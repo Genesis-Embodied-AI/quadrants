@@ -254,6 +254,13 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
 
     indices_expr_group = None
     if has_slice:
+        if isinstance(value, BufferView):
+            if len(indices) != 1 or not isinstance(indices[0], slice):
+                raise QuadrantsSyntaxError("BufferView only supports 1D slicing in kernels")
+            s = indices[0]
+            start = s.start if s.start is not None else Expr(0)
+            stop = s.stop if s.stop is not None else Expr(value.size)
+            return value.subview(start, Expr(stop) - Expr(start))
         if isinstance(value, (Field, AnyArray, SharedArray)):
             matched, proxy = try_tile_slice(value, indices)
             if matched:

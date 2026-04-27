@@ -104,6 +104,58 @@ def test_vector_ndarray_slice():
     assert view.get_ndarray() is v_arr
 
 
+@test_utils.test(arch=get_host_arch_list())
+def test_host_subview():
+    """subview() creates a narrower view with accumulated offset."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    a = data[8:24]  # offset=8, size=16
+    b = a.subview(4, 8)  # offset=12, size=8
+    assert b.offset == 12
+    assert b.size == 8
+    assert b.get_ndarray() is data
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_host_subview_error():
+    """subview() raises ValueError when sub-range exceeds parent."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    view = data[:16]
+    with pytest.raises(ValueError, match="subview out of range"):
+        view.subview(8, 16)  # 8 + 16 > 16
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_host_view_slice():
+    """BufferView slice creates a subview with correct offset accumulation."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    a = data[8:24]  # offset=8, size=16
+    b = a[4:12]  # offset=12, size=8
+    c = b[:4]  # offset=12, size=4
+    assert b.offset == 12
+    assert b.size == 8
+    assert c.offset == 12
+    assert c.size == 4
+    assert c.get_ndarray() is data
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_host_view_slice_step_error():
+    """BufferView slice with step != 1 raises ValueError."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    view = data[:16]
+    with pytest.raises(ValueError, match="step=1"):
+        _ = view[::2]
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_host_view_int_index_error():
+    """BufferView integer indexing on host raises TypeError (use slice instead)."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    view = data[:16]
+    with pytest.raises(TypeError, match="slice"):
+        _ = view[0]
+
+
 # ---------------------------------------------------------------------------
 # Group B — Kernel functional tests
 # ---------------------------------------------------------------------------
@@ -224,6 +276,87 @@ def test_func_annotation():
 
 
 @test_utils.test(arch=get_host_arch_list())
+def test_kernel_subview():
+    """subview() inside a kernel writes to the correct sub-range of the backing ndarray."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    data.from_numpy(np.zeros(N, dtype=np.float32))
+
+    @qd.kernel
+    def k(v: BufferView[qd.f32]):
+        sub = v.subview(4, 4)
+        for i in range(sub.size):
+            sub[i] = 9.0
+
+    k(data[8:24])  # view: offset=8, size=16; subview: offset=12, size=4
+    result = data.to_numpy()
+    assert np.all(result[:12] == 0.0)
+    assert np.all(result[12:16] == 9.0)
+    assert np.all(result[16:] == 0.0)
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_kernel_construct_from_ndarray():
+    """BufferView constructed inside a kernel from ndarray + offset + size."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    data.from_numpy(np.zeros(N, dtype=np.float32))
+
+    @qd.kernel
+    def k(arr: qd.types.ndarray(qd.f32, ndim=1), off: qd.i32, sz: qd.i32):
+        view = BufferView(arr, off, sz)
+        for i in range(view.size):
+            view[i] = 4.0
+
+    k(data, 8, 8)  # write 4.0 to data[8:16]
+    result = data.to_numpy()
+    assert np.all(result[:8] == 0.0)
+    assert np.all(result[8:16] == 4.0)
+    assert np.all(result[16:] == 0.0)
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_kernel_slice():
+    """v[4:8] slice syntax inside a kernel creates a subview and writes correctly."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    data.from_numpy(np.zeros(N, dtype=np.float32))
+
+    @qd.kernel
+    def k(v: BufferView[qd.f32]):
+        sub = v[4:8]
+        for i in range(sub.size):
+            sub[i] = 6.0
+
+    k(data[8:24])  # view: offset=8, size=16; slice [4:8] -> subview offset=12, size=4
+    result = data.to_numpy()
+    assert np.all(result[:12] == 0.0)
+    assert np.all(result[12:16] == 6.0)
+    assert np.all(result[16:] == 0.0)
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_constructor_negative_offset():
+    """BufferView with negative offset raises ValueError."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    with pytest.raises(ValueError, match="out of range"):
+        BufferView(data, -1, 8)
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_constructor_negative_size():
+    """BufferView with negative size raises ValueError."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    with pytest.raises(ValueError, match="out of range"):
+        BufferView(data, 0, -1)
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_constructor_exceeds_length():
+    """BufferView with offset+size > ndarray length raises ValueError."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    with pytest.raises(ValueError, match="out of range"):
+        BufferView(data, 16, 32)  # 16 + 32 > 32
+
+
+@test_utils.test(arch=get_host_arch_list())
 def test_wrong_type_error():
     """Passing a plain ndarray where BufferView[dtype] is expected raises an error."""
     data = qd.ndarray(qd.f32, shape=(N,))
@@ -320,6 +453,22 @@ def test_debug_callstack_nested():
     # Both frames must appear: kernel frame and func frame.
     assert "k" in msg
     assert "writer" in msg
+
+
+@pytest.mark.skipif(_no_assert, reason="assert not supported on linux arm64/aarch64")
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+def test_debug_subview_oob():
+    """Debug mode: subview exceeding parent size raises QuadrantsAssertionError."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def k(v: BufferView[qd.f32]):
+        for i in range(1):
+            sub = v.subview(v.size + i, 1)  # offset == parent size -> OOB
+            sub[0] = 1.0
+
+    with pytest.raises(QuadrantsAssertionError, match=r"subview Out Of Range"):
+        k(data[:16])
 
 
 @pytest.mark.skipif(_no_assert, reason="assert not supported on linux arm64/aarch64")

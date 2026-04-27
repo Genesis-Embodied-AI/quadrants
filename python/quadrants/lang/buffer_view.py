@@ -101,14 +101,12 @@ class BufferView:
         return BufferViewType(dtype)
 
     def __init__(self, arr, offset, size):
-        # Host-side: offset/size are numeric. Kernel-compilation: offset/size are Expr nodes.
-        assert isinstance(offset, Expr) == isinstance(
-            size, Expr
-        ), f"offset and size must be both Expr or both numeric, got {type(offset).__name__} and {type(size).__name__}"
-        if isinstance(offset, Expr):
+        if impl.inside_kernel():
+            # Kernel-compilation path: args may be Expr nodes, resolved at runtime on device.
             # TODO: insert IR-level assert (offset+size <= ndarray_length) once ndarray shape is queryable in Expr.
             pass
         else:
+            # Host-side path: coerce to int and validate bounds.
             offset, size = int(offset), int(size)
             arr_shape = getattr(arr, "shape", None)
             if arr_shape is not None:
@@ -135,15 +133,51 @@ class BufferView:
             a = data[8:24]          # offset=8, size=16 into data
             b = a.subview(4, 8)     # offset=12, size=8 into data
         """
-        if isinstance(offset, Expr):
-            return BufferView(self.arr, Expr(self.offset) + Expr(offset), size)
+        if impl.inside_kernel():
+            return self._subview_expr(Expr(offset), Expr(size))
         offset, size = int(offset), int(size)
         if offset < 0 or size < 0 or offset + size > self.size:
             raise ValueError(f"subview out of range: offset={offset}, size={size}, parent size={self.size}")
         return BufferView(self.arr, self.offset + offset, size)
 
+    @quadrants_scope
+    def _subview_expr(self, offset, size):
+        """Kernel-compilation path for subview: insert debug bounds assertions."""
+        offset_expr = Expr(offset)
+        size_expr = Expr(size)
+        parent_size_expr = Expr(self.size)
+
+        cfg = impl.get_runtime().prog.config()
+        if cfg.debug:
+            ast_builder = impl.get_runtime().compiling_callable.ast_builder()
+            src_info = impl.get_runtime().get_current_src_info()
+            dbg_info = _qd_core.DebugInfo(src_info)
+            tid_expr = Expr(ast_builder.insert_thread_idx_expr())
+
+            kernel_name, callstack = _build_callstack(2048)
+            msg = (
+                f"BufferView subview Out Of Range: kernel[{kernel_name}]"
+                " tid=%d, subview offset=%d, subview size=%d, parent size=%d.\n"
+                f"Callstack:\n"
+                f"{callstack}"
+            )
+            args = [tid_expr.ptr, offset_expr.ptr, size_expr.ptr, parent_size_expr.ptr]
+
+            impl.qd_assert((offset_expr >= Expr(0)).ptr, msg, args, dbg_info)
+            impl.qd_assert((size_expr >= Expr(0)).ptr, msg, args, dbg_info)
+            impl.qd_assert(((offset_expr + size_expr) <= parent_size_expr).ptr, msg, args, dbg_info)
+
+        new_offset = Expr(self.offset) + offset_expr
+        return BufferView(self.arr, new_offset, size_expr)
+
     def __getitem__(self, key):
-        """Slice a view to create a subview: ``view[2:6]``."""
+        """Slice a view to create a subview (host-side only): ``view[2:6]``.
+
+        In kernels, slicing goes through impl.subscript() -> subview() instead.
+        """
+        assert (
+            not impl.inside_kernel()
+        ), "BufferView.__getitem__ is not reachable in kernel scope; subscripts are dispatched via impl.subscript()"
         if not isinstance(key, slice):
             raise TypeError(f"BufferView host-side indexing requires a slice, got {type(key).__name__}")
         start, stop, step = key.indices(self.size)
