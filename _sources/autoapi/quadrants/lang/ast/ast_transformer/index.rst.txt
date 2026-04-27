@@ -63,8 +63,9 @@ Module Contents
 
       :param ctx: The builder context.
       :type ctx: ast_builder_utils.BuilderContext
-      :param target: A variable name. `target.id` holds the name as a string.
+      :param target: A variable name. `target.id` holds the name as
       :type target: ast.Name
+      :param a string.:
       :param annotation: A type we hope to assign to the target
       :param value: A node representing the value.
       :param is_static_assign: A boolean value indicating whether this is a static assignment
