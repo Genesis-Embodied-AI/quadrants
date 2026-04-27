@@ -348,11 +348,26 @@ std::string JITSessionCUDA::compile_module_to_ptx(std::unique_ptr<llvm::Module> 
   }
 
   std::string buffer(outstr.begin(), outstr.end());
+  append_compute_cache_bypass_nonce_if_disabled(buffer, this->config_);
 
   // Null-terminate the ptx source
   buffer.push_back(0);
   ptx_cache_->store_ptx(ptx_cache_key, buffer);
   return buffer;
+}
+
+void append_compute_cache_bypass_nonce_if_disabled(std::string &ptx, const CompileConfig &compile_config) {
+  // CUDA_CACHE_DISABLE is captured at libcuda init time so it cannot be toggled mid-process; appending a per-session
+  // comment shifts the PTX hash that the driver compute cache uses, forcing ptxas to re-run cold. The nonce is
+  // `static` so that within one process every call sees the same value: two kernels in the same run that produce
+  // identical PTX still hit the driver cache and skip a second ptxas invocation, while only cross-process reuse is
+  // broken - the property needed for clean cold-cache measurements when offline_cache=false.
+  if (compile_config.offline_cache) {
+    return;
+  }
+  static const std::string session_nonce =
+      fmt::format("\n// quadrants-session-nonce: {}\n", static_cast<int64_t>(std::time(nullptr)));
+  ptx.append(session_nonce);
 }
 
 std::unique_ptr<JITSession> create_llvm_jit_session_cuda(QuadrantsLLVMContext *tlctx,
