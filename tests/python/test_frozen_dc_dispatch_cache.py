@@ -228,10 +228,10 @@ def test_frozen_dc_cache_many_fields():
     np.testing.assert_allclose(arrays[9].to_numpy(), [2.0, 2.0, 2.0, 2.0])
 
 
-# ---------------------------------------------------------------------------
-# id() reuse guard: _get_frozen_dc_plan must not return a stale plan when a
-# new used_params set is allocated at the same address as a garbage-collected one.
-# ---------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------------------------
+# id() reuse guard: _get_frozen_dc_plan must not return a stale plan when a new used_params set is allocated at the same
+# address as a garbage-collected one.
+# -----------------------------------------------------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
@@ -266,10 +266,10 @@ def test_frozen_dc_plan_id_reuse_guard():
         )
 
 
-# ---------------------------------------------------------------------------
-# qd.reset() must clear _frozen_dc_plans so stale entries from a previous
-# qd.init() cycle don't leak into a fresh session.
-# ---------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------------------------
+# qd.reset() must clear _frozen_dc_plans so stale entries from a previous qd.init() cycle don't leak into a fresh
+# session.
+# -----------------------------------------------------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
