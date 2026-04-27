@@ -178,7 +178,7 @@ The kernel argument is unwrapped to the bare impl before the template-mapper / A
 
 ## Pickle
 
-`qd.Tensor` objects are picklable on **both** backends, including under non-identity layouts. Round-trip preserves the canonical data, the dtype, the shape, and the layout:
+`qd.Tensor` objects are picklable on **both** backends, including under non-identity layouts. Round-trip (pickle then unpickle) preserves the canonical data, the dtype, the shape, and the layout:
 
 ```python
 import pickle
