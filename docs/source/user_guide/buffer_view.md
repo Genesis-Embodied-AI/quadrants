@@ -28,6 +28,22 @@ For programmatically computed offsets, use the constructor directly:
 view = qd.BufferView(data, offset=16, size=32)
 ```
 
+## Slicing a view (subview)
+
+A `BufferView` can be sliced again to create a narrower subview. All views share the same backing ndarray — offsets accumulate automatically:
+
+```python
+a = data[8:24]      # BufferView: offset=8,  size=16
+b = a[4:12]         # BufferView: offset=12, size=8
+c = b[:4]           # BufferView: offset=12, size=4
+```
+
+This forms a closed slicing chain: `ndarray` → slice → `BufferView` → slice → `BufferView`. Each step validates bounds against the parent's size. The `subview()` method provides the same functionality with explicit offset and size:
+
+```python
+b = a.subview(offset=4, size=8)   # equivalent to a[4:12]
+```
+
 ## Kernel type annotation
 
 Use `BufferView` as a parameter annotation on `@qd.kernel`. The element dtype can be specified explicitly or omitted:

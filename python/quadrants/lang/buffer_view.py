@@ -68,36 +68,27 @@ def _build_callstack(max_bytes):
 
 
 class BufferView:
-    """A view into a sub-range [offset, offset+size) of an ndarray kernel argument.
+    """A view into a sub-range [offset, offset+size) of an ndarray.
 
-    Intercepts subscript operations at AST-translation time to rewrite
-    ``view[i]`` into ``arr[offset + i]`` with optional bounds checking,
-    without any IR-level changes.
+    Create via slice syntax::
 
-    Create a view using ndarray slice syntax (preferred)::
-
-        data = qd.ndarray(qd.f32, shape=(N,))
         view = data[:16]           # offset=0, size=16
         view = data[8:24]          # offset=8, size=16
 
-    Or construct directly for programmatic offsets::
+    Or construct directly::
 
-        view = qd.BufferView(buf, offset=16, size=32)
+        view = qd.BufferView(data, offset=16, size=32)
 
-    Use ``BufferView[dtype]`` as the kernel type annotation::
+    Subviews can be created from an existing view::
+
+        sub = view.subview(offset=4, size=8)
+
+    Annotate kernel/func parameters with ``BufferView[dtype]`` or plain ``BufferView``::
 
         @qd.kernel
         def k(v: BufferView[qd.f32]):
             for i in range(v.size):
                 v[i] *= 2.0
-
-        k(data[:16])
-
-    The same annotation works on ``@qd.func``::
-
-        @qd.func
-        def process(v: BufferView[qd.f32], idx: qd.i32):
-            v[idx] = v[idx] * 2.0
     """
 
     _is_quadrants_class = True
@@ -110,8 +101,14 @@ class BufferView:
         return BufferViewType(dtype)
 
     def __init__(self, arr, offset, size):
-        assert isinstance(offset, Expr) == isinstance(size, Expr), "offset and size must be both Expr or both numeric"
-        if not isinstance(offset, Expr):
+        # Host-side: offset/size are numeric. Kernel-compilation: offset/size are Expr nodes.
+        assert isinstance(offset, Expr) == isinstance(
+            size, Expr
+        ), f"offset and size must be both Expr or both numeric, got {type(offset).__name__} and {type(size).__name__}"
+        if isinstance(offset, Expr):
+            # TODO: insert IR-level assert (offset+size <= ndarray_length) once ndarray shape is queryable in Expr.
+            pass
+        else:
             offset, size = int(offset), int(size)
             arr_shape = getattr(arr, "shape", None)
             if arr_shape is not None:
@@ -129,6 +126,30 @@ class BufferView:
     def shape(self):
         """Returns the shape of this view as a tuple, e.g. ``(16,)``."""
         return (self.size,)
+
+    def subview(self, offset, size):
+        """Create a sub-range view within this view, with bounds checking.
+
+        Offsets are relative to this view's start, not the ndarray's::
+
+            a = data[8:24]          # offset=8, size=16 into data
+            b = a.subview(4, 8)     # offset=12, size=8 into data
+        """
+        if isinstance(offset, Expr):
+            return BufferView(self.arr, Expr(self.offset) + Expr(offset), size)
+        offset, size = int(offset), int(size)
+        if offset < 0 or size < 0 or offset + size > self.size:
+            raise ValueError(f"subview out of range: offset={offset}, size={size}, parent size={self.size}")
+        return BufferView(self.arr, self.offset + offset, size)
+
+    def __getitem__(self, key):
+        """Slice a view to create a subview: ``view[2:6]``."""
+        if not isinstance(key, slice):
+            raise TypeError(f"BufferView host-side indexing requires a slice, got {type(key).__name__}")
+        start, stop, step = key.indices(self.size)
+        if step != 1:
+            raise ValueError(f"BufferView slice requires step=1, got step={step}")
+        return self.subview(start, max(stop - start, 0))
 
     @quadrants_scope
     def subscript(self, *indices):
