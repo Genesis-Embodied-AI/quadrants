@@ -61,6 +61,9 @@ def _vulkan_debug_warmup():
     process: vkQueueWaitIdle() can return before the callback fires. A full init/dispatch/sync/reset cycle here warms
     the driver-level debug infrastructure so subsequent inits work reliably.
     """
+    if sys.platform == "darwin":
+        return
+
     from tests import test_utils
 
     if qd.vulkan not in test_utils.expected_archs():
