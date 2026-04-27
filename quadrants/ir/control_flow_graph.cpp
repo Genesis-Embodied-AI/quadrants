@@ -1264,20 +1264,22 @@ void ControlFlowGraph::determine_ad_stack_size() {
    * pre-pass for a symbolic `SizeExpr`, and hard-errors if the grammar cannot resolve them. There
    * is no compile-time size fallback. The time complexity is
    * O(num_statements + num_stacks * num_edges * num_nodes).
+   *
+   * Implementation notes: the per-stack data is keyed by a contiguous stack id and stored in
+   * vector<vector<int>> rather than unordered_map<AdStackAllocaStmt*, vector<int>>, the BF visit
+   * loop hoists the per-stack vectors as local references, and outgoing edge node ids are
+   * precomputed once per source node. These keep the dominant inner loop free of hash lookups,
+   * which large reverse-mode kernels are sensitive to.
    */
   const int num_nodes = size();
 
-  // max_increased_size[i][j] is the maximum number of (pushes - pops) of
-  // stack |i| among all prefixes of the CFGNode |j|.
-  std::unordered_map<AdStackAllocaStmt *, std::vector<int>> max_increased_size;
-
-  // increased_size[i][j] is the number of (pushes - pops) of stack |i| in
-  // the CFGNode |j|.
-  std::unordered_map<AdStackAllocaStmt *, std::vector<int>> increased_size;
+  // Map AdStackAllocaStmt* to a contiguous int index. Only stacks whose `max_size` is still 0
+  // (i.e. unresolved by an earlier pass) participate in BF; resolved stacks are skipped so the
+  // pass cannot clobber them.
+  std::unordered_map<AdStackAllocaStmt *, int> stack_id;
+  std::vector<AdStackAllocaStmt *> stacks;
 
   std::unordered_map<CFGNode *, int> node_ids;
-  std::unordered_set<AdStackAllocaStmt *> all_stacks;
-
   for (int i = 0; i < num_nodes; i++)
     node_ids[nodes[i].get()] = i;
 
@@ -1285,102 +1287,134 @@ void ControlFlowGraph::determine_ad_stack_size() {
     for (int j = nodes[i]->begin_location; j < nodes[i]->end_location; j++) {
       Stmt *stmt = nodes[i]->block->statements[j].get();
       if (auto *stack = stmt->cast<AdStackAllocaStmt>()) {
-        // Skip stacks whose size has already been resolved by an earlier pass (e.g. the structural
-        // pre-pass in `irpass::determine_ad_stack_size` that handles bounded inner loops without
-        // running Bellman-Ford). Without this guard the Bellman-Ford pass unconditionally
-        // overwrites `stack->max_size` at the bottom of its per-stack loop - with 0 when the stack
-        // has no push/pop in the CFG - clobbering the upstream result.
         if (stack->max_size != 0) {
           continue;
         }
-        all_stacks.insert(stack);
-        max_increased_size.insert(std::make_pair(stack, std::vector<int>(num_nodes, 0)));
-        increased_size.insert(std::make_pair(stack, std::vector<int>(num_nodes, 0)));
+        if (stack_id.emplace(stack, static_cast<int>(stacks.size())).second) {
+          stacks.push_back(stack);
+        }
       }
     }
   }
 
-  // For each basic block we compute the increase of stack size. This is a
-  // pre-processing step for the next maximum stack size determining algorithm.
+  const int num_stacks = static_cast<int>(stacks.size());
+  if (num_stacks == 0) {
+    return;
+  }
+
+  // max_increased_size[s][j] is the maximum number of (pushes - pops) of stack |s| among all
+  // prefixes of the CFGNode |j|. increased_size[s][j] is the net (pushes - pops) of stack |s| in
+  // the CFGNode |j|. Both are indexed by contiguous stack id (cheap vector access in the BF hot
+  // loop).
+  std::vector<std::vector<int>> max_increased_size(num_stacks, std::vector<int>(num_nodes, 0));
+  std::vector<std::vector<int>> increased_size(num_stacks, std::vector<int>(num_nodes, 0));
+
+  // Track which stacks actually participate in any push/pop in the CFG. Stacks with no
+  // push/pop end with `max_size = 0` regardless of BF (every node has zero increase), so we
+  // skip BF for them and reproduce the original "Unused autodiff stack" warning here.
+  std::vector<bool> stack_active(num_stacks, false);
+
   for (int i = 0; i < num_nodes; i++) {
     for (int j = nodes[i]->begin_location; j < nodes[i]->end_location; j++) {
       Stmt *stmt = nodes[i]->block->statements[j].get();
       if (auto *stack_push = stmt->cast<AdStackPushStmt>()) {
         auto *stack = stack_push->stack->as<AdStackAllocaStmt>();
         if (stack->max_size == 0 /*adaptive*/) {
-          increased_size[stack][i]++;
-          if (increased_size[stack][i] > max_increased_size[stack][i]) {
-            max_increased_size[stack][i] = increased_size[stack][i];
+          auto it = stack_id.find(stack);
+          QD_ASSERT(it != stack_id.end());
+          const int sid = it->second;
+          stack_active[sid] = true;
+          int &cur = increased_size[sid][i];
+          cur++;
+          if (cur > max_increased_size[sid][i]) {
+            max_increased_size[sid][i] = cur;
           }
         }
       } else if (auto *stack_pop = stmt->cast<AdStackPopStmt>()) {
         auto *stack = stack_pop->stack->as<AdStackAllocaStmt>();
         if (stack->max_size == 0 /*adaptive*/) {
-          increased_size[stack][i]--;
+          auto it = stack_id.find(stack);
+          QD_ASSERT(it != stack_id.end());
+          const int sid = it->second;
+          stack_active[sid] = true;
+          increased_size[sid][i]--;
         }
       }
     }
   }
 
-  // The maximum stack size determining algorithm -- run the Bellman-Ford
-  // algorithm on each AD-stack separately.
-  for (auto *stack : all_stacks) {
-    // The maximum size of |stack| among all control flows starting at the
-    // beginning of the IR.
+  // Precompute outgoing-edge node ids once per node so the BF inner loop walks an int vector
+  // instead of hashing `node_ids[next_node]` on every traversal.
+  std::vector<std::vector<int>> next_ids(num_nodes);
+  for (int i = 0; i < num_nodes; i++) {
+    auto &dst = next_ids[i];
+    dst.reserve(nodes[i]->next.size());
+    for (auto *next_node : nodes[i]->next) {
+      dst.push_back(node_ids[next_node]);
+    }
+  }
+
+  // BF scratch reused across stacks to avoid reallocating per iteration.
+  std::vector<int> max_size_at_node_begin(num_nodes);
+  std::vector<char> in_queue(num_nodes);
+  std::vector<int> times_pushed_in_queue(num_nodes);
+  std::queue<int> to_visit;
+
+  // The maximum stack size determining algorithm -- run the Bellman-Ford algorithm on each
+  // AD-stack separately.
+  for (int sid = 0; sid < num_stacks; sid++) {
+    AdStackAllocaStmt *stack = stacks[sid];
+    if (!stack_active[sid]) {
+      // No push/pop in the CFG: BF would visit reachable nodes with all-zero edge weights and
+      // settle with `max_size = 0`, no positive loop. Reproduce the post-BF result directly.
+      QD_WARN("Unused autodiff stack {} should have been eliminated.", stack->name());
+      continue;
+    }
+
+    // Hoist references to the per-stack vectors out of the BF visit loop.
+    const std::vector<int> &mis_for_stack = max_increased_size[sid];
+    const std::vector<int> &is_for_stack = increased_size[sid];
+
+    // Reset BF scratch. `max_size_at_node_begin` starts at -1 to force the first relaxation to
+    // overwrite, matching the original behaviour.
+    std::fill(max_size_at_node_begin.begin(), max_size_at_node_begin.end(), -1);
+    std::fill(in_queue.begin(), in_queue.end(), 0);
+    std::fill(times_pushed_in_queue.begin(), times_pushed_in_queue.end(), 0);
+    std::queue<int>().swap(to_visit);
+
     int max_size = 0;
-
-    // max_size_at_node_begin[j] is the maximum size of |stack| among
-    // all control flows starting at the beginning of the IR and ending at the
-    // beginning of the CFGNode |j|. Initialize this array to -1 to make sure
-    // that the first iteration of the Bellman-Ford algorithm fully updates
-    // this array.
-    std::vector<int> max_size_at_node_begin(num_nodes, -1);
-
-    // The queue for the Bellman-Ford algorithm.
-    std::queue<int> to_visit;
-
-    // An optimization for the Bellman-Ford algorithm.
-    std::vector<bool> in_queue(num_nodes);
-
-    // An array for detecting positive loop in the Bellman-Ford algorithm.
-    std::vector<int> times_pushed_in_queue(num_nodes, 0);
-
     max_size_at_node_begin[start_node] = 0;
     to_visit.push(start_node);
-    in_queue[start_node] = true;
+    in_queue[start_node] = 1;
     times_pushed_in_queue[start_node]++;
 
     bool has_positive_loop = false;
 
-    // The Bellman-Ford algorithm.
     while (!to_visit.empty()) {
       int node_id = to_visit.front();
       to_visit.pop();
-      in_queue[node_id] = false;
-      CFGNode *now = nodes[node_id].get();
+      in_queue[node_id] = 0;
 
       // Inside this CFGNode -- update the answer |max_size|
-      const auto max_size_inside_this_node = max_increased_size[stack][node_id];
-      const auto current_max_size = max_size_at_node_begin[node_id] + max_size_inside_this_node;
+      const int begin_size = max_size_at_node_begin[node_id];
+      const int current_max_size = begin_size + mis_for_stack[node_id];
       if (current_max_size > max_size) {
         max_size = current_max_size;
       }
-      // At the end of this CFGNode -- update the state
-      // |max_size_at_node_begin| of other CFGNodes
-      const auto increase_in_this_node = increased_size[stack][node_id];
-      const auto current_size = max_size_at_node_begin[node_id] + increase_in_this_node;
-      for (auto *next_node : now->next) {
-        int next_node_id = node_ids[next_node];
+      // At the end of this CFGNode -- update the state |max_size_at_node_begin| of other
+      // CFGNodes
+      const int current_size = begin_size + is_for_stack[node_id];
+      for (int next_node_id : next_ids[node_id]) {
         if (current_size > max_size_at_node_begin[next_node_id]) {
           max_size_at_node_begin[next_node_id] = current_size;
           if (!in_queue[next_node_id]) {
             if (times_pushed_in_queue[next_node_id] <= num_nodes) {
               to_visit.push(next_node_id);
-              in_queue[next_node_id] = true;
+              in_queue[next_node_id] = 1;
               times_pushed_in_queue[next_node_id]++;
             } else {
-              // A positive loop is found because a node is going to be pushed
-              // into the queue the (num_nodes + 1)-th time.
+              // A positive loop is found because a node is going to be pushed into the queue
+              // the (num_nodes + 1)-th time.
               has_positive_loop = true;
               break;
             }
@@ -1399,8 +1433,8 @@ void ControlFlowGraph::determine_ad_stack_size() {
       // the outer ranges). If it also cannot, the caller emits a hard compile error - there is
       // no compile-time `default_ad_stack_size` fallback.
     } else {
-      // Since we use |max_size| == 0 for adaptive sizes, we do not want stacks
-      // with maximum capacity indeed equal to 0.
+      // Since we use |max_size| == 0 for adaptive sizes, we do not want stacks with maximum
+      // capacity indeed equal to 0.
       QD_WARN_IF(max_size == 0, "Unused autodiff stack {} should have been eliminated.", stack->name());
       stack->max_size = max_size;
     }
