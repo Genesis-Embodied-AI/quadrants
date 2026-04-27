@@ -186,6 +186,23 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
             ``range(len(shape))``.
         TypeError: If any keyword argument outside the accepted set is passed (see ``_SCALAR_ACCEPTED_KWARGS``).
     """
+    from quadrants.lang._ndarray import (
+        Ndarray,  # pylint: disable=import-outside-toplevel
+    )
+    from quadrants.lang.field import Field  # pylint: disable=import-outside-toplevel
+
+    if isinstance(dtype, (Ndarray, Field, Tensor)):
+        raise TypeError(
+            f"qd.tensor() allocates a new tensor; to wrap an existing {type(dtype).__name__}, use qd.wrap(impl) instead"
+        )
+    if layout is not None:
+        from quadrants.lang.matrix import MatrixType  # pylint: disable=import-outside-toplevel
+
+        if isinstance(dtype, MatrixType):
+            raise TypeError(
+                "layout= is not supported with compound dtypes (vector/matrix). "
+                "Use qd.Vector.tensor(...) or qd.Matrix.tensor(...) without layout= instead."
+            )
     _validate_kwargs(kwargs, factory_name="qd.tensor", accepted=_SCALAR_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
     forwarded = {k: v for k, v in kwargs.items() if k != "backend"}

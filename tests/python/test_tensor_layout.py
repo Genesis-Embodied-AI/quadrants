@@ -193,3 +193,49 @@ def test_layout_with_needs_grad_allocates_grad(backend):
     a = qd.tensor(qd.f32, shape=(4, 5), backend=backend, layout=(1, 0), needs_grad=True)
     assert a.grad is not None
     assert tuple(a.grad.shape) == tuple(a.shape)
+
+
+# ----------------------------------------------------------------------------
+# Compound dtype (vector / matrix) + layout= must be rejected
+# ----------------------------------------------------------------------------
+
+
+def test_layout_rejected_for_vector_dtype():
+    """qd.tensor() with a compound vector dtype must reject layout=."""
+    qd.init(arch=qd.x64)
+    vec3 = qd.types.vector(3, qd.f32)
+    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
+        qd.tensor(vec3, shape=(4,), layout=(0,))
+
+
+def test_layout_rejected_for_matrix_dtype():
+    """qd.tensor() with a compound matrix dtype must reject layout=."""
+    qd.init(arch=qd.x64)
+    mat2x2 = qd.types.matrix(2, 2, qd.f32)
+    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
+        qd.tensor(mat2x2, shape=(4,), layout=(0,))
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+def test_layout_rejected_for_vector_dtype_both_backends(backend):
+    """layout= rejection applies to both field and ndarray backends."""
+    qd.init(arch=qd.x64)
+    vec3 = qd.types.vector(3, qd.f32)
+    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
+        qd.tensor(vec3, shape=(5,), backend=backend, layout=(0,))
+
+
+def test_vector_dtype_without_layout_still_works():
+    """Compound vector dtype without layout= must still allocate fine."""
+    qd.init(arch=qd.x64)
+    vec3 = qd.types.vector(3, qd.f32)
+    a = qd.tensor(vec3, shape=(4,))
+    assert tuple(a.shape) == (4,)
+
+
+def test_matrix_dtype_without_layout_still_works():
+    """Compound matrix dtype without layout= must still allocate fine."""
+    qd.init(arch=qd.x64)
+    mat2x2 = qd.types.matrix(2, 2, qd.f32)
+    a = qd.tensor(mat2x2, shape=(4,))
+    assert tuple(a.shape) == (4,)

@@ -8,7 +8,8 @@ from tests import test_utils
 
 
 @pytest.mark.skipif(
-    sys.platform == "darwin", reason="FIXME: This test is causing OOM error on the CI, crashing jobs with error 143..."
+    sys.platform == "darwin",
+    reason="FIXME: macOS unified memory swaps to disk instead of OOMing, causing this test to hang",
 )
 @test_utils.test(arch=qd.gpu)
 def test_huge_allocation_fail_at_allocate_time():

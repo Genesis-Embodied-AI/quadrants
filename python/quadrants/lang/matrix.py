@@ -1862,6 +1862,8 @@ class MatrixNdarray(Ndarray):
     @python_scope
     def __deepcopy__(self, memo=None):
         ret_arr = MatrixNdarray(self.n, self.m, self.dtype, self._physical_shape)
+        if self._qd_layout is not None:
+            ret_arr._qd_layout = self._qd_layout
         ret_arr.copy_from(self)
         return ret_arr
 
@@ -1989,6 +1991,8 @@ class VectorNdarray(Ndarray):
     @python_scope
     def __deepcopy__(self, memo=None):
         ret_arr = VectorNdarray(self.n, self.dtype, self._physical_shape)
+        if self._qd_layout is not None:
+            ret_arr._qd_layout = self._qd_layout
         ret_arr.copy_from(self)
         return ret_arr
 

@@ -1,6 +1,6 @@
 # Tensors
 
-Quadrants offers two underlying tensor implementations, `qd.field` and `qd.ndarray`. They have different runtime/compile-time trade-offs, and different physical memory layouts can suit different kernels.
+Quadrants offers two underlying tensor implementations, [`qd.field` and `qd.ndarray`](tensor_types.md). They have different runtime/compile-time trade-offs, and different physical memory layouts can suit different kernels.
 
 The tensor API lets you pick both the **backend** and the **physical memory layout** on a per-tensor basis at allocation time. The rest of the system (kernels, fastcache, autograd) stays out of the way.
 
@@ -13,7 +13,7 @@ See [`tensor_types`](tensor_types.md), [`scalar_tensors`](scalar_tensors.md), an
 | Member | Underlying type | When to prefer |
 |---|---|---|
 | `qd.Backend.FIELD` | `qd.field` | Faster at runtime; recompiles when any dimension size changes. |
-| `qd.Backend.NDARRAY` | `qd.ndarray` | Slightly slower at runtime but avoids recompilation when sizes change. |
+| `qd.Backend.NDARRAY` | `qd.ndarray` | Slower at runtime but avoids recompilation when sizes change. |
 
 The choice is per tensor: a single program can freely mix backends.
 
@@ -86,6 +86,8 @@ print(a.grad.to_numpy())   # [0., 100., 200., 300.]
 Gradient buffers always share the canonical shape of the primal, on both backends. The `needs_grad` keyword also passes through `qd.Vector.tensor` and `qd.Matrix.tensor` for compound element types.
 
 ## Controlling physical layout
+
+Tweaking the memory layout on a per-tensor basis is commonly used to improve runtime performance. In practice, tuning axis order is sufficient in most cases. For advanced users seeking finer-grained control over the memory layout, see the SNode API (`qd.root`).
 
 The `layout=` keyword lets you pick per-tensor:
 
@@ -176,7 +178,7 @@ The kernel argument is unwrapped to the bare impl before the template-mapper / A
 
 ## Pickle
 
-`qd.Tensor` objects are picklable on **both** backends, including under non-identity layouts. Round-trip preserves the canonical data, the dtype, the shape, and the layout:
+`qd.Tensor` objects are picklable on **both** backends, including under non-identity layouts. Round-trip (pickle then unpickle) preserves the canonical data, the dtype, the shape, and the layout:
 
 ```python
 import pickle
@@ -193,8 +195,6 @@ assert restored.shape == (3, 4)
 assert restored.layout == (1, 0)
 assert (restored.to_numpy() == a.to_numpy()).all()
 ```
-
-Pickle is implemented at the wrapper layer (`Tensor.__reduce__` round-trips through `to_numpy()` plus a `qd.tensor(...)` reallocation on load). The bare `qd.field` type does not support pickle directly — `qd.Tensor` is the unit of serialization.
 
 ## Wrapping a bare tensor: `qd.wrap`
 
@@ -215,7 +215,7 @@ assert t._unwrap() is a   # same underlying impl
 
 ## Cross-backend `copy_from` is not supported
 
-`tensor.copy_from(other)` requires both tensors to share the same backend. Mixed-backend copies are deliberately unsupported because the intended deployment model is process-wide, homogeneous backend selection (e.g. via a `GS_ENABLE_NDARRAY` env var):
+`tensor.copy_from(other)` requires both tensors to share the same backend. Mixed-backend copies are not supported:
 
 ```python
 a = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD)
@@ -223,7 +223,7 @@ b = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 a.copy_from(b)   # raises: cross-backend copy unsupported
 ```
 
-If you genuinely need to move data across backends, route it through NumPy (or DLPack/Torch): `a.from_numpy(b.to_numpy())`.
+If you genuinely need to move data across backends, route it through Torch: `a.from_torch(b.to_torch())`.
 
 ## Known asymmetry: real-dtype `.grad` stub on the field backend
 
@@ -237,4 +237,4 @@ t_field.grad   # currently a Tensor wrapper around a zombie field
 t_nd.grad      # None
 ```
 
-Use `needs_grad=True` if you intend to read `.grad`. Integer dtypes are symmetric (`grad is None` on both backends regardless of `needs_grad`). This asymmetry is tracked as a follow-up; it does not affect kernels that opt in to autograd via `needs_grad=True`.
+Use `needs_grad=True` if you intend to read `.grad`. Integer dtypes are symmetric (`grad is None` on both backends regardless of `needs_grad`).
