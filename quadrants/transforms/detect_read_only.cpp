@@ -24,18 +24,19 @@ void detect_read_only_in_task(OffloadedStmt *offload) {
 
 class ExternalPtrAccessVisitor : public BasicStmtVisitor {
  private:
-  std::unordered_map<std::vector<int>,
-                     ExternalPtrAccess,
-                     hashing::Hasher<std::vector<int>>> &map_;
+  std::unordered_map<std::vector<int>, ExternalPtrAccess, hashing::Hasher<std::vector<int>>> &map_;
+  // If true, only count references through `ExternalPtrStmt::is_grad == true` (the `.grad` slot of an
+  // ndarray argument). If false, count every `ExternalPtrStmt` access, regardless of slot (the historical
+  // behaviour shared by the data-slot blit path and the read-only analysis consumers).
+  bool grad_only_;
 
  public:
   using BasicStmtVisitor::visit;
 
   explicit ExternalPtrAccessVisitor(
-      std::unordered_map<std::vector<int>,
-                         ExternalPtrAccess,
-                         hashing::Hasher<std::vector<int>>> &map)
-      : map_(map) {
+      std::unordered_map<std::vector<int>, ExternalPtrAccess, hashing::Hasher<std::vector<int>>> &map,
+      bool grad_only = false)
+      : map_(map), grad_only_(grad_only) {
   }
 
   void visit(GlobalLoadStmt *stmt) override {
@@ -43,6 +44,8 @@ class ExternalPtrAccessVisitor : public BasicStmtVisitor {
       return;
 
     ExternalPtrStmt *src = stmt->src->cast<ExternalPtrStmt>();
+    if (grad_only_ && !src->is_grad)
+      return;
     ArgLoadStmt *arg = src->base_ptr->cast<ArgLoadStmt>();
     if (map_.find(arg->arg_id) != map_.end()) {
       map_[arg->arg_id] = map_[arg->arg_id] | ExternalPtrAccess::READ;
@@ -56,6 +59,8 @@ class ExternalPtrAccessVisitor : public BasicStmtVisitor {
       return;
 
     ExternalPtrStmt *dst = stmt->dest->cast<ExternalPtrStmt>();
+    if (grad_only_ && !dst->is_grad)
+      return;
     ArgLoadStmt *arg = dst->base_ptr->cast<ArgLoadStmt>();
     if (map_.find(arg->arg_id) != map_.end()) {
       map_[arg->arg_id] = map_[arg->arg_id] | ExternalPtrAccess::WRITE;
@@ -70,6 +75,8 @@ class ExternalPtrAccessVisitor : public BasicStmtVisitor {
 
     // Atomics modifies existing state (therefore both read & write)
     ExternalPtrStmt *dst = stmt->dest->cast<ExternalPtrStmt>();
+    if (grad_only_ && !dst->is_grad)
+      return;
     ArgLoadStmt *arg = dst->base_ptr->cast<ArgLoadStmt>();
     map_[arg->arg_id] = ExternalPtrAccess::WRITE | ExternalPtrAccess::READ;
   }
@@ -87,14 +94,18 @@ void detect_read_only(IRNode *root) {
   }
 }
 
-std::unordered_map<std::vector<int>,
-                   ExternalPtrAccess,
-                   hashing::Hasher<std::vector<int>>>
+std::unordered_map<std::vector<int>, ExternalPtrAccess, hashing::Hasher<std::vector<int>>>
 detect_external_ptr_access_in_task(OffloadedStmt *offload) {
-  std::unordered_map<std::vector<int>, ExternalPtrAccess,
-                     hashing::Hasher<std::vector<int>>>
-      map;
+  std::unordered_map<std::vector<int>, ExternalPtrAccess, hashing::Hasher<std::vector<int>>> map;
   ExternalPtrAccessVisitor v(map);
+  offload->accept(&v);
+  return map;
+}
+
+std::unordered_map<std::vector<int>, ExternalPtrAccess, hashing::Hasher<std::vector<int>>>
+detect_external_ptr_grad_access_in_task(OffloadedStmt *offload) {
+  std::unordered_map<std::vector<int>, ExternalPtrAccess, hashing::Hasher<std::vector<int>>> map;
+  ExternalPtrAccessVisitor v(map, /*grad_only=*/true);
   offload->accept(&v);
   return map;
 }

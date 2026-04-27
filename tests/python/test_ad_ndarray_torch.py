@@ -4,14 +4,12 @@ import quadrants as qd
 
 from tests import test_utils
 
-archs_support_ndarray_ad = [qd.cpu, qd.cuda]
-
 torch = pytest.importorskip("torch")
 
 pytestmark = pytest.mark.needs_torch
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(default_fp=qd.f64, require=[qd.extension.adstack, qd.extension.data64])
 def test_simple_demo():
     @test_utils.torch_op(output_shapes=[(1,)])
     @qd.kernel
@@ -27,7 +25,7 @@ def test_simple_demo():
     torch.autograd.gradcheck(test, input)
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64)
+@test_utils.test(default_fp=qd.f64, require=qd.extension.data64)
 def test_ad_reduce():
     @test_utils.torch_op(output_shapes=[(1,)])
     @qd.kernel
@@ -80,7 +78,7 @@ def test_ad_reduce():
         lambda y: y**0.4,
     ],
 )
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64)
+@test_utils.test(default_fp=qd.f64, require=qd.extension.data64)
 def test_poly(tifunc):
     s = (4,)
 
@@ -95,7 +93,7 @@ def test_poly(tifunc):
     torch.autograd.gradcheck(test, input)
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64)
+@test_utils.test(default_fp=qd.f64, require=qd.extension.data64)
 def test_ad_select():
     s = (4,)
 
@@ -111,9 +109,9 @@ def test_ad_select():
     torch.autograd.gradcheck(test, [x, y])
 
 
-@test_utils.test(arch=archs_support_ndarray_ad)
+@test_utils.test()
 def test_ad_mixed_with_torch():
-    @test_utils.torch_op(output_shapes=[(1,)])
+    @test_utils.torch_op(output_shapes=[(1,)], output_dtype=torch.float)
     @qd.kernel
     def compute_sum(a: qd.types.ndarray(), p: qd.types.ndarray()):
         for i in a:
@@ -129,7 +127,7 @@ def test_ad_mixed_with_torch():
         assert a.grad[i] == 4
 
 
-@test_utils.test(arch=archs_support_ndarray_ad)
+@test_utils.test()
 def test_ad_tape_throw():
     N = 4
 
@@ -169,7 +167,7 @@ def test_ad_tape_throw():
             compute_sum(b, n)
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_tape_torch_tensor_grad_none():
     N = 3
 
@@ -193,7 +191,7 @@ def test_tape_torch_tensor_grad_none():
         assert a.grad[i] == 1.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_tensor_shape():
     N = 3
 
@@ -213,11 +211,17 @@ def test_tensor_shape():
     with qd.ad.Tape(loss=loss):
         test(a, loss)
 
-    for i in range(N):
-        assert a.grad[i] == 1.0
+    # AMDGPU and some Vulkan drivers lose fp32 bit-exactness on the reverse-pass adjoint sum (CUDA and Metal
+    # happen to hit exactly 1.0); use allclose on those, exact equality elsewhere.
+    arch = qd.lang.impl.current_cfg().arch
+    if arch in (qd.amdgpu, qd.vulkan):
+        assert torch.allclose(a.grad, torch.ones_like(a.grad))
+    else:
+        for i in range(N):
+            assert a.grad[i] == 1.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_torch_needs_grad_false():
     N = 3
 

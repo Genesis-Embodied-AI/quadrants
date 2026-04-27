@@ -18,8 +18,7 @@ std::string scratch_pad_info(const MemoryAccessOptions &opt) {
     ser += "mem_access_opt [ ";
     for (auto &rec : opt.get_all()) {
       for (auto flag : rec.second) {
-        ser += rec.first->get_node_type_name_hinted() + ":" +
-               snode_access_flag_name(flag) + " ";
+        ser += rec.first->get_node_type_name_hinted() + ":" + snode_access_flag_name(flag) + " ";
       }
     }
     ser += "] ";
@@ -30,15 +29,13 @@ std::string scratch_pad_info(const MemoryAccessOptions &opt) {
 }
 
 std::string block_dim_info(int block_dim) {
-  return "block_dim=" +
-         (block_dim == 0 ? "adaptive" : std::to_string(block_dim)) + " ";
+  return "block_dim=" + (block_dim == 0 ? "adaptive" : std::to_string(block_dim)) + " ";
 }
 
 class IRPrinter : public IRVisitor {
  private:
   ExpressionPrinter *expr_printer_{nullptr};
-  std::function<void(const Stmt *stmt)> dbg_info_printer_{
-      [](const Stmt *stmt) {}};
+  std::function<void(const Stmt *stmt)> dbg_info_printer_{[](const Stmt *stmt) {}};
 
  public:
   int current_indent{0};
@@ -132,8 +129,7 @@ class IRPrinter : public IRVisitor {
 
   void visit(FrontendAllocaStmt *alloca) override {
     std::string shared_suffix = (alloca->is_shared) ? "(shared)" : "";
-    print("{}${} = alloca{} {}", alloca->type_hint(), alloca->id, shared_suffix,
-          alloca->ident.name());
+    print("{}${} = alloca{} {}", alloca->type_hint(), alloca->id, shared_suffix, alloca->ident.name());
     dbg_info_printer_(alloca);
   }
 
@@ -148,8 +144,7 @@ class IRPrinter : public IRVisitor {
       extras += ", ";
       extras += arg->name();
     }
-    print("{} : assert {}, \"{}\"{}", assert->id, assert->cond->name(),
-          assert->text, extras);
+    print("{} : assert {}, \"{}\"{}", assert->id, assert->cond->name(), assert->text, extras);
     dbg_info_printer_(assert);
   }
 
@@ -187,8 +182,8 @@ class IRPrinter : public IRVisitor {
     if (stmt->val.expr) {
       extras += ", " + expr_to_string(stmt->val);
     }
-    print("{} : {} {} {}", stmt->name(), snode_op_type_name(stmt->op_type),
-          stmt->snode->get_node_type_name_hinted(), extras);
+    print("{} : {} {} {}", stmt->name(), snode_op_type_name(stmt->op_type), stmt->snode->get_node_type_name_hinted(),
+          extras);
     dbg_info_printer_(stmt);
   }
 
@@ -200,8 +195,7 @@ class IRPrinter : public IRVisitor {
       extras += ", val = " + stmt->val->name();
     }
     std::string snode = stmt->snode->get_node_type_name_hinted();
-    print("{}{} = {} [{}] {}", stmt->type_hint(), stmt->name(),
-          snode_op_type_name(stmt->op_type), snode, extras);
+    print("{}{} = {} [{}] {}", stmt->type_hint(), stmt->name(), snode_op_type_name(stmt->op_type), snode, extras);
     dbg_info_printer_(stmt);
   }
 
@@ -217,50 +211,40 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(DecorationStmt *stmt) override {
-    if (stmt->decoration.size() == 2 &&
-        stmt->decoration[0] ==
-            uint32_t(DecorationStmt::Decoration::kLoopUnique)) {
-      print("decorate {} : Loop-unique {}", stmt->operand->name(),
-            stmt->decoration[0], stmt->decoration[1]);
+    if (stmt->decoration.size() == 2 && stmt->decoration[0] == uint32_t(DecorationStmt::Decoration::kLoopUnique)) {
+      print("decorate {} : Loop-unique {}", stmt->operand->name(), stmt->decoration[0], stmt->decoration[1]);
     } else {
-      print("decorate {} : ... size = {}", stmt->operand->name(),
-            stmt->decoration.size());
+      print("decorate {} : ... size = {}", stmt->operand->name(), stmt->decoration.size());
     }
     dbg_info_printer_(stmt);
   }
 
   void visit(UnaryOpStmt *stmt) override {
     if (stmt->is_cast()) {
-      std::string reint =
-          stmt->op_type == UnaryOpType::cast_value ? "" : "reinterpret_";
-      print("{}{} = {}{}<{}> {}", stmt->type_hint(), stmt->name(), reint,
-            unary_op_type_name(stmt->op_type), data_type_name(stmt->cast_type),
-            stmt->operand->name());
+      std::string reint = stmt->op_type == UnaryOpType::cast_value ? "" : "reinterpret_";
+      print("{}{} = {}{}<{}> {}", stmt->type_hint(), stmt->name(), reint, unary_op_type_name(stmt->op_type),
+            data_type_name(stmt->cast_type), stmt->operand->name());
     } else {
-      print("{}{} = {} {}", stmt->type_hint(), stmt->name(),
-            unary_op_type_name(stmt->op_type), stmt->operand->name());
+      print("{}{} = {} {}", stmt->type_hint(), stmt->name(), unary_op_type_name(stmt->op_type), stmt->operand->name());
     }
     dbg_info_printer_(stmt);
   }
 
   void visit(BinaryOpStmt *bin) override {
-    print("{}{} = {} {} {}", bin->type_hint(), bin->name(),
-          binary_op_type_name(bin->op_type), bin->lhs->name(),
+    print("{}{} = {} {} {}", bin->type_hint(), bin->name(), binary_op_type_name(bin->op_type), bin->lhs->name(),
           bin->rhs->name());
     dbg_info_printer_(bin);
   }
 
   void visit(TernaryOpStmt *stmt) override {
-    print("{}{} = {}({}, {}, {})", stmt->type_hint(), stmt->name(),
-          ternary_type_name(stmt->op_type), stmt->op1->name(),
+    print("{}{} = {}({}, {}, {})", stmt->type_hint(), stmt->name(), ternary_type_name(stmt->op_type), stmt->op1->name(),
           stmt->op2->name(), stmt->op3->name());
     dbg_info_printer_(stmt);
   }
 
   void visit(AtomicOpStmt *stmt) override {
-    print("{}{} = atomic {}({}, {})", stmt->type_hint(), stmt->name(),
-          atomic_op_type_name(stmt->op_type), stmt->dest->name(),
-          stmt->val->name());
+    print("{}{} = atomic {}({}, {})", stmt->type_hint(), stmt->name(), atomic_op_type_name(stmt->op_type),
+          stmt->dest->name(), stmt->val->name());
     dbg_info_printer_(stmt);
   }
 
@@ -333,14 +317,12 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(ConstStmt *const_stmt) override {
-    print("{}{} = const {}", const_stmt->type_hint(), const_stmt->name(),
-          const_stmt->val.stringify());
+    print("{}{} = const {}", const_stmt->type_hint(), const_stmt->name(), const_stmt->val.stringify());
     dbg_info_printer_(const_stmt);
   }
 
   void visit(WhileControlStmt *stmt) override {
-    print("{} : while control {}, {}", stmt->name(),
-          stmt->mask ? stmt->mask->name() : "nullptr", stmt->cond->name());
+    print("{} : while control {}, {}", stmt->name(), stmt->mask ? stmt->mask->name() : "nullptr", stmt->cond->name());
     dbg_info_printer_(stmt);
   }
 
@@ -361,8 +343,7 @@ class IRPrinter : public IRVisitor {
       }
       args += expr_to_string(stmt->args.exprs[i]);
     }
-    print("{}${} = call \"{}\", args = ({}), ret = {}", stmt->type_hint(),
-          stmt->id, stmt->func->get_name(), args,
+    print("{}${} = call \"{}\", args = ({}), ret = {}", stmt->type_hint(), stmt->id, stmt->func->get_name(), args,
           stmt->ident.has_value() ? stmt->ident->name() : "none");
     dbg_info_printer_(stmt);
   }
@@ -372,8 +353,8 @@ class IRPrinter : public IRVisitor {
     for (const auto &arg : stmt->args) {
       args.push_back(arg->name());
     }
-    print("{}{} = call \"{}\", args = {{{}}}", stmt->type_hint(), stmt->name(),
-          stmt->func->get_name(), fmt::join(args, ", "));
+    print("{}{} = call \"{}\", args = {{{}}}", stmt->type_hint(), stmt->name(), stmt->func->get_name(),
+          fmt::join(args, ", "));
     dbg_info_printer_(stmt);
   }
 
@@ -399,25 +380,19 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(FrontendForStmt *for_stmt) override {
-    auto vars = make_list<Identifier>(
-        for_stmt->loop_var_ids,
-        [](const Identifier &id) -> std::string { return id.name(); });
+    auto vars =
+        make_list<Identifier>(for_stmt->loop_var_ids, [](const Identifier &id) -> std::string { return id.name(); });
     if (for_stmt->snode) {
-      print("{} : for {} in {} {}{}{{", for_stmt->name(), vars,
-            for_stmt->snode->get_node_type_name_hinted(),
-            scratch_pad_info(for_stmt->mem_access_opt),
-            block_dim_info(for_stmt->block_dim));
+      print("{} : for {} in {} {}{}{{", for_stmt->name(), vars, for_stmt->snode->get_node_type_name_hinted(),
+            scratch_pad_info(for_stmt->mem_access_opt), block_dim_info(for_stmt->block_dim));
     } else if (for_stmt->external_tensor) {
-      print("{} : for {} in {} {}{}{{", for_stmt->name(), vars,
-            expr_to_string(for_stmt->external_tensor),
-            scratch_pad_info(for_stmt->mem_access_opt),
-            block_dim_info(for_stmt->block_dim));
+      print("{} : for {} in {} {}{}{{", for_stmt->name(), vars, expr_to_string(for_stmt->external_tensor),
+            scratch_pad_info(for_stmt->mem_access_opt), block_dim_info(for_stmt->block_dim));
     } else if (for_stmt->mesh) {
       print("{} : for {} in mesh {{", for_stmt->name(), vars);
     } else {
-      print("{} : for {} in range({}, {}) {}{{", for_stmt->name(), vars,
-            expr_to_string(for_stmt->begin), expr_to_string(for_stmt->end),
-            block_dim_info(for_stmt->block_dim));
+      print("{} : for {} in range({}, {}) {}{{", for_stmt->name(), vars, expr_to_string(for_stmt->begin),
+            expr_to_string(for_stmt->end), block_dim_info(for_stmt->block_dim));
     }
     for_stmt->body->accept(this);
     print("}}");
@@ -425,21 +400,19 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(RangeForStmt *for_stmt) override {
-    print("{} : {}for in range({}, {}) {}{}{{", for_stmt->name(),
-          for_stmt->reversed ? "reversed " : "", for_stmt->begin->name(),
-          for_stmt->end->name(),
-          for_stmt->is_bit_vectorized ? "(bit_vectorized) " : "",
-          block_dim_info(for_stmt->block_dim));
+    const std::string loop_name_suffix =
+        for_stmt->loop_name.empty() ? std::string() : fmt::format(" loop_name={}", for_stmt->loop_name);
+    print("{} : {}for in range({}, {}) {}{}{}{{", for_stmt->name(), for_stmt->reversed ? "reversed " : "",
+          for_stmt->begin->name(), for_stmt->end->name(), for_stmt->is_bit_vectorized ? "(bit_vectorized) " : "",
+          block_dim_info(for_stmt->block_dim), loop_name_suffix);
     for_stmt->body->accept(this);
     print("}}");
     dbg_info_printer_(for_stmt);
   }
 
   void visit(StructForStmt *for_stmt) override {
-    print("{} : struct for in {} {}{}{}{{", for_stmt->name(),
-          for_stmt->snode->get_node_type_name_hinted(),
-          for_stmt->is_bit_vectorized ? "(bit_vectorized) " : "",
-          scratch_pad_info(for_stmt->mem_access_opt),
+    print("{} : struct for in {} {}{}{}{{", for_stmt->name(), for_stmt->snode->get_node_type_name_hinted(),
+          for_stmt->is_bit_vectorized ? "(bit_vectorized) " : "", scratch_pad_info(for_stmt->mem_access_opt),
           block_dim_info(for_stmt->block_dim));
     for_stmt->body->accept(this);
     print("}}");
@@ -447,11 +420,8 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(MeshForStmt *for_stmt) override {
-    print("{} : mesh for ({} -> {}) {}{{", for_stmt->name(),
-          mesh::element_type_name(for_stmt->major_from_type),
-          for_stmt->major_to_types.size() == 0
-              ? "Unknown"
-              : mesh::element_type_name(*for_stmt->major_to_types.begin()),
+    print("{} : mesh for ({} -> {}) {}{{", for_stmt->name(), mesh::element_type_name(for_stmt->major_from_type),
+          for_stmt->major_to_types.size() == 0 ? "Unknown" : mesh::element_type_name(*for_stmt->major_to_types.begin()),
           scratch_pad_info(for_stmt->mem_access_opt));
     for_stmt->body->accept(this);
     print("}}");
@@ -459,8 +429,7 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(MatrixOfGlobalPtrStmt *stmt) override {
-    std::string s = fmt::format("{}{} = matrix of global ptr [",
-                                stmt->type_hint(), stmt->name());
+    std::string s = fmt::format("{}{} = matrix of global ptr [", stmt->type_hint(), stmt->name());
 
     for (int i = 0; i < (int)stmt->snodes.size(); i++) {
       s += fmt::format("{}", stmt->snodes[i]->get_node_type_name_hinted());
@@ -484,8 +453,7 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(GlobalPtrStmt *stmt) override {
-    std::string s =
-        fmt::format("{}{} = global ptr [", stmt->type_hint(), stmt->name());
+    std::string s = fmt::format("{}{} = global ptr [", stmt->type_hint(), stmt->name());
 
     std::string snode_name;
     if (stmt->snode) {
@@ -510,8 +478,7 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(MatrixOfMatrixPtrStmt *stmt) override {
-    std::string s = fmt::format("{}{} = matrix of matrix ptr [",
-                                stmt->type_hint(), stmt->name());
+    std::string s = fmt::format("{}{} = matrix of matrix ptr [", stmt->type_hint(), stmt->name());
     for (int i = 0; i < (int)stmt->stmts.size(); i++) {
       s += fmt::format("{}", stmt->stmts[i]->name());
       if (i + 1 < (int)stmt->stmts.size()) {
@@ -524,59 +491,51 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(MatrixPtrStmt *stmt) override {
-    std::string s =
-        fmt::format("{}{} = shift ptr [{} + {}]", stmt->type_hint(),
-                    stmt->name(), stmt->origin->name(), stmt->offset->name());
+    std::string s = fmt::format("{}{} = shift ptr [{} + {}]", stmt->type_hint(), stmt->name(), stmt->origin->name(),
+                                stmt->offset->name());
     print_raw(s);
     dbg_info_printer_(stmt);
   }
 
   void visit(ArgLoadStmt *stmt) override {
-    print("{}{} = arg{}[{}]", stmt->type_hint(), stmt->name(),
-          stmt->create_load ? "load" : "addr", fmt::join(stmt->arg_id, ", "));
+    print("{}{} = arg{}[{}]", stmt->type_hint(), stmt->name(), stmt->create_load ? "load" : "addr",
+          fmt::join(stmt->arg_id, ", "));
     dbg_info_printer_(stmt);
   }
 
   void visit(FrontendReturnStmt *stmt) override {
-    print("{}{} : return [{}]", stmt->type_hint(), stmt->name(),
-          expr_group_to_string(stmt->values));
+    print("{}{} : return [{}]", stmt->type_hint(), stmt->name(), expr_group_to_string(stmt->values));
     dbg_info_printer_(stmt);
   }
 
   void visit(ReturnStmt *stmt) override {
-    print("{}{} : return {}", stmt->type_hint(), stmt->name(),
-          stmt->values_raw_names());
+    print("{}{} : return {}", stmt->type_hint(), stmt->name(), stmt->values_raw_names());
     dbg_info_printer_(stmt);
   }
 
   void visit(LocalLoadStmt *stmt) override {
-    print("{}{} = local load [{}]", stmt->type_hint(), stmt->name(),
-          stmt->src->name());
+    print("{}{} = local load [{}]", stmt->type_hint(), stmt->name(), stmt->src->name());
     dbg_info_printer_(stmt);
   }
 
   void visit(LocalStoreStmt *stmt) override {
-    print("{}{} : local store [{} <- {}]", stmt->type_hint(), stmt->name(),
-          stmt->dest->name(), stmt->val->name());
+    print("{}{} : local store [{} <- {}]", stmt->type_hint(), stmt->name(), stmt->dest->name(), stmt->val->name());
     dbg_info_printer_(stmt);
   }
 
   void visit(GlobalLoadStmt *stmt) override {
-    print("{}{} = global load {}", stmt->type_hint(), stmt->name(),
-          stmt->src->name());
+    print("{}{} = global load {}", stmt->type_hint(), stmt->name(), stmt->src->name());
     dbg_info_printer_(stmt);
   }
 
   void visit(GlobalStoreStmt *stmt) override {
-    print("{}{} : global store [{} <- {}]", stmt->type_hint(), stmt->name(),
-          stmt->dest->name(), stmt->val->name());
+    print("{}{} : global store [{} <- {}]", stmt->type_hint(), stmt->name(), stmt->dest->name(), stmt->val->name());
     dbg_info_printer_(stmt);
   }
 
   void visit(RangeAssumptionStmt *stmt) override {
-    print("{}{} = assume_in_range({}{:+d} <= {} < {}{:+d})", stmt->type_hint(),
-          stmt->name(), stmt->base->name(), stmt->low, stmt->input->name(),
-          stmt->base->name(), stmt->high);
+    print("{}{} = assume_in_range({}{:+d} <= {} < {}{:+d})", stmt->type_hint(), stmt->name(), stmt->base->name(),
+          stmt->low, stmt->input->name(), stmt->base->name(), stmt->high);
     dbg_info_printer_(stmt);
   }
 
@@ -590,26 +549,20 @@ class IRPrinter : public IRVisitor {
       add.erase(add.size() - 2, 2);  // remove the last ", "
       add += "]";
     }
-    print("{}{} = loop_unique({}{})", stmt->type_hint(), stmt->name(),
-          stmt->input->name(), add);
+    print("{}{} = loop_unique({}{})", stmt->type_hint(), stmt->name(), stmt->input->name(), add);
     dbg_info_printer_(stmt);
   }
 
   void visit(LinearizeStmt *stmt) override {
-    auto ind = make_list<Stmt *>(
-        stmt->inputs, [&](Stmt *const &stmt) { return stmt->name(); }, "{");
-    auto stride = make_list<int>(
-        stmt->strides,
-        [&](const int &stride) { return std::to_string(stride); }, "{");
+    auto ind = make_list<Stmt *>(stmt->inputs, [&](Stmt *const &stmt) { return stmt->name(); }, "{");
+    auto stride = make_list<int>(stmt->strides, [&](const int &stride) { return std::to_string(stride); }, "{");
 
-    print("{}{} = linearized(ind {}, stride {})", stmt->type_hint(),
-          stmt->name(), ind, stride);
+    print("{}{} = linearized(ind {}, stride {})", stmt->type_hint(), stmt->name(), ind, stride);
     dbg_info_printer_(stmt);
   }
 
   void visit(IntegerOffsetStmt *stmt) override {
-    print("{}{} = offset {} + {}", stmt->type_hint(), stmt->name(),
-          stmt->input->name(), stmt->offset);
+    print("{}{} = offset {} + {}", stmt->type_hint(), stmt->name(), stmt->input->name(), stmt->offset);
     dbg_info_printer_(stmt);
   }
 
@@ -617,24 +570,21 @@ class IRPrinter : public IRVisitor {
     if (stmt->root() == nullptr)
       print("{}{} = get root nullptr", stmt->type_hint(), stmt->name());
     else
-      print("{}{} = get root [{}][{}]", stmt->type_hint(), stmt->name(),
-            stmt->root()->get_node_type_name_hinted(),
+      print("{}{} = get root [{}][{}]", stmt->type_hint(), stmt->name(), stmt->root()->get_node_type_name_hinted(),
             stmt->root()->type_name());
     dbg_info_printer_(stmt);
   }
 
   void visit(SNodeLookupStmt *stmt) override {
-    print("{}{} = [{}][{}]::lookup({}, {}) activate = {}", stmt->type_hint(),
-          stmt->name(), stmt->snode->get_node_type_name_hinted(),
-          stmt->snode->type_name(), stmt->input_snode->name(),
+    print("{}{} = [{}][{}]::lookup({}, {}) activate = {}", stmt->type_hint(), stmt->name(),
+          stmt->snode->get_node_type_name_hinted(), stmt->snode->type_name(), stmt->input_snode->name(),
           stmt->input_index->name(), stmt->activate);
     dbg_info_printer_(stmt);
   }
 
   void visit(GetChStmt *stmt) override {
     print("{}{} = get child [{}->{}] {}", stmt->type_hint(), stmt->name(),
-          stmt->input_snode->get_node_type_name_hinted(),
-          stmt->output_snode->get_node_type_name_hinted(),
+          stmt->input_snode->get_node_type_name_hinted(), stmt->output_snode->get_node_type_name_hinted(),
           stmt->input_ptr->name());
     dbg_info_printer_(stmt);
   }
@@ -661,8 +611,7 @@ class IRPrinter : public IRVisitor {
     }
     s += fmt::format(" layout={} is_grad={}", "AOS", stmt->is_grad);
 
-    print(fmt::format("{}{} = external_ptr {}", stmt->type_hint(), stmt->name(),
-                      s));
+    print(fmt::format("{}{} = external_ptr {}", stmt->type_hint(), stmt->name(), s));
     dbg_info_printer_(stmt);
   }
 
@@ -683,31 +632,29 @@ class IRPrinter : public IRVisitor {
       } else {
         end_str = fmt::format("tmp(offset={}B)", stmt->end_offset);
       }
-      details =
-          fmt::format("range_for({}, {}) grid_dim={} block_dim={}", begin_str,
-                      end_str, stmt->grid_dim, stmt->block_dim);
+      details = fmt::format("range_for({}, {}) grid_dim={} block_dim={}", begin_str, end_str, stmt->grid_dim,
+                            stmt->block_dim);
+      if (!stmt->loop_name.empty()) {
+        details += fmt::format(" loop_name={}", stmt->loop_name);
+      }
     } else if (stmt->task_type == OffloadedTaskType::struct_for) {
-      details =
-          fmt::format("struct_for({}) grid_dim={} block_dim={} bls={}",
-                      stmt->snode->get_node_type_name_hinted(), stmt->grid_dim,
-                      stmt->block_dim, scratch_pad_info(stmt->mem_access_opt));
+      details = fmt::format("struct_for({}) grid_dim={} block_dim={} bls={}", stmt->snode->get_node_type_name_hinted(),
+                            stmt->grid_dim, stmt->block_dim, scratch_pad_info(stmt->mem_access_opt));
+      if (!stmt->loop_name.empty()) {
+        details += fmt::format(" loop_name={}", stmt->loop_name);
+      }
     } else if (stmt->task_type == OffloadedTaskType::mesh_for) {
       details = fmt::format(
           "mesh_for({} -> {}) num_patches={} grid_dim={} block_dim={} bls={}",
           mesh::element_type_name(stmt->major_from_type),
-          stmt->major_to_types.size() == 0
-              ? "Unknown"
-              : mesh::element_type_name(*stmt->major_to_types.begin()),
-          stmt->mesh->num_patches, stmt->grid_dim, stmt->block_dim,
-          scratch_pad_info(stmt->mem_access_opt));
+          stmt->major_to_types.size() == 0 ? "Unknown" : mesh::element_type_name(*stmt->major_to_types.begin()),
+          stmt->mesh->num_patches, stmt->grid_dim, stmt->block_dim, scratch_pad_info(stmt->mem_access_opt));
     }
     if (stmt->task_type == OffloadedTaskType::listgen) {
-      print("{} = offloaded listgen {}->{}", stmt->name(),
-            stmt->snode->parent->get_node_type_name_hinted(),
+      print("{} = offloaded listgen {}->{}", stmt->name(), stmt->snode->parent->get_node_type_name_hinted(),
             stmt->snode->get_node_type_name_hinted());
     } else if (stmt->task_type == OffloadedTaskType::gc) {
-      print("{} = offloaded garbage collect {}", stmt->name(),
-            stmt->snode->get_node_type_name_hinted());
+      print("{} = offloaded garbage collect {}", stmt->name(), stmt->snode->get_node_type_name_hinted());
     } else {
       print("{} = offloaded {} ", stmt->name(), details);
       if (stmt->tls_prologue) {
@@ -745,44 +692,37 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(ClearListStmt *stmt) override {
-    print("{} = clear_list {}", stmt->name(),
-          stmt->snode->get_node_type_name_hinted());
+    print("{} = clear_list {}", stmt->name(), stmt->snode->get_node_type_name_hinted());
     dbg_info_printer_(stmt);
   }
 
   void visit(LoopIndexStmt *stmt) override {
-    print("{}{} = loop {} index {}", stmt->type_hint(), stmt->name(),
-          stmt->loop->name(), stmt->index);
+    print("{}{} = loop {} index {}", stmt->type_hint(), stmt->name(), stmt->loop->name(), stmt->index);
     dbg_info_printer_(stmt);
   }
 
   void visit(LoopLinearIndexStmt *stmt) override {
-    print("{}{} = loop {} index linear", stmt->type_hint(), stmt->name(),
-          stmt->loop->name());
+    print("{}{} = loop {} index linear", stmt->type_hint(), stmt->name(), stmt->loop->name());
     dbg_info_printer_(stmt);
   }
 
   void visit(BlockCornerIndexStmt *stmt) override {
-    print("{}{} = loop {} block corner index {}", stmt->type_hint(),
-          stmt->name(), stmt->loop->name(), stmt->index);
+    print("{}{} = loop {} block corner index {}", stmt->type_hint(), stmt->name(), stmt->loop->name(), stmt->index);
     dbg_info_printer_(stmt);
   }
 
   void visit(GlobalTemporaryStmt *stmt) override {
-    print("{}{} = global tmp var (offset = {} B)", stmt->type_hint(),
-          stmt->name(), stmt->offset);
+    print("{}{} = global tmp var (offset = {} B)", stmt->type_hint(), stmt->name(), stmt->offset);
     dbg_info_printer_(stmt);
   }
 
   void visit(ThreadLocalPtrStmt *stmt) override {
-    print("{}{} = thread local ptr (offset = {} B)", stmt->type_hint(),
-          stmt->name(), stmt->offset);
+    print("{}{} = thread local ptr (offset = {} B)", stmt->type_hint(), stmt->name(), stmt->offset);
     dbg_info_printer_(stmt);
   }
 
   void visit(BlockLocalPtrStmt *stmt) override {
-    print("{}{} = block local ptr (offset = {})", stmt->type_hint(),
-          stmt->name(), stmt->offset->name());
+    print("{}{} = block local ptr (offset = {})", stmt->type_hint(), stmt->name(), stmt->offset->name());
     dbg_info_printer_(stmt);
   }
 
@@ -796,58 +736,49 @@ class IRPrinter : public IRVisitor {
       args += arg->name();
       first = false;
     }
-    print("{}{} = internal call {}({})", stmt->type_hint(), stmt->name(),
-          stmt->func_name, args);
+    print("{}{} = internal call {}({})", stmt->type_hint(), stmt->name(), stmt->func_name, args);
     dbg_info_printer_(stmt);
   }
 
   void visit(AdStackAllocaStmt *stmt) override {
-    print("{}{} = stack alloc (max_size={})", stmt->type_hint(), stmt->name(),
-          stmt->max_size);
+    print("{}{} = stack alloc (max_size={})", stmt->type_hint(), stmt->name(), stmt->max_size);
     dbg_info_printer_(stmt);
   }
 
   void visit(AdStackLoadTopStmt *stmt) override {
-    print("{}{} = stack load top {}", stmt->type_hint(), stmt->name(),
-          stmt->stack->name());
+    print("{}{} = stack load top {}", stmt->type_hint(), stmt->name(), stmt->stack->name());
     dbg_info_printer_(stmt);
   }
 
   void visit(AdStackLoadTopAdjStmt *stmt) override {
-    print("{}{} = stack load top adj {}", stmt->type_hint(), stmt->name(),
-          stmt->stack->name());
+    print("{}{} = stack load top adj {}", stmt->type_hint(), stmt->name(), stmt->stack->name());
     dbg_info_printer_(stmt);
   }
 
   void visit(AdStackPushStmt *stmt) override {
-    print("{}{} : stack push {}, val = {}", stmt->type_hint(), stmt->name(),
-          stmt->stack->name(), stmt->v->name());
+    print("{}{} : stack push {}, val = {}", stmt->type_hint(), stmt->name(), stmt->stack->name(), stmt->v->name());
     dbg_info_printer_(stmt);
   }
 
   void visit(AdStackPopStmt *stmt) override {
-    print("{}{} : stack pop {}", stmt->type_hint(), stmt->name(),
-          stmt->stack->name());
+    print("{}{} : stack pop {}", stmt->type_hint(), stmt->name(), stmt->stack->name());
     dbg_info_printer_(stmt);
   }
 
   void visit(AdStackAccAdjointStmt *stmt) override {
-    print("{}{} : stack acc adj {}, val = {}", stmt->type_hint(), stmt->name(),
-          stmt->stack->name(), stmt->v->name());
+    print("{}{} : stack acc adj {}, val = {}", stmt->type_hint(), stmt->name(), stmt->stack->name(), stmt->v->name());
     dbg_info_printer_(stmt);
   }
 
   void visit(ExternalTensorShapeAlongAxisStmt *stmt) override {
-    print("{}{} = external_tensor_shape_along_axis {}, arg_id [{}]",
-          stmt->type_hint(), stmt->name(), stmt->axis,
+    print("{}{} = external_tensor_shape_along_axis {}, arg_id [{}]", stmt->type_hint(), stmt->name(), stmt->axis,
           fmt::join(stmt->arg_id, ", "));
     dbg_info_printer_(stmt);
   }
 
   void visit(ExternalTensorBasePtrStmt *stmt) override {
-    print("{}{} = external_tensor_base_ptr (arg_id=[{}], is_grad={})",
-          stmt->type_hint(), stmt->name(), fmt::join(stmt->arg_id, ", "),
-          stmt->is_grad);
+    print("{}{} = external_tensor_base_ptr (arg_id=[{}], is_grad={})", stmt->type_hint(), stmt->name(),
+          fmt::join(stmt->arg_id, ", "), stmt->is_grad);
     dbg_info_printer_(stmt);
   }
 
@@ -862,27 +793,25 @@ class IRPrinter : public IRVisitor {
         values += ", ";
       }
     }
-    print("{} : {}bit_struct_store {}, ch_ids=[{}], values=[{}]", stmt->name(),
-          stmt->is_atomic ? "atomic " : "", stmt->ptr->name(), ch_ids, values);
+    print("{} : {}bit_struct_store {}, ch_ids=[{}], values=[{}]", stmt->name(), stmt->is_atomic ? "atomic " : "",
+          stmt->ptr->name(), ch_ids, values);
   }
 
   // Mesh related.
 
   void visit(MeshRelationAccessStmt *stmt) override {
     if (stmt->is_size()) {
-      print("{}{} = {} idx relation {} size", stmt->type_hint(), stmt->name(),
-            stmt->mesh_idx->name(), mesh::element_type_name(stmt->to_type));
+      print("{}{} = {} idx relation {} size", stmt->type_hint(), stmt->name(), stmt->mesh_idx->name(),
+            mesh::element_type_name(stmt->to_type));
     } else {
-      print("{}{} = {} idx relation {}[{}]", stmt->type_hint(), stmt->name(),
-            stmt->mesh_idx->name(), mesh::element_type_name(stmt->to_type),
-            stmt->neighbor_idx->name());
+      print("{}{} = {} idx relation {}[{}]", stmt->type_hint(), stmt->name(), stmt->mesh_idx->name(),
+            mesh::element_type_name(stmt->to_type), stmt->neighbor_idx->name());
     }
     dbg_info_printer_(stmt);
   }
 
   void visit(MeshIndexConversionStmt *stmt) override {
-    print("{}{} = {} {} {}", stmt->type_hint(), stmt->name(),
-          mesh::conv_type_name(stmt->conv_type),
+    print("{}{} = {} {} {}", stmt->type_hint(), stmt->name(), mesh::conv_type_name(stmt->conv_type),
           mesh::element_type_name(stmt->idx_type), stmt->idx->name());
     dbg_info_printer_(stmt);
   }
@@ -932,8 +861,8 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(GetElementStmt *stmt) override {
-    print("{}{} = get_element({}, {})", stmt->type_hint(), stmt->name(),
-          stmt->src->name(), fmt::join(stmt->index, ", "));
+    print("{}{} = get_element({}, {})", stmt->type_hint(), stmt->name(), stmt->src->name(),
+          fmt::join(stmt->index, ", "));
   }
 
  private:
@@ -962,20 +891,15 @@ class IRPrinter : public IRVisitor {
 
 namespace irpass {
 
-void print(IRNode *root,
-           std::string *output,
-           bool print_ir_dbg_info,
-           bool print_kernel_wrapper) {
+void print(IRNode *root, std::string *output, bool print_ir_dbg_info, bool print_kernel_wrapper) {
   ExpressionHumanFriendlyPrinter expr_printer;
-  return IRPrinter::run(&expr_printer, root, output, print_ir_dbg_info,
-                        print_kernel_wrapper);
+  return IRPrinter::run(&expr_printer, root, output, print_ir_dbg_info, print_kernel_wrapper);
 }
 
-std::function<void(const std::string &)> make_pass_printer(
-    bool verbose,
-    bool print_ir_dbg_info,
-    const std::string &kernel_name,
-    IRNode *ir) {
+std::function<void(const std::string &)> make_pass_printer(bool verbose,
+                                                           bool print_ir_dbg_info,
+                                                           const std::string &kernel_name,
+                                                           IRNode *ir) {
   if (!verbose) {
     return [](const std::string &) {};
   }

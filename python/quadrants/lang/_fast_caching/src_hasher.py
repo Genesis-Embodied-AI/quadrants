@@ -1,4 +1,5 @@
 import json
+import os
 import warnings
 from typing import Any, Iterable, Sequence
 
@@ -49,6 +50,7 @@ def create_cache_key(
             kernel_source_info.filepath,
             str(kernel_source_info.start_lineno),
             "pruned",
+            "kcov" if os.environ.get("QD_KERNEL_COVERAGE") == "1" else "",
         )
     )
     return cache_key
@@ -58,6 +60,7 @@ class CacheValue(BaseModel):
     frontend_cache_key: str
     hashed_function_source_infos: list[HashedFunctionSourceInfo]
     used_py_dataclass_parameters: set[str]
+    graph_do_while_arg: str | None = None
 
 
 def store(
@@ -65,6 +68,7 @@ def store(
     fast_cache_key: str,
     function_source_infos: Iterable[FunctionSourceInfo],
     used_py_dataclass_parameters: set[str],
+    graph_do_while_arg: str | None = None,
 ) -> None:
     """
     Note that unlike other caches, this cache is not going to store the actual value we want.
@@ -92,6 +96,7 @@ def store(
         frontend_cache_key=frontend_cache_key,
         hashed_function_source_infos=list(hashed_function_source_infos),
         used_py_dataclass_parameters=used_py_dataclass_parameters,
+        graph_do_while_arg=graph_do_while_arg,
     )
     cache.store(fast_cache_key, cache_value_obj.model_dump_json())
 
@@ -109,17 +114,17 @@ def _try_load(cache_key: str) -> CacheValue | None:
     return cache_value_obj
 
 
-def load(cache_key: str) -> tuple[set[str], str] | tuple[None, None]:
+def load(cache_key: str) -> tuple[set[str], str, str | None] | tuple[None, None, None]:
     """
     loads function source infos from cache, if available
     checks the hashes against the current source code
     """
     cache_value = _try_load(cache_key)
     if cache_value is None:
-        return None, None
+        return None, None, None
     if function_hasher.validate_hashed_function_infos(cache_value.hashed_function_source_infos):
-        return cache_value.used_py_dataclass_parameters, cache_value.frontend_cache_key
-    return None, None
+        return cache_value.used_py_dataclass_parameters, cache_value.frontend_cache_key, cache_value.graph_do_while_arg
+    return None, None, None
 
 
 def dump_stats() -> None:

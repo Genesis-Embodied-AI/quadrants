@@ -27,8 +27,7 @@ using high_res_clock = std::chrono::high_resolution_clock;
 
 // TODO: In the future this isn't necessarily a pointer, since DeviceAllocation
 // is already a pretty cheap handle>
-using InputBuffersMap =
-    std::unordered_map<BufferInfo, DeviceAllocation *, BufferInfoHasher>;
+using InputBuffersMap = std::unordered_map<BufferInfo, DeviceAllocation *, BufferInfoHasher>;
 
 class SNodeTreeManager;
 
@@ -75,11 +74,29 @@ class CompiledQuadrantsKernel {
   std::vector<std::unique_ptr<Pipeline>> pipelines_;
 };
 
+// Per-task runtime metadata populated by the on-device adstack SizeExpr sizer shader. `metadata` is the
+// readback of the sizer buffer laid out as `[stride_float, stride_int, (offset, max_size)*]`; `stride_*`
+// are cached copies of the first two words for the downstream heap-sizing math in `launch_kernel`. One
+// entry per task in the kernel's `tasks_attribs` vector (tasks without any adstack allocas keep the
+// compile-time strides from `AdStackSizingAttribs::per_thread_stride_*_compile_time` and leave `metadata`
+// empty).
+struct PerTaskAdStackRuntime {
+  std::vector<uint32_t> metadata;
+  uint32_t stride_float{0};
+  uint32_t stride_int{0};
+};
+
 class QD_DLL_EXPORT GfxRuntime {
  public:
   struct Params {
     Device *device{nullptr};
     KernelProfilerBase *profiler{nullptr};
+    // Back-reference to the owning `GfxProgramImpl` so `launch_kernel` can reach `ProgramImpl::program` and
+    // evaluate per-task `SerializedSizeExpr` trees captured in `TaskAttributes::ad_stack.allocas[i].size_expr`
+    // against the live field state (via `SNodeRwAccessorsBank`) + the per-launch `LaunchContextBuilder` args.
+    // Null is tolerated for pre-`materialize_runtime` construction paths; only the adstack-metadata publish
+    // path uses it, and kernels without any adstack do not trigger that path.
+    ProgramImpl *program_impl{nullptr};
   };
 
   explicit GfxRuntime(const Params &params);
@@ -112,27 +129,38 @@ class QD_DLL_EXPORT GfxRuntime {
 
   size_t get_root_buffer_size(int id) const;
 
-  void enqueue_compute_op_lambda(
-      std::function<void(Device *device, CommandList *cmdlist)> op,
-      const std::vector<ComputeOpImageRef> &image_refs);
+  void enqueue_compute_op_lambda(std::function<void(Device *device, CommandList *cmdlist)> op,
+                                 const std::vector<ComputeOpImageRef> &image_refs);
 
   bool used_in_kernel(DeviceAllocationId id) {
     return ndarrays_in_use_.count(id) > 0;
   }
 
-  static std::pair<const lang::StructType *, size_t>
-  get_struct_type_with_data_layout(const lang::StructType *old_ty,
-                                   const std::string &layout);
+  static std::pair<const lang::StructType *, size_t> get_struct_type_with_data_layout(const lang::StructType *old_ty,
+                                                                                      const std::string &layout);
 
-  static std::tuple<const lang::StructType *, size_t, size_t>
-  get_struct_type_with_data_layout_impl(const lang::StructType *old_ty,
-                                        const std::string &layout);
+  static std::tuple<const lang::StructType *, size_t, size_t> get_struct_type_with_data_layout_impl(
+      const lang::StructType *old_ty,
+      const std::string &layout);
 
  private:
   friend class quadrants::lang::gfx::SNodeTreeManager;
 
   void ensure_current_cmdlist();
   void submit_current_cmdlist_if_timeout();
+
+  // Walks each task's `SerializedSizeExpr` trees, encodes them into device bytecode, dispatches the on-device
+  // sizer compute shader once per adstack-bearing task, and reads back per-task `[stride_float, stride_int,
+  // (offset, max_size)*]` metadata. See `quadrants/runtime/gfx/adstack_sizer_launch.cpp` for the full
+  // mechanism. Returns one entry per task in `task_attribs`; tasks without adstack allocas get the
+  // compile-time fallback strides and an empty `metadata`. Called from `launch_kernel` before the main
+  // cmdlist opens, so the sizer dispatch is fully serialised against any in-flight reader kernels.
+  std::vector<PerTaskAdStackRuntime> publish_adstack_metadata_spirv(
+      LaunchContextBuilder &host_ctx,
+      DeviceAllocationGuard *args_buffer,
+      const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
+      const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
+      const std::string &kernel_name);
 
   void init_nonroot_buffers();
 
@@ -146,10 +174,69 @@ class QD_DLL_EXPORT GfxRuntime {
   // FIXME: Support proper multiple lists
   std::unique_ptr<DeviceAllocationGuard> listgen_buffer_;
 
+  // Deferred-free buffers associated with queued-but-not-yet-completed cmdlists. `flush()` leaves this
+  // untouched after submit (any buffer here may still be referenced by an in-flight command); only
+  // `synchronize()` clears it, after `wait_idle()` drains the stream. Across repeated `flush()` calls without
+  // an intervening sync this can accumulate in principle - one batch per flush - but every workload in
+  // Quadrants touches a Python-side observable (result fetch, `to_numpy()`, field readback, etc.) between
+  // kernel launches and those paths trigger an implicit `synchronize()` that drains the queue.
+  //
+  // A bounded-FIFO / semaphore-keyed retirement scheme was considered (see the `is_signaled()` discussion in
+  // the closed PR #538) and rejected as net-negative: the FIFO variant trades a theoretical growth path for
+  // a real, measurable blocking stall every N flushes, at an arbitrary threshold. The non-blocking polling
+  // variant is the one worth doing, but only if a real workload motivates it - that requires
+  // `bool is_signaled() const` on `StreamSemaphoreObject` and per-backend implementations (`vkGetFenceStatus`
+  // on Vulkan, `MTLSharedEvent` on Metal, trivial on CPU), an RHI public-surface change that should stand
+  // alone when it lands.
   std::vector<std::unique_ptr<DeviceAllocationGuard>> ctx_buffers_;
+
+  // Single u32 SSBO written by kernels that overflow an adstack. Allocated lazily on the first launch that binds
+  // BufferType::AdStackOverflow and then reused across launches; synchronize() reads it, raises if non-zero, and
+  // zeros it for the next window.
+  std::unique_ptr<DeviceAllocationGuard> adstack_overflow_buffer_;
+
+  // Per-dispatch heaps for SPIR-V adstack primal/adjoint storage. The float heap backs f32-valued adstacks; the
+  // int heap backs i32 and u1 adstacks (u1 stored as i32 to match the historical Function-scope path's bool->int
+  // remap). Other primitive types (f64, i64, ...) are hard-errored in the shader codegen (no fallback). Each heap
+  // is sized at `stride * (group_x * block_dim) * sizeof(element)` and grown lazily; reused across launches
+  // whenever the current allocation is already big enough. On grow, the previous buffer is moved into
+  // `ctx_buffers_` rather than freed synchronously, so any in-flight cmdlist still referencing it stays valid
+  // until the stream drains.
+  std::unique_ptr<DeviceAllocationGuard> adstack_heap_buffer_float_;
+  size_t adstack_heap_buffer_float_size_{0};
+  std::unique_ptr<DeviceAllocationGuard> adstack_heap_buffer_int_;
+  size_t adstack_heap_buffer_int_size_{0};
+  // Per-`GfxRuntime` compiled sizer pipeline and bytecode scratch buffer for the on-device adstack
+  // SizeExpr interpreter (see `quadrants/codegen/spirv/adstack_sizer_shader.{h,cpp}`). The pipeline is
+  // built once lazily on the first reverse-mode kernel launch that has adstack allocas and reused across
+  // every such launch afterwards; the bytecode buffer is grown on demand with the same
+  // amortised-doubling policy as the float / int heaps. Both are null on backends that don't advertise
+  // both `spirv_has_physical_storage_buffer` and `spirv_has_int64`, in which case the adstack-allocating
+  // kernel is hard-errored at launch time rather than routed to a broken host-eval fallback.
+  std::unique_ptr<Pipeline> adstack_sizer_pipeline_{nullptr};
+  std::unique_ptr<DeviceAllocationGuard> adstack_sizer_bytecode_buffer_;
+  size_t adstack_sizer_bytecode_buffer_size_{0};
+
+  // Owning `ProgramImpl` back-reference; propagated from `Params::program_impl`. See the comment on
+  // `Params::program_impl` for the contract.
+  ProgramImpl *program_impl_{nullptr};
+
+  // Set by the destructor before its own `synchronize()` call so the adstack-overflow poll in `synchronize()`
+  // short-circuits instead of raising from an implicitly-noexcept `~GfxRuntime()` unwinding path (a throw
+  // there would call `std::terminate()` and crash the process; the user-visible raise should happen at the
+  // user's own `qd.sync()` site, not during teardown). Mirrors LlvmProgramImpl's `finalizing_` flag.
+  bool finalizing_{false};
 
   std::unique_ptr<CommandList> current_cmdlist_{nullptr};
   high_res_clock::time_point current_cmdlist_pending_since_;
+
+  // Counts kernel launches since the last `synchronize()`. `submit_current_cmdlist_if_timeout` forces a
+  // drain once this crosses a threshold, bounding the growth of `VulkanStream::submitted_cmdbuffers_` (and
+  // the fences, semaphores and descriptor sets those entries keep alive) on tight kernel-launch loops that
+  // never touch a Python-side observable - workloads like MPM88 where every substep is a pure GPU update
+  // and the host only reads state once at the end. See the assignment site for the MoltenVK SIGSEGV this
+  // guards against.
+  size_t pending_launches_since_sync_{0};
 
   std::vector<std::unique_ptr<CompiledQuadrantsKernel>> ti_kernels_;
 
@@ -163,12 +250,11 @@ class QD_DLL_EXPORT GfxRuntime {
   std::unordered_set<DeviceAllocationId> ndarrays_in_use_;
 };
 
-GfxRuntime::RegisterParams run_codegen(
-    Kernel *kernel,
-    Arch arch,
-    const DeviceCapabilityConfig &caps,
-    const std::vector<CompiledSNodeStructs> &compiled_structs,
-    const CompileConfig &compile_config);
+GfxRuntime::RegisterParams run_codegen(Kernel *kernel,
+                                       Arch arch,
+                                       const DeviceCapabilityConfig &caps,
+                                       const std::vector<CompiledSNodeStructs> &compiled_structs,
+                                       const CompileConfig &compile_config);
 
 }  // namespace gfx
 }  // namespace quadrants::lang

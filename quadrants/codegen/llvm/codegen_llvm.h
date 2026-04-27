@@ -23,9 +23,7 @@ class FunctionCreationGuard {
   llvm::BasicBlock *old_entry, *allocas, *entry, *old_final, *final;
   llvm::IRBuilder<>::InsertPoint ip;
 
-  FunctionCreationGuard(TaskCodeGenLLVM *mb,
-                        std::vector<llvm::Type *> arguments,
-                        const std::string &func_name);
+  FunctionCreationGuard(TaskCodeGenLLVM *mb, std::vector<llvm::Type *> arguments, const std::string &func_name);
 
   ~FunctionCreationGuard();
 };
@@ -64,6 +62,33 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   // The task_codegen_id represents the id of the offloaded task
   int task_codegen_id{0};
+
+  // Per-task heap-backed adstack state. Replaces the function-scope `create_entry_block_alloca` that used to
+  // bound the cumulative adstack size by the worker-thread stack limit (~512 KB on macOS secondary threads).
+  // `ad_stack_per_thread_stride_` is the sum of `AdStackAllocaStmt::size_in_bytes()` (aligned up to 8) for every
+  // adstack in the current offloaded task - each thread owns exactly this many bytes inside
+  // `runtime->adstack_heap_buffer`. `ad_stack_offsets_` is indexed by each alloca's `stack_id` (assigned during the
+  // pre-scan in declaration order) and stores the offset within the per-thread slice (i.e. the sum of sizes of
+  // siblings visited earlier in the pre-scan). Both are populated by a pre-scan of the task body in
+  // `init_offloaded_task_function` before any codegen runs, so later sibling allocas do not shift an earlier
+  // alloca's offset out from under a cached SSA pointer. `ad_stack_heap_base_llvm_` caches the SSA value returned by
+  // `LLVMRuntime_get_adstack_heap_buffer(runtime)` at the top of the task body - emitted once and reused at every
+  // AdStack* visit to avoid redundant runtime calls. All three reset to empty / nullptr per task.
+  std::size_t ad_stack_per_thread_stride_{0};
+  std::vector<std::size_t> ad_stack_offsets_;
+  // Mirror of the pre-scan output copied into `current_task->ad_stack` in `finalize_offloaded_task_function`. Kept
+  // as class state so the scan (which runs before `current_task` is constructed) can still push entries in order.
+  std::vector<AdStackAllocaInfo> ad_stack_allocas_info_;
+  std::vector<SerializedSizeExpr> ad_stack_size_exprs_;
+  llvm::Value *ad_stack_heap_base_llvm_{nullptr};
+  // Cached SSA values for the three per-launch metadata fields the host publishes into
+  // `LLVMRuntime.adstack_{per_thread_stride,offsets,max_sizes}` before each dispatch. Loaded once at
+  // `entry_block` (via `ensure_ad_stack_metadata_llvm`) and reused by every `AdStack*` visit. Resolving via
+  // runtime fields lets `AdStackAllocaStmt`'s base-address math and `AdStackPushStmt`'s overflow bound scale per
+  // launch from `SizeExpr` without a recompile.
+  llvm::Value *ad_stack_stride_llvm_{nullptr};
+  llvm::Value *ad_stack_offsets_ptr_llvm_{nullptr};
+  llvm::Value *ad_stack_max_sizes_ptr_llvm_{nullptr};
 
   std::unordered_map<const Stmt *, std::vector<llvm::Value *>> loop_vars_llvm;
 
@@ -113,19 +138,15 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   llvm::Value *get_runtime();
 
-  void emit_struct_meta_base(const std::string &name,
-                             llvm::Value *node_meta,
-                             SNode *snode);
+  void emit_struct_meta_base(const std::string &name, llvm::Value *node_meta, SNode *snode);
 
-  void create_elementwise_binary(
-      BinaryOpStmt *stmt,
-      std::function<llvm::Value *(llvm::Value *lhs, llvm::Value *rhs)> f);
+  void create_elementwise_binary(BinaryOpStmt *stmt,
+                                 std::function<llvm::Value *(llvm::Value *lhs, llvm::Value *rhs)> f);
 
-  void create_elementwise_cast(
-      UnaryOpStmt *stmt,
-      llvm::Type *to_ty,
-      std::function<llvm::Value *(llvm::Value *, llvm::Type *)> f,
-      bool on_self = false);
+  void create_elementwise_cast(UnaryOpStmt *stmt,
+                               llvm::Type *to_ty,
+                               std::function<llvm::Value *(llvm::Value *, llvm::Type *)> f,
+                               bool on_self = false);
 
   std::unique_ptr<RuntimeObject> emit_struct_meta_object(SNode *snode);
 
@@ -144,19 +165,13 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
    */
   virtual LLVMCompiledTask run_compilation();
   // For debugging only
-  virtual llvm::Value *create_print(std::string tag,
-                                    DataType dt,
-                                    llvm::Value *value);
+  virtual llvm::Value *create_print(std::string tag, DataType dt, llvm::Value *value);
 
   llvm::Value *create_print(std::string tag, llvm::Value *value);
 
-  void set_struct_to_buffer(const StructType *struct_type,
-                            llvm::Value *buffer,
-                            const std::vector<Stmt *> &elements);
+  void set_struct_to_buffer(const StructType *struct_type, llvm::Value *buffer, const std::vector<Stmt *> &elements);
 
-  llvm::Value *cast_pointer(llvm::Value *val,
-                            std::string dest_ty_name,
-                            int addr_space = 0);
+  llvm::Value *cast_pointer(llvm::Value *val, std::string dest_ty_name, int addr_space = 0);
 
   void emit_list_gen(OffloadedStmt *listgen);
 
@@ -170,9 +185,7 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   llvm::Function *get_struct_function(const std::string &name, int tree_id);
 
   template <typename... Args>
-  llvm::Value *call_struct_func(int tree_id,
-                                const std::string &func_name,
-                                Args &&...args);
+  llvm::Value *call_struct_func(int tree_id, const std::string &func_name, Args &&...args);
 
   void create_increment(llvm::Value *ptr, llvm::Value *value);
 
@@ -242,11 +255,10 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   virtual llvm::Value *integral_type_atomic(AtomicOpStmt *stmt);
 
-  virtual llvm::Value *atomic_op_using_cas(
-      llvm::Value *output_address,
-      llvm::Value *val,
-      std::function<llvm::Value *(llvm::Value *, llvm::Value *)> op,
-      const DataType &type);
+  virtual llvm::Value *atomic_op_using_cas(llvm::Value *output_address,
+                                           llvm::Value *val,
+                                           std::function<llvm::Value *(llvm::Value *, llvm::Value *)> op,
+                                           const DataType &type);
 
   virtual llvm::Value *real_type_atomic(AtomicOpStmt *stmt);
 
@@ -256,11 +268,7 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   void visit(MatrixPtrStmt *stmt) override;
 
-  void store_quant_int(llvm::Value *ptr,
-                       llvm::Type *physical_type,
-                       QuantIntType *qit,
-                       llvm::Value *value,
-                       bool atomic);
+  void store_quant_int(llvm::Value *ptr, llvm::Type *physical_type, QuantIntType *qit, llvm::Value *value, bool atomic);
 
   void store_quant_fixed(llvm::Value *ptr,
                          llvm::Type *physical_type,
@@ -268,32 +276,21 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
                          llvm::Value *value,
                          bool atomic);
 
-  void store_masked(llvm::Value *ptr,
-                    llvm::Type *ty,
-                    uint64 mask,
-                    llvm::Value *value,
-                    bool atomic);
+  void store_masked(llvm::Value *ptr, llvm::Type *ty, uint64 mask, llvm::Value *value, bool atomic);
 
   void visit(GlobalStoreStmt *stmt) override;
 
-  llvm::Value *quant_int_or_quant_fixed_to_bits(llvm::Value *val,
-                                                Type *input_type,
-                                                llvm::Type *output_type);
+  llvm::Value *quant_int_or_quant_fixed_to_bits(llvm::Value *val, Type *input_type, llvm::Type *output_type);
 
   void visit(BitStructStoreStmt *stmt) override;
 
   void store_quant_floats_with_shared_exponents(BitStructStoreStmt *stmt);
 
-  llvm::Value *extract_quant_float(llvm::Value *physical_value,
-                                   BitStructType *bit_struct,
-                                   int digits_id);
+  llvm::Value *extract_quant_float(llvm::Value *physical_value, BitStructType *bit_struct, int digits_id);
 
-  llvm::Value *extract_quant_int(llvm::Value *physical_value,
-                                 llvm::Value *bit_offset,
-                                 QuantIntType *qit);
+  llvm::Value *extract_quant_int(llvm::Value *physical_value, llvm::Value *bit_offset, QuantIntType *qit);
 
-  llvm::Value *reconstruct_quant_fixed(llvm::Value *digits,
-                                       QuantFixedType *qfxt);
+  llvm::Value *reconstruct_quant_fixed(llvm::Value *digits, QuantFixedType *qfxt);
 
   llvm::Value *reconstruct_quant_float(llvm::Value *input_digits,
                                        llvm::Value *input_exponent_val,
@@ -330,17 +327,14 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
     return false;  // on CPU devices just pass in a pointer
   }
 
-  std::string init_offloaded_task_function(OffloadedStmt *stmt,
-                                           std::string suffix = "");
+  std::string init_offloaded_task_function(OffloadedStmt *stmt, std::string suffix = "");
 
   void finalize_offloaded_task_function();
 
-  FunctionCreationGuard get_function_creation_guard(
-      std::vector<llvm::Type *> argument_types,
-      const std::string &func_name = "function_body");
+  FunctionCreationGuard get_function_creation_guard(std::vector<llvm::Type *> argument_types,
+                                                    const std::string &func_name = "function_body");
 
-  std::tuple<llvm::Value *, llvm::Value *> get_range_for_bounds(
-      OffloadedStmt *stmt);
+  std::tuple<llvm::Value *, llvm::Value *> get_range_for_bounds(OffloadedStmt *stmt);
 
   virtual void create_offload_range_for(OffloadedStmt *stmt) = 0;
 
@@ -367,6 +361,16 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   void visit(InternalFuncStmt *stmt) override;
 
   // Stack statements
+
+  // Emits a single `LLVMRuntime_get_adstack_heap_buffer(runtime)` load into `entry_block` on first use for the current
+  // task, caching the returned base pointer in `ad_stack_heap_base_llvm_`. Subsequent AdStack* visit sites reuse the
+  // cached SSA value. Emitting into `entry_block` (rather than at the first visit site) guarantees the base pointer
+  // dominates every AdStack* in the task - two sibling adstacks in separate branches of an `if` statement would
+  // otherwise bind to the first branch's SSA value and fail `verifyFunction`. The heap itself is sized and grown
+  // host-side by `LlvmRuntimeExecutor::ensure_adstack_heap` before each dispatch; the kernel just reads the published
+  // pointer.
+  void ensure_ad_stack_heap_base_llvm();
+  void ensure_ad_stack_metadata_llvm();
 
   void visit(AdStackAllocaStmt *stmt) override;
 
@@ -404,9 +408,7 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   llvm::Value *extract_digits_from_f32(llvm::Value *f, bool full);
 
-  llvm::Value *extract_digits_from_f32_with_shared_exponent(
-      llvm::Value *f,
-      llvm::Value *shared_exp);
+  llvm::Value *extract_digits_from_f32_with_shared_exponent(llvm::Value *f, llvm::Value *shared_exp);
 
   llvm::Value *get_exponent_offset(llvm::Value *exponent, QuantFloatType *qflt);
 

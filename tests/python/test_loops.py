@@ -158,7 +158,7 @@ def test_loop_arg_as_range():
 
 @test_utils.test()
 def test_assignment_in_nested_loops():
-    # https://github.com/taichi-dev/quadrants/issues/1109
+    # https://github.com/taichi-dev/taichi/issues/1109
     m = qd.field(qd.f32, 3)
     x = qd.field(qd.f32, ())
 

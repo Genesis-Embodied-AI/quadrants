@@ -1071,6 +1071,10 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
     caps.set(DeviceCapability::spirv_has_int64, 1);
     caps.set(DeviceCapability::spirv_has_physical_storage_buffer, 1);
   }
+  // Metal supports 64-bit atomics (atomic<ulong>) on Apple7+ and Mac2+.
+  if (feature_floating_point_atomics) {
+    caps.set(DeviceCapability::spirv_has_atomic_int64, 1);
+  }
   if (feature_floating_point_atomics) {
     // FIXME: (penguinliong) For some reason floating point atomics doesn't
     // work and breaks the FEM99/FEM128 examples. Should consider add them back
@@ -1230,6 +1234,23 @@ RhiResult MetalDevice::allocate_memory(const AllocParams &params,
   MTLBuffer_id buffer = [mtl_device_ newBufferWithLength:params.size
                                                  options:resource_options];
 
+  // `newBufferWithLength:` returns nil on allocation failure (most commonly
+  // when `params.size` exceeds `mtl_device_.maxBufferLength`, which on Apple
+  // Silicon is ~75% of unified memory). Without this check we would wrap nil in
+  // `MetalMemory` and return `RhiResult::success`, and every subsequent
+  // `bindings->rw_buffer(...)` call would `setBuffer:nil` on the Metal encoder
+  // - shader writes drop silently and reads come back as zero, producing NaNs
+  // through divide-by-zero in reverse-mode AD kernels (e.g. `.normalized()`'s
+  // sqrt adjoint reloading a primal that was never actually written).
+  if (buffer == nil) {
+    std::string msg =
+        "Metal newBufferWithLength:" + std::to_string(params.size) +
+        " returned nil (maxBufferLength=" +
+        std::to_string(uint64_t([mtl_device_ maxBufferLength])) + ")";
+    RHI_LOG_ERROR(msg);
+    return RhiResult::out_of_memory;
+  }
+
   MetalMemory &alloc = memory_allocs_.acquire(buffer, can_map);
 
   *out_devalloc = DeviceAllocation{};
@@ -1344,6 +1365,16 @@ RhiResult MetalDevice::create_pipeline(Pipeline **out_pipeline,
     *out_pipeline = MetalPipeline::create_compute_pipeline(
         *this, (const uint32_t *)src.data, src.size, name);
   } catch (const std::exception &e) {
+    return RhiResult::error;
+  }
+  // `create_compute_pipeline` returns nullptr on any rejection by Apple's MSL
+  // translator or the Metal pipeline-state factory; the specific reason is
+  // logged via `RHI_LOG_ERROR` inside (examples: translator-internal MSL
+  // errors, `XPC_ERROR_CONNECTION_INTERRUPTED` from the XPC-backed MSL
+  // service). Propagate the failure as an `RhiResult::error` so the caller
+  // surfaces it as a Python-level exception instead of launching with a null
+  // pipeline.
+  if (*out_pipeline == nullptr) {
     return RhiResult::error;
   }
   return RhiResult::success;

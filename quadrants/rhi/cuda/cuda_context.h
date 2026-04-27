@@ -30,6 +30,7 @@ class CUDAContext {
   int max_shared_memory_bytes_;
   bool debug_;
   bool supports_mem_pool_;
+  bool supports_pageable_memory_access_;
   void *stream_;
 
  public:
@@ -75,10 +76,23 @@ class CUDAContext {
     return compute_capability_;
   }
 
+  int get_max_shared_memory_bytes() const {
+    return max_shared_memory_bytes_;
+  }
+
   int64_t get_clock_rate_khz() const;
 
   bool supports_mem_pool() const {
     return supports_mem_pool_;
+  }
+
+  // True when the device can coherently dereference plain host pointers (`malloc` / `new`) from kernel code via HMM /
+  // system-allocated memory. Maps `CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS` directly - 1 on Linux with an
+  // HMM-capable driver + kernel (open-source nvidia module or 535+ with HMM enabled), 0 on Turing and older parts,
+  // Windows, and any Linux host without HMM. Used by the adstack sizer launcher to decide whether to stage a device
+  // copy of `RuntimeContext` before each launch.
+  bool supports_pageable_memory_access() const {
+    return supports_pageable_memory_access_;
   }
 
   ~CUDAContext();
@@ -89,8 +103,7 @@ class CUDAContext {
     void *new_ctx_;
 
    public:
-    explicit ContextGuard(CUDAContext *new_ctx)
-        : old_ctx_(nullptr), new_ctx_(new_ctx->context_) {
+    explicit ContextGuard(CUDAContext *new_ctx) : old_ctx_(nullptr), new_ctx_(new_ctx->context_) {
       CUDADriver::get_instance().context_get_current(&old_ctx_);
       if (old_ctx_ != new_ctx_)
         new_ctx->make_current();

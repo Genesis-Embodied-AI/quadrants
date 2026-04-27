@@ -1,3 +1,5 @@
+import platform
+
 import numpy as np
 import pytest
 from pytest import approx
@@ -6,6 +8,20 @@ import quadrants as qd
 from quadrants.lang.simt import subgroup
 
 from tests import test_utils
+
+
+def _skip_if_f64_unsupported(dtype):
+    arch = qd.lang.impl.current_cfg().arch
+    if dtype in (qd.i64, qd.u64) and arch == qd.metal:
+        pytest.skip("64-bit integer types not supported on Metal")
+    if dtype in (qd.i64, qd.u64) and arch == qd.vulkan and platform.system() == "Darwin":
+        pytest.skip("MoltenVK does not support 64-bit integer types")
+    if dtype != qd.f64:
+        return
+    if arch == qd.metal:
+        pytest.skip("Metal does not support f64 in buffer-backed snode/kernel I/O")
+    if arch == qd.vulkan and platform.system() == "Darwin":
+        pytest.skip("MoltenVK does not support f64")
 
 
 @test_utils.test(arch=qd.cuda)
@@ -497,61 +513,282 @@ def test_grid_memfence():
         assert a[i] == i + 1
 
 
-# Higher level primitives test
-def _test_subgroup_reduce(op, group_op, np_op, size, initial_value, dtype):
-    field = qd.field(dtype, (size))
-    if dtype == qd.i32 or dtype == qd.i64:
-        rand_values = np.random.randint(1, 100, size=(size))
-        field.from_numpy(rand_values)
-    if dtype == qd.f32 or dtype == qd.f64:
-        rand_values = np.random.random(size=(size)).astype(np.float32)
-        field.from_numpy(rand_values)
+# The old SPIR-V-only no-arg subgroup reductions (`subgroup.reduce_add` / `reduce_mul` / `reduce_min`
+# / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`) and their Vulkan-specific tests have
+# been removed.  See `test_subgroup_reduce_add` / `test_subgroup_reduce_all_add` below for the
+# portable sized-reduction tests, and add equivalent sized portable replacements for the other
+# reductions on top of `shuffle_down` / `shuffle` if needed.
+
+
+def _init_field(field, n, dtype):
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for i in range(n):
+        field[i] = (i + 1) if dtype in int_dtypes else 1.0000000000001 * (i + 1)
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_broadcast(dtype):
+    """Broadcast lane 0's value to all lanes via shuffle."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    a = qd.field(dtype=dtype, shape=N)
 
     @qd.kernel
-    def reduce_all() -> dtype:
-        sum = qd.cast(initial_value, dtype)
-        for i in field:
-            value = field[i]
-            reduce_value = group_op(value)
-            if subgroup.elect():
-                op(sum, reduce_value)
-        return sum
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = subgroup.shuffle(a[i], qd.u32(0))
 
-    if dtype == qd.i32 or dtype == qd.i64:
-        assert reduce_all() == np_op(rand_values)
+    _init_field(a, N, dtype)
+
+    expected = a[0]
+    foo()
+
+    # Lanes 0-3 are guaranteed to be in the same subgroup (min size is 4).
+    for i in range(4):
+        assert a[i] == expected
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_roundtrip(dtype):
+    """Each lane shuffles to its own ID (identity shuffle)."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    a = qd.field(dtype=dtype, shape=N)
+    diff = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            result = subgroup.shuffle(a[i], qd.cast(lane, qd.u32))
+            diff[i] = result - a[i]
+
+    _init_field(a, N, dtype)
+
+    foo()
+
+    for i in range(N):
+        assert diff[i] == 0
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_cross_lane(dtype):
+    """Each lane in a group of 4 reads from a different lane in the group."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            group_base = (lane // 4) * 4
+            # Each lane reads from lane (group_base + 3 - probe_id),
+            # i.e. lane 0 reads from lane 3, lane 1 from lane 2, etc.
+            src_lane = group_base + 3 - lane % 4
+            dst[i] = subgroup.shuffle(src[i], qd.cast(src_lane, qd.u32))
+
+    _init_field(src, N, dtype)
+
+    foo()
+
+    # Lanes 0-3 are guaranteed to be in the same subgroup.
+    # Lane 0 should have lane 3's value, lane 1 should have lane 2's, etc.
+    assert dst[0] == src[3]
+    assert dst[1] == src[2]
+    assert dst[2] == src[1]
+    assert dst[3] == src[0]
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_xor_pattern(dtype):
+    """XOR shuffle: each lane reads from lane_id ^ 1 (swap neighbors)."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            dst[i] = subgroup.shuffle(src[i], qd.cast(lane ^ 1, qd.u32))
+
+    _init_field(src, N, dtype)
+
+    foo()
+
+    # Lanes 0-3 are in the same subgroup: 0<->1 swap, 2<->3 swap
+    assert dst[0] == src[1]
+    assert dst[1] == src[0]
+    assert dst[2] == src[3]
+    assert dst[3] == src[2]
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_down(dtype):
+    """shuffle_down: each lane reads from lane_id + offset."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.shuffle_down(src[i], qd.u32(1))
+
+    _init_field(src, N, dtype)
+
+    foo()
+
+    # Lane 0 reads from lane 1, lane 1 from lane 2, lane 2 from lane 3
+    # (within the guaranteed min subgroup of 4 lanes, lane 3's result is undefined)
+    assert dst[0] == src[1]
+    assert dst[1] == src[2]
+    assert dst[2] == src[3]
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_down_reduction(dtype):
+    """Tree reduction via shuffle_down, summing 4 values."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            val = src[i]
+            val = val + subgroup.shuffle_down(val, qd.u32(2))
+            val = val + subgroup.shuffle_down(val, qd.u32(1))
+            dst[i] = val
+
+    _init_field(src, N, dtype)
+
+    foo()
+
+    # Lane 0 should have sum of lanes 0-3 (within the min subgroup of 4)
+    expected = sum(src[i] for i in range(4))
+    assert abs(dst[0] - expected) < 1e-5
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_reduce_add(dtype, log2_size):
+    """Portable shuffle_down tree reduction: lane 0 of each 2**log2_size group has the sum."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.reduce_add(src[i], log2_size)
+
+    _init_field(src, N, dtype)
+    foo()
+
+    group_size = 1 << log2_size
+    expected = sum(src[i] for i in range(group_size))
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    if dtype in int_dtypes:
+        assert dst[0] == expected
     else:
-        assert reduce_all() == approx(np_op(rand_values), 3e-4)
+        assert abs(dst[0] - expected) < 1e-4 * abs(expected)
 
 
-# We use 2677 as size because it is a prime number
-# i.e. any device other than a subgroup size of 1 should have one non active group
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_reduce_all_add(dtype, log2_size):
+    """Portable butterfly XOR reduction: every lane in each 2**log2_size group has the sum."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.reduce_all_add(src[i], log2_size)
+
+    _init_field(src, N, dtype)
+    foo()
+
+    group_size = 1 << log2_size
+    expected = sum(src[i] for i in range(group_size))
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for i in range(group_size):
+        if dtype in int_dtypes:
+            assert dst[i] == expected, f"lane {i}: got {dst[i]}, expected {expected}"
+        else:
+            assert abs(dst[i] - expected) < 1e-4 * abs(expected), f"lane {i}: got {dst[i]}, expected {expected}"
 
 
-@test_utils.test(arch=qd.vulkan, exclude=[(qd.vulkan, "Darwin")])
-def test_subgroup_reduction_add_i32():
-    _test_subgroup_reduce(qd.atomic_add, subgroup.reduce_add, np.sum, 2677, 0, qd.i32)
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_invocation_id_range():
+    """Verify invocation IDs are non-negative."""
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = subgroup.invocation_id()
+
+    foo()
+
+    for i in range(N):
+        assert 0 <= a[i]
 
 
 @test_utils.test(arch=qd.vulkan)
-def test_subgroup_reduction_add_f32():
-    _test_subgroup_reduce(qd.atomic_add, subgroup.reduce_add, np.sum, 2677, 0, qd.f32)
+def test_vulkan_subgroup_id_survives_reinit():
+    """Regression test: SubgroupLocalInvocationId must stay stable across
+    repeated qd.init(vulkan)/qd.reset() cycles.  An NVIDIA driver bug
+    corrupts it after ~11 vkDestroyInstance/vkCreateInstance cycles;
+    the fix is to reuse the VkInstance."""
+    N = 16
+    NUM_CYCLES = 20
+    reference = None
 
+    for cycle in range(NUM_CYCLES):
+        qd.init(arch=qd.vulkan)
 
-# @test_utils.test(arch=qd.vulkan)
-# def test_subgroup_reduction_mul_i32():
-#     _test_subgroup_reduce(qd.atomic_add, subgroup.reduce_mul, np.prod, 8, 1, qd.f32)
+        ids = qd.ndarray(dtype=qd.i32, shape=(N,))
 
+        @qd.kernel
+        def read_ids(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+            qd.loop_config(block_dim=N)
+            for i in range(N):
+                out[i] = subgroup.invocation_id()
 
-@test_utils.test(arch=qd.vulkan, exclude=[(qd.vulkan, "Darwin")])
-def test_subgroup_reduction_max_i32():
-    _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.i32)
+        read_ids(ids)
+        result = ids.to_numpy().tolist()
 
+        if reference is None:
+            reference = result
+        else:
+            assert result == reference, f"cycle {cycle}: subgroup IDs changed — " f"got {result}, expected {reference}"
 
-@test_utils.test(arch=qd.vulkan)
-def test_subgroup_reduction_max_f32():
-    _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)
-
-
-@test_utils.test(arch=qd.vulkan)
-def test_subgroup_reduction_min_f32():
-    _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)
+        qd.reset()

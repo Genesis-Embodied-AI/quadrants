@@ -21,8 +21,7 @@ namespace quadrants {
 
 // Declare and then load
 // Load to `this`
-#define QD_LOAD_CONFIG(name, default_val) \
-  this->name = config.get(#name, default_val)
+#define QD_LOAD_CONFIG(name, default_val) this->name = config.get(#name, default_val)
 
 class Dict {
  private:
@@ -51,10 +50,7 @@ class Dict {
   }
 
   template <typename V>
-  typename std::enable_if_t<(!type::is_VectorND<V>() &&
-                             !std::is_reference<V>::value &&
-                             !std::is_pointer<V>::value),
-                            V>
+  typename std::enable_if_t<(!type::is_VectorND<V>() && !std::is_reference<V>::value && !std::is_pointer<V>::value), V>
   get(std::string key) const;
 
   static bool is_string_integral(const std::string &str) {
@@ -85,9 +81,7 @@ class Dict {
     check_string_integral(str);
   }
 
-  template <
-      typename V,
-      typename std::enable_if<(type::is_VectorND<V>()), V>::type * = nullptr>
+  template <typename V, typename std::enable_if<(type::is_VectorND<V>()), V>::type * = nullptr>
   V get(std::string key) const {
     constexpr int N = V::dim;
     using T = typename V::ScalarType;
@@ -176,20 +170,17 @@ class Dict {
     int64 ptr_ll;
     std::getline(ss, t, '\t');
     ss >> ptr_ll;
-    QD_ASSERT_INFO(t == typeid(T).name(),
-                   "Pointer type mismatch: " + t + " and " + typeid(T).name());
+    QD_ASSERT_INFO(t == typeid(T).name(), "Pointer type mismatch: " + t + " and " + typeid(T).name());
     return reinterpret_cast<T *>(ptr_ll);
   }
 
   template <typename T>
-  std::enable_if_t<std::is_pointer<T>::value, std::remove_pointer_t<T>> get(
-      std::string key) const {
+  std::enable_if_t<std::is_pointer<T>::value, std::remove_pointer_t<T>> get(std::string key) const {
     return get_ptr<std::remove_pointer_t<T>>(key);
   }
 
   template <typename T>
-  std::enable_if_t<std::is_reference<T>::value, std::remove_reference_t<T>> &
-  get(std::string key) const {
+  std::enable_if_t<std::is_reference<T>::value, std::remove_reference_t<T>> &get(std::string key) const {
     return *get_ptr<std::remove_reference_t<T>>(key);
   }
 
@@ -347,8 +338,7 @@ inline bool Dict::get<bool>(std::string key) const {
       {"true", true},   {"True", true},   {"t", true},  {"1", true},
       {"false", false}, {"False", false}, {"f", false}, {"0", false},
   };
-  QD_ASSERT_INFO(dict.find(s) != dict.end(),
-                 "Unknown identifier for bool: " + s);
+  QD_ASSERT_INFO(dict.find(s) != dict.end(), "Unknown identifier for bool: " + s);
   return dict[s];
 }
 

@@ -28,8 +28,7 @@ using namespace llvm;
 static bool is_half2(DataType dt) {
   if (dt->is<TensorType>()) {
     auto tensor_type = dt->as<TensorType>();
-    return tensor_type->get_element_type() == PrimitiveType::f16 &&
-           tensor_type->get_num_elements() == 2;
+    return tensor_type->get_element_type() == PrimitiveType::f16 && tensor_type->get_num_elements() == 2;
   }
 
   return false;
@@ -48,16 +47,12 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       : TaskCodeGenLLVM(id, config, tlctx, kernel, ir) {
   }
 
-  llvm::Value *create_print(std::string tag,
-                            DataType dt,
-                            llvm::Value *value) override {
+  llvm::Value *create_print(std::string tag, DataType dt, llvm::Value *value) override {
     std::string format = data_type_format(dt);
     if (value->getType() == llvm::Type::getFloatTy(*llvm_context)) {
-      value =
-          builder->CreateFPExt(value, llvm::Type::getDoubleTy(*llvm_context));
+      value = builder->CreateFPExt(value, llvm::Type::getDoubleTy(*llvm_context));
     }
-    return create_print("[cuda codegen debug] " + tag + " " + format + "\n",
-                        {value->getType()}, {value});
+    return create_print("[cuda codegen debug] " + tag + " " + format + "\n", {value->getType()}, {value});
   }
 
   llvm::Value *create_print(const std::string &format,
@@ -66,23 +61,16 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     auto stype = llvm::StructType::get(*llvm_context, types, false);
     auto value_arr = builder->CreateAlloca(stype);
     for (int i = 0; i < values.size(); i++) {
-      auto value_ptr = builder->CreateGEP(
-          stype, value_arr, {tlctx->get_constant(0), tlctx->get_constant(i)});
+      auto value_ptr = builder->CreateGEP(stype, value_arr, {tlctx->get_constant(0), tlctx->get_constant(i)});
       builder->CreateStore(values[i], value_ptr);
     }
-    return LLVMModuleBuilder::call(
-        builder.get(), "vprintf",
-        builder->CreateGlobalStringPtr(format, "format_string"),
-        builder->CreateBitCast(value_arr,
-                               llvm::PointerType::getUnqual(*llvm_context)));
+    return LLVMModuleBuilder::call(builder.get(), "vprintf", builder->CreateGlobalStringPtr(format, "format_string"),
+                                   builder->CreateBitCast(value_arr, llvm::PointerType::getUnqual(*llvm_context)));
   }
 
-  std::tuple<llvm::Value *, llvm::Type *> create_value_and_type(
-      llvm::Value *value,
-      DataType dt) {
+  std::tuple<llvm::Value *, llvm::Type *> create_value_and_type(llvm::Value *value, DataType dt) {
     auto value_type = tlctx->get_data_type(dt);
-    if (dt->is_primitive(PrimitiveTypeID::f32) ||
-        dt->is_primitive(PrimitiveTypeID::f16)) {
+    if (dt->is_primitive(PrimitiveTypeID::f32) || dt->is_primitive(PrimitiveTypeID::f16)) {
       value_type = tlctx->get_data_type(PrimitiveType::f64);
       value = builder->CreateFPExt(value, value_type);
     }
@@ -102,8 +90,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
   }
 
   void visit(PrintStmt *stmt) override {
-    QD_ASSERT_INFO(stmt->contents.size() < 32,
-                   "CUDA `print()` doesn't support more than 32 entries");
+    QD_ASSERT_INFO(stmt->contents.size() < 32, "CUDA `print()` doesn't support more than 32 entries");
 
     std::vector<llvm::Type *> types;
     std::vector<llvm::Value *> values;
@@ -117,8 +104,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       if (std::holds_alternative<Stmt *>(content)) {
         auto arg_stmt = std::get<Stmt *>(content);
 
-        auto &&merged_format = merge_printf_specifier(
-            format, data_type_format(arg_stmt->ret_type));
+        auto &&merged_format = merge_printf_specifier(format, data_type_format(arg_stmt->ret_type));
         // CUDA supports all conversions, but not 'F'.
         // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#format-specifiers
         std::replace(merged_format.begin(), merged_format.end(), 'F', 'f');
@@ -139,8 +125,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
               QD_ASSERT(llvm::dyn_cast<llvm::ArrayType>(value_type));
               elem_value = builder->CreateExtractValue(value, i);
             }
-            auto [casted_value, elem_value_type] =
-                create_value_and_type(elem_value, elem_type);
+            auto [casted_value, elem_value_type] = create_value_and_type(elem_value, elem_type);
             types.push_back(elem_value_type);
             values.push_back(casted_value);
           }
@@ -155,16 +140,14 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         auto arg_str = std::get<std::string>(content);
 
         auto value = builder->CreateGlobalStringPtr(arg_str, "content_string");
-        auto char_type =
-            llvm::Type::getInt8Ty(*tlctx->get_this_thread_context());
+        auto char_type = llvm::Type::getInt8Ty(*tlctx->get_this_thread_context());
         auto value_type = llvm::PointerType::get(char_type, 0);
 
         types.push_back(value_type);
         values.push_back(value);
         formats += "%s";
       }
-      QD_ASSERT_INFO(num_contents < 32,
-                     "CUDA `print()` doesn't support more than 32 entries");
+      QD_ASSERT_INFO(num_contents < 32, "CUDA `print()` doesn't support more than 32 entries");
     }
 
     llvm_val[stmt] = create_print(formats, types, values);
@@ -174,9 +157,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     // Override shared memory codegen logic for large shared memory
     auto tensor_type = stmt->ret_type.ptr_removed()->cast<TensorType>();
     if (tensor_type && stmt->is_shared) {
-      size_t shared_array_bytes =
-          tensor_type->get_num_elements() *
-          data_type_size(tensor_type->get_element_type());
+      size_t shared_array_bytes = tensor_type->get_num_elements() * data_type_size(tensor_type->get_element_type());
+
+      llvm::Type *shared_array_type;
       if (shared_array_bytes > cuda_dynamic_shared_array_threshold_bytes) {
         if (dynamic_shared_array_bytes > 0) {
           /* Current version only allows one dynamic shared array allocation,
@@ -190,20 +173,34 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
               "Only one single large shared array instance is allowed in "
               "current version.")
         }
-        // Clear tensor shape for dynamic shared memory.
-        tensor_type->set_shape(std::vector<int>({0}));
+        // Build a zero-sized LLVM array type for dynamically allocated
+        // shared memory. The actual size is passed at kernel launch time
+        // via dynamic_shared_array_bytes.
+        // Note: we must NOT mutate tensor_type (e.g. via set_shape())
+        // because TensorType instances are cached singletons in
+        // TypeFactory, shared across tasks compiled in parallel that
+        // use shared arrays with the same shape and dtype. Mutating one
+        // would zero out get_num_elements() for other tasks, causing
+        // them to skip the dynamic allocation path and launch with no
+        // shared memory at all, leading to illegal memory accesses at
+        // runtime.
+        // The singleton is keyed by (shape, dtype) in TypeFactory, so the
+        // corruption only occurs when multiple offloaded tasks allocate
+        // shared arrays with identical shape and dtype. If either differs,
+        // each task gets a distinct TensorType instance and is unaffected.
+        auto element_type = tlctx->get_data_type(tensor_type->get_element_type());
+        shared_array_type = llvm::ArrayType::get(element_type, 0);
         dynamic_shared_array_bytes += shared_array_bytes;
+      } else {
+        shared_array_type = tlctx->get_data_type(tensor_type);
       }
 
-      auto type = tlctx->get_data_type(tensor_type);
-      auto base = new llvm::GlobalVariable(
-          *module, type, false, llvm::GlobalValue::ExternalLinkage, nullptr,
-          fmt::format("shared_array_t{}_s{}", task_codegen_id, stmt->id),
-          nullptr, llvm::GlobalVariable::NotThreadLocal,
-          3 /*addrspace=shared*/);
+      auto base = new llvm::GlobalVariable(*module, shared_array_type, false, llvm::GlobalValue::ExternalLinkage,
+                                           nullptr, fmt::format("shared_array_t{}_s{}", task_codegen_id, stmt->id),
+                                           nullptr, llvm::GlobalVariable::NotThreadLocal, 3 /*addrspace=shared*/);
       base->setAlignment(llvm::MaybeAlign(8));
-      auto ptr_type = llvm::PointerType::get(type, 0);
-      llvm_val[stmt] = builder->CreatePointerCast(base, ptr_type);
+      auto ptr_shared_array_type = llvm::PointerType::get(shared_array_type, 0);
+      llvm_val[stmt] = builder->CreatePointerCast(base, ptr_shared_array_type);
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }
@@ -216,8 +213,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     if (input_quadrants_type->is_primitive(PrimitiveTypeID::f16)) {
       // Promote to f32 since we don't have f16 support for extra unary ops in
       // libdevice.
-      input =
-          builder->CreateFPExt(input, llvm::Type::getFloatTy(*llvm_context));
+      input = builder->CreateFPExt(input, llvm::Type::getFloatTy(*llvm_context));
       input_quadrants_type = PrimitiveType::f32;
     }
 
@@ -261,19 +257,13 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       auto frac_ptr = builder->CreateStructGEP(stype, res, 0);
       auto exp_ptr = builder->CreateStructGEP(stype, res, 1);
       // __nv_frexp onlys takes in double
-      auto double_input =
-          input_quadrants_type->is_primitive(PrimitiveTypeID::f32)
-              ? builder->CreateFPExt(
-                    input,
-                    llvm::Type::getDoubleTy(*tlctx->get_this_thread_context()))
-              : input;
+      auto double_input = input_quadrants_type->is_primitive(PrimitiveTypeID::f32)
+                              ? builder->CreateFPExt(input, llvm::Type::getDoubleTy(*tlctx->get_this_thread_context()))
+                              : input;
       auto frac = call("__nv_frexp", double_input, exp_ptr);
-      auto output =
-          input_quadrants_type->is_primitive(PrimitiveTypeID::f32)
-              ? builder->CreateFPTrunc(
-                    frac,
-                    llvm::Type::getFloatTy(*tlctx->get_this_thread_context()))
-              : frac;
+      auto output = input_quadrants_type->is_primitive(PrimitiveTypeID::f32)
+                        ? builder->CreateFPTrunc(frac, llvm::Type::getFloatTy(*tlctx->get_this_thread_context()))
+                        : frac;
       builder->CreateStore(output, frac_ptr);
       llvm_val[stmt] = res;
     } else if (op == UnaryOpType::popcnt) {
@@ -299,41 +289,35 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     } else if (op == UnaryOpType::log) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
         // logf has fast-math option
-        llvm_val[stmt] = call(
-            compile_config.fast_math ? "__nv_fast_logf" : "__nv_logf", input);
+        llvm_val[stmt] = call(compile_config.fast_math ? "__nv_fast_logf" : "__nv_logf", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_log", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
         llvm_val[stmt] = call("log", input);
       } else {
-        QD_ERROR("log() for type {} is not supported",
-                 input_quadrants_type.to_string());
+        QD_ERROR("log() for type {} is not supported", input_quadrants_type.to_string());
       }
     } else if (op == UnaryOpType::sin) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
         // sinf has fast-math option
-        llvm_val[stmt] = call(
-            compile_config.fast_math ? "__nv_fast_sinf" : "__nv_sinf", input);
+        llvm_val[stmt] = call(compile_config.fast_math ? "__nv_fast_sinf" : "__nv_sinf", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_sin", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
         llvm_val[stmt] = call("sin", input);
       } else {
-        QD_ERROR("sin() for type {} is not supported",
-                 input_quadrants_type.to_string());
+        QD_ERROR("sin() for type {} is not supported", input_quadrants_type.to_string());
       }
     } else if (op == UnaryOpType::cos) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
         // cosf has fast-math option
-        llvm_val[stmt] = call(
-            compile_config.fast_math ? "__nv_fast_cosf" : "__nv_cosf", input);
+        llvm_val[stmt] = call(compile_config.fast_math ? "__nv_fast_cosf" : "__nv_cosf", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_cos", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
         llvm_val[stmt] = call("cos", input);
       } else {
-        QD_ERROR("cos() for type {} is not supported",
-                 input_quadrants_type.to_string());
+        QD_ERROR("cos() for type {} is not supported", input_quadrants_type.to_string());
       }
     }
     UNARY_STD(exp)
@@ -349,8 +333,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 #undef UNARY_STD
     if (stmt->ret_type->is_primitive(PrimitiveTypeID::f16)) {
       // Convert back to f16.
-      llvm_val[stmt] = builder->CreateFPTrunc(
-          llvm_val[stmt], llvm::Type::getHalfTy(*llvm_context));
+      llvm_val[stmt] = builder->CreateFPTrunc(llvm_val[stmt], llvm::Type::getHalfTy(*llvm_context));
     }
   }
 
@@ -361,12 +344,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       return nullptr;
     }
     QD_ASSERT(stmt->val->ret_type->is<PrimitiveType>());
-    PrimitiveTypeID prim_type =
-        stmt->val->ret_type->cast<PrimitiveType>()->type;
+    PrimitiveTypeID prim_type = stmt->val->ret_type->cast<PrimitiveType>()->type;
 
-    std::unordered_map<PrimitiveTypeID,
-                       std::unordered_map<AtomicOpType, std::string>>
-        fast_reductions;
+    std::unordered_map<PrimitiveTypeID, std::unordered_map<AtomicOpType, std::string>> fast_reductions;
 
     fast_reductions[PrimitiveTypeID::i32][AtomicOpType::add] = "reduce_add_i32";
     fast_reductions[PrimitiveTypeID::f32][AtomicOpType::add] = "reduce_add_f32";
@@ -375,21 +355,16 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     fast_reductions[PrimitiveTypeID::i32][AtomicOpType::max] = "reduce_max_i32";
     fast_reductions[PrimitiveTypeID::f32][AtomicOpType::max] = "reduce_max_f32";
 
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_and] =
-        "reduce_and_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_or] =
-        "reduce_or_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_xor] =
-        "reduce_xor_i32";
+    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_and] = "reduce_and_i32";
+    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_or] = "reduce_or_i32";
+    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_xor] = "reduce_xor_i32";
 
     AtomicOpType op = stmt->op_type;
     if (fast_reductions.find(prim_type) == fast_reductions.end()) {
       return nullptr;
     }
-    QD_ASSERT(fast_reductions.at(prim_type).find(op) !=
-              fast_reductions.at(prim_type).end());
-    return call(fast_reductions.at(prim_type).at(op), llvm_val[stmt->dest],
-                llvm_val[stmt->val]);
+    QD_ASSERT(fast_reductions.at(prim_type).find(op) != fast_reductions.at(prim_type).end());
+    return call(fast_reductions.at(prim_type).at(op), llvm_val[stmt->dest], llvm_val[stmt->val]);
   }
 
   void visit(AtomicOpStmt *atomic_stmt) override {
@@ -401,8 +376,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 
     std::string cuda_library_path = get_custom_cuda_library_path();
     int cap = CUDAContext::get_instance().get_compute_capability();
-    if (is_half2(dest_type) && is_half2(val_type) &&
-        atomic_stmt->op_type == AtomicOpType::add && cap >= 60 &&
+    if (is_half2(dest_type) && is_half2(val_type) && atomic_stmt->op_type == AtomicOpType::add && cap >= 60 &&
         !cuda_library_path.empty()) {
       /*
         Half2 optimization for float16 atomic add
@@ -431,26 +405,20 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       llvm::Value *old_val_ptr = builder->CreateBitCast(old_val, ptr_type);
 
       // Prepare dest_ptr via pointer cast
-      llvm::Value *dest_half2_ptr =
-          builder->CreateBitCast(llvm_val[atomic_stmt->dest], ptr_type);
+      llvm::Value *dest_half2_ptr = builder->CreateBitCast(llvm_val[atomic_stmt->dest], ptr_type);
 
       // Prepare value_ptr from val
       llvm::ArrayType *array_type = llvm::ArrayType::get(half_type, 2);
       llvm::Value *value_ptr = builder->CreateAlloca(array_type);
       llvm::Value *value_ptr0 =
-          builder->CreateGEP(array_type, value_ptr,
-                             {tlctx->get_constant(0), tlctx->get_constant(0)});
+          builder->CreateGEP(array_type, value_ptr, {tlctx->get_constant(0), tlctx->get_constant(0)});
       llvm::Value *value_ptr1 =
-          builder->CreateGEP(array_type, value_ptr,
-                             {tlctx->get_constant(0), tlctx->get_constant(1)});
-      llvm::Value *value0 =
-          builder->CreateExtractValue(llvm_val[atomic_stmt->val], {0});
-      llvm::Value *value1 =
-          builder->CreateExtractValue(llvm_val[atomic_stmt->val], {1});
+          builder->CreateGEP(array_type, value_ptr, {tlctx->get_constant(0), tlctx->get_constant(1)});
+      llvm::Value *value0 = builder->CreateExtractValue(llvm_val[atomic_stmt->val], {0});
+      llvm::Value *value1 = builder->CreateExtractValue(llvm_val[atomic_stmt->val], {1});
       builder->CreateStore(value0, value_ptr0);
       builder->CreateStore(value1, value_ptr1);
-      llvm::Value *value_half2_ptr =
-          builder->CreateBitCast(value_ptr, ptr_type);
+      llvm::Value *value_half2_ptr = builder->CreateBitCast(value_ptr, ptr_type);
       // Defined in quadrants/runtime/llvm/runtime_module/cuda_runtime.cu
       call("half2_atomic_add", dest_half2_ptr, old_val_ptr, value_half2_ptr);
 
@@ -470,9 +438,8 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 
     llvm::Function *body;
     {
-      auto guard = get_function_creation_guard(
-          {llvm::PointerType::get(get_runtime_type("RuntimeContext"), 0),
-           get_tls_buffer_type(), tlctx->get_data_type<int>()});
+      auto guard = get_function_creation_guard({llvm::PointerType::get(get_runtime_type("RuntimeContext"), 0),
+                                                get_tls_buffer_type(), tlctx->get_data_type<int>()});
 
       auto loop_var = create_entry_block_alloca(PrimitiveType::i32);
       loop_vars_llvm[stmt].push_back(loop_var);
@@ -485,8 +452,8 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     auto epilogue = create_xlogue(stmt->tls_epilogue);
 
     auto [begin, end] = get_range_for_bounds(stmt);
-    call("gpu_parallel_range_for", get_arg(0), begin, end, tls_prologue, body,
-         epilogue, tlctx->get_constant(stmt->tls_size));
+    call("gpu_parallel_range_for", get_arg(0), begin, end, tls_prologue, body, epilogue,
+         tlctx->get_constant(stmt->tls_size));
   }
 
   void create_offload_mesh_for(OffloadedStmt *stmt) override {
@@ -494,9 +461,8 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 
     llvm::Function *body;
     {
-      auto guard = get_function_creation_guard(
-          {llvm::PointerType::get(get_runtime_type("RuntimeContext"), 0),
-           get_tls_buffer_type(), tlctx->get_data_type<int>()});
+      auto guard = get_function_creation_guard({llvm::PointerType::get(get_runtime_type("RuntimeContext"), 0),
+                                                get_tls_buffer_type(), tlctx->get_data_type<int>()});
 
       for (int i = 0; i < stmt->mesh_prologue->size(); i++) {
         auto &s = stmt->mesh_prologue->statements[i];
@@ -508,28 +474,22 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         call("block_barrier");  // "__syncthreads()"
       }
 
-      auto loop_test_bb =
-          llvm::BasicBlock::Create(*llvm_context, "loop_test", func);
-      auto loop_body_bb =
-          llvm::BasicBlock::Create(*llvm_context, "loop_body", func);
-      auto func_exit =
-          llvm::BasicBlock::Create(*llvm_context, "func_exit", func);
+      auto loop_test_bb = llvm::BasicBlock::Create(*llvm_context, "loop_test", func);
+      auto loop_body_bb = llvm::BasicBlock::Create(*llvm_context, "loop_body", func);
+      auto func_exit = llvm::BasicBlock::Create(*llvm_context, "func_exit", func);
       auto i32_ty = llvm::Type::getInt32Ty(*llvm_context);
       auto loop_index = create_entry_block_alloca(i32_ty);
-      llvm::Value *thread_idx = builder->CreateIntrinsic(
-          Intrinsic::nvvm_read_ptx_sreg_tid_x, ArrayRef<llvm::Value *>{});
-      llvm::Value *block_dim = builder->CreateIntrinsic(
-          Intrinsic::nvvm_read_ptx_sreg_ntid_x, ArrayRef<llvm::Value *>{});
+      llvm::Value *thread_idx =
+          builder->CreateIntrinsic(Intrinsic::nvvm_read_ptx_sreg_tid_x, ArrayRef<llvm::Value *>{});
+      llvm::Value *block_dim =
+          builder->CreateIntrinsic(Intrinsic::nvvm_read_ptx_sreg_ntid_x, ArrayRef<llvm::Value *>{});
       builder->CreateStore(thread_idx, loop_index);
       builder->CreateBr(loop_test_bb);
 
       {
         builder->SetInsertPoint(loop_test_bb);
-        auto cond = builder->CreateICmp(
-            llvm::CmpInst::Predicate::ICMP_SLT,
-            builder->CreateLoad(i32_ty, loop_index),
-            llvm_val[stmt->owned_num_local.find(stmt->major_from_type)
-                         ->second]);
+        auto cond = builder->CreateICmp(llvm::CmpInst::Predicate::ICMP_SLT, builder->CreateLoad(i32_ty, loop_index),
+                                        llvm_val[stmt->owned_num_local.find(stmt->major_from_type)->second]);
         builder->CreateCondBr(cond, loop_body_bb, func_exit);
       }
 
@@ -540,10 +500,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           auto &s = stmt->body->statements[i];
           s->accept(this);
         }
-        builder->CreateStore(
-            builder->CreateAdd(builder->CreateLoad(i32_ty, loop_index),
-                               block_dim),
-            loop_index);
+        builder->CreateStore(builder->CreateAdd(builder->CreateLoad(i32_ty, loop_index), block_dim), loop_index);
         builder->CreateBr(loop_test_bb);
         builder->SetInsertPoint(func_exit);
       }
@@ -558,8 +515,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 
     auto tls_epilogue = create_mesh_xlogue(stmt->tls_epilogue);
 
-    call("gpu_parallel_mesh_for", get_arg(0),
-         tlctx->get_constant(stmt->mesh->num_patches), tls_prologue, body,
+    call("gpu_parallel_mesh_for", get_arg(0), tlctx->get_constant(stmt->mesh->num_patches), tls_prologue, body,
          tls_epilogue, tlctx->get_constant(stmt->tls_size));
   }
 
@@ -598,8 +554,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     return true;  // on CUDA, pass the argument by value
   }
 
-  llvm::Value *create_intrinsic_load(llvm::Value *ptr,
-                                     llvm::Type *ty) override {
+  llvm::Value *create_intrinsic_load(llvm::Value *ptr, llvm::Type *ty) override {
     // The llvm.nvvm.ldg.global.* intrinsics have been removed.
     // They are replaced by a standard load from global address space 1
     // with !invariant.load metadata.
@@ -608,25 +563,22 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     llvm::PointerType *ptr_ty_addrspace_1 = llvm::PointerType::get(ty, 1);
 
     // Cast the input pointer to the correct address space.
-    llvm::Value *cast_ptr =
-        builder->CreateAddrSpaceCast(ptr, ptr_ty_addrspace_1);
+    llvm::Value *cast_ptr = builder->CreateAddrSpaceCast(ptr, ptr_ty_addrspace_1);
 
     // Create the load instruction.
     llvm::LoadInst *load = builder->CreateLoad(ty, cast_ptr);
 
     // Attach the !invariant.load metadata.
-    llvm::MDNode *invariant_load_metadata =
-        llvm::MDNode::get(builder->getContext(), {});
-    load->setMetadata(llvm::LLVMContext::MD_invariant_load,
-                      invariant_load_metadata);
+    llvm::MDNode *invariant_load_metadata = llvm::MDNode::get(builder->getContext(), {});
+    load->setMetadata(llvm::LLVMContext::MD_invariant_load, invariant_load_metadata);
 
     return load;
   }
 
   void visit(GlobalLoadStmt *stmt) override {
     if (auto get_ch = stmt->src->cast<GetChStmt>()) {
-      bool should_cache_as_read_only = current_offload->mem_access_opt.has_flag(
-          get_ch->output_snode, SNodeAccessFlag::read_only);
+      bool should_cache_as_read_only =
+          current_offload->mem_access_opt.has_flag(get_ch->output_snode, SNodeAccessFlag::read_only);
       create_global_load(stmt, should_cache_as_read_only);
     } else {
       create_global_load(stmt, false);
@@ -634,12 +586,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
   }
 
   void create_bls_buffer(OffloadedStmt *stmt) {
-    auto type = llvm::ArrayType::get(llvm::Type::getInt8Ty(*llvm_context),
-                                     stmt->bls_size);
-    bls_buffer = new GlobalVariable(
-        *module, type, false, llvm::GlobalValue::ExternalLinkage, nullptr,
-        "bls_buffer", nullptr, llvm::GlobalVariable::NotThreadLocal,
-        3 /*addrspace=shared*/);
+    auto type = llvm::ArrayType::get(llvm::Type::getInt8Ty(*llvm_context), stmt->bls_size);
+    bls_buffer = new GlobalVariable(*module, type, false, llvm::GlobalValue::ExternalLinkage, nullptr, "bls_buffer",
+                                    nullptr, llvm::GlobalVariable::NotThreadLocal, 3 /*addrspace=shared*/);
     bls_buffer->setAlignment(llvm::MaybeAlign(8));
   }
 
@@ -673,27 +622,42 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       if (stmt->task_type == Type::range_for) {
         if (stmt->const_begin && stmt->const_end) {
           int num_threads = stmt->end_value - stmt->begin_value;
-          int grid_dim = ((num_threads % stmt->block_dim) == 0)
-                             ? (num_threads / stmt->block_dim)
-                             : (num_threads / stmt->block_dim) + 1;
+          int grid_dim = ((num_threads % stmt->block_dim) == 0) ? (num_threads / stmt->block_dim)
+                                                                : (num_threads / stmt->block_dim) + 1;
           grid_dim = std::max(grid_dim, 1);
           current_task->grid_dim = std::min(stmt->grid_dim, grid_dim);
         }
       }
       if (stmt->task_type == Type::listgen) {
         int query_max_block_per_sm;
-        CUDADriver::get_instance().device_get_attribute(
-            &query_max_block_per_sm,
-            CU_DEVICE_ATTRIBUTE_MAX_BLOCKS_PER_MULTIPROCESSOR, nullptr);
+        CUDADriver::get_instance().device_get_attribute(&query_max_block_per_sm,
+                                                        CU_DEVICE_ATTRIBUTE_MAX_BLOCKS_PER_MULTIPROCESSOR, nullptr);
         int num_SMs;
-        CUDADriver::get_instance().device_get_attribute(
-            &num_SMs, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, nullptr);
+        CUDADriver::get_instance().device_get_attribute(&num_SMs, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, nullptr);
         current_task->grid_dim = num_SMs * query_max_block_per_sm;
       }
       current_task->block_dim = stmt->block_dim;
       current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
+      // Host-side adstack sizing. For non-range_for and for const-bound range_for the launcher uses
+      // `grid_dim * block_dim` directly, which is tight because codegen above caps grid_dim to
+      // ceil((end-begin)/block_dim) for const range_for and non-range_for tasks fan out over the full
+      // dispatch. For dynamic-bound range_for we record const values and gtmps byte offsets so the
+      // launcher resolves begin/end at launch time (via i32 DtoH memcpy from runtime->temporaries)
+      // and sizes the heap to exactly `(end - begin) * per_thread_stride`.
+      if (current_task->ad_stack.per_thread_stride > 0) {
+        current_task->ad_stack.static_num_threads =
+            static_cast<std::size_t>(current_task->grid_dim) * static_cast<std::size_t>(current_task->block_dim);
+        if (stmt->task_type == Type::range_for && !(stmt->const_begin && stmt->const_end)) {
+          current_task->ad_stack.dynamic_gpu_range_for = true;
+          current_task->ad_stack.begin_const_value = stmt->const_begin ? stmt->begin_value : 0;
+          current_task->ad_stack.end_const_value = stmt->const_end ? stmt->end_value : 0;
+          current_task->ad_stack.begin_offset_bytes =
+              stmt->const_begin ? -1 : static_cast<std::int32_t>(stmt->begin_offset);
+          current_task->ad_stack.end_offset_bytes = stmt->const_end ? -1 : static_cast<std::int32_t>(stmt->end_offset);
+        }
+      }
       offloaded_tasks.push_back(*current_task);
       current_task = nullptr;
     }
@@ -759,28 +723,67 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 
     // Convert back to f16 if applicable.
     if (stmt->ret_type->is_primitive(PrimitiveTypeID::f16)) {
-      llvm_val[stmt] = builder->CreateFPTrunc(
-          llvm_val[stmt], llvm::Type::getHalfTy(*llvm_context));
+      llvm_val[stmt] = builder->CreateFPTrunc(llvm_val[stmt], llvm::Type::getHalfTy(*llvm_context));
+    }
+  }
+
+  void visit(InternalFuncStmt *stmt) override {
+    if (stmt->func_name == "subgroupShuffle" || stmt->func_name == "subgroupBroadcast") {
+      llvm_val[stmt] = emit_cuda_shuffle(
+          /* value=*/llvm_val[stmt->args[0]],
+          /* dt=*/stmt->args[0]->ret_type,
+          /* index=*/llvm_val[stmt->args[1]]);
+    } else if (stmt->func_name == "subgroupShuffleDown") {
+      llvm_val[stmt] = emit_cuda_shuffle_down(
+          /* value=*/llvm_val[stmt->args[0]],
+          /* dt=*/stmt->args[0]->ret_type,
+          /* offset=*/llvm_val[stmt->args[1]]);
+    } else if (stmt->func_name == "subgroupInvocationId") {
+      llvm_val[stmt] = call("cuda_lane_id");
+    } else {
+      TaskCodeGenLLVM::visit(stmt);
     }
   }
 
  private:
+  llvm::Value *emit_cuda_shuffle(llvm::Value *value, DataType dt, llvm::Value *index) {
+    if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::u32))
+      return call("cuda_shuffle_i32", index, value);
+    if (dt->is_primitive(PrimitiveTypeID::f32))
+      return call("cuda_shuffle_f32", index, value);
+    if (dt->is_primitive(PrimitiveTypeID::f64))
+      return call("cuda_shuffle_f64", index, value);
+    if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
+      return call("cuda_shuffle_i64", index, value);
+    QD_ERROR("subgroup shuffle: unsupported type {}", data_type_name(dt));
+    return nullptr;
+  }
+
+  llvm::Value *emit_cuda_shuffle_down(llvm::Value *value, DataType dt, llvm::Value *offset) {
+    if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::u32))
+      return call("cuda_shuffle_down_i32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f32))
+      return call("cuda_shuffle_down_f32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f64))
+      return call("cuda_shuffle_down_f64", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
+      return call("cuda_shuffle_down_i64", offset, value);
+    QD_ERROR("subgroup shuffle_down: unsupported type {}", data_type_name(dt));
+    return nullptr;
+  }
+
   std::tuple<llvm::Value *, llvm::Value *> get_spmd_info() override {
-    auto thread_idx = builder->CreateIntrinsic(
-        Intrinsic::nvvm_read_ptx_sreg_tid_x, ArrayRef<llvm::Value *>{});
-    auto block_dim = builder->CreateIntrinsic(
-        Intrinsic::nvvm_read_ptx_sreg_ntid_x, ArrayRef<llvm::Value *>{});
+    auto thread_idx = builder->CreateIntrinsic(Intrinsic::nvvm_read_ptx_sreg_tid_x, ArrayRef<llvm::Value *>{});
+    auto block_dim = builder->CreateIntrinsic(Intrinsic::nvvm_read_ptx_sreg_ntid_x, ArrayRef<llvm::Value *>{});
     return std::make_tuple(thread_idx, block_dim);
   }
 };
 
-LLVMCompiledTask KernelCodeGenCUDA::compile_task(
-    int task_codegen_id,
-    const CompileConfig &config,
-    std::unique_ptr<llvm::Module> &&module,
-    IRNode *block) {
-  TaskCodeGenCUDA gen(task_codegen_id, config, get_quadrants_llvm_context(),
-                      kernel, block);
+LLVMCompiledTask KernelCodeGenCUDA::compile_task(int task_codegen_id,
+                                                 const CompileConfig &config,
+                                                 std::unique_ptr<llvm::Module> &&module,
+                                                 IRNode *block) {
+  TaskCodeGenCUDA gen(task_codegen_id, config, get_quadrants_llvm_context(), kernel, block);
   return gen.run_compilation();
 }
 

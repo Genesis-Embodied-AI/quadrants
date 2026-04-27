@@ -8,8 +8,7 @@ namespace quadrants::lang {
 
 namespace {
 template <typename T>
-inline std::vector<T> concatenate_vector(const std::vector<T> &lhs,
-                                         const std::vector<T> &rhs) {
+inline std::vector<T> concatenate_vector(const std::vector<T> &lhs, const std::vector<T> &rhs) {
   std::vector<T> result;
   result.assign(lhs.begin(), lhs.end());
   result.insert(result.end(), rhs.begin(), rhs.end());
@@ -67,8 +66,7 @@ void LaunchContextBuilder::set_arg_float(int arg_id, float64 d) {
   }
 }
 
-void LaunchContextBuilder::set_args_float(const std::vector<int> &args_id,
-                                          const std::vector<float64> &vec) {
+void LaunchContextBuilder::set_args_float(const std::vector<int> &args_id, const std::vector<float64> &vec) {
   const size_t num_arrs = args_id.size();
   QD_ASSERT(num_arrs == vec.size());
   for (int i = 0; i < num_arrs; i++) {
@@ -77,8 +75,7 @@ void LaunchContextBuilder::set_args_float(const std::vector<int> &args_id,
 }
 
 template <typename T, std::size_t N>
-void LaunchContextBuilder::set_struct_arg(const std::array<int, N> &arg_indices,
-                                          T d) {
+void LaunchContextBuilder::set_struct_arg(const std::array<int, N> &arg_indices, T d) {
   auto dt = kernel_->args_type->get_element_type(arg_indices);
 
   QD_ASSERT(dt->template is<PrimitiveType>() || dt->template is<PointerType>());
@@ -106,19 +103,16 @@ void LaunchContextBuilder::set_struct_arg(const std::array<int, N> &arg_indices,
 }
 
 template <std::size_t... I>
-constexpr auto vec_to_array(const std::vector<int> &v,
-                            std::index_sequence<I...>) {
+constexpr auto vec_to_array(const std::vector<int> &v, std::index_sequence<I...>) {
   return std::array<int, sizeof...(I)>{v[I]...};
 }
 
 template <typename T>
-void LaunchContextBuilder::set_struct_arg(const std::vector<int> &arg_indices,
-                                          T v) {
+void LaunchContextBuilder::set_struct_arg(const std::vector<int> &arg_indices, T v) {
   switch (arg_indices.size()) {
-#define CASE(N)                                                       \
-  case N: {                                                           \
-    return set_struct_arg(                                            \
-        vec_to_array(arg_indices, std::make_index_sequence<N>{}), v); \
+#define CASE(N)                                                                         \
+  case N: {                                                                             \
+    return set_struct_arg(vec_to_array(arg_indices, std::make_index_sequence<N>{}), v); \
   }
     CASE(1)
     CASE(2)
@@ -133,41 +127,42 @@ void LaunchContextBuilder::set_struct_arg(const std::vector<int> &arg_indices,
   }
 }
 
-void LaunchContextBuilder::set_ndarray_ptrs(int arg_id,
-                                            uint64 data_ptr,
-                                            uint64 grad_ptr) {
-  set_struct_arg(std::array{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY},
-                 data_ptr);
+void LaunchContextBuilder::set_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr) {
+  set_struct_arg(std::array{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}, data_ptr);
   if (kernel_->nested_parameters[arg_id].needs_grad) {
-    set_struct_arg(std::array{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY},
-                   grad_ptr);
+    set_struct_arg(std::array{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}, grad_ptr);
   }
 }
 
-template void LaunchContextBuilder::set_struct_arg(const std::array<int, 1> &,
-                                                   uint64);
-template void LaunchContextBuilder::set_struct_arg(const std::array<int, 1> &,
-                                                   int64);
-template void LaunchContextBuilder::set_struct_arg(const std::array<int, 1> &,
-                                                   float64);
-template void LaunchContextBuilder::set_struct_arg(const std::array<int, 2> &,
-                                                   uint64);
-template void LaunchContextBuilder::set_struct_arg(const std::array<int, 2> &,
-                                                   int64);
-template void LaunchContextBuilder::set_struct_arg(const std::array<int, 2> &,
-                                                   float64);
-template void LaunchContextBuilder::set_struct_arg(const std::array<int, 3> &,
-                                                   uint64);
-template void LaunchContextBuilder::set_struct_arg(const std::array<int, 3> &,
-                                                   int64);
-template void LaunchContextBuilder::set_struct_arg(const std::array<int, 3> &,
-                                                   float64);
-template void LaunchContextBuilder::set_struct_arg(const std::vector<int> &,
-                                                   uint64);
-template void LaunchContextBuilder::set_struct_arg(const std::vector<int> &,
-                                                   int64);
-template void LaunchContextBuilder::set_struct_arg(const std::vector<int> &,
-                                                   float64);
+void LaunchContextBuilder::set_host_accessible_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr) {
+  // Host-accessible variant used by the CPU kernel launcher. `set_ndarray_ptrs` alone only writes the
+  // resolved pointer into the kernel-visible arg buffer; it leaves the `array_ptrs` map holding whatever the
+  // earlier `set_arg_ndarray_impl` stashed (a `DeviceAllocation *` handle when the caller passed an Ndarray).
+  // The adstack size-expression evaluator reads straight from `array_ptrs` to resolve runtime loop bounds
+  // derived from ndarray element reads (`ExternalTensorRead` nodes from `determine_ad_stack_size`); on CPU the
+  // resolved `data_ptr` is the real host pointer to the element buffer, so mirror it into `array_ptrs` once
+  // the launcher knows the raw address. SPIR-V / CUDA / AMDGPU launchers stay on the plain `set_ndarray_ptrs`
+  // path: the address they pass is a device-only pointer that cannot be dereferenced from the evaluator, and
+  // stamping it into `array_ptrs` would just move the stale read to a harder-to-diagnose segfault.
+  set_ndarray_ptrs(arg_id, data_ptr, grad_ptr);
+  array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}] = reinterpret_cast<void *>(data_ptr);
+  if (kernel_->nested_parameters[arg_id].needs_grad) {
+    array_ptrs[{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}] = reinterpret_cast<void *>(grad_ptr);
+  }
+}
+
+template void LaunchContextBuilder::set_struct_arg(const std::array<int, 1> &, uint64);
+template void LaunchContextBuilder::set_struct_arg(const std::array<int, 1> &, int64);
+template void LaunchContextBuilder::set_struct_arg(const std::array<int, 1> &, float64);
+template void LaunchContextBuilder::set_struct_arg(const std::array<int, 2> &, uint64);
+template void LaunchContextBuilder::set_struct_arg(const std::array<int, 2> &, int64);
+template void LaunchContextBuilder::set_struct_arg(const std::array<int, 2> &, float64);
+template void LaunchContextBuilder::set_struct_arg(const std::array<int, 3> &, uint64);
+template void LaunchContextBuilder::set_struct_arg(const std::array<int, 3> &, int64);
+template void LaunchContextBuilder::set_struct_arg(const std::array<int, 3> &, float64);
+template void LaunchContextBuilder::set_struct_arg(const std::vector<int> &, uint64);
+template void LaunchContextBuilder::set_struct_arg(const std::vector<int> &, int64);
+template void LaunchContextBuilder::set_struct_arg(const std::vector<int> &, float64);
 
 void LaunchContextBuilder::set_arg_int(int arg_id, int64 d) {
   auto dt = kernel_->args_type->get_element_type(std::array{arg_id});
@@ -200,8 +195,7 @@ void LaunchContextBuilder::set_arg_int(int arg_id, int64 d) {
   }
 }
 
-void LaunchContextBuilder::set_args_int(const std::vector<int> &args_id,
-                                        const std::vector<int64> &vec) {
+void LaunchContextBuilder::set_args_int(const std::vector<int> &args_id, const std::vector<int64> &vec) {
   const size_t num_arrs = args_id.size();
   QD_ASSERT(num_arrs == vec.size());
   for (int i = 0; i < num_arrs; i++) {
@@ -213,8 +207,7 @@ void LaunchContextBuilder::set_arg_uint(int arg_id, uint64 d) {
   set_arg_int(arg_id, d);
 }
 
-void LaunchContextBuilder::set_args_uint(const std::vector<int> &args_id,
-                                         const std::vector<uint64> &vec) {
+void LaunchContextBuilder::set_args_uint(const std::vector<int> &args_id, const std::vector<uint64> &vec) {
   const size_t num_arrs = args_id.size();
   QD_ASSERT(num_arrs == vec.size());
   for (int i = 0; i < num_arrs; i++) {
@@ -234,9 +227,7 @@ void LaunchContextBuilder::set_arg<TypedConstant>(int arg_id, TypedConstant d) {
 }
 
 template <typename T, std::size_t N>
-void LaunchContextBuilder::set_struct_arg_impl(
-    const std::array<int, N> &arg_indices,
-    T v) {
+void LaunchContextBuilder::set_struct_arg_impl(const std::array<int, N> &arg_indices, T v) {
   int offset = args_type->get_element_offset(arg_indices);
   QD_ASSERT(offset + sizeof(T) <= arg_buffer_size);
   *(T *)(ctx_->arg_buffer + offset) = v;
@@ -255,6 +246,15 @@ T LaunchContextBuilder::get_struct_arg(std::vector<int> arg_indices) {
 }
 
 template <typename T>
+T LaunchContextBuilder::get_struct_arg_host(std::vector<int> arg_indices) {
+  // `ctx_->arg_buffer` can be a device pointer after a CUDA / AMDGPU launcher swap; `arg_buffer_.get()` is the
+  // launcher-owned host backing buffer and is always safe to dereference from host code.
+  int offset = args_type->get_element_offset(arg_indices);
+  QD_ASSERT(offset + sizeof(T) <= arg_buffer_size);
+  return *(T *)(arg_buffer_.get() + offset);
+}
+
+template <typename T>
 void LaunchContextBuilder::set_arg(int arg_id, T v) {
   set_struct_arg_impl(std::array{arg_id}, v);
   set_array_device_allocation_type(arg_id, DevAllocType::kNone);
@@ -265,17 +265,14 @@ T LaunchContextBuilder::get_ret(int i) {
   return quadrants_union_cast_with_different_sizes<T>(ctx_->result_buffer[i]);
 }
 
-#define PER_C_TYPE(type, ctype)                                            \
-  template void LaunchContextBuilder::set_struct_arg_impl(                 \
-      const std::array<int, 1> &arg_indices, ctype v);                     \
-  template void LaunchContextBuilder::set_struct_arg_impl(                 \
-      const std::array<int, 2> &arg_indices, ctype v);                     \
-  template void LaunchContextBuilder::set_struct_arg_impl(                 \
-      const std::array<int, 3> &arg_indices, ctype v);                     \
-  template ctype LaunchContextBuilder::get_arg(const std::vector<int> &i); \
-  template ctype LaunchContextBuilder::get_struct_arg(                     \
-      std::vector<int> arg_indices);                                       \
-  template void LaunchContextBuilder::set_arg(int i, ctype v);             \
+#define PER_C_TYPE(type, ctype)                                                                            \
+  template void LaunchContextBuilder::set_struct_arg_impl(const std::array<int, 1> &arg_indices, ctype v); \
+  template void LaunchContextBuilder::set_struct_arg_impl(const std::array<int, 2> &arg_indices, ctype v); \
+  template void LaunchContextBuilder::set_struct_arg_impl(const std::array<int, 3> &arg_indices, ctype v); \
+  template ctype LaunchContextBuilder::get_arg(const std::vector<int> &i);                                 \
+  template ctype LaunchContextBuilder::get_struct_arg(std::vector<int> arg_indices);                       \
+  template ctype LaunchContextBuilder::get_struct_arg_host(std::vector<int> arg_indices);                  \
+  template void LaunchContextBuilder::set_arg(int i, ctype v);                                             \
   template ctype LaunchContextBuilder::get_ret(int i);
 #include "quadrants/inc/data_type_with_c_type.inc.h"
 PER_C_TYPE(gen, void *)  // Register void* as a valid type
@@ -285,28 +282,22 @@ void LaunchContextBuilder::set_array_runtime_size(int i, uint64 size) {
   array_runtime_sizes[i] = size;
 }
 
-void LaunchContextBuilder::set_array_device_allocation_type(
-    int i,
-    DevAllocType usage) {
+void LaunchContextBuilder::set_array_device_allocation_type(int i, DevAllocType usage) {
   device_allocation_type[i] = usage;
 }
 
-void LaunchContextBuilder::set_arg_external_array_with_shape(
-    int arg_id,
-    uintptr_t ptr,
-    uint64 size,
-    const std::vector<int64> &shape,
-    uintptr_t grad_ptr) {
-  QD_ASSERT_INFO(
-      kernel_->nested_parameters[arg_id].is_array,
-      "Assigning external (numpy) array to scalar argument is not allowed.");
+void LaunchContextBuilder::set_arg_external_array_with_shape(int arg_id,
+                                                             uintptr_t ptr,
+                                                             uint64 size,
+                                                             const std::vector<int64> &shape,
+                                                             uintptr_t grad_ptr) {
+  QD_ASSERT_INFO(kernel_->nested_parameters[arg_id].is_array,
+                 "Assigning external (numpy) array to scalar argument is not allowed.");
 
-  QD_ASSERT_INFO(shape.size() <= quadrants_max_num_indices,
-                 "External array cannot have > {max_num_indices} indices");
+  QD_ASSERT_INFO(shape.size() <= quadrants_max_num_indices, "External array cannot have > {max_num_indices} indices");
   array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}] = (void *)ptr;
   if (grad_ptr != 0) {
-    array_ptrs[{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}] =
-        (void *)grad_ptr;
+    array_ptrs[{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}] = (void *)grad_ptr;
   }
   set_array_runtime_size(arg_id, size);
   set_array_device_allocation_type(arg_id, DevAllocType::kNone);
@@ -322,9 +313,7 @@ void LaunchContextBuilder::set_arg_ndarray(int arg_id, const Ndarray &arr) {
   set_arg_ndarray_impl(arg_id, ptr, arr.shape);
 }
 
-void LaunchContextBuilder::set_args_ndarray(
-    const std::vector<int> &args_id,
-    const std::vector<Ndarray *> &arrs) {
+void LaunchContextBuilder::set_args_ndarray(const std::vector<int> &args_id, const std::vector<Ndarray *> &arrs) {
   const size_t num_arrs = args_id.size();
 
   array_ptrs.reserve(array_ptrs.size() + num_arrs);
@@ -349,9 +338,7 @@ void LaunchContextBuilder::set_args_ndarray(
   }
 }
 
-void LaunchContextBuilder::set_arg_ndarray_with_grad(int arg_id,
-                                                     const Ndarray &arr,
-                                                     const Ndarray &arr_grad) {
+void LaunchContextBuilder::set_arg_ndarray_with_grad(int arg_id, const Ndarray &arr, const Ndarray &arr_grad) {
   intptr_t ptr = arr.get_device_allocation_ptr_as_int();
   intptr_t ptr_grad = arr_grad.get_device_allocation_ptr_as_int();
   QD_ASSERT_INFO(arr.shape.size() <= quadrants_max_num_indices,
@@ -359,10 +346,9 @@ void LaunchContextBuilder::set_arg_ndarray_with_grad(int arg_id,
   set_arg_ndarray_impl(arg_id, ptr, arr.shape, ptr_grad);
 }
 
-void LaunchContextBuilder::set_args_ndarray_with_grad(
-    const std::vector<int> &args_id,
-    const std::vector<Ndarray *> &arrs,
-    const std::vector<Ndarray *> &arrs_grad) {
+void LaunchContextBuilder::set_args_ndarray_with_grad(const std::vector<int> &args_id,
+                                                      const std::vector<Ndarray *> &arrs,
+                                                      const std::vector<Ndarray *> &arrs_grad) {
   const size_t num_arrs = args_id.size();
   QD_ASSERT(num_arrs == arrs.size());
   QD_ASSERT(num_arrs == arrs_grad.size());
@@ -376,11 +362,9 @@ void LaunchContextBuilder::set_arg_ndarray_impl(int arg_id,
                                                 const std::vector<int> &shape,
                                                 intptr_t devalloc_ptr_grad) {
   // Set array ptr
-  array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}] =
-      (void *)devalloc_ptr;
+  array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}] = (void *)devalloc_ptr;
   if (devalloc_ptr_grad != 0) {
-    array_ptrs[{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}] =
-        (void *)devalloc_ptr_grad;
+    array_ptrs[{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}] = (void *)devalloc_ptr_grad;
   }
   // Set device allocation type and runtime size
   set_array_device_allocation_type(arg_id, DevAllocType::kNdarray);
@@ -398,27 +382,20 @@ void LaunchContextBuilder::set_arg_matrix(int arg_id, const Matrix &matrix) {
   for (int i = 0; i < matrix.length(); i++) {
     switch (type_size) {
       case 1:
-        set_struct_arg_impl(std::array{arg_id, i},
-                            quadrants_union_cast_with_different_sizes<int8>(
-                                reinterpret_cast<uint8_t *>(matrix.data())[i]));
+        set_struct_arg_impl(std::array{arg_id, i}, quadrants_union_cast_with_different_sizes<int8>(
+                                                       reinterpret_cast<uint8_t *>(matrix.data())[i]));
         break;
       case 2:
-        set_struct_arg_impl(
-            std::array{arg_id, i},
-            quadrants_union_cast_with_different_sizes<int16>(
-                reinterpret_cast<uint16_t *>(matrix.data())[i]));
+        set_struct_arg_impl(std::array{arg_id, i}, quadrants_union_cast_with_different_sizes<int16>(
+                                                       reinterpret_cast<uint16_t *>(matrix.data())[i]));
         break;
       case 4:
-        set_struct_arg_impl(
-            std::array{arg_id, i},
-            quadrants_union_cast_with_different_sizes<int32>(
-                reinterpret_cast<uint32_t *>(matrix.data())[i]));
+        set_struct_arg_impl(std::array{arg_id, i}, quadrants_union_cast_with_different_sizes<int32>(
+                                                       reinterpret_cast<uint32_t *>(matrix.data())[i]));
         break;
       case 8:
-        set_struct_arg_impl(
-            std::array{arg_id, i},
-            quadrants_union_cast_with_different_sizes<int64>(
-                reinterpret_cast<uint64_t *>(matrix.data())[i]));
+        set_struct_arg_impl(std::array{arg_id, i}, quadrants_union_cast_with_different_sizes<int64>(
+                                                       reinterpret_cast<uint64_t *>(matrix.data())[i]));
         break;
       default:
         QD_ERROR("Unsupported type size {}", type_size);
@@ -432,8 +409,7 @@ TypedConstant LaunchContextBuilder::fetch_ret(const std::vector<int> &index) {
   return fetch_ret_impl(offset, dt);
 }
 
-float64 LaunchContextBuilder::get_struct_ret_float(
-    const std::vector<int> &index) {
+float64 LaunchContextBuilder::get_struct_ret_float(const std::vector<int> &index) {
   return fetch_ret(index).val_float();
 }
 
@@ -441,8 +417,7 @@ int64 LaunchContextBuilder::get_struct_ret_int(const std::vector<int> &index) {
   return fetch_ret(index).val_int();
 }
 
-uint64 LaunchContextBuilder::get_struct_ret_uint(
-    const std::vector<int> &index) {
+uint64 LaunchContextBuilder::get_struct_ret_uint(const std::vector<int> &index) {
   return fetch_ret(index).val_uint();
 }
 

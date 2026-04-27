@@ -80,8 +80,7 @@ class QD_DLL_EXPORT Program {
 
   KernelProfilerQueryResult query_kernel_profile_info(const std::string &name) {
     KernelProfilerQueryResult query_result;
-    profiler->query(name, query_result.counter, query_result.min,
-                    query_result.max, query_result.avg);
+    profiler->query(name, query_result.counter, query_result.min, query_result.max, query_result.avg);
     return query_result;
   }
 
@@ -114,11 +113,10 @@ class QD_DLL_EXPORT Program {
 
   void dump_cache_data_to_disk();
 
-  const CompiledKernelData *load_fast_cache(
-      const std::string &checksum,
-      const std::string &kernel_name,
-      const CompileConfig &compile_config,
-      const DeviceCapabilityConfig &device_caps);
+  const CompiledKernelData *load_fast_cache(const std::string &checksum,
+                                            const std::string &kernel_name,
+                                            const CompileConfig &compile_config,
+                                            const DeviceCapabilityConfig &device_caps);
 
   Kernel &create_kernel(const std::function<void(Kernel *)> &body,
                         const std::string &name = "",
@@ -130,25 +128,26 @@ class QD_DLL_EXPORT Program {
                                const DeviceCapabilityConfig &device_caps,
                                const Kernel &kernel_def);
 
-  void launch_kernel(const CompiledKernelData &compiled_kernel_data,
-                     LaunchContextBuilder &ctx);
+  void launch_kernel(const CompiledKernelData &compiled_kernel_data, LaunchContextBuilder &ctx);
 
-  std::size_t get_cuda_graph_cache_size() {
-    return program_impl_->get_kernel_launcher().get_cuda_graph_cache_size();
+  std::size_t get_graph_cache_size() {
+    return program_impl_->get_kernel_launcher().get_graph_cache_size();
   }
 
-  bool get_cuda_graph_cache_used_on_last_call() {
-    return program_impl_->get_kernel_launcher()
-        .get_cuda_graph_cache_used_on_last_call();
+  bool get_graph_cache_used_on_last_call() {
+    return program_impl_->get_kernel_launcher().get_graph_cache_used_on_last_call();
   }
 
   size_t get_num_offloaded_tasks_on_last_call() const {
     return num_offloaded_tasks_on_last_call_;
   }
 
-  std::size_t get_cuda_graph_num_nodes_on_last_call() {
-    return program_impl_->get_kernel_launcher()
-        .get_cuda_graph_num_nodes_on_last_call();
+  std::size_t get_graph_num_nodes_on_last_call() {
+    return program_impl_->get_kernel_launcher().get_graph_num_nodes_on_last_call();
+  }
+
+  std::size_t get_graph_total_builds() {
+    return program_impl_->get_kernel_launcher().get_graph_total_builds();
   }
 
   DeviceCapabilityConfig get_device_caps() {
@@ -198,6 +197,12 @@ class QD_DLL_EXPORT Program {
   inline SNodeRwAccessorsBank &get_snode_rw_accessors_bank() {
     return snode_rw_accessors_bank_;
   }
+
+  // Look up an `SNode` in this `Program`'s snode trees by its global `SNode::id`. Used by the host-side adstack
+  // size-expression evaluator to rehydrate an `SNode *` from a `snode_id` that survived the offline cache. Linear
+  // over all snode trees; called at most once per adstack leaf per kernel launch so the cost is negligible in
+  // practice.
+  SNode *get_snode_by_id(int snode_id);
 
   /**
    * Destroys a new SNode tree.
@@ -256,17 +261,15 @@ class QD_DLL_EXPORT Program {
   }
 
   // TODO: do we still need result_buffer?
-  DeviceAllocation allocate_memory_on_device(std::size_t alloc_size,
-                                             uint64 *result_buffer) {
+  DeviceAllocation allocate_memory_on_device(std::size_t alloc_size, uint64 *result_buffer) {
     return program_impl_->allocate_memory_on_device(alloc_size, result_buffer);
   }
 
-  Ndarray *create_ndarray(
-      const DataType type,
-      const std::vector<int> &shape,
-      ExternalArrayLayout layout = ExternalArrayLayout::kNull,
-      bool zero_fill = false,
-      const DebugInfo &dbg_info = DebugInfo());
+  Ndarray *create_ndarray(const DataType type,
+                          const std::vector<int> &shape,
+                          ExternalArrayLayout layout = ExternalArrayLayout::kNull,
+                          bool zero_fill = false,
+                          const DebugInfo &dbg_info = DebugInfo());
 
   std::string get_kernel_return_data_layout() {
     return program_impl_->get_kernel_return_data_layout();
@@ -276,9 +279,8 @@ class QD_DLL_EXPORT Program {
     return program_impl_->get_kernel_argument_data_layout();
   };
 
-  std::pair<const StructType *, size_t> get_struct_type_with_data_layout(
-      const StructType *old_ty,
-      const std::string &layout);
+  std::pair<const StructType *, size_t> get_struct_type_with_data_layout(const StructType *old_ty,
+                                                                         const std::string &layout);
 
   void delete_ndarray(Ndarray *ndarray);
 
@@ -295,9 +297,8 @@ class QD_DLL_EXPORT Program {
    *  @params op The lambda that is invoked to construct the custom compute Op
    *  @params image_refs The image resource references used in this compute Op
    */
-  void enqueue_compute_op_lambda(
-      std::function<void(Device *device, CommandList *cmdlist)> op,
-      const std::vector<ComputeOpImageRef> &image_refs);
+  void enqueue_compute_op_lambda(std::function<void(Device *device, CommandList *cmdlist)> op,
+                                 const std::vector<ComputeOpImageRef> &image_refs);
 
   /**
    * TODO(zhanlue): Remove this interface

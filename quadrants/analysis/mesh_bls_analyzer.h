@@ -12,8 +12,7 @@ namespace quadrants::lang {
 class MeshBLSCache {
  public:
   using AccessFlag = quadrants::lang::AccessFlag;
-  using Rec = std::map<std::pair<mesh::MeshElementType, mesh::ConvType>,
-                       std::set<std::pair<SNode *, AccessFlag>>>;
+  using Rec = std::map<std::pair<mesh::MeshElementType, mesh::ConvType>, std::set<std::pair<SNode *, AccessFlag>>>;
 
   SNode *snode{nullptr};
   mesh::MeshElementType element_type;
@@ -35,10 +34,7 @@ class MeshBLSCache {
     unique_accessed = 0;
   }
 
-  bool access(mesh::MeshElementType element_type,
-              mesh::ConvType conv_type,
-              AccessFlag flags,
-              Stmt *idx) {
+  bool access(mesh::MeshElementType element_type, mesh::ConvType conv_type, AccessFlag flags, Stmt *idx) {
     if (!initialized) {
       initialized = true;
       this->conv_type = conv_type;
@@ -63,10 +59,7 @@ class MeshBLSCache {
       const auto cache_type = std::make_pair(element_type, conv_type);
       auto ptr = rec.find(cache_type);
       if (ptr == rec.end()) {
-        ptr = rec.emplace(std::piecewise_construct,
-                          std::forward_as_tuple(cache_type),
-                          std::forward_as_tuple())
-                  .first;
+        ptr = rec.emplace(std::piecewise_construct, std::forward_as_tuple(cache_type), std::forward_as_tuple()).first;
       }
       ptr->second.insert(std::make_pair(snode, total_flags));
     }
@@ -82,23 +75,16 @@ class MeshBLSCaches {
 
   void insert(SNode *snode) {
     if (caches.find(snode) == caches.end()) {
-      caches.emplace(std::piecewise_construct, std::forward_as_tuple(snode),
-                     std::forward_as_tuple(snode));
+      caches.emplace(std::piecewise_construct, std::forward_as_tuple(snode), std::forward_as_tuple(snode));
     } else {
-      QD_ERROR("mesh::MeshBLSCaches for {} already exists.",
-               snode->node_type_name);
+      QD_ERROR("mesh::MeshBLSCaches for {} already exists.", snode->node_type_name);
     }
   }
 
-  bool access(SNode *snode,
-              mesh::MeshElementType element_type,
-              mesh::ConvType conv_type,
-              AccessFlag flags,
-              Stmt *idx) {
+  bool access(SNode *snode, mesh::MeshElementType element_type, mesh::ConvType conv_type, AccessFlag flags, Stmt *idx) {
     if (caches.find(snode) == caches.end())
       return false;
-    return caches.find(snode)->second.access(element_type, conv_type, flags,
-                                             idx);
+    return caches.find(snode)->second.access(element_type, conv_type, flags, idx);
   }
 
   Rec finalize() {
@@ -124,10 +110,7 @@ class MeshBLSAnalyzer : public BasicStmtVisitor {
   using BasicStmtVisitor::visit;
 
  public:
-  MeshBLSAnalyzer(OffloadedStmt *for_stmt,
-                  MeshBLSCaches *caches,
-                  bool auto_mesh_local,
-                  const CompileConfig &config);
+  MeshBLSAnalyzer(OffloadedStmt *for_stmt, MeshBLSCaches *caches, bool auto_mesh_local, const CompileConfig &config);
 
   void visit(GlobalPtrStmt *stmt) override {
   }

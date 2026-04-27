@@ -18,8 +18,7 @@ inline bool operator==(ArgArrayPtrKey lhs, ArgArrayPtrKey rhs) noexcept {
 
 struct ArgArrayPtrKeyHasher {
   size_t operator()(ArgArrayPtrKey k) const noexcept {
-    return (static_cast<size_t>(static_cast<uint32_t>(k.arg_id)) << 32) |
-           static_cast<uint32_t>(k.ptr_type);
+    return (static_cast<size_t>(static_cast<uint32_t>(k.arg_id)) << 32) | static_cast<uint32_t>(k.ptr_type);
   }
 };
 
@@ -51,20 +50,17 @@ class LaunchContextBuilder {
   // In this context, 'args_id' is a vector gathering the position of each
   // of these scalar arguments in the corresponding kernel. As a result, the
   // length 'args_id' and 'vec' must be equal.
-  void set_args_float(const std::vector<int> &args_id,
-                      const std::vector<float64> &vec);
+  void set_args_float(const std::vector<int> &args_id, const std::vector<float64> &vec);
 
   // Created signed and unsigned version for argument range check of pybind
   void set_arg_int(int arg_id, int64 d);
   // Bulk processing of multiple scalar int arguments at the same time.
   // See 'set_arg_float' documentation for details.
-  void set_args_int(const std::vector<int> &args_id,
-                    const std::vector<int64> &vec);
+  void set_args_int(const std::vector<int> &args_id, const std::vector<int64> &vec);
   // Bulk processing of multiple scalar uint arguments at the same time.
   // See 'set_arg_float' documentation for details.
   void set_arg_uint(int arg_id, uint64 d);
-  void set_args_uint(const std::vector<int> &args_id,
-                     const std::vector<uint64> &vec);
+  void set_args_uint(const std::vector<int> &args_id, const std::vector<uint64> &vec);
 
   void set_array_runtime_size(int arg_id, uint64 size);
 
@@ -88,12 +84,26 @@ class LaunchContextBuilder {
   void set_struct_arg(const std::vector<int> &arg_indices, T v);
 
   void set_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr);
+  // Same as `set_ndarray_ptrs`, but also mirrors the resolved host pointer into `array_ptrs` so the adstack
+  // size-expression evaluator can dereference it. Call only from launchers where `data_ptr`/`grad_ptr` is a
+  // real host-accessible address (CPU); device-only launchers (SPIR-V / CUDA / AMDGPU) must use the plain
+  // `set_ndarray_ptrs`.
+  void set_host_accessible_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr);
 
   template <typename T>
   T get_arg(const std::vector<int> &i);
 
   template <typename T>
   T get_struct_arg(std::vector<int> arg_indices);
+
+  // Host-only counterpart of `get_struct_arg`: always reads from the launcher-owned `arg_buffer_` host backing
+  // store instead of `RuntimeContext::arg_buffer`. Needed because CUDA / AMDGPU launchers swap
+  // `ctx_->arg_buffer` to a device pointer before handing the context to the adstack sizer encoder; a plain
+  // `get_struct_arg<T>` at that point would dereference device memory from the host. Call this from host-side
+  // evaluators (e.g. `encode_adstack_size_expr_device_bytecode`) that need to peek scalar slots without
+  // assuming the kernel-facing `RuntimeContext::arg_buffer` still points at host memory.
+  template <typename T>
+  T get_struct_arg_host(std::vector<int> arg_indices);
 
   template <typename T>
   T get_ret(int arg_id);
@@ -112,11 +122,8 @@ class LaunchContextBuilder {
   // Bulk processing of multiple individual Taichi NDarray arguments (without
   // any associated gradient) at the same time.
   // See 'set_arg_float' for details.
-  void set_args_ndarray(const std::vector<int> &args_id,
-                        const std::vector<Ndarray *> &arrs);
-  void set_arg_ndarray_with_grad(int arg_id,
-                                 const Ndarray &arr,
-                                 const Ndarray &arr_grad);
+  void set_args_ndarray(const std::vector<int> &args_id, const std::vector<Ndarray *> &arrs);
+  void set_arg_ndarray_with_grad(int arg_id, const Ndarray &arr, const Ndarray &arr_grad);
   // Bulk processing of multiple individual Taichi NDarray arguments (along
   // with associated gradient) at the same time.
   // See 'set_arg_float' for details.
@@ -150,7 +157,7 @@ class LaunchContextBuilder {
   size_t arg_buffer_size{0};
   const StructType *args_type{nullptr};
   size_t result_buffer_size{0};
-  bool use_cuda_graph{false};
+  bool use_graph{false};
   int graph_do_while_arg_id{-1};
   void *graph_do_while_flag_dev_ptr{nullptr};
 

@@ -354,7 +354,7 @@ def init(
             ``kwargs``, which allows for fine grained control of Quadrants compiler
             behavior. Below we list some of the most frequently used ones. For a
             complete list, please check out
-            https://github.com/taichi-dev/quadrants/blob/master/quadrants/program/compile_config.h.
+            https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h.
 
             * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
             * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.
@@ -363,7 +363,7 @@ def init(
             *``random_seed`` (int): Sets the seed of the random generator. The default is 0.
             *``debug_dump_path`` (str): used as the base path for QD_DUMP_IR and similar
     """
-    # FIXME(https://github.com/taichi-dev/quadrants/issues/4811): save the current working directory since it may be
+    # FIXME(https://github.com/taichi-dev/taichi/issues/4811): save the current working directory since it may be
     # changed by the Vulkan backend initialization on OS X.
     current_dir = os.getcwd()
 
@@ -491,8 +491,14 @@ def init(
     else:
         _install_python_backend_dtype_call()
 
-    # Recover the current working directory (https://github.com/taichi-dev/quadrants/issues/4811)
+    # Recover the current working directory (https://github.com/taichi-dev/taichi/issues/4811)
     os.chdir(current_dir)
+
+    if os.environ.get("QD_KERNEL_COVERAGE") == "1":
+        from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
+
+        _kernel_coverage.ensure_field_allocated()
+
     return None
 
 
@@ -528,7 +534,7 @@ def mesh_local(*args):
     and to enable the mesh BLS optimization,
     only available for backends supporting `qd.extension.mesh` and to use with mesh-for loop.
 
-    Related to https://github.com/taichi-dev/quadrants/issues/3608
+    Related to https://github.com/taichi-dev/taichi/issues/3608
 
     Args:
         *args (List[Attribute]): A list of mesh attributes or fields accessed as attributes.
@@ -643,6 +649,7 @@ def loop_config(
     parallelize=None,
     block_dim_adaptive=True,
     bit_vectorize=False,
+    name=None,
 ):
     """Sets directives for the next loop
 
@@ -652,6 +659,7 @@ def loop_config(
         parallelize (int): The number of threads to use on CPU
         block_dim_adaptive (bool): Whether to allow backends set block_dim adaptively, enabled by default
         bit_vectorize (bool): Whether to enable bit vectorization of struct fors on quant_arrays.
+        name (str): Optional name for this loop, used in GPU kernel names for profiling and debugging.
 
     Examples::
 
@@ -707,12 +715,15 @@ def loop_config(
     if bit_vectorize:
         _bit_vectorize()
 
+    if name is not None:
+        get_runtime().compiling_callable.ast_builder().set_loop_name(name)
+
 
 def graph_do_while(condition) -> bool:
     """Marks a while loop as a CUDA graph do-while conditional node.
 
     Used as ``while qd.graph_do_while(flag):`` inside a
-    ``@qd.kernel(cuda_graph=True)`` kernel. The loop body repeats while
+    ``@qd.kernel(graph=True)`` kernel. The loop body repeats while
     ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
 
     On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
@@ -721,7 +732,7 @@ def graph_do_while(condition) -> bool:
 
     This function should not be called directly at runtime; it is
     recognised and transformed during AST compilation.
-    Requires ``@qd.kernel(cuda_graph=True)``.
+    Requires ``@qd.kernel(graph=True)``.
     """
     return bool(condition)
 
@@ -750,7 +761,7 @@ def mesh_patch_idx():
     """Returns the internal mesh patch id of this running thread,
     only available for backends supporting `qd.extension.mesh` and to use within mesh-for loop.
 
-    Related to https://github.com/taichi-dev/quadrants/issues/3608
+    Related to https://github.com/taichi-dev/taichi/issues/3608
     """
     return (
         impl.get_runtime()

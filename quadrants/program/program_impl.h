@@ -23,11 +23,18 @@ struct ComputeOpImageRef {
 
 struct RuntimeContext;
 
+class Program;
+
 class ProgramImpl {
  public:
   // TODO: Make it safer, we exposed it for now as it's directly accessed
   // outside.
   CompileConfig *config;
+
+  // Back-reference to the owning `Program`, plumbed in from `Program`'s constructor so host-side per-launch paths
+  // (e.g. the adstack `SizeExpr` evaluator) can reach `SNodeRwAccessorsBank` without threading `Program *` through
+  // every kernel-launcher signature. Null until the owning Program sets it.
+  Program *program{nullptr};
 
  public:
   explicit ProgramImpl(CompileConfig &config);
@@ -42,8 +49,7 @@ class ProgramImpl {
    * Allocate runtime buffer, e.g result_buffer or backend specific runtime
    * buffer, e.g. preallocated_device_buffer on CUDA.
    */
-  virtual void materialize_runtime(KernelProfilerBase *profiler,
-                                   uint64 **result_buffer_ptr) = 0;
+  virtual void materialize_runtime(KernelProfilerBase *profiler, uint64 **result_buffer_ptr) = 0;
 
   /**
    * JIT compiles @param tree to backend-specific data types.
@@ -53,14 +59,11 @@ class ProgramImpl {
   /**
    * Compiles the @param tree types and allocates runtime buffer for it.
    */
-  virtual void materialize_snode_tree(SNodeTree *tree,
-                                      uint64 *result_buffer_ptr) = 0;
+  virtual void materialize_snode_tree(SNodeTree *tree, uint64 *result_buffer_ptr) = 0;
 
   virtual void destroy_snode_tree(SNodeTree *snode_tree) = 0;
 
-  virtual std::size_t get_snode_num_dynamically_allocated(
-      SNode *snode,
-      uint64 *result_buffer) = 0;
+  virtual std::size_t get_snode_num_dynamically_allocated(SNode *snode, uint64 *result_buffer) = 0;
 
   /**
    * Perform a backend synchronization.
@@ -93,8 +96,7 @@ class ProgramImpl {
     return kDeviceNullPtr;
   }
 
-  virtual DeviceAllocation allocate_memory_on_device(std::size_t alloc_size,
-                                                     uint64 *result_buffer) {
+  virtual DeviceAllocation allocate_memory_on_device(std::size_t alloc_size, uint64 *result_buffer) {
     return kDeviceNullAllocation;
   }
 
@@ -107,29 +109,23 @@ class ProgramImpl {
 
   // TODO: Move to Runtime Object
   virtual uint64_t *get_device_alloc_info_ptr(const DeviceAllocation &alloc) {
-    QD_ERROR(
-        "get_device_alloc_info_ptr() not implemented on the current backend");
+    QD_ERROR("get_device_alloc_info_ptr() not implemented on the current backend");
     return nullptr;
   }
 
   // TODO: Move to Runtime Object
-  virtual void fill_ndarray(const DeviceAllocation &alloc,
-                            std::size_t size,
-                            uint32_t data) {
+  virtual void fill_ndarray(const DeviceAllocation &alloc, std::size_t size, uint32_t data) {
     QD_ERROR("fill_ndarray() not implemented on the current backend");
   }
 
-  virtual void enqueue_compute_op_lambda(
-      std::function<void(Device *device, CommandList *cmdlist)> op,
-      const std::vector<ComputeOpImageRef> &image_refs) {
+  virtual void enqueue_compute_op_lambda(std::function<void(Device *device, CommandList *cmdlist)> op,
+                                         const std::vector<ComputeOpImageRef> &image_refs) {
     QD_NOT_IMPLEMENTED;
   }
 
-  virtual void print_memory_profiler_info(
-      std::vector<std::unique_ptr<SNodeTree>> &snode_trees_,
-      uint64 *result_buffer) {
-    QD_ERROR(
-        "print_memory_profiler_info() not implemented on the current backend");
+  virtual void print_memory_profiler_info(std::vector<std::unique_ptr<SNodeTree>> &snode_trees_,
+                                          uint64 *result_buffer) {
+    QD_ERROR("print_memory_profiler_info() not implemented on the current backend");
   }
 
   virtual void check_runtime_error(uint64 *result_buffer) {
@@ -137,6 +133,12 @@ class ProgramImpl {
   }
 
   virtual void finalize() {
+  }
+
+  // Hook invoked by `Program::finalize()` before any teardown sync. Lets backends flip state (e.g. the LLVM
+  // `finalizing_` flag used to suppress adstack-overflow polling) so the two `Program::synchronize()` calls that
+  // precede `finalize()` do not throw into the Program destructor path.
+  virtual void pre_finalize() {
   }
 
   virtual uint64 fetch_result_uint64(int i, uint64 *result_buffer) {
@@ -151,9 +153,8 @@ class ProgramImpl {
     return "";
   };
 
-  virtual std::pair<const StructType *, size_t>
-  get_struct_type_with_data_layout(const StructType *old_ty,
-                                   const std::string &layout) {
+  virtual std::pair<const StructType *, size_t> get_struct_type_with_data_layout(const StructType *old_ty,
+                                                                                 const std::string &layout) {
     return {old_ty, 0};
   }
 

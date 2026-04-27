@@ -1,6 +1,10 @@
+# pyright: reportPrivateImportUsage=false
+# Reason: torch.zeros_like is public torch API, but pyright 1.1.409+ flags
+# it as private because torch's stubs don't re-export it via __all__.
 import ast
 import inspect
 import math
+import os
 import sys
 import textwrap
 import types
@@ -18,11 +22,17 @@ from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type
 
 import numpy as np
 
+
+def _kernel_coverage_enabled() -> bool:
+    return os.environ.get("QD_KERNEL_COVERAGE") == "1"
+
+
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 from quadrants.lang.ast import ASTTransformerFuncContext
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
@@ -99,7 +109,7 @@ class FuncBase:
 
         Note: NOT in the hot path. Just run once, on function registration
         """
-        sig = inspect.signature(self.func)
+        sig = get_func_signature(self.func)
         if hasattr(self.func, "__wrapped__"):
             raise_exception(
                 QuadrantsSyntaxError,
@@ -193,7 +203,7 @@ class FuncBase:
         for i in template_slot_locations:
             template_var_name = argument_metas[i].name
             global_vars[template_var_name] = py_args[i]
-        parameters = inspect.signature(fn).parameters
+        parameters = get_func_signature(fn).parameters
         for i, (parameter_name, parameter) in enumerate(parameters.items()):
             if is_dataclass(parameter.annotation):
                 _kernel_impl_dataclass.populate_global_vars_from_dataclass(
@@ -246,9 +256,21 @@ class FuncBase:
 
         autodiff_mode = current_kernel.autodiff_mode
 
+        _kcov = None
+        if _kernel_coverage_enabled() and autodiff_mode == _qd_core.AutodiffMode.NONE:
+            from . import (  # pylint: disable=import-outside-toplevel
+                _kernel_coverage as _kcov,
+            )
+
+            tree = _kcov.rewrite_ast(tree, function_source_info.filepath, function_source_info.start_lineno)
+
         quadrants_callable = current_kernel.quadrants_callable
         is_pure = quadrants_callable is not None and quadrants_callable.is_pure
         global_vars = self._get_global_vars(self.func)
+        if _kcov is not None:
+            cov_field = _kcov.get_field()
+            if cov_field is not None:
+                global_vars[_kcov.FIELD_VAR_NAME] = cov_field
 
         template_vars = {}
         if is_kernel or is_real_function:
@@ -391,7 +413,7 @@ class FuncBase:
         return tuple(fused_py_args)
 
     def _get_global_vars(self, _func: Callable) -> dict[str, Any]:
-        # Discussions: https://github.com/taichi-dev/quadrants/issues/282
+        # Discussions: https://github.com/taichi-dev/taichi/issues/282
         global_vars = _func.__globals__.copy()
         freevar_names = _func.__code__.co_freevars
         closure = _func.__closure__

@@ -1,5 +1,7 @@
 import gc
+import os
 import sys
+import time
 
 import pytest
 
@@ -51,6 +53,41 @@ def run_gc_after_test():
     gc.collect()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _vulkan_debug_warmup():
+    """Prime the Vulkan debugPrintf callback pipeline once per worker process.
+
+    The validation layer's debugPrintf callback delivery has a race condition on the first kernel dispatch in a new
+    process: vkQueueWaitIdle() can return before the callback fires. A full init/dispatch/sync/reset cycle here warms
+    the driver-level debug infrastructure so subsequent inits work reliably.
+    """
+    if sys.platform == "darwin":
+        return
+
+    from tests import test_utils
+
+    if qd.vulkan not in test_utils.expected_archs():
+        return
+
+    try:
+        qd.init(arch=qd.vulkan, debug=True, enable_fallback=False, print_full_traceback=True)
+
+        @qd.kernel
+        def _warmup() -> qd.i8:
+            return qd.i8(64) + qd.i8(64)
+
+        _warmup()
+        qd.sync()
+        sys.stdout.flush()
+    except Exception:
+        pass
+    finally:
+        try:
+            qd.reset()
+        except Exception:
+            pass
+
+
 @pytest.fixture(autouse=True)
 def wanted_arch(request, req_arch, req_options):
     if req_arch is not None:
@@ -86,15 +123,12 @@ def pytest_generate_tests(metafunc):
 @pytest.hookimpl(trylast=True)
 def pytest_runtest_logreport(report):
     """
-    Intentionally crash test workers when a test fails.
-    This is to avoid the failing test leaving a corrupted GPU state for the
-    following tests.
+    Retire test workers when a test fails, to avoid the failing test
+    leaving a corrupted GPU state for the following tests.
     """
 
     interactor = getattr(sys, "xdist_interactor", None)
     if not interactor:
-        # not running under xdist, or xdist is not active,
-        # or using stock xdist (we need a customized version)
         return
 
     if report.outcome not in ("rerun", "error", "failed"):
@@ -102,12 +136,21 @@ def pytest_runtest_logreport(report):
 
     layoff = False
 
-    for _, loc, _ in report.longrepr.chain:
-        if "CUDA_ERROR_OUT_OF_MEMORY" in loc.message:
-            layoff = True
-            break
+    chain = getattr(getattr(report, "longrepr", None), "chain", None)
+    if chain:
+        for _, loc, _ in chain:
+            msg = getattr(loc, "message", "") if loc else ""
+            if "CUDA_ERROR_OUT_OF_MEMORY" in msg:
+                layoff = True
+                break
 
-    interactor.retire(layoff=layoff)
+    # Don't call interactor.retire() — it uses os._exit(0) which kills
+    # the process before execnet's IO thread can flush the channel buffer.
+    # The test failure report (queued by xdist's own hook, which ran before
+    # this trylast hook) would be lost, hiding all error messages.
+    interactor.sendevent("workerretire", layoff=layoff)
+    time.sleep(0.2)
+    os._exit(0)
 
 
 import importlib

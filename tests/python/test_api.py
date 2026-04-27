@@ -435,5 +435,5 @@ user_api[qd.sparse] = ["grid", "usage"]
 @test_utils.test(arch=qd.cpu)
 def test_api(src):
     expected = sorted(user_api[src])
-    actual = sorted([s for s in dir(src) if not s.startswith("_")])
+    actual = sorted([s for s in dir(src) if not s.startswith(("_", "@")) and s != "pytest_plugin"])
     assert actual == expected, f"Failed for API={src}:\n  expected={expected}\n  actual={actual}"

@@ -6,13 +6,11 @@ static std::unique_ptr<CompiledKernelData> new_spirv_compiled_kernel_data() {
   return std::make_unique<spirv::CompiledKernelData>();
 }
 
-CompiledKernelData::Creator *const CompiledKernelData::spriv_creator =
-    new_spirv_compiled_kernel_data;
+CompiledKernelData::Creator *const CompiledKernelData::spriv_creator = new_spirv_compiled_kernel_data;
 
 namespace spirv {
 
-CompiledKernelData::CompiledKernelData(Arch arch, InternalData data)
-    : arch_(arch), data_(std::move(data)) {
+CompiledKernelData::CompiledKernelData(Arch arch, InternalData data) : arch_(arch), data_(std::move(data)) {
 }
 
 Arch CompiledKernelData::arch() const {
@@ -23,27 +21,23 @@ std::unique_ptr<lang::CompiledKernelData> CompiledKernelData::clone() const {
   return std::make_unique<CompiledKernelData>(arch_, data_);
 }
 
-CompiledKernelData::Err CompiledKernelData::load_impl(
-    const CompiledKernelDataFile &file) {
+CompiledKernelData::Err CompiledKernelData::load_impl(const CompiledKernelDataFile &file) {
   arch_ = file.arch();
   if (!arch_uses_spirv(arch_)) {
     return Err::kArchNotMatched;
   }
   try {
-    liong::json::deserialize(liong::json::parse(file.metadata()),
-                             data_.metadata, true);
+    liong::json::deserialize(liong::json::parse(file.metadata()), data_.metadata, true);
   } catch (const liong::json::JsonException &) {
     return Err::kParseMetadataFailed;
   }
   return str2src(file.src_code(), data_.src);
 }
 
-CompiledKernelData::Err CompiledKernelData::dump_impl(
-    CompiledKernelDataFile &file) const {
+CompiledKernelData::Err CompiledKernelData::dump_impl(CompiledKernelDataFile &file) const {
   file.set_arch(arch_);
   try {
-    file.set_metadata(
-        liong::json::print(liong::json::serialize(data_.metadata)));
+    file.set_metadata(liong::json::print(liong::json::serialize(data_.metadata)));
   } catch (const liong::json::JsonException &) {
     return Err::kSerMetadataFailed;
   }
@@ -53,9 +47,7 @@ CompiledKernelData::Err CompiledKernelData::dump_impl(
   return err;
 }
 
-CompiledKernelData::Err CompiledKernelData::src2str(
-    const InternalData::Source &src,
-    std::string &result) {
+CompiledKernelData::Err CompiledKernelData::src2str(const InternalData::Source &src, std::string &result) {
   std::ostringstream oss;
   write_to_binary_stream(src, oss);
   if (oss) {
@@ -65,12 +57,8 @@ CompiledKernelData::Err CompiledKernelData::src2str(
   return Err::kSerSrcCodeFailed;
 }
 
-CompiledKernelData::Err CompiledKernelData::str2src(
-    const std::string &str,
-    InternalData::Source &result) {
-  return read_from_binary(result, str.data(), str.size())
-             ? Err::kNoError
-             : Err::kParseSrcCodeFailed;
+CompiledKernelData::Err CompiledKernelData::str2src(const std::string &str, InternalData::Source &result) {
+  return read_from_binary(result, str.data(), str.size()) ? Err::kNoError : Err::kParseSrcCodeFailed;
 }
 
 }  // namespace spirv

@@ -14,8 +14,7 @@ TEST(FrontendTypeInference, Const) {
 }
 
 TEST(FrontendTypeInference, ArgLoad) {
-  auto arg_load_u64 =
-      Expr::make<ArgLoadExpression>(std::vector<int>{2}, PrimitiveType::u64);
+  auto arg_load_u64 = Expr::make<ArgLoadExpression>(std::vector<int>{2}, PrimitiveType::u64);
   arg_load_u64->type_check(nullptr);
   EXPECT_EQ(arg_load_u64->ret_type, PrimitiveType::u64);
 }
@@ -32,11 +31,8 @@ TEST(FrontendTypeInference, Id) {
   auto kernel = std::make_unique<Kernel>(*prog, func, "fake_kernel");
   auto const_i32 = value<int32>(-(1 << 20));
   const_i32->type_check(nullptr);
-  auto id_i32 =
-      kernel->context->builder().make_var(const_i32, const_i32->dbg_info);
-  EXPECT_EQ(id_i32->ret_type,
-            DataType(TypeFactory::get_instance().get_pointer_type(
-                PrimitiveType::i32)));
+  auto id_i32 = kernel->context->builder().make_var(const_i32, const_i32->dbg_info);
+  EXPECT_EQ(id_i32->ret_type, DataType(TypeFactory::get_instance().get_pointer_type(PrimitiveType::i32)));
 }
 
 TEST(FrontendTypeInference, BinaryOp) {
@@ -103,15 +99,12 @@ TEST(FrontendTypeInference, TernaryOp_NoBroadcast) {
   std::vector<Expr> op2_element = {const_3, const_3, const_3};
   std::vector<Expr> op3_element = {const_5, const_5, const_5};
 
-  auto op2 =
-      Expr::make<MatrixExpression>(op2_element, shape, PrimitiveType::i32);
+  auto op2 = Expr::make<MatrixExpression>(op2_element, shape, PrimitiveType::i32);
   op2->type_check(nullptr);
-  auto op3 =
-      Expr::make<MatrixExpression>(op2_element, shape, PrimitiveType::i32);
+  auto op3 = Expr::make<MatrixExpression>(op2_element, shape, PrimitiveType::i32);
   op3->type_check(nullptr);
 
-  auto ternary =
-      Expr::make<TernaryOpExpression>(TernaryOpType::select, cond, op2, op3);
+  auto ternary = Expr::make<TernaryOpExpression>(TernaryOpType::select, cond, op2, op3);
   ternary->type_check(nullptr);
 
   auto ternary_expr = ternary.cast<TernaryOpExpression>();
@@ -119,10 +112,8 @@ TEST(FrontendTypeInference, TernaryOp_NoBroadcast) {
   auto op2_ret_type = ternary_expr->op2->ret_type;
   auto op3_ret_type = ternary_expr->op3->ret_type;
 
-  EXPECT_TRUE(op2_ret_type->is<TensorType>() &&
-              op2_ret_type->cast<TensorType>()->get_shape() == shape);
-  EXPECT_TRUE(op3_ret_type->is<TensorType>() &&
-              op3_ret_type->cast<TensorType>()->get_shape() == shape);
+  EXPECT_TRUE(op2_ret_type->is<TensorType>() && op2_ret_type->cast<TensorType>()->get_shape() == shape);
+  EXPECT_TRUE(op3_ret_type->is<TensorType>() && op3_ret_type->cast<TensorType>()->get_shape() == shape);
   EXPECT_EQ(cond_ret_type, PrimitiveType::u1);
 }
 
@@ -132,20 +123,16 @@ TEST(FrontendTypeInference, GlobalPtr_Field) {
   auto kernel = std::make_unique<Kernel>(*prog, func, "fake_kernel");
   auto *ast_builder = &kernel->context->builder();
 
-  auto global_var =
-      Expr::make<FieldExpression>(PrimitiveType::u8, Identifier(0));
+  auto global_var = Expr::make<FieldExpression>(PrimitiveType::u8, Identifier(0));
   SNode snode;
   snode.num_active_indices = 1;
-  std::dynamic_pointer_cast<FieldExpression>(global_var.expr)
-      ->set_snode(&snode);
+  std::dynamic_pointer_cast<FieldExpression>(global_var.expr)->set_snode(&snode);
 
   auto index = value<int32>(2);
   index->type_check(nullptr);
   auto global_ptr = ast_builder->expr_subscript(global_var, ExprGroup(index));
   global_ptr->type_check(nullptr);
-  EXPECT_EQ(global_ptr->ret_type,
-            DataType(TypeFactory::get_instance().get_pointer_type(
-                PrimitiveType::u8)));
+  EXPECT_EQ(global_ptr->ret_type, DataType(TypeFactory::get_instance().get_pointer_type(PrimitiveType::u8)));
 }
 
 TEST(FrontendTypeInference, GlobalPtr_ExternalTensor) {
@@ -156,10 +143,8 @@ TEST(FrontendTypeInference, GlobalPtr_ExternalTensor) {
 
   auto index = value<float32>(2);
   index->type_check(nullptr);
-  auto external_tensor = Expr::make<ExternalTensorExpression>(
-      PrimitiveType::u16, 1, std::vector<int>{0}, 0);
-  auto global_ptr =
-      ast_builder->expr_subscript(external_tensor, ExprGroup(index));
+  auto external_tensor = Expr::make<ExternalTensorExpression>(PrimitiveType::u16, 1, std::vector<int>{0}, 0);
+  auto global_ptr = ast_builder->expr_subscript(external_tensor, ExprGroup(index));
   EXPECT_THROW(global_ptr->type_check(nullptr), QuadrantsTypeError);
 }
 
@@ -170,17 +155,14 @@ TEST(FrontendTypeInference, TensorElement) {
   auto *ast_builder = &kernel->context->builder();
   const std::vector<int> shape{3};
   auto var = Expr(std::make_shared<IdExpression>(ast_builder->get_next_id()));
-  ast_builder->insert(std::make_unique<FrontendAllocaStmt>(
-      std::static_pointer_cast<IdExpression>(var.expr)->id, shape,
-      PrimitiveType::u32));
+  ast_builder->insert(std::make_unique<FrontendAllocaStmt>(std::static_pointer_cast<IdExpression>(var.expr)->id, shape,
+                                                           PrimitiveType::u32));
   var->ret_type = ast_builder->get_last_stmt()->ret_type;
   auto index = value<int32>(2);
   index->type_check(nullptr);
   auto tensor_element = Expr::make<IndexExpression>(var, ExprGroup(index));
   tensor_element->type_check(nullptr);
-  EXPECT_EQ(tensor_element->ret_type,
-            DataType(TypeFactory::get_instance().get_pointer_type(
-                PrimitiveType::u32)));
+  EXPECT_EQ(tensor_element->ret_type, DataType(TypeFactory::get_instance().get_pointer_type(PrimitiveType::u32)));
 }
 
 TEST(FrontendTypeInference, AtomicOp) {
@@ -188,8 +170,7 @@ TEST(FrontendTypeInference, AtomicOp) {
   const_i32->type_check(nullptr);
   auto const_f32 = value<float32>(5.0);
   const_f32->type_check(nullptr);
-  auto atomic_add_i32 =
-      Expr::make<AtomicOpExpression>(AtomicOpType::add, const_i32, const_f32);
+  auto atomic_add_i32 = Expr::make<AtomicOpExpression>(AtomicOpType::add, const_i32, const_f32);
   atomic_add_i32->type_check(nullptr);
   EXPECT_EQ(atomic_add_i32->ret_type, PrimitiveType::i32);
 }
@@ -202,17 +183,14 @@ TEST(FrontendTypeInference, SNodeOp) {
   snode->dt = PrimitiveType::u8;
   auto index = value<int32>(2);
   index->type_check(nullptr);
-  auto snode_op =
-      kernel->context->builder().snode_get_addr(snode.get(), ExprGroup(index));
+  auto snode_op = kernel->context->builder().snode_get_addr(snode.get(), ExprGroup(index));
   snode_op->type_check(nullptr);
   EXPECT_EQ(snode_op->ret_type, PrimitiveType::u64);
 }
 
 TEST(FrontendTypeInference, ExternalTensorShapeAlongAxis) {
-  auto external_tensor = Expr::make<ExternalTensorExpression>(
-      PrimitiveType::u64, 1, std::vector<int>{0}, 0);
-  auto shape =
-      Expr::make<ExternalTensorShapeAlongAxisExpression>(external_tensor, 0);
+  auto external_tensor = Expr::make<ExternalTensorExpression>(PrimitiveType::u64, 1, std::vector<int>{0}, 0);
+  auto shape = Expr::make<ExternalTensorShapeAlongAxisExpression>(external_tensor, 0);
   shape->type_check(nullptr);
   EXPECT_EQ(shape->ret_type, PrimitiveType::i32);
 }
@@ -240,8 +218,8 @@ TEST(FrontendTypeInference, LoopUnique) {
 }
 
 TEST(FrontendTypeInference, InternalFuncCall) {
-  auto internal_func_call = Expr::make<InternalFuncCallExpression>(
-      Operations::get(InternalOp::do_nothing), std::vector<Expr>{});
+  auto internal_func_call =
+      Expr::make<InternalFuncCallExpression>(Operations::get(InternalOp::do_nothing), std::vector<Expr>{});
   internal_func_call->type_check(nullptr);
   EXPECT_EQ(internal_func_call->ret_type, PrimitiveType::i32);
 }
@@ -262,8 +240,7 @@ TEST(FrontendTypeInference, TensorTypeUnification) {
   auto rhs_type = binaryop_expr->rhs->ret_type->cast<TensorType>();
   auto ret_type = binaryop_expr->ret_type;
   auto expected_shape = std::vector<int>({2, 1});
-  EXPECT_TRUE(ret_type->is<TensorType>() &&
-              ret_type->cast<TensorType>()->get_shape() == expected_shape);
+  EXPECT_TRUE(ret_type->is<TensorType>() && ret_type->cast<TensorType>()->get_shape() == expected_shape);
   EXPECT_TRUE(rhs_type->get_shape() == expected_shape);
 
   // lhs const, rhs mat
@@ -273,8 +250,7 @@ TEST(FrontendTypeInference, TensorTypeUnification) {
   EXPECT_TRUE(binaryop_expr->rhs->ret_type->is<TensorType>());
   auto lhs_type = binaryop_expr->lhs->ret_type->cast<TensorType>();
   ret_type = binaryop_expr->ret_type;
-  EXPECT_TRUE(ret_type->is<TensorType>() &&
-              ret_type->cast<TensorType>()->get_shape() == expected_shape);
+  EXPECT_TRUE(ret_type->is<TensorType>() && ret_type->cast<TensorType>()->get_shape() == expected_shape);
   EXPECT_TRUE(lhs_type->get_shape() == expected_shape);
 }
 }  // namespace quadrants::lang

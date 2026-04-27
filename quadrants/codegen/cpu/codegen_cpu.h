@@ -20,11 +20,10 @@ class KernelCodeGenCPU : public KernelCodeGen {
 
   // TODO: Stop defining this macro guards in the headers
 #ifdef QD_WITH_LLVM
-  LLVMCompiledTask compile_task(
-      int task_codegen_id,
-      const CompileConfig &config,
-      std::unique_ptr<llvm::Module> &&module = nullptr,
-      IRNode *block = nullptr) override;
+  LLVMCompiledTask compile_task(int task_codegen_id,
+                                const CompileConfig &config,
+                                std::unique_ptr<llvm::Module> &&module = nullptr,
+                                IRNode *block = nullptr) override;
 
  protected:
   void optimize_module(llvm::Module *module) override;

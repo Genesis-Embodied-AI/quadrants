@@ -117,6 +117,7 @@ def test_poly(tifunc):
         (lambda x: qd.tanh(x), lambda x: np.tanh(x)),
         (lambda x: qd.sin(x), lambda x: np.sin(x)),
         (lambda x: qd.cos(x), lambda x: np.cos(x)),
+        (lambda x: qd.tan(x), lambda x: np.tan(x)),
         (lambda x: qd.acos(x), lambda x: np.arccos(x)),
         (lambda x: qd.asin(x), lambda x: np.arcsin(x)),
     ],

@@ -11,10 +11,7 @@
 
 namespace quadrants::lang {
 
-CUDAContext::CUDAContext()
-    : profiler_(nullptr),
-      driver_(CUDADriver::get_instance_without_context()),
-      stream_(nullptr) {
+CUDAContext::CUDAContext() : profiler_(nullptr), driver_(CUDADriver::get_instance_without_context()), stream_(nullptr) {
   // CUDA initialization
   dev_count_ = 0;
   driver_.init(0);
@@ -27,17 +24,12 @@ CUDAContext::CUDAContext()
   QD_TRACE("Using CUDA device [id=0]: {}", name);
 
   int cc_major, cc_minor;
-  driver_.device_get_attribute(
-      &cc_major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device_);
-  driver_.device_get_attribute(
-      &cc_minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device_);
+  driver_.device_get_attribute(&cc_major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device_);
+  driver_.device_get_attribute(&cc_minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device_);
 
   int device_supports_mem_pool = 0;
-  if (driver_.get_version_major() > 11 ||
-      (driver_.get_version_major() == 11 && driver_.get_version_minor() >= 2)) {
-    driver_.device_get_attribute(&device_supports_mem_pool,
-                                 CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED,
-                                 device_);
+  if (driver_.get_version_major() > 11 || (driver_.get_version_major() == 11 && driver_.get_version_minor() >= 2)) {
+    driver_.device_get_attribute(&device_supports_mem_pool, CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED, device_);
   } else {
     QD_WARN(
         "Please consider upgrade your nvidia driver for better device memory "
@@ -57,8 +49,7 @@ CUDAContext::CUDAContext()
     // TODO: make this configurable after we let the memory pool replace the
     // preallocated memory
     constexpr uint64 kMemPoolReleaseThreshold = 1048576 * 128;
-    driver_.mem_pool_set_attribute(default_mem_pool,
-                                   CU_MEMPOOL_ATTR_RELEASE_THRESHOLD,
+    driver_.mem_pool_set_attribute(default_mem_pool, CU_MEMPOOL_ATTR_RELEASE_THRESHOLD,
                                    (void *)&kMemPoolReleaseThreshold);
   }
 
@@ -67,8 +58,7 @@ CUDAContext::CUDAContext()
   driver_.context_set_current(context_);
 
   const auto GB = std::pow(1024.0, 3.0);
-  QD_TRACE("Total memory {:.2f} GB; free memory {:.2f} GB",
-           get_total_memory() / GB, get_free_memory() / GB);
+  QD_TRACE("Total memory {:.2f} GB; free memory {:.2f} GB", get_total_memory() / GB, get_free_memory() / GB);
 
   compute_capability_ = cc_major * 10 + cc_minor;
 
@@ -79,9 +69,13 @@ CUDAContext::CUDAContext()
     compute_capability_ = 121;
   }
 
-  driver_.device_get_attribute(
-      &max_shared_memory_bytes_,
-      CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN, device_);
+  driver_.device_get_attribute(&max_shared_memory_bytes_, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN,
+                               device_);
+
+  int device_supports_pageable_memory_access = 0;
+  driver_.device_get_attribute(&device_supports_pageable_memory_access, CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS,
+                               device_);
+  supports_pageable_memory_access_ = device_supports_pageable_memory_access != 0;
 
   mcpu_ = fmt::format("sm_{}", compute_capability_);
 
@@ -110,8 +104,7 @@ std::string CUDAContext::get_device_name() {
 
 int64_t CUDAContext::get_clock_rate_khz() const {
   int clock_rate_khz = 0;
-  driver_.device_get_attribute(&clock_rate_khz, CU_DEVICE_ATTRIBUTE_CLOCK_RATE,
-                               device_);
+  driver_.device_get_attribute(&clock_rate_khz, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device_);
   return static_cast<int64_t>(clock_rate_khz);
 }
 
@@ -130,13 +123,10 @@ void CUDAContext::launch(void *func,
   KernelProfilerBase::TaskHandle task_handle;
   // Kernel launch
   if (profiler_) {
-    KernelProfilerCUDA *profiler_cuda =
-        dynamic_cast<KernelProfilerCUDA *>(profiler_);
+    KernelProfilerCUDA *profiler_cuda = dynamic_cast<KernelProfilerCUDA *>(profiler_);
     std::string primal_task_name, key;
-    bool valid =
-        offline_cache::try_demangle_name(task_name, primal_task_name, key);
-    profiler_cuda->trace(task_handle, valid ? primal_task_name : task_name,
-                         func, grid_dim, block_dim, 0);
+    bool valid = offline_cache::try_demangle_name(task_name, primal_task_name, key);
+    profiler_cuda->trace(task_handle, valid ? primal_task_name : task_name, func, grid_dim, block_dim, 0);
   }
 
   auto context_guard = CUDAContext::get_instance().get_guard();
@@ -163,13 +153,10 @@ void CUDAContext::launch(void *func,
             "supports max capacity of {} bytes.",
             dynamic_shared_mem_bytes, max_shared_memory_bytes_);
       }
-      driver_.kernel_set_attribute(
-          func, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
-          dynamic_shared_mem_bytes);
+      driver_.kernel_set_attribute(func, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, dynamic_shared_mem_bytes);
     }
-    driver_.launch_kernel(func, grid_dim, 1, 1, block_dim, 1, 1,
-                          dynamic_shared_mem_bytes, stream_,
-                          arg_pointers.data(), nullptr);
+    driver_.launch_kernel(func, grid_dim, 1, 1, block_dim, 1, 1, dynamic_shared_mem_bytes, stream_, arg_pointers.data(),
+                          nullptr);
   }
   if (profiler_)
     profiler_->stop(task_handle);

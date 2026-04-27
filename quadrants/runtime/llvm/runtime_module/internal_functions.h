@@ -28,37 +28,67 @@ i32 refresh_counter(RuntimeContext *context) {
   return 0;
 }
 
-i32 insert_triplet_f32(RuntimeContext *context,
-                       int64 base_ptr_,
-                       int i,
-                       int j,
-                       float value) {
+i32 insert_triplet_f32(RuntimeContext *context, int64 base_ptr_, int i, int j, float value) {
   ATOMIC_INSERT(32);
   return 0;
 }
 
-i32 insert_triplet_f64(RuntimeContext *context,
-                       int64 base_ptr_,
-                       int i,
-                       int j,
-                       float64 value) {
+i32 insert_triplet_f64(RuntimeContext *context, int64 base_ptr_, int i, int j, float64 value) {
   ATOMIC_INSERT(64);
   return 0;
 }
 
-i32 test_internal_func_args(RuntimeContext *context,
-                            float32 i,
-                            float32 j,
-                            int32 k) {
+i32 test_internal_func_args(RuntimeContext *context, float32 i, float32 j, int32 k) {
   return static_cast<int>((i + j) * k);
 }
 
 i32 test_stack(RuntimeContext *context) {
-  auto stack = new u8[132];
-  stack_push(stack, 16, 4);
-  stack_push(stack, 16, 4);
-  stack_push(stack, 16, 4);
-  stack_push(stack, 16, 4);
+  auto *runtime = context->runtime;
+  // Header u64 `n` + max_num_elements * 2 * element_size for primal+adjoint slot pairs. Allocate generously for
+  // the guard-case subtests below.
+  auto stack = new u8[8 + 16 * 2 * 4];
+  stack_init(stack);
+
+  // Basic push/pop accounting.
+  stack_push(runtime, stack, 16, 4);
+  stack_push(runtime, stack, 16, 4);
+  stack_push(runtime, stack, 16, 4);
+  stack_push(runtime, stack, 16, 4);
+  QD_TEST_CHECK(*(u64 *)stack == 4, runtime);
+  QD_TEST_CHECK(runtime->adstack_overflow_flag == 0, runtime);
+
+  // stack_top_primal must point at slot (n - 1) (here: slot 3) when n > 0.
+  QD_TEST_CHECK(stack_top_primal(stack, 4) == stack + sizeof(u64) + 3 * 2 * 4, runtime);
+
+  stack_pop(stack);
+  stack_pop(stack);
+  stack_pop(stack);
+  stack_pop(stack);
+  QD_TEST_CHECK(*(u64 *)stack == 0, runtime);
+
+  // stack_pop underflow guard: extra pops past n == 0 must not wrap `n` into UINT_MAX. The runtime silently
+  // clamps at 0 instead of trapping, so the reverse pass can over-pop without corrupting subsequent kernels.
+  stack_pop(stack);
+  stack_pop(stack);
+  QD_TEST_CHECK(*(u64 *)stack == 0, runtime);
+
+  // stack_top_primal clamping: on an empty stack the top-of-stack pointer must index slot 0 (not `-1`
+  // * 2 * element_size, which would point into header territory and crash on read).
+  QD_TEST_CHECK(stack_top_primal(stack, 4) == stack + sizeof(u64), runtime);
+
+  // Push past capacity: `n` stops at max_num_elements and `adstack_overflow_flag` flips to 1.
+  for (int i = 0; i < 16; i++) {
+    stack_push(runtime, stack, 16, 4);
+  }
+  QD_TEST_CHECK(*(u64 *)stack == 16, runtime);
+  QD_TEST_CHECK(runtime->adstack_overflow_flag == 0, runtime);
+  stack_push(runtime, stack, 16, 4);  // overflow push
+  QD_TEST_CHECK(*(u64 *)stack == 16, runtime);
+  QD_TEST_CHECK(runtime->adstack_overflow_flag == 1, runtime);
+  // Reset the flag so subsequent tests in the same fixture are not poisoned.
+  runtime->adstack_overflow_flag = 0;
+
+  delete[] stack;
   return 0;
 }
 
@@ -162,8 +192,7 @@ i32 test_active_mask(RuntimeContext *context) {
   auto remaining = active_mask;
   while (remaining) {
     auto leader = cttz_i32(remaining);
-    quadrants_printf(rt, "current leader %d bid %d tid %d\n", leader,
-                     block_idx(), thread_idx());
+    quadrants_printf(rt, "current leader %d bid %d tid %d\n", leader, block_idx(), thread_idx());
     warp_barrier(active_mask);
     remaining &= ~(1u << leader);
   }
@@ -173,8 +202,7 @@ i32 test_active_mask(RuntimeContext *context) {
 
 i32 test_shfl(RuntimeContext *context) {
   auto rt = context->runtime;
-  auto s =
-      cuda_shfl_down_sync_i32(cuda_active_mask(), warp_idx() + 1000, 2, 31);
+  auto s = cuda_shfl_down_sync_i32(cuda_active_mask(), warp_idx() + 1000, 2, 31);
   quadrants_printf(rt, "tid %d tid_shfl %d\n", thread_idx(), s);
 
   return 0;

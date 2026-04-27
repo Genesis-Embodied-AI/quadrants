@@ -19,20 +19,19 @@ class KernelLauncher : public LLVM::KernelLauncher {
   using Base::Base;
 
   void launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) override;
-  Handle register_llvm_kernel(
-      const LLVM::CompiledKernelData &compiled) override;
+  Handle register_llvm_kernel(const LLVM::CompiledKernelData &compiled) override;
 
  private:
-  void launch_offloaded_tasks(JITModule *amdgpu_module,
+  void launch_offloaded_tasks(LaunchContextBuilder &ctx,
+                              JITModule *amdgpu_module,
                               const std::vector<OffloadedTask> &offloaded_tasks,
                               void *context_pointer,
                               int arg_size);
-  void launch_offloaded_tasks_with_do_while(
-      LaunchContextBuilder &ctx,
-      JITModule *amdgpu_module,
-      const std::vector<OffloadedTask> &offloaded_tasks,
-      void *context_pointer,
-      int arg_size);
+  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
+                                            JITModule *amdgpu_module,
+                                            const std::vector<OffloadedTask> &offloaded_tasks,
+                                            void *context_pointer,
+                                            int arg_size);
   bool on_amdgpu_device(void *ptr);
   std::vector<Context> contexts_;
 };
