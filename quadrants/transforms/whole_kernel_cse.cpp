@@ -37,8 +37,26 @@ class MarkUndone : public BasicStmtVisitor {
   }
 
   static void run(std::unordered_set<int> *visited, Stmt *modified_operand) {
+    // Walk the same scope as `replace_all_usages_with(nullptr, modified_operand, ...)` does -- the eliminated
+    // statement's parent block (and its descendant subtrees) plus the top-level statements of every ancestor block.
+    // The previous version walked the entire `get_ir_root()`, which on large autodiff kernels gave an O(N) sweep
+    // per elimination and produced an O(N^2) outer pass when many statements were CSE-eliminated. SSA dominance
+    // guarantees every user of `modified_operand` lives in this scope, so we cannot miss a stale `visited_` entry.
     MarkUndone marker(visited, modified_operand);
-    modified_operand->get_ir_root()->accept(&marker);
+    if (modified_operand->parent == nullptr) {
+      modified_operand->get_ir_root()->accept(&marker);
+      return;
+    }
+    modified_operand->parent->accept(&marker);
+    auto current_block = modified_operand->parent->parent_block();
+    while (current_block != nullptr) {
+      for (auto &stmt : current_block->statements) {
+        if (stmt->has_operand(modified_operand)) {
+          visited->erase(stmt->instance_id);
+        }
+      }
+      current_block = current_block->parent_block();
+    }
   }
 };
 
@@ -46,8 +64,13 @@ class MarkUndone : public BasicStmtVisitor {
 class WholeKernelCSE : public BasicStmtVisitor {
  private:
   std::unordered_set<int> visited_;
-  // each scope corresponds to an unordered_set
-  std::vector<std::unordered_map<std::size_t, std::unordered_set<Stmt *> > > visible_stmts_;
+  // Single hash-bucketed visibility table covering every active scope, keyed by `operand_hash`. Each `visit(Block*)`
+  // pushes a fresh entry on `scope_inserts_` recording what it added so the corresponding entries can be removed
+  // from `visible_stmts_` on scope exit. Equivalent in semantics to the prior per-scope `unordered_map` stack but
+  // collapses the per-stmt visibility lookup from O(nesting depth) to O(1) hash + O(bucket size) bucket walk -- the
+  // scope-chain walk was the bottleneck on deeply-nested autodiff IR.
+  std::unordered_map<std::size_t, std::vector<Stmt *>> visible_stmts_;
+  std::vector<std::vector<std::pair<std::size_t, Stmt *>>> scope_inserts_;
   DelayedIRModifier modifier_;
 
  public:
@@ -68,7 +91,9 @@ class WholeKernelCSE : public BasicStmtVisitor {
 
   static std::size_t operand_hash(const Stmt *stmt) {
     std::size_t hash_code{0};
-    auto hash_type = std::hash<std::type_index>{}(std::type_index(typeid(stmt)));
+    // Use the dynamic type via `typeid(*stmt)` -- `typeid(stmt)` operates on the pointer expression and returns the
+    // `Stmt*` static type for every input, collapsing every statement class into the same hash component.
+    auto hash_type = std::hash<std::type_index>{}(std::type_index(typeid(*stmt)));
     if (stmt->is<GlobalPtrStmt>() || stmt->is<LoopUniqueStmt>()) {
       // special cases in common_statement_eliminable()
       return hash_type;
@@ -84,9 +109,11 @@ class WholeKernelCSE : public BasicStmtVisitor {
   }
 
   static bool common_statement_eliminable(Stmt *this_stmt, Stmt *prev_stmt) {
-    // Is this_stmt eliminable given that prev_stmt appears before it and has
-    // the same type with it?
-    if (this_stmt->type() != prev_stmt->type())
+    // Is this_stmt eliminable given that prev_stmt appears before it and has the same type with it? Use RTTI here
+    // instead of `Stmt::type()` -- the latter constructs a `StatementTypeNameVisitor`, dispatches `accept()`, and
+    // returns a freshly-allocated `std::string`, which dominated this pass on large autodiff kernels because it ran
+    // for every (this_stmt, prev_stmt) pair that shared a hash bucket.
+    if (typeid(*this_stmt) != typeid(*prev_stmt))
       return false;
     if (this_stmt->is<GlobalPtrStmt>()) {
       auto this_ptr = this_stmt->as<GlobalPtrStmt>();
@@ -113,6 +140,11 @@ class WholeKernelCSE : public BasicStmtVisitor {
     return irpass::analysis::same_statements(this_stmt, prev_stmt);
   }
 
+  void register_visible(std::size_t hash_value, Stmt *stmt) {
+    visible_stmts_[hash_value].push_back(stmt);
+    scope_inserts_.back().emplace_back(hash_value, stmt);
+  }
+
   void visit(Stmt *stmt) override {
     if (!stmt->common_statement_eliminable())
       return;
@@ -122,11 +154,12 @@ class WholeKernelCSE : public BasicStmtVisitor {
     // Generic visitor for all CSE-able statements.
     std::size_t hash_value = operand_hash(stmt);
     if (is_done(stmt)) {
-      visible_stmts_.back()[hash_value].insert(stmt);
+      register_visible(hash_value, stmt);
       return;
     }
-    for (auto &scope : visible_stmts_) {
-      for (auto &prev_stmt : scope[hash_value]) {
+    auto it = visible_stmts_.find(hash_value);
+    if (it != visible_stmts_.end()) {
+      for (auto *prev_stmt : it->second) {
         if (common_statement_eliminable(stmt, prev_stmt)) {
           MarkUndone::run(&visited_, stmt);
           stmt->replace_usages_with(prev_stmt);
@@ -135,16 +168,32 @@ class WholeKernelCSE : public BasicStmtVisitor {
         }
       }
     }
-    visible_stmts_.back()[hash_value].insert(stmt);
+    register_visible(hash_value, stmt);
     set_done(stmt);
   }
 
   void visit(Block *stmt_list) override {
-    visible_stmts_.emplace_back();
+    scope_inserts_.emplace_back();
     for (auto &stmt : stmt_list->statements) {
       stmt->accept(this);
     }
-    visible_stmts_.pop_back();
+    // On scope exit drop every entry inserted at this depth from the global visibility table; entries from outer
+    // scopes (recorded in earlier `scope_inserts_` frames) survive so they remain visible to sibling subtrees.
+    for (auto &[hash_value, stmt] : scope_inserts_.back()) {
+      auto it = visible_stmts_.find(hash_value);
+      if (it == visible_stmts_.end()) {
+        continue;
+      }
+      auto &bucket = it->second;
+      auto pos = std::find(bucket.begin(), bucket.end(), stmt);
+      if (pos != bucket.end()) {
+        bucket.erase(pos);
+      }
+      if (bucket.empty()) {
+        visible_stmts_.erase(it);
+      }
+    }
+    scope_inserts_.pop_back();
   }
 
   void visit(IfStmt *if_stmt) override {
