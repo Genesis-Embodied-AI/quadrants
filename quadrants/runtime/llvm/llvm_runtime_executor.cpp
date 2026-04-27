@@ -662,10 +662,38 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
 
   std::size_t stride = 0;
   const bool is_gpu_llvm = (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu);
-  if (!is_gpu_llvm) {
-    // CPU: run the host evaluator directly. The ndarray data is host-accessible (see
-    // `set_host_accessible_ndarray_ptrs` in the CPU kernel launcher) so `ExternalTensorRead` resolves without
-    // any device round-trip; FieldLoad is serviced by `SNodeRwAccessorsBank` exactly as before.
+
+  // Host-eval fast path. The on-device sizer kernel exists to handle one specific leaf, `ExternalTensorRead`,
+  // whose ndarray data lives in GPU-private memory (`cudaMalloc` / `hipMalloc`, no UVA fallback) and thus
+  // cannot be touched from the host. Every other SizeExpr leaf - `Const`, `BoundVariable`,
+  // `ExternalTensorShape`, `FieldLoad` - is host-resolvable through the existing `evaluate_adstack_size_expr`
+  // path, so when the kernel's SizeExprs are all `ExternalTensorRead`-free we can skip the encode + bytecode
+  // h2d + sizer-kernel launch + d2h-stride pipeline entirely and write the metadata directly via `copy_h2d`.
+  // On CUDA the saved `cuMemcpyDtoH` for the per-launch stride readback is the dominant cost: every reverse-
+  // mode kernel launch in a 100-substep test paid one such synchronous DtoH each, and that compound stall
+  // accounted for the bulk of the GPU regression seen when adstack mode replaced `unrolling_limit`. The
+  // condition is computed once per launch by scanning each stack's `nodes` vector for an
+  // `ExternalTensorRead` leaf; the scan is O(total SizeExpr nodes), well below the cost of the cheapest
+  // h2d / d2h on any LLVM GPU backend.
+  bool all_size_exprs_host_resolvable = true;
+  for (std::size_t i = 0; i < n_stacks && all_size_exprs_host_resolvable; ++i) {
+    if (i >= ad_stack.size_exprs.size()) {
+      continue;
+    }
+    for (const auto &node : ad_stack.size_exprs[i].nodes) {
+      if (static_cast<SizeExpr::Kind>(node.kind) == SizeExpr::Kind::ExternalTensorRead) {
+        all_size_exprs_host_resolvable = false;
+        break;
+      }
+    }
+  }
+  const bool use_host_eval = !is_gpu_llvm || all_size_exprs_host_resolvable;
+  if (use_host_eval) {
+    // CPU + GPU-without-ExternalTensorRead path: run the host evaluator directly and `copy_h2d` the resulting
+    // arrays. On CPU the ndarray data is host-accessible (see `set_host_accessible_ndarray_ptrs` in the CPU
+    // kernel launcher) so even `ExternalTensorRead` would resolve without a device round-trip; the
+    // `is_gpu_llvm` arms gate kept this branch CPU-only before the ExternalTensorRead-free check above
+    // unlocked it for CUDA / AMDGPU. `FieldLoad` is serviced by `SNodeRwAccessorsBank` regardless.
     std::vector<uint64_t> host_max_sizes(n_stacks);
     for (std::size_t i = 0; i < n_stacks; ++i) {
       const SerializedSizeExpr *expr = (i < ad_stack.size_exprs.size()) ? &ad_stack.size_exprs[i] : nullptr;

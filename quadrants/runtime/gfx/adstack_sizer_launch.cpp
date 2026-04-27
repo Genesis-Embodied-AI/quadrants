@@ -17,12 +17,14 @@
 
 #include "quadrants/runtime/gfx/runtime.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <vector>
 
 #include "quadrants/codegen/spirv/adstack_sizer_shader.h"
 #include "quadrants/common/logging.h"
+#include "quadrants/ir/adstack_size_expr.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/launch_context_builder.h"
@@ -31,6 +33,89 @@
 
 namespace quadrants::lang {
 namespace gfx {
+
+namespace {
+
+// True iff every SizeExpr across every adstack alloca in every task is host-resolvable, i.e. contains no
+// `ExternalTensorRead` leaf. ExternalTensorRead dereferences the ndarray data pointer at a runtime-resolved
+// linear offset, and on SPIR-V backends that data lives in GPU-private memory so the host evaluator cannot
+// touch it without a device round-trip; the rest of the SizeExpr grammar (Const, FieldLoad, ExternalTensorShape,
+// BoundVariable, Add/Sub/Mul/Max, MaxOverRange) is host-resolvable through the existing
+// `evaluate_adstack_size_expr` path. Mirrors the `compute_contains_device_leaf` predicate used by
+// `encode_adstack_size_expr_device_bytecode_for_spirv`'s pre-substitution but at task granularity.
+bool all_size_exprs_host_resolvable(const std::vector<size_t> &adstack_task_indices,
+                                    const std::vector<spirv::TaskAttributes> &task_attribs) {
+  for (size_t ti : adstack_task_indices) {
+    for (const auto &alloca : task_attribs[ti].ad_stack.allocas) {
+      for (const auto &node : alloca.size_expr.nodes) {
+        if (static_cast<SizeExpr::Kind>(node.kind) == SizeExpr::Kind::ExternalTensorRead) {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+// Replicates the sizer shader's per-task metadata layout on the host: for each task, write a flat
+// `[stride_float, stride_int, (offset_i, max_size_i)*]` buffer where `max_size_i` is the host-evaluated
+// SizeExpr (falling back to `max_size_compile_time` for stacks with an empty `nodes` vector), and offsets
+// run as a per-heap prefix sum (Float advances by `2 * max_size`, Int by `max_size`, matching the
+// primal+adjoint interleaved Float-heap layout the main-kernel codegen already bakes in). The shader logic
+// this mirrors lives in `quadrants/codegen/spirv/adstack_sizer_shader.cpp` (the `running_off_f` /
+// `running_off_i` accumulator and the metadata writeback at the bottom of the per-stack loop).
+//
+// Caller must have verified `all_size_exprs_host_resolvable` first; this function asserts that no
+// SizeExpr contains `ExternalTensorRead`.
+void eval_per_task_metadata_on_host(const std::vector<size_t> &adstack_task_indices,
+                                    const std::vector<spirv::TaskAttributes> &task_attribs,
+                                    Program *prog,
+                                    LaunchContextBuilder &host_ctx,
+                                    std::vector<PerTaskAdStackRuntime> &per_task_ad_stack) {
+  using HeapKind = spirv::TaskAttributes::AdStackAllocaAttribs::HeapKind;
+  for (size_t ti : adstack_task_indices) {
+    const auto &allocas = task_attribs[ti].ad_stack.allocas;
+    auto &rt = per_task_ad_stack[ti];
+    const size_t n_stacks = allocas.size();
+    rt.metadata.assign(2 + 2 * n_stacks, 0);
+    uint32_t running_off_f = 0;
+    uint32_t running_off_i = 0;
+    for (size_t i = 0; i < n_stacks; ++i) {
+      const auto &a = allocas[i];
+      uint32_t max_size;
+      if (a.size_expr.nodes.empty()) {
+        // Cache-load fallback: no symbolic tree captured, the compile-time bound is authoritative.
+        // Match the shader's `max(max_size_compile_time, 1)` lower clamp.
+        max_size = std::max<uint32_t>(a.max_size_compile_time, 1u);
+      } else {
+        int64_t evaluated = evaluate_adstack_size_expr(a.size_expr, prog, &host_ctx);
+        // `evaluate_adstack_size_expr` returns -1 only when `expr.nodes` is empty (handled above) or hits
+        // an internal hard error; clamp to the same `max(_, 1)` lower bound the shader applies.
+        if (evaluated < 1) {
+          evaluated = 1;
+        }
+        max_size = static_cast<uint32_t>(evaluated);
+      }
+      uint32_t offset;
+      if (a.heap_kind == HeapKind::Float) {
+        offset = running_off_f;
+        // Primal + adjoint interleaved.
+        running_off_f += 2u * max_size;
+      } else {
+        offset = running_off_i;
+        running_off_i += max_size;
+      }
+      rt.metadata[2 + 2 * i] = offset;
+      rt.metadata[2 + 2 * i + 1] = max_size;
+    }
+    rt.metadata[0] = running_off_f;
+    rt.metadata[1] = running_off_i;
+    rt.stride_float = running_off_f;
+    rt.stride_int = running_off_i;
+  }
+}
+
+}  // namespace
 
 std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     LaunchContextBuilder &host_ctx,
@@ -58,6 +143,21 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
                  "GfxRuntime::launch_kernel: `ProgramImpl::program` back-reference not set; cannot "
                  "encode AdStack SizeExpr bytecode. Ensure GfxProgramImpl passes `program_impl = this` "
                  "into `GfxRuntime::Params`.");
+
+  // Fast path: when no SizeExpr in any adstack-bearing task contains an `ExternalTensorRead` leaf, every
+  // capacity bound is host-resolvable through `evaluate_adstack_size_expr`, and the entire GPU sizer pipeline
+  // (sizer-bytecode upload, per-task metadata-buffer alloc, `flush()` + `device_->wait_idle()` to force PSB
+  // visibility, sizer cmdlist record + `submit_synced`, blocking metadata readback) drops out. On Metal /
+  // MoltenVK the dropped pair of `wait_idle()` calls each cost a full GPU-host stall per launch; with one
+  // launch per substep across forward + backward of a 100-substep test, that stall cost compounds linearly
+  // with the test's launch count and was the dominant runtime regression observed when adstacks replaced
+  // `unrolling_limit` for autodiff. Kernels whose size_expr trees include `ExternalTensorRead` (an ndarray
+  // scalar load whose data lives in GPU-private memory) still need the on-device sizer below.
+  if (all_size_exprs_host_resolvable(adstack_task_indices, task_attribs)) {
+    eval_per_task_metadata_on_host(adstack_task_indices, task_attribs, program_impl_->program, host_ctx,
+                                   per_task_ad_stack);
+    return per_task_ad_stack;
+  }
   QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer) ||
                   !device_->get_caps().get(DeviceCapability::spirv_has_int64) ||
                   !device_->get_caps().get(DeviceCapability::spirv_has_int8) ||
