@@ -68,7 +68,7 @@ class FunctionDefTransformer:
             )
             offset = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_offset")
             count = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_count")
-            return True, BufferView(arr, offset, count)
+            return True, BufferView(arr, offset, count)  # count passed as positional `size` arg
         if isinstance(annotation, ndarray_type.NdarrayType):
             assert this_arg_features is not None
             raw_element_type: DataTypeCxx

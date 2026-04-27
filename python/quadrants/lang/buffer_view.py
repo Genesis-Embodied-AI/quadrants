@@ -88,7 +88,7 @@ class BufferView:
 
         @qd.kernel
         def k(v: BufferView[qd.f32]):
-            for i in range(v.count):
+            for i in range(v.size):
                 v[i] *= 2.0
 
         k(data[:16])
@@ -109,10 +109,15 @@ class BufferView:
             return BufferViewType(*dtype)
         return BufferViewType(dtype)
 
-    def __init__(self, arr, offset, count):
+    def __init__(self, arr, offset, size):
         self.arr = arr
         self.offset = offset
-        self.count = count
+        self.size = size
+
+    @property
+    def shape(self):
+        """Returns the shape of this view as a tuple, e.g. ``(16,)``."""
+        return (self.size,)
 
     @quadrants_scope
     def subscript(self, *indices):
@@ -124,7 +129,7 @@ class BufferView:
         if cfg.debug:
             i_expr = Expr(indices[0])
             offset_expr = Expr(self.offset)
-            count_expr = Expr(self.count)
+            size_expr = Expr(self.size)
 
             tid_expr = Expr(ast_builder.insert_thread_idx_expr())
 
@@ -132,7 +137,7 @@ class BufferView:
 
             msg = (
                 f"BufferView Out Of Range: kernel[{kernel_name}]"
-                " tid=%d, got index %d (offset=%d, count=%d).\n"
+                " tid=%d, got index %d (offset=%d, size=%d).\n"
                 f"Callstack:\n"
                 f"{callstack}"
             )
@@ -140,13 +145,13 @@ class BufferView:
             impl.qd_assert(
                 (i_expr >= Expr(0)).ptr,
                 msg,
-                [tid_expr.ptr, i_expr.ptr, offset_expr.ptr, count_expr.ptr],
+                [tid_expr.ptr, i_expr.ptr, offset_expr.ptr, size_expr.ptr],
                 dbg_info,
             )
             impl.qd_assert(
-                (i_expr < count_expr).ptr,
+                (i_expr < size_expr).ptr,
                 msg,
-                [tid_expr.ptr, i_expr.ptr, offset_expr.ptr, count_expr.ptr],
+                [tid_expr.ptr, i_expr.ptr, offset_expr.ptr, size_expr.ptr],
                 dbg_info,
             )
 

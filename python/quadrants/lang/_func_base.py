@@ -175,6 +175,9 @@ class FuncBase:
                     pass
                 elif annotation_type is buffer_view_type.BufferViewType:
                     pass
+                elif annotation is BufferViewInstance:
+                    # v: BufferView (no dtype) — infer dtype from the passed argument
+                    annotation = buffer_view_type.BufferViewType()
                 else:
                     raise QuadrantsSyntaxError(f"Invalid type annotation (argument {i}) of Taichi kernel: {annotation}")
             self.arg_metas.append(ArgMetadata(annotation, param.name, param.default))
@@ -526,10 +529,10 @@ class FuncBase:
             launch_ctx_buffer[_QD_ARRAY].append((index, inner.arr))
             if is_signed(cook_dtype(primitive_types.i32)):
                 launch_ctx_buffer[_INT].append((index + 1, int(v.offset)))
-                launch_ctx_buffer[_INT].append((index + 2, int(v.count)))
+                launch_ctx_buffer[_INT].append((index + 2, int(v.size)))
             else:
                 launch_ctx_buffer[_UINT].append((index + 1, int(v.offset)))
-                launch_ctx_buffer[_UINT].append((index + 2, int(v.count)))
+                launch_ctx_buffer[_UINT].append((index + 2, int(v.size)))
             return 3, True
         if needed_arg_basetype is ndarray_type.NdarrayType and isinstance(v, Ndarray):
             v_primal = v.arr

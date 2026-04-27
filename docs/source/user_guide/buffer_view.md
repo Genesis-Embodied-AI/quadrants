@@ -1,14 +1,10 @@
-# BufferView: safe sub-range access
+# BufferView
 
-`BufferView` provides a zero-copy, bounds-checked view into a sub-range
-`[offset, offset+count)` of an ndarray, suitable for passing to kernels that
-should only operate on a portion of a larger buffer.
+`BufferView` allows passing a sub-range of an ndarray to a kernel, with optional bounds checking in debug mode.
 
 ## Creating a view
 
-### Slice syntax (preferred)
-
-Use Python's standard slice notation on any 1D `qd.ndarray`:
+Use Python slice notation on any 1D `qd.ndarray`:
 
 ```python
 import quadrants as qd
@@ -18,52 +14,51 @@ N = 64
 data = qd.ndarray(qd.f32, shape=(N,))
 data.from_numpy(np.arange(N, dtype=np.float32))
 
-first_half  = data[:32]     # offset=0,  count=32
-second_half = data[32:]     # offset=32, count=32
-middle      = data[16:48]   # offset=16, count=32
-last_eight  = data[-8:]     # offset=56, count=8  (negative indices work)
+first_half = data[:32]     # offset=0,  size=32
+second_half = data[32:]    # offset=32, size=32
+middle = data[16:48]       # offset=16, size=32
+last_eight = data[-8:]     # offset=56, size=8
 ```
 
-Only 1D ndarrays are supported. `step` must be omitted or 1; `data[::2]`
-raises a `ValueError`.
+Only 1D ndarrays are supported. Slices with a step other than 1 raise `ValueError`.
 
-### Explicit constructor
-
-For programmatically computed offsets use the constructor directly:
+For programmatically computed offsets, use the constructor directly:
 
 ```python
-view = qd.BufferView(data, offset=16, count=32)
+view = qd.BufferView(data, offset=16, size=32)
 ```
 
 ## Kernel type annotation
 
-Use `BufferView[dtype]` as the parameter annotation.
-The view is automatically decomposed into `(ndarray, offset, count)` at
-compile time and reassembled inside the kernel:
+Use `BufferView[dtype]` as the parameter annotation. The dtype can be omitted to let Quadrants infer it from the passed argument:
 
 ```python
 from quadrants import BufferView
 
 @qd.kernel
 def scale(v: BufferView[qd.f32], factor: qd.f32):
-    for i in range(v.count):
+    for i in range(v.size):
         v[i] = v[i] * factor
 
+@qd.kernel
+def scale_any(v: BufferView):  # dtype inferred at call time
+    for i in range(v.size):
+        v[i] = v[i] * 2.0
+
 scale(data[:32], 2.0)
+scale_any(data[:32])
 ```
 
-`v.count` gives the length of the view; `v[i]` transparently accesses
-`data[offset + i]`.
+`v.size` gives the number of elements in the view; `v.shape` gives the equivalent tuple `(size,)`. Subscript `v[i]` transparently accesses `data[offset + i]`.
 
 ## Using BufferView in `@qd.func`
 
-`BufferView[dtype]` works as a type annotation on `@qd.func` as well,
-enabling composable helper functions:
+A `BufferView` can be passed to a `@qd.func` either with or without a type annotation:
 
 ```python
 @qd.func
-def fill_view(v: BufferView[qd.f32], val: qd.f32):
-    for i in range(v.count):
+def fill_view(v: BufferView[qd.f32], val: qd.f32):  # annotation is optional
+    for i in range(v.size):
         v[i] = val
 
 @qd.kernel
@@ -75,22 +70,20 @@ kernel(data[16:48])
 
 ## Debug mode: bounds checking and callstack diagnostics
 
-With `debug=True`, every subscript on a `BufferView` is bounds-checked
-against `[0, count)`. An out-of-bounds access raises a
-`QuadrantsAssertionError` with a structured message that includes the
-kernel name, thread ID, the bad index, the view's offset and count, and
-the full compilation-time callstack:
+With `debug=True`, every subscript on a `BufferView` is bounds-checked against `[0, size)`. An out-of-bounds access raises `QuadrantsAssertionError` with a message that includes the kernel name, thread ID, the index, the view's offset and size, and the full compilation-time callstack:
 
 ```python
 qd.init(arch=qd.cpu, debug=True)
 
 @qd.func
 def writer(v: BufferView[qd.f32], idx: qd.i32):
-    v[idx] = 99.0                  # OOB when idx >= count
+    v[idx] = 99.0                  # OOB when idx >= size
 
 @qd.kernel
 def kernel(v: BufferView[qd.f32]):
-    writer(v, 16)                  # passes index 16 to a view of count=16
+    for i in range(v.size):
+        if i == 0:
+            writer(v, v.size)      # passes out-of-range index
 
 N = 32
 data = qd.ndarray(qd.f32, shape=(N,))
@@ -101,21 +94,14 @@ Output:
 
 ```
 quadrants.lang.exception.QuadrantsAssertionError:
-BufferView Out Of Range: kernel[kernel] tid=0, got index 16 (offset=0, count=16).
+BufferView Out Of Range: kernel[kernel] tid=0, got index 16 (offset=0, size=16).
 Callstack:
 kernel (script.py:11)
   writer (script.py:7)
 ```
 
-The callstack shows every function frame from the kernel down to the
-leaf function where the access occurred.
+The callstack shows every function frame from the kernel down to the leaf function where the access occurred. Bounds checking has no cost when `debug=False` (the default).
 
-Bounds checking is only active when `debug=True`; it has no cost in
-production mode.
+## Limitation
 
-## Limitations
-
-- Only **1D** ndarrays are supported as the backing buffer.
-- The slice step must be 1 (or omitted).
-- `BufferView[dtype]` annotations are evaluated at kernel compilation time;
-  the view itself is passed at the call site.
+Only **1D** ndarrays are supported as the backing buffer.
