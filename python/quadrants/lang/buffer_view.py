@@ -2,6 +2,8 @@
 
 import re
 
+import numpy as np
+
 from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.expr import Expr, make_expr_group
@@ -113,8 +115,10 @@ class BufferView:
         # Validate bounds when constructed on the host (arr has a .shape attribute).
         # During kernel compilation arr is an Expr node without .shape — skip validation.
         arr_shape = getattr(arr, "shape", None)
-        if arr_shape is not None and isinstance(offset, int) and isinstance(size, int):
-            n = arr_shape[0] if arr_shape else 0
+        if arr_shape is not None and isinstance(offset, (int, np.integer)) and isinstance(size, (int, np.integer)):
+            if len(arr_shape) != 1:
+                raise TypeError(f"BufferView requires a 1D ndarray, got shape {arr_shape}")
+            n = arr_shape[0]
             if offset < 0 or size < 0 or offset + size > n:
                 raise ValueError(f"BufferView out of range: offset={offset}, size={size}, ndarray length={n}")
         self.arr = arr

@@ -219,6 +219,8 @@ class FunctionDefTransformer:
             return None
 
         # BufferView arguments are passed by reference.
+        # Dtype validation happens at the kernel boundary (_template_mapper_hotpath._extract_arg),
+        # not here — data.arr is an Expr node during func compilation, not a real Ndarray.
         if isinstance(argument_type, buffer_view_type.BufferViewType):
             if not isinstance(data, BufferView):
                 raise QuadrantsSyntaxError(f"Argument {argument_name} expects a BufferView, got {type(data).__name__}")
