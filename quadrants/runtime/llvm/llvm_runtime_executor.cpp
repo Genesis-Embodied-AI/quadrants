@@ -507,6 +507,45 @@ void LlvmRuntimeExecutor::finalize() {
   runtime_temporaries_cache_ = nullptr;
   runtime_adstack_heap_buffer_field_ptr_ = nullptr;
   runtime_adstack_heap_size_field_ptr_ = nullptr;
+  // Release the pinned-host metadata scratch and its completion event. Sequence: first drain the pending in-flight
+  // copy via `event_synchronize` (the next launch's reuse path would have done this lazily, but on shutdown there
+  // is no next launch), then free the host pinning, then destroy the event. Skipping the synchronize before
+  // `mem_free_host` would race the DMA engine's read against the host free; skipping `event_destroy` would leak a
+  // CUDA / HIP event handle.
+  if (pinned_metadata_event_ != nullptr) {
+#if defined(QD_WITH_CUDA)
+    if (config_.arch == Arch::cuda) {
+      if (pinned_metadata_event_pending_) {
+        CUDADriver::get_instance().event_synchronize(pinned_metadata_event_);
+      }
+      CUDADriver::get_instance().event_destroy(pinned_metadata_event_);
+    }
+#endif
+#if defined(QD_WITH_AMDGPU)
+    if (config_.arch == Arch::amdgpu) {
+      if (pinned_metadata_event_pending_) {
+        AMDGPUDriver::get_instance().event_synchronize(pinned_metadata_event_);
+      }
+      AMDGPUDriver::get_instance().event_destroy(pinned_metadata_event_);
+    }
+#endif
+    pinned_metadata_event_ = nullptr;
+    pinned_metadata_event_pending_ = false;
+  }
+  if (pinned_metadata_scratch_ != nullptr) {
+#if defined(QD_WITH_CUDA)
+    if (config_.arch == Arch::cuda) {
+      CUDADriver::get_instance().mem_free_host(pinned_metadata_scratch_);
+    }
+#endif
+#if defined(QD_WITH_AMDGPU)
+    if (config_.arch == Arch::amdgpu) {
+      AMDGPUDriver::get_instance().mem_free_host(pinned_metadata_scratch_);
+    }
+#endif
+    pinned_metadata_scratch_ = nullptr;
+    pinned_metadata_scratch_capacity_ = 0;
+  }
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
     preallocated_runtime_objects_allocs_.reset();
     preallocated_runtime_memory_allocs_.reset();
@@ -689,11 +728,14 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
   }
   const bool use_host_eval = !is_gpu_llvm || all_size_exprs_host_resolvable;
   if (use_host_eval) {
-    // CPU + GPU-without-ExternalTensorRead path: run the host evaluator directly and `copy_h2d` the resulting
-    // arrays. On CPU the ndarray data is host-accessible (see `set_host_accessible_ndarray_ptrs` in the CPU
-    // kernel launcher) so even `ExternalTensorRead` would resolve without a device round-trip; the
-    // `is_gpu_llvm` arms gate kept this branch CPU-only before the ExternalTensorRead-free check above
-    // unlocked it for CUDA / AMDGPU. `FieldLoad` is serviced by `SNodeRwAccessorsBank` regardless.
+    // CPU + GPU-without-ExternalTensorRead path: run the host evaluator directly. On CPU we use synchronous
+    // `copy_h2d` (just `std::memcpy` for that arch), but on CUDA / AMDGPU we ship the same payload through
+    // pinned-host memory via async `cuMemcpyHtoDAsync` / `hipMemcpyHtoDAsync` so the host returns immediately
+    // after queueing the copies on the default stream and the subsequent main-kernel launch (also on the
+    // default stream) stream-orders after the copies. The synchronous `cuMemcpyHtoD_v2` path used to block
+    // the host on every one of the three writes we issue per launch; with thousands of reverse-mode launches
+    // per `test_differentiable_rigid` run, those serial host stalls were a measurable fraction of wallclock.
+    // `FieldLoad` is serviced by `SNodeRwAccessorsBank` regardless of arch.
     std::vector<uint64_t> host_max_sizes(n_stacks);
     for (std::size_t i = 0; i < n_stacks; ++i) {
       const SerializedSizeExpr *expr = (i < ad_stack.size_exprs.size()) ? &ad_stack.size_exprs[i] : nullptr;
@@ -711,10 +753,126 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
       host_offsets[i] = stride;
       stride += align_up_8(sizeof(int64_t) + ad_stack.allocas[i].entry_size_bytes * host_max_sizes[i]);
     }
-    copy_h2d(offsets_dev_ptr, host_offsets.data(), n_stacks * sizeof(uint64_t));
-    copy_h2d(max_sizes_dev_ptr, host_max_sizes.data(), n_stacks * sizeof(uint64_t));
     uint64_t stride_u64 = static_cast<uint64_t>(stride);
-    copy_h2d(runtime_adstack_stride_field_ptr_, &stride_u64, sizeof(uint64_t));
+    if (!is_gpu_llvm) {
+      copy_h2d(offsets_dev_ptr, host_offsets.data(), n_stacks * sizeof(uint64_t));
+      copy_h2d(max_sizes_dev_ptr, host_max_sizes.data(), n_stacks * sizeof(uint64_t));
+      copy_h2d(runtime_adstack_stride_field_ptr_, &stride_u64, sizeof(uint64_t));
+    } else {
+      // Three-block payload packed into the pinned-host scratch as `[stride_u64, offsets[n_stacks],
+      // max_sizes[n_stacks]]`. Three async DMAs land on the three target device addresses (the runtime
+      // struct's stride field, the offsets storage buffer, the max_sizes storage buffer) sourced from
+      // the corresponding offsets within the pinned scratch. The driver's H2D DMA engine reads from the
+      // pinned bytes at execution time, so we must not overwrite the scratch before all three copies
+      // have completed - hence the per-launch `event_record` after the last copy and the
+      // `event_synchronize` at the top of the next launch. The wait is typically a no-op because a few
+      // microseconds of small copies finish well before the host returns, dispatches the main kernel,
+      // and re-enters this function on the next launch.
+      const std::size_t header_bytes = sizeof(uint64_t);
+      const std::size_t array_bytes = n_stacks * sizeof(uint64_t);
+      const std::size_t total_bytes = header_bytes + 2 * array_bytes;
+
+      auto wait_pending = [this]() {
+        if (!pinned_metadata_event_pending_) {
+          return;
+        }
+#if defined(QD_WITH_CUDA)
+        if (config_.arch == Arch::cuda) {
+          CUDADriver::get_instance().event_synchronize(pinned_metadata_event_);
+        }
+#endif
+#if defined(QD_WITH_AMDGPU)
+        if (config_.arch == Arch::amdgpu) {
+          AMDGPUDriver::get_instance().event_synchronize(pinned_metadata_event_);
+        }
+#endif
+        pinned_metadata_event_pending_ = false;
+      };
+
+      // Grow / first-allocate the pinned host scratch and the per-launch completion event. Doubling growth
+      // means the pinned alloc / free traffic is amortised to O(log peak_total_bytes) across a run.
+      if (total_bytes > pinned_metadata_scratch_capacity_) {
+        wait_pending();
+        if (pinned_metadata_scratch_ != nullptr) {
+#if defined(QD_WITH_CUDA)
+          if (config_.arch == Arch::cuda) {
+            CUDADriver::get_instance().mem_free_host(pinned_metadata_scratch_);
+          }
+#endif
+#if defined(QD_WITH_AMDGPU)
+          if (config_.arch == Arch::amdgpu) {
+            AMDGPUDriver::get_instance().mem_free_host(pinned_metadata_scratch_);
+          }
+#endif
+          pinned_metadata_scratch_ = nullptr;
+        }
+        std::size_t new_capacity = std::max<std::size_t>(total_bytes, 2 * pinned_metadata_scratch_capacity_);
+#if defined(QD_WITH_CUDA)
+        if (config_.arch == Arch::cuda) {
+          CUDADriver::get_instance().mem_alloc_host(&pinned_metadata_scratch_, new_capacity);
+        }
+#endif
+#if defined(QD_WITH_AMDGPU)
+        if (config_.arch == Arch::amdgpu) {
+          // `hipHostMallocDefault == 0`. Coherent / portable / write-combined flags are intentionally not set;
+          // the workload is small payloads written linearly by the host and DMA-read by the GPU once.
+          AMDGPUDriver::get_instance().mem_alloc_host(&pinned_metadata_scratch_, new_capacity, 0u);
+        }
+#endif
+        pinned_metadata_scratch_capacity_ = new_capacity;
+      }
+      if (pinned_metadata_event_ == nullptr) {
+        // `cuEventCreate` flag `0` (CU_EVENT_DEFAULT) means timing-enabled, which the driver costs us nothing
+        // to set up here and lets future profilers attach without re-creating the event. `hipEventCreateWithFlags`
+        // takes the same encoding.
+#if defined(QD_WITH_CUDA)
+        if (config_.arch == Arch::cuda) {
+          CUDADriver::get_instance().event_create(&pinned_metadata_event_, 0u);
+        }
+#endif
+#if defined(QD_WITH_AMDGPU)
+        if (config_.arch == Arch::amdgpu) {
+          AMDGPUDriver::get_instance().event_create(&pinned_metadata_event_, 0u);
+        }
+#endif
+      }
+      // Block until any in-flight copies from the previous launch have finished pulling from the pinned scratch
+      // before we overwrite it. In steady state this is a no-op because the small DMAs finish well before the
+      // host loops back here; the wait exists only to defend against an unusual interleaving where the GPU
+      // queue is backlogged and the next launch enters this function before the previous launch's last copy
+      // has been consumed.
+      wait_pending();
+
+      auto *pinned = static_cast<uint64_t *>(pinned_metadata_scratch_);
+      pinned[0] = stride_u64;
+      std::memcpy(pinned + 1, host_offsets.data(), array_bytes);
+      std::memcpy(pinned + 1 + n_stacks, host_max_sizes.data(), array_bytes);
+
+      [[maybe_unused]] void *default_stream = nullptr;
+#if defined(QD_WITH_CUDA)
+      if (config_.arch == Arch::cuda) {
+        CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned, header_bytes,
+                                                               default_stream);
+        CUDADriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 1, array_bytes,
+                                                               default_stream);
+        CUDADriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 1 + n_stacks, array_bytes,
+                                                               default_stream);
+        CUDADriver::get_instance().event_record(pinned_metadata_event_, default_stream);
+      }
+#endif
+#if defined(QD_WITH_AMDGPU)
+      if (config_.arch == Arch::amdgpu) {
+        AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned,
+                                                                 header_bytes, default_stream);
+        AMDGPUDriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 1, array_bytes,
+                                                                 default_stream);
+        AMDGPUDriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 1 + n_stacks, array_bytes,
+                                                                 default_stream);
+        AMDGPUDriver::get_instance().event_record(pinned_metadata_event_, default_stream);
+      }
+#endif
+      pinned_metadata_event_pending_ = true;
+    }
   } else {
     // GPU (CUDA / AMDGPU): encode the SizeExpr trees into device bytecode, upload, launch the sizer runtime
     // function, read back just the computed stride. The sizer kernel writes `adstack_max_sizes[]`,

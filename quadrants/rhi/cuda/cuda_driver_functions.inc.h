@@ -34,6 +34,8 @@ PER_CUDA_FUNCTION(memset, cuMemsetD8_v2, void *, uint8, std::size_t);
 PER_CUDA_FUNCTION(memsetd32, cuMemsetD32_v2, void *, uint32, std::size_t);
 PER_CUDA_FUNCTION(mem_free, cuMemFree_v2, void *);
 PER_CUDA_FUNCTION(mem_free_async_impl, cuMemFreeAsync, void *, void *);
+PER_CUDA_FUNCTION(mem_alloc_host, cuMemAllocHost_v2, void **, std::size_t);
+PER_CUDA_FUNCTION(mem_free_host, cuMemFreeHost, void *);
 PER_CUDA_FUNCTION(mem_advise, cuMemAdvise, void *, std::size_t, uint32, uint32);
 PER_CUDA_FUNCTION(mem_get_info, cuMemGetInfo_v2, std::size_t *, std::size_t *);
 PER_CUDA_FUNCTION(mem_get_attribute, cuPointerGetAttribute, void *, uint32, void *);

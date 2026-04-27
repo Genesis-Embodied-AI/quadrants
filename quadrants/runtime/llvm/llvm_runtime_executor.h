@@ -239,6 +239,22 @@ class LlvmRuntimeExecutor {
   DeviceAllocationUnique adstack_sizer_bytecode_alloc_ = nullptr;
   std::size_t adstack_sizer_bytecode_capacity_{0};
 
+  // Pinned (page-locked) host scratch + completion event used by the host-eval branch of `publish_adstack_metadata`
+  // on CUDA / AMDGPU to issue the per-launch adstack metadata writes asynchronously. With pageable host memory
+  // `cuMemcpyHtoDAsync` synchronises on the staging copy, so the source MUST be pinned for the async copy to be
+  // truly non-blocking; with pinned host memory the host returns immediately after queuing the copy on the
+  // default stream and the GPU pulls the bytes via DMA before the subsequent main-kernel launch (which is also
+  // queued on the default stream and stream-orders after the copies). One pinned scratch is reused across
+  // launches; `pinned_metadata_event_` is recorded after the last copy of each launch, and the next launch's
+  // `publish_adstack_metadata` waits on it before overwriting the scratch so the in-flight copy cannot read torn
+  // bytes. Allocated lazily on the first call that exercises this branch and grown via
+  // `cuMemAllocHost_v2` / `hipHostMalloc`; freed in the executor destructor. Capacity is in bytes and tracks the
+  // largest `(2 + 2 * n_stacks) * sizeof(uint64)` payload published so far.
+  void *pinned_metadata_scratch_{nullptr};
+  std::size_t pinned_metadata_scratch_capacity_{0};
+  void *pinned_metadata_event_{nullptr};
+  bool pinned_metadata_event_pending_{false};
+
   // good buddy
   friend LlvmProgramImpl;
   friend SNodeTreeBufferManager;
