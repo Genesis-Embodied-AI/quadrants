@@ -997,6 +997,15 @@ void runtime_retrieve_and_reset_error_code(LLVMRuntime *runtime) {
   runtime->error_code = 0;
 }
 
+// Atomic relaxed setter paired with the relaxed exchange in `runtime_retrieve_and_reset_adstack_overflow`. Used by
+// the inline AdStackPush codegen path on the overflow branch where the kernel skips the increment and value-store
+// to keep the alloca-tracked count in lock-step with the slot-write semantics of the previous helper-based path.
+// Multiple device threads can hit the overflow branch concurrently (thread pool dispatch over a multi-element
+// field); relaxed atomicity is sufficient because the host only polls the flag after the dispatch has joined.
+void set_adstack_overflow_flag(LLVMRuntime *runtime) {
+  __atomic_store_n(&runtime->adstack_overflow_flag, (i64)1, __ATOMIC_RELAXED);
+}
+
 void runtime_retrieve_and_reset_adstack_overflow(LLVMRuntime *runtime) {
   // Paired with the relaxed atomic write in `stack_push`. The host calls this only after the thread pool has
   // joined, so strictly no synchronization is required here, but use `__atomic_exchange_n` anyway to keep the

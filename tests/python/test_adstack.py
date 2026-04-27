@@ -2408,3 +2408,70 @@ def test_adstack_spirv_metadata_per_task_buffer():
     # own sizer-computed 9. Post-fix: finishes cleanly because each task gets its own metadata buffer.
     kernel_two_offloads_with_tri_reduce.grad()
     qd.sync()
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("n_iter", [4, 16, 64])
+@pytest.mark.parametrize("n_stacks", [1, 3])
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_unrolled_many_pushes_promotes_count_to_ssa(n_iter, n_stacks):
+    # Pins the LLVM AdStack codegen path that promotes the per-stack count to an `alloca i64` per task and
+    # replaces the runtime stack_init / stack_push / stack_pop / stack_top_primal / stack_top_adjoint helper
+    # calls with inline IR. With the alloca approach, mem2reg promotes the count to an SSA register and an
+    # unrolled body of N pushes collapses to a chain of integer adds with no per-push memory traffic on the
+    # count side; the previous helper-call path emitted N load + N store pairs through the heap u64 header
+    # that LLVM AA could not fold because the stack pointer reaches the runtime through several getter calls.
+    # The test exercises the regime where the optimisation has the most leverage: a `qd.static` unrolled loop
+    # of N differentiable ops fanning across `n_stacks` parallel adstacks, evaluated in reverse mode against
+    # PyTorch autograd. A regression that miscalculates the slot offset or skips the bounds-check path under
+    # the new codegen produces wrong gradients here long before it surfaces as an overflow at runtime.
+    #
+    # Internal details: each stack carries an independent `sin(x[i] + j*step + s_offset)` accumulation. The
+    # outer non-static `for i in x` keeps the kernel offload-shaped (one task per element), while the inner
+    # `qd.static(range(n_iter))` forces straight-line unrolled IR so the SSA-promoted count is the dominant
+    # store/load eliminator. `n_iter=64` is well above the historical adstack capacity of 32, so a regression
+    # in the bounds-check hoist that incorrectly clamps `count > max_size` would either short-circuit the
+    # forward pass (wrong primal) or silently drop pushes (wrong gradient), both caught by the autograd
+    # cross-check.
+    import torch
+
+    n = 4
+    step = 0.07
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            acc = 0.0
+            for s in qd.static(range(n_stacks)):
+                s_offset = qd.cast(s, qd.f32) * 0.13
+                for j in qd.static(range(n_iter)):
+                    a = x[i] + qd.cast(j, qd.f32) * step + s_offset
+                    acc += qd.sin(a)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.21 + i * 0.05
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.21 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        acc_t = torch.zeros((), dtype=torch.float32)
+        for s in range(n_stacks):
+            s_offset_t = float(s) * 0.13
+            for j in range(n_iter):
+                a_t = x_t[i] + float(j) * step + s_offset_t
+                acc_t = acc_t + torch.sin(a_t)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    assert y[None] == pytest.approx(y_t.item(), rel=1e-4)
+    for i in range(n):
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-4)

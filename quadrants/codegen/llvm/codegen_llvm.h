@@ -90,6 +90,17 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   llvm::Value *ad_stack_offsets_ptr_llvm_{nullptr};
   llvm::Value *ad_stack_max_sizes_ptr_llvm_{nullptr};
 
+  // Per-task per-stack SSA-promoted state replacing the runtime-helper path that read / wrote the u64 count
+  // header in heap memory on every push / pop / top access. The alloca is created in the entry block and
+  // initialised to 0 at the `AdStackAllocaStmt` site; mem2reg later promotes it to an SSA register and GVN folds
+  // consecutive count++ chains in unrolled bodies, collapsing the N-fold load-modify-store the runtime helpers
+  // emitted into a single chain of adds. `ad_stack_max_size_per_stack_` is the matching per-stack hoist of the
+  // `LLVMRuntime.adstack_max_sizes[stack_id]` load: each push otherwise re-loaded the same value, and AA could
+  // not fold the loads because the pointer reaches the runtime through several getter calls. Both maps reset per
+  // task.
+  std::unordered_map<int, llvm::Value *> ad_stack_count_alloca_per_stack_;
+  std::unordered_map<int, llvm::Value *> ad_stack_max_size_per_stack_;
+
   std::unordered_map<const Stmt *, std::vector<llvm::Value *>> loop_vars_llvm;
 
   std::unordered_map<Function *, llvm::Function *> func_map;
@@ -371,6 +382,18 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // pointer.
   void ensure_ad_stack_heap_base_llvm();
   void ensure_ad_stack_metadata_llvm();
+
+  // Allocate (entry-block) and return the per-stack i64 alloca that holds the AdStack count, replacing the u64
+  // header at the start of the heap-backed stack memory. The first call for a given `stack_id` creates the
+  // alloca; subsequent calls return the cached value. Caller is responsible for emitting the init-to-0 store at
+  // the AdStackAllocaStmt visit site so the count semantics match the previous `stack_init` helper, including
+  // for AllocaStmt nested inside a loop where each iteration must restart from zero.
+  llvm::Value *ensure_ad_stack_count_alloca(int stack_id);
+  // Hoist `LLVMRuntime.adstack_max_sizes[stack_id]` to the entry block on first use per stack. Each
+  // `AdStackPushStmt` would otherwise re-issue the load through the runtime metadata pointer; the hoist makes the
+  // value SSA-stable across the whole task so the bounds check folds to a constant compare against an SSA value
+  // whenever the per-stack max is loop-invariant (always true at the moment).
+  llvm::Value *ensure_ad_stack_max_size_for_stack(int stack_id);
 
   void visit(AdStackAllocaStmt *stmt) override;
 
