@@ -455,9 +455,10 @@ The bool value in <cite>cond</cite> must can be determined at compile time.</p>
 <dt class="sig sig-object py" id="quadrants.lang.impl.field">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.impl.</span></span><span class="sig-name descname"><span class="pre">field</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/impl.html#field"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.impl.field" title="Link to this definition">#</a></dt>
 <dd><p>Defines a Quadrants field.</p>
-<p>A Quadrants field can be viewed as an abstract N-dimensional array, hiding away the complexity of how its
-underlying <a class="reference internal" href="../snode/index.html#quadrants.lang.snode.SNode" title="quadrants.lang.snode.SNode"><code class="xref py py-class docutils literal notranslate"><span class="pre">SNode</span></code></a> are actually defined. The data in a Quadrants field can be
-directly accessed by a Quadrants <a class="reference internal" href="../kernel_impl/index.html#quadrants.lang.kernel_impl.kernel" title="quadrants.lang.kernel_impl.kernel"><code class="xref py py-func docutils literal notranslate"><span class="pre">kernel()</span></code></a>.</p>
+<p>A Quadrants field can be viewed as an abstract N-dimensional array, hiding away
+the complexity of how its underlying <a class="reference internal" href="../snode/index.html#quadrants.lang.snode.SNode" title="quadrants.lang.snode.SNode"><code class="xref py py-class docutils literal notranslate"><span class="pre">SNode</span></code></a> are
+actually defined. The data in a Quadrants field can be directly accessed by
+a Quadrants <a class="reference internal" href="../kernel_impl/index.html#quadrants.lang.kernel_impl.kernel" title="quadrants.lang.kernel_impl.kernel"><code class="xref py py-func docutils literal notranslate"><span class="pre">kernel()</span></code></a>.</p>
 <p>See also <a class="reference external" href="https://docs.taichi-lang.org/docs/field">https://docs.taichi-lang.org/docs/field</a></p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -467,10 +468,10 @@ directly accessed by a Quadrants <a class="reference internal" href="../kernel_i
 <li><p><strong>order</strong> (<em>str</em><em>, </em><em>optional</em>) – order of the shape laid out in memory.</p></li>
 <li><p><strong>name</strong> (<em>str</em><em>, </em><em>optional</em>) – name of the field.</p></li>
 <li><p><strong>offset</strong> (<em>Union</em><em>[</em><em>int</em><em>, </em><em>tuple</em><em>[</em><em>int</em><em>]</em><em>]</em><em>, </em><em>optional</em>) – offset of the field domain.</p></li>
-<li><p><strong>needs_grad</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether this field participates in autodiff (reverse mode) and thus needs an
-adjoint field to store the gradients.</p></li>
-<li><p><strong>needs_dual</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether this field participates in autodiff (forward mode) and thus needs a dual
-field to store the gradients.</p></li>
+<li><p><strong>needs_grad</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether this field participates in autodiff (reverse mode)
+and thus needs an adjoint field to store the gradients.</p></li>
+<li><p><strong>needs_dual</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether this field participates in autodiff (forward mode)
+and thus needs an dual field to store the gradients.</p></li>
 </ul>
 </dd>
 </dl>
@@ -603,8 +604,9 @@ in many ways similar to <code class="docutils literal notranslate"><span class="
 <span class="gp">&gt;&gt;&gt; </span>        <span class="n">do_b</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>Depending on the value of <code class="docutils literal notranslate"><span class="pre">cond</span></code>, <code class="docutils literal notranslate"><span class="pre">run()</span></code> will be directly compiled into either <code class="docutils literal notranslate"><span class="pre">do_a()</span></code> or <code class="docutils literal notranslate"><span class="pre">do_b()</span></code>.
-Thus there won’t be a runtime condition check.</p>
+<p>Depending on the value of <code class="docutils literal notranslate"><span class="pre">cond</span></code>, <code class="docutils literal notranslate"><span class="pre">run()</span></code> will be directly compiled
+into either <code class="docutils literal notranslate"><span class="pre">do_a()</span></code> or <code class="docutils literal notranslate"><span class="pre">do_b()</span></code>. Thus there won’t be a runtime
+condition check.</p>
 <p>Another common usage is for compile-time loop unrolling:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">():</span>
