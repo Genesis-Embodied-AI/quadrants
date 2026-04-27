@@ -12,6 +12,7 @@ import dataclasses
 import numpy as np
 
 import quadrants as qd
+from quadrants.lang._func_base import _frozen_dc_plans, _get_frozen_dc_plan
 
 from tests import test_utils
 
@@ -219,9 +220,108 @@ def test_frozen_dc_cache_many_fields():
     use_two(state)
     np.testing.assert_allclose(arrays[0].to_numpy(), [1.0, 1.0, 1.0, 1.0])
     np.testing.assert_allclose(arrays[9].to_numpy(), [2.0, 2.0, 2.0, 2.0])
-    for i in range(1, 9):
-        np.testing.assert_allclose(arrays[i].to_numpy(), [0.0, 0.0, 0.0, 0.0])
+    for idx in range(1, 9):
+        np.testing.assert_allclose(arrays[idx].to_numpy(), [0.0, 0.0, 0.0, 0.0])
 
     use_two(state)
     np.testing.assert_allclose(arrays[0].to_numpy(), [1.0, 1.0, 1.0, 1.0])
     np.testing.assert_allclose(arrays[9].to_numpy(), [2.0, 2.0, 2.0, 2.0])
+
+
+# ---------------------------------------------------------------------------
+# id() reuse guard: _get_frozen_dc_plan must not return a stale plan when a
+# new used_params set is allocated at the same address as a garbage-collected one.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_frozen_dc_plan_id_reuse_guard():
+    """Simulate id() reuse: after the original used_params set is deleted, a new set at the same address must not
+    receive the stale cached plan.  CPython 3.13+ (mimalloc) makes this scenario likely in practice.
+    """
+    from quadrants.lang._dataclass_util import create_flat_name
+
+    @dataclasses.dataclass(frozen=True)
+    class S:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    fields_dict = {f.name: f for f in dataclasses.fields(S)}
+    flat_x = create_flat_name("S", "x")
+
+    params_a = {flat_x, "__qd_S__qd_y"}
+    plan_a = _get_frozen_dc_plan(params_a, S, "S", fields_dict)
+    assert len(plan_a) == 1
+    assert plan_a[0][0] == "x"
+    assert plan_a[0][1] == flat_x
+
+    saved_id = id(params_a)
+    del params_a
+
+    params_b = {"__qd_S__qd_z"}
+    if id(params_b) == saved_id:
+        plan_b = _get_frozen_dc_plan(params_b, S, "S", fields_dict)
+        assert plan_b == (), (
+            f"id() reuse guard failed: got plan {plan_b!r} from a stale cache entry "
+            f"instead of empty tuple for params_b={params_b!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# qd.reset() must clear _frozen_dc_plans so stale entries from a previous
+# qd.init() cycle don't leak into a fresh session.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_frozen_dc_plans_cleared_on_reset():
+    """After qd.reset(), _frozen_dc_plans must be empty."""
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        a: qd.types.NDArray[qd.i32, 1]
+
+    @qd.kernel
+    def fill(state: State):
+        for i in range(4):
+            state.a[i] = 7
+
+    a = qd.ndarray(qd.i32, shape=(4,))
+    fill(State(a=a))
+    np.testing.assert_array_equal(a.to_numpy(), [7, 7, 7, 7])
+
+    assert len(_frozen_dc_plans) > 0, "Plan cache should be populated after kernel call"
+
+    qd.reset()
+    assert len(_frozen_dc_plans) == 0, "qd.reset() must clear _frozen_dc_plans"
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: kernel correctness survives qd.reset() with frozen dataclass args.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_frozen_dc_kernel_correct_after_reset():
+    """A kernel using a frozen dataclass must produce correct results after qd.reset() re-initializes the runtime,
+    even though the plan cache was cleared.
+    """
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        a: qd.types.NDArray[qd.i32, 1]
+
+    @qd.kernel
+    def fill(state: State, val: qd.i32):
+        for i in range(4):
+            state.a[i] = val
+
+    a1 = qd.ndarray(qd.i32, shape=(4,))
+    fill(State(a=a1), 10)
+    np.testing.assert_array_equal(a1.to_numpy(), [10, 10, 10, 10])
+
+    qd.reset()
+    qd.init(arch=qd.cpu)
+
+    a2 = qd.ndarray(qd.i32, shape=(4,))
+    fill(State(a=a2), 20)
+    np.testing.assert_array_equal(a2.to_numpy(), [20, 20, 20, 20])
