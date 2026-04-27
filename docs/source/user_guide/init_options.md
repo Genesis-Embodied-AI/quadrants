@@ -10,10 +10,10 @@ Whether the compilation caches **persist on disk across Python invocations**. De
 
 Setting `offline_cache=False` is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. In-process caches operate independently of this flag: within a single Python session, identical kernels are never recompiled. The flag therefore controls only whether the next Python invocation observes a warm or a cold disk.
 
-When `offline_cache=True`, three persistent layers cooperate:
+When `offline_cache=True`, three persistent layers cooperate. The first two share the cache directory configured by `offline_cache_file_path` (default `~/.cache/quadrants`); the third is owned by libcuda and lives outside that path.
 
-1. The cross-backend kernel-IR / compiled-kernel cache under `~/.cache/quadrants` (driven by `KernelCompilationManager`). When the IR-and-config hash hits, the previously compiled kernel data is loaded from disk and the entire compile pipeline is skipped. Active for every backend (CPU, CUDA, AMDGPU, Metal, Vulkan).
-2. The CUDA per-arch PTX cache under `~/.cache/quadrants/.../ptx_cache_sm_*` (driven by `PtxCache`). When the LLVM-IR hash hits, the previously emitted PTX is loaded from disk and `ptxas` is skipped.
+1. The cross-backend kernel-IR / compiled-kernel cache (driven by `KernelCompilationManager`). When the IR-and-config hash hits, the previously compiled kernel data is loaded from disk and the entire compile pipeline is skipped. Active for every backend (CPU, CUDA, AMDGPU, Metal, Vulkan).
+2. The CUDA per-arch PTX cache, written under `<offline_cache_file_path>/ptx_cache_sm_*` (driven by `PtxCache`). When the LLVM-IR hash hits, the previously emitted PTX is loaded from disk and `ptxas` is skipped.
 3. The NVIDIA driver compute cache at `~/.nv/ComputeCache`, keyed by PTX content hash. When this hits, even `ptxas` work that the per-arch PTX cache would have triggered is skipped because the SASS itself is reused. This cache is owned by libcuda and not by Quadrants.
 
 Setting `offline_cache=False` (or `QD_OFFLINE_CACHE=0`) disables every disk-persistent layer so a fresh Python session sees a true cold start:
