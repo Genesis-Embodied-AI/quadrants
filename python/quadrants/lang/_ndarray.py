@@ -269,11 +269,10 @@ class Ndarray:
         Called from ``__getitem__`` when the key is a ``slice``.
         Supports start/stop with negative indices; step must be 1.
         """
-        from quadrants.lang.buffer_view import BufferView  # local import avoids circular dep at module level
+        from quadrants.lang.buffer_view import BufferView  # pylint: disable=C0415  # noqa: I001
+
         if len(self.shape) != 1:
-            raise TypeError(
-                f"ndarray slice to BufferView requires a 1D array, got shape {self.shape}"
-            )
+            raise TypeError(f"ndarray slice to BufferView requires a 1D array, got shape {self.shape}")
         start, stop, step = key.indices(self.shape[0])
         if step != 1:
             raise ValueError(f"BufferView slice requires step=1, got step={step}")

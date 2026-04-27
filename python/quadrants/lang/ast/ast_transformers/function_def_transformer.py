@@ -221,9 +221,7 @@ class FunctionDefTransformer:
         # BufferView arguments are passed by reference.
         if isinstance(argument_type, buffer_view_type.BufferViewType):
             if not isinstance(data, BufferView):
-                raise QuadrantsSyntaxError(
-                    f"Argument {argument_name} expects a BufferView, got {type(data).__name__}"
-                )
+                raise QuadrantsSyntaxError(f"Argument {argument_name} expects a BufferView, got {type(data).__name__}")
             ctx.create_variable(argument_name, data)
             return None
 
