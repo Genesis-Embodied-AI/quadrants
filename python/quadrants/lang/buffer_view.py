@@ -110,6 +110,13 @@ class BufferView:
         return BufferViewType(dtype)
 
     def __init__(self, arr, offset, size):
+        # Validate bounds when constructed on the host (arr has a .shape attribute).
+        # During kernel compilation arr is an Expr node without .shape — skip validation.
+        arr_shape = getattr(arr, "shape", None)
+        if arr_shape is not None and isinstance(offset, int) and isinstance(size, int):
+            n = arr_shape[0] if arr_shape else 0
+            if offset < 0 or size < 0 or offset + size > n:
+                raise ValueError(f"BufferView out of range: offset={offset}, size={size}, ndarray length={n}")
         self.arr = arr
         self.offset = offset
         self.size = size
