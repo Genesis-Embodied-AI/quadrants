@@ -322,6 +322,8 @@ class Kernel(FuncBase):
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
+        self._mutable_nd_cached_val: list = []
         self._tensor_unwrap_indices: tuple[int, ...] | None = None
 
     def ast_builder(self) -> ASTBuilder:
@@ -457,6 +459,27 @@ class Kernel(FuncBase):
         launch_ctx = t_kernel.make_launch_context()
         # Special treatment for primitive types is unecessary and detrimental. See 'TemplateMapper.lookup' for details.
         args_hash: "ArgsHash" = (id(t_kernel), *[id(arg) for arg in args])
+        # Stale-cache guard for mutable structs containing ndarrays. Frozen dataclass fields cannot be reassigned, so
+        # id(struct) in args_hash is already sufficient. For mutable structs, ndarray attributes can change between
+        # calls while the struct id stays the same, so we fold the live ndarray id(s) into the hash.
+        if key != self._mutable_nd_cached_key:
+            if self._struct_ndarray_launch_info_by_key:
+                struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
+                if struct_nd_info:
+                    self._mutable_nd_cached_val = [
+                        (idx, chain) for _, idx, chain in struct_nd_info
+                        if type(args[idx]).__hash__ is None
+                    ]
+                else:
+                    self._mutable_nd_cached_val = []
+            else:
+                self._mutable_nd_cached_val = []
+            self._mutable_nd_cached_key = key
+        if self._mutable_nd_cached_val:
+            args_hash = (*args_hash, *(
+                id(self._resolve_struct_ndarray(args, idx, chain))
+                for idx, chain in self._mutable_nd_cached_val
+            ))
         if not self.launch_context_buffer_cache.populate_launch_ctx_from_cache(args_hash, launch_ctx):
             launch_ctx_buffer: dict[KernelBatchedArgType, list[tuple]] = defaultdict(list)
             actual_argument_slot = 0
@@ -569,6 +592,16 @@ class Kernel(FuncBase):
         if ret_type in primitive_types.real_types:
             return launch_ctx.get_struct_ret_float(indices)
         raise QuadrantsRuntimeTypeError(f"Invalid return type on index={indices}")
+
+    @staticmethod
+    def _resolve_struct_ndarray(args, template_arg_idx, attr_chain):
+        """Walk a struct's attribute chain to find the live ndarray (or Tensor wrapper)."""
+        obj = args[template_arg_idx]
+        for attr_name in attr_chain:
+            obj = getattr(obj, attr_name)
+        if type(obj) in _TENSOR_WRAPPER_TYPES:
+            obj = obj._unwrap()
+        return obj
 
     @staticmethod
     def _set_struct_ndarray_args(
