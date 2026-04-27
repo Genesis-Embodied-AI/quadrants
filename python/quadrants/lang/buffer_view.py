@@ -2,8 +2,6 @@
 
 import re
 
-import numpy as np
-
 from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.expr import Expr, make_expr_group
@@ -112,6 +110,7 @@ class BufferView:
         return BufferViewType(dtype)
 
     def __init__(self, arr, offset, size):
+        assert isinstance(offset, Expr) == isinstance(size, Expr), "offset and size must be both Expr or both numeric"
         if not isinstance(offset, Expr):
             offset, size = int(offset), int(size)
             arr_shape = getattr(arr, "shape", None)
