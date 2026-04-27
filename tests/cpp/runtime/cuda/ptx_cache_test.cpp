@@ -26,6 +26,7 @@ TEST(PtxCache, TestBasic) {
 
   CompileConfig compile_config;
   compile_config.arch = Arch::cuda;
+  compile_config.offline_cache = true;  // Exercises the disk-persistence path; mem-only path is covered separately.
 
   // Use a test compute capability value
   int compute_capability = 80;  // SM 8.0 for testing
@@ -92,6 +93,7 @@ TEST(PtxCache, TestSmVersionPartitioning) {
 
   CompileConfig compile_config;
   compile_config.arch = Arch::cuda;
+  compile_config.offline_cache = true;  // Exercises the disk-persistence path; mem-only path is covered separately.
 
   // Test with SM 8.0
   int compute_capability_80 = 80;
