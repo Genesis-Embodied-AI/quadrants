@@ -1258,36 +1258,40 @@ std::unordered_set<SNode *> ControlFlowGraph::gather_loaded_snodes() {
 
 void ControlFlowGraph::determine_ad_stack_size() {
   /**
-   * Determine the necessary size of every adaptive AD-stack on the control-flow graph (CFG). The
-   * problem reduces to finding, for each AD-stack, the maximum running net push count along any
-   * walk from the kernel entry. We solve it with a Bellman-Ford-style longest-path computation
-   * variant; AD-stacks whose forward kernel contains a positive cycle (pushes > pops around a
-   * loop) are left at `max_size = 0`, and the caller routes them through the structural bounded-
-   * loop pre-pass for a symbolic `SizeExpr`, hard-erroring if the grammar still cannot resolve
-   * them. There is no compile-time size fallback.
+   * Determine the necessary size of every adaptive AD-stack on the control-flow graph (CFG). For each AD-stack we
+   * compute the maximum running net push count along any walk from the kernel entry. AD-stacks whose forward kernel
+   * contains a positive cycle (pushes > pops around a loop) are left at `max_size = 0`, and the caller routes them
+   * through the structural bounded-loop pre-pass for a symbolic `SizeExpr`, hard-erroring if the grammar still
+   * cannot resolve them. There is no compile-time size fallback.
    *
    * Implementation notes for compile-time perf on large reverse-mode kernels:
-   *   1. Per-stack per-node pre-aggregates (`max_increased_size`, `increased_size`) are stored
-   *      in dense `vector<vector<int>>` indexed by a contiguous int stack id, instead of a
-   *      `unordered_map<AdStackAllocaStmt*, vector<int>>` -- this removes hash traffic from the
-   *      hot inner loop.
-   *   2. Stacks whose `(increased_size, max_increased_size)` row pair is bit-identical share a
-   *      single Bellman-Ford run -- typical kernels generate one alloca per autodiff variable in
-   *      the same loop body, so most rows collapse to a few representatives.
-   *   3. The CFG is condensed via Tarjan into strongly connected components (SCCs); the per-stack
-   *      computation is a topological-order dynamic programming (DP) sweep over the SCC
-   *      condensation, with a Shortest-Path-Faster-Algorithm (SPFA, the queue-based Bellman-Ford
-   *      variant) bounded inside each cyclic SCC. Cycle detection is local to the SCC, so stacks
-   *      pay only for the cycles they actually touch and the global O(V * E) Bellman-Ford worst
-   *      case is gone.
-   * Per-stack cost becomes O(V + E + sum_{cyclic S} |S| * |E_S|), where V/E are CFG node/edge
-   * counts; the overall cost is O(V + E + R * (V + E + sum_{cyclic S} |S| * |E_S|)) with R the
-   * number of distinct row-pair representatives.
+   *   1. Per-stack per-node pre-aggregates (`max_increased_size`, `increased_size`) are stored in dense
+   *      `vector<vector<int>>` indexed by a contiguous int stack id, instead of an
+   *      `unordered_map<AdStackAllocaStmt*, vector<int>>` -- this removes hash traffic from the hot inner loop.
+   *   2. Stacks whose `(increased_size, max_increased_size)` row pair is bit-identical share a single dynamic
+   *      programming run -- typical kernels generate one alloca per autodiff variable in the same loop body, so
+   *      most rows collapse to a few representatives.
+   *   3. The CFG is condensed via Tarjan into strongly connected components (SCCs). DFS finish times recorded
+   *      during the same Tarjan pass split each cyclic SCC's intra-edges into a forward set (target finishes
+   *      before source) and a back set (target finishes at or after source). Per representative we run a
+   *      single-pass dynamic-programming (DP) sweep over the forward edges in descending finish-time order, then
+   *      check the back edges once for positive-cycle relaxation. Correctness: any walk inside an SCC decomposes
+   *      into a forward path plus zero or more cycles, and an SCC with no positive cycle has the same max-walk-sum
+   *      as the back-edge-removed DAG; a positive cycle is exactly the case where some back-edge would still relax
+   *      after the forward DP. This drops the per-cyclic-SCC cost from O(|S| * |E_S|) to O(|S| + |E_S|).
+   *   4. Two sign-based fast paths short-circuit the DP for trivial cyclic SCCs: an SCC with `min_is >= 0 && max_is
+   *      > 0` for this stack must contain a positive cycle (every node lies on some cycle, and a cycle through a
+   *      strictly-positive node with all non-negative `is` along it sums positive); an SCC with `min_is == 0 ==
+   *      max_is` has no `is` contribution at all and is handled by spreading the max entry-side
+   *      `max_size_at_node_begin` to every node in O(|S|).
+   * Per-rep cost becomes O(V + E + sum_{cyclic S} |S| * |E_S|) (with the SCC sum dropping to O(|S| + |E_S|) for
+   * the common autodiff push/pop pattern); overall cost is O(V + E + R * (V + E)) with R the number of distinct
+   * row-pair representatives.
    */
   const int num_nodes = size();
 
   // Map AdStackAllocaStmt* to a contiguous int index. Only stacks whose `max_size` is still 0 (i.e. unresolved by an
-  // earlier pass) participate in Bellman-Ford; resolved stacks are skipped so the pass cannot clobber them.
+  // earlier pass) participate in the DP; resolved stacks are skipped so the pass cannot clobber them.
   std::unordered_map<AdStackAllocaStmt *, int> stack_id;
   std::vector<AdStackAllocaStmt *> stacks;
 
@@ -1321,8 +1325,8 @@ void ControlFlowGraph::determine_ad_stack_size() {
   std::vector<std::vector<int>> increased_size(num_stacks, std::vector<int>(num_nodes, 0));
 
   // Track which stacks actually participate in any push/pop in the CFG. Stacks with no push/pop end with
-  // `max_size = 0` regardless of Bellman-Ford (every node has zero increase), so we skip Bellman-Ford for them and
-  // reproduce the original "Unused autodiff stack" warning here.
+  // `max_size = 0` regardless of the DP (every node has zero increase), so we skip the DP for them and reproduce
+  // the original "Unused autodiff stack" warning here.
   std::vector<bool> stack_active(num_stacks, false);
 
   for (int i = 0; i < num_nodes; i++) {
@@ -1366,14 +1370,17 @@ void ControlFlowGraph::determine_ad_stack_size() {
   }
 
   // Tarjan strongly-connected-component (SCC) decomposition of the CFG, computed once and shared across all per-stack
-  // Bellman-Ford runs. Output:
+  // dynamic-programming runs. Output:
   //   scc_id[n]    : SCC index of each node (lower index = topologically deeper / sink-side, so sources are at index
   //                  num_sccs - 1, matching Tarjan's natural emission order which is reverse topological order).
   //   scc_nodes[s] : list of node ids in SCC s.
-  // We then split each node's outgoing edges into intra-SCC and inter-SCC sets so the per-stack dynamic-programming
-  // sweep iterates each set without filtering inside the hot loop. Cyclic SCCs (|S| > 1 or |S| == 1 with self-loop)
-  // are flagged so cycle detection runs only on those, and only at SCC scope.
+  //   dfs_finish[n]: DFS post-order index, used below to split each cyclic SCC's intra-edges into a forward and a
+  //                  back set without a separate edge classification pass.
+  // We then split each node's outgoing edges into intra-SCC and inter-SCC sets so the per-stack DP iterates each
+  // set without filtering inside the hot loop. Cyclic SCCs (|S| > 1 or |S| == 1 with self-loop) are flagged so
+  // cycle detection runs only on those, and only at SCC scope.
   std::vector<int> scc_id(num_nodes, -1);
+  std::vector<int> dfs_finish(num_nodes, -1);  // DFS post-order index per node; ancestors finish AFTER descendants.
   std::vector<std::vector<int>> scc_nodes;
   {
     std::vector<int> tarjan_index(num_nodes, -1);
@@ -1384,6 +1391,7 @@ void ControlFlowGraph::determine_ad_stack_size() {
     std::vector<std::pair<int, std::size_t>> dfs_stack;
     dfs_stack.reserve(num_nodes);
     int next_index = 0;
+    int next_finish = 0;
     int next_scc = 0;
     for (int origin = 0; origin < num_nodes; origin++) {
       if (tarjan_index[origin] != -1) {
@@ -1429,6 +1437,7 @@ void ControlFlowGraph::determine_ad_stack_size() {
             scc_nodes.push_back(std::move(component));
             next_scc++;
           }
+          dfs_finish[u] = next_finish++;
           dfs_stack.pop_back();
           if (!dfs_stack.empty()) {
             const int parent = dfs_stack.back().first;
@@ -1442,13 +1451,22 @@ void ControlFlowGraph::determine_ad_stack_size() {
   }
   const int num_sccs = static_cast<int>(scc_nodes.size());
 
-  std::vector<std::vector<int>> next_ids_intra(num_nodes);
+  // Each intra-SCC edge is either a "forward" edge in the DFS spanning sense (source finishes after target, so source
+  // can be processed before target with a single topological pass) or a "back" edge (source finishes before target,
+  // closing a cycle). The forward set carries the per-stack DAG dynamic programming; back-edges only need a single
+  // post-DP relaxation check to detect positive cycles. Inter-SCC edges always relax forward in topological order.
+  std::vector<std::vector<int>> next_ids_intra_fwd(num_nodes);
+  std::vector<std::vector<int>> next_ids_intra_back(num_nodes);
   std::vector<std::vector<int>> next_ids_inter(num_nodes);
   for (int u = 0; u < num_nodes; u++) {
     const int su = scc_id[u];
     for (int v : next_ids[u]) {
       if (scc_id[v] == su) {
-        next_ids_intra[u].push_back(v);
+        if (dfs_finish[v] < dfs_finish[u]) {
+          next_ids_intra_fwd[u].push_back(v);
+        } else {
+          next_ids_intra_back[u].push_back(v);
+        }
       } else {
         next_ids_inter[u].push_back(v);
       }
@@ -1456,28 +1474,38 @@ void ControlFlowGraph::determine_ad_stack_size() {
   }
 
   // An SCC is cyclic iff it contains a cycle. By definition that is |S| > 1 (any two nodes lie on a cycle since the
-  // SCC is strongly connected) or |S| == 1 with a self-loop edge.
+  // SCC is strongly connected) or |S| == 1 with a self-loop edge. For cyclic SCCs we also precompute a topological
+  // ordering of the SCC's nodes (descending DFS finish time) so the per-stack DAG DP visits each node once with all
+  // forward predecessors already finalized.
   std::vector<char> scc_is_cyclic(num_sccs, 0);
+  std::vector<std::vector<int>> scc_topo(num_sccs);
   for (int s = 0; s < num_sccs; s++) {
-    if (scc_nodes[s].size() > 1) {
+    auto &nodes_in_s = scc_nodes[s];
+    if (nodes_in_s.size() > 1) {
       scc_is_cyclic[s] = 1;
     } else {
-      const int n = scc_nodes[s][0];
-      for (int v : next_ids_intra[n]) {
+      const int n = nodes_in_s[0];
+      // A singleton SCC is cyclic iff it has a self-loop. Self-loops are classified as back-edges above
+      // (dfs_finish[v] == dfs_finish[u]), so check there.
+      for (int v : next_ids_intra_back[n]) {
         if (v == n) {
           scc_is_cyclic[s] = 1;
           break;
         }
       }
     }
+    if (scc_is_cyclic[s]) {
+      auto topo = nodes_in_s;
+      std::sort(topo.begin(), topo.end(), [&](int a, int b) { return dfs_finish[a] > dfs_finish[b]; });
+      scc_topo[s] = std::move(topo);
+    }
   }
 
-  // Group AD-stacks whose per-node (increased_size, max_increased_size) rows are bit-identical, so that Bellman-Ford
-  // runs once per equivalence class instead of once per stack. In practice many AD-stacks in the same kernel share
-  // their push/pop schedule (one alloca per autodiff variable in the same loop body), and Bellman-Ford on a large
-  // CFG dwarfs the dedup cost. We hash a sparse fingerprint (only nodes where the stack actually has push/pop
-  // activity) and group by it. Worst case (no duplicates): one Bellman-Ford run per stack, equivalent to running it
-  // directly per stack.
+  // Group AD-stacks whose per-node (increased_size, max_increased_size) rows are bit-identical, so that the DP runs
+  // once per equivalence class instead of once per stack. In practice many AD-stacks in the same kernel share their
+  // push/pop schedule (one alloca per autodiff variable in the same loop body), and the DP on a large CFG dwarfs
+  // the dedup cost. We hash a sparse fingerprint (only nodes where the stack actually has push/pop activity) and
+  // group by it. Worst case (no duplicates): one DP run per stack, equivalent to running it directly per stack.
   using Fingerprint = std::vector<std::tuple<int, int, int>>;  // (node_id, is, mis), sorted by node_id
   struct FingerprintHash {
     std::size_t operator()(const Fingerprint &f) const noexcept {
@@ -1516,35 +1544,25 @@ void ControlFlowGraph::determine_ad_stack_size() {
     }
   }
 
-  // Scratch buffers reused across representatives to avoid reallocating per iteration.
+  // Scratch buffer reused across representatives to avoid reallocating per iteration.
   std::vector<int> max_size_at_node_begin(num_nodes);
-  std::vector<char> in_queue(num_nodes);
-  std::vector<int> times_pushed_in_queue(num_nodes);
-  std::queue<int> to_visit;
 
   // Per-representative results, broadcast below to every stack that hashed to this representative.
-  struct BFResult {
+  struct DPResult {
     int max_size;
     bool has_positive_loop;
   };
-  std::unordered_map<int, BFResult> rep_results;
+  std::unordered_map<int, DPResult> rep_results;
   rep_results.reserve(rep_stack_ids.size());
 
   // For each representative stack, walk the SCC condensation in topological order (sources first, since Tarjan emits
-  // SCCs in reverse-topological order so source SCCs end up at the largest indices). Each non-cyclic SCC is processed
-  // in O(1) per node; each cyclic SCC runs a small Shortest-Path-Faster-Algorithm sweep bounded to |S| + 1 queue
-  // pushes per node, with positive-cycle detection scoped to the SCC. Inter-SCC edges only relax forward
-  // (predecessors are already finalized when an SCC is entered), so each is touched O(1) times per stack. Total
-  // per-stack cost is therefore O(V + E + sum_{cyclic S} |S| * |E_S|), independent of the global V * E worst case
-  // that would dominate a Bellman-Ford pass running on the whole CFG.
+  // SCCs in reverse-topological order so source SCCs end up at the largest indices). Inter-SCC edges only relax
+  // forward (predecessors are already finalized when an SCC is entered), so each is touched O(1) times per stack.
   for (int rep_sid : rep_stack_ids) {
     const std::vector<int> &mis_for_stack = max_increased_size[rep_sid];
     const std::vector<int> &is_for_stack = increased_size[rep_sid];
 
     std::fill(max_size_at_node_begin.begin(), max_size_at_node_begin.end(), -1);
-    std::fill(in_queue.begin(), in_queue.end(), 0);
-    std::fill(times_pushed_in_queue.begin(), times_pushed_in_queue.end(), 0);
-    std::queue<int>().swap(to_visit);
 
     int max_size = 0;
     max_size_at_node_begin[start_node] = 0;
@@ -1555,51 +1573,82 @@ void ControlFlowGraph::determine_ad_stack_size() {
       const auto &nodes_in_s = scc_nodes[s];
 
       if (scc_is_cyclic[s]) {
-        // Bounded Shortest-Path-Faster-Algorithm sweep on the intra-SCC subgraph. All entry nodes (those already
-        // relaxed by earlier SCCs) seed the queue; relaxation only follows intra-SCC edges. The SCC's size bounds
-        // the number of legal pushes per node -- a node entering the queue more than |S| + 1 times means a positive
-        // cycle exists for this stack within the SCC, which is the per-stack failure signal. The cycle detection is
-        // local to the SCC, so positive cycles in unrelated SCCs do not contaminate this one.
-        const int s_size = static_cast<int>(nodes_in_s.size());
+        // Sign-based fast paths sidestep the cyclic-SCC dynamic programming when the stack's `is` contribution
+        // inside this SCC is structurally trivial. Two cases short-circuit:
+        //   1. min_is >= 0 with max_is > 0: every node in the SCC lies on some cycle (SCC property), and a cycle
+        //      through a strictly-positive node with all non-negative `is` along it sums to a positive value, so a
+        //      positive cycle exists for this stack. This is the autodiff push-only-in-SCC pattern.
+        //   2. min_is == 0 == max_is (no `is` contribution in this SCC at all): the DP would only spread the maximum
+        //      entry-side `max_size_at_node_begin` value to every node in S; we do that directly in O(|S|).
+        int min_is = INT_MAX;
+        int max_is = INT_MIN;
         for (int u : nodes_in_s) {
-          in_queue[u] = 0;
-          times_pushed_in_queue[u] = 0;
-        }
-        for (int u : nodes_in_s) {
-          if (max_size_at_node_begin[u] >= 0) {
-            to_visit.push(u);
-            in_queue[u] = 1;
-            times_pushed_in_queue[u]++;
+          const int v = is_for_stack[u];
+          if (v < min_is) {
+            min_is = v;
+          }
+          if (v > max_is) {
+            max_is = v;
           }
         }
-        while (!to_visit.empty()) {
-          int u = to_visit.front();
-          to_visit.pop();
-          in_queue[u] = 0;
-          const int exit_val = max_size_at_node_begin[u] + is_for_stack[u];
-          for (int v : next_ids_intra[u]) {
-            if (exit_val > max_size_at_node_begin[v]) {
-              max_size_at_node_begin[v] = exit_val;
-              if (!in_queue[v]) {
-                if (times_pushed_in_queue[v] <= s_size) {
-                  to_visit.push(v);
-                  in_queue[v] = 1;
-                  times_pushed_in_queue[v]++;
-                } else {
-                  has_positive_loop = true;
-                  break;
-                }
+        if (min_is >= 0 && max_is > 0) {
+          has_positive_loop = true;
+          break;
+        }
+        if (min_is == 0 && max_is == 0) {
+          int max_begin = -1;
+          for (int u : nodes_in_s) {
+            if (max_size_at_node_begin[u] > max_begin) {
+              max_begin = max_size_at_node_begin[u];
+            }
+          }
+          if (max_begin >= 0) {
+            for (int u : nodes_in_s) {
+              if (max_size_at_node_begin[u] < max_begin) {
+                max_size_at_node_begin[u] = max_begin;
               }
+            }
+          }
+        } else {
+          // Mixed-sign case: single-pass dynamic programming on the SCC's forward edges (processed in descending DFS
+          // finish-time so every forward predecessor is finalized before its successor relaxes), followed by one
+          // relaxation check on the back-edges. Correctness: every walk inside the SCC decomposes into a forward
+          // path (along non-back edges) plus zero or more closed cycles formed by a back-edge plus a forward path.
+          // For SCCs with no positive cycle, traversing a cycle adds a non-positive amount to the running size and
+          // so cannot improve max_size beyond what the forward DP already computed. The back-edge relaxation check
+          // after the DP detects the only failure mode (some back-edge would still improve a forward predecessor's
+          // value, which can only happen if a positive cycle exists for this stack).
+          for (int u : scc_topo[s]) {
+            const int begin = max_size_at_node_begin[u];
+            if (begin < 0) {
+              continue;
+            }
+            const int exit_val = begin + is_for_stack[u];
+            for (int v : next_ids_intra_fwd[u]) {
+              if (exit_val > max_size_at_node_begin[v]) {
+                max_size_at_node_begin[v] = exit_val;
+              }
+            }
+          }
+          for (int u : nodes_in_s) {
+            const int begin = max_size_at_node_begin[u];
+            if (begin < 0) {
+              continue;
+            }
+            const int exit_val = begin + is_for_stack[u];
+            for (int v : next_ids_intra_back[u]) {
+              if (exit_val > max_size_at_node_begin[v]) {
+                has_positive_loop = true;
+                break;
+              }
+            }
+            if (has_positive_loop) {
+              break;
             }
           }
           if (has_positive_loop) {
             break;
           }
-        }
-        if (has_positive_loop) {
-          // Drain any residual queue entries so the next iteration starts clean.
-          std::queue<int>().swap(to_visit);
-          break;
         }
       }
 
@@ -1630,17 +1679,17 @@ void ControlFlowGraph::determine_ad_stack_size() {
   for (int sid = 0; sid < num_stacks; sid++) {
     AdStackAllocaStmt *stack = stacks[sid];
     if (!stack_active[sid]) {
-      // No push/pop in the CFG: Bellman-Ford would visit reachable nodes with all-zero edge weights and settle with
+      // No push/pop in the CFG: the DP would visit reachable nodes with all-zero edge weights and settle with
       // `max_size = 0`, no positive loop. Reproduce that result directly.
       QD_WARN("Unused autodiff stack {} should have been eliminated.", stack->name());
       continue;
     }
-    const BFResult &res = rep_results[stack_to_rep[sid]];
+    const DPResult &res = rep_results[stack_to_rep[sid]];
     if (res.has_positive_loop) {
       // Leave `max_size = 0` so the structural bounded-loop pre-pass in `irpass::determine_ad_stack_size` gets a
-      // chance to derive a symbolic bound (a statically-bounded inner loop whose push-only body defeats Bellman-
-      // Ford, resolved from the outer ranges). If it also cannot, the caller emits a hard compile error - there is
-      // no compile-time `default_ad_stack_size` fallback.
+      // chance to derive a symbolic bound (a statically-bounded inner loop whose push-only body defeats the
+      // longest-path computation, resolved from the outer ranges). If it also cannot, the caller emits a hard
+      // compile error - there is no compile-time `default_ad_stack_size` fallback.
     } else {
       // Since we use |max_size| == 0 for adaptive sizes, we do not want stacks with maximum capacity indeed equal
       // to 0.
