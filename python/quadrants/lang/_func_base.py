@@ -527,12 +527,8 @@ class FuncBase:
             inner = v.get_ndarray()
             assert isinstance(inner, Ndarray)
             launch_ctx_buffer[_QD_ARRAY].append((index, inner.arr))
-            if is_signed(cook_dtype(primitive_types.i32)):
-                launch_ctx_buffer[_INT].append((index + 1, int(v.offset)))
-                launch_ctx_buffer[_INT].append((index + 2, int(v.size)))
-            else:
-                launch_ctx_buffer[_UINT].append((index + 1, int(v.offset)))
-                launch_ctx_buffer[_UINT].append((index + 2, int(v.size)))
+            launch_ctx_buffer[_INT].append((index + 1, int(v.offset)))
+            launch_ctx_buffer[_INT].append((index + 2, int(v.size)))
             return 3, True
         if needed_arg_basetype is ndarray_type.NdarrayType and isinstance(v, Ndarray):
             v_primal = v.arr

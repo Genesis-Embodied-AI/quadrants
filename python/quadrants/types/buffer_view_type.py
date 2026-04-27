@@ -5,7 +5,7 @@ class BufferViewType:
     """Type annotation for BufferView kernel parameters.
 
     A BufferView is automatically decomposed into three kernel arguments
-    (ndarray, offset, count) at compile time and reassembled into a
+    (ndarray, offset, size) at compile time and reassembled into a
     kernel-scope BufferView object.
 
     Args:
@@ -18,7 +18,7 @@ class BufferViewType:
 
         @qd.kernel
         def k(v: BufferView[qd.f32]):
-            for i in range(v.count):
+            for i in range(v.size):
                 v[i] *= 2.0
     """
 

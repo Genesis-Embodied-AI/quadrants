@@ -276,7 +276,8 @@ class Ndarray:
         start, stop, step = key.indices(self.shape[0])
         if step != 1:
             raise ValueError(f"BufferView slice requires step=1, got step={step}")
-        return BufferView(self, start, stop - start)
+        size = max(stop - start, 0)
+        return BufferView(self, start, size)
 
     @python_scope
     def _pad_key(self, key):

@@ -100,6 +100,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         inner = arg.get_ndarray()
         assert isinstance(inner, Ndarray)
         assert inner.shape is not None
+        if __debug__ and __builtins__["__debug__"] and annotation.dtype is not None:
+            annotation.ndarray_type.check_matched(inner.get_type(), arg_name)
         type_id = id(inner.element_type)
         element_type = type_id if type_id in primitive_types.type_ids else inner.element_type
         return element_type, len(inner.shape), False, annotation.ndarray_type.boundary

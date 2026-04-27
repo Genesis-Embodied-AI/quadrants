@@ -68,7 +68,7 @@ def _build_callstack(max_bytes):
 
 
 class BufferView:
-    """A view into a sub-range [offset, offset+count) of an ndarray kernel argument.
+    """A view into a sub-range [offset, offset+size) of an ndarray kernel argument.
 
     Intercepts subscript operations at AST-translation time to rewrite
     ``view[i]`` into ``arr[offset + i]`` with optional bounds checking,
@@ -77,12 +77,12 @@ class BufferView:
     Create a view using ndarray slice syntax (preferred)::
 
         data = qd.ndarray(qd.f32, shape=(N,))
-        view = data[:16]           # offset=0, count=16
-        view = data[8:24]          # offset=8, count=16
+        view = data[:16]           # offset=0, size=16
+        view = data[8:24]          # offset=8, size=16
 
     Or construct directly for programmatic offsets::
 
-        view = qd.BufferView(buf, offset=16, count=32)
+        view = qd.BufferView(buf, offset=16, size=32)
 
     Use ``BufferView[dtype]`` as the kernel type annotation::
 
