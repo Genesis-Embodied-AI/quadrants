@@ -355,7 +355,9 @@ class Ndarray:
             other (Ndarray): The source ndarray.
         """
         assert isinstance(other, Ndarray)
-        assert tuple(self.arr.shape) == tuple(other.arr.shape)
+        assert tuple(self.shape) == tuple(other.shape), (
+            f"copy_from shape mismatch: destination {tuple(self.shape)} vs source {tuple(other.shape)}"
+        )
         from quadrants._kernels import ndarray_to_ndarray  # pylint: disable=C0415
 
         ndarray_to_ndarray(self, other)
@@ -497,6 +499,8 @@ class ScalarNdarray(Ndarray):
 
     def __deepcopy__(self, memo=None):
         ret_arr = ScalarNdarray(self.dtype, self._physical_shape)
+        if self._qd_layout is not None:
+            ret_arr._qd_layout = self._qd_layout
         ret_arr.copy_from(self)
         return ret_arr
 
