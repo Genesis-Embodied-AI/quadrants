@@ -237,4 +237,4 @@ t_field.grad   # currently a Tensor wrapper around a zombie field
 t_nd.grad      # None
 ```
 
-Use `needs_grad=True` if you intend to read `.grad`. Integer dtypes are symmetric (`grad is None` on both backends regardless of `needs_grad`). This asymmetry is tracked as a follow-up; it does not affect kernels that opt in to autograd via `needs_grad=True`.
+Use `needs_grad=True` if you intend to read `.grad`. Integer dtypes are symmetric (`grad is None` on both backends regardless of `needs_grad`).
