@@ -19,12 +19,12 @@ namespace {
 // produces an unusually deep or wide tree; the host-side encoder hard-errors rather than let the shader
 // silently truncate (see `encode_adstack_size_expr_device_bytecode_for_spirv`), so exceeding a cap surfaces
 // as a clear compile-time diagnostic rather than a mysterious overflow at the next `stack_push`.
-// Per-stack node-count cap for the eval state. Each invocation gets its own private `values_arr` of this
-// size indexed by the *local* offset within the stack's subtree (not the global bytecode-wide node index),
-// so this cap applies only per-stack, not per-kernel. Observed reverse-mode kernels have a handful of stacks
-// with ~1k-node symbolic trees (`MaxOverRange` over ndarray reads with a nested `Max` of per-substep trip
-// counts), so the cap needs to comfortably exceed that. 4096 * 8 B = 32 KiB of i64 private memory per
-// invocation; the sizer runs as a single-thread dispatch so this is not multiplied by workgroup size.
+// Per-stack node-count cap for the eval state. The shader hosts its `values_arr` slice in the i64 scratch
+// SSBO (binding 3) sized at `kAdStackSizerScratchI64Elems`; the slice is indexed by the *local* offset
+// within the stack's subtree (not the global bytecode-wide node index), so this cap applies only per-stack,
+// not per-kernel. Observed reverse-mode kernels have a handful of stacks with ~1k-node symbolic trees
+// (`MaxOverRange` over ndarray reads with a nested `Max` of per-substep trip counts); 65536 * 8 B = 512 KiB
+// of device memory per `GfxRuntime` (allocated once, reused across every sizer dispatch).
 constexpr int kMaxNodes = kAdStackSizerMaxNodesPerStack;
 // `kMaxVars` sizes the per-invocation `scope_arr` indexed by dense bound-var id; must match
 // `kAdStackSizeExprDeviceMaxBoundVars` so every id the host-side dense-remap hands out lands in bounds. `kMaxPending`
