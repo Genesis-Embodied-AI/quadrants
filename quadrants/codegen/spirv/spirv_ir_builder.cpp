@@ -479,6 +479,7 @@ SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
     }
   }
 
+  // decorate the array type
   this->decorate(spv::OpDecorate, arr_type, spv::DecorationArrayStride, nbytes);
 
   return arr_type;
