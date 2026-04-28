@@ -447,10 +447,19 @@ SType IRBuilder::get_function_array_type(const SType &_value_type, uint32_t num_
   return arr_type;
 }
 
-SType IRBuilder::get_array_type(const SType &value_type, uint32_t num_elems) {
+SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
   // Identical bookkeeping to `get_function_array_type` plus the `ArrayStride` decoration the storage-buffer
-  // / PSB / Uniform interface requires. Delegate to keep the two in sync.
-  SType arr_type = get_function_array_type(value_type, num_elems);
+  // / PSB / Uniform interface requires. Delegate the `OpTypeArray` emission to keep the two in sync, then
+  // add the decoration on top.
+  SType arr_type = get_function_array_type(_value_type, num_elems);
+
+  // Mirror `get_function_array_type`'s `u1 -> i32` rewrite so the stride below matches the `OpTypeArray`
+  // element type (`bool` is 1-byte on every host but the array is emitted with `i32` elements; without this
+  // rewrite the stride would land on `1` and `spirv-val` rejects `ArrayStride < element_size`).
+  auto value_type = _value_type;
+  if (value_type.dt->is_primitive(PrimitiveTypeID::u1)) {
+    value_type = i32_type();
+  }
 
   uint32_t nbytes;
   if (value_type.flag == TypeKind::kPrimitive) {
