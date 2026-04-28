@@ -2287,8 +2287,13 @@ def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe(arr
             assert x.grad[k] == pytest.approx(2 * expected_visits[k] * 0.1, rel=1e-5)
 
 
+@pytest.mark.parametrize(
+    "x_unused_val",
+    [0.1, 100.0],
+    ids=["uniform_x", "amplified_unused_x"],
+)
 @test_utils.test(require=qd.extension.adstack)
-def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread():
+def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread(x_unused_val):
     # Pins that a reverse-mode kernel whose inner trip count is `fld[i] - arr[i]` - a scalar field minus an ndarray
     # element, both indexed by the outer loop variable - compiles and produces the correct gradient on every supported
     # backend.
@@ -2303,6 +2308,16 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
     # synthesised body would pair a bound-var-indexed `FieldLoad` with an `ExternalTensorRead`; the unfused
     # `Sub(MaxOverRange(i, 0, shape, FieldLoad), MaxOverRange(i, 0, shape, ExternalTensorRead))` keeps each operand
     # closed and host-foldable on both encoders.
+    #
+    # The `x_unused_val` parametrization sets `x[8..15]` to `x_unused_val` while keeping `x[0..7]` at `0.1`. Only
+    # `x[0..7]` is reached by the kernel under correct sizing, so `x_unused_val` does not affect the expected loss /
+    # gradient at all and the assertions are identical across parametrizations. The `amplified_unused_x` variant
+    # (`x_unused_val=100.0`) exists so that any regression that mis-routes a stack push / pop to a slot outside the
+    # intended index range surfaces as a multi-order-of-magnitude gradient delta (e.g. a single spurious visit to
+    # `x[8]` produces `x.grad[8]=200.0` instead of the `0.2` an `x_unused_val=0.1` setup would produce), so the
+    # failure cannot be misread as a tolerance issue. The original `uniform_x` (`x_unused_val=0.1`) parametrization
+    # preserves the historical loss / gradient magnitudes for direct continuity with the prior fixed-fixture form of
+    # this test.
     N = 4
     N_X = 16
 
@@ -2322,7 +2337,7 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
             loss[None] += accum
 
     for i in range(N_X):
-        x[i] = 0.1
+        x[i] = 0.1 if i < 8 else x_unused_val
     for i in range(N):
         fld[i] = 10
     arr_np = np.array([2, 2, 2, 2], dtype=np.int32)
@@ -2335,7 +2350,8 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
     qd.sync()
 
     # Each of the 4 outer iterations runs `fld[i] - arr[i] = 10 - 2 = 8` inner iters. Total pushes = 32.
-    # x[0..7] is visited 4 times (once per outer iter); x[8..] is never visited.
+    # x[0..7] is visited 4 times (once per outer iter); x[8..] is never visited, so the loss and gradients
+    # are independent of `x_unused_val`.
     assert loss[None] == pytest.approx(4 * 8 * 0.01, rel=1e-5)
     for k in range(8):
         assert x.grad[k] == pytest.approx(4 * 2 * 0.1, rel=1e-5)
