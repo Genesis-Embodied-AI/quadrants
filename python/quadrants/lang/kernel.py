@@ -467,8 +467,7 @@ class Kernel(FuncBase):
                 struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
                 if struct_nd_info:
                     self._mutable_nd_cached_val = [
-                        (idx, chain) for _, idx, chain in struct_nd_info
-                        if type(args[idx]).__hash__ is None
+                        (idx, chain) for _, idx, chain in struct_nd_info if type(args[idx]).__hash__ is None
                     ]
                 else:
                     self._mutable_nd_cached_val = []
@@ -476,10 +475,10 @@ class Kernel(FuncBase):
                 self._mutable_nd_cached_val = []
             self._mutable_nd_cached_key = key
         if self._mutable_nd_cached_val:
-            args_hash = (*args_hash, *(
-                id(self._resolve_struct_ndarray(args, idx, chain))
-                for idx, chain in self._mutable_nd_cached_val
-            ))
+            args_hash = (
+                *args_hash,
+                *(id(self._resolve_struct_ndarray(args, idx, chain)) for idx, chain in self._mutable_nd_cached_val),
+            )
         if not self.launch_context_buffer_cache.populate_launch_ctx_from_cache(args_hash, launch_ctx):
             launch_ctx_buffer: dict[KernelBatchedArgType, list[tuple]] = defaultdict(list)
             actual_argument_slot = 0
