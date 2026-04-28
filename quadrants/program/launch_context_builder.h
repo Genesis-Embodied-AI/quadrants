@@ -84,12 +84,26 @@ class LaunchContextBuilder {
   void set_struct_arg(const std::vector<int> &arg_indices, T v);
 
   void set_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr);
+  // Same as `set_ndarray_ptrs`, but also mirrors the resolved host pointer into `array_ptrs` so the adstack
+  // size-expression evaluator can dereference it. Call only from launchers where `data_ptr`/`grad_ptr` is a
+  // real host-accessible address (CPU); device-only launchers (SPIR-V / CUDA / AMDGPU) must use the plain
+  // `set_ndarray_ptrs`.
+  void set_host_accessible_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr);
 
   template <typename T>
   T get_arg(const std::vector<int> &i);
 
   template <typename T>
   T get_struct_arg(std::vector<int> arg_indices);
+
+  // Host-only counterpart of `get_struct_arg`: always reads from the launcher-owned `arg_buffer_` host backing
+  // store instead of `RuntimeContext::arg_buffer`. Needed because CUDA / AMDGPU launchers swap
+  // `ctx_->arg_buffer` to a device pointer before handing the context to the adstack sizer encoder; a plain
+  // `get_struct_arg<T>` at that point would dereference device memory from the host. Call this from host-side
+  // evaluators (e.g. `encode_adstack_size_expr_device_bytecode`) that need to peek scalar slots without
+  // assuming the kernel-facing `RuntimeContext::arg_buffer` still points at host memory.
+  template <typename T>
+  T get_struct_arg_host(std::vector<int> arg_indices);
 
   template <typename T>
   T get_ret(int arg_id);

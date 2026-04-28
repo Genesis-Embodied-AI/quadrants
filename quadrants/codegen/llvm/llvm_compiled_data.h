@@ -5,6 +5,7 @@
 
 #include "llvm/IR/Module.h"
 #include "quadrants/common/serialization.h"
+#include "quadrants/ir/adstack_size_expr.h"
 
 namespace quadrants::lang {
 
@@ -24,6 +25,18 @@ namespace quadrants::lang {
 //       - Else: use `begin_const_value` directly.
 //       - Same rule for end.
 //     This is the tight sizing for dynamic-bound range_for on GPU - no saturating-grid-dim over-allocation.
+// Per-adstack entry in `AdStackSizingInfo::allocas`. One slot per `AdStackAllocaStmt` in the task, indexed by its
+// `stack_id`. `offset` is the byte offset of this alloca inside the per-thread slice (a prefix sum of aligned sizes
+// of earlier allocas); `max_size_compile_time` is the compile-time bound (used when `size_expr` is absent, e.g.
+// after offline-cache load where the symbolic tree is not serialized); `entry_size_bytes` is `2 *
+// element_size_in_bytes()` rounded to alignment that matches the runtime `stack_top_primal` math.
+struct AdStackAllocaInfo {
+  std::size_t offset{0};
+  std::size_t max_size_compile_time{0};
+  std::size_t entry_size_bytes{0};
+  QD_IO_DEF(offset, max_size_compile_time, entry_size_bytes);
+};
+
 struct AdStackSizingInfo {
   std::size_t per_thread_stride{0};
   std::size_t static_num_threads{0};
@@ -32,13 +45,21 @@ struct AdStackSizingInfo {
   std::int32_t end_const_value{0};
   std::int32_t begin_offset_bytes{-1};
   std::int32_t end_offset_bytes{-1};
+  std::vector<AdStackAllocaInfo> allocas;
+  // One flat `SerializedSizeExpr` per entry in `allocas`, populated by the codegen pre-scan so the host launcher
+  // can evaluate field-load-bounded sizes against the live field state right before each dispatch. The flat post-
+  // order form survives the offline cache (an empty `nodes` vector means "no symbolic bound captured", same
+  // behaviour as a kernel that Bellman-Ford fully resolved and the launcher only needs `max_size_compile_time`).
+  std::vector<SerializedSizeExpr> size_exprs;
   QD_IO_DEF(per_thread_stride,
             static_num_threads,
             dynamic_gpu_range_for,
             begin_const_value,
             end_const_value,
             begin_offset_bytes,
-            end_offset_bytes);
+            end_offset_bytes,
+            allocas,
+            size_exprs);
 };
 
 class OffloadedTask {

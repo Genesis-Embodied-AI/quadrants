@@ -59,6 +59,14 @@ perf_dispatch
 ```
 
 ```{toctree}
+:caption: Testing
+:maxdepth: 1
+:titlesonly:
+
+kernel_coverage
+```
+
+```{toctree}
 :caption: Reference
 :maxdepth: 1
 :titlesonly:
@@ -68,6 +76,14 @@ python_backend
 debug
 quirks
 troubleshooting
+```
+
+```{toctree}
+:caption: Contributing
+:maxdepth: 1
+:titlesonly:
+
+contributing
 ```
 
 ```{toctree}

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "quadrants/ir/adstack_size_expr.h"
 #include "quadrants/ir/ir.h"
 #include "quadrants/ir/offloaded_task_type.h"
 #include "quadrants/ir/stmt_op_types.h"
@@ -1602,6 +1603,13 @@ class AdStackAllocaStmt : public Stmt {
  public:
   DataType dt;
   std::size_t max_size{0};  // 0 = adaptive
+  // Compile-time captured symbolic expression for `max_size`, populated by
+  // `determine_ad_stack_size` when the bound is derivable from constants and scalar field loads.
+  // Host-evaluated pre-launch to size the adstack heap; null until the pre-pass runs.
+  std::shared_ptr<SizeExpr> size_expr;
+  // Stable identifier assigned during codegen pre-scan; indexes into the runtime adstack-metadata
+  // arrays (offsets, max_sizes). -1 until the pre-scan runs.
+  int stack_id{-1};
 
   AdStackAllocaStmt(const DataType &dt, std::size_t max_size) : dt(dt), max_size(max_size) {
     ret_type = dt;
