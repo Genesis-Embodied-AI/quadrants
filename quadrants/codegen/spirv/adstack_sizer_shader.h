@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/rhi/arch.h"
 #include "quadrants/rhi/public_device.h"
 
@@ -47,5 +48,15 @@ constexpr int kAdStackSizerMaxNodesPerStack = 4096;
 // (`pending_*_arr`). The host-side encoder hard-errors when a tree's MOR nesting exceeds this so the shader's
 // fixed-size access-chain stays in bounds without a runtime guard. 16 covers every observed real kernel.
 constexpr int kAdStackSizerMaxPendingFrames = 16;
+
+// Per-invocation interpreter state element counts in each scratch SSBO. Layout in the i64 buffer is
+// `[values_arr | scope_arr | pending_cur_i | pending_end | pending_max_accum]`; layout in the i32 buffer is
+// `[pending_mor_idx | pending_body_start | pending_body_end | pending_var_id | pending_saved_max_k]`. The
+// host launcher uses these to size the two scratch buffers it binds on every sizer dispatch (binding 3 = i64
+// scratch, binding 4 = i32 scratch). Mirrors the in-shader `kI64Base*` / `kI32Base*` constants in
+// `adstack_sizer_shader.cpp`.
+constexpr int kAdStackSizerScratchI64Elems =
+    kAdStackSizerMaxNodesPerStack + kAdStackSizeExprDeviceMaxBoundVars + 3 * kAdStackSizerMaxPendingFrames;
+constexpr int kAdStackSizerScratchI32Elems = 5 * kAdStackSizerMaxPendingFrames;
 
 }  // namespace quadrants::lang::spirv

@@ -310,9 +310,6 @@ IVkPipeline create_compute_pipeline(VkDevice device,
 
   VkResult res =
       vkCreateComputePipelines(device, cache ? cache->cache : VK_NULL_HANDLE, 1, &info, nullptr, &obj->pipeline);
-  if (res != VK_SUCCESS) {
-    fprintf(stderr, "vkCreateComputePipelines failed: VkResult=%d\n", static_cast<int>(res));
-  }
   RHI_THROW_UNLESS(res == VK_SUCCESS, std::runtime_error("vkCreateComputePipelines failed"));
 
   return obj;
