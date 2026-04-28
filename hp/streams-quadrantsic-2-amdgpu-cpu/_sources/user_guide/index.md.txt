@@ -54,6 +54,7 @@ tile16
 :titlesonly:
 
 graph
+streams
 perf_dispatch
 ```
 

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Python backend &#8212; Quadrants 0.7.1 documentation</title>
+    <title>Streams &#8212; Quadrants 0.7.1 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/python_backend';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/streams';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Debug mode" href="debug.html" />
-    <link rel="prev" title="Python features in kernel scope" href="unsupported_python.html" />
+    <link rel="next" title="Performance Dispatch" href="perf_dispatch.html" />
+    <link rel="prev" title="CUDA Graph" href="graph.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.7.1" />
@@ -307,15 +307,15 @@
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
-<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Streams</a></li>
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
-<ul class="current nav bd-sidenav">
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
@@ -366,7 +366,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Python backend</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Streams</span></li>
   </ul>
 </nav>
 </div>
@@ -383,72 +383,176 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="python-backend">
-<h1>Python backend<a class="headerlink" href="#python-backend" title="Link to this heading">#</a></h1>
-<p>The Python backend executes Quadrants kernels and functions as plain Python, using PyTorch tensors for storage. No compilation or GPU is required.</p>
-<p>This is useful for:</p>
-<ul class="simple">
-<li><p>Debugging kernel logic with a standard Python debugger</p></li>
-<li><p>Running on systems without a GPU or native compiler</p></li>
-<li><p>Quick iteration without compilation overhead</p></li>
-</ul>
-<section id="requirements">
-<h2>Requirements<a class="headerlink" href="#requirements" title="Link to this heading">#</a></h2>
-<p>PyTorch must be installed. No other dependencies beyond the standard Quadrants install are needed.</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="streams">
+<h1>Streams<a class="headerlink" href="#streams" title="Link to this heading">#</a></h1>
+<p>Streams allow concurrent execution of GPU operations. By default, all Quadrants kernels launch on the default
+stream, which serializes everything. By creating explicit streams, you can run independent kernels concurrently
+and control synchronization with events.</p>
+<section id="supported-platforms">
+<h2>Supported platforms<a class="headerlink" href="#supported-platforms" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Backend</p></th>
+<th class="head"><p>Streams</p></th>
+<th class="head"><p>Events</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CUDA</p></td>
+<td><p>Yes</p></td>
+<td><p>Yes</p></td>
+<td><p>Full concurrent execution</p></td>
+</tr>
+<tr class="row-odd"><td><p>AMDGPU</p></td>
+<td><p>Yes</p></td>
+<td><p>Yes</p></td>
+<td><p>Full concurrent execution (requires ROCm &gt;= 5.4)</p></td>
+</tr>
+<tr class="row-even"><td><p>CPU</p></td>
+<td><p>No-op</p></td>
+<td><p>No-op</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> is silently ignored, kernels run serially</p></td>
+</tr>
+<tr class="row-odd"><td><p>Metal</p></td>
+<td><p>No-op</p></td>
+<td><p>No-op</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> is silently ignored, kernels run serially</p></td>
+</tr>
+<tr class="row-even"><td><p>Vulkan</p></td>
+<td><p>No-op</p></td>
+<td><p>No-op</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> is silently ignored, kernels run serially</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>On backends without native stream support, <code class="docutils literal notranslate"><span class="pre">create_stream()</span></code> and <code class="docutils literal notranslate"><span class="pre">create_event()</span></code> return objects with handle
+<code class="docutils literal notranslate"><span class="pre">0</span></code>. All stream/event operations become no-ops and kernels run serially. Code written with streams is portable across all backends in the sense that it will run without modifications, but serially.</p>
 </section>
-<section id="quick-start">
-<h2>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading">#</a></h2>
+<section id="creating-and-using-streams">
+<h2>Creating and using streams<a class="headerlink" href="#creating-and-using-streams" title="Link to this heading">#</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
-<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">python</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
 
-<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
+<span class="n">N</span> <span class="o">=</span> <span class="mi">1024</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">*</span> <span class="mf">2.0</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">fill_a</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
 
-<span class="n">fill</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">fill_b</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">2.0</span>
+
+<span class="n">s1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
+<span class="n">s2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
+
+<span class="n">fill_a</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s1</span><span class="p">)</span>
+<span class="n">fill_b</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>
+
+<span class="n">s1</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+<span class="n">s2</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+
+<span class="n">s1</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+<span class="n">s2</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Pass <code class="docutils literal notranslate"><span class="pre">qd_stream=</span></code> to any kernel call to launch it on that stream. Kernels on different streams may execute
+concurrently. Call <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> to block until all work on a stream completes.</p>
+</section>
+<section id="events">
+<h2>Events<a class="headerlink" href="#events" title="Link to this heading">#</a></h2>
+<p>Events let you express dependencies between streams without full synchronization.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">s1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
+<span class="n">s2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">produce</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">10.0</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">consume</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+<span class="n">produce</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s1</span><span class="p">)</span>
+
+<span class="n">e</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_event</span><span class="p">()</span>
+<span class="n">e</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span>       <span class="c1"># record when s1 finishes produce()</span>
+<span class="n">e</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>  <span class="c1"># s2 waits for that event before proceeding</span>
+
+<span class="n">consume</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>  <span class="c1"># safe to read a[] — produce() is guaranteed complete</span>
+<span class="n">s2</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+
+<span class="n">e</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+<span class="n">s1</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+<span class="n">s2</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">e.record(stream)</span></code> captures the point in <code class="docutils literal notranslate"><span class="pre">stream</span></code>’s execution. <code class="docutils literal notranslate"><span class="pre">e.wait(qd_stream=stream)</span></code> makes <code class="docutils literal notranslate"><span class="pre">stream</span></code> wait
+until the recorded point is reached. If <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> is omitted, the default stream waits.</p>
+</section>
+<section id="context-managers">
+<h2>Context managers<a class="headerlink" href="#context-managers" title="Link to this heading">#</a></h2>
+<p>Streams and events support <code class="docutils literal notranslate"><span class="pre">with</span></code> blocks for automatic cleanup:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span> <span class="k">as</span> <span class="n">s</span><span class="p">:</span>
+    <span class="n">fill_a</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s</span><span class="p">)</span>
+    <span class="n">s</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+<span class="c1"># s.destroy() called automatically</span>
 </pre></div>
 </div>
 </section>
-<section id="supported-features">
-<h2>Supported features<a class="headerlink" href="#supported-features" title="Link to this heading">#</a></h2>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> — executed directly as Python functions</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.field()</span></code> — scalar, vector, and matrix fields</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray()</span></code> — scalar, vector, and matrix ndarrays</p></li>
-<li><p>Struct fields (<code class="docutils literal notranslate"><span class="pre">qd.types.struct</span></code>)</p></li>
-<li><p>Atomics (<code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_min</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_max</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_and</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_or</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_xor</span></code>)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.grouped(field)</span></code> — struct-for iteration over field indices</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.ndrange()</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.static()</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.cast()</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.math.isnan()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.math.isinf()</span></code></p></li>
-<li><p>Dtype constructors (<code class="docutils literal notranslate"><span class="pre">qd.f32(x)</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.i32(x)</span></code>)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.Vector()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.Matrix()</span></code></p></li>
-</ul>
+<section id="pytorch-interop-cuda">
+<h2>PyTorch interop (CUDA)<a class="headerlink" href="#pytorch-interop-cuda" title="Link to this heading">#</a></h2>
+<p>When mixing Quadrants kernels with PyTorch operations on CUDA, both frameworks must use the same stream to
+avoid race conditions. Without explicit stream management, Quadrants and PyTorch may launch work on different
+streams with no ordering guarantees, leading to intermittent data corruption.</p>
+<section id="running-quadrants-kernels-on-pytorch-s-stream">
+<h3>Running Quadrants kernels on PyTorch’s stream<a class="headerlink" href="#running-quadrants-kernels-on-pytorch-s-stream" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.stream</span><span class="w"> </span><span class="kn">import</span> <span class="n">Stream</span>
+
+<span class="n">torch_stream_ptr</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">current_stream</span><span class="p">()</span><span class="o">.</span><span class="n">cuda_stream</span>
+<span class="n">stream</span> <span class="o">=</span> <span class="n">Stream</span><span class="p">(</span><span class="n">torch_stream_ptr</span><span class="p">)</span>
+
+<span class="n">physics_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">stream</span><span class="p">)</span>
+<span class="n">observations</span> <span class="o">=</span> <span class="n">compute_obs_tensor</span><span class="p">()</span>  <span class="c1"># PyTorch op on the same stream</span>
+<span class="n">apply_actions_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">stream</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Wrap PyTorch’s raw <code class="docutils literal notranslate"><span class="pre">CUstream</span></code> pointer in a Quadrants <code class="docutils literal notranslate"><span class="pre">Stream</span></code> object. Do <strong>not</strong> call <code class="docutils literal notranslate"><span class="pre">destroy()</span></code> on this
+wrapper — PyTorch owns the underlying stream.</p>
+</section>
+<section id="running-pytorch-operations-on-a-quadrants-stream">
+<h3>Running PyTorch operations on a Quadrants stream<a class="headerlink" href="#running-pytorch-operations-on-a-quadrants-stream" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd_stream</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
+<span class="n">torch_stream</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">ExternalStream</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">.</span><span class="n">handle</span><span class="p">)</span>
+
+<span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="n">torch_stream</span><span class="p">):</span>
+    <span class="n">physics_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">qd_stream</span><span class="p">)</span>
+    <span class="n">observations</span> <span class="o">=</span> <span class="n">compute_obs_tensor</span><span class="p">()</span>
+    <span class="n">apply_actions_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">qd_stream</span><span class="p">)</span>
+
+<span class="n">qd_stream</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Stream.handle</span></code> is the raw <code class="docutils literal notranslate"><span class="pre">CUstream</span></code> pointer, which <code class="docutils literal notranslate"><span class="pre">torch.cuda.ExternalStream</span></code> accepts directly.</p>
+</section>
 </section>
 <section id="limitations">
 <h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><strong>Single-threaded.</strong> Kernels run sequentially; there is no parallelism.</p></li>
-<li><p><strong>Atomics are plain sequential ops.</strong> Correct in single-threaded execution but not a test of real atomic semantics.</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">loop_config()</span></code> and <code class="docutils literal notranslate"><span class="pre">sync()</span></code> are no-ops.</strong></p></li>
-<li><p><strong>No SNode trees.</strong> Fields are flat PyTorch tensors, not backed by the SNode system.</p></li>
-<li><p><strong>Performance is not representative</strong> of compiled backends. Do not use for benchmarking.</p></li>
-<li><p><strong>GPU-specific features</strong> (shared memory, block-level intrinsics, etc.) are not available.</p></li>
+<li><p><strong>Not compatible with graphs.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel decorated with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>.</p></li>
+<li><p><strong>No automatic synchronization.</strong> You are responsible for inserting events or <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> calls when one
+stream’s output is another stream’s input.</p></li>
 </ul>
-<section id="batch-shape-vs-real-shape">
-<h3>Batch shape vs real shape<a class="headerlink" href="#batch-shape-vs-real-shape" title="Link to this heading">#</a></h3>
-<p>The <code class="docutils literal notranslate"><span class="pre">.shape</span></code> property returns the <strong>batch dimensions only</strong>, consistent with how Quadrants kernels index fields. For example, a <code class="docutils literal notranslate"><span class="pre">vec3</span></code> field of shape <code class="docutils literal notranslate"><span class="pre">(10,)</span></code> reports <code class="docutils literal notranslate"><span class="pre">.shape</span> <span class="pre">==</span> <span class="pre">(10,)</span></code> even though the underlying tensor has size <code class="docutils literal notranslate"><span class="pre">(10,</span> <span class="pre">3)</span></code>. Use <code class="docutils literal notranslate"><span class="pre">.size()</span></code> to get the full torch shape.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">vec3</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
-<span class="n">f</span><span class="o">.</span><span class="n">shape</span>     <span class="c1"># torch.Size([10])    — batch dims, what kernels see</span>
-<span class="n">f</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>    <span class="c1"># torch.Size([10, 3]) — real tensor shape</span>
-</pre></div>
-</div>
-</section>
 </section>
 </section>
 
@@ -463,20 +567,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="unsupported_python.html"
+       href="graph.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Python features in kernel scope</p>
+        <p class="prev-next-title">CUDA Graph</p>
       </div>
     </a>
     <a class="right-next"
-       href="debug.html"
+       href="perf_dispatch.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Debug mode</p>
+        <p class="prev-next-title">Performance Dispatch</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -499,20 +603,23 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#requirements">Requirements</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start">Quick start</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-features">Supported features</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#batch-shape-vs-real-shape">Batch shape vs real shape</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-platforms">Supported platforms</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-and-using-streams">Creating and using streams</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#events">Events</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#context-managers">Context managers</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#pytorch-interop-cuda">PyTorch interop (CUDA)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#running-quadrants-kernels-on-pytorch-s-stream">Running Quadrants kernels on PyTorch’s stream</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#running-pytorch-operations-on-a-quadrants-stream">Running PyTorch operations on a Quadrants stream</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a></li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/user_guide/python_backend.md.txt">
+    <a href="../_sources/user_guide/streams.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
