@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Contributing to quadrants &#8212; Quadrants 0.7.1 documentation</title>
+    <title>Contributing to quadrants &#8212; Quadrants 0.7.3 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=5a057da9"></script>
+    <script src="../_static/documentation_options.js?v=c98573da"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Troubleshooting" href="troubleshooting.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.1" />
+  <meta name="docsearch:version" content="0.7.3" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.1 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
   
 </a></div>
     
@@ -507,6 +507,7 @@
 <li><p><strong>check-markup-links</strong> (<code class="docutils literal notranslate"><span class="pre">check_markup_links.yml</span></code>) — validates links in documentation</p></li>
 <li><p><strong>linux / macosx / win</strong> — build and test on each platform</p></li>
 <li><p><strong>test-gpu</strong> — GPU-specific tests</p></li>
+<li><p><strong>coverage report</strong> — a diff coverage summary is posted as a PR comment on each push, with a link to the full annotated report. This includes kernel-level branch coverage. See <a class="reference internal" href="kernel_coverage.html"><span class="std std-doc">Kernel code coverage</span></a> for details.</p></li>
 </ul>
 </section>
 <section id="line-wrapping-check-check-wrapping-yml">
@@ -516,7 +517,11 @@
 <li><p><strong>Markdown files (<code class="docutils literal notranslate"><span class="pre">.md</span></code>)</strong>: lines should not be hard-wrapped. Each paragraph should be a single long line.</p></li>
 <li><p><strong>Code comments and docstrings</strong>: lines should be wrapped at 120 characters, not at 80.</p></li>
 </ul>
-<p>The check runs only on files changed in the PR and reports up to 3 violations.</p>
+<p>The check runs only on lines changed in the PR and reports up to 3 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
+<section id="deleted-comments-check-check-deleted-comments-yml">
+<h3>Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)<a class="headerlink" href="#deleted-comments-check-check-deleted-comments-yml" title="Link to this heading">#</a></h3>
+<p>Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted. Reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
 </section>
 </section>
 </section>
@@ -581,6 +586,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pre-commit-linters-linters-yml">Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#other-ci-jobs">Other CI jobs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#line-wrapping-check-check-wrapping-yml">Line wrapping check (<code class="docutils literal notranslate"><span class="pre">check_wrapping.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deleted-comments-check-check-deleted-comments-yml">Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)</a></li>
 </ul>
 </li>
 </ul>

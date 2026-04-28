@@ -873,8 +873,8 @@ Module Contents
 
    .. py:method:: to_torch(device=None)
 
-      Convert this matrix ndarray to a ``torch.Tensor`` of shape
-      ``self.shape + (n, m)``. Mirrors :meth:`MatrixField.to_torch`.
+      Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
+      :meth:`MatrixField.to_torch`.
 
 
 

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Kernel code coverage &#8212; Quadrants 0.7.1 documentation</title>
+    <title>Kernel code coverage &#8212; Quadrants 0.7.3 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=5a057da9"></script>
+    <script src="../_static/documentation_options.js?v=c98573da"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Performance Dispatch" href="perf_dispatch.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.1" />
+  <meta name="docsearch:version" content="0.7.3" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.1 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
   
 </a></div>
     
@@ -479,7 +479,8 @@ coverage<span class="w"> </span>html
 </section>
 <section id="ci-integration">
 <h2>CI integration<a class="headerlink" href="#ci-integration" title="Link to this heading">#</a></h2>
-<p>The CI workflow posts a diff coverage report as a PR comment on each push. A <strong>new comment</strong> is created each time (rather than editing the previous one) so that the PR timeline shows a clear chronological sequence of commits and their corresponding coverage results.</p>
+<p>The CI workflow posts a compact coverage summary as a PR comment on each push, showing per-file coverage percentages and missing line ranges. The full annotated report (with per-line hit/miss markers) is published as a GitHub Check — the PR comment includes a link to it. A <strong>new comment</strong> is created each time (rather than editing the previous one) so that the PR timeline shows a clear chronological sequence of commits and their corresponding coverage results.</p>
+<p>The report covers only Python files (<code class="docutils literal notranslate"><span class="pre">.py</span></code>) and only lines added or modified in the PR diff — unchanged lines are not reported. C++ files are not included in the coverage report.</p>
 </section>
 <section id="under-the-hood">
 <h2>Under the hood<a class="headerlink" href="#under-the-hood" title="Link to this heading">#</a></h2>
