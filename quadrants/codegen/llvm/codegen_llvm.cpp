@@ -2369,9 +2369,14 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
   auto *i8ty = llvm::Type::getInt8Ty(*llvm_context);
   llvm::Value *primal_ptr = builder->CreateGEP(i8ty, llvm_val[stack], slot_offset);
   // Zero the primal+adjoint slot pair to match `stack_push`'s `memset(top_primal, 0, 2 * element_size)`. Without
-  // this, a previous use of this slot's adjoint would persist into the new push's accumulator.
+  // this, a previous use of this slot's adjoint would persist into the new push's accumulator. Slot pointer is
+  // `stack + 8 + count * 2 * element_size` so the destination is `2 * element_size`-aligned (the slot stride),
+  // capped at 8 because the per-thread slab base is 8-aligned. For `element_size in {1, 2}` (i8 / u1 packs, fp16)
+  // this is 2 or 4 bytes; an over-stated alignment would let LLVM lower the memset to wider stores than the
+  // pointer can satisfy on stricter backends.
+  std::size_t slot_align = std::min<std::size_t>(8u, 2u * stack->element_size_in_bytes());
   builder->CreateMemSet(primal_ptr, llvm::ConstantInt::get(llvm::Type::getInt8Ty(*llvm_context), 0),
-                        llvm::ConstantInt::get(i64ty, stack->entry_size_in_bytes()), llvm::MaybeAlign(8));
+                        llvm::ConstantInt::get(i64ty, stack->entry_size_in_bytes()), llvm::MaybeAlign(slot_align));
   llvm::Value *primal_typed_ptr =
       builder->CreateBitCast(primal_ptr, llvm::PointerType::get(tlctx->get_data_type(stmt->ret_type), 0));
   builder->CreateStore(llvm_val[stmt->v], primal_typed_ptr);

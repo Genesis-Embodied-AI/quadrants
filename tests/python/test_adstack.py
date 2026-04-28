@@ -2522,6 +2522,65 @@ def test_adstack_repeated_load_top_of_outer_value_in_unrolled_inner_loop(n_inner
 
 
 @pytest.mark.needs_torch
+@pytest.mark.parametrize("n_iter", [4, 16])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], require=qd.extension.adstack)
+def test_adstack_f16_unrolled_pushes_alignment(n_iter):
+    # Cross-check `d/dx sum_i sum_j sin(x[i] + j*step)` against PyTorch autograd for an `f16` field whose
+    # operand `a = x[i] + j*step` adstack-promotes through `sin`. Each adstack slot is `2 * element_size`
+    # = 4 bytes wide, so slot N starts at byte offset `8 + 4*N` from the per-thread slab base. Slot 0 is
+    # 8-aligned but every odd slot index (1, 3, 5, ...) lands on a 4-byte-aligned address that is NOT
+    # 8-aligned.
+    #
+    # Internal details: `AdStackPushStmt`'s inline IR emits a `llvm.memset` zeroing the primal+adjoint
+    # slot pair before storing the pushed value. The destination alignment passed to `CreateMemSet` must
+    # reflect the actual slot pointer alignment - `min(8, 2 * element_size)` = 4 bytes for f16. An
+    # over-stated 8-byte alignment lets NVPTX / AMDGCN lowering pick a wider store (`st.b64`) than the
+    # 4-aligned slot pointer can satisfy, which traps as a misaligned-address fault on stricter GPU
+    # backends or silently corrupts adjoint state on tolerant ones - either way producing wrong
+    # gradients. `n_iter=16` ensures multiple non-zero slot offsets get exercised, including odd
+    # slot indices where the alignment claim matters most. Tolerance `rel=4e-3` is the f16 precision
+    # floor for sums of ~16 `sin` values.
+    import torch
+
+    n = 4
+    step = 0.05
+    x = qd.field(qd.f16, shape=n, needs_grad=True)
+    y = qd.field(qd.f16, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            acc = 0.0
+            for j in qd.static(range(n_iter)):
+                a = x[i] + qd.cast(j, qd.f16) * qd.f16(step)
+                acc = acc + qd.sin(a)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.21 + i * 0.05
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.21 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        acc_t = torch.zeros((), dtype=torch.float32)
+        for j in range(n_iter):
+            a_t = x_t[i] + float(j) * step
+            acc_t = acc_t + torch.sin(a_t)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    assert float(y[None]) == pytest.approx(y_t.item(), rel=4e-3)
+    for i in range(n):
+        assert float(x.grad[i]) == pytest.approx(x_t.grad[i].item(), rel=4e-3)
+
+
+@pytest.mark.needs_torch
 @pytest.mark.parametrize("n_iter", [4, 16, 64])
 @pytest.mark.parametrize("n_stacks", [1, 3])
 @test_utils.test(require=qd.extension.adstack)
