@@ -1,8 +1,6 @@
 # Streams
 
-Streams allow concurrent execution of GPU operations. By default, all Quadrants kernels launch on the default
-stream, which serializes everything. By creating explicit streams, you can run independent kernels concurrently
-and control synchronization with events.
+Streams allow concurrent execution of GPU operations. By default, all Quadrants kernels launch on the default stream, which serializes everything. By creating explicit streams, you can run independent kernels concurrently and control synchronization with events.
 
 ## Supported platforms
 
@@ -14,8 +12,7 @@ and control synchronization with events.
 | Metal   | No-op   | No-op  | `qd_stream` is silently ignored, kernels run serially |
 | Vulkan  | No-op   | No-op  | `qd_stream` is silently ignored, kernels run serially |
 
-On backends without native stream support, `create_stream()` and `create_event()` return objects with handle
-`0`. All stream/event operations become no-ops and kernels run serially. Code written with streams is portable across all backends in the sense that it will run without modifications, but serially.
+On backends without native stream support, `create_stream()` and `create_event()` return objects with handle `0`. All stream/event operations become no-ops and kernels run serially. Code written with streams is portable across all backends in the sense that it will run without modifications, but serially.
 
 ## Creating and using streams
 
@@ -51,8 +48,7 @@ s1.destroy()
 s2.destroy()
 ```
 
-Pass `qd_stream=` to any kernel call to launch it on that stream. Kernels on different streams may execute
-concurrently. Call `synchronize()` to block until all work on a stream completes.
+Pass `qd_stream=` to any kernel call to launch it on that stream. Kernels on different streams may execute concurrently. Call `synchronize()` to block until all work on a stream completes.
 
 ## Events
 
@@ -86,8 +82,7 @@ s1.destroy()
 s2.destroy()
 ```
 
-`e.record(stream)` captures the point in `stream`'s execution. `e.wait(qd_stream=stream)` makes `stream` wait
-until the recorded point is reached. If `qd_stream` is omitted, the default stream waits.
+`e.record(stream)` captures the point in `stream`'s execution. `e.wait(qd_stream=stream)` makes `stream` wait until the recorded point is reached. If `qd_stream` is omitted, the default stream waits.
 
 ## Context managers
 
@@ -102,9 +97,7 @@ with qd.create_stream() as s:
 
 ## PyTorch interop (CUDA)
 
-When mixing Quadrants kernels with PyTorch operations on CUDA, both frameworks must use the same stream to
-avoid race conditions. Without explicit stream management, Quadrants and PyTorch may launch work on different
-streams with no ordering guarantees, leading to intermittent data corruption.
+When mixing Quadrants kernels with PyTorch operations on CUDA, both frameworks must use the same stream to avoid race conditions. Without explicit stream management, Quadrants and PyTorch may launch work on different streams with no ordering guarantees, leading to intermittent data corruption.
 
 ### Running Quadrants kernels on PyTorch's stream
 
@@ -120,8 +113,7 @@ observations = compute_obs_tensor()  # PyTorch op on the same stream
 apply_actions_kernel(qd_stream=stream)
 ```
 
-Wrap PyTorch's raw `CUstream` pointer in a Quadrants `Stream` object. Do **not** call `destroy()` on this
-wrapper — PyTorch owns the underlying stream.
+Wrap PyTorch's raw `CUstream` pointer in a Quadrants `Stream` object. Do **not** call `destroy()` on this wrapper — PyTorch owns the underlying stream.
 
 ### Running PyTorch operations on a Quadrants stream
 
@@ -142,5 +134,4 @@ qd_stream.destroy()
 ## Limitations
 
 - **Not compatible with graphs.** Do not pass `qd_stream` to a kernel decorated with `graph=True`.
-- **No automatic synchronization.** You are responsible for inserting events or `synchronize()` calls when one
-  stream's output is another stream's input.
+- **No automatic synchronization.** You are responsible for inserting events or `synchronize()` calls when one stream's output is another stream's input.
