@@ -492,15 +492,21 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
   // Track whether the alloca has any store at all so a load-only alloca (no adstack-relevant data flow either
   // direction) can short-circuit `run()` regardless of what the per-op visitors below find. The decision of
   // whether the alloca needs adstack promotion is made entirely by the precise visitors: non-linear unary /
-  // binary / ternary, GlobalPtr / ExternalPtr index, and IfStmt / RangeForStmt bound. A load+store cycle alone
-  // is not sufficient evidence: a loop-carried accumulator like `acc = acc + sin(x[i])` has such a cycle yet
-  // only feeds linear add operations, whose adjoint formulas (`d/dop = 1`) never read the accumulator's
-  // per-iteration value, so adstack promotion would emit a push + pop per iteration with no reverse-pass
-  // consumer. Restricting `is_stack_needed_` to the consumer-shape visitors leaves accumulator-style allocas
-  // as plain `AllocaStmt`s while keeping every adstack promotion that the reverse pass actually needs.
+  // binary / ternary, GlobalPtr / ExternalPtr index, and IfStmt / RangeForStmt bound. Plus an alloca that is
+  // both loaded and stored anywhere in the IB is treated as loop-carried, which is needed for kernels like
+  // `for j: p, q = q, p + q` where the reverse pass routes the gradient through the cross-iteration
+  // recurrence and BackupSSA's single overwrite-each-iteration alloca cannot back the read-after-write across
+  // iterations. The visit-order-dependent load+store evidence here is conservative: any alloca with both a
+  // load and a store inside the IB triggers it, including pure accumulators whose adjoint formulas don't
+  // actually need per-iteration values - the slight over-promotion cost is the price of correctness on
+  // Fibonacci-style recurrences (silent gradient corruption otherwise).
   void visit(LocalStoreStmt *stmt) override {
-    if (stmt->dest == target_alloca_backup_)
+    if (stmt->dest == target_alloca_backup_) {
       load_only_ = false;
+      if (local_loaded_) {
+        is_stack_needed_ = true;
+      }
+    }
   }
 
   // Check if the alloca is load only

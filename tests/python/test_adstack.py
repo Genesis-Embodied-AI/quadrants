@@ -2390,29 +2390,21 @@ def test_adstack_spirv_metadata_per_task_buffer():
 
 @pytest.mark.needs_torch
 @pytest.mark.parametrize("n_inner", [4])
-@pytest.mark.xfail(
-    reason="Pre-existing AD bug for min/max binary op with loop-carried alloca operand inside a "
-    "serial range-for: reverse-pass `cmp_lt(bin->lhs, bin->rhs)` reads the last forward "
-    "iteration's lhs/rhs (BackupSSA spills to a single alloca) so gradient routing flips "
-    "on iterations where the winning side actually changed. Bug exists on `main` and is "
-    "not introduced by this PR; tracked here as a regression sentinel for whoever fixes "
-    "the MakeAdjoint::visit(BinaryOpStmt) min/max branch (likely needs a snap-stack on "
-    "the cmp result, mirroring the IfStmt-cond snap-stack at auto_diff.cpp:~1791).",
-    strict=False,
-)
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], require=qd.extension.adstack, ad_stack_size=64)
 def test_adstack_min_loop_carried_serial_range_for(n_inner):
     # Cross-check `d/dx sum_i acc_n` where `acc` is initialized to 1.0 and updated per iteration of a serial
     # `for j in range(n_inner)` body via `acc = qd.min(acc * 0.5 + 0.05, x[i] + j*0.05)`. The min winner flips
     # between the lhs and rhs across iterations (rhs wins on iter 0 because acc starts at 1.0 vs x[i]=~0.3,
-    # then lhs wins on later iterations as acc shrinks). The reverse pass must therefore use the per-iteration
-    # forward lhs/rhs to route the gradient correctly.
+    # then lhs wins on later iterations as acc shrinks). The reverse pass must use the per-iteration forward
+    # lhs/rhs to route the gradient correctly.
     #
-    # Internal details: today the reverse-pass `cmp_lt(bin->lhs, bin->rhs)` reads `bin->lhs` and `bin->rhs`
-    # via plain `LocalLoadStmt`s of single-slot allocas that BackupSSA emits, not via per-iteration adstack
-    # reads. Every reverse iteration therefore reads the last forward iteration's lhs/rhs values, gradient
-    # routing flips, and `x.grad` comes out 0 instead of the analytical `0.125` for `x[i]=0.3`, `n_inner=4`.
-    # The fix lives in `MakeAdjoint::visit(BinaryOpStmt)`'s min/max branch and is out of scope for this PR.
+    # Internal details: pins the snap-stack fix in `MakeAdjoint::visit(BinaryOpStmt)`'s min/max branch. The
+    # forward cmp `lhs < rhs` (min) / `rhs < lhs` (max) is computed at forward time and pushed onto a
+    # dedicated 1-push-per-bin-execution adstack, then read back in reverse with a matching pop. Without the
+    # snap-stack, BackupSSA spills `bin->lhs` / `bin->rhs` to single overwrite-each-iteration allocas and
+    # every reverse iteration reads the last forward iteration's values, so the cmp flips on iterations where
+    # the actual winner changed and the gradient routes through the wrong branch (visible as `x.grad=0`
+    # instead of the analytical `0.125` for `x[i]=0.31`, `n_inner=4`).
     import torch
 
     n = 4
