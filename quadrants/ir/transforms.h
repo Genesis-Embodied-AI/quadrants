@@ -134,6 +134,12 @@ ENUM_FLAGS(ExternalPtrAccess){NONE = 0, READ = 1, WRITE = 2};
 std::unordered_map<std::vector<int>, ExternalPtrAccess, hashing::Hasher<std::vector<int>>>
 detect_external_ptr_access_in_task(OffloadedStmt *offload);
 
+// Same, but restricted to `ExternalPtrStmt::is_grad == true` references - i.e. only accesses routed through
+// the `.grad` slot of an ndarray argument. Used by the SPIR-V launcher to skip the host->device grad blit for
+// kernels that never read the grad slot (the common case on the forward pass of reverse-mode AD).
+std::unordered_map<std::vector<int>, ExternalPtrAccess, hashing::Hasher<std::vector<int>>>
+detect_external_ptr_grad_access_in_task(OffloadedStmt *offload);
+
 // compile_to_offloads does the basic compilation to create all the offloaded
 // tasks of a Quadrants kernel.
 void compile_to_offloads(IRNode *ir,

@@ -74,6 +74,11 @@ CUDAContext::CUDAContext() : profiler_(nullptr), driver_(CUDADriver::get_instanc
   driver_.device_get_attribute(&max_shared_memory_bytes_, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN,
                                device_);
 
+  int device_supports_pageable_memory_access = 0;
+  driver_.device_get_attribute(&device_supports_pageable_memory_access, CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS,
+                               device_);
+  supports_pageable_memory_access_ = device_supports_pageable_memory_access != 0;
+
   mcpu_ = fmt::format("sm_{}", compute_capability_);
 
   QD_TRACE("Emitting CUDA code for {}", mcpu_);

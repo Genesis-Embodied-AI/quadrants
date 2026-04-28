@@ -16,6 +16,18 @@ DeviceObjVkDescriptorPool::~DeviceObjVkDescriptorPool() {
 }
 
 DeviceObjVkDescriptorSet::~DeviceObjVkDescriptorSet() {
+  // Return the set to its source pool so the underlying `VkDescriptorSet` handle is reusable on the next
+  // allocation. Without this, the pool keeps accumulating consumed-but-never-reclaimed slots and
+  // `VulkanDevice::alloc_desc_set` spins up a fresh pool at the 64-set boundary (`maxSets` in
+  // `new_descriptor_pool`). On MoltenVK the resulting pool churn surfaces as a null-pool deref inside
+  // `MVKResourcesCommandEncoderState::bindDescriptorSet` after ~32 launches of any two-set kernel (e.g. the
+  // SNode read/write accessors) because `MVKDescriptorSet::_pool` still points at a pool the driver has
+  // started tearing down. The pool is created with `VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT`, so the
+  // free call is legal, and the `ref_pool` shared_ptr guarantees the pool (and its `VkDevice`) outlive this
+  // destructor.
+  if (ref_pool != nullptr && set != VK_NULL_HANDLE) {
+    vkFreeDescriptorSets(device, ref_pool->pool, 1, &set);
+  }
 }
 
 DeviceObjVkCommandPool::~DeviceObjVkCommandPool() {

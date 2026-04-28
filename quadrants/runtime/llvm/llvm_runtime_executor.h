@@ -6,6 +6,7 @@
 #ifdef QD_WITH_LLVM
 
 #include "quadrants/rhi/llvm/llvm_device.h"
+#include "quadrants/codegen/llvm/llvm_compiled_data.h"
 #include "quadrants/runtime/llvm/llvm_offline_cache.h"
 #include "quadrants/runtime/llvm/snode_tree_buffer_manager.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
@@ -21,6 +22,7 @@
 namespace quadrants::lang {
 
 class ProgramImpl;
+class LaunchContextBuilder;
 
 namespace cuda {
 class CudaDevice;
@@ -92,6 +94,28 @@ class LlvmRuntimeExecutor {
   // first grow, and subsequent publishes are `memcpy_host_to_device` (CUDA / AMDGPU) or plain pointer stores
   // (CPU) against those cached addresses.
   void ensure_adstack_heap(std::size_t needed_bytes);
+
+  // Publish the per-task adstack metadata into `LLVMRuntime.adstack_{per_thread_stride,offsets,max_sizes}` and size
+  // the heap for the launch. Returns the `per_thread_stride * num_threads` byte size the heap was grown to (zero if
+  // the task has no adstacks). When `ad_stack.size_exprs` is populated (cache miss after the `determine_ad_stack_size`
+  // pre-pass) each entry is evaluated against the live field state; otherwise each alloca's compile-time
+  // `max_size_compile_time` is used (cache-hit path - symbolic tree is currently not serialized into the offline
+  // cache, so the compile-time fallback is all the launcher has).
+  //
+  // `device_runtime_context_ptr` is the device-side pointer the sizer kernel should receive as its `ctx` argument when
+  // the GPU cannot dereference the host `&ctx->get_context()` pointer directly: the sizer kernel reads
+  // `ctx->arg_buffer` on device to resolve `ExternalTensorRead` leaves against the kernel arg buffer. AMDGPU/HIP has no
+  // UVA fallback and always faults with `hipErrorIllegalAddress`, so the AMDGPU launcher always stages a device copy of
+  // `RuntimeContext` and passes that pointer. CUDA UVA covers pinned / CUDA-managed memory only; the plain
+  // `std::make_unique<RuntimeContext>()` backing is neither, so dereferencing the host pointer requires HMM (system-
+  // allocated memory), which is a driver + kernel capability advertised via
+  // `CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS`. The CUDA launcher stages the device copy only when that attribute
+  // reports unsupported (Turing without HMM, Windows, pre-535 Linux drivers) and passes `nullptr` otherwise to keep the
+  // HMM-equipped fast path zero-overhead. CPU ignores this argument and runs the host evaluator in-process.
+  std::size_t publish_adstack_metadata(const AdStackSizingInfo &ad_stack,
+                                       std::size_t num_threads,
+                                       LaunchContextBuilder *ctx,
+                                       void *device_runtime_context_ptr = nullptr);
 
   // Return (and lazily cache) the device pointer to `runtime->temporaries`, the global temporary buffer backing
   // `GlobalTemporaryStmt` loads and stores. GPU kernel launchers use this to read back dynamic range_for bounds
@@ -193,6 +217,27 @@ class LlvmRuntimeExecutor {
   // launch is required per grow.
   void *runtime_adstack_heap_buffer_field_ptr_{nullptr};
   void *runtime_adstack_heap_size_field_ptr_{nullptr};
+
+  // Cached device pointers to the per-launch metadata fields
+  // `runtime->{adstack_per_thread_stride, adstack_offsets, adstack_max_sizes}`. Populated lazily on the first
+  // `publish_adstack_metadata` call via a one-shot `runtime_get_adstack_metadata_field_ptrs` kernel and reused
+  // for every subsequent launch.
+  void *runtime_adstack_stride_field_ptr_{nullptr};
+  void *runtime_adstack_offsets_field_ptr_{nullptr};
+  void *runtime_adstack_max_sizes_field_ptr_{nullptr};
+
+  // Host-owned storage for the two per-launch adstack metadata arrays. We reuse these buffers across launches so
+  // the device pointers we publish remain stable; they are grown (never shrunk) when a larger task is hit.
+  DeviceAllocationUnique adstack_offsets_alloc_ = nullptr;
+  DeviceAllocationUnique adstack_max_sizes_alloc_ = nullptr;
+  std::size_t adstack_metadata_capacity_{0};
+
+  // Per-launch scratch buffer used on GPU arches (CUDA / AMDGPU) to ship the encoded adstack SizeExpr bytecode
+  // consumed by `runtime_eval_adstack_size_expr`. Amortised-doubling growth, reused across launches. Unused on
+  // CPU where the host evaluator runs directly without a device round-trip. See
+  // `encode_adstack_size_expr_device_bytecode` for the byte layout.
+  DeviceAllocationUnique adstack_sizer_bytecode_alloc_ = nullptr;
+  std::size_t adstack_sizer_bytecode_capacity_{0};
 
   // good buddy
   friend LlvmProgramImpl;

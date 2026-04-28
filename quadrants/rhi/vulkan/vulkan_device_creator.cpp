@@ -40,7 +40,7 @@ bool check_validation_layer_support() {
 }
 
 static const std::unordered_set<std::string> ignored_messages = {
-    "UNASSIGNED-DEBUG-PRINTF",
+    "VVL-DEBUG-PRINTF",
     "VUID_Undefined",
     // (penguinliong): Attempting to map a non-host-visible piece of memory.
     // `VulkanDevice::map()` returns `RhiResult::invalid_usage` in this case.
@@ -60,12 +60,9 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(VkDebugUtilsMessageSeverityFlag
                                                  const VkDebugUtilsMessengerCallbackDataEXT *p_callback_data,
                                                  void *p_user_data) {
   if (message_type == VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT &&
-      message_severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT &&
-      strstr(p_callback_data->pMessage, "DEBUG-PRINTF") != nullptr) {
-    // Message format is "BLABLA | MessageID=xxxxx | <DEBUG_PRINT_MSG>"
-    std::string msg(p_callback_data->pMessage);
-    auto const pos = msg.find_last_of("|");
-    std::cout << msg.substr(pos + 2);
+      message_severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT && p_callback_data->pMessageIdName != nullptr &&
+      strstr(p_callback_data->pMessageIdName, "DEBUG-PRINTF") != nullptr) {
+    std::cout << p_callback_data->pMessage << std::flush;
   }
 
   if (message_severity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
@@ -304,6 +301,27 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
     }
   }
 
+  // Normalize `params_.enable_validation_layer` against the host's actual layer availability BEFORE
+  // the instance-reuse short-circuit below: downstream code (device-extension enumeration at
+  // `create_logical_device`, the `VK_KHR_SHADER_NON_SEMANTIC_INFO` cap gate, the device layer arrays
+  // at the tail of `create_logical_device`) reads this flag on every cycle, and `create_logical_device`
+  // runs on every re-init. If we let the request pass through unchanged on the reuse path, the cap is
+  // set to `true` every subsequent cycle even when the layer is not actually loaded on the cached
+  // instance (the only cycle where the layer-load flip happens is the very first, which is also the
+  // only cycle where a fresh `vkCreateInstance` runs). Users observed this as `test_overflow.py`
+  // passing on the first parametrization and failing on every subsequent one in the same pytest
+  // session: `DebugPrintf`-ext-imported shaders compile fine, but the validation layer that would
+  // route those messages to stdout was never loaded, so the overflow-detected strings never appear in
+  // `capfd`. Running the check here keeps the flag consistent across re-inits; re-running on every
+  // call is cheap (it enumerates instance layers, ~microseconds).
+  if (params_.enable_validation_layer && !check_validation_layer_support()) {
+    RHI_LOG_ERROR(
+        "Validation layers requested but not available, turning off... "
+        "Please make sure Vulkan SDK from https://vulkan.lunarg.com/sdk/home "
+        "is installed.");
+    params_.enable_validation_layer = false;
+  }
+
   // Reuse the VkInstance from a previous init/reset cycle if available.
   // Repeated vkDestroyInstance/vkCreateInstance triggers an NVIDIA driver bug
   // that corrupts SubgroupLocalInvocationId after ~11 cycles.
@@ -325,15 +343,8 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   create_info.pApplicationInfo = &app_info;
 
-  if (params_.enable_validation_layer) {
-    if (!check_validation_layer_support()) {
-      RHI_LOG_ERROR(
-          "Validation layers requested but not available, turning off... "
-          "Please make sure Vulkan SDK from https://vulkan.lunarg.com/sdk/home "
-          "is installed.");
-      params_.enable_validation_layer = false;
-    }
-  }
+  // `params_.enable_validation_layer` has already been normalized against the host's actual layer
+  // availability above, before the cached-instance short-circuit. No second check needed here.
 
   VkDebugUtilsMessengerCreateInfoEXT debug_create_info{};
 
@@ -587,10 +598,17 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
     } else if (name == VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME && params_.enable_validation_layer) {
-      // VK_KHR_shader_non_semantic_info isn't supported on molten-vk.
+#if !defined(__APPLE__)
+      // VK_KHR_shader_non_semantic_info isn't fully supported on MoltenVK: the extension enumerates as
+      // available on the LunarG-SDK-sourced build, the device accepts `OpExtInstImport "NonSemantic.DebugPrintf"`
+      // and the downstream `OpExtInst` call sites at SPIR-V validation time, but the SPIRV-Cross -> MSL
+      // translator inside MoltenVK emits unconditional `debugPrintfEXT(...)` calls that Metal's MSL compiler
+      // rejects with `use of undeclared identifier 'debugPrintfEXT'`. Since the only Vulkan implementation on
+      // Apple platforms is MoltenVK, drop the advertisement here rather than at each SPIR-V codegen site.
       // Tracking issue: https://github.com/KhronosGroup/MoltenVK/issues/1214
       caps.set(DeviceCapability::spirv_has_non_semantic_info, true);
       enabled_extensions.push_back(ext.extensionName);
+#endif
     } else if (name == VK_KHR_8BIT_STORAGE_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_KHR_16BIT_STORAGE_EXTENSION_NAME) {
@@ -734,12 +752,24 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       if (shader_atomic_float_feature.shaderBufferFloat64Atomics) {
         caps.set(DeviceCapability::spirv_has_atomic_float64, true);
       }
+#if !defined(__APPLE__)
+      // Shared (threadgroup) float atomics are not actually usable through MoltenVK: the underlying Metal
+      // Shading Language rejects `atomic_fetch_add_explicit` on `threadgroup atomic_float*` with
+      // `cannot pass pointer to address space 'threadgroup' as a pointer to address space 'device'`, so
+      // MSL translation of any SPIR-V that emits `OpAtomicFAdd` against the Workgroup storage class fails
+      // at pipeline creation. The `shaderSharedFloatN AtomicAdd` feature bit is advertised by MoltenVK
+      // anyway; advertising the cap back up would route `has_native_float_atomic_add(..., is_shared=true)`
+      // to the native path and make every shared-atomic-float kernel unusable on Apple. Dropping the cap
+      // here falls back to the CAS-emulated path in `atomic_operation_widened`, which targets uint
+      // atomics and works on every backend. Companion gate to the `spirv_has_non_semantic_info` drop a
+      // few branches up; see that comment for the overall MoltenVK cap-sanitisation rationale.
       if (shader_atomic_float_feature.shaderSharedFloat32AtomicAdd) {
         caps.set(DeviceCapability::spirv_has_shared_atomic_float_add, true);
       }
       if (shader_atomic_float_feature.shaderSharedFloat64AtomicAdd) {
         caps.set(DeviceCapability::spirv_has_shared_atomic_float64_add, true);
       }
+#endif
       *pNextEnd = &shader_atomic_float_feature;
       pNextEnd = &shader_atomic_float_feature.pNext;
     }
@@ -757,9 +787,15 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       if (shader_atomic_float_2_feature.shaderBufferFloat16Atomics) {
         caps.set(DeviceCapability::spirv_has_atomic_float16, true);
       }
+#if !defined(__APPLE__)
+      // Same MoltenVK limitation as `shader_atomic_float_feature.shaderSharedFloat32AtomicAdd` above:
+      // the feature bit is advertised but the MSL translator cannot emit a valid threadgroup
+      // `atomic_fetch_add_explicit` for it. Drop the cap on Apple and let the CAS-emulated fallback
+      // handle f16 shared atomics.
       if (shader_atomic_float_2_feature.shaderSharedFloat16AtomicAdd) {
         caps.set(DeviceCapability::spirv_has_shared_atomic_float16_add, true);
       }
+#endif
       if (shader_atomic_float_2_feature.shaderBufferFloat32AtomicMinMax) {
         caps.set(DeviceCapability::spirv_has_atomic_float_minmax, true);
       }
@@ -789,12 +825,25 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       features2.pNext = &shader_8bit_storage_feature;
       vkGetPhysicalDeviceFeatures2KHR(physical_device_, &features2);
 
+      // Gate the SPIR-V `CapabilityStorageBuffer8BitAccess` emission strictly on the queried
+      // feature bit. `VK_KHR_8bit_storage` promoted into Vulkan 1.2 core doesn't imply the feature
+      // is actually supported -- implementations can still expose `storageBuffer8BitAccess = FALSE`
+      // -- so the SPIR-V cap may only be emitted when this feature is true, otherwise strict
+      // validation rejects shaders that declare the capability.
+      if (shader_8bit_storage_feature.storageBuffer8BitAccess) {
+        caps.set(DeviceCapability::spirv_has_storage_buffer_8bit_access, true);
+      }
+
       *pNextEnd = &shader_8bit_storage_feature;
       pNextEnd = &shader_8bit_storage_feature.pNext;
     }
     if (CHECK_VERSION(1, 1) || CHECK_EXTENSION(VK_KHR_16BIT_STORAGE_EXTENSION_NAME)) {
       features2.pNext = &shader_16bit_storage_feature;
       vkGetPhysicalDeviceFeatures2KHR(physical_device_, &features2);
+
+      if (shader_16bit_storage_feature.storageBuffer16BitAccess) {
+        caps.set(DeviceCapability::spirv_has_storage_buffer_16bit_access, true);
+      }
 
       *pNextEnd = &shader_16bit_storage_feature;
       pNextEnd = &shader_16bit_storage_feature.pNext;
@@ -805,15 +854,19 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       features2.pNext = &buffer_device_address_feature;
       vkGetPhysicalDeviceFeatures2KHR(physical_device_, &features2);
 
-      if (CHECK_VERSION(1, 3) || buffer_device_address_feature.bufferDeviceAddress) {
-        if (device_supported_features.shaderInt64) {
-// Temporarily disable it on macOS:
-// https://github.com/taichi-dev/taichi/issues/6295
-// (penguinliong) Temporarily disabled (until device capability is ready).
-#if !defined(__APPLE__) && false
-          caps.set(DeviceCapability::spirv_has_physical_storage_buffer, true);
-#endif
-        }
+      // Gate strictly on the queried feature bit. Vulkan 1.3 *promotes* `VK_KHR_buffer_device_address`
+      // into core but still lets the implementation expose `bufferDeviceAddress = VK_FALSE`; the previous
+      // `CHECK_VERSION(1, 3) || feature_bit` condition therefore treated 1.3 devices as PSB-capable even
+      // when they were not, which would drive `vkGetBufferDeviceAddressKHR` / BDA usage flags on hardware
+      // that didn't advertise the feature. The `shaderInt64` guard stays because the sizer shader holds
+      // PSB pointers as `i64` SSA values.
+      if (buffer_device_address_feature.bufferDeviceAddress && device_supported_features.shaderInt64) {
+        // The prior `#if !defined(__APPLE__) && false` kill-switch referenced Taichi issue #6295 (broken
+        // BDA on the 2022-era MoltenVK pinned in `quadrants/rhi/CMakeLists.txt`). That pin has since been
+        // replaced with a LunarG-SDK-sourced MoltenVK (>= 1.3, sporting working `vkGetBufferDeviceAddress`),
+        // so there is no reason to hard-disable PSB on Apple (or anywhere) - the feature query above now
+        // correctly reflects the device's actual capability.
+        caps.set(DeviceCapability::spirv_has_physical_storage_buffer, true);
       }
       *pNextEnd = &buffer_device_address_feature;
       pNextEnd = &buffer_device_address_feature.pNext;

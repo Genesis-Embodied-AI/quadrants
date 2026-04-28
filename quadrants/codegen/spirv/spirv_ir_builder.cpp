@@ -54,6 +54,22 @@ void IRBuilder::init_header() {
   if (caps_->get(cap::spirv_has_int16)) {
     ib_.begin(spv::OpCapability).add(spv::CapabilityInt16).commit(&header_);
   }
+  // `CapabilityStorageBuffer{8,16}BitAccess` gate narrow-typed loads / stores through a
+  // descriptor-bound `StorageBuffer` pointer (e.g. `OpLoad %_ptr_StorageBuffer_ushort`). The
+  // existing codegen has been emitting these narrow-typed accesses via the uint-punning path in
+  // `load_buffer` / `store_buffer` for a while (`get_quadrants_uint_type(i16) = u16`,
+  // `get_quadrants_uint_type(i8) = u8`), which strict Vulkan validation requires these capabilities
+  // for -- so we emit them unconditionally whenever the queried feature is set, independent of
+  // whether the current kernel actually uses a narrow type. The cost is a single extra
+  // `OpCapability` word in the shader header; the upside is that every 16-bit / 8-bit field or
+  // ndarray access is spec-compliant on drivers that enforce the letter of
+  // `SPV_KHR_{8,16}bit_storage`.
+  if (caps_->get(cap::spirv_has_storage_buffer_8bit_access)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer8BitAccess).commit(&header_);
+  }
+  if (caps_->get(cap::spirv_has_storage_buffer_16bit_access)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer16BitAccess).commit(&header_);
+  }
   if (caps_->get(cap::spirv_has_int64)) {
     ib_.begin(spv::OpCapability).add(spv::CapabilityInt64).commit(&header_);
   }
@@ -76,6 +92,17 @@ void IRBuilder::init_header() {
   }
 
   ib_.begin(spv::OpExtension).add("SPV_KHR_storage_buffer_storage_class").commit(&header_);
+
+  // `SPV_KHR_{8,16}bit_storage` is paired with `CapabilityStorageBuffer{8,16}BitAccess` above.
+  // Both the capability and the extension are needed for narrow-typed `StorageBuffer` loads /
+  // stores to validate on Vulkan; declaring only the capability without the extension is
+  // ill-formed SPIR-V.
+  if (caps_->get(cap::spirv_has_storage_buffer_8bit_access)) {
+    ib_.begin(spv::OpExtension).add("SPV_KHR_8bit_storage").commit(&header_);
+  }
+  if (caps_->get(cap::spirv_has_storage_buffer_16bit_access)) {
+    ib_.begin(spv::OpExtension).add("SPV_KHR_16bit_storage").commit(&header_);
+  }
 
   if (caps_->get(cap::spirv_has_no_integer_wrap_decoration)) {
     ib_.begin(spv::OpExtension).add("SPV_KHR_no_integer_wrap_decoration").commit(&header_);
@@ -134,9 +161,13 @@ std::vector<uint32_t> IRBuilder::finalize() {
 
 void IRBuilder::init_pre_defs() {
   ext_glsl450_ = ext_inst_import("GLSL.std.450");
-  if (caps_->get(cap::spirv_has_non_semantic_info)) {
-    debug_printf_ = ext_inst_import("NonSemantic.DebugPrintf");
-  }
+  // `debug_printf_` is imported lazily in `call_debugprintf` on first use rather than here. A declared-but-unused
+  // `OpExtInstImport "NonSemantic.DebugPrintf"` at the top of a SPIR-V module is accepted by native Vulkan
+  // drivers but rejected by MoltenVK: the SPIRV-Cross -> MSL translator emits an unconditional stub that calls
+  // `debugPrintfEXT` even when no `OpExtInst` targets the import, and the subsequent MSL compile fails with
+  // `use of undeclared identifier 'debugPrintfEXT'`. Skipping the import entirely when no call site needs it
+  // keeps kernels without `print` or debug assert traffic compatible with MoltenVK even while the
+  // `spirv_has_non_semantic_info` capability is advertised by the Vulkan device.
 
   t_bool_ = declare_primitive_type(get_data_type<bool>());
   if (caps_->get(cap::spirv_has_int8)) {
@@ -366,6 +397,21 @@ SType IRBuilder::get_pointer_type(const SType &value_type, spv::StorageClass sto
   t.element_type_id = value_type.id;
   t.storage_class = storage_class;
   ib_.begin(spv::OpTypePointer).add_seq(t, storage_class, value_type).commit(&global_);
+  // An `OpTypePointer` in the `PhysicalStorageBuffer` storage class that points to a scalar or vector
+  // needs an explicit `ArrayStride` decoration for `OpPtrAccessChain`'s `Element` offset to be scaled
+  // correctly on Vulkan. Without the decoration, drivers that strictly follow SPV_KHR_physical_storage_buffer
+  // treat the stride as undefined and collapse every element index to the base address, which manifests as
+  // `arr[i]` reads returning `arr[0]` for all `i` across the whole kernel (and any indexed ndarray write
+  // landing on slot 0). Sized-pointees (structs, arrays) already carry explicit layout decorations so they
+  // don't need this; the fix is limited to scalars/vectors, where the natural stride is just the pointee
+  // byte size. Uniform / StorageBuffer / Input / Output / Workgroup pointers don't use PSB arithmetic, so
+  // the decoration is a no-op for them and is skipped.
+  if (storage_class == spv::StorageClassPhysicalStorageBuffer && value_type.flag == TypeKind::kPrimitive) {
+    size_t stride = get_primitive_type_size(value_type.dt);
+    if (stride > 0) {
+      this->decorate(spv::OpDecorate, t, spv::DecorationArrayStride, uint32_t(stride));
+    }
+  }
   pointer_type_tbl_[key] = t;
   return t;
 }
@@ -846,13 +892,23 @@ Value IRBuilder::cast(const SType &dst_type, Value value) {
           return PrimitiveType::unknown;
       };
 
+      DataType intermediate_dt;
       if (is_signed(from)) {
-        ret = make_value(spv::OpSConvert, get_primitive_type(get_signed_type(to)), ret);
+        intermediate_dt = get_signed_type(to);
+        ret = make_value(spv::OpSConvert, get_primitive_type(intermediate_dt), ret);
       } else {
-        ret = make_value(spv::OpUConvert, get_primitive_type(get_unsigned_type(to)), ret);
+        intermediate_dt = get_unsigned_type(to);
+        ret = make_value(spv::OpUConvert, get_primitive_type(intermediate_dt), ret);
       }
 
-      ret = make_value(spv::OpBitcast, dst_type, ret);
+      // OpBitcast(T, T) is invalid per SPIR-V spec ("Result Type must not equal Operand Type"). When the
+      // intermediate dtype (same signedness as the source but width-matched to the destination) already
+      // matches the caller's destination type, skip the trailing bitcast so the widening / narrowing SConvert
+      // / UConvert above is the final instruction. The trailing bitcast still runs in the mixed-signedness
+      // case, which is the scenario it was written for.
+      if (intermediate_dt != to) {
+        ret = make_value(spv::OpBitcast, dst_type, ret);
+      }
     }
 
     return ret;

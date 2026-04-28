@@ -48,15 +48,14 @@ std::size_t resolve_num_threads(const AdStackSizingInfo &info, LlvmRuntimeExecut
 
 void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             JITModule *cuda_module,
-                                            const std::vector<OffloadedTask> &offloaded_tasks) {
+                                            const std::vector<OffloadedTask> &offloaded_tasks,
+                                            void *device_context_ptr) {
   auto *executor = get_runtime_executor();
   auto *active_stream = CUDAContext::get_instance().get_stream();
   for (size_t i = 0; i < offloaded_tasks.size();) {
     const auto &task = offloaded_tasks[i];
-    if (task.ad_stack.per_thread_stride > 0) {
-      std::size_t n = resolve_num_threads(task.ad_stack, executor);
-      executor->ensure_adstack_heap(task.ad_stack.per_thread_stride * n);
-    }
+    std::size_t n = resolve_num_threads(task.ad_stack, executor);
+    executor->publish_adstack_metadata(task.ad_stack, n, &ctx, device_context_ptr);
     if (task.stream_parallel_group_id == 0) {
       QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
       cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
@@ -96,10 +95,11 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
 
 void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
                                                           JITModule *cuda_module,
-                                                          const std::vector<OffloadedTask> &offloaded_tasks) {
+                                                          const std::vector<OffloadedTask> &offloaded_tasks,
+                                                          void *device_context_ptr) {
   int32_t counter_val;
   do {
-    launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
+    launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
     counter_val = 0;
     auto *stream = CUDAContext::get_instance().get_stream();
     CUDADriver::get_instance().stream_synchronize(stream);
@@ -236,11 +236,40 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
 
+  // Stage a device-side copy of `RuntimeContext` for the adstack sizer kernel on GPUs that cannot dereference plain
+  // host pointers (`malloc` / `new`) from device code. CUDA's UVA only covers pinned / managed allocations; the
+  // `std::make_unique<RuntimeContext>()` backing is neither. On drivers + kernels that expose HMM / system-allocated
+  // memory the sizer can read the host pointer directly and we keep the zero-staging fast path; everywhere else
+  // (Turing without HMM, Windows, older Linux without an HMM-capable driver) the host-pointer read faults with
+  // `CUDA_ERROR_ILLEGAL_ADDRESS` at the next DtoH sync, so we fall back to a per-launch device copy. Gate is the
+  // `PAGEABLE_MEMORY_ACCESS` device attribute rather than a compute-capability threshold: HMM availability is a
+  // property of the driver + kernel combo, not the GPU architecture (sm_70 / V100 with a current HMM driver is fine;
+  // sm_90 / H100 on a Windows host or with a pre-535 Linux driver still needs the fallback). We additionally skip
+  // the staging for forward-only launches (no task has an adstack alloca, so `publish_adstack_metadata` early-returns
+  // and the staged buffer would be pure waste).
+  bool needs_sizer_device_ctx = false;
+  for (const auto &task : offloaded_tasks) {
+    if (!task.ad_stack.allocas.empty()) {
+      needs_sizer_device_ctx = true;
+      break;
+    }
+  }
+  needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().supports_pageable_memory_access();
+  void *device_context_ptr = nullptr;
+  if (needs_sizer_device_ctx) {
+    CUDADriver::get_instance().malloc_async(&device_context_ptr, sizeof(RuntimeContext), nullptr);
+    CUDADriver::get_instance().memcpy_host_to_device_async(device_context_ptr, &ctx.get_context(),
+                                                           sizeof(RuntimeContext), nullptr);
+  }
+
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
-    launch_offloaded_tasks_with_do_while(ctx, cuda_module, offloaded_tasks);
+    launch_offloaded_tasks_with_do_while(ctx, cuda_module, offloaded_tasks, device_context_ptr);
   } else {
-    launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
+    launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
+  }
+  if (needs_sizer_device_ctx) {
+    CUDADriver::get_instance().mem_free_async(device_context_ptr, nullptr);
   }
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().mem_free_async(device_arg_buffer, active_stream);

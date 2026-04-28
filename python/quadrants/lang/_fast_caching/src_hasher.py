@@ -1,4 +1,5 @@
 import json
+import os
 import warnings
 from typing import Any, Iterable, Sequence
 
@@ -49,6 +50,7 @@ def create_cache_key(
             kernel_source_info.filepath,
             str(kernel_source_info.start_lineno),
             "pruned",
+            "kcov" if os.environ.get("QD_KERNEL_COVERAGE") == "1" else "",
         )
     )
     return cache_key
