@@ -735,12 +735,15 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     // the host on every one of the three writes we issue per launch; with thousands of reverse-mode launches
     // per `test_differentiable_rigid` run, those serial host stalls were a measurable fraction of wallclock.
     // `FieldLoad` is serviced by `SNodeRwAccessorsBank` regardless of arch.
+    // Guard `program_impl_->program` lookups against the C++-only-tests setup where `program_impl_` itself is
+    // null; the on-device branch below already does this and falls back to `max_size_compile_time`.
+    Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
     std::vector<uint64_t> host_max_sizes(n_stacks);
     for (std::size_t i = 0; i < n_stacks; ++i) {
       const SerializedSizeExpr *expr = (i < ad_stack.size_exprs.size()) ? &ad_stack.size_exprs[i] : nullptr;
       int64_t v = -1;
-      if (expr != nullptr && !expr->nodes.empty() && program_impl_->program != nullptr) {
-        v = evaluate_adstack_size_expr(*expr, program_impl_->program, ctx);
+      if (expr != nullptr && !expr->nodes.empty() && prog != nullptr) {
+        v = evaluate_adstack_size_expr(*expr, prog, ctx);
       }
       if (v < 0) {
         v = static_cast<int64_t>(ad_stack.allocas[i].max_size_compile_time);
