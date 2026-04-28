@@ -18,9 +18,7 @@ streams is portable across all backends — it will run without modifications, b
 
 ## Stream parallelism
 
-Inside a `@qd.kernel`, each `with qd.stream_parallel():` block runs on its own GPU stream. The runtime
-creates temporary streams, launches the for loops, and synchronizes automatically before the next
-non-parallel statement.
+Inside a `@qd.kernel`, each `with qd.stream_parallel():` block runs on its own GPU stream.
 
 ```python
 import quadrants as qd
