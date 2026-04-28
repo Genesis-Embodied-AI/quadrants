@@ -393,7 +393,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="qd-init-options">
 <h1>qd.init options<a class="headerlink" href="#qd-init-options" title="Link to this heading">#</a></h1>
-<p><code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> accepts every field of the underlying <code class="docutils literal notranslate"><span class="pre">CompileConfig</span></code> struct as a keyword argument; the same fields are also reachable as environment variables of the form <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>). This page covers some of the knobs that are commonly tuned in practice. The underlying source of truth is <code class="docutils literal notranslate"><span class="pre">quadrants/program/compile_config.h</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> accepts every field of the underlying <code class="docutils literal notranslate"><span class="pre">CompileConfig</span></code> struct as a keyword argument; the same fields are also reachable as environment variables of the form <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>). This page covers some of the knobs that are commonly tuned in practice. The underlying source of truth is <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants/blob/main/quadrants/program/compile_config.h"><code class="docutils literal notranslate"><span class="pre">quadrants/program/compile_config.h</span></code></a>.</p>
 <section id="caching">
 <h2>Caching<a class="headerlink" href="#caching" title="Link to this heading">#</a></h2>
 <section id="offline-cache">
@@ -419,6 +419,32 @@
 <li><p>Reproducing first-run behavior in CI matrix runs that would otherwise warm the caches across iterations.</p></li>
 </ul>
 <p>For normal use, leave it at <code class="docutils literal notranslate"><span class="pre">True</span></code>; the cache layers are the dominant source of fast warm-up.</p>
+</section>
+</section>
+<section id="compile-time-tuning">
+<h2>Compile-time tuning<a class="headerlink" href="#compile-time-tuning" title="Link to this heading">#</a></h2>
+<section id="cfg-optimization">
+<h3><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code><a class="headerlink" href="#cfg-optimization" title="Link to this heading">#</a></h3>
+<p>Whether to run the control-flow-graph optimization pass. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. Setting it to <code class="docutils literal notranslate"><span class="pre">False</span></code> makes compilation up to 6x faster while costing 1-5% of runtime speed; consider disabling it if compile time is the bottleneck and the runtime delta is acceptable.</p>
+</section>
+<section id="fast-math">
+<h3><code class="docutils literal notranslate"><span class="pre">fast_math</span></code><a class="headerlink" href="#fast-math" title="Link to this heading">#</a></h3>
+<p>Whether to enable IEEE-relaxed floating-point optimizations (FMA fusion, no NaN / infinity / signed-zero guarantees). Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. Disable when investigating numerical anomalies or running deterministic-tolerance tests.</p>
+</section>
+<section id="num-compile-threads">
+<h3><code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code><a class="headerlink" href="#num-compile-threads" title="Link to this heading">#</a></h3>
+<p>Number of host threads used when compiling kernels. Default <code class="docutils literal notranslate"><span class="pre">4</span></code>. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to <code class="docutils literal notranslate"><span class="pre">1</span></code>) on memory-pressure-bound systems where concurrent LLVM compilations thrash.</p>
+</section>
+</section>
+<section id="debugging">
+<h2>Debugging<a class="headerlink" href="#debugging" title="Link to this heading">#</a></h2>
+<section id="debug">
+<h3><code class="docutils literal notranslate"><span class="pre">debug</span></code><a class="headerlink" href="#debug" title="Link to this heading">#</a></h3>
+<p>Enables IR verification between every compiler pass plus additional runtime checks (integer-overflow guards on arithmetic, linear-index overflow guards on tensor indexing, adstack push-bounds at the runtime helper level). Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Compile time slows substantially because the verifier walks the IR after every transform and the extra runtime checks expand the emitted code; ~21s additional has been observed on adstack-heavy kernels. Turn this on while iterating on a kernel that is producing incorrect numerics or while developing a new compiler pass; turn it back off once the bug is found.</p>
+</section>
+<section id="check-out-of-bound">
+<h3><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code><a class="headerlink" href="#check-out-of-bound" title="Link to this heading">#</a></h3>
+<p>Enables runtime bounds-checking for tensor indexing. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Costs runtime performance proportional to indexing density; leave off for benchmarks. Backends that do not expose the <code class="docutils literal notranslate"><span class="pre">assertion</span></code> extension (currently Metal and Vulkan) cannot honor this flag.</p>
 </section>
 </section>
 </section>
@@ -472,6 +498,17 @@
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#caching">Caching</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-cache"><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#compile-time-tuning">Compile-time tuning</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cfg-optimization"><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fast-math"><code class="docutils literal notranslate"><span class="pre">fast_math</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#num-compile-threads"><code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debugging">Debugging</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#debug"><code class="docutils literal notranslate"><span class="pre">debug</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#check-out-of-bound"><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code></a></li>
 </ul>
 </li>
 </ul>
