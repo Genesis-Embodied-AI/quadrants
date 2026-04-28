@@ -710,10 +710,9 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
   // h2d + sizer-kernel launch + d2h-stride pipeline entirely and write the metadata directly via `copy_h2d`.
   // On CUDA the saved `cuMemcpyDtoH` for the per-launch stride readback is the dominant cost: every reverse-
   // mode kernel launch in a 100-substep test paid one such synchronous DtoH each, and that compound stall
-  // accounted for the bulk of the GPU regression seen when adstack mode replaced `unrolling_limit`. The
-  // condition is computed once per launch by scanning each stack's `nodes` vector for an `ExternalTensorRead`
-  // leaf; the scan is O(total SizeExpr nodes), well below the cost of the cheapest h2d / d2h on any LLVM GPU
-  // backend.
+  // accounted for the bulk of the GPU launch overhead under adstack mode. The condition is computed once per
+  // launch by scanning each stack's `nodes` vector for an `ExternalTensorRead` leaf; the scan is O(total
+  // SizeExpr nodes), well below the cost of the cheapest h2d / d2h on any LLVM GPU backend.
   bool all_size_exprs_host_resolvable = true;
   for (std::size_t i = 0; i < n_stacks && all_size_exprs_host_resolvable; ++i) {
     if (i >= ad_stack.size_exprs.size()) {

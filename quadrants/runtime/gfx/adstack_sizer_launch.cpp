@@ -150,9 +150,9 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
   // visibility, sizer cmdlist record + `submit_synced`, blocking metadata readback) drops out. On Metal /
   // MoltenVK the dropped pair of `wait_idle()` calls each cost a full GPU-host stall per launch; with one
   // launch per substep across forward + backward of a 100-substep test, that stall cost compounds linearly
-  // with the test's launch count and was the dominant runtime regression observed when adstacks replaced
-  // `unrolling_limit` for autodiff. Kernels whose size_expr trees include `ExternalTensorRead` (an ndarray
-  // scalar load whose data lives in GPU-private memory) still need the on-device sizer below.
+  // with the test's launch count and is the dominant per-launch overhead under adstack mode. Kernels whose
+  // size_expr trees include `ExternalTensorRead` (an ndarray scalar load whose data lives in GPU-private
+  // memory) still need the on-device sizer below.
   if (all_size_exprs_host_resolvable(adstack_task_indices, task_attribs)) {
     eval_per_task_metadata_on_host(adstack_task_indices, task_attribs, program_impl_->program, host_ctx,
                                    per_task_ad_stack);
