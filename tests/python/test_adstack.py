@@ -2408,3 +2408,67 @@ def test_adstack_spirv_metadata_per_task_buffer():
     # own sizer-computed 9. Post-fix: finishes cleanly because each task gets its own metadata buffer.
     kernel_two_offloads_with_tri_reduce.grad()
     qd.sync()
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("n_iter", [4, 16, 64])
+@pytest.mark.parametrize("n_stacks", [1, 3])
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_unrolled_many_pushes_across_multiple_stacks(n_iter, n_stacks):
+    # Cross-check `d/dx sum_i sum_s sum_j sin(x[i] + j*step + s*offset)` against PyTorch autograd for the
+    # kernel shape where `n_stacks` parallel adstacks each receive `n_iter` straight-line pushes inside an
+    # unrolled inner loop, fanning out to a separate non-linear `sin` per stack per iteration.
+    #
+    # Internal details: this is the regime the LLVM release-build inline AdStack codegen targets - each `s`
+    # promotes its operand `a = x[i] + j*step + s*offset` onto its own per-stack `alloca i64` count, and
+    # the unrolled inner loop body emits `n_iter` consecutive `count++` increments per stack. After mem2reg
+    # lifts the alloca to SSA and GVN folds the increment chain to constants `0, 1, ..., n_iter - 1`, the
+    # only memory ops left in the unrolled body are the slot stores. `n_iter=64` is well above the adstack
+    # capacity floor of 32, so any regression that miscalculates the slot offset under multiple sibling
+    # stacks (e.g. by hoisting the count alloca shared across stacks instead of per-stack), that
+    # short-circuits / silently drops pushes via a wrong saturating subtract on count, or that races a
+    # cross-stack increment, surfaces here as a wrong gradient long before it would surface as an overflow
+    # at runtime. The cross-check tolerance `rel=1e-6` is the f32 floor; a few-ULP drift per `sin` over up
+    # to `n_stacks * n_iter <= 192` summed terms still fits within it.
+    import torch
+
+    n = 4
+    step = 0.07
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            acc = 0.0
+            for s in qd.static(range(n_stacks)):
+                s_offset = qd.cast(s, qd.f32) * 0.13
+                for j in qd.static(range(n_iter)):
+                    a = x[i] + qd.cast(j, qd.f32) * step + s_offset
+                    acc += qd.sin(a)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.21 + i * 0.05
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.21 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        acc_t = torch.zeros((), dtype=torch.float32)
+        for s in range(n_stacks):
+            s_offset_t = float(s) * 0.13
+            for j in range(n_iter):
+                a_t = x_t[i] + float(j) * step + s_offset_t
+                acc_t = acc_t + torch.sin(a_t)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    for i in range(n):
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
