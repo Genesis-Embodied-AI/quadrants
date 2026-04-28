@@ -381,6 +381,7 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   llvm::Value *emit_ad_stack_top_slot_ptr(const AdStackAllocaStmt *stack,
                                           llvm::Value *count,
                                           std::size_t adjoint_offset_bytes);
+  llvm::Value *emit_ad_stack_single_slot_ptr(const AdStackAllocaStmt *stack, std::size_t adjoint_offset_bytes);
 
   void visit(AdStackAllocaStmt *stmt) override;
 
