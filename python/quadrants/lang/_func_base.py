@@ -643,6 +643,7 @@ class FuncBase:
                 field_full_name = create_flat_name(py_dataclass_basename, field_name)
                 if field_full_name not in used_py_dataclass_parameters:
                     continue
+                # Storing attribute in a temporary to avoid repeated attribute lookup (~20ns penalty)
                 field_type = field.type
                 assert not isinstance(field_type, str)
                 field_value = getattr(v, field_name)

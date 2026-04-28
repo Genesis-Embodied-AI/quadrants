@@ -71,6 +71,7 @@ class Ndarray:
         self.dtype = None
         self.arr = None
         self.grad: "TensorNdarray | None" = None
+        # We register with runtime, in order to enable reset to work later
         impl.get_runtime().ndarrays.add(self)
 
     def __reduce__(self):
