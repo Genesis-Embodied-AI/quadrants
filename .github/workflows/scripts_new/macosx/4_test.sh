@@ -11,9 +11,9 @@ chmod +x ./build/quadrants_cpp_tests
 ./build/quadrants_cpp_tests
 
 # Phase 1: run all tests except torch-dependent ones
-python tests/run_tests.py -v -r 3 --arch metal,vulkan,cpu -m "not needs_torch"
+python tests/run_tests.py -v -r 1 --arch metal,vulkan,cpu -m "not needs_torch"
 
 # Phase 2: install torch, run only torch tests
 # TODO: revert to stable torch after 2.9.2 release
 pip install --pre --upgrade torch --index-url https://download.pytorch.org/whl/nightly/cpu
-python tests/run_tests.py -v -r 3 --arch metal,vulkan,cpu -m needs_torch
+python tests/run_tests.py -v -r 1 --arch metal,vulkan,cpu -m needs_torch

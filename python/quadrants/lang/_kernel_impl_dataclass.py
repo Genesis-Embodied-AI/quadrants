@@ -1,10 +1,10 @@
 import ast
 import dataclasses
-import inspect
 from typing import Any
 
 from quadrants.lang import util
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._signature import get_func_signature
 from quadrants.lang.ast import (
     ASTTransformerFuncContext,
 )
@@ -73,7 +73,7 @@ def extract_struct_locals_from_context(ctx: ASTTransformerFuncContext) -> set[st
     """
     struct_locals = set()
     assert ctx.func is not None
-    sig = inspect.signature(ctx.func.func)
+    sig = get_func_signature(ctx.func.func)
     parameters = sig.parameters
     for param_name, parameter in parameters.items():
         if dataclasses.is_dataclass(parameter.annotation):

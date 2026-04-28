@@ -194,10 +194,6 @@ void LlvmRuntimeExecutor::synchronize() {
   } else if (config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
     AMDGPUDriver::get_instance().stream_synchronize(nullptr);
-    // A better way
-    // use `hipFreeAsync` to free the device kernel arg mem
-    // notice: rocm version
-    AMDGPUContext::get_instance().free_kernel_arg_pointer();
 #else
     QD_ERROR("No AMDGPU support");
 #endif
@@ -236,6 +232,24 @@ std::size_t LlvmRuntimeExecutor::get_snode_num_dynamically_allocated(SNode *snod
   auto data_list = runtime_query<void *>("NodeManager_get_data_list", result_buffer, node_allocator);
 
   return (std::size_t)runtime_query<int32>("ListManager_get_num_elements", result_buffer, data_list);
+}
+
+void LlvmRuntimeExecutor::check_adstack_overflow() {
+  // Called from `synchronize()` on every sync so adstack overflow surfaces as a Python exception regardless of
+  // `compile_config.debug`. The runtime / result buffer may not exist yet (e.g. a C++ test that constructs Program
+  // without materializing the runtime and then triggers Program::finalize -> synchronize), so no-op in that case.
+  if (llvm_runtime_ == nullptr || result_buffer_cache_ == nullptr) {
+    return;
+  }
+  auto *runtime_jit_module = get_runtime_jit_module();
+  runtime_jit_module->call<void *>("runtime_retrieve_and_reset_adstack_overflow", llvm_runtime_);
+  auto flag = fetch_result<int64>(quadrants_result_buffer_error_id, result_buffer_cache_);
+  if (flag != 0) {
+    throw QuadrantsAssertionError(
+        "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
+        "allows. Raised at the next qd.sync() rather than at the offending kernel launch. Pass a larger "
+        "`default_ad_stack_size=N` to `qd.init()` to raise the capacity. See documentation for details.");
+  }
 }
 
 void LlvmRuntimeExecutor::check_runtime_error(uint64 *result_buffer) {
@@ -476,6 +490,14 @@ uint64_t *LlvmRuntimeExecutor::get_device_alloc_info_ptr(const DeviceAllocation 
 
 void LlvmRuntimeExecutor::finalize() {
   profiler_ = nullptr;
+  // Release the host-owned adstack heap before the device teardown below so its `DeviceAllocationGuard` destructor
+  // runs while the RHI device is still valid. The destructor drops the allocation back to the driver memory pool
+  // (or to the host allocator on CPU); deferring past `llvm_device()->clear()` would leak it.
+  adstack_heap_alloc_.reset();
+  adstack_heap_size_ = 0;
+  runtime_temporaries_cache_ = nullptr;
+  runtime_adstack_heap_buffer_field_ptr_ = nullptr;
+  runtime_adstack_heap_size_field_ptr_ = nullptr;
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
     preallocated_runtime_objects_allocs_.reset();
     preallocated_runtime_memory_allocs_.reset();
@@ -523,6 +545,99 @@ void *LlvmRuntimeExecutor::preallocate_memory(std::size_t prealloc_size, DeviceA
   void *preallocated_device_buffer = llvm_device()->get_memory_addr(preallocated_device_buffer_alloc);
   devalloc = std::make_unique<DeviceAllocationGuard>(std::move(preallocated_device_buffer_alloc));
   return preallocated_device_buffer;
+}
+
+void *LlvmRuntimeExecutor::get_runtime_temporaries_device_ptr() {
+  if (runtime_temporaries_cache_ != nullptr) {
+    return runtime_temporaries_cache_;
+  }
+  QD_ASSERT(llvm_runtime_ != nullptr);
+  QD_ASSERT(result_buffer_cache_ != nullptr);
+  auto *const runtime_jit = get_runtime_jit_module();
+  runtime_jit->call<void *>("runtime_get_temporaries_ptr", llvm_runtime_);
+  runtime_temporaries_cache_ = quadrants_union_cast_with_different_sizes<void *>(
+      fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
+  return runtime_temporaries_cache_;
+}
+
+void LlvmRuntimeExecutor::ensure_adstack_heap(std::size_t needed_bytes) {
+  if (needed_bytes == 0 || needed_bytes <= adstack_heap_size_) {
+    return;
+  }
+  // Amortized doubling keeps the number of re-allocations across a run bounded by log(peak_size).
+  std::size_t new_size = std::max(needed_bytes, std::size_t(2) * adstack_heap_size_);
+
+  Device::AllocParams params{};
+  params.size = new_size;
+  params.host_read = false;
+  params.host_write = false;
+  params.export_sharing = false;
+  params.usage = AllocUsage::Storage;
+  DeviceAllocation new_alloc;
+  RhiResult res = llvm_device()->allocate_memory(params, &new_alloc);
+  QD_ERROR_IF(res != RhiResult::success,
+              "Failed to allocate {} bytes for the adstack heap (err: {}). Consider lowering `ad_stack_size` or the "
+              "per-kernel reverse-mode adstack count.",
+              new_size, int(res));
+  // `get_device_alloc_info_ptr` is the RHI-agnostic accessor that returns the raw host-visible
+  // pointer on CPU and the device-visible pointer on CUDA / AMDGPU (`get_memory_addr` is only
+  // implemented on the GPU devices, so we route through this helper instead).
+  void *new_ptr = get_device_alloc_info_ptr(new_alloc);
+
+  auto new_guard = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+
+  // Publish the new buffer pointer and size into the runtime struct. On CPU the runtime lives in host memory,
+  // so plain stores through the cached field pointers are correct. On CUDA / AMDGPU the runtime lives in device
+  // memory, so the host writes via the driver's host->device memcpy. The field-address query runs exactly once,
+  // on the first grow, and caches the two device pointers; every subsequent grow is just two 8-byte memcpys.
+  if (runtime_adstack_heap_buffer_field_ptr_ == nullptr) {
+    auto *const runtime_jit = get_runtime_jit_module();
+    runtime_jit->call<void *>("runtime_get_adstack_heap_field_ptrs", llvm_runtime_);
+    runtime_adstack_heap_buffer_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
+    runtime_adstack_heap_size_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id + 1, result_buffer_cache_));
+  }
+  uint64 size_u64 = static_cast<uint64>(new_size);
+  if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+    CUDADriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_buffer_field_ptr_, &new_ptr, sizeof(void *));
+    CUDADriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_size_field_ptr_, &size_u64, sizeof(uint64));
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+    AMDGPUDriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_buffer_field_ptr_, &new_ptr,
+                                                       sizeof(void *));
+    AMDGPUDriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_size_field_ptr_, &size_u64, sizeof(uint64));
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else {
+    *reinterpret_cast<void **>(runtime_adstack_heap_buffer_field_ptr_) = new_ptr;
+    *reinterpret_cast<uint64 *>(runtime_adstack_heap_size_field_ptr_) = size_u64;
+  }
+
+  // Replace and release the old allocation. `DeviceAllocationGuard`'s destructor calls
+  // `llvm_device()->dealloc_memory`. The new slab has already been handed to `new_guard` above, so the move-assignment
+  // here is what destroys the *previous* guard - the new allocation is not the one being freed. Safety of the release
+  // depends on the backend:
+  //   - CPU: host `std::free`. No GPU involved, always safe.
+  //   - CUDA: `CudaDevice::dealloc_memory` routes through `DeviceMemoryPool::release(release_raw=true)` ->
+  //     `cuMemFree_v2`, which synchronizes with pending device work before returning.
+  //   - AMDGPU: `AmdgpuDevice::dealloc_memory` routes through `DeviceMemoryPool::release(release_raw=false)` ->
+  //     `CachingAllocator::release`, which pools the allocation *without* calling `hipFree` and *without*
+  //     synchronizing. The physical memory stays mapped, so an in-flight kernel still holding the old base pointer
+  //     keeps reading/writing valid storage. The cross-launch safety invariant for AMDGPU comes from
+  //     `amdgpu::KernelLauncher::launch_llvm_kernel` ending with `hipFree(context_pointer)`, which synchronizes
+  //     with all in-flight kernels launched during that call. By the time the *next* `launch_llvm_kernel` reaches
+  //     `ensure_adstack_heap` and can destroy the previous guard, no GPU kernel from the prior call is still
+  //     referencing the old slab. CUDA does not need this extra hop -- the `cuMemFree_v2` in the bullet above
+  //     already syncs -- and the CUDA launcher correspondingly does not allocate a device-side `context_pointer`
+  //     (it passes the `RuntimeContext` by host reference).
+  adstack_heap_alloc_ = std::move(new_guard);
+  adstack_heap_size_ = new_size;
 }
 
 void LlvmRuntimeExecutor::preallocate_runtime_memory() {
@@ -617,6 +732,7 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
 
   QD_TRACE("LLVMRuntime initialized (excluding `root`)");
   llvm_runtime_ = fetch_result<void *>(quadrants_result_buffer_ret_value_id, *result_buffer_ptr);
+  result_buffer_cache_ = *result_buffer_ptr;
   QD_TRACE("LLVMRuntime pointer fetched");
 
   // Preallocate for runtime memory and update to LLVMRuntime

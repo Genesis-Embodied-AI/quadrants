@@ -32,10 +32,19 @@ interop
 ```
 
 ```{toctree}
+:caption: Autodiff
+:maxdepth: 1
+:titlesonly:
+
+autodiff
+```
+
+```{toctree}
 :caption: SIMT primitives
 :maxdepth: 1
 :titlesonly:
 
+subgroup
 tile16
 ```
 
@@ -45,6 +54,7 @@ tile16
 :titlesonly:
 
 graph
+streams
 perf_dispatch
 ```
 

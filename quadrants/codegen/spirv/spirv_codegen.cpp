@@ -6,6 +6,7 @@
 #include <variant>
 #include <filesystem>
 
+#include "spirv/unified1/GLSL.std.450.h"
 #include "quadrants/codegen/codegen_utils.h"
 #include "quadrants/program/program.h"
 #include "quadrants/program/kernel.h"
@@ -32,6 +33,7 @@ constexpr char kArgsBufferName[] = "args_buffer";
 constexpr char kRetBufferName[] = "ret_buffer";
 constexpr char kListgenBufferName[] = "listgen_buffer";
 constexpr char kExtArrBufferName[] = "ext_arr_buffer";
+constexpr char kAdStackOverflowBufferName[] = "adstack_overflow_buffer";
 
 constexpr int kMaxNumThreadsGridStrideLoop = 65536 * 2;
 
@@ -52,7 +54,9 @@ std::string buffer_instance_name(BufferInfo b) {
     case BufferType::ListGen:
       return kListgenBufferName;
     case BufferType::ExtArr:
-      return std::string(kExtArrBufferName) + "_" + std::to_string(b.root_id);
+      return std::string(kExtArrBufferName) + "_" + std::to_string(b.root_id) + (b.is_grad ? "_grad" : "");
+    case BufferType::AdStackOverflow:
+      return kAdStackOverflowBufferName;
     default:
       QD_NOT_IMPLEMENTED;
       break;
@@ -702,7 +706,9 @@ void TaskCodegen::visit(ExternalPtrStmt *stmt) {
   }
   if (caps_->get(DeviceCapability::spirv_has_physical_storage_buffer)) {
     std::vector<int> indices = arg_id;
-    indices.push_back(1);
+    // Pick the data or gradient pointer slot of the ndarray argument struct. Without this, reverse-mode AD kernels
+    // accumulate into x.data instead of x.grad and host-side gradients stay at zero.
+    indices.push_back(stmt->is_grad ? TypeFactory::GRAD_PTR_POS_IN_NDARRAY : TypeFactory::DATA_PTR_POS_IN_NDARRAY);
     spirv::Value addr_ptr = ir_->make_access_chain(ir_->get_pointer_type(ir_->u64_type(), spv::StorageClassUniform),
                                                    get_buffer_value(BufferType::Args, PrimitiveType::i32), indices);
     spirv::Value base_addr = ir_->load_variable(addr_ptr, ir_->u64_type());
@@ -724,7 +730,7 @@ void TaskCodegen::visit(ExternalPtrStmt *stmt) {
 
   if (ctx_attribs_->arg_at(arg_id).is_array) {
     QD_ASSERT(arg_id.size() == 1);
-    ptr_to_buffers_[stmt] = {BufferType::ExtArr, arg_id[0]};
+    ptr_to_buffers_[stmt] = {BufferType::ExtArr, arg_id[0], stmt->is_grad};
   } else {
     ptr_to_buffers_[stmt] = BufferType::Args;
   }
@@ -1179,9 +1185,11 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 3);
   }
 
-  const std::unordered_set<std::string> reduction_ops{"subgroupAdd", "subgroupMul", "subgroupMin", "subgroupMax",
-                                                      "subgroupAnd", "subgroupOr",  "subgroupXor"};
-
+  // Note: the SPIR-V-only `subgroupAdd` / `subgroupMul` / `subgroupMin` / `subgroupMax` /
+  // `subgroupAnd` / `subgroupOr` / `subgroupXor` reductions have been removed.  Use the portable
+  // Python `subgroup.reduce_add(value, log2_size)` (and equivalents) on top of the cross-platform
+  // `subgroupShuffleDown` / `subgroupShuffle` primitives instead.  The inclusive-scan ops below
+  // are still SPIR-V-only and remain pending portable replacements.
   const std::unordered_set<std::string> inclusive_scan_ops{
       "subgroupInclusiveAdd", "subgroupInclusiveMul", "subgroupInclusiveMin", "subgroupInclusiveMax",
       "subgroupInclusiveAnd", "subgroupInclusiveOr",  "subgroupInclusiveXor"};
@@ -1224,8 +1232,7 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     auto index = ir_->query_value(stmt->args[1]->raw_name());
     val = ir_->make_value(spv::OpGroupNonUniformBroadcast, value.stype,
                           ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), value, index);
-  } else if (reduction_ops.find(stmt->func_name) != reduction_ops.end() ||
-             inclusive_scan_ops.find(stmt->func_name) != inclusive_scan_ops.end()) {
+  } else if (inclusive_scan_ops.find(stmt->func_name) != inclusive_scan_ops.end()) {
     auto arg = ir_->query_value(stmt->args[0]->raw_name());
     auto stype = ir_->get_primitive_type(stmt->args[0]->ret_type);
     spv::Op spv_op;
@@ -1272,13 +1279,7 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
       QD_ERROR("Unsupported operation: {}", stmt->func_name);
     }
 
-    spv::GroupOperation group_op;
-
-    if (reduction_ops.find(stmt->func_name) != reduction_ops.end()) {
-      group_op = spv::GroupOperationReduce;
-    } else if (inclusive_scan_ops.find(stmt->func_name) != inclusive_scan_ops.end()) {
-      group_op = spv::GroupOperationInclusiveScan;
-    }
+    spv::GroupOperation group_op = spv::GroupOperationInclusiveScan;
 
     val = ir_->make_value(spv_op, stype, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), group_op, arg);
   } else if (shuffle_ops.find(stmt->func_name) != shuffle_ops.end()) {
@@ -2185,6 +2186,162 @@ std::vector<BufferBind> TaskCodegen::get_buffer_binds() {
     result.push_back(BufferBind{key.first, int(val)});
   }
   return result;
+}
+
+// --- AdStack (autodiff local-variable history stack) for SPIR-V ---
+// The stack is represented as three Function-scope variables per allocation:
+//   count_var  : u32              - number of entries currently on the stack
+//   primal_arr : Array<T, N>      - primal values
+//   adjoint_arr: Array<T, N>      - adjoint (gradient) values
+// This mirrors the LLVM runtime stack (runtime.cpp:1889-1912) but is fully inlined.
+
+spirv::Value TaskCodegen::ad_stack_access(spirv::Value arr, spirv::Value index, const spirv::SType &elem_type) {
+  spirv::SType ptr_type = ir_->get_pointer_type(elem_type, spv::StorageClassFunction);
+  spirv::Value ret = ir_->make_value(spv::OpAccessChain, ptr_type, arr, index);
+  ret.flag = spirv::ValueKind::kVariablePtr;
+  return ret;
+}
+
+void TaskCodegen::visit(AdStackAllocaStmt *stmt) {
+  QD_ASSERT_INFO(stmt->max_size > 0, "Adaptive autodiff stack's size should have been determined.");
+  spirv::SType elem_type = ir_->get_primitive_type(stmt->ret_type);
+  // `IRBuilder::get_array_type` silently promotes a u1 value_type to i32 because OpTypeBool has no defined
+  // storage layout under SPIR-V's LogicalAddressing model. Mirror that promotion in the storage-facing SType
+  // we keep in `AdStackSpirv` so the OpAccessChain/store/load triplet emitted by push/load/acc uses the same
+  // element type as the declared OpTypeArray; otherwise spirv-val rejects the shader and AMD's native Vulkan
+  // driver runs it and segfaults the dispatch. Push/LoadTop then casts between `elem_type` (bool) and
+  // `storage_type` (i32) around the user-visible value, matching what the heap-backed path does in #493.
+  spirv::SType storage_type = stmt->ret_type->is_primitive(PrimitiveTypeID::u1) ? ir_->i32_type() : elem_type;
+  spirv::SType arr_type = ir_->get_array_type(storage_type, stmt->max_size);
+
+  AdStackSpirv info;
+  info.elem_type = elem_type;
+  info.storage_type = storage_type;
+  info.max_size = stmt->max_size;
+  info.count_var = ir_->alloca_variable(ir_->u32_type());
+  info.primal_arr = ir_->alloca_variable(arr_type);
+  info.adjoint_arr = ir_->alloca_variable(arr_type);
+  ir_->store_variable(info.count_var, ir_->uint_immediate_number(ir_->u32_type(), 0));
+  ad_stacks_[stmt] = info;
+}
+
+void TaskCodegen::visit(AdStackPushStmt *stmt) {
+  auto &info = ad_stacks_.at(stmt->stack);
+  spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
+
+  // Guard the primal/adjoint store and the count increment with an in-range check. Without it, a loop that pushes
+  // more than `max_size` elements would write past the end of the Function-scope arrays, with backend-defined
+  // behavior (silent corruption on Metal / Vulkan). On overflow the else branch flips the host-readable overflow
+  // flag so the runtime can surface it as a Python exception after the dispatch; the in-kernel no-op still matters
+  // because we want to avoid the OOB write regardless of whether the host ends up raising on this launch.
+  spirv::Value max_val = ir_->uint_immediate_number(ir_->u32_type(), stmt->stack->as<AdStackAllocaStmt>()->max_size);
+  spirv::Value in_range = ir_->lt(count, max_val);
+  spirv::Label then_label = ir_->new_label();
+  spirv::Label else_label = ir_->new_label();
+  spirv::Label merge_label = ir_->new_label();
+  ir_->make_inst(spv::OpSelectionMerge, merge_label, spv::SelectionControlMaskNone);
+  ir_->make_inst(spv::OpBranchConditional, in_range, then_label, else_label);
+  ir_->start_label(then_label);
+
+  // primal_arr[count] = v; adjoint_arr[count] = 0;
+  spirv::Value val = ir_->query_value(stmt->v->raw_name());
+  if (info.elem_type.id != info.storage_type.id) {
+    val = ir_->cast(info.storage_type, val);  // u1 -> i32
+  }
+  spirv::Value primal_ptr = ad_stack_access(info.primal_arr, count, info.storage_type);
+  ir_->store_variable(primal_ptr, val);
+  spirv::Value adjoint_ptr = ad_stack_access(info.adjoint_arr, count, info.storage_type);
+  ir_->store_variable(adjoint_ptr, ir_->get_zero(info.storage_type));
+
+  // count++
+  spirv::Value one = ir_->uint_immediate_number(ir_->u32_type(), 1);
+  ir_->store_variable(info.count_var, ir_->add(count, one));
+
+  ir_->make_inst(spv::OpBranch, merge_label);
+  ir_->start_label(else_label);
+
+  // Signal overflow to the host. Concurrent overflows would race on a plain `OpStore`; even though every thread
+  // writes the same sentinel, Vulkan's synchronization validation layer correctly flags this as a data race on a
+  // StorageBuffer location. Use `OpAtomicOr` with relaxed memory semantics so the write has defined memory-model
+  // behavior - the result is still "flag set" regardless of interleaving, and the host only reads after an
+  // implicit wait_idle barrier from the next sync.
+  spirv::Value overflow_buffer = get_buffer_value(BufferType::AdStackOverflow, PrimitiveType::u32);
+  spirv::Value overflow_ptr =
+      ir_->struct_array_access(ir_->u32_type(), overflow_buffer, ir_->uint_immediate_number(ir_->i32_type(), 0));
+  ir_->make_value(spv::OpAtomicOr, ir_->u32_type(), overflow_ptr,
+                  /*scope=*/ir_->const_i32_one_,
+                  /*semantics=*/ir_->const_i32_zero_, ir_->uint_immediate_number(ir_->u32_type(), 1));
+
+  ir_->make_inst(spv::OpBranch, merge_label);
+  ir_->start_label(merge_label);
+}
+
+void TaskCodegen::visit(AdStackPopStmt *stmt) {
+  // Intentionally unclamped, unlike the LLVM runtime's stack_pop. A forward push that overflowed skipped the
+  // count++ and flipped the overflow flag, so the matching reverse pop here underflows count to UINT_MAX. The
+  // LoadTop*/AccAdjoint visitors clamp idx to max_size-1 so the OpAccessChain stays in-bounds regardless, and
+  // the host raises a RuntimeError at the next synchronize() before any garbage adjoint reaches user code.
+  auto &info = ad_stacks_.at(stmt->stack);
+  spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
+  spirv::Value one = ir_->uint_immediate_number(ir_->u32_type(), 1);
+  ir_->store_variable(info.count_var, ir_->sub(count, one));
+}
+
+// `idx = min(count - 1, max_size - 1)` as a u32. If count underflowed to UINT_MAX after a pop that had no matching
+// push (overflow path), count - 1 is UINT_MAX - 1 which still clamps to max_size - 1, keeping OpAccessChain
+// in-bounds. Without this clamp, hostile Vulkan drivers (e.g. Adreno, Mali) TDR on OOB private-memory access
+// before the host-side qd.sync() can raise the deferred adstack-overflow exception.
+static spirv::Value ad_stack_top_index(spirv::IRBuilder *ir, spirv::Value count, uint32_t max_size) {
+  spirv::Value idx = ir->sub(count, ir->uint_immediate_number(ir->u32_type(), 1));
+  spirv::Value cap = ir->uint_immediate_number(ir->u32_type(), max_size - 1);
+  return ir->call_glsl450(ir->u32_type(), GLSLstd450UMin, idx, cap);
+}
+
+void TaskCodegen::visit(AdStackLoadTopStmt *stmt) {
+  // `return_ptr == true` is emitted by ReplaceLocalVarWithStacks::visit(MatrixPtrStmt) when a TensorType
+  // loop-carried variable takes a per-element address, and the caller (downstream MatrixPtrStmt codegen) treats
+  // the returned value as a base pointer for OpAccessChain. Scalarize-with-real_matrix_scalarize is expected to
+  // have replaced those before SPIR-V codegen sees them (by lowering TensorType adstacks to N scalar adstacks +
+  // MatrixInit), so we never actually hit this path in practice. But if a tensor-typed AdStackLoadTopStmt slips
+  // through scalarize (e.g. real_matrix_scalarize disabled, or a future change misses the node type), the old
+  // `QD_ASSERT(!stmt->return_ptr)` silently no-ops in release builds and the scalar-load fallthrough registers
+  // an integer where a pointer is expected - silent wrong gradients or a GPU TDR (PR #490 review). Fail loudly
+  // in both debug and release instead.
+  QD_ERROR_IF(stmt->return_ptr,
+              "SPIR-V codegen does not yet support AdStackLoadTopStmt with return_ptr=true (tensor-typed "
+              "loop-carried variable). Ensure scalarize is enabled (real_matrix_scalarize=True) so matrix/vector "
+              "adstacks are lowered to scalar ones before codegen.");
+  auto &info = ad_stacks_.at(stmt->stack);
+  spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
+  spirv::Value idx = ad_stack_top_index(ir_.get(), count, info.max_size);
+  spirv::Value ptr = ad_stack_access(info.primal_arr, idx, info.storage_type);
+  spirv::Value val = ir_->load_variable(ptr, info.storage_type);
+  if (info.elem_type.id != info.storage_type.id) {
+    val = ir_->cast(info.elem_type, val);  // i32 -> u1
+  }
+  ir_->register_value(stmt->raw_name(), val);
+}
+
+void TaskCodegen::visit(AdStackLoadTopAdjStmt *stmt) {
+  // Adjoint slots only fire for real-typed primals (`is_real` guard in MakeAdjoint::accumulate), so the u1/i32
+  // cast dance the primal path needs never triggers here - `elem_type` and `storage_type` are always equal.
+  auto &info = ad_stacks_.at(stmt->stack);
+  spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
+  spirv::Value idx = ad_stack_top_index(ir_.get(), count, info.max_size);
+  spirv::Value ptr = ad_stack_access(info.adjoint_arr, idx, info.storage_type);
+  ir_->register_value(stmt->raw_name(), ir_->load_variable(ptr, info.storage_type));
+}
+
+void TaskCodegen::visit(AdStackAccAdjointStmt *stmt) {
+  // Adjoint accumulation is only emitted for real-typed primals (`is_real` guard in MakeAdjoint::accumulate),
+  // so u1 adstacks never reach here and `elem_type == storage_type`.
+  auto &info = ad_stacks_.at(stmt->stack);
+  spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
+  spirv::Value idx = ad_stack_top_index(ir_.get(), count, info.max_size);
+  spirv::Value ptr = ad_stack_access(info.adjoint_arr, idx, info.storage_type);
+  spirv::Value old_val = ir_->load_variable(ptr, info.storage_type);
+  spirv::Value new_val = ir_->add(old_val, ir_->query_value(stmt->v->raw_name()));
+  ir_->store_variable(ptr, new_val);
 }
 
 void TaskCodegen::push_loop_control_labels(spirv::Label continue_label, spirv::Label merge_label) {

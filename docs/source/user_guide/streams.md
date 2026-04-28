@@ -1,0 +1,176 @@
+# Streams
+
+Streams allow concurrent execution of GPU operations. By default, all Quadrants kernels launch on the default
+stream, which serializes everything. With streams, you can run multiple top-level for loops in parallel.
+
+## Supported platforms
+
+| Backend | Supported |
+|---------|-----------|
+| CUDA    | Yes       |
+| AMDGPU  | Yes       |
+| CPU     | No-op     |
+| Metal   | No-op     |
+| Vulkan  | No-op     |
+
+On backends without native stream support, stream operations are no-ops and for loops run serially. Code using
+streams is portable across all backends — it will run without modifications, but serially.
+
+## Stream parallelism
+
+Inside a `@qd.kernel`, each `with qd.stream_parallel():` block runs on its own GPU stream. The runtime
+creates temporary streams, launches the for loops, and synchronizes automatically before the next
+non-parallel statement.
+
+```python
+import quadrants as qd
+
+qd.init(arch=qd.cuda)
+
+N = 1024
+a = qd.field(qd.f32, shape=(N,))
+b = qd.field(qd.f32, shape=(N,))
+c = qd.field(qd.f32, shape=(N,))
+
+@qd.kernel
+def compute_ab():
+    with qd.stream_parallel():
+        for i in range(N):
+            a[i] = compute_a(i)
+    with qd.stream_parallel():
+        for j in range(N):
+            b[j] = compute_b(j)
+
+@qd.kernel
+def combine():
+    for i in range(N):
+        c[i] = a[i] + b[i]
+
+compute_ab()  # the two stream_parallel blocks run concurrently
+combine()     # runs after compute_ab() returns — a[] and b[] are ready
+```
+
+Consecutive `with qd.stream_parallel():` blocks run concurrently. Multiple for loops within a single block
+share a stream and run serially on it. All streams are synchronized before the kernel returns.
+
+### Restrictions
+
+- All top-level statements in a kernel must be either all `stream_parallel` blocks or all regular statements.
+  Mixing the two at the top level is a compile-time error.
+- Nesting `stream_parallel` blocks is not supported.
+
+## Explicit streams
+
+For cases that require manual control — such as launching separate kernels on different streams or
+interoperating with PyTorch — you can create and manage streams directly.
+
+### Creating and using streams
+
+```python
+s1 = qd.create_stream()
+s2 = qd.create_stream()
+
+fill_a(qd_stream=s1)
+fill_b(qd_stream=s2)
+
+s1.synchronize()
+s2.synchronize()
+
+s1.destroy()
+s2.destroy()
+```
+
+Pass `qd_stream=` to any kernel call to launch it on that stream. Kernels on different streams may execute
+concurrently. Call `synchronize()` to block until all work on a stream completes.
+
+### Events
+
+Events let you express dependencies between streams without full synchronization.
+
+```python
+s1 = qd.create_stream()
+s2 = qd.create_stream()
+
+@qd.kernel
+def produce():
+    for i in range(N):
+        a[i] = 10.0
+
+@qd.kernel
+def consume():
+    for i in range(N):
+        b[i] = a[i]
+
+produce(qd_stream=s1)
+
+e = qd.create_event()
+e.record(s1)       # record when s1 finishes produce()
+e.wait(qd_stream=s2)  # s2 waits for that event before proceeding
+
+consume(qd_stream=s2)  # safe to read a[] — produce() is guaranteed complete
+s2.synchronize()
+
+e.destroy()
+s1.destroy()
+s2.destroy()
+```
+
+`e.record(stream)` captures the point in `stream`'s execution. `e.wait(qd_stream=stream)` makes `stream` wait
+until the recorded point is reached. If `qd_stream` is omitted, the default stream waits.
+
+### Context managers
+
+Streams and events support `with` blocks for automatic cleanup:
+
+```python
+with qd.create_stream() as s:
+    fill_a(qd_stream=s)
+    s.synchronize()
+# s.destroy() called automatically
+```
+
+### PyTorch interop (CUDA)
+
+When mixing Quadrants kernels with PyTorch operations on CUDA, both frameworks must use the same stream to
+avoid race conditions. Without explicit stream management, Quadrants and PyTorch may launch work on different
+streams with no ordering guarantees, leading to intermittent data corruption.
+
+#### Running Quadrants kernels on PyTorch's stream
+
+```python
+import torch
+from quadrants.lang.stream import Stream
+
+torch_stream_ptr = torch.cuda.current_stream().cuda_stream
+stream = Stream(torch_stream_ptr)
+
+physics_kernel(qd_stream=stream)
+observations = compute_obs_tensor()  # PyTorch op on the same stream
+apply_actions_kernel(qd_stream=stream)
+```
+
+Wrap PyTorch's raw `CUstream` pointer in a Quadrants `Stream` object. Do **not** call `destroy()` on this
+wrapper — PyTorch owns the underlying stream.
+
+#### Running PyTorch operations on a Quadrants stream
+
+```python
+qd_stream = qd.create_stream()
+torch_stream = torch.cuda.ExternalStream(qd_stream.handle)
+
+with torch.cuda.stream(torch_stream):
+    physics_kernel(qd_stream=qd_stream)
+    observations = compute_obs_tensor()
+    apply_actions_kernel(qd_stream=qd_stream)
+
+qd_stream.destroy()
+```
+
+`Stream.handle` is the raw `CUstream` pointer, which `torch.cuda.ExternalStream` accepts directly.
+
+## Limitations
+
+- **Not compatible with graphs.** Do not pass `qd_stream` to a kernel decorated with `graph=True`.
+- **No automatic synchronization with explicit streams.** When using explicit streams, you are responsible for
+  inserting events or `synchronize()` calls when one stream's output is another stream's input.
+  `stream_parallel` handles this automatically.
