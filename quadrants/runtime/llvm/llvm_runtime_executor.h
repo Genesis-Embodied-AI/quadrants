@@ -247,9 +247,9 @@ class LlvmRuntimeExecutor {
   // queued on the default stream and stream-orders after the copies). One pinned scratch is reused across
   // launches; `pinned_metadata_event_` is recorded after the last copy of each launch, and the next launch's
   // `publish_adstack_metadata` waits on it before overwriting the scratch so the in-flight copy cannot read torn
-  // bytes. Allocated lazily on the first call that exercises this branch and grown via
-  // `cuMemAllocHost_v2` / `hipHostMalloc`; freed in the executor destructor. Capacity is in bytes and tracks the
-  // largest `(2 + 2 * n_stacks) * sizeof(uint64)` payload published so far.
+  // bytes. Allocated lazily on the first call that exercises this branch and grown via `cuMemAllocHost_v2` /
+  // `hipHostMalloc`; freed in the executor destructor. Capacity is in bytes and tracks the largest
+  // `(2 + 2 * n_stacks) * sizeof(uint64)` payload published so far.
   void *pinned_metadata_scratch_{nullptr};
   std::size_t pinned_metadata_scratch_capacity_{0};
   void *pinned_metadata_event_{nullptr};

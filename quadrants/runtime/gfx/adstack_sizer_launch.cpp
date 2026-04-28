@@ -40,8 +40,8 @@ namespace {
 // `ExternalTensorRead` leaf. ExternalTensorRead dereferences the ndarray data pointer at a runtime-resolved
 // linear offset, and on SPIR-V backends that data lives in GPU-private memory so the host evaluator cannot
 // touch it without a device round-trip; the rest of the SizeExpr grammar (Const, FieldLoad, ExternalTensorShape,
-// BoundVariable, Add/Sub/Mul/Max, MaxOverRange) is host-resolvable through the existing
-// `evaluate_adstack_size_expr` path. Mirrors the `compute_contains_device_leaf` predicate used by
+// BoundVariable, Add/Sub/Mul/Max, MaxOverRange) is host-resolvable through the existing `evaluate_adstack_size_expr`
+// path. Mirrors the `compute_contains_device_leaf` predicate used by
 // `encode_adstack_size_expr_device_bytecode_for_spirv`'s pre-substitution but at task granularity.
 bool all_size_exprs_host_resolvable(const std::vector<size_t> &adstack_task_indices,
                                     const std::vector<spirv::TaskAttributes> &task_attribs) {
