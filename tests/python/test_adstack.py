@@ -2411,6 +2411,117 @@ def test_adstack_spirv_metadata_per_task_buffer():
 
 
 @pytest.mark.needs_torch
+@pytest.mark.parametrize("n_iter", [4, 32])
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_linear_only_accumulator_with_nonlinear_operand(n_iter):
+    # Cross-check `d/dx sum_i sum_j sin(x[i] + j*step)` against PyTorch autograd for the kernel shape
+    # that mixes a loop-carried accumulator (`acc = acc + ...`) with a non-linear operand
+    # (`sin(a)` where `a = x[i] + j*step`) inside an unrolled inner loop.
+    #
+    # Internal details: the operand `a` feeds `sin`, which is in `NonLinearOps::unary_collections`, so
+    # `AdStackAllocaJudger::visit(UnaryOpStmt)` promotes its alloca to an adstack and the reverse pass
+    # reads `a` back via `AdStackLoadTopStmt`. The accumulator `acc` only feeds linear `add`, never
+    # reaches the non-linear / index / control-flow consumer visitors, but its adjoint chain still has
+    # to weave through the adstack push / pop sites the operand introduces. `n_iter=32` keeps the
+    # unrolled body wide enough that any miscalculation in the slot offset for the operand's stack -
+    # e.g. an off-by-one in the inline `count - 1` saturation, a misaligned slot stride, or a missed
+    # primal+adjoint zero-init on push - surfaces here as a wrong gradient long before it would surface
+    # as an overflow at runtime.
+    import torch
+
+    n = 4
+    step = 0.07
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            acc = 0.0
+            for j in qd.static(range(n_iter)):
+                a = x[i] + qd.cast(j, qd.f32) * step
+                acc = acc + qd.sin(a)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.18 + i * 0.05
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.18 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        acc_t = torch.zeros((), dtype=torch.float32)
+        for j in range(n_iter):
+            a_t = x_t[i] + float(j) * step
+            acc_t = acc_t + torch.sin(a_t)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    for i in range(n):
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("n_inner", [4, 32])
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_repeated_load_top_of_outer_value_in_unrolled_inner_loop(n_inner):
+    # Cross-check `d/dx sum_i sum_j cos(sin(x[i])) * (1 + j*0.01)` against PyTorch autograd for the
+    # kernel shape where an outer-loop value (`a = sin(x[i])`) is consumed by a non-linear unary op
+    # `cos(a)` repeatedly inside an unrolled inner loop, producing N consecutive `AdStackLoadTopStmt`
+    # reads of the same stack in the reverse pass with no intervening Push / Pop / AccAdjoint.
+    #
+    # Internal details: each inner-loop iteration's reverse-pass adjoint formula reads `a`'s primal
+    # (for `d/da cos(a) = -sin(a)`) and adjoint via the inline slot-pointer math. With `n_inner=32`
+    # straight-line LoadTops on the same stack inside one block, the inline codegen emits 32
+    # independent count-load + slot-GEP + value-load sequences. A regression that miscalculates the
+    # saturating `count - 1` index under repeated reads, races the count alloca's mem2reg promotion
+    # across the LoadTops, or short-circuits the slot offset math, surfaces here as a wrong gradient.
+    import torch
+
+    n = 3
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            a = qd.sin(x[i])
+            acc = 0.0
+            for j in qd.static(range(n_inner)):
+                acc = acc + qd.cos(a) * (1.0 + qd.cast(j, qd.f32) * 0.01)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.21 + i * 0.05
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.21 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        a_t = torch.sin(x_t[i])
+        acc_t = torch.zeros((), dtype=torch.float32)
+        for j in range(n_inner):
+            acc_t = acc_t + torch.cos(a_t) * (1.0 + float(j) * 0.01)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    for i in range(n):
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
+
+
+@pytest.mark.needs_torch
 @pytest.mark.parametrize("n_iter", [4, 16, 64])
 @pytest.mark.parametrize("n_stacks", [1, 3])
 @test_utils.test(require=qd.extension.adstack)
