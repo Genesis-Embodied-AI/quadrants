@@ -55,6 +55,7 @@ tile16
 
 graph
 perf_dispatch
+init_options
 ```
 
 ```{toctree}
