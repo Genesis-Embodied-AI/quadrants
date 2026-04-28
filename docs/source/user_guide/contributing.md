@@ -126,6 +126,7 @@ You can run these locally with `pre-commit run -a` after `pip install pre-commit
 - **check-markup-links** (`check_markup_links.yml`) — validates links in documentation
 - **linux / macosx / win** — build and test on each platform
 - **test-gpu** — GPU-specific tests
+- **coverage report** — a diff coverage summary is posted as a PR comment on each push, with a link to the full annotated report. This includes kernel-level branch coverage. See [Kernel code coverage](kernel_coverage.md) for details.
 
 ### Line wrapping check (`check_wrapping.yml`)
 
@@ -134,4 +135,8 @@ Uses an AI agent to check that lines in changed files follow wrapping convention
 - **Markdown files (`.md`)**: lines should not be hard-wrapped. Each paragraph should be a single long line.
 - **Code comments and docstrings**: lines should be wrapped at 120 characters, not at 80.
 
-The check runs only on files changed in the PR and reports up to 3 violations.
+The check runs only on lines changed in the PR and reports up to 3 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
+### Deleted comments check (`check_deleted_comments.yml`)
+
+Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted. Reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
