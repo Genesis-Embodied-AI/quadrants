@@ -81,10 +81,9 @@ Module Contents
 
    Defines a Quadrants field.
 
-   A Quadrants field can be viewed as an abstract N-dimensional array, hiding away
-   the complexity of how its underlying :class:`~quadrants.lang.snode.SNode` are
-   actually defined. The data in a Quadrants field can be directly accessed by
-   a Quadrants :func:`~quadrants.lang.kernel_impl.kernel`.
+   A Quadrants field can be viewed as an abstract N-dimensional array, hiding away the complexity of how its
+   underlying :class:`~quadrants.lang.snode.SNode` are actually defined. The data in a Quadrants field can be
+   directly accessed by a Quadrants :func:`~quadrants.lang.kernel_impl.kernel`.
 
    See also https://docs.taichi-lang.org/docs/field
 
@@ -98,11 +97,11 @@ Module Contents
    :type name: str, optional
    :param offset: offset of the field domain.
    :type offset: Union[int, tuple[int]], optional
-   :param needs_grad: whether this field participates in autodiff (reverse mode)
-                      and thus needs an adjoint field to store the gradients.
+   :param needs_grad: whether this field participates in autodiff (reverse mode) and thus needs an
+                      adjoint field to store the gradients.
    :type needs_grad: bool, optional
-   :param needs_dual: whether this field participates in autodiff (forward mode)
-                      and thus needs an dual field to store the gradients.
+   :param needs_dual: whether this field participates in autodiff (forward mode) and thus needs a dual
+                      field to store the gradients.
    :type needs_dual: bool, optional
 
    Example::
@@ -220,9 +219,8 @@ Module Contents
        >>>     else:
        >>>         do_b()
 
-   Depending on the value of ``cond``, ``run()`` will be directly compiled
-   into either ``do_a()`` or ``do_b()``. Thus there won't be a runtime
-   condition check.
+   Depending on the value of ``cond``, ``run()`` will be directly compiled into either ``do_a()`` or ``do_b()``.
+   Thus there won't be a runtime condition check.
 
    Another common usage is for compile-time loop unrolling::
 
