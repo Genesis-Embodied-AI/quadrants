@@ -36,19 +36,22 @@ namespace gfx {
 
 namespace {
 
-// True iff every SizeExpr across every adstack alloca in every task is host-resolvable, i.e. contains no
-// `ExternalTensorRead` leaf. ExternalTensorRead dereferences the ndarray data pointer at a runtime-resolved
-// linear offset, and on SPIR-V backends that data lives in GPU-private memory so the host evaluator cannot
-// touch it without a device round-trip; the rest of the SizeExpr grammar (Const, FieldLoad, ExternalTensorShape,
-// BoundVariable, Add/Sub/Mul/Max, MaxOverRange) is host-resolvable through the existing `evaluate_adstack_size_expr`
-// path. Mirrors the `compute_contains_device_leaf` predicate used by
-// `encode_adstack_size_expr_device_bytecode_for_spirv`'s pre-substitution but at task granularity.
+// True iff every SizeExpr across every adstack alloca in every task is host-resolvable WITHOUT triggering a
+// nested kernel launch. On SPIR-V backends both `ExternalTensorRead` and `FieldLoad` would require a device
+// round-trip from the host: ExternalTensorRead dereferences ndarray data that lives in GPU-private memory,
+// and FieldLoad would have to launch a `SNodeRwAccessorsBank::read_int` accessor kernel to read the SNode
+// value off-device. Either of those launched mid-publish corrupts the SPIR-V launcher's per-task metadata
+// upload state and shows up as wrong gradients on kernels that mix the two paths (this is the leaf set the
+// SPIR-V on-device sizer was specifically built to handle on-device via PSB loads). The fast path therefore
+// only fires when every SizeExpr leaf is one of `Const`, `ExternalTensorShape`, `BoundVariable`, or the
+// arithmetic / `MaxOverRange` combinators.
 bool all_size_exprs_host_resolvable(const std::vector<size_t> &adstack_task_indices,
                                     const std::vector<spirv::TaskAttributes> &task_attribs) {
   for (size_t ti : adstack_task_indices) {
     for (const auto &alloca : task_attribs[ti].ad_stack.allocas) {
       for (const auto &node : alloca.size_expr.nodes) {
-        if (static_cast<SizeExpr::Kind>(node.kind) == SizeExpr::Kind::ExternalTensorRead) {
+        auto kind = static_cast<SizeExpr::Kind>(node.kind);
+        if (kind == SizeExpr::Kind::ExternalTensorRead || kind == SizeExpr::Kind::FieldLoad) {
           return false;
         }
       }
