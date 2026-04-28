@@ -427,7 +427,7 @@ SType IRBuilder::get_storage_pointer_type(const SType &value_type) {
   return get_pointer_type(value_type, storage_class);
 }
 
-SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
+SType IRBuilder::get_function_array_type(const SType &_value_type, uint32_t num_elems) {
   auto value_type = _value_type;
   if (value_type.dt->is_primitive(PrimitiveTypeID::u1)) {
     value_type = i32_type();
@@ -443,6 +443,14 @@ SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
   } else {
     ib_.begin(spv::OpTypeRuntimeArray).add_seq(arr_type, value_type).commit(&global_);
   }
+
+  return arr_type;
+}
+
+SType IRBuilder::get_array_type(const SType &value_type, uint32_t num_elems) {
+  // Identical bookkeeping to `get_function_array_type` plus the `ArrayStride` decoration the storage-buffer
+  // / PSB / Uniform interface requires. Delegate to keep the two in sync.
+  SType arr_type = get_function_array_type(value_type, num_elems);
 
   uint32_t nbytes;
   if (value_type.flag == TypeKind::kPrimitive) {
@@ -462,7 +470,6 @@ SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
     }
   }
 
-  // decorate the array type
   this->decorate(spv::OpDecorate, arr_type, spv::DecorationArrayStride, nbytes);
 
   return arr_type;

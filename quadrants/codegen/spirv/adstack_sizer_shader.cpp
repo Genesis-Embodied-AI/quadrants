@@ -833,12 +833,16 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   st.metadata_buf = metadata_buf;
   st.args_buf = args_buf;
 
-  SType values_arr_ty = ir.get_array_type(ir.i64_type(), kMaxNodes);
+  // Use `get_function_array_type` rather than `get_array_type` for these per-invocation arrays. The latter
+  // emits an `ArrayStride` decoration on the resulting `OpTypeArray`, which Vulkan rejects on a
+  // Function-scope `OpVariable` per `VUID-StandaloneSpirv-None-10684` ("Invalid explicit layout decorations
+  // on type"); Blackwell-class NVIDIA Vulkan drivers ship the SPIR-V validator and fail pipeline creation.
+  SType values_arr_ty = ir.get_function_array_type(ir.i64_type(), kMaxNodes);
   st.values_arr = ir.alloca_variable(values_arr_ty);
-  SType scope_arr_ty = ir.get_array_type(ir.i64_type(), kMaxVars);
+  SType scope_arr_ty = ir.get_function_array_type(ir.i64_type(), kMaxVars);
   st.scope_arr = ir.alloca_variable(scope_arr_ty);
-  SType pending_i32_ty = ir.get_array_type(ir.i32_type(), kMaxPending);
-  SType pending_i64_ty = ir.get_array_type(ir.i64_type(), kMaxPending);
+  SType pending_i32_ty = ir.get_function_array_type(ir.i32_type(), kMaxPending);
+  SType pending_i64_ty = ir.get_function_array_type(ir.i64_type(), kMaxPending);
   st.pending_mor_idx_arr = ir.alloca_variable(pending_i32_ty);
   st.pending_body_start_arr = ir.alloca_variable(pending_i32_ty);
   st.pending_body_end_arr = ir.alloca_variable(pending_i32_ty);
