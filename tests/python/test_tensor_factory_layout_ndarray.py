@@ -126,8 +126,8 @@ def test_factory_layout_rank2_value_check():
 
     fill(a)
     arr = a.to_numpy()
-    # to_numpy() returns the canonical view: shape and indices match
-    # what the kernel wrote, regardless of physical layout.
+    # to_numpy() returns the canonical view: shape and indices match what the kernel wrote, regardless of physical
+    # layout.
     assert arr.shape == (M, N)
     assert arr[2, 3] == 203
     assert arr[0, 1] == 1

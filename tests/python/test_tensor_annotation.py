@@ -153,10 +153,8 @@ def test_tensor_layouts_keep_separate_cache_entries():
     assert len(k._primal.mapper.mapping) == 2
 
 
-# ----------------------------------------------------------------------------
-# Vector / matrix element types: qd.Tensor must dispatch the compound-element
-# tensors built by qd.Vector.tensor / qd.Matrix.tensor on both backends.
-# ----------------------------------------------------------------------------
+# Vector / matrix element types: qd.Tensor must dispatch the compound-element tensors built by qd.Vector.tensor /
+# qd.Matrix.tensor on both backends.
 
 
 BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
