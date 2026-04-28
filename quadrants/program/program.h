@@ -198,6 +198,12 @@ class QD_DLL_EXPORT Program {
     return snode_rw_accessors_bank_;
   }
 
+  // Look up an `SNode` in this `Program`'s snode trees by its global `SNode::id`. Used by the host-side adstack
+  // size-expression evaluator to rehydrate an `SNode *` from a `snode_id` that survived the offline cache. Linear
+  // over all snode trees; called at most once per adstack leaf per kernel launch so the cost is negligible in
+  // practice.
+  SNode *get_snode_by_id(int snode_id);
+
   /**
    * Destroys a new SNode tree.
    *

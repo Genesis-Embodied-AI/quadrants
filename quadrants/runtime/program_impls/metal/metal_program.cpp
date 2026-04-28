@@ -21,6 +21,7 @@ void MetalProgramImpl::materialize_runtime(KernelProfilerBase *profiler, uint64 
 
   gfx::GfxRuntime::Params params;
   params.device = device_.get();
+  params.program_impl = this;
   runtime_ = std::make_unique<gfx::GfxRuntime>(std::move(params));
   snode_tree_mgr_ = std::make_unique<gfx::SNodeTreeManager>(runtime_.get());
 }

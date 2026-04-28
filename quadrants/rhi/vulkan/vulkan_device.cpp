@@ -1592,10 +1592,17 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
   }
 
   if (get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer) &&
-      ((alloc_info.usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) ||
-       (alloc_info.usage & VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR) ||
-       (alloc_info.usage & VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR) ||
-       (alloc_info.usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR))) {
+      ((buffer_info.usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) ||
+       (buffer_info.usage & VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR) ||
+       (buffer_info.usage & VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR) ||
+       (buffer_info.usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR))) {
+    // Check the Vulkan `VkBufferCreateInfo::usage` flags, not the VMA `VmaAllocationCreateInfo::usage`
+    // enum - the latter is `VMA_MEMORY_USAGE_UNKNOWN` here (never set) and never matches any
+    // `VK_BUFFER_USAGE_*` bit, so without this the branch was dead and the SHADER_DEVICE_ADDRESS usage
+    // flag was never attached. The downstream `vkGetBufferDeviceAddressKHR` call below then fires
+    // `VUID-VkBufferDeviceAddressInfo-buffer-02601` under the validation layer, and on drivers that
+    // don't validate (MoltenVK) returns a garbage address that silently miscomputes every subsequent
+    // PSB-backed ndarray load.
     buffer_info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR;
   }
 
@@ -1607,7 +1614,13 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
 
   vmaGetAllocationInfo(alloc.buffer->allocator, alloc.buffer->allocation, &alloc.alloc_info);
 
-  if (get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer)) {
+  if (get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer) &&
+      (buffer_info.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR)) {
+    // Gated on the matching usage bit the block above may have added: `vkGetBufferDeviceAddressKHR`
+    // requires the target buffer to have been created with `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`
+    // (VUID-VkBufferDeviceAddressInfo-buffer-02601). Buffers that do not qualify for the bit (uniform-only,
+    // vertex/index, transfer-only staging) never need a device address - they are only read via descriptor
+    // binding. Leaving `alloc.addr` at zero in that case matches what happens on backends without the cap.
     VkBufferDeviceAddressInfoKHR info{};
     info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR;
     info.buffer = alloc.buffer->buffer;

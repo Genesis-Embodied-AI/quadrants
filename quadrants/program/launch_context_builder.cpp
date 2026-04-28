@@ -134,6 +134,23 @@ void LaunchContextBuilder::set_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 
   }
 }
 
+void LaunchContextBuilder::set_host_accessible_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr) {
+  // Host-accessible variant used by the CPU kernel launcher. `set_ndarray_ptrs` alone only writes the
+  // resolved pointer into the kernel-visible arg buffer; it leaves the `array_ptrs` map holding whatever the
+  // earlier `set_arg_ndarray_impl` stashed (a `DeviceAllocation *` handle when the caller passed an Ndarray).
+  // The adstack size-expression evaluator reads straight from `array_ptrs` to resolve runtime loop bounds
+  // derived from ndarray element reads (`ExternalTensorRead` nodes from `determine_ad_stack_size`); on CPU the
+  // resolved `data_ptr` is the real host pointer to the element buffer, so mirror it into `array_ptrs` once
+  // the launcher knows the raw address. SPIR-V / CUDA / AMDGPU launchers stay on the plain `set_ndarray_ptrs`
+  // path: the address they pass is a device-only pointer that cannot be dereferenced from the evaluator, and
+  // stamping it into `array_ptrs` would just move the stale read to a harder-to-diagnose segfault.
+  set_ndarray_ptrs(arg_id, data_ptr, grad_ptr);
+  array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}] = reinterpret_cast<void *>(data_ptr);
+  if (kernel_->nested_parameters[arg_id].needs_grad) {
+    array_ptrs[{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}] = reinterpret_cast<void *>(grad_ptr);
+  }
+}
+
 template void LaunchContextBuilder::set_struct_arg(const std::array<int, 1> &, uint64);
 template void LaunchContextBuilder::set_struct_arg(const std::array<int, 1> &, int64);
 template void LaunchContextBuilder::set_struct_arg(const std::array<int, 1> &, float64);
@@ -229,6 +246,15 @@ T LaunchContextBuilder::get_struct_arg(std::vector<int> arg_indices) {
 }
 
 template <typename T>
+T LaunchContextBuilder::get_struct_arg_host(std::vector<int> arg_indices) {
+  // `ctx_->arg_buffer` can be a device pointer after a CUDA / AMDGPU launcher swap; `arg_buffer_.get()` is the
+  // launcher-owned host backing buffer and is always safe to dereference from host code.
+  int offset = args_type->get_element_offset(arg_indices);
+  QD_ASSERT(offset + sizeof(T) <= arg_buffer_size);
+  return *(T *)(arg_buffer_.get() + offset);
+}
+
+template <typename T>
 void LaunchContextBuilder::set_arg(int arg_id, T v) {
   set_struct_arg_impl(std::array{arg_id}, v);
   set_array_device_allocation_type(arg_id, DevAllocType::kNone);
@@ -245,6 +271,7 @@ T LaunchContextBuilder::get_ret(int i) {
   template void LaunchContextBuilder::set_struct_arg_impl(const std::array<int, 3> &arg_indices, ctype v); \
   template ctype LaunchContextBuilder::get_arg(const std::vector<int> &i);                                 \
   template ctype LaunchContextBuilder::get_struct_arg(std::vector<int> arg_indices);                       \
+  template ctype LaunchContextBuilder::get_struct_arg_host(std::vector<int> arg_indices);                  \
   template void LaunchContextBuilder::set_arg(int i, ctype v);                                             \
   template ctype LaunchContextBuilder::get_ret(int i);
 #include "quadrants/inc/data_type_with_c_type.inc.h"

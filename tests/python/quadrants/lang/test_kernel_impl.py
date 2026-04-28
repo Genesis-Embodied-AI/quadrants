@@ -1,3 +1,4 @@
+import os
 import pathlib
 
 import pytest
@@ -7,7 +8,13 @@ from quadrants._test_tools import qd_init_same_arch
 
 from tests import test_utils
 
+_KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"
 
+
+@pytest.mark.skipif(
+    _KERNEL_COVERAGE,
+    reason="Coverage probes change the kernel AST, preventing FE-LL cache hits after reinit",
+)
 @test_utils.test()
 def test_fe_ll_observations(tmp_path: pathlib.Path) -> None:
     @qd.kernel
