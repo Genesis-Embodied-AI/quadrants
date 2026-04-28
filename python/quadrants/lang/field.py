@@ -1,6 +1,7 @@
 # pyright: reportPrivateImportUsage=false
 # Reason: torch.zeros is public torch API, but pyright 1.1.409+ flags it as
 # private because torch's stubs don't re-export it via __all__.
+import ctypes
 from typing import TYPE_CHECKING, cast
 
 import quadrants.lang
@@ -15,6 +16,91 @@ from quadrants.lang.util import (
     to_numpy_type,
     to_pytorch_type,
 )
+
+
+# ---------------------------------------------------------------------------
+# DLPack canonical-view patch for layout-tagged fields.
+#
+# The C++ ``field_to_dlpack`` derives the physical-memory axis order from the SNode chain. For layout-tagged fields
+# built via the new flat-rank-N allocation path (see ``lang/impl.py::_field``), the SNode chain is in natural order and
+# C++ reports the *permuted physical* shape with identity strides. We patch the returned DLManagedTensor in place here
+# so consumers (``torch.utils.dlpack.from_dlpack`` et al.) observe the canonical shape and matching permuted strides —
+# byte-identical to the view layout-tagged ndarrays produce via the ``ndarray_to_dlpack`` ``layout=`` parameter.
+#
+# The struct layouts below match the DLPack v1 ABI exactly. Only the fields we need to read (``ndim``) and mutate
+# (``shape``, ``strides``) are referenced, so additions to DLTensor / DLManagedTensor that land after this writes in
+# newer DLPack versions won't affect correctness.
+# ---------------------------------------------------------------------------
+class _DLDevice(ctypes.Structure):
+    _fields_ = [("device_type", ctypes.c_int32), ("device_id", ctypes.c_int32)]
+
+
+class _DLDataType(ctypes.Structure):
+    _fields_ = [("code", ctypes.c_uint8), ("bits", ctypes.c_uint8), ("lanes", ctypes.c_uint16)]
+
+
+class _DLTensor(ctypes.Structure):
+    _fields_ = [
+        ("data", ctypes.c_void_p),
+        ("device", _DLDevice),
+        ("ndim", ctypes.c_int32),
+        ("dtype", _DLDataType),
+        ("shape", ctypes.POINTER(ctypes.c_int64)),
+        ("strides", ctypes.POINTER(ctypes.c_int64)),
+        ("byte_offset", ctypes.c_uint64),
+    ]
+
+
+class _DLManagedTensor(ctypes.Structure):
+    _fields_ = [
+        ("dl_tensor", _DLTensor),
+        ("manager_ctx", ctypes.c_void_p),
+        ("deleter", ctypes.c_void_p),
+    ]
+
+
+def _patch_field_dlpack_canonical(capsule, layout):
+    """Mutate the DLManagedTensor inside *capsule* so its shape/strides expose a canonical view of the
+    permuted-physical field buffer.
+
+    Invariants (input):
+      * ``shape[i]`` = physical shape along axis ``i`` of the SNode (which is the *permuted* shape the field was
+        allocated at).
+      * ``strides[i]`` = physical stride along axis ``i`` (row-major over the permuted shape).
+
+    Invariants (output):
+      * ``shape[a]`` = canonical-axis-``a`` extent = input ``shape[invperm[a]]``.
+      * ``strides[a]`` = canonical-axis-``a`` stride = input ``strides[invperm[a]]``.
+
+    ``invperm`` inverts the ``_qd_layout`` permutation by the convention that ``layout[p]`` is the canonical axis at
+    physical nesting position ``p``, so ``invperm[canonical_axis] = physical_axis``.
+    """
+    ndim = len(layout)
+    if ndim == 0:
+        return
+    if tuple(layout) == tuple(range(ndim)):
+        return  # identity layout — nothing to do
+    _PyCapsule_GetPointer = ctypes.pythonapi.PyCapsule_GetPointer
+    _PyCapsule_GetPointer.restype = ctypes.c_void_p
+    _PyCapsule_GetPointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+    raw = _PyCapsule_GetPointer(capsule, b"dltensor")
+    if not raw:
+        raise RuntimeError("field_to_dlpack returned a capsule without the expected 'dltensor' name")
+    mt = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensor)).contents
+    t = mt.dl_tensor
+    if t.ndim < ndim:
+        raise RuntimeError(f"field_to_dlpack returned ndim={t.ndim} but layout has rank {ndim}; cannot patch")
+    # Only the first ``ndim`` axes carry the canonical permutation; any trailing axes (element dims for VectorField /
+    # MatrixField) are already in innermost identity position and must not be permuted.
+    shape_phys = [int(t.shape[i]) for i in range(ndim)]
+    strides_phys = [int(t.strides[i]) for i in range(ndim)]
+    invperm = [0] * ndim
+    for p, a in enumerate(layout):
+        invperm[a] = p
+    for a in range(ndim):
+        t.shape[a] = shape_phys[invperm[a]]
+        t.strides[a] = strides_phys[invperm[a]]
+
 
 if TYPE_CHECKING:
     from quadrants.lang.expr import Expr
@@ -63,8 +149,41 @@ class Field:
     @property
     def shape(self) -> tuple[int, ...]:
         if not self._shape:
-            self._shape = cast(tuple[int, ...], self._snode.shape)
+            phys = cast(tuple[int, ...], self._snode.shape)
+            # For layout-tagged fields the SNode is allocated at the permuted *physical* shape; surface the
+            # caller-facing *canonical* shape (inverse permutation) to match the ``Tensor`` / ``Ndarray`` contract
+            # where ``.shape`` is always what was passed into the factory.
+            layout = getattr(self, "_qd_layout", None)
+            if layout is not None:
+                layout_t = tuple(layout)
+                if layout_t != tuple(range(len(layout_t))) and len(phys) == len(layout_t):
+                    # ``phys[p] = canonical[layout[p]]`` ⇒ ``canonical[a] = phys[inv_layout[a]]``.
+                    inv = [0] * len(layout_t)
+                    for p, a in enumerate(layout_t):
+                        inv[a] = p
+                    phys = tuple(phys[inv[a]] for a in range(len(layout_t)))
+            self._shape = phys
         return self._shape
+
+    @property
+    def layout(self):
+        """Canonical-axis-permutation tuple, or ``None`` for identity.
+
+        Mirrors :attr:`Ndarray.layout`: returns the same value the caller passed to ``qd.tensor(..., layout=...)``
+        (or ``None`` if that kwarg was omitted / was the identity permutation). Lets downstream code introspect the
+        physical layout without having to know which backend produced the tensor.
+
+        Fields constructed directly via ``qd.field(..., order=...)`` also report their layout here — the ``order=``
+        axis-string is translated into an integer permutation and stashed on the same ``_qd_layout`` attribute that
+        layout-tagged ndarrays use.
+        """
+        layout = getattr(self, "_qd_layout", None)
+        if layout is None:
+            return None
+        layout = tuple(layout)
+        if layout == tuple(range(len(layout))):
+            return None
+        return layout
 
     @property
     def dtype(self) -> DataTypeCxx:
@@ -192,7 +311,17 @@ class Field:
         if len(key) != len(self.shape):
             raise AssertionError("Slicing is not supported on qd.field")
 
-        return key + ((0,) * (_qd_core.get_max_num_indices() - len(key)))  # type: ignore
+        # For layout-tagged fields (``_qd_layout = (a0, a1, ..., a_{N-1})`` canonical-axis permutation), the user writes
+        # indices in canonical order but the underlying flat rank-N SNode is allocated at the permuted physical shape
+        # and expects physical-order indices. Mirrors ``Tensor._permute_key`` in ``_tensor_wrapper.py``. Uses the same
+        # convention as :func:`build_Subscript`: physical index at nesting level ``p`` is ``canonical[layout[p]]``.
+        layout = getattr(self, "_qd_layout", None)
+        if layout is not None:
+            layout_t = tuple(layout)
+            if layout_t != tuple(range(len(layout_t))):
+                key = tuple(key[layout_t[p]] for p in range(len(layout_t)))
+
+        return tuple(key) + ((0,) * (_qd_core.get_max_num_indices() - len(key)))  # type: ignore
 
     def _initialize_host_accessors(self):
         if self.host_accessors:
@@ -219,11 +348,28 @@ class ScalarField(Field):
 
     def to_dlpack(self):
         """
-        Note: caller is responsible for calling qd.sync() between modifying the field, and
-        reading it.
+        Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.
         """
         impl.get_runtime().materialize()
-        return impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, 0, 0, 0)
+        try:
+            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, 0, 0, 0)
+        except ModuleNotFoundError:
+            # The C++ ``field_to_dlpack`` calls ``torch_supports_byte_offset`` which unconditionally does ``import
+            # torch``. Guard here so callers that don't need torch (e.g. raw DLPack consumers) get a clear error
+            # instead of a worker crash.
+            raise ModuleNotFoundError(
+                "field.to_dlpack() requires torch to be installed "
+                "(the C++ layer checks torch version for DLPack byte_offset support)"
+            ) from None
+        # For layout-tagged fields the underlying dense SNode is allocated at the *permuted physical* shape; the C++
+        # ``field_to_dlpack`` reports that physical shape because the SNode hierarchy no longer encodes the
+        # canonical-axis permutation (which now lives on the Python-side ``_qd_layout`` attribute instead of nested
+        # rank-1 SNodes). Patch the DLManagedTensor in place so consumers see the canonical shape with permuted
+        # strides — the same view contract that layout-tagged ndarrays produce.
+        layout = getattr(self, "_qd_layout", None)
+        if layout is not None:
+            _patch_field_dlpack_canonical(capsule, tuple(layout))
+        return capsule
 
     def fill(self, val):
         """Fills this scalar field with a specified value."""

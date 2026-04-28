@@ -40,6 +40,7 @@ def _get_expected_matrix_apis():
         "outer_product",
         "rows",
         "sum",
+        "tensor",
         "to_list",
         "to_numpy",
         "trace",
@@ -54,6 +55,7 @@ def _get_expected_matrix_apis():
 
 user_api = {}
 user_api[qd] = [
+    "Backend",
     "BitpackedFields",
     "CRITICAL",
     "DEBUG",
@@ -86,8 +88,12 @@ user_api[qd] = [
     "QuadrantsSyntaxError",
     "QuadrantsTypeError",
     "Template",
+    "Tensor",
+    "MatrixTensor",
+    "VectorTensor",
     "Vector",
     "VectorNdarray",
+    "wrap",
     "WARN",
     "abs",
     "acos",
@@ -226,6 +232,7 @@ user_api[qd] = [
     "tan",
     "tanh",
     "template",
+    "tensor",
     "tools",
     "types",
     "u1",
@@ -258,6 +265,7 @@ user_api[qd.Field] = [
     "fill",
     "from_numpy",
     "from_torch",
+    "layout",
     "parent",
     "shape",
     "snode",
@@ -357,6 +365,7 @@ user_api[qd.MatrixField] = [
     "from_numpy",
     "from_torch",
     "get_scalar_field",
+    "layout",
     "parent",
     "shape",
     "snode",
@@ -369,11 +378,15 @@ user_api[qd.MatrixNdarray] = [
     "element_shape",
     "fill",
     "from_numpy",
+    "from_torch",
     "get_type",
+    "layout",
+    "shape",
     "to_dlpack",
     "to_numpy",
+    "to_torch",
 ]
-user_api[qd.Ndarray] = ["copy_from", "element_shape", "fill", "get_type", "to_dlpack"]
+user_api[qd.Ndarray] = ["copy_from", "element_shape", "fill", "get_type", "layout", "shape", "to_dlpack"]
 user_api[qd.SNode] = [
     "bitmasked",
     "deactivate_all",
@@ -393,6 +406,7 @@ user_api[qd.ScalarField] = [
     "fill",
     "from_numpy",
     "from_torch",
+    "layout",
     "parent",
     "shape",
     "snode",
@@ -405,9 +419,13 @@ user_api[qd.ScalarNdarray] = [
     "element_shape",
     "fill",
     "from_numpy",
+    "from_torch",
     "get_type",
+    "layout",
+    "shape",
     "to_dlpack",
     "to_numpy",
+    "to_torch",
 ]
 user_api[qd.Struct] = ["entries", "field", "items", "keys", "methods", "to_dict"]
 user_api[qd.StructField] = [
@@ -418,6 +436,7 @@ user_api[qd.StructField] = [
     "from_torch",
     "get_member_field",
     "keys",
+    "layout",
     "parent",
     "shape",
     "snode",
@@ -429,9 +448,13 @@ user_api[qd.VectorNdarray] = [
     "element_shape",
     "fill",
     "from_numpy",
+    "from_torch",
     "get_type",
+    "layout",
+    "shape",
     "to_dlpack",
     "to_numpy",
+    "to_torch",
 ]
 user_api[qd.sparse] = ["grid", "usage"]
 

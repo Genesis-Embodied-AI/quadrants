@@ -122,10 +122,18 @@ def decl_sparse_matrix(dtype, name):
 
 
 def decl_ndarray_arg(
-    element_type: DataTypeCxx, ndim: int, name: str, needs_grad: bool, boundary: BoundaryMode
+    element_type: DataTypeCxx,
+    ndim: int,
+    name: str,
+    needs_grad: bool,
+    boundary: BoundaryMode,
+    layout=None,
 ) -> AnyArray:
     arg_id = impl.get_runtime().compiling_callable.insert_ndarray_param(element_type, ndim, name, needs_grad)
-    return AnyArray(_qd_core.make_external_tensor_expr(element_type, ndim, arg_id, needs_grad, boundary))
+    return AnyArray(
+        _qd_core.make_external_tensor_expr(element_type, ndim, arg_id, needs_grad, boundary),
+        _qd_layout=layout,
+    )
 
 
 def decl_ret(dtype):

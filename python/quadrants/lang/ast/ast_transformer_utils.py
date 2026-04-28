@@ -181,6 +181,8 @@ class ASTTransformerGlobalContext:
         self.pruning: "Pruning" = pruning
         self.currently_compiling_materialize_key = currently_compiling_materialize_key
         self.pass_idx: int = pass_idx
+        self.ndarray_to_any_array: dict[int, Any] = {}
+        self.struct_ndarray_launch_info: list[tuple] = []
 
 
 class ASTTransformerFuncContext:

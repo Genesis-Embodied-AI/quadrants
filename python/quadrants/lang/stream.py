@@ -11,8 +11,8 @@ def _get_prog_weakref():
 class Stream:
     """Wraps a backend-specific GPU stream for concurrent kernel execution.
 
-    On backends without native streams (e.g. CPU), this is a no-op object.
-    Call destroy() explicitly or use as a context manager to ensure cleanup.
+    On backends without native streams (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as
+    a context manager to ensure cleanup.
     """
 
     def __init__(self, handle: int, prog_ref: weakref.ref | None = None):
@@ -55,8 +55,8 @@ class Stream:
 class Event:
     """Wraps a backend-specific GPU event for stream synchronization.
 
-    On backends without native events (e.g. CPU), this is a no-op object.
-    Call destroy() explicitly or use as a context manager to ensure cleanup.
+    On backends without native events (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as
+    a context manager to ensure cleanup.
     """
 
     def __init__(self, handle: int, prog_ref: weakref.ref | None = None):

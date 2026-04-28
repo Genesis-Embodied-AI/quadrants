@@ -8,6 +8,11 @@ from quadrants._lib.core.quadrants_python import (
     BoundaryMode,
     DataTypeCxx,
 )
+from quadrants._tensor import (
+    _TENSOR_T_FIELD_MARKER,
+    _TENSOR_T_NDARRAY_MARKER,
+)
+from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import (
     _ndarray,
     any_array,
@@ -44,6 +49,31 @@ class FunctionDefTransformer:
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
+        # qd.Tensor value-dispatch. The first slot of this_arg_features is a string marker placed by
+        # _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).
+        if annotation is _TensorClass:
+            assert this_arg_features is not None
+            marker = this_arg_features[0]
+            if marker == _TENSOR_T_NDARRAY_MARKER:
+                raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features[1:]
+                return False, (
+                    kernel_arguments.decl_ndarray_arg,
+                    (
+                        to_quadrants_type(raw_element_type),
+                        ndim,
+                        full_name,
+                        needs_grad,
+                        BoundaryMode(boundary),
+                        layout,
+                    ),
+                )
+            if marker == _TENSOR_T_FIELD_MARKER:
+                # Field branch: behave exactly like a template arg.
+                if name in ctx.template_vars:
+                    return True, ctx.template_vars[name]
+                assert ctx.global_vars is not None
+                return True, ctx.global_vars.get(name)
+            raise AssertionError(f"unknown qd.Tensor marker: {marker!r}")
         if annotation == annotations.template or isinstance(annotation, annotations.template):
             if name in ctx.template_vars:
                 return True, ctx.template_vars[name]
@@ -63,7 +93,8 @@ class FunctionDefTransformer:
             ndim: int
             needs_grad: bool
             boundary: int
-            raw_element_type, ndim, needs_grad, boundary = this_arg_features
+            # Tensors layout is the trailing slot; None for legacy / identity.
+            raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features
             return False, (
                 kernel_arguments.decl_ndarray_arg,
                 (
@@ -72,6 +103,7 @@ class FunctionDefTransformer:
                     full_name,
                     needs_grad,
                     BoundaryMode(boundary),
+                    layout,
                 ),
             )
         if isinstance(annotation, MatrixType):
@@ -152,9 +184,87 @@ class FunctionDefTransformer:
                 ctx.arg_features[i] if ctx.arg_features is not None else (),
             )
 
+        FunctionDefTransformer._predeclare_struct_ndarrays(ctx)
         compiling_callable.finalize_params()
         # remove original args
         node.args.args = []
+
+    @staticmethod
+    def _predeclare_struct_ndarrays(ctx: ASTTransformerFuncContext) -> None:
+        """Walk template args that are structs and pre-declare any ``Ndarray`` attributes as kernel args (via
+        ``decl_ndarray_arg``) so they are registered before ``finalize_params``. The resulting ``AnyArray`` objects are
+        cached on the global context for later lookup by ``build_Attribute``.
+
+        Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in
+        ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in the
+        launch context.
+        """
+        from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
+
+        cache = ctx.global_context.ndarray_to_any_array
+        launch_info = ctx.global_context.struct_ndarray_launch_info
+
+        def _walk_obj(obj, arg_idx, path):
+            if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+                for field in dataclasses.fields(obj):
+                    child = getattr(obj, field.name)
+                    if isinstance(child, _TensorClass):
+                        child = child._unwrap()
+                    if isinstance(child, _ndarray.Ndarray):
+                        _register_ndarray(child, arg_idx, (*path, field.name))
+                    elif dataclasses.is_dataclass(child) and not isinstance(child, type):
+                        _walk_obj(child, arg_idx, (*path, field.name))
+            else:
+                for attr_name, attr_val in vars(obj).items():
+                    if isinstance(attr_val, _TensorClass):
+                        attr_val = attr_val._unwrap()
+                    if isinstance(attr_val, _ndarray.Ndarray):
+                        _register_ndarray(attr_val, arg_idx, (*path, attr_name))
+
+        def _register_ndarray(nd, arg_idx, attr_chain):
+            key = id(nd)
+            if key in cache:
+                return
+            from quadrants._lib import core as _qd_core  # pylint: disable=C0415
+
+            element_type = cook_dtype(nd.element_type)
+            ndim = len(nd._physical_shape)
+            needs_grad = nd.grad is not None
+            layout = getattr(nd, "_qd_layout", None)
+            name = f"__qd_struct_nd_{key}"
+            arg_id_vec = impl.get_runtime().compiling_callable.insert_ndarray_param(
+                element_type, ndim, name, needs_grad
+            )
+            arr = any_array.AnyArray(
+                _qd_core.make_external_tensor_expr(element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE),
+                _qd_layout=layout,
+            )
+            cache[key] = arr
+            launch_info.append((arg_id_vec[0], arg_idx, attr_chain))
+
+        assert ctx.py_args is not None
+        for i, arg_meta in enumerate(ctx.func.arg_metas):
+            anno = arg_meta.annotation
+            is_template = anno is annotations.template or isinstance(anno, annotations.template)
+            is_tensor_anno = anno is _TensorClass
+            if not (is_template or is_tensor_anno):
+                continue
+            val = ctx.py_args[i]
+            if isinstance(val, _TensorClass):
+                val = val._unwrap()
+            if isinstance(val, _ndarray.Ndarray):
+                continue
+            if dataclasses.is_dataclass(val) and not isinstance(val, type):
+                _walk_obj(val, i, ())
+            elif hasattr(val, "__dict__"):
+                _walk_obj(val, i, ())
+
+    @staticmethod
+    def _unwrap_tensor(data: Any) -> Any:
+        """Unwrap a ``qd.Tensor`` wrapper to its bare impl, if needed."""
+        if isinstance(data, _TensorClass):
+            return data._unwrap()
+        return data
 
     @staticmethod
     def _transform_func_arg(
@@ -168,10 +278,20 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, data)
             return None
 
+        # qd.Tensor in @qd.func context: polymorphic pass-by-reference. No template-mapper features are available
+        # (those only exist for top-level @qd.kernel args). Unwrap any Tensor wrapper, then create the variable
+        # directly — ndarray and field impls are both valid pass-by-reference arguments.
+        if argument_type is _TensorClass:
+            data = FunctionDefTransformer._unwrap_tensor(data)
+            _cache = getattr(getattr(ctx, "global_context", None), "ndarray_to_any_array", None)
+            promoted = _cache.get(id(data)) if _cache else None
+            ctx.create_variable(argument_name, promoted if promoted is not None else data)
+            return None
+
         if dataclasses.is_dataclass(argument_type):
             for field in dataclasses.fields(argument_type):
                 flat_name = create_flat_name(argument_name, field.name)
-                data_child = getattr(data, field.name)
+                data_child = FunctionDefTransformer._unwrap_tensor(getattr(data, field.name))
                 if isinstance(
                     data_child,
                     (
@@ -181,14 +301,19 @@ class FunctionDefTransformer:
                         any_array.AnyArray,
                     ),
                 ):
-                    field.type.check_matched(data_child.get_type(), field.name)
-                    ctx.create_variable(flat_name, data_child)
+                    # qd.Tensor struct fields skip check_matched (the Tensor class has no such method — it is
+                    # polymorphic).
+                    if field.type is not _TensorClass and hasattr(field.type, "check_matched"):
+                        field.type.check_matched(data_child.get_type(), field.name)
+                    _cache = getattr(getattr(ctx, "global_context", None), "ndarray_to_any_array", None)
+                    promoted = _cache.get(id(data_child)) if _cache else None
+                    ctx.create_variable(flat_name, promoted if promoted is not None else data_child)
                 elif dataclasses.is_dataclass(data_child):
                     FunctionDefTransformer._transform_func_arg(
                         ctx,
                         flat_name,
                         field.type,
-                        getattr(data, field.name),
+                        data_child,
                     )
                 else:
                     raise QuadrantsSyntaxError(
