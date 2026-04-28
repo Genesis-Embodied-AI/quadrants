@@ -19,9 +19,8 @@ Module Contents
 
    Type annotation for BufferView kernel parameters.
 
-   A BufferView is automatically decomposed into three kernel arguments
-   (ndarray, offset, size) at compile time and reassembled into a
-   kernel-scope BufferView object.
+   A BufferView is automatically decomposed into three kernel arguments (ndarray, offset, size) at compile time
+   and reassembled into a kernel-scope BufferView object.
 
    :param dtype: Element data type (e.g. qd.f32).
    :param boundary: Boundary mode for the underlying ndarray ("unsafe", "clamp").
