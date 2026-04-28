@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Supported systems &#8212; Quadrants 0.7.3 documentation</title>
+    <title>qd.init options &#8212; Quadrants 0.7.3 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/supported_systems';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/init_options';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Tensor types" href="tensor_types.html" />
-    <link rel="prev" title="Getting started" href="getting_started.html" />
+    <link rel="next" title="Kernel code coverage" href="kernel_coverage.html" />
+    <link rel="prev" title="Performance Dispatch" href="perf_dispatch.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.7.3" />
@@ -279,9 +279,9 @@
      aria-label="Section Navigation">
   <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
   <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
-<ul class="current nav bd-sidenav">
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Supported systems</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
 <ul class="nav bd-sidenav">
@@ -308,10 +308,10 @@
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
-<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">qd.init options</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
@@ -375,7 +375,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Supported systems</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">qd.init options</span></li>
   </ul>
 </nav>
 </div>
@@ -392,100 +392,60 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="supported-systems">
-<h1>Supported systems<a class="headerlink" href="#supported-systems" title="Link to this heading">#</a></h1>
-<section id="ci-tested-systems">
-<h2>CI Tested systems<a class="headerlink" href="#ci-tested-systems" title="Link to this heading">#</a></h2>
-<p>We test the following systems in our CI servers:</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="qd-init-options">
+<h1>qd.init options<a class="headerlink" href="#qd-init-options" title="Link to this heading">#</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> accepts every field of the underlying <code class="docutils literal notranslate"><span class="pre">CompileConfig</span></code> struct as a keyword argument; the same fields are also reachable as environment variables of the form <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>). This page covers some of the knobs that are commonly tuned in practice. The underlying source of truth is <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants/blob/main/quadrants/program/compile_config.h"><code class="docutils literal notranslate"><span class="pre">quadrants/program/compile_config.h</span></code></a>.</p>
+<section id="caching">
+<h2>Caching<a class="headerlink" href="#caching" title="Link to this heading">#</a></h2>
+<section id="offline-cache">
+<h3><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code><a class="headerlink" href="#offline-cache" title="Link to this heading">#</a></h3>
+<p>Whether the compilation caches <strong>persist on disk across Python invocations</strong>. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. The “offline” in the name refers to the fact that this cache outlives the process: it is what makes the <em>second</em> time you start a Python interpreter and run a kernel cheap, by reusing artifacts from the first run.</p>
+<p>Setting <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. In-process caches operate independently of this flag: within a single Python session, identical kernels are never recompiled. The flag therefore controls only whether the next Python invocation observes a warm or a cold disk.</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">offline_cache=True</span></code>, three persistent layers cooperate. The first two share the cache directory configured by <code class="docutils literal notranslate"><span class="pre">offline_cache_file_path</span></code> (default <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/qdcache</span></code>); the third is owned by libcuda and lives outside that path.</p>
+<ol class="arabic simple">
+<li><p>The cross-backend kernel-IR / compiled-kernel cache (driven by <code class="docutils literal notranslate"><span class="pre">KernelCompilationManager</span></code>). When the IR-and-config hash hits, the previously compiled kernel data is loaded from disk and the entire compile pipeline is skipped. Active for every backend (CPU, CUDA, AMDGPU, Metal, Vulkan).</p></li>
+<li><p>The CUDA per-arch PTX cache, written under <code class="docutils literal notranslate"><span class="pre">&lt;offline_cache_file_path&gt;/ptx_cache_sm_*</span></code> (driven by <code class="docutils literal notranslate"><span class="pre">PtxCache</span></code>). When the LLVM-IR hash hits, the previously emitted PTX is loaded from disk and the LLVM-to-PTX compilation pipeline (LLVM optimization passes plus the NVPTX backend’s PTX emission) is skipped. <code class="docutils literal notranslate"><span class="pre">ptxas</span></code> itself runs later inside <code class="docutils literal notranslate"><span class="pre">cuModuleLoadDataEx</span></code> and is governed by Layer 3.</p></li>
+<li><p>The NVIDIA driver compute cache at <code class="docutils literal notranslate"><span class="pre">~/.nv/ComputeCache</span></code>, keyed by PTX content hash. When this hits, <code class="docutils literal notranslate"><span class="pre">ptxas</span></code> work is skipped because the SASS itself is reused. This cache is owned by libcuda and not by Quadrants.</p></li>
+</ol>
+<p>Setting <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> (or <code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>) disables every disk-persistent layer so a fresh Python session sees a true cold start:</p>
 <ul class="simple">
-<li><p>Python 3.10-Python 3.13</p></li>
-<li><p>Mac OS X 14 and 15</p></li>
-<li><p>Ubuntu 22.04 and Ubuntu 24.04</p></li>
-<li><p>Windows Server 2025</p></li>
+<li><p>Layer 1 falls back to memory-only. The disk cache is not consulted for kernel data and new kernels are not persisted, so kernels are compiled from source on every Python invocation.</p></li>
+<li><p>Layer 2 falls back to memory-only. PTX is still cached within one process so kernels with identical LLVM IR share PTX output, but nothing is read from or written to disk.</p></li>
+<li><p>Layer 3 cannot be controlled by the libcuda environment variable <code class="docutils literal notranslate"><span class="pre">CUDA_CACHE_DISABLE</span></code> from inside Python because the variable is captured by libcuda at process start. Quadrants instead appends a per-process nonce comment to the PTX it submits to <code class="docutils literal notranslate"><span class="pre">cuModuleLoadDataEx</span></code>. The nonce is constant within one process - kernels with identical PTX still share a cubin in the same run - and changes between processes so cross-run hits cannot quietly serve stale SASS.</p></li>
 </ul>
-</section>
-<section id="id1">
-<h2>Supported systems:<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
-<section id="operating-systems">
-<h3>Operating systems<a class="headerlink" href="#operating-systems" title="Link to this heading">#</a></h3>
+<p>When to set it to <code class="docutils literal notranslate"><span class="pre">False</span></code>:</p>
 <ul class="simple">
-<li><p>Mac Silicon 14 or 15</p></li>
-<li><p>Ubuntu 22.04 and 24.04 (x64 and ARM64)</p></li>
-<li><p>Windows 10 or later (x86 only)</p></li>
+<li><p>Taking compile-time profiles where any cached SASS would mask the real cost.</p></li>
+<li><p>Investigating a stale-cache bug or suspected cache corruption.</p></li>
+<li><p>Reproducing first-run behavior in CI matrix runs that would otherwise warm the caches across iterations.</p></li>
 </ul>
+<p>For normal use, leave it at <code class="docutils literal notranslate"><span class="pre">True</span></code>; the cache layers are the dominant source of fast warm-up.</p>
 </section>
-<section id="gpus">
-<h3>GPUs<a class="headerlink" href="#gpus" title="Link to this heading">#</a></h3>
-<ul class="simple">
-<li><p>CUDA GPUs, Pascal or later (&gt;=sm_60)</p></li>
-<li><p>Metal GPUs</p></li>
-<li><p>AMD GPUs</p></li>
-<li><p>Vulkan-compatible GPUs (e.g. Intel Arc)</p></li>
-</ul>
 </section>
-<section id="backend-os-matrix">
-<h3>Backend / OS matrix<a class="headerlink" href="#backend-os-matrix" title="Link to this heading">#</a></h3>
-<p>Which backends are available on each supported platform. <code class="docutils literal notranslate"><span class="pre">qd.cpu</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> run on every OS; the other GPU backends are platform-specific because they wrap vendor drivers (CUDA on NVIDIA, ROCm on AMD, Metal on Apple).</p>
-<div class="pst-scrollable-table-container"><table class="table">
-<thead>
-<tr class="row-odd"><th class="head"><p>OS \ backend</p></th>
-<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.cpu</span></code></p></th>
-<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.cuda</span></code></p></th>
-<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code></p></th>
-<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.metal</span></code></p></th>
-<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code></p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p>macOS (Apple Silicon)</p></td>
-<td><p>yes</p></td>
-<td><p>n/a</p></td>
-<td><p>n/a</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-</tr>
-<tr class="row-odd"><td><p>Linux x64</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>n/a</p></td>
-<td><p>yes</p></td>
-</tr>
-<tr class="row-even"><td><p>Linux ARM64</p></td>
-<td><p>yes</p></td>
-<td><p>no</p></td>
-<td><p>no</p></td>
-<td><p>n/a</p></td>
-<td><p>yes</p></td>
-</tr>
-<tr class="row-odd"><td><p>Windows x86</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>no</p></td>
-<td><p>n/a</p></td>
-<td><p>yes</p></td>
-</tr>
-<tr class="row-even"><td><p>Windows ARM64</p></td>
-<td><p>yes</p></td>
-<td><p>no</p></td>
-<td><p>no</p></td>
-<td><p>n/a</p></td>
-<td><p>yes</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<p>Notes:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.cuda</span></code> requires an NVIDIA driver + CUDA runtime on the host; quadrants links against the CUDA runtime discovered at import time. NVIDIA ships CUDA for Linux ARM64 and Windows ARM64, but quadrants does not support them yet.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code> currently wires up the Linux x64 ROCm path only. AMD’s HIP SDK also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.metal</span></code> is only available on Apple hardware and is the recommended GPU backend there.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> on macOS ships a bundled MoltenVK dylib inside the wheel, so no separate MoltenVK install is required.</p></li>
-</ul>
+<section id="compile-time-tuning">
+<h2>Compile-time tuning<a class="headerlink" href="#compile-time-tuning" title="Link to this heading">#</a></h2>
+<section id="cfg-optimization">
+<h3><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code><a class="headerlink" href="#cfg-optimization" title="Link to this heading">#</a></h3>
+<p>Whether to run the control-flow-graph optimization pass. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. Setting it to <code class="docutils literal notranslate"><span class="pre">False</span></code> makes compilation up to 6x faster while costing 1-5% of runtime speed; consider disabling it if compile time is the bottleneck and the runtime delta is acceptable.</p>
 </section>
-<section id="python-backend">
-<h3>Python backend<a class="headerlink" href="#python-backend" title="Link to this heading">#</a></h3>
-<p>A pure-Python backend (<code class="docutils literal notranslate"><span class="pre">qd.python</span></code>) is available on any system where PyTorch is installed. See <a class="reference internal" href="python_backend.html"><span class="std std-doc">Python backend</span></a>.</p>
+<section id="fast-math">
+<h3><code class="docutils literal notranslate"><span class="pre">fast_math</span></code><a class="headerlink" href="#fast-math" title="Link to this heading">#</a></h3>
+<p>Whether to enable IEEE-relaxed floating-point optimizations (FMA fusion, no NaN / infinity / signed-zero guarantees). Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. Disable when investigating numerical anomalies or running deterministic-tolerance tests.</p>
+</section>
+<section id="num-compile-threads">
+<h3><code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code><a class="headerlink" href="#num-compile-threads" title="Link to this heading">#</a></h3>
+<p>Number of host threads used when compiling kernels. Default <code class="docutils literal notranslate"><span class="pre">4</span></code>. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to <code class="docutils literal notranslate"><span class="pre">1</span></code>) on memory-pressure-bound systems where concurrent LLVM compilations thrash.</p>
+</section>
+</section>
+<section id="debugging">
+<h2>Debugging<a class="headerlink" href="#debugging" title="Link to this heading">#</a></h2>
+<section id="debug">
+<h3><code class="docutils literal notranslate"><span class="pre">debug</span></code><a class="headerlink" href="#debug" title="Link to this heading">#</a></h3>
+<p>Enables IR verification between every compiler pass plus additional runtime checks (integer-overflow guards on arithmetic, linear-index overflow guards on tensor indexing, adstack push-bounds at the runtime helper level). Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Compile time slows substantially because the verifier walks the IR after every transform and the extra runtime checks expand the emitted code; ~21s additional has been observed on adstack-heavy kernels. Turn this on while iterating on a kernel that is producing incorrect numerics or while developing a new compiler pass; turn it back off once the bug is found.</p>
+</section>
+<section id="check-out-of-bound">
+<h3><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code><a class="headerlink" href="#check-out-of-bound" title="Link to this heading">#</a></h3>
+<p>Enables runtime bounds-checking for tensor indexing. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Costs runtime performance proportional to indexing density; leave off for benchmarks. Backends that do not expose the <code class="docutils literal notranslate"><span class="pre">assertion</span></code> extension (currently Metal and Vulkan) cannot honor this flag.</p>
 </section>
 </section>
 </section>
@@ -501,20 +461,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="getting_started.html"
+       href="perf_dispatch.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Getting started</p>
+        <p class="prev-next-title">Performance Dispatch</p>
       </div>
     </a>
     <a class="right-next"
-       href="tensor_types.html"
+       href="kernel_coverage.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Tensor types</p>
+        <p class="prev-next-title">Kernel code coverage</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -537,12 +497,19 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-tested-systems">CI Tested systems</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Supported systems:</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#operating-systems">Operating systems</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gpus">GPUs</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#backend-os-matrix">Backend / OS matrix</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-backend">Python backend</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#caching">Caching</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-cache"><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#compile-time-tuning">Compile-time tuning</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cfg-optimization"><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fast-math"><code class="docutils literal notranslate"><span class="pre">fast_math</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#num-compile-threads"><code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debugging">Debugging</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#debug"><code class="docutils literal notranslate"><span class="pre">debug</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#check-out-of-bound"><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -551,7 +518,7 @@
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/user_guide/supported_systems.md.txt">
+    <a href="../_sources/user_guide/init_options.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
