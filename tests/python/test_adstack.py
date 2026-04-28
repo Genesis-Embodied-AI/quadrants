@@ -1469,7 +1469,7 @@ def test_adstack_bounded_inner_loop_sized_by_structural_prepass():
     assert x.grad[0] == pytest.approx(dv_dx, rel=1e-6)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.metal, qd.vulkan], default_ip=qd.i64)
+@test_utils.test(require=qd.extension.adstack, default_ip=qd.i64)
 def test_adstack_bounded_inner_loop_pre_pass_handles_i64_bounds():
     # Pins that the structural pre-pass in `irpass::determine_ad_stack_size` accepts integer
     # `ConstStmt` loop bounds of any signed or unsigned width (not just i32). A kernel compiled
@@ -1740,7 +1740,7 @@ def test_adstack_field_load_bounded_loop_evaluated_per_launch():
 
 
 @pytest.mark.parametrize("ndarray_kind", ["numpy", "qd_ndarray"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_inner_range_bounded_by_ndarray_read_at_outer_index(ndarray_kind):
     # Pins the `ExternalTensorRead`-over-`LoopIndex` `MaxOverRange` wrap in the `SizeExpr` pre-pass: a reverse-mode
     # adstack whose inner range `range(a[i])` is bounded by a scalar ndarray read at the enclosing outer loop index. The
@@ -1866,7 +1866,7 @@ def test_adstack_inner_range_bounded_by_multidim_ndarray_read():
 
 
 @pytest.mark.parametrize("outer_bound", ["const", "dynamic"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_ext_tensor_read_indexed_by_stashed_outer_loop_var(outer_bound):
     # Pins the `ExternalPtrStmt` indexed by `AdStackLoadTopStmt` grammar gap. The kernel walks a parent/child
     # hierarchical-array layout: an outer parallel-for whose body casts its loop variable (`i_l = qd.cast(i_l_,
@@ -2100,7 +2100,7 @@ def test_adstack_triangular_ndrange_self_referential_push_idempotency():
 
 
 @pytest.mark.parametrize("inner_loop_shape", ["begin_end", "sub_then_range"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_shape_ends(inner_loop_shape):
     # Covers the two user-facing surface forms of a reverse-mode kernel whose inner range-for trip count is the
     # difference between two reads of parallel ndarrays indexed by the SAME outer loop. Both lower to a
@@ -2164,7 +2164,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_s
         assert x.grad[j] == pytest.approx(0.0, abs=1e-7)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched_shape_ends():
     # Pins the `expr_sub` fusion for the Sub-of-two-MaxOverRange shape that the walker builds when an inner range-for's
     # trip count is computed as the difference between two ndarray reads whose indices come from two DIFFERENT enclosing
@@ -2343,7 +2343,7 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
         assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal], cfg_optimization=False)
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_spirv_metadata_per_task_buffer():
     # SPIR-V launcher used to share a single grow-on-demand `AdStackMetadata` device buffer across every task in a
     # kernel. Per-task `(stride_float, stride_int, offset_i, max_size_i, ...)` tables were host-memcpy'd into that
@@ -2534,7 +2534,12 @@ def test_adstack_f16_unrolled_pushes_alignment(n_iter):
     # backends or silently corrupts adjoint state on tolerant ones - either way producing wrong
     # gradients. `n_iter=16` ensures multiple non-zero slot offsets get exercised, including odd
     # slot indices where the alignment claim matters most. Tolerance `rel=4e-3` is the f16 precision
-    # floor for sums of ~16 `sin` values.
+    # floor for sums of ~16 `sin` values. SPIR-V backends (Metal / MoltenVK / Vulkan) are excluded
+    # from the arch list because their MSL / Vulkan shader compilation fails on the reverse-mode
+    # `y[None] += acc` adstack shape with `qd.f16` fields - the host-side type-check warns
+    # `Atomic add may lose precision: f16 <- f32` and the underlying compute pipeline build then
+    # rejects the shader, so the alignment regression this test pins on the LLVM CUDA / AMDGPU
+    # backends cannot run on the SPIR-V backends regardless of slot alignment correctness.
     import torch
 
     n = 4
@@ -2640,7 +2645,7 @@ def test_adstack_unrolled_many_pushes_across_multiple_stacks(n_iter, n_stacks):
 
 
 @pytest.mark.needs_torch
-@pytest.mark.parametrize("n_inner", [4])
+@pytest.mark.parametrize("n_inner", [4, 32])
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=64)
 def test_adstack_min_loop_carried_serial_range_for(n_inner):
     # Cross-check `d/dx sum_i acc_n` where `acc` is initialized to 1.0 and updated per iteration of a serial
