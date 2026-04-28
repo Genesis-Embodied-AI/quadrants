@@ -40,10 +40,12 @@ class KernelLauncher : public LLVM::KernelLauncher {
  private:
   void launch_offloaded_tasks(LaunchContextBuilder &ctx,
                               JITModule *cuda_module,
-                              const std::vector<OffloadedTask> &offloaded_tasks);
+                              const std::vector<OffloadedTask> &offloaded_tasks,
+                              void *device_context_ptr);
   void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
                                             JITModule *cuda_module,
-                                            const std::vector<OffloadedTask> &offloaded_tasks);
+                                            const std::vector<OffloadedTask> &offloaded_tasks,
+                                            void *device_context_ptr);
 
   std::vector<Context> contexts_;
   GraphManager graph_manager_;

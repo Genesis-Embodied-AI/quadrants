@@ -13,12 +13,12 @@ class KernelLauncher : public LLVM::KernelLauncher {
 
   struct Context {
     std::vector<TaskFunc> task_funcs;
-    // Parallel vector to `task_funcs`: `ad_stack_needed_bytes[i]` is the exact adstack heap size required
-    // before dispatching task i on this kernel. Precomputed at `register_llvm_kernel` time from the
-    // `OffloadedTask::ad_stack` sizing info. 0 means the task has no adstack and the launcher skips the
-    // ensure call. CPU sizing is always `static_num_threads` (set by codegen to `num_cpu_threads` for
-    // non-serial tasks, 1 for serial) so no launch-time gtmps resolution is needed on this backend.
-    std::vector<std::size_t> ad_stack_needed_bytes;
+    // Parallel vectors to `task_funcs`: `ad_stacks[i]` points into the owning `OffloadedTask::ad_stack` (stable
+    // for the kernel's lifetime) and `num_threads_per_task[i]` is the thread count used to size the heap. CPU
+    // sizing is always `static_num_threads` (set by codegen to `num_cpu_threads` for non-serial tasks, 1 for
+    // serial), so no launch-time gtmp resolution is needed on this backend.
+    std::vector<AdStackSizingInfo> ad_stacks;
+    std::vector<std::size_t> num_threads_per_task;
     const std::vector<std::pair<int, Callable::Parameter>> *parameters;
   };
 
@@ -31,10 +31,12 @@ class KernelLauncher : public LLVM::KernelLauncher {
  private:
   void launch_offloaded_tasks(LaunchContextBuilder &ctx,
                               const std::vector<TaskFunc> &task_funcs,
-                              const std::vector<std::size_t> &ad_stack_needed_bytes);
+                              const std::vector<AdStackSizingInfo> &ad_stacks,
+                              const std::vector<std::size_t> &num_threads_per_task);
   void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
                                             const std::vector<TaskFunc> &task_funcs,
-                                            const std::vector<std::size_t> &ad_stack_needed_bytes);
+                                            const std::vector<AdStackSizingInfo> &ad_stacks,
+                                            const std::vector<std::size_t> &num_threads_per_task);
 
   std::vector<Context> contexts_;
 };
