@@ -2659,3 +2659,57 @@ def test_adstack_unrolled_many_pushes_across_multiple_stacks(n_iter, n_stacks):
     assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
     for i in range(n):
         assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("n_inner", [4])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], require=qd.extension.adstack, ad_stack_size=64)
+def test_adstack_min_loop_carried_serial_range_for(n_inner):
+    # Cross-check `d/dx sum_i acc_n` where `acc` is initialized to 1.0 and updated per iteration of a serial
+    # `for j in range(n_inner)` body via `acc = qd.min(acc * 0.5 + 0.05, x[i] + j*0.05)`. The min winner flips
+    # between the lhs and rhs across iterations (rhs wins on iter 0 because acc starts at 1.0 vs x[i]=~0.3,
+    # then lhs wins on later iterations as acc shrinks). The reverse pass must use the per-iteration forward
+    # lhs/rhs to route the gradient correctly.
+    #
+    # Internal details: pins the snap-stack fix in `MakeAdjoint::visit(BinaryOpStmt)`'s min/max branch. The
+    # forward cmp `lhs < rhs` (min) / `rhs < lhs` (max) is computed at forward time and pushed onto a
+    # dedicated 1-push-per-bin-execution adstack, then read back in reverse with a matching pop. Without the
+    # snap-stack, BackupSSA spills `bin->lhs` / `bin->rhs` to single overwrite-each-iteration allocas and
+    # every reverse iteration reads the last forward iteration's values, so the cmp flips on iterations where
+    # the actual winner changed and the gradient routes through the wrong branch (visible as `x.grad=0`
+    # instead of the analytical `0.125` for `x[i]=0.31`, `n_inner=4`).
+    import torch
+
+    n = 4
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            acc = 1.0
+            for j in range(n_inner):
+                acc = qd.min(acc * 0.5 + 0.05, x[i] + qd.cast(j, qd.f32) * 0.05)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.31 + i * 0.07
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.31 + i * 0.07 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        acc_t = torch.tensor(1.0, dtype=torch.float32)
+        for j in range(n_inner):
+            acc_t = torch.minimum(acc_t * 0.5 + 0.05, x_t[i] + float(j) * 0.05)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    for i in range(n):
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-4)
