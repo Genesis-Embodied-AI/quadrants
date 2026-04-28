@@ -1849,8 +1849,8 @@ class MatrixNdarray(Ndarray):
 
     @python_scope
     def to_torch(self, device=None):
-        """Convert this matrix ndarray to a ``torch.Tensor`` of shape
-        ``self.shape + (n, m)``. Mirrors :meth:`MatrixField.to_torch`."""
+        """Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
+        :meth:`MatrixField.to_torch`."""
         return self._ndarray_matrix_to_torch(as_vector=0, device=device)
 
     @python_scope
