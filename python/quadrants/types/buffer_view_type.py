@@ -4,9 +4,8 @@ from quadrants.types.ndarray_type import NdarrayType
 class BufferViewType:
     """Type annotation for BufferView kernel parameters.
 
-    A BufferView is automatically decomposed into three kernel arguments
-    (ndarray, offset, size) at compile time and reassembled into a
-    kernel-scope BufferView object.
+    A BufferView is automatically decomposed into three kernel arguments (ndarray, offset, size) at compile time
+    and reassembled into a kernel-scope BufferView object.
 
     Args:
         dtype: Element data type (e.g. qd.f32).

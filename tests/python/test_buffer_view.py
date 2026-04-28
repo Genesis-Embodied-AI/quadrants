@@ -1,5 +1,4 @@
-"""Tests for BufferView: slice syntax, kernel annotation, @qd.func support,
-and debug-mode out-of-bounds detection with complete callstack diagnostics."""
+"""Tests for BufferView: slice syntax, kernel annotation, @qd.func support, and debug-mode OOB detection with callstack."""
 
 import platform
 
@@ -521,8 +520,7 @@ def test_debug_no_false_positive():
 @test_utils.test(arch=get_host_arch_list())
 def test_no_debug_no_assertion():
     """Without debug mode, an out-of-range index does NOT raise QuadrantsAssertionError."""
-    # The view is data[:16]; accessing index 16 writes to data[16], which is
-    # within the backing ndarray (N=32) so there is no IR-level OOB either.
+    # The view is data[:16]; accessing index 16 writes to data[16], within the backing ndarray (N=32), no IR-level OOB.
     data = qd.ndarray(qd.f32, shape=(N,))
 
     @qd.kernel
