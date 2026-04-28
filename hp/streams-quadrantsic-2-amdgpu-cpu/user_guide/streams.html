@@ -288,6 +288,7 @@
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
@@ -311,6 +312,7 @@
 <li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Streams</a></li>
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
@@ -393,9 +395,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="streams">
 <h1>Streams<a class="headerlink" href="#streams" title="Link to this heading">#</a></h1>
-<p>Streams allow concurrent execution of GPU operations. By default, all Quadrants kernels launch on the default
-stream, which serializes everything. By creating explicit streams, you can run independent kernels concurrently
-and control synchronization with events.</p>
+<p>Streams allow concurrent execution of GPU operations. By default, all Quadrants kernels launch on the default stream, which serializes everything. By creating explicit streams, you can run independent kernels concurrently and control synchronization with events.</p>
 <section id="supported-platforms">
 <h2>Supported platforms<a class="headerlink" href="#supported-platforms" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
@@ -435,8 +435,7 @@ and control synchronization with events.</p>
 </tbody>
 </table>
 </div>
-<p>On backends without native stream support, <code class="docutils literal notranslate"><span class="pre">create_stream()</span></code> and <code class="docutils literal notranslate"><span class="pre">create_event()</span></code> return objects with handle
-<code class="docutils literal notranslate"><span class="pre">0</span></code>. All stream/event operations become no-ops and kernels run serially. Code written with streams is portable across all backends in the sense that it will run without modifications, but serially.</p>
+<p>On backends without native stream support, <code class="docutils literal notranslate"><span class="pre">create_stream()</span></code> and <code class="docutils literal notranslate"><span class="pre">create_event()</span></code> return objects with handle <code class="docutils literal notranslate"><span class="pre">0</span></code>. All stream/event operations become no-ops and kernels run serially. Code written with streams is portable across all backends in the sense that it will run without modifications, but serially.</p>
 </section>
 <section id="creating-and-using-streams">
 <h2>Creating and using streams<a class="headerlink" href="#creating-and-using-streams" title="Link to this heading">#</a></h2>
@@ -471,8 +470,7 @@ and control synchronization with events.</p>
 <span class="n">s2</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>Pass <code class="docutils literal notranslate"><span class="pre">qd_stream=</span></code> to any kernel call to launch it on that stream. Kernels on different streams may execute
-concurrently. Call <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> to block until all work on a stream completes.</p>
+<p>Pass <code class="docutils literal notranslate"><span class="pre">qd_stream=</span></code> to any kernel call to launch it on that stream. Kernels on different streams may execute concurrently. Call <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> to block until all work on a stream completes.</p>
 </section>
 <section id="events">
 <h2>Events<a class="headerlink" href="#events" title="Link to this heading">#</a></h2>
@@ -504,8 +502,7 @@ concurrently. Call <code class="docutils literal notranslate"><span class="pre">
 <span class="n">s2</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">e.record(stream)</span></code> captures the point in <code class="docutils literal notranslate"><span class="pre">stream</span></code>’s execution. <code class="docutils literal notranslate"><span class="pre">e.wait(qd_stream=stream)</span></code> makes <code class="docutils literal notranslate"><span class="pre">stream</span></code> wait
-until the recorded point is reached. If <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> is omitted, the default stream waits.</p>
+<p><code class="docutils literal notranslate"><span class="pre">e.record(stream)</span></code> captures the point in <code class="docutils literal notranslate"><span class="pre">stream</span></code>’s execution. <code class="docutils literal notranslate"><span class="pre">e.wait(qd_stream=stream)</span></code> makes <code class="docutils literal notranslate"><span class="pre">stream</span></code> wait until the recorded point is reached. If <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> is omitted, the default stream waits.</p>
 </section>
 <section id="context-managers">
 <h2>Context managers<a class="headerlink" href="#context-managers" title="Link to this heading">#</a></h2>
@@ -519,9 +516,7 @@ until the recorded point is reached. If <code class="docutils literal notranslat
 </section>
 <section id="pytorch-interop-cuda">
 <h2>PyTorch interop (CUDA)<a class="headerlink" href="#pytorch-interop-cuda" title="Link to this heading">#</a></h2>
-<p>When mixing Quadrants kernels with PyTorch operations on CUDA, both frameworks must use the same stream to
-avoid race conditions. Without explicit stream management, Quadrants and PyTorch may launch work on different
-streams with no ordering guarantees, leading to intermittent data corruption.</p>
+<p>When mixing Quadrants kernels with PyTorch operations on CUDA, both frameworks must use the same stream to avoid race conditions. Without explicit stream management, Quadrants and PyTorch may launch work on different streams with no ordering guarantees, leading to intermittent data corruption.</p>
 <section id="running-quadrants-kernels-on-pytorch-s-stream">
 <h3>Running Quadrants kernels on PyTorch’s stream<a class="headerlink" href="#running-quadrants-kernels-on-pytorch-s-stream" title="Link to this heading">#</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
@@ -535,8 +530,7 @@ streams with no ordering guarantees, leading to intermittent data corruption.</p
 <span class="n">apply_actions_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">stream</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Wrap PyTorch’s raw <code class="docutils literal notranslate"><span class="pre">CUstream</span></code> pointer in a Quadrants <code class="docutils literal notranslate"><span class="pre">Stream</span></code> object. Do <strong>not</strong> call <code class="docutils literal notranslate"><span class="pre">destroy()</span></code> on this
-wrapper — PyTorch owns the underlying stream.</p>
+<p>Wrap PyTorch’s raw <code class="docutils literal notranslate"><span class="pre">CUstream</span></code> pointer in a Quadrants <code class="docutils literal notranslate"><span class="pre">Stream</span></code> object. Do <strong>not</strong> call <code class="docutils literal notranslate"><span class="pre">destroy()</span></code> on this wrapper — PyTorch owns the underlying stream.</p>
 </section>
 <section id="running-pytorch-operations-on-a-quadrants-stream">
 <h3>Running PyTorch operations on a Quadrants stream<a class="headerlink" href="#running-pytorch-operations-on-a-quadrants-stream" title="Link to this heading">#</a></h3>
@@ -558,8 +552,7 @@ wrapper — PyTorch owns the underlying stream.</p>
 <h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p><strong>Not compatible with graphs.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel decorated with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>.</p></li>
-<li><p><strong>No automatic synchronization.</strong> You are responsible for inserting events or <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> calls when one
-stream’s output is another stream’s input.</p></li>
+<li><p><strong>No automatic synchronization.</strong> You are responsible for inserting events or <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> calls when one stream’s output is another stream’s input.</p></li>
 </ul>
 </section>
 </section>

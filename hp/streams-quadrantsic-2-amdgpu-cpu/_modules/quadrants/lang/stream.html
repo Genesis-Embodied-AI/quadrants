@@ -331,8 +331,8 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">Stream</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Wraps a backend-specific GPU stream for concurrent kernel execution.</span>
 
-<span class="sd">    On backends without native streams (e.g. CPU), this is a no-op object.</span>
-<span class="sd">    Call destroy() explicitly or use as a context manager to ensure cleanup.</span>
+<span class="sd">    On backends without native streams (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as</span>
+<span class="sd">    a context manager to ensure cleanup.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handle</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">prog_ref</span><span class="p">:</span> <span class="n">weakref</span><span class="o">.</span><span class="n">ref</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
@@ -387,8 +387,8 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">Event</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Wraps a backend-specific GPU event for stream synchronization.</span>
 
-<span class="sd">    On backends without native events (e.g. CPU), this is a no-op object.</span>
-<span class="sd">    Call destroy() explicitly or use as a context manager to ensure cleanup.</span>
+<span class="sd">    On backends without native events (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as</span>
+<span class="sd">    a context manager to ensure cleanup.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handle</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">prog_ref</span><span class="p">:</span> <span class="n">weakref</span><span class="o">.</span><span class="n">ref</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
