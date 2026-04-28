@@ -421,7 +421,8 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
     // (cross-iteration accumulators are exactly the shape that drives the hoist). The demand-driven gate only
     // applies to value-producing stmts (UnaryOp / BinaryOp / TernaryOp / GlobalLoad / LoopIndex) where the
     // alloca + LocalStore + LocalLoad triple is purely a reverse-pass-readable spill - those skip when no consumer
-    // requires the value.
+    // requires the value. The `LocalStoreStmt`s emitted here are placeholders that `ReplaceLocalVarWithStacks`
+    // rewrites into `AdStackPushStmt`s downstream.
     if (stmt->is<AllocaStmt>()) {
       auto dtype = stmt->ret_type.ptr_removed();
       auto alloc = Stmt::make<AllocaStmt>(dtype);
