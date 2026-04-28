@@ -47,8 +47,9 @@ class NonLinearOps {
   inline static const std::set<UnaryOpType> unary_collections{
       UnaryOpType::abs,  UnaryOpType::sin, UnaryOpType::cos, UnaryOpType::tan,  UnaryOpType::tanh, UnaryOpType::asin,
       UnaryOpType::acos, UnaryOpType::exp, UnaryOpType::log, UnaryOpType::sqrt, UnaryOpType::rsqrt};
-  inline static const std::set<BinaryOpType> binary_collections{BinaryOpType::mul, BinaryOpType::div,
-                                                                BinaryOpType::atan2, BinaryOpType::pow};
+  inline static const std::set<BinaryOpType> binary_collections{BinaryOpType::mul,   BinaryOpType::div,
+                                                                BinaryOpType::atan2, BinaryOpType::pow,
+                                                                BinaryOpType::min,   BinaryOpType::max};
 };
 
 class IndependentBlocksJudger : public BasicStmtVisitor {
@@ -371,6 +372,15 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
           for (auto *idx : ep->indices) {
             out.insert(idx);
           }
+        } else if (auto *mp = stmt->cast<MatrixPtrStmt>()) {
+          // Reverse-mode `MakeAdjoint::visit(MatrixPtrStmt)` reads `stmt->offset` for dynamic-index adjoint
+          // routing, so a per-iteration-varying offset producer left in pure SSA would be backed by BackupSSA's
+          // single overwrite-each-iteration alloca and the reverse pass would read the last forward offset for
+          // every iteration. Promote it to alloca so `AdStackAllocaJudger::visit(MatrixPtrStmt)` can
+          // adstack-promote loop-varying offsets. Speculative fix: not exhibited by any failing test in the AD
+          // suite today, but the analysis is sound and the cost of leaving it unfixed is silent gradient
+          // corruption on `tensor[i + j]`-style local-tensor indexing inside a serial range-for.
+          out.insert(mp->offset);
         } else if (auto *if_s = stmt->cast<IfStmt>()) {
           out.insert(if_s->cond);
           if (if_s->true_statements) {
@@ -523,6 +533,18 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
       if (index_ll && index_ll->src == target_alloca_backup_)
         is_stack_needed_ = true;
     }
+  }
+
+  // Reverse-mode `MakeAdjoint::visit(MatrixPtrStmt)` reads `stmt->offset` for dynamic-index adjoint routing, so
+  // a runtime-varying offset whose value comes from this alloca needs adstack promotion - otherwise BackupSSA
+  // backs the offset with a single overwrite-each-iteration slot and the reverse pass routes every iteration's
+  // adjoint into the last forward offset's slot. Same cursor-vs-backup pattern as the index visitors above.
+  void visit(MatrixPtrStmt *stmt) override {
+    if (is_stack_needed_)
+      return;
+    auto *offset_ll = stmt->offset->cast<LocalLoadStmt>();
+    if (offset_ll && offset_ll->src == target_alloca_backup_)
+      is_stack_needed_ = true;
   }
 
   // Check whether the target alloca is fed into a non-linear unary op. Same cursor-vs-backup pattern as

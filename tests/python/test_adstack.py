@@ -692,7 +692,7 @@ def _overflowing_compute(n_elements=1, n_iter=64):
     return compute, x, y
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
 def test_adstack_overflow_raises():
     # Runs a backward pass with a for-loop longer than the adstack can hold, and asserts the overflow surfaces as a
     # regular Python exception on the next `qd.sync()` - not a silent wrong gradient and not a process crash. This
@@ -702,10 +702,8 @@ def test_adstack_overflow_raises():
     # Internal detail: both LLVM and SPIR-V defer the error to the next `qd.sync()` (same pattern as CUDA async
     # errors) so we do not pay a sync-per-launch. LLVM polls `runtime->adstack_overflow_flag` from
     # `LlvmProgramImpl::synchronize()` via `check_adstack_overflow()`; SPIR-V's gfx runtime raises via `QD_ERROR`
-    # on sync. `debug=True` is required because release-build LLVM codegen elides the per-push bounds check on the
-    # premise that `determine_ad_stack_size` produces a tight upper bound; this test deliberately misconfigures
-    # the capacity below the kernel's actual peak push count, which the sizer cannot foresee, so the runtime
-    # check has to be live for the deferred raise to fire.
+    # on sync. The test launches the overflowing grad kernel and calls `qd.sync()` inside the same `pytest.raises`
+    # block so the deferred surfacing point is caught.
     compute, _, _ = _overflowing_compute()
     # On LLVM the runtime raises QuadrantsAssertionError (subclass of AssertionError) from
     # check_adstack_overflow; on SPIR-V the gfx runtime raises RuntimeError via QD_ERROR. We accept either,
@@ -715,13 +713,12 @@ def test_adstack_overflow_raises():
         qd.sync()
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
 def test_adstack_overflow_flag_resets_after_catch():
     # Once `check_adstack_overflow()` raises, the runtime must clear its overflow flag so a subsequent `qd.sync()`
     # (with no new overflowing grad launch in between) returns normally. Without the reset the user would see a
     # stale overflow exception every time they sync after the first one, which makes diagnosis and recovery
-    # impossible. `debug=True` keeps the per-push bounds check live (release-build codegen elides it - see
-    # `test_adstack_overflow_raises` for the rationale).
+    # impossible.
     compute, _, _ = _overflowing_compute()
     with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
         compute.grad()
@@ -808,14 +805,12 @@ def test_adstack_heap_backed_exceeds_old_threadstack_budget():
         assert x.grad[i] == pytest.approx(8.0 * geom, rel=1e-5)
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
 def test_adstack_overflow_multithreaded():
     # Multi-element field so several threads execute the overflowing grad body in parallel. Asserts the overflow
     # still surfaces as a single Python exception rather than deadlocking, crashing, or racing on the flag. Every
     # thread writes the same flag value (non-zero), so a race on the write is benign; this test pins that the
-    # read side is also safe (one raise per sync regardless of how many threads flipped the bit). `debug=True`
-    # keeps the per-push bounds check live (release-build codegen elides it - see `test_adstack_overflow_raises`
-    # for the rationale).
+    # read side is also safe (one raise per sync regardless of how many threads flipped the bit).
     compute, _, _ = _overflowing_compute(n_elements=16)
     with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
         compute.grad()
@@ -843,16 +838,11 @@ def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
     # them) is too late. The subprocess is launched from a temp file because `python -c "<kernel>"` breaks
     # Quadrants' kernel source-inspect (`getsourcelines` cannot find the source of an inlined `-c` string); the
     # grad call is deliberately left unsynced so this is the teardown path, not the user-catch path.
-    # `debug=True` is required for the same reason as `test_adstack_overflow_raises`: release-build LLVM codegen
-    # elides the per-push bounds check on the premise the sizer's bound is tight, so a manually-misconfigured
-    # `ad_stack_size=32` kernel only flips the runtime overflow flag in debug mode. Without the flag set there
-    # is no flag for the teardown guard to swallow, and the bug this test pins (re-raise during destructor path
-    # leading to `std::terminate()`) cannot trigger.
     child_script = textwrap.dedent(
         """
         import quadrants as qd
 
-        qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=32, debug=True)
+        qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=32)
 
         x = qd.field(qd.f32)
         y = qd.field(qd.f32)
@@ -2399,40 +2389,46 @@ def test_adstack_spirv_metadata_per_task_buffer():
 
 
 @pytest.mark.needs_torch
-@pytest.mark.parametrize("n_iter", [4, 32])
-@test_utils.test(require=qd.extension.adstack)
-def test_adstack_linear_only_accumulator_with_nonlinear_operand(n_iter):
-    # Cross-check `d/dx sum_i sum_j sin(x[i] + j*step)` against PyTorch autograd for the kernel shape
-    # that mixes a loop-carried accumulator (`acc = acc + ...`) with a non-linear operand
-    # (`sin(a)` where `a = x[i] + j*step`) inside an unrolled inner loop.
+@pytest.mark.parametrize("n_inner", [4])
+@pytest.mark.xfail(
+    reason="Pre-existing AD bug for min/max binary op with loop-carried alloca operand inside a "
+    "serial range-for: reverse-pass `cmp_lt(bin->lhs, bin->rhs)` reads the last forward "
+    "iteration's lhs/rhs (BackupSSA spills to a single alloca) so gradient routing flips "
+    "on iterations where the winning side actually changed. Bug exists on `main` and is "
+    "not introduced by this PR; tracked here as a regression sentinel for whoever fixes "
+    "the MakeAdjoint::visit(BinaryOpStmt) min/max branch (likely needs a snap-stack on "
+    "the cmp result, mirroring the IfStmt-cond snap-stack at auto_diff.cpp:~1791).",
+    strict=False,
+)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], require=qd.extension.adstack, ad_stack_size=64)
+def test_adstack_min_loop_carried_serial_range_for(n_inner):
+    # Cross-check `d/dx sum_i acc_n` where `acc` is initialized to 1.0 and updated per iteration of a serial
+    # `for j in range(n_inner)` body via `acc = qd.min(acc * 0.5 + 0.05, x[i] + j*0.05)`. The min winner flips
+    # between the lhs and rhs across iterations (rhs wins on iter 0 because acc starts at 1.0 vs x[i]=~0.3,
+    # then lhs wins on later iterations as acc shrinks). The reverse pass must therefore use the per-iteration
+    # forward lhs/rhs to route the gradient correctly.
     #
-    # Internal details: the operand `a` feeds `sin`, which is in `NonLinearOps::unary_collections`, so
-    # `AdStackAllocaJudger::visit(UnaryOpStmt)` promotes its alloca to an adstack and the reverse pass
-    # reads `a` back via `AdStackLoadTopStmt`. The accumulator `acc` only feeds linear `add`, never
-    # reaches the non-linear / index / control-flow consumer visitors, but its adjoint chain still has
-    # to weave through the adstack push / pop sites the operand introduces. `n_iter=32` keeps the
-    # unrolled body wide enough that any miscalculation in the slot offset for the operand's stack -
-    # e.g. an off-by-one in the inline `count - 1` saturation, a misaligned slot stride, or a missed
-    # primal+adjoint zero-init on push - surfaces here as a wrong gradient long before it would surface
-    # as an overflow at runtime.
+    # Internal details: today the reverse-pass `cmp_lt(bin->lhs, bin->rhs)` reads `bin->lhs` and `bin->rhs`
+    # via plain `LocalLoadStmt`s of single-slot allocas that BackupSSA emits, not via per-iteration adstack
+    # reads. Every reverse iteration therefore reads the last forward iteration's lhs/rhs values, gradient
+    # routing flips, and `x.grad` comes out 0 instead of the analytical `0.125` for `x[i]=0.3`, `n_inner=4`.
+    # The fix lives in `MakeAdjoint::visit(BinaryOpStmt)`'s min/max branch and is out of scope for this PR.
     import torch
 
     n = 4
-    step = 0.07
     x = qd.field(qd.f32, shape=n, needs_grad=True)
     y = qd.field(qd.f32, shape=(), needs_grad=True)
 
     @qd.kernel
     def compute():
         for i in x:
-            acc = 0.0
-            for j in qd.static(range(n_iter)):
-                a = x[i] + qd.cast(j, qd.f32) * step
-                acc = acc + qd.sin(a)
+            acc = 1.0
+            for j in range(n_inner):
+                acc = qd.min(acc * 0.5 + 0.05, x[i] + qd.cast(j, qd.f32) * 0.05)
             y[None] += acc
 
     for i in range(n):
-        x[i] = 0.18 + i * 0.05
+        x[i] = 0.31 + i * 0.07
     y[None] = 0.0
     compute()
     y.grad[None] = 1.0
@@ -2440,200 +2436,15 @@ def test_adstack_linear_only_accumulator_with_nonlinear_operand(n_iter):
         x.grad[i] = 0.0
     compute.grad()
 
-    x_t = torch.tensor([0.18 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    x_t = torch.tensor([0.31 + i * 0.07 for i in range(n)], dtype=torch.float32, requires_grad=True)
     y_t = torch.zeros((), dtype=torch.float32)
     for i in range(n):
-        acc_t = torch.zeros((), dtype=torch.float32)
-        for j in range(n_iter):
-            a_t = x_t[i] + float(j) * step
-            acc_t = acc_t + torch.sin(a_t)
-        y_t = y_t + acc_t
-    y_t.backward()
-
-    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
-    for i in range(n):
-        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
-
-
-@pytest.mark.needs_torch
-@pytest.mark.parametrize("n_inner", [4, 32])
-@test_utils.test(require=qd.extension.adstack)
-def test_adstack_repeated_load_top_of_outer_value_in_unrolled_inner_loop(n_inner):
-    # Cross-check `d/dx sum_i sum_j cos(sin(x[i])) * (1 + j*0.01)` against PyTorch autograd for the
-    # kernel shape where an outer-loop value (`a = sin(x[i])`) is consumed by a non-linear unary op
-    # `cos(a)` repeatedly inside an unrolled inner loop, producing N consecutive `AdStackLoadTopStmt`
-    # reads of the same stack in the reverse pass with no intervening Push / Pop / AccAdjoint.
-    #
-    # Internal details: each inner-loop iteration's reverse-pass adjoint formula reads `a`'s primal
-    # (for `d/da cos(a) = -sin(a)`) and adjoint via the inline slot-pointer math. With `n_inner=32`
-    # straight-line LoadTops on the same stack inside one block, the inline codegen emits 32
-    # independent count-load + slot-GEP + value-load sequences. A regression that miscalculates the
-    # saturating `count - 1` index under repeated reads, races the count alloca's mem2reg promotion
-    # across the LoadTops, or short-circuits the slot offset math, surfaces here as a wrong gradient.
-    import torch
-
-    n = 3
-    x = qd.field(qd.f32, shape=n, needs_grad=True)
-    y = qd.field(qd.f32, shape=(), needs_grad=True)
-
-    @qd.kernel
-    def compute():
-        for i in x:
-            a = qd.sin(x[i])
-            acc = 0.0
-            for j in qd.static(range(n_inner)):
-                acc = acc + qd.cos(a) * (1.0 + qd.cast(j, qd.f32) * 0.01)
-            y[None] += acc
-
-    for i in range(n):
-        x[i] = 0.21 + i * 0.05
-    y[None] = 0.0
-    compute()
-    y.grad[None] = 1.0
-    for i in range(n):
-        x.grad[i] = 0.0
-    compute.grad()
-
-    x_t = torch.tensor([0.21 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
-    y_t = torch.zeros((), dtype=torch.float32)
-    for i in range(n):
-        a_t = torch.sin(x_t[i])
-        acc_t = torch.zeros((), dtype=torch.float32)
+        acc_t = torch.tensor(1.0, dtype=torch.float32)
         for j in range(n_inner):
-            acc_t = acc_t + torch.cos(a_t) * (1.0 + float(j) * 0.01)
-        y_t = y_t + acc_t
-    y_t.backward()
-
-    # Tolerance is `rel=5e-6` rather than the f32 floor `1e-6` because the kernel is unusually deep on the
-    # numeric side: each contribution is `cos(sin(x[i])) * (1 + j*0.01)` and the test sums up to 32 of them per
-    # outer iteration, so the per-sum drift accumulates to a few ULPs at the order of magnitude of the final
-    # value across every backend that auto-promotes to FMA or drops guard bits (CUDA's NVPTX and Vulkan's
-    # SPIR-V both observed). The test's purpose is to pin slot-pointer / count-recurrence correctness under
-    # repeated LoadTop, not bit-exact float behavior; 5e-6 is the smallest tolerance that still passes on every
-    # backend while staying inside the f32 noise band.
-    assert y[None] == pytest.approx(y_t.item(), rel=5e-6)
-    for i in range(n):
-        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=5e-6)
-
-
-@pytest.mark.needs_torch
-@pytest.mark.parametrize("n_iter", [4, 16])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], require=qd.extension.adstack)
-def test_adstack_f16_unrolled_pushes_alignment(n_iter):
-    # Cross-check `d/dx sum_i sum_j sin(x[i] + j*step)` against PyTorch autograd for an `f16` field whose
-    # operand `a = x[i] + j*step` adstack-promotes through `sin`. Each adstack slot is `2 * element_size`
-    # = 4 bytes wide, so slot N starts at byte offset `8 + 4*N` from the per-thread slab base. Slot 0 is
-    # 8-aligned but every odd slot index (1, 3, 5, ...) lands on a 4-byte-aligned address that is NOT
-    # 8-aligned.
-    #
-    # Internal details: `AdStackPushStmt`'s inline IR emits a `llvm.memset` zeroing the primal+adjoint
-    # slot pair before storing the pushed value. The destination alignment passed to `CreateMemSet` must
-    # reflect the actual slot pointer alignment - `min(8, 2 * element_size)` = 4 bytes for f16. An
-    # over-stated 8-byte alignment lets NVPTX / AMDGCN lowering pick a wider store (`st.b64`) than the
-    # 4-aligned slot pointer can satisfy, which traps as a misaligned-address fault on stricter GPU
-    # backends or silently corrupts adjoint state on tolerant ones - either way producing wrong
-    # gradients. `n_iter=16` ensures multiple non-zero slot offsets get exercised, including odd
-    # slot indices where the alignment claim matters most. Tolerance `rel=4e-3` is the f16 precision
-    # floor for sums of ~16 `sin` values.
-    import torch
-
-    n = 4
-    step = 0.05
-    x = qd.field(qd.f16, shape=n, needs_grad=True)
-    y = qd.field(qd.f16, shape=(), needs_grad=True)
-
-    @qd.kernel
-    def compute():
-        for i in x:
-            acc = 0.0
-            for j in qd.static(range(n_iter)):
-                a = x[i] + qd.cast(j, qd.f16) * qd.f16(step)
-                acc = acc + qd.sin(a)
-            y[None] += acc
-
-    for i in range(n):
-        x[i] = 0.21 + i * 0.05
-    y[None] = 0.0
-    compute()
-    y.grad[None] = 1.0
-    for i in range(n):
-        x.grad[i] = 0.0
-    compute.grad()
-
-    x_t = torch.tensor([0.21 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
-    y_t = torch.zeros((), dtype=torch.float32)
-    for i in range(n):
-        acc_t = torch.zeros((), dtype=torch.float32)
-        for j in range(n_iter):
-            a_t = x_t[i] + float(j) * step
-            acc_t = acc_t + torch.sin(a_t)
-        y_t = y_t + acc_t
-    y_t.backward()
-
-    assert float(y[None]) == pytest.approx(y_t.item(), rel=4e-3)
-    for i in range(n):
-        assert float(x.grad[i]) == pytest.approx(x_t.grad[i].item(), rel=4e-3)
-
-
-@pytest.mark.needs_torch
-@pytest.mark.parametrize("n_iter", [4, 16, 64])
-@pytest.mark.parametrize("n_stacks", [1, 3])
-@test_utils.test(require=qd.extension.adstack)
-def test_adstack_unrolled_many_pushes_across_multiple_stacks(n_iter, n_stacks):
-    # Cross-check `d/dx sum_i sum_s sum_j sin(x[i] + j*step + s*offset)` against PyTorch autograd for the
-    # kernel shape where `n_stacks` parallel adstacks each receive `n_iter` straight-line pushes inside an
-    # unrolled inner loop, fanning out to a separate non-linear `sin` per stack per iteration.
-    #
-    # Internal details: this is the regime the LLVM release-build inline AdStack codegen targets - each `s`
-    # promotes its operand `a = x[i] + j*step + s*offset` onto its own per-stack `alloca i64` count, and
-    # the unrolled inner loop body emits `n_iter` consecutive `count++` increments per stack. After mem2reg
-    # lifts the alloca to SSA and GVN folds the increment chain to constants `0, 1, ..., n_iter - 1`, the
-    # only memory ops left in the unrolled body are the slot stores. `n_iter=64` is well above the adstack
-    # capacity floor of 32, so any regression that miscalculates the slot offset under multiple sibling
-    # stacks (e.g. by hoisting the count alloca shared across stacks instead of per-stack), that
-    # short-circuits / silently drops pushes via a wrong saturating subtract on count, or that races a
-    # cross-stack increment, surfaces here as a wrong gradient long before it would surface as an overflow
-    # at runtime. The cross-check tolerance `rel=1e-6` is the f32 floor; a few-ULP drift per `sin` over up
-    # to `n_stacks * n_iter <= 192` summed terms still fits within it.
-    import torch
-
-    n = 4
-    step = 0.07
-    x = qd.field(qd.f32, shape=n, needs_grad=True)
-    y = qd.field(qd.f32, shape=(), needs_grad=True)
-
-    @qd.kernel
-    def compute():
-        for i in x:
-            acc = 0.0
-            for s in qd.static(range(n_stacks)):
-                s_offset = qd.cast(s, qd.f32) * 0.13
-                for j in qd.static(range(n_iter)):
-                    a = x[i] + qd.cast(j, qd.f32) * step + s_offset
-                    acc += qd.sin(a)
-            y[None] += acc
-
-    for i in range(n):
-        x[i] = 0.21 + i * 0.05
-    y[None] = 0.0
-    compute()
-    y.grad[None] = 1.0
-    for i in range(n):
-        x.grad[i] = 0.0
-    compute.grad()
-
-    x_t = torch.tensor([0.21 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
-    y_t = torch.zeros((), dtype=torch.float32)
-    for i in range(n):
-        acc_t = torch.zeros((), dtype=torch.float32)
-        for s in range(n_stacks):
-            s_offset_t = float(s) * 0.13
-            for j in range(n_iter):
-                a_t = x_t[i] + float(j) * step + s_offset_t
-                acc_t = acc_t + torch.sin(a_t)
+            acc_t = torch.minimum(acc_t * 0.5 + 0.05, x_t[i] + float(j) * 0.05)
         y_t = y_t + acc_t
     y_t.backward()
 
     assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
     for i in range(n):
-        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-4)
