@@ -847,27 +847,33 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
       std::memcpy(pinned + 1, host_offsets.data(), array_bytes);
       std::memcpy(pinned + 1 + n_stacks, host_max_sizes.data(), array_bytes);
 
-      [[maybe_unused]] void *default_stream = nullptr;
+      // Queue the metadata copies on the same stream the subsequent main-kernel dispatch will run on, so the
+      // GPU stream-orders the copies before the kernel reads `adstack_max_sizes` etc. On CUDA the active
+      // stream is `CUDAContext::get_instance().get_stream()` - configurable via `set_stream`, defaults to the
+      // null stream - and `CUDAContext::launch` dispatches kernels on the same handle. AMDGPU has no
+      // public stream-selection API: `AMDGPUContext::launch` always passes `nullptr` to `hipLaunchKernel`
+      // (i.e. the default stream), so the copies match that.
 #if defined(QD_WITH_CUDA)
       if (config_.arch == Arch::cuda) {
+        void *active_stream = CUDAContext::get_instance().get_stream();
         CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned, header_bytes,
-                                                               default_stream);
-        CUDADriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 1, array_bytes,
-                                                               default_stream);
+                                                               active_stream);
+        CUDADriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 1, array_bytes, active_stream);
         CUDADriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 1 + n_stacks, array_bytes,
-                                                               default_stream);
-        CUDADriver::get_instance().event_record(pinned_metadata_event_, default_stream);
+                                                               active_stream);
+        CUDADriver::get_instance().event_record(pinned_metadata_event_, active_stream);
       }
 #endif
 #if defined(QD_WITH_AMDGPU)
       if (config_.arch == Arch::amdgpu) {
+        void *active_stream = nullptr;  // AMDGPUContext::launch always uses the default stream.
         AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned,
-                                                                 header_bytes, default_stream);
+                                                                 header_bytes, active_stream);
         AMDGPUDriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 1, array_bytes,
-                                                                 default_stream);
+                                                                 active_stream);
         AMDGPUDriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 1 + n_stacks, array_bytes,
-                                                                 default_stream);
-        AMDGPUDriver::get_instance().event_record(pinned_metadata_event_, default_stream);
+                                                                 active_stream);
+        AMDGPUDriver::get_instance().event_record(pinned_metadata_event_, active_stream);
       }
 #endif
       pinned_metadata_event_pending_ = true;
