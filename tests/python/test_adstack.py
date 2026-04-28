@@ -2526,9 +2526,16 @@ def test_adstack_repeated_load_top_of_outer_value_in_unrolled_inner_loop(n_inner
         y_t = y_t + acc_t
     y_t.backward()
 
-    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    # Tolerance is `rel=5e-6` rather than the f32 floor `1e-6` because the kernel is unusually deep on the
+    # numeric side: each contribution is `cos(sin(x[i])) * (1 + j*0.01)` and the test sums up to 32 of them per
+    # outer iteration, so the per-sum drift accumulates to a few ULPs at the order of magnitude of the final
+    # value across every backend that auto-promotes to FMA or drops guard bits (CUDA's NVPTX and Vulkan's
+    # SPIR-V both observed). The test's purpose is to pin slot-pointer / count-recurrence correctness under
+    # repeated LoadTop, not bit-exact float behavior; 5e-6 is the smallest tolerance that still passes on every
+    # backend while staying inside the f32 noise band.
+    assert y[None] == pytest.approx(y_t.item(), rel=5e-6)
     for i in range(n):
-        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=5e-6)
 
 
 @pytest.mark.needs_torch
