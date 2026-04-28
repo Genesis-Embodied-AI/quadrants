@@ -2740,7 +2740,7 @@ void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_
         MakeAdjoint::run(ib);
         type_check(root, config);
         BackupSSA::run(ib);
-        irpass::analysis::verify(root);
+        irpass::analysis::verify_if_debug(root, config);
       }
     } else {
       auto IB = IdentifyIndependentBlocks::run(root);
@@ -2750,7 +2750,7 @@ void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_
         MakeAdjoint::run(ib);
         type_check(root, config);
         BackupSSA::run(ib);
-        irpass::analysis::verify(root);
+        irpass::analysis::verify_if_debug(root, config);
       }
     }
   } else if (autodiff_mode == AutodiffMode::kForward) {
@@ -2759,7 +2759,7 @@ void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_
     MakeDual::run(block);
   }
   type_check(root, config);
-  irpass::analysis::verify(root);
+  irpass::analysis::verify_if_debug(root, config);
 }
 
 class GloablDataAccessRuleChecker : public BasicStmtVisitor {
