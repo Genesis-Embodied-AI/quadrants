@@ -178,7 +178,7 @@ class CallTransformer:
         func_id = ctx.func.func_id
         for arg in args:
             val = arg.ptr
-            if dataclasses.is_dataclass(val):
+            if dataclasses.is_dataclass(val) and isinstance(val, type):
                 dataclass_type = val
                 for field in dataclasses.fields(dataclass_type):
                     try:
@@ -224,7 +224,7 @@ class CallTransformer:
         added_kwargs = []
         for i, kwarg in enumerate(kwargs):
             val = kwarg.ptr[kwarg.arg]
-            if dataclasses.is_dataclass(val):
+            if dataclasses.is_dataclass(val) and isinstance(val, type):
                 dataclass_type = val
                 for field in dataclasses.fields(dataclass_type):
                     src_name = create_flat_name(kwarg.value.id, field.name)
