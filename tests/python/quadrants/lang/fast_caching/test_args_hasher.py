@@ -295,6 +295,79 @@ def test_args_hasher_custom_torch_tensor() -> None:
 
 
 @test_utils.test()
+def test_args_hasher_dataclass_with_field_child_returns_none() -> None:
+    """A frozen dataclass whose fields contain ScalarField (non-cacheable) must produce hash=None.
+
+    Before the fix, dataclass_to_repr embedded the literal string "(None)" for non-cacheable child fields instead
+    of propagating None upward. This caused all instances of such dataclasses to share the same fastcache key,
+    leading to stale compiled kernels being reused across tests with different SNode trees.
+    """
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        a: qd.types.NDArray[qd.i32, 1]
+
+    f = qd.field(qd.i32, shape=(4,))
+    state = State(a=f)
+    h = args_hasher.hash_args(False, [state], [None])
+    assert h is None, f"Dataclass with ScalarField child must disable fastcache, got {h!r}"
+
+
+@test_utils.test()
+def test_args_hasher_dataclass_with_tensor_field_child_returns_none() -> None:
+    """A frozen dataclass whose qd.Tensor field wraps a ScalarField must also produce hash=None."""
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        a: qd.types.NDArray[qd.i32, 1]
+
+    f = qd.field(qd.i32, shape=(4,))
+    t = qd.Tensor(f)
+    state = State(a=t)
+    h = args_hasher.hash_args(False, [state], [None])
+    assert h is None, f"Dataclass with Tensor-wrapped ScalarField must disable fastcache, got {h!r}"
+
+
+@test_utils.test()
+def test_args_hasher_dataclass_with_ndarray_child_returns_hash() -> None:
+    """A frozen dataclass whose fields are all ndarrays (cacheable) must still produce a valid hash."""
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        a: qd.types.NDArray[qd.i32, 1]
+        b: qd.types.NDArray[qd.f32, 1]
+
+    a = qd.ndarray(qd.i32, (4,))
+    b = qd.ndarray(qd.f32, (4,))
+    state = State(a=a, b=b)
+    h = args_hasher.hash_args(False, [state], [None])
+    assert h is not None, "Dataclass with ndarray children should be fast-cacheable"
+
+
+@test_utils.test()
+def test_args_hasher_dataclass_field_none_not_collide_with_ndarray() -> None:
+    """Two frozen dataclass instances — one with fields, one with ndarrays — must not share a cache key.
+
+    This is the core collision scenario: before the fix, the field-backed instance produced a non-None hash
+    containing "(None)" strings, which could collide with other instances.
+    """
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        a: qd.types.NDArray[qd.i32, 1]
+
+    nd = qd.ndarray(qd.i32, (4,))
+    f = qd.field(qd.i32, shape=(4,))
+
+    h_nd = args_hasher.hash_args(False, [State(a=nd)], [None])
+    h_f = args_hasher.hash_args(False, [State(a=f)], [None])
+
+    assert h_nd is not None
+    assert h_f is None
+    assert h_nd != h_f
+
+
+@test_utils.test()
 def test_args_hasher_named_tuple() -> None:
     @qd.data_oriented
     class Geom(NamedTuple):

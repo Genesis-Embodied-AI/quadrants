@@ -16,6 +16,8 @@ from quadrants import _logging
 
 _GRAPH_ENABLED = os.environ.get("QD_GRAPH", "1") == "1"
 
+from quadrants import _tensor_wrapper
+
 
 def _kernel_coverage_enabled() -> bool:
     return os.environ.get("QD_KERNEL_COVERAGE") == "1"
@@ -29,6 +31,7 @@ from quadrants._lib.core.quadrants_python import (
     KernelCxx,
     KernelLaunchContext,
 )
+from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 from quadrants.lang._fast_caching import src_hasher
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
@@ -76,24 +79,24 @@ _ARCH_PYTHON = Arch.python
 
 
 class LaunchContextBufferCache:
-    # Here, we are tracking whether a launch context buffer can be cached.
-    # The point of caching the launch context buffer is allowing skipping recursive processing of all the input
-    # arguments one-by-one, which is adding a significant overhead, without changing anything in regards of the
-    # function calls to the launch context that must be made for a given kernel.
-    # You can understand this as resolving the static part of the entire control flow of '_recursive_set_args'
-    # for a given set of arguments, which is (mostly surely uniquely) characterized by its hash, gathering all
-    # the instructions that cannot be evaluated statically and packing them in a buffer without evaluating them at
-    # this point. This buffer is then cached once and for all and evaluated every time the exact same set of input
-    # argument is passed. This means that, ultimately, it will result in the exact same function calls with or
-    # without caching. In this particular case, the function calls corresponds to adding arguments to the current
-    # context for this kernel call.
-    # A launch context buffer is considered cache-friendly if and only if no direct call to the launch context
-    # where made preemptively during the recursive processing of the arguments, all of parameters of the arguments are
+    # Here, we are tracking whether a launch context buffer can be cached. The point of caching the launch context
+    # buffer is allowing skipping recursive processing of all the input arguments one-by-one, which is adding a
+    # significant overhead, without changing anything in regards of the function calls to the launch context that must
+    # be made for a given kernel.
+    # You can understand this as resolving the static part of the entire control flow of '_recursive_set_args' for a
+    # given set of arguments, which is (mostly surely uniquely) characterized by its hash, gathering all the
+    # instructions that cannot be evaluated statically and packing them in a buffer without evaluating them at this
+    # point. This buffer is then cached once and for all and evaluated every time the exact same set of input argument
+    # is passed. This means that, ultimately, it will result in the exact same function calls with or without caching.
+    # In this particular case, the function calls corresponds to adding arguments to the current context for this kernel
+    # call.
+    # A launch context buffer is considered cache-friendly if and only if no direct call to the launch context where
+    # made preemptively during the recursive processing of the arguments, all of parameters of the arguments are
     # pointers, the address of these pointers cannot change, and the set of parameters is fixed.
     # The lifetime of a cache entry is bound to the lifetime of any of its input arguments: the first being garbage
-    # collected will invalidate the entire entry. Moreover, the entire cache registry is bound to the lifetime of
-    # the taichi prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that
-    # the cache stores wear references to pointers, so it does not hold alife any allocated memory.
+    # collected will invalidate the entire entry. Moreover, the entire cache registry is bound to the lifetime of the
+    # taichi prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that the cache
+    # stores wear references to pointers, so it does not hold alife any allocated memory.
     def __init__(self) -> None:
         # Keep track of taichi runtime to automatically clear cache if destroyed
         self._prog_weakref: ReferenceType[Program] | None = None
@@ -223,8 +226,8 @@ class ASTGenerator:
                 struct_locals = _kernel_impl_dataclass.extract_struct_locals_from_context(ctx)
             else:
                 struct_locals = pruning.used_vars_by_func_id[ctx.func.func_id]
-            # struct locals are the expanded py dataclass fields that we will write to
-            # local variables, and will then be available to use in build_Call, later.
+            # struct locals are the expanded py dataclass fields that we will write to local variables, and will then
+            # be available to use in build_Call, later.
             tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(self.tree, struct_locals=struct_locals)
             ctx.only_parse_function_def = self.only_parse_function_def
             transform_tree(tree, ctx)
@@ -291,12 +294,11 @@ class Kernel(FuncBase):
         )
         self.autodiff_mode = autodiff_mode
         self.grad: "Kernel | None" = None
-        impl.get_runtime().kernels.append(self)
+        impl.get_runtime().kernels.append(self)  # type: ignore[arg-type]
         self.reset()
         self.kernel_cpp: None | KernelCxx = None
-        # A materialized kernel is a KernelCxx object which may or may not have
-        # been compiled. It generally has been converted at least as far as AST
-        # and front-end IR, but not necessarily any further.
+        # A materialized kernel is a KernelCxx object which may or may not have been compiled. It generally has been
+        # converted at least as far as AST and front-end IR, but not necessarily any further.
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
         self.use_graph: bool = False
@@ -319,6 +321,10 @@ class Kernel(FuncBase):
         self.launch_observations = LaunchObservations()
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
+        self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
+        self._mutable_nd_cached_val: list = []
+        self._tensor_unwrap_indices: tuple[int, ...] | None = None
 
     def ast_builder(self) -> ASTBuilder:
         assert self.kernel_cpp is not None
@@ -343,7 +349,7 @@ class Kernel(FuncBase):
             cached_graph_do_while_arg: str | None = None
             if self.fast_checksum:
                 self.src_ll_cache_observations.cache_key_generated = True
-                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_arg = src_hasher.load(
+                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_arg = src_hasher.load(  # type: ignore[reportAssignmentType]
                     self.fast_checksum
                 )
             if used_py_dataclass_parameters is not None and frontend_cache_key is not None:
@@ -366,9 +372,8 @@ class Kernel(FuncBase):
         elif self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
             # The bit in caps should not be modified without updating corresponding test
             # freetext can be freely modified.
-            # As for why we are using `print` rather than eg logger.info, it is because
-            # this is only printed when qd.init(print_non_pure=..) is True. And it is
-            # confusing to set that to True, and see nothing printed.
+            # As for why we are using `print` rather than eg logger.info, it is because this is only printed when
+            # qd.init(print_non_pure=..) is True. And it is confusing to set that to True, and see nothing printed.
             print(f"[NOT_PURE] Debug information: not pure: {self.func.__name__}")
         return None
 
@@ -427,6 +432,9 @@ class Kernel(FuncBase):
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
+                    self._struct_ndarray_launch_info_by_key[key] = getattr(
+                        ctx.global_context, "struct_ndarray_launch_info", []
+                    )
                 else:
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
@@ -453,6 +461,26 @@ class Kernel(FuncBase):
         launch_ctx = t_kernel.make_launch_context()
         # Special treatment for primitive types is unecessary and detrimental. See 'TemplateMapper.lookup' for details.
         args_hash: "ArgsHash" = (id(t_kernel), *[id(arg) for arg in args])
+        # Stale-cache guard for mutable structs containing ndarrays. Frozen dataclass fields cannot be reassigned, so
+        # id(struct) in args_hash is already sufficient. For mutable structs, ndarray attributes can change between
+        # calls while the struct id stays the same, so we fold the live ndarray id(s) into the hash.
+        if key != self._mutable_nd_cached_key:
+            if self._struct_ndarray_launch_info_by_key:
+                struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
+                if struct_nd_info:
+                    self._mutable_nd_cached_val = [
+                        (idx, chain) for _, idx, chain in struct_nd_info if type(args[idx]).__hash__ is None
+                    ]
+                else:
+                    self._mutable_nd_cached_val = []
+            else:
+                self._mutable_nd_cached_val = []
+            self._mutable_nd_cached_key = key
+        if self._mutable_nd_cached_val:
+            args_hash = (
+                *args_hash,
+                *(id(self._resolve_struct_ndarray(args, idx, chain)) for idx, chain in self._mutable_nd_cached_val),
+            )
         if not self.launch_context_buffer_cache.populate_launch_ctx_from_cache(args_hash, launch_ctx):
             launch_ctx_buffer: dict[KernelBatchedArgType, list[tuple]] = defaultdict(list)
             actual_argument_slot = 0
@@ -481,6 +509,10 @@ class Kernel(FuncBase):
                 )
                 i_out += num_args_
                 is_launch_ctx_cacheable &= is_launch_ctx_cacheable_
+
+            struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
+            if struct_nd_info:
+                self._set_struct_ndarray_args(struct_nd_info, args, launch_ctx_buffer, is_launch_ctx_cacheable)
 
             kernel_args_count_by_type = defaultdict(int)
             kernel_args_count_by_type.update(
@@ -524,7 +556,7 @@ class Kernel(FuncBase):
                         self.fast_checksum,
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
-                        graph_do_while_arg=self.graph_do_while_arg,
+                        graph_do_while_arg=self.graph_do_while_arg,  # type: ignore[reportCallIssue]
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
@@ -569,6 +601,40 @@ class Kernel(FuncBase):
             return launch_ctx.get_struct_ret_float(indices)
         raise QuadrantsRuntimeTypeError(f"Invalid return type on index={indices}")
 
+    @staticmethod
+    def _resolve_struct_ndarray(args, template_arg_idx, attr_chain):
+        """Walk a struct's attribute chain to find the live ndarray (or Tensor wrapper)."""
+        obj = args[template_arg_idx]
+        for attr_name in attr_chain:
+            obj = getattr(obj, attr_name)
+        if type(obj) in _TENSOR_WRAPPER_TYPES:
+            obj = obj._unwrap()
+        return obj
+
+    @staticmethod
+    def _set_struct_ndarray_args(
+        launch_info: list,
+        args: tuple,
+        launch_ctx_buffer: dict,
+        is_launch_ctx_cacheable: bool,
+    ) -> None:
+        """Set ndarray kernel args that were pre-declared from struct template fields during compilation."""
+        from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
+
+        for arg_id, template_arg_idx, attr_chain in launch_info:
+            obj = args[template_arg_idx]
+            for attr_name in attr_chain:
+                obj = getattr(obj, attr_name)
+            if type(obj) in _TENSOR_WRAPPER_TYPES:
+                obj = obj._unwrap()
+            assert isinstance(obj, Ndarray), f"Expected Ndarray at {attr_chain}, got {type(obj)}"
+            v_primal = obj.arr
+            v_grad = obj.grad.arr if obj.grad else None
+            if v_grad is None:
+                launch_ctx_buffer[_QD_ARRAY].append((arg_id, v_primal))
+            else:
+                launch_ctx_buffer[_QD_ARRAY_WITH_GRAD].append((arg_id, v_primal, v_grad))
+
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
         try:
             instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args)
@@ -589,6 +655,38 @@ class Kernel(FuncBase):
 
         self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
+        # Tensor-wrapper unwrap (stork-17). Substitute each ``qd.Tensor`` instance (including ``VectorTensor`` /
+        # ``MatrixTensor`` subclasses) with its underlying ``Ndarray`` / ``ScalarField`` impl *before* anything
+        # downstream observes the arg tuple — including the autograd tape (uses identity), the template mapper
+        # (cache-keys on ``id(arg)``), ``_extract_arg``, and the AST builder. This guarantees JIT cache stability:
+        # ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields
+        # identical cache keys.
+        #
+        # PERF: On first call, record which arg positions are Tensor wrappers. On subsequent calls, skip entirely
+        # (empty indices) or unwrap only the cached positions (no full-arg scan). For a kernel with 30 args and 1
+        # Tensor, this reduces per-call type checks from 30 to 1.
+        #
+        # Safety of caching: kernel parameter annotations are fixed per position (they come from the function
+        # signature and are stored in ``self.mapper.arguments``). Whether a given position receives a Tensor wrapper
+        # or a bare impl is determined by the caller's annotation pattern, which is stable across calls — a user who
+        # passes ``qd.Tensor(impl)`` at position *i* will do so on every call, because the annotation (``qd.Tensor``,
+        # ``qd.template()``, ``qd.types.ndarray()``, or a dataclass type) doesn't change. The template mapper
+        # enforces a fixed arg count (``len(args) == self.num_args``), so cached indices cannot go out of bounds.
+        if _tensor_wrapper._any_tensor_constructed:  # pyright: ignore[reportOptionalMemberAccess]
+            _indices = self._tensor_unwrap_indices
+            if _indices is None:
+                _indices = tuple(i for i, a in enumerate(py_args) if type(a) in _TENSOR_WRAPPER_TYPES)
+                self._tensor_unwrap_indices = _indices
+                if _indices:
+                    py_args_l = list(py_args)
+                    for i in _indices:
+                        py_args_l[i] = py_args_l[i]._impl  # pyright: ignore[reportAttributeAccessIssue]
+                    py_args = tuple(py_args_l)
+            elif _indices:
+                py_args_l = list(py_args)
+                for i in _indices:
+                    py_args_l[i] = py_args_l[i]._impl  # pyright: ignore[reportAttributeAccessIssue]
+                py_args = tuple(py_args_l)
 
         # Transform the primal kernel to forward mode grad kernel
         # then recover to primal when exiting the forward mode manager
@@ -598,9 +696,8 @@ class Kernel(FuncBase):
             # `mode_original == AutodiffMode.REVERSE` only, to avoid duplicate computation for 1st-order derivatives.
             self.runtime.fwd_mode_manager.insert(self)
 
-        # Both the class kernels and the plain-function kernels are unified now.
-        # In both cases, |self.grad| is another Kernel instance that computes the
-        # gradient. For class kernels, args[0] is always the kernel owner.
+        # Both the class kernels and the plain-function kernels are unified now. In both cases, |self.grad| is another
+        # Kernel instance that computes the gradient. For class kernels, args[0] is always the kernel owner.
 
         # No need to capture grad kernels because they are already bound with their primal kernels
         if self.autodiff_mode in (_NONE, _VALIDATION) and self.runtime.target_tape and not self.runtime.grad_replaced:
@@ -609,7 +706,7 @@ class Kernel(FuncBase):
         if self.autodiff_mode != _NONE and impl.current_cfg().opt_level == 0:
             _logging.warn("""opt_level = 1 is enforced to enable gradient computation.""")
             impl.current_cfg().opt_level = 1
-        key = self.ensure_compiled(*py_args)
+        key = self.ensure_compiled(*py_args)  # type: ignore[arg-type]
         self._last_launch_key = key
         kernel_cpp = self.materialized_kernels[key]
         compiled_kernel_data = self.compiled_kernel_data_by_key.get(key, None)

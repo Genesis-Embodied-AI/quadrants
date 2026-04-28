@@ -56,6 +56,9 @@ PtxCache::PtxCache(const Config config, const CompileConfig &compile_config, int
       compute_capability_(compute_capability),
       cache_dir_(join_path(config_.offline_cache_path, fmt::format("ptx_cache_sm_{}", compute_capability_))) {
   QD_DEBUG("Create ptxcache with offline_cache_file_path = {}", this->cache_dir_);
+  if (get_cache_mode(compile_config_) != CacheMode::MemAndDiskCache) {
+    return;
+  }
   auto filepath = join_path(this->cache_dir_, kMetadataFilename);
   auto lock_path = join_path(this->cache_dir_, kMetadataLockName);
   if (path_exists(filepath)) {
@@ -70,6 +73,10 @@ PtxCache::PtxCache(const Config config, const CompileConfig &compile_config, int
 
 void PtxCache::dump() {
   if (wrapped_by_key_.empty()) {
+    return;
+  }
+  if (get_cache_mode(compile_config_) != CacheMode::MemAndDiskCache) {
+    wrapped_by_key_.clear();
     return;
   }
 
@@ -216,7 +223,7 @@ void PtxCache::store_ptx(const std::string &cache_key, const std::string &ptx) {
   k.metadata.cache_key = cache_key;
   k.metadata.created_at = k.metadata.last_used_at = std::time(nullptr);
   k.metadata.size = 0;  // Populate `size` within the PtxCache::dump()
-  k.metadata.cache_mode = CacheMode::MemAndDiskCache;
+  k.metadata.cache_mode = get_cache_mode(compile_config_);
   wrapped_by_key_[cache_key] = std::move(k);
 }
 
@@ -226,7 +233,7 @@ std::optional<std::string> PtxCache::load_ptx(const std::string &cache_key) {
 }
 
 CacheMode PtxCache::get_cache_mode(const CompileConfig &compile_config) {
-  return CacheMode::MemAndDiskCache;
+  return compile_config.offline_cache ? CacheMode::MemAndDiskCache : CacheMode::MemCache;
 }
 
 }  // namespace quadrants::lang
