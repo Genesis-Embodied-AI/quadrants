@@ -1,18 +1,11 @@
 import gc
 import os
 import sys
-import time
+import tempfile
 
 import pytest
 
-# rerunfailures use xdist version number to determine if it is compatible
-# but we are using a forked version of xdist(with git hash as it's version),
-# so we need to override it
-import pytest_rerunfailures
-
 import quadrants as qd
-
-pytest_rerunfailures.works_with_current_xdist = lambda: True
 
 
 @pytest.fixture(autouse=True)
@@ -120,43 +113,93 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("req_arch,req_options", [(None, None)], ids=["none"])
 
 
-@pytest.hookimpl(trylast=True)
+def _exit_marker_dir():
+    """Temp directory shared between xdist controller and workers for intentional-exit markers."""
+    return os.environ.get("_QD_XDIST_EXIT_MARKER_DIR")
+
+
+def pytest_configure(config):
+    """On the xdist controller, create a temp directory for intentional-exit markers.
+
+    Workers inherit the ``_QD_XDIST_EXIT_MARKER_DIR`` env var and use the same directory.
+    """
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+    if os.environ.get("_QD_XDIST_EXIT_MARKER_DIR"):
+        return
+    d = os.path.join(tempfile.gettempdir(), f"qd_xdist_exits_{os.getpid()}")
+    os.makedirs(d, exist_ok=True)
+    os.environ["_QD_XDIST_EXIT_MARKER_DIR"] = d
+
+
+def pytest_unconfigure(config):
+    """Clean up the marker directory at session end."""
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+    d = _exit_marker_dir()
+    if d and os.path.isdir(d):
+        import shutil
+
+        shutil.rmtree(d, ignore_errors=True)
+
+
+@pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_runtest_logreport(report):
+    """Handle xdist worker retirement and crash-report suppression.
+
+    On the controller: swallow synthetic crash reports that were already marked for suppression by
+    pytest_handlecrashitem.
+
+    On workers: after a test failure, write an intentional-exit marker and kill the process so it
+    restarts with clean GPU state.  The real test report is sent by inner hooks (including xdist's
+    report-forwarding hook) during ``yield`` before we exit.
     """
-    Retire test workers when a test fails, to avoid the failing test
-    leaving a corrupted GPU state for the following tests.
+    if getattr(report, "_qd_suppress", False):
+        return None
+
+    result = yield
+
+    if os.environ.get("PYTEST_XDIST_WORKER") and report.outcome in ("rerun", "error", "failed"):
+        d = _exit_marker_dir()
+        if d:
+            worker_id = os.environ["PYTEST_XDIST_WORKER"]
+            try:
+                with open(os.path.join(d, worker_id), "w") as f:
+                    f.write(report.nodeid)
+            except OSError:
+                pass
+        os._exit(1)
+
+    return result
+
+
+def pytest_handlecrashitem(crashitem, report, sched):
+    """Suppress the synthetic crash report only for intentional ``os._exit(1)`` exits.
+
+    When a worker is killed intentionally (to reset GPU state after a failure), it writes a marker
+    file before exiting.  If the marker exists, we flag the synthetic report for suppression and
+    return a truthy value to stop the firstresult hook chain.  Genuine crashes (segfaults, OOM,
+    etc.) have no marker, so their reports pass through unmodified.
     """
-
-    interactor = getattr(sys, "xdist_interactor", None)
-    if not interactor:
+    d = _exit_marker_dir()
+    if not d:
         return
-
-    if report.outcome not in ("rerun", "error", "failed"):
+    node = getattr(report, "node", None)
+    if not node:
         return
-
-    layoff = False
-
-    chain = getattr(getattr(report, "longrepr", None), "chain", None)
-    if chain:
-        for _, loc, _ in chain:
-            msg = getattr(loc, "message", "") if loc else ""
-            if "CUDA_ERROR_OUT_OF_MEMORY" in msg:
-                layoff = True
-                break
-
-    # Don't call interactor.retire() — it uses os._exit(0) which kills
-    # the process before execnet's IO thread can flush the channel buffer.
-    # The test failure report (queued by xdist's own hook, which ran before
-    # this trylast hook) would be lost, hiding all error messages.
-    interactor.sendevent("workerretire", layoff=layoff)
-    time.sleep(0.2)
-    os._exit(0)
+    worker_id = node.gateway.id
+    marker = os.path.join(d, worker_id)
+    if not os.path.exists(marker):
+        return
+    try:
+        os.unlink(marker)
+    except OSError:
+        pass
+    report._qd_suppress = True
+    return True
 
 
 import importlib
-import sys
-
-import pytest
 
 
 @pytest.fixture

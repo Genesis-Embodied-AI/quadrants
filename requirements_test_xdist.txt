@@ -1,6 +1,0 @@
-# This URL format is incompatible with pyproject.toml
-# taichi created a fork of pytest-xdist, to handle restarting gpu
-# workers when they crash, in order to reset the GPU state.
-# TODO: come up with some approach that is compatible with pyproject.toml
-# Ticketed here: https://linear.app/genesis-ai-company/issue/CMP-141/clean-up-requirements-test-xdisttxt
-git+https://github.com/taichi-dev/pytest-xdist@a3b5ad3038#egg=pytest-xdist

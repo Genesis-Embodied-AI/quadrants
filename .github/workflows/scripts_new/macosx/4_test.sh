@@ -3,7 +3,6 @@
 set -ex
 
 pip install --prefer-binary --group test
-pip install -r requirements_test_xdist.txt
 find . -name '*.bc'
 ls -lh build/
 export QD_LIB_DIR="$(python -c 'import quadrants as ti; print(ti.__path__[0])' | tail -n 1)/_lib/runtime"

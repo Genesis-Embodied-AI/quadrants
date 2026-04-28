@@ -3,7 +3,6 @@
 set -ex
 
 pip install --group test
-pip install -r requirements_test_xdist.txt
 
 # Phase 1: run all tests except torch-dependent ones
 python tests/run_tests.py -v -r 1 -m "not needs_torch"
