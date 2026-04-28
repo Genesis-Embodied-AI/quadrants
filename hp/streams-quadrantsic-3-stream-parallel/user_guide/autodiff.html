@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Automatic differentiation &#8212; Quadrants 0.7.1 documentation</title>
+    <title>Automatic differentiation &#8212; Quadrants 0.7.3 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=5a057da9"></script>
+    <script src="../_static/documentation_options.js?v=c98573da"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Numpy and Torch interop" href="interop.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.1" />
+  <meta name="docsearch:version" content="0.7.3" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.1 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
   
 </a></div>
     
@@ -309,7 +309,12 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="nav bd-sidenav">
@@ -318,6 +323,10 @@
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
 <ul class="nav bd-sidenav">
@@ -385,13 +394,13 @@
   <section class="tex2jax_ignore mathjax_ignore" id="automatic-differentiation">
 <h1>Automatic differentiation<a class="headerlink" href="#automatic-differentiation" title="Link to this heading">#</a></h1>
 <p>Automatic differentiation (autodiff) computes the exact gradient of a kernel’s output with respect to its inputs, without the user writing the derivative formulas by hand. Gradient-based optimizers then use this gradient to train neural networks, fit physical models to data, drive differentiable simulators, or solve inverse problems.</p>
-<p>Throughout this page, the <em>primal</em> is the value a kernel computes in its normal forward pass (the field value, the loss, whatever the kernel writes); the <em>adjoint</em> (or <em>gradient</em>) is the derivative of the final scalar output (typically a loss) with respect to that primal value, stored in the <code class="docutils literal notranslate"><span class="pre">.grad</span></code> field next to the primal.</p>
-<p>Quadrants implements autodiff at compile time: when <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields’ <code class="docutils literal notranslate"><span class="pre">.grad</span></code> companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode, reverse mode, and the adstack pipeline for dynamic loops (described further down) are fully supported on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan.</p>
-<p>Three styles are supported:</p>
+<p><strong>Note.</strong> Throughout this page, the <em>primal</em> is the value a kernel computes in its normal forward pass (the field value, the loss, whatever the kernel writes); the <em>adjoint</em> (or <em>gradient</em>) is the derivative of the final scalar output (typically a loss) with respect to that primal value, stored in the <code class="docutils literal notranslate"><span class="pre">.grad</span></code> field next to the primal.</p>
+<p>Quadrants implements autodiff at compile time: when <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields’ <code class="docutils literal notranslate"><span class="pre">.grad</span></code> companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan. Reverse-mode AD through dynamic loops (described further down) is currently behind an opt-in <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=True</span></code> flag.</p>
+<p>Three mechanisms are supported:</p>
 <ul class="simple">
-<li><p><strong>Reverse mode</strong> - one scalar output, many inputs. One backward pass yields every input gradient. This is the usual training setup and the bulk of the page.</p></li>
-<li><p><strong>Forward mode</strong> - few inputs, many outputs. One forward pass yields every output derivative along a chosen input direction. See <a class="reference internal" href="#forward-mode-ad-via-qd-ad-fwdmode">Forward-mode AD via <code class="docutils literal notranslate"><span class="pre">qd.ad.FwdMode</span></code></a>.</p></li>
-<li><p><strong>Custom gradients</strong> - override the auto-generated gradient with a user-supplied one, typically to inject a closed-form analytic derivative or to checkpoint for memory. See <a class="reference internal" href="#overriding-the-compiler-generated-gradient">Overriding the compiler-generated gradient</a>.</p></li>
+<li><p><strong><a class="reference internal" href="#reverse-mode-autodiff">Reverse mode</a></strong> - one scalar output, many inputs. One backward pass yields every input gradient. This is the usual training setup and the bulk of the page.</p></li>
+<li><p><strong><a class="reference internal" href="#forward-mode-ad-via-qd-ad-fwdmode">Forward mode</a></strong> - few inputs, many outputs. One forward pass yields every output derivative along a chosen input direction.</p></li>
+<li><p><strong><a class="reference internal" href="#overriding-the-compiler-generated-gradient">Custom gradients</a></strong> - override the auto-generated gradient with a user-supplied one, typically to inject a closed-form analytic derivative or to checkpoint for memory.</p></li>
 </ul>
 <p><a class="reference internal" href="#autodiff-with-dynamic-loops">Dynamic loops</a> and the <a class="reference internal" href="#global-data-access-rules-and-the-validation-checker">validation checker</a> are covered further down for when the default path is not enough.</p>
 <section id="reverse-mode-autodiff">
@@ -445,7 +454,13 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">place(x,</span> <span class="pre">x.grad)</span></code> allocates the adjoint alongside the primal. Without it, <code class="docutils literal notranslate"><span class="pre">kernel.grad()</span></code> raises at first use. Ndarrays take <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> instead.</p></li>
 <li><p>Adjoints must be cleared before each reverse pass; leftover values accumulate. <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> (below) does this automatically.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">kernel.grad(...)</span></code> takes the same arguments as the forward kernel.</p></li>
-<li><p>Reverse-mode AD through a <em>dynamic</em> loop (one whose trip count is not known at compile time) needs an opt-in compiler pipeline called the <em>adstack</em>, gated behind <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=True</span></code> in <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>. Support for this path is still experimental and the set of loop shapes it accepts is still growing; see <a class="reference internal" href="#autodiff-with-dynamic-loops">Autodiff with dynamic loops</a> and <a class="reference internal" href="#under-the-hood-adstack-capacity-and-memory">Under the hood: adstack capacity and memory</a> for what works today and what does not.</p></li>
+<li><p>Reverse-mode AD through a <em>dynamic</em> loop (one whose trip count is not known at compile time) needs an opt-in compiler pipeline called the <em>adstack</em>, gated behind <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=True</span></code> in <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>. This path will be enabled by default in a future release, once thoroughly tested in production; see <a class="reference internal" href="#autodiff-with-dynamic-loops">Autodiff with dynamic loops</a> and <a class="reference internal" href="#under-the-hood-advanced">Under the hood (advanced)</a> for the current status.</p></li>
+</ul>
+<p><strong>Integer casts stop gradients.</strong> Integers have no meaningful derivative, so the chain rule reads as zero upstream of any cast to integer - no error, just silently-zero gradients. This is a property of differentiation through quantization, not of Quadrants. Rules of thumb:</p>
+<ul class="simple">
+<li><p>keep differentiable variables in <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.f64</span></code> through the full forward chain;</p></li>
+<li><p>casting <em>to</em> a float is safe - the downstream float section remains differentiable, and the cast itself contributes a unit factor to the chain rule;</p></li>
+<li><p>casting <em>back to</em> an integer stops the gradient at that point, so only do it at integer-indexing sites, after any arithmetic whose gradient you need.</p></li>
 </ul>
 <section id="recording-a-backward-pass-with-qd-ad-tape">
 <h3>Recording a backward pass with <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code><a class="headerlink" href="#recording-a-backward-pass-with-qd-ad-tape" title="Link to this heading">#</a></h3>
@@ -541,9 +556,9 @@
 </section>
 <section id="global-data-access-rules-and-the-validation-checker">
 <h3>Global data access rules and the validation checker<a class="headerlink" href="#global-data-access-rules-and-the-validation-checker" title="Link to this heading">#</a></h3>
-<p><strong>Problem.</strong> Reverse-mode AD reads the same globals the forward pass touched to compute gradients. If the forward pass reads a global and then overwrites it in the same launch, the reverse pass sees the post-write value and silently computes the wrong gradient - no error, no warning, just incorrect numbers.</p>
+<p><strong>Problem.</strong> Reverse-mode AD reads the same globals the forward pass touched to compute gradients. If the forward pass reads a global and then overwrites it in the same launch, the reverse pass sees the post-write value and by default silently computes the wrong gradient - no error, no warning, just incorrect numbers. An opt-in runtime check (described below) catches this pattern, but it is off by default because the cost would be prohibitive in production.</p>
 <p><strong>How Quadrants does it.</strong> The compiler imposes a per-launch constraint: within a single kernel launch, a field or ndarray entry that has been read must not be written to afterward. The constraint is strictly per-launch, so different kernels can freely read and write the same entry. Kernel scalar arguments are not subject to this rule: they are function parameters, not globals, and the reverse pass does not need to re-read their original value.</p>
-<p><strong>Workflow.</strong> Keep reads and writes to the same global entry in separate kernel launches; when developing, opt into the runtime checker described below to catch accidental violations.</p>
+<p><strong>Workflow.</strong> Keep reads and writes to the same global entry in separate kernel launches; when developing, opt into the runtime validation checker described below to catch accidental violations.</p>
 <p>Here is a kernel that violates the rule:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">bad</span><span class="p">():</span>
@@ -568,14 +583,19 @@
 </pre></div>
 </div>
 <p>The pattern often hides inside in-place time-stepping updates like <code class="docutils literal notranslate"><span class="pre">x[i]</span> <span class="pre">=</span> <span class="pre">x[i]</span> <span class="pre">+</span> <span class="pre">dt</span> <span class="pre">*</span> <span class="pre">v[i]</span></code> when the same loop body reads <code class="docutils literal notranslate"><span class="pre">x[i]</span></code> earlier. The same fix applies (split into two kernels), or equivalently, double-buffer: have the update write into an <code class="docutils literal notranslate"><span class="pre">x_new</span></code> field and swap the references after the kernel returns.</p>
-<p><strong>Runtime check.</strong> Violations of the rule do not produce an error on their own - the gradients are just silently wrong. To get Quadrants to validate the rule at runtime, pass <code class="docutils literal notranslate"><span class="pre">validation=True</span></code> to <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> (with <code class="docutils literal notranslate"><span class="pre">qd.init(debug=True)</span></code> set). A violation raises <code class="docutils literal notranslate"><span class="pre">QuadrantsAssertionError</span></code> with the offending field name. Kernels wrapped in <code class="docutils literal notranslate"><span class="pre">qd.ad.grad_replaced</span></code> are exempt - their gradient is the user’s responsibility.</p>
+<p><strong>Runtime check.</strong> To catch violations at runtime instead of letting the gradients come out silently wrong, drive the reverse pass through <a class="reference internal" href="#recording-a-backward-pass-with-qd-ad-tape"><code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code></a> and pass <code class="docutils literal notranslate"><span class="pre">validation=True</span></code>, with <code class="docutils literal notranslate"><span class="pre">qd.init(debug=True)</span></code> set. A violation raises <code class="docutils literal notranslate"><span class="pre">QuadrantsAssertionError</span></code> with the offending field name. Kernels wrapped in <code class="docutils literal notranslate"><span class="pre">qd.ad.grad_replaced</span></code> are exempt - their gradient is the user’s responsibility.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">ad</span><span class="o">.</span><span class="n">Tape</span><span class="p">(</span><span class="n">loss</span><span class="o">=</span><span class="n">loss</span><span class="p">,</span> <span class="n">validation</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="n">bad</span><span class="p">()</span>  <span class="c1"># raises QuadrantsAssertionError naming b as the offending field</span>
+</pre></div>
+</div>
 </section>
 </section>
 <section id="autodiff-with-dynamic-loops">
 <h2>Autodiff with dynamic loops<a class="headerlink" href="#autodiff-with-dynamic-loops" title="Link to this heading">#</a></h2>
 <p><strong>Problem.</strong> Reverse-mode AD through a dynamic loop (one whose trip count is not known at compile time) needs to recover the primal value at each iteration when walking the loop backwards. Without that, the chain-rule steps read a stale value and the gradients come out silently wrong. Static-unrolled (<code class="docutils literal notranslate"><span class="pre">qd.static(range(...))</span></code>) loops are not affected because every iteration becomes its own inlined block at compile time.</p>
-<p><strong>How Quadrants does it.</strong> Quadrants provides a dedicated compiler pipeline for this, called the <em>adstack</em> (short for “(a)uto(d)iff (stack)”). It allocates a per-variable stack alongside each primal that is updated inside the loop. The forward pass pushes an entry each iteration; the reverse pass pops them back off in reverse order to recover the correct primal for every chain-rule step. adstack is opt-in because it costs extra per-thread memory and compile time, and because most kernels do not need it. Running with adstack enabled when it is not strictly needed is safe. Running without it when it is needed raises a <code class="docutils literal notranslate"><span class="pre">QuadrantsCompilationError</span></code> in most cases: the autodiff pass rejects a non-static range that would otherwise lose its primal. A few edge-case loop shapes still slip past that rejection and produce silently-wrong gradients; these are tracked and fixed in the autodiff pass as they surface, so if you see wrong-but-non-zero gradients through a dynamic loop with adstack disabled, turn it on and rerun as a sanity check.</p>
-<p><strong>Workflow.</strong> Enable the pipeline at init time and keep using the normal reverse-mode workflow: <code class="docutils literal notranslate"><span class="pre">qd.init(...,</span> <span class="pre">ad_stack_experimental_enabled=True)</span></code>. The flag is compile-time, so it must be set before the offending kernel compiles.</p>
+<p><strong>How Quadrants does it.</strong> Quadrants provides a dedicated compiler pipeline for this, called the <em>adstack</em> (short for “(a)uto(d)iff (stack)”). It allocates a per-variable stack alongside each primal that is updated inside the loop. The forward pass pushes one entry per iteration. The reverse pass walks the stack from top down. At each reverse iteration it reads the current top entry, applies the chain-rule contributions of that iteration, then pops the entry once and steps to the iteration underneath. Enabling adstack costs extra per-thread memory and compile time, but some kernels need it.</p>
+<p><strong>Workflow.</strong> Enable the pipeline at init time and keep using the normal reverse-mode workflow: <code class="docutils literal notranslate"><span class="pre">qd.init(...,</span> <span class="pre">ad_stack_experimental_enabled=True)</span></code>.</p>
+<p><strong>Note.</strong> Running with adstack enabled when it is not strictly needed is safe, but not the other way around. Running without it when it is needed raises a <code class="docutils literal notranslate"><span class="pre">QuadrantsCompilationError</span></code> in most cases: the autodiff pass rejects a non-static range that would otherwise lose its primal. A few edge-case loop shapes still slip past that rejection and produce silently-wrong gradients; these are tracked and fixed in the autodiff pass as they surface. There is no automated detector for this case. If you suspect a kernel may be affected, a reasonable check is to enable adstack and re-run: if the gradients are unchanged, adstack was not needed.</p>
 <p>Reverse-mode AD walks the forward kernel in reverse and applies the chain rule at every op. The chain-rule factor at each op is that op’s derivative with respect to its input. For <em>non-linear</em> ops (<code class="docutils literal notranslate"><span class="pre">sin</span></code>, <code class="docutils literal notranslate"><span class="pre">cos</span></code>, <code class="docutils literal notranslate"><span class="pre">exp</span></code>, <code class="docutils literal notranslate"><span class="pre">sqrt</span></code>, <code class="docutils literal notranslate"><span class="pre">tanh</span></code>, <code class="docutils literal notranslate"><span class="pre">pow</span></code>, …) that derivative depends on the input’s primal, so the reverse pass needs the primal value that was there on the forward pass. For <em>linear</em> ops (addition, subtraction, multiplication by a constant) the derivative is itself a constant and no primal is needed. In a dynamic loop the forward pass writes a different primal at each iteration, so the reverse pass cannot simply re-read the latest value - it needs one per iteration. adstack provides exactly that: a per-iteration stash of the primal.</p>
 <section id="examples-of-dynamic-loops-that-need-it">
 <h3>Examples of dynamic loops that need it<a class="headerlink" href="#examples-of-dynamic-loops-that-need-it" title="Link to this heading">#</a></h3>
@@ -593,110 +613,223 @@
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">qd.static(range(...))</span></code> loops are unrolled at compile time and never need the adstack either.</p>
 </section>
-<section id="under-the-hood-adstack-capacity-and-memory">
-<h3>Under the hood: adstack capacity and memory<a class="headerlink" href="#under-the-hood-adstack-capacity-and-memory" title="Link to this heading">#</a></h3>
-<p><em>You do not need to read this section to use reverse-mode AD. If a kernel exceeds its adstack capacity, Quadrants raises a Python exception at the next <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> whose message recommends bumping <code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> - that is usually enough. Read on only if you hit that overflow, want to understand why, or want to cap the memory footprint explicitly.</em></p>
-<p><strong>Tuning.</strong> Two <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> knobs control adstack sizing, both measured in slots per adstack (not bytes):</p>
+<section id="supported-loop-shapes">
+<h3>Supported loop shapes<a class="headerlink" href="#supported-loop-shapes" title="Link to this heading">#</a></h3>
+<p>Quadrants supports many common loop constructs, but not every loop shape that compiles in the absence of adstack is currently handled. Loop shapes outside the supported set are rejected at compile time, with the error naming the offending source line. Typical fixes are to restructure the loop into one of the supported shapes, or to file a bug. Setting <code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR=1</span></code> before compiling dumps the kernel IR for the first unresolved adstack into <code class="docutils literal notranslate"><span class="pre">/tmp/ir_adstack_unresolved/</span></code> so you can attach it to the report.</p>
+<p>See <a class="reference internal" href="#appendix-a-types-of-dynamic-loops-supported-by-reverse-mode-ad">Appendix A: types of dynamic loops supported by reverse-mode AD</a> for the authoritative list.</p>
+</section>
+<section id="under-the-hood-advanced">
+<h3>Under the hood (advanced)<a class="headerlink" href="#under-the-hood-advanced" title="Link to this heading">#</a></h3>
+<p><em>You do not need to read this section to use reverse-mode AD. Skip past it unless you hit an overflow error on SPIR-V, an out-of-memory error on GPU, or a compile error from the autodiff pass naming a loop in your kernel.</em></p>
+<section id="why-peek-and-pop-not-pop-per-use">
+<h4>Why peek-and-pop, not pop-per-use<a class="headerlink" href="#why-peek-and-pop-not-pop-per-use" title="Link to this heading">#</a></h4>
+<p>The reverse pass reads the current top of stack as many times as that iteration’s chain-rule contributions need, then pops the entry once. The number of reads per entry equals the number of downstream uses of the primal in that iteration. Popping after each read would not work: the same primal often feeds several chain-rule terms in one iteration - e.g. a <code class="docutils literal notranslate"><span class="pre">v</span></code> that appears in both a <code class="docutils literal notranslate"><span class="pre">sin(v)</span></code> and a subsequent <code class="docutils literal notranslate"><span class="pre">v</span> <span class="pre">*</span> <span class="pre">w</span></code> is needed for both adjoint terms - so popping after the first read would discard the value before the remaining terms could use it.</p>
+</section>
+<section id="one-adstack-per-variable">
+<h4>One adstack per variable<a class="headerlink" href="#one-adstack-per-variable" title="Link to this heading">#</a></h4>
+<p>A dynamic loop does not have a single adstack. The compiler allocates one adstack per scalar value the reverse pass has to replay:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">default_ad_stack_size=N</span></code> (default <code class="docutils literal notranslate"><span class="pre">256</span></code>): the fallback capacity for loops whose trip count the compiler cannot prove statically. Every adstack whose size was not deducible shares this value. Prefer this knob - it only affects the branch where the compiler had to guess.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">ad_stack_size=N</span></code> (default <code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">=</span> <span class="pre">adaptive</span></code>): hard override forcing every adstack in the program to exactly <code class="docutils literal notranslate"><span class="pre">N</span></code> slots regardless of what the compiler proved. Use only for targeted experiments, for example stress-testing the runtime heap path.</p></li>
+<li><p>one for each floating-point <a class="reference internal" href="#examples-of-dynamic-loops-that-need-it">loop-carried variable</a> (e.g. <code class="docutils literal notranslate"><span class="pre">v</span> <span class="pre">+=</span> <span class="pre">qd.sin(u)</span></code>);</p></li>
+<li><p>one for each integer loop-carried variable (counters, or indices used to address a global field: <code class="docutils literal notranslate"><span class="pre">idx</span> <span class="pre">+=</span> <span class="pre">step;</span> <span class="pre">total</span> <span class="pre">+=</span> <span class="pre">a[idx]</span></code>);</p></li>
+<li><p>one for each <em>branch flag</em> - a per-iteration boolean the compiler emits internally whenever an <code class="docutils literal notranslate"><span class="pre">if</span></code> inside the loop body depends on a loop-carried variable. The flag records which branch ran so the reverse pass walks the matching one.</p></li>
 </ul>
-<p><strong>One adstack per variable.</strong> A dynamic loop does not have a single adstack. The compiler allocates one for each <a class="reference internal" href="#examples-of-dynamic-loops-that-need-it">loop-carried variable</a> the reverse pass has to replay - whether the variable is a floating-point accumulator (<code class="docutils literal notranslate"><span class="pre">v</span> <span class="pre">+=</span> <span class="pre">qd.sin(u)</span></code>), an integer counter (<code class="docutils literal notranslate"><span class="pre">count</span> <span class="pre">+=</span> <span class="pre">1</span></code>), an integer index used to address a global field (<code class="docutils literal notranslate"><span class="pre">idx</span> <span class="pre">+=</span> <span class="pre">step;</span> <span class="pre">total</span> <span class="pre">+=</span> <span class="pre">a[idx]</span></code>), or any other scalar type that carries state across iterations. The compiler also allocates one for each <em>boolean branch flag</em>: a per-iteration boolean it emits internally whenever an <code class="docutils literal notranslate"><span class="pre">if</span></code> inside the loop body depends on a loop-carried variable - the flag records which branch ran on each iteration so the reverse pass walks the matching one. A kernel with four <code class="docutils literal notranslate"><span class="pre">f32</span></code> loop-carried variables and one integer loop counter therefore allocates five separate adstacks, each sized independently by the rule below.</p>
-<p><strong>Sizing rule.</strong> A <code class="docutils literal notranslate"><span class="pre">K</span></code>-iteration dynamic loop consumes <code class="docutils literal notranslate"><span class="pre">K</span> <span class="pre">+</span> <span class="pre">2</span></code> slots in each of its adstacks: one slot per forward iteration, plus two setup slots (one for the initial adjoint, one for the primal’s starting value). <code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> is a per-stack slot count, so size it at the worst-case trip count of the deepest unprovable dynamic loop in the program plus 2.</p>
+<p>A kernel with four <code class="docutils literal notranslate"><span class="pre">f32</span></code> loop-carried variables and one integer loop counter therefore allocates five separate adstacks, each sized independently.</p>
+</section>
+<section id="launch-time-sizing">
+<h4>Launch-time sizing<a class="headerlink" href="#launch-time-sizing" title="Link to this heading">#</a></h4>
+<p>Adstack sizing is automatic on every backend. You do not need to tune anything, and there is no user-facing size knob:</p>
+<ul class="simple">
+<li><p>For each loop-carried variable, the compiler works out a launch-time formula for that adstack’s depth at compile time. The formula is composed from the bound shapes listed under <a class="reference internal" href="#supported-loop-shapes">Supported loop shapes</a>, combined with <code class="docutils literal notranslate"><span class="pre">+</span></code>, <code class="docutils literal notranslate"><span class="pre">-</span></code>, <code class="docutils literal notranslate"><span class="pre">*</span></code>, and <code class="docutils literal notranslate"><span class="pre">max</span></code>.</p></li>
+<li><p>Right before every kernel dispatch, Quadrants evaluates that formula against the live field and ndarray state, and resizes the per-thread backing buffer accordingly.</p></li>
+<li><p>If a loop shape falls outside what the compiler knows how to bound, it raises a compile error naming the offending source location - there is no silent over-allocation.</p></li>
+</ul>
+<p>The evaluation happens in different places depending on the backend, but the result is the same:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
-<tr class="row-odd"><th class="head"><p>Loop shape</p></th>
-<th class="head"><p>Required <code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code></p></th>
+<tr class="row-odd"><th class="head"><p>Backend</p></th>
+<th class="head"><p>Where the formula is evaluated</p></th>
+<th class="head"><p>Why</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>single dynamic <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(a[None])</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">a_max</span> <span class="pre">+</span> <span class="pre">2</span></code></p></td>
+<tr class="row-even"><td><p>CPU / CUDA / AMDGPU</p></td>
+<td><p>On the host, right before dispatch</p></td>
+<td><p>The host can read every input the formula depends on.</p></td>
 </tr>
-<tr class="row-odd"><td><p>nested <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(a[None]):</span> <span class="pre">for</span> <span class="pre">j</span> <span class="pre">in</span> <span class="pre">range(b[None])</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">a_max</span> <span class="pre">*</span> <span class="pre">b_max</span> <span class="pre">+</span> <span class="pre">2</span></code></p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.ndrange(n,</span> <span class="pre">m)</span></code> with field-derived <code class="docutils literal notranslate"><span class="pre">n</span></code>, <code class="docutils literal notranslate"><span class="pre">m</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">n_max</span> <span class="pre">*</span> <span class="pre">m_max</span> <span class="pre">+</span> <span class="pre">2</span></code></p></td>
+<tr class="row-odd"><td><p>Metal / Vulkan</p></td>
+<td><p>In a tiny on-device compute shader run before the main kernel</p></td>
+<td><p>The formula can depend on ndarray contents that live on the GPU, so the evaluation has to run where the data is.</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>At <code class="docutils literal notranslate"><span class="pre">max_n_dofs_per_entity</span> <span class="pre">=</span> <span class="pre">16</span></code>, a <code class="docutils literal notranslate"><span class="pre">16</span> <span class="pre">x</span> <span class="pre">16</span></code> ndrange hits the default exactly (<code class="docutils literal notranslate"><span class="pre">256</span></code>).</p>
-<p><strong>Memory footprint.</strong> Each adstack is <em>typed</em>: all of its slots hold values of the same scalar type - <code class="docutils literal notranslate"><span class="pre">f32</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code>, <code class="docutils literal notranslate"><span class="pre">i32</span></code>, <code class="docutils literal notranslate"><span class="pre">i64</span></code>, <code class="docutils literal notranslate"><span class="pre">bool</span></code>, and so on - inherited from the loop-carried variable the adstack was allocated for. We denote that type <code class="docutils literal notranslate"><span class="pre">T</span></code>. With one scratch buffer per adstack (see above), the total memory cost depends on two further quantities. The first is the number of threads the kernel actually dispatches, which we call <code class="docutils literal notranslate"><span class="pre">num_threads</span></code>. On CPU that is the thread-pool size, typically tens. On GPU it is the full ndrange. The second is <code class="docutils literal notranslate"><span class="pre">bytes_per_slot</span></code>, which depends on <code class="docutils literal notranslate"><span class="pre">T</span></code> and on the backend; the two tables below work through the concrete values. Total memory across all buffers is then approximately:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">num_threads</span> <span class="o">*</span> <span class="n">default_ad_stack_size</span> <span class="o">*</span> <span class="n">bytes_per_slot</span> <span class="o">*</span> <span class="n">num_buffers</span>
+<p>Either way, the per-thread stride and each adstack’s offset / max-size land in a small buffer the main kernel reads on every push. The backing heap grows on demand to match the largest size any launch has needed so far, and is reused across subsequent launches - you do not need to reserve memory up front.</p>
+<p>The on-device sizer relies on two common hardware features (64-bit integer arithmetic and raw-pointer storage-buffer access). Every mainstream GPU from late 2018 onward supports both.</p>
+</section>
+<section id="manual-override">
+<h4>Manual override<a class="headerlink" href="#manual-override" title="Link to this heading">#</a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> exposes a single escape hatch:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ad_stack_size=N</span></code> (default <code class="docutils literal notranslate"><span class="pre">0</span></code>, meaning “let the sizer decide”): forces every adstack in the program to exactly <code class="docutils literal notranslate"><span class="pre">N</span></code> slots and bypasses the sizer entirely.</p></li>
+</ul>
+<p>Leave it at <code class="docutils literal notranslate"><span class="pre">0</span></code> in day-to-day use. Setting it to a positive <code class="docutils literal notranslate"><span class="pre">N</span></code> is meant for stress tests or for working around a suspected sizer bug; it defeats the per-launch-exact sizing, so every dispatch allocates the full <code class="docutils literal notranslate"><span class="pre">N</span></code> slots whether the kernel actually needs them or not.</p>
+</section>
+<section id="memory-footprint">
+<h4>Memory footprint<a class="headerlink" href="#memory-footprint" title="Link to this heading">#</a></h4>
+<p>Each adstack is <em>typed</em>: all of its slots hold values of the same scalar type - <code class="docutils literal notranslate"><span class="pre">f32</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code>, <code class="docutils literal notranslate"><span class="pre">i32</span></code>, <code class="docutils literal notranslate"><span class="pre">i64</span></code>, <code class="docutils literal notranslate"><span class="pre">bool</span></code>, and so on - inherited from the loop-carried variable it was allocated for. Denote that type <code class="docutils literal notranslate"><span class="pre">T</span></code>.</p>
+<p>Total memory across all adstacks is approximately:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">num_threads</span> <span class="o">*</span> <span class="n">stack_size</span> <span class="o">*</span> <span class="n">bytes_per_slot</span> <span class="o">*</span> <span class="n">num_buffers</span>
 </pre></div>
 </div>
-<p>On all backends, every adstack slot stores a <em>primal</em> value of type <code class="docutils literal notranslate"><span class="pre">T</span></code> - that is what the reverse pass pops to recover the forward-pass value at each chain-rule step.</p>
-<p>In addition, LLVM backends (CPU / CUDA / AMDGPU) store an <em>adjoint</em> of type <code class="docutils literal notranslate"><span class="pre">T</span></code> alongside the primal in each slot, regardless of what <code class="docutils literal notranslate"><span class="pre">T</span></code> is. The adjoint slot is where the reverse pass accumulates chain-rule contributions; LLVM carries it even when <code class="docutils literal notranslate"><span class="pre">T</span></code> is an integer or boolean (where the reverse pass never writes to it) because the codegen uses a uniform two-element slot layout, which keeps push/pop branch-free at the cost of the unused adjoint slot for non-floating-point <code class="docutils literal notranslate"><span class="pre">T</span></code>. So <code class="docutils literal notranslate"><span class="pre">bytes_per_slot</span> <span class="pre">=</span> <span class="pre">2</span> <span class="pre">*</span> <span class="pre">sizeof(T)</span></code> on LLVM for every choice of <code class="docutils literal notranslate"><span class="pre">T</span></code>:</p>
+<p>where each quantity means:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Quantity</p></th>
+<th class="head"><p>What it is</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">num_threads</span></code></p></td>
+<td><p>Threads the kernel actually dispatches. On CPU: the thread-pool size, typically tens. On GPU: the full ndrange.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stack_size</span></code></p></td>
+<td><p>Per-launch capacity resolved by the sizer. Varies between launches - if an ndarray-bounded loop iterates 16 times at one dispatch and 1024 at another, <code class="docutils literal notranslate"><span class="pre">stack_size</span></code> tracks each.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">bytes_per_slot</span></code></p></td>
+<td><p>Depends on <code class="docutils literal notranslate"><span class="pre">T</span></code> and on the backend (see table below).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">num_buffers</span></code></p></td>
+<td><p>Number of adstacks the kernel allocates - one per loop-carried variable plus one per dependent branch flag (see <a class="reference internal" href="#one-adstack-per-variable">One adstack per variable</a>).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Every adstack slot always stores a <em>primal</em> value - the forward-pass value the reverse pass pops to recover the chain-rule step. Floating-point adstacks additionally store an <em>adjoint</em> slot where the reverse pass accumulates chain-rule contributions. Integer / boolean adstacks do not need an adjoint slot.</p>
+<p>Platform-specific notes:</p>
+<ul class="simple">
+<li><p>Even though integer / boolean adstacks do not need an adjoint slot, LLVM backends still carry one for codegen uniformity. SPIR-V backends trim it.</p></li>
+<li><p>SPIR-V stores <code class="docutils literal notranslate"><span class="pre">bool</span></code> slots using 4 bytes (32 bits), because SPIR-V does not specify a portable in-memory layout for booleans.</p></li>
+</ul>
+<p>The resulting per-slot cost on each platform is:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>T</p></th>
 <th class="head"><p>LLVM bytes/slot</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p>f32</p></td>
-<td><p>8</p></td>
-</tr>
-<tr class="row-odd"><td><p>f64</p></td>
-<td><p>16</p></td>
-</tr>
-<tr class="row-even"><td><p>i32 / u32</p></td>
-<td><p>8</p></td>
-</tr>
-<tr class="row-odd"><td><p>i64 / u64</p></td>
-<td><p>16</p></td>
-</tr>
-<tr class="row-even"><td><p>bool</p></td>
-<td><p>2</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<p>On SPIR-V backends (Metal / Vulkan) the slot layout is trimmed: adstacks whose <code class="docutils literal notranslate"><span class="pre">T</span></code> is an integer type (<code class="docutils literal notranslate"><span class="pre">i32</span></code>, <code class="docutils literal notranslate"><span class="pre">i64</span></code>, …) only store the primal because the reverse pass does not accumulate integer adjoints, and per-thread on-chip memory is more constrained than on LLVM. So <code class="docutils literal notranslate"><span class="pre">bytes_per_slot</span> <span class="pre">=</span> <span class="pre">sizeof(T)</span></code> for integer <code class="docutils literal notranslate"><span class="pre">T</span></code> and <code class="docutils literal notranslate"><span class="pre">bytes_per_slot</span> <span class="pre">=</span> <span class="pre">2</span> <span class="pre">*</span> <span class="pre">sizeof(T)</span></code> for floating-point <code class="docutils literal notranslate"><span class="pre">T</span></code>. SPIR-V has no defined layout for <code class="docutils literal notranslate"><span class="pre">OpTypeBool</span></code>, so booleans are widened to i32 at storage time:</p>
-<div class="pst-scrollable-table-container"><table class="table">
-<thead>
-<tr class="row-odd"><th class="head"><p>T</p></th>
 <th class="head"><p>SPIR-V bytes/slot</p></th>
 </tr>
 </thead>
 <tbody>
 <tr class="row-even"><td><p>f32</p></td>
 <td><p>8</p></td>
+<td><p>8</p></td>
 </tr>
 <tr class="row-odd"><td><p>f64</p></td>
 <td><p>16</p></td>
+<td><p>16</p></td>
 </tr>
 <tr class="row-even"><td><p>i32 / u32</p></td>
+<td><p>8</p></td>
 <td><p>4</p></td>
 </tr>
 <tr class="row-odd"><td><p>i64 / u64</p></td>
+<td><p>16</p></td>
 <td><p>8</p></td>
 </tr>
 <tr class="row-even"><td><p>bool</p></td>
+<td><p>2</p></td>
 <td><p>4</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Adstack buffers live on the device on GPU and in host RAM on CPU. The buffer grows on demand to match the largest size any launch has needed so far and is reused across subsequent launches, so you do not need to reserve memory up front.</p>
-<p><strong>Avoiding OOM on GPU.</strong> A big <code class="docutils literal notranslate"><span class="pre">ndrange</span></code> combined with several loop-carried f32 variables adds up fast: <code class="docutils literal notranslate"><span class="pre">ndrange(1024,</span> <span class="pre">1024)</span></code> with <code class="docutils literal notranslate"><span class="pre">default_ad_stack_size=256</span></code> and four f32 buffers allocates roughly <code class="docutils literal notranslate"><span class="pre">1024</span> <span class="pre">*</span> <span class="pre">1024</span> <span class="pre">*</span> <span class="pre">256</span> <span class="pre">*</span> <span class="pre">8</span> <span class="pre">*</span> <span class="pre">4</span> <span class="pre">bytes</span> <span class="pre">~=</span> <span class="pre">8</span> <span class="pre">GB</span></code>, enough to exhaust a consumer GPU. Doubling <code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> doubles the backing buffer linearly, so it is the simplest knob to reach for on out-of-memory. Remedies, in order:</p>
+<p>Adstack buffers live on the device on GPU and in host RAM on CPU.</p>
+</section>
+<section id="avoiding-oom-on-gpu">
+<h4>Avoiding OOM on GPU<a class="headerlink" href="#avoiding-oom-on-gpu" title="Link to this heading">#</a></h4>
+<p>A large <code class="docutils literal notranslate"><span class="pre">ndrange</span></code> combined with several loop-carried variables multiplies quickly. If the allocator returns out-of-memory on a legitimately deep reverse-mode kernel, remedies in order:</p>
 <ol class="arabic simple">
-<li><p>Drop <code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> toward the real worst-case trip count of your dynamic loops.</p></li>
-<li><p>Reduce the number of loop-carried variables the reverse pass has to replay (split the kernel, checkpoint manually, or fold two accumulators into one).</p></li>
+<li><p>Reduce <code class="docutils literal notranslate"><span class="pre">num_buffers</span></code> - split the kernel, checkpoint manually, or fold two accumulators into one so the reverse pass has fewer loop-carried variables to replay.</p></li>
 <li><p>Raise <code class="docutils literal notranslate"><span class="pre">device_memory_fraction</span></code> or <code class="docutils literal notranslate"><span class="pre">device_memory_GB</span></code> in <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> if the GPU has headroom.</p></li>
 </ol>
 </section>
 </section>
-<section id="known-limitations">
-<h2>Known limitations<a class="headerlink" href="#known-limitations" title="Link to this heading">#</a></h2>
+</section>
+<section id="what-can-go-wrong">
+<h2>What can go wrong<a class="headerlink" href="#what-can-go-wrong" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p>Adstack overflow is reported as a Python-level exception on every backend, but asynchronously: the offending kernel writes to a host-polled SSBO flag during execution, and the next <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> (explicit, or implicit via a host read like <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> / <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code>) reads the flag and raises. This follows the same pattern as CUDA async errors so every launch does not pay a per-launch sync. If you want the exception to land exactly at the offending kernel rather than at the next sync, call <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> right after the kernel, or enable <code class="docutils literal notranslate"><span class="pre">qd.init(debug=True)</span></code> on LLVM backends to poll after every launch.</p></li>
-<li><p>Adstack trades compile time for generality. Kernels with many loop-carried variables, nested dynamic loops, or large inner-loop bodies produce visibly slow compile times - seconds stretching into minutes, and on SPIR-V backends sometimes into the territory where the driver’s shader compiler gives up. Budget compile-time accordingly when migrating existing reverse-mode AD workloads.</p></li>
-<li><p>Reverse-mode AD does not propagate gradients through integer casts or non-real operations. No error is raised; the gradient simply stops at the cast and silently reads as zero upstream. Cast to <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.f64</span></code> before the differentiable section.</p></li>
-<li><p>Backward passes on non-trivial kernels run noticeably slower than the corresponding forward pass, sometimes by an order of magnitude on SPIR-V.</p></li>
+<li><p><strong>Adstack overflow at <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> (sizer under-estimated the bound).</strong> Surfaces asynchronously at the next <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> as <code class="docutils literal notranslate"><span class="pre">QuadrantsAssertionError:</span> <span class="pre">Adstack</span> <span class="pre">overflow</span> <span class="pre">...</span></code>. On unusually intricate nested loops - typically deeply nested <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(arr[...])</span></code> with cumulative-index arithmetic - the sizer can compute a bound that is mathematically tighter than the actual push count. This is a bug; please file it with <code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR=1</span></code> set so the kernel IR ships with the report. Workarounds, in order of convenience:</p>
+<ul>
+<li><p>shorten the innermost dynamic loop;</p></li>
+<li><p>precompute its worst-case trip into a scalar field the kernel only reads;</p></li>
+<li><p>split the inner section into its own <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>;</p></li>
+<li><p>pass <code class="docutils literal notranslate"><span class="pre">ad_stack_size=N</span></code> to <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> with <code class="docutils literal notranslate"><span class="pre">N</span></code> large enough to cover the real push count (bypasses the sizer).</p></li>
 </ul>
+</li>
+<li><p><strong>Out-of-memory before the kernel even runs.</strong> A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer’s number is correct. Surfaces as an allocator OOM at launch time. Remedies are the ones listed under <em>Avoiding OOM on GPU</em> above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.</p></li>
+<li><p><strong>Loop bounds backed by a mutated ndarray.</strong> A reverse-mode kernel with <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n[j])</span></code> requires <code class="docutils literal notranslate"><span class="pre">n[j]</span></code> to hold the same value at the forward call and at <code class="docutils literal notranslate"><span class="pre">.grad()</span></code>. If anything writes to <code class="docutils literal notranslate"><span class="pre">n[j]</span></code> between those two points - the differentiable kernel itself, or any other kernel call - the computed gradient may come out wrong, sometimes as an <code class="docutils literal notranslate"><span class="pre">Adstack</span> <span class="pre">overflow</span></code> exception at <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code>, sometimes silently. The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> returns. The reason for that is Quadrants’ adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like <a class="reference external" href="https://pytorch.org/docs/stable/notes/autograd.html">PyTorch’s autograd</a> is not affected, since the trip count is recorded as the forward runs and reused at backward time.</p></li>
+</ul>
+</section>
+<section id="performance-characteristics">
+<h2>Performance characteristics<a class="headerlink" href="#performance-characteristics" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Compile time scales with loop nesting.</strong> The adstack pipeline trades compile time for generality. Kernels with many loop-carried variables, nested dynamic loops, or large inner-loop bodies produce visibly slow compile times - seconds stretching into minutes. Budget compile time accordingly when migrating existing reverse-mode AD workloads.</p></li>
+<li><p><strong>SPIR-V backward passes can be an order of magnitude slower than the forward pass.</strong> Reverse-mode AD reruns every forward op and additionally accumulates a gradient contribution per op, usually via atomic writes.</p></li>
+</ul>
+</section>
+<section id="appendix-a-types-of-dynamic-loops-supported-by-reverse-mode-ad">
+<h2>Appendix A: types of dynamic loops supported by reverse-mode AD<a class="headerlink" href="#appendix-a-types-of-dynamic-loops-supported-by-reverse-mode-ad" title="Link to this heading">#</a></h2>
+<p>The compiler recognises the following bound shapes for adstack-aware loops:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Bound shape</p></th>
+<th class="head"><p>Example</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Integer constant</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(42):</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Scalar integer field (<code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code>) at a constant or loop index</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n[None]):</span></code>, <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n[j]):</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Ndarray argument shape along any axis</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(arr.shape[1]):</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Scalar ndarray read at a constant or loop index, including multi-axis reads</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(arr[j]):</span></code><br><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(arr[j,</span> <span class="pre">k]):</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Two-argument <code class="docutils literal notranslate"><span class="pre">range(start,</span> <span class="pre">stop)</span></code> whose <code class="docutils literal notranslate"><span class="pre">start</span></code> and <code class="docutils literal notranslate"><span class="pre">stop</span></code> are any of the bound shapes above</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">k</span> <span class="pre">in</span> <span class="pre">range(start[j],</span> <span class="pre">stop[j]):</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>An enclosing <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(...)</span></code>, struct-for, or ndrange index (also multi-index ndrange over ndarray shapes)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(N):</span> <span class="pre">...</span> <span class="pre">for</span> <span class="pre">j</span> <span class="pre">in</span> <span class="pre">range(i):</span></code><br><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i,</span> <span class="pre">j</span> <span class="pre">in</span> <span class="pre">qd.ndrange(arr.shape[0],</span> <span class="pre">arr.shape[1]):</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>A cast of a loop index stashed earlier in the same body, used to index a field or ndarray</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">i_l</span> <span class="pre">=</span> <span class="pre">qd.cast(outer_i,</span> <span class="pre">qd.i32)</span></code> then later <code class="docutils literal notranslate"><span class="pre">arr[i_l]</span></code> or <code class="docutils literal notranslate"><span class="pre">field[i_l]</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Examples of constructs that are <em>not</em> currently handled:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">k_nonlinear_bound</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">a</span><span class="p">)):</span>   <span class="c1"># non-linear transform of a bound shape</span>
+        <span class="o">...</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">k_mixed_index</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">b</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">b</span><span class="p">[</span><span class="n">j</span><span class="p">]):</span>   <span class="c1"># cross-axis indices into independent ndarrays</span>
+                <span class="o">...</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">k_data_dependent</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="k">while</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">10</span><span class="p">:</span>              <span class="c1"># bound that can only be known by running the loop body</span>
+            <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+</pre></div>
+</div>
 </section>
 </section>
 
@@ -757,10 +890,21 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#autodiff-with-dynamic-loops">Autodiff with dynamic loops</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#examples-of-dynamic-loops-that-need-it">Examples of dynamic loops that need it</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#examples-of-dynamic-loops-that-do-not-need-it">Examples of dynamic loops that do not need it</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-adstack-capacity-and-memory">Under the hood: adstack capacity and memory</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-loop-shapes">Supported loop shapes</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-advanced">Under the hood (advanced)</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#why-peek-and-pop-not-pop-per-use">Why peek-and-pop, not pop-per-use</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#one-adstack-per-variable">One adstack per variable</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#launch-time-sizing">Launch-time sizing</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#manual-override">Manual override</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#memory-footprint">Memory footprint</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#avoiding-oom-on-gpu">Avoiding OOM on GPU</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#known-limitations">Known limitations</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-can-go-wrong">What can go wrong</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-characteristics">Performance characteristics</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#appendix-a-types-of-dynamic-loops-supported-by-reverse-mode-ad">Appendix A: types of dynamic loops supported by reverse-mode AD</a></li>
 </ul>
   </nav></div>
 

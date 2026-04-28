@@ -17,6 +17,7 @@ Submodules
    /autoapi/quadrants/linalg/index
    /autoapi/quadrants/math/index
    /autoapi/quadrants/profiler/index
+   /autoapi/quadrants/pytest_plugin/index
    /autoapi/quadrants/sparse/index
    /autoapi/quadrants/tools/index
    /autoapi/quadrants/types/index
