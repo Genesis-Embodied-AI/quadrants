@@ -692,7 +692,7 @@ def _overflowing_compute(n_elements=1, n_iter=64):
     return compute, x, y
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
 def test_adstack_overflow_raises():
     # Runs a backward pass with a for-loop longer than the adstack can hold, and asserts the overflow surfaces as a
     # regular Python exception on the next `qd.sync()` - not a silent wrong gradient and not a process crash. This
@@ -702,8 +702,10 @@ def test_adstack_overflow_raises():
     # Internal detail: both LLVM and SPIR-V defer the error to the next `qd.sync()` (same pattern as CUDA async
     # errors) so we do not pay a sync-per-launch. LLVM polls `runtime->adstack_overflow_flag` from
     # `LlvmProgramImpl::synchronize()` via `check_adstack_overflow()`; SPIR-V's gfx runtime raises via `QD_ERROR`
-    # on sync. The test launches the overflowing grad kernel and calls `qd.sync()` inside the same `pytest.raises`
-    # block so the deferred surfacing point is caught.
+    # on sync. `debug=True` is required because release-build LLVM codegen elides the per-push bounds check on the
+    # premise that `determine_ad_stack_size` produces a tight upper bound; this test deliberately misconfigures
+    # the capacity below the kernel's actual peak push count, which the sizer cannot foresee, so the runtime
+    # check has to be live for the deferred raise to fire.
     compute, _, _ = _overflowing_compute()
     # On LLVM the runtime raises QuadrantsAssertionError (subclass of AssertionError) from
     # check_adstack_overflow; on SPIR-V the gfx runtime raises RuntimeError via QD_ERROR. We accept either,
@@ -713,12 +715,13 @@ def test_adstack_overflow_raises():
         qd.sync()
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
 def test_adstack_overflow_flag_resets_after_catch():
     # Once `check_adstack_overflow()` raises, the runtime must clear its overflow flag so a subsequent `qd.sync()`
     # (with no new overflowing grad launch in between) returns normally. Without the reset the user would see a
     # stale overflow exception every time they sync after the first one, which makes diagnosis and recovery
-    # impossible.
+    # impossible. `debug=True` keeps the per-push bounds check live (release-build codegen elides it - see
+    # `test_adstack_overflow_raises` for the rationale).
     compute, _, _ = _overflowing_compute()
     with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
         compute.grad()
@@ -805,12 +808,14 @@ def test_adstack_heap_backed_exceeds_old_threadstack_budget():
         assert x.grad[i] == pytest.approx(8.0 * geom, rel=1e-5)
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
 def test_adstack_overflow_multithreaded():
     # Multi-element field so several threads execute the overflowing grad body in parallel. Asserts the overflow
     # still surfaces as a single Python exception rather than deadlocking, crashing, or racing on the flag. Every
     # thread writes the same flag value (non-zero), so a race on the write is benign; this test pins that the
-    # read side is also safe (one raise per sync regardless of how many threads flipped the bit).
+    # read side is also safe (one raise per sync regardless of how many threads flipped the bit). `debug=True`
+    # keeps the per-push bounds check live (release-build codegen elides it - see `test_adstack_overflow_raises`
+    # for the rationale).
     compute, _, _ = _overflowing_compute(n_elements=16)
     with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
         compute.grad()
@@ -838,11 +843,16 @@ def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
     # them) is too late. The subprocess is launched from a temp file because `python -c "<kernel>"` breaks
     # Quadrants' kernel source-inspect (`getsourcelines` cannot find the source of an inlined `-c` string); the
     # grad call is deliberately left unsynced so this is the teardown path, not the user-catch path.
+    # `debug=True` is required for the same reason as `test_adstack_overflow_raises`: release-build LLVM codegen
+    # elides the per-push bounds check on the premise the sizer's bound is tight, so a manually-misconfigured
+    # `ad_stack_size=32` kernel only flips the runtime overflow flag in debug mode. Without the flag set there
+    # is no flag for the teardown guard to swallow, and the bug this test pins (re-raise during destructor path
+    # leading to `std::terminate()`) cannot trigger.
     child_script = textwrap.dedent(
         """
         import quadrants as qd
 
-        qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=32)
+        qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=32, debug=True)
 
         x = qd.field(qd.f32)
         y = qd.field(qd.f32)
