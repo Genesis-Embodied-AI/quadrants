@@ -182,6 +182,18 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     PipelineSourceDesc source_desc{PipelineSourceType::spirv_binary, (void *)spirv.data(),
                                    spirv.size() * sizeof(uint32_t)};
     auto [pipeline, res] = device_->create_pipeline_unique(source_desc, "adstack_sizer", backend_cache_.get());
+    if (res != RhiResult::success) {
+      const char *path = "/tmp/adstack_sizer_dump.spv";
+      FILE *f = std::fopen(path, "wb");
+      if (f != nullptr) {
+        std::fwrite(spirv.data(), sizeof(uint32_t), spirv.size(), f);
+        std::fclose(f);
+        fprintf(stderr,
+                "[adstack-sizer] wrote SPIR-V dump to %s (%zu words). Disassemble with `spirv-dis %s` "
+                "and validate with `spirv-val --target-env vulkan1.4 %s`.\n",
+                path, spirv.size(), path, path);
+      }
+    }
     QD_ERROR_IF(res != RhiResult::success, "Failed to create pipeline for the adstack SizeExpr sizer shader (err: {})",
                 int(res));
     adstack_sizer_pipeline_ = std::move(pipeline);
