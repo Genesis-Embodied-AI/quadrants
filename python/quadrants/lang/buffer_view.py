@@ -102,9 +102,19 @@ class BufferView:
 
     def __init__(self, arr, offset, size):
         if impl.inside_kernel():
-            # Kernel-compilation path: args may be Expr nodes, resolved at runtime on device.
-            # TODO: insert IR-level assert (offset+size <= ndarray_length) once ndarray shape is queryable in Expr.
-            pass
+            # Kernel-compilation path: insert debug bounds assertion against the backing ndarray.
+            cfg = impl.get_runtime().prog.config()
+            if cfg.debug:
+                ast_builder = impl.get_runtime().compiling_callable.ast_builder()
+                src_info = impl.get_runtime().get_current_src_info()
+                dbg_info = _qd_core.DebugInfo(src_info)
+                arr_len = Expr(_qd_core.get_external_tensor_shape_along_axis(arr.ptr, 0, dbg_info))
+                offset_expr, size_expr = Expr(offset), Expr(size)
+                msg = "BufferView construction out of range: offset=%d, size=%d, ndarray length=%d."
+                args = [offset_expr.ptr, size_expr.ptr, arr_len.ptr]
+                impl.qd_assert((offset_expr >= Expr(0)).ptr, msg, args, dbg_info)
+                impl.qd_assert((size_expr >= Expr(0)).ptr, msg, args, dbg_info)
+                impl.qd_assert(((offset_expr + size_expr) <= arr_len).ptr, msg, args, dbg_info)
         else:
             # Host-side path: coerce to int and validate bounds.
             offset, size = int(offset), int(size)

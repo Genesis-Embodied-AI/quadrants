@@ -357,6 +357,23 @@ def test_constructor_exceeds_length():
 
 
 @test_utils.test(arch=get_host_arch_list())
+def test_kernel_slice_step_error():
+    """v[::2] inside a kernel raises QuadrantsSyntaxError."""
+    from quadrants.lang.exception import QuadrantsSyntaxError as QSE
+
+    data = qd.ndarray(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def k(v: BufferView[qd.f32]):
+        sub = v[::2]
+        for i in range(sub.size):
+            sub[i] = 1.0
+
+    with pytest.raises(QSE, match="step=1"):
+        k(data[:16])
+
+
+@test_utils.test(arch=get_host_arch_list())
 def test_wrong_type_error():
     """Passing a plain ndarray where BufferView[dtype] is expected raises an error."""
     data = qd.ndarray(qd.f32, shape=(N,))
@@ -469,6 +486,22 @@ def test_debug_subview_oob():
 
     with pytest.raises(QuadrantsAssertionError, match=r"subview Out Of Range"):
         k(data[:16])
+
+
+@pytest.mark.skipif(_no_assert, reason="assert not supported on linux arm64/aarch64")
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+def test_debug_kernel_construct_oob():
+    """Debug mode: kernel-constructed BufferView with offset+size > ndarray length raises assertion."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def k(arr: qd.types.ndarray(qd.f32, ndim=1)):
+        for i in range(1):
+            view = BufferView(arr, 28 + i, 8)  # 28 + 8 = 36 > 32
+            view[0] = 1.0
+
+    with pytest.raises(QuadrantsAssertionError, match=r"BufferView construction out of range"):
+        k(data)
 
 
 @pytest.mark.skipif(_no_assert, reason="assert not supported on linux arm64/aarch64")
