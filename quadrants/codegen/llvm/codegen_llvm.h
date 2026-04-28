@@ -89,6 +89,12 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   llvm::Value *ad_stack_stride_llvm_{nullptr};
   llvm::Value *ad_stack_offsets_ptr_llvm_{nullptr};
   llvm::Value *ad_stack_max_sizes_ptr_llvm_{nullptr};
+  // Per-task per-stack `alloca i64` holding the live push count, hoisted to the entry block so `mem2reg` can
+  // promote it to SSA and `GVN` can fold consecutive count loads / stores across straight-line unrolled bodies.
+  // Replaces the heap-resident `u64` count header at `stack_ptr[0..8)` for every AdStack op when
+  // `compile_config.debug == false`. The 8-byte heap header gap is preserved for layout compatibility but is
+  // never read or written from kernel code on the release path.
+  std::unordered_map<const AdStackAllocaStmt *, llvm::Value *> ad_stack_count_alloca_llvm_;
 
   std::unordered_map<const Stmt *, std::vector<llvm::Value *>> loop_vars_llvm;
 
@@ -371,6 +377,10 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // pointer.
   void ensure_ad_stack_heap_base_llvm();
   void ensure_ad_stack_metadata_llvm();
+  llvm::Value *ensure_ad_stack_count_alloca_llvm(const AdStackAllocaStmt *stack);
+  llvm::Value *emit_ad_stack_top_slot_ptr(const AdStackAllocaStmt *stack,
+                                          llvm::Value *count,
+                                          std::size_t adjoint_offset_bytes);
 
   void visit(AdStackAllocaStmt *stmt) override;
 

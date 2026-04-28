@@ -1754,6 +1754,7 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   ad_stack_stride_llvm_ = nullptr;
   ad_stack_offsets_ptr_llvm_ = nullptr;
   ad_stack_max_sizes_ptr_llvm_ = nullptr;
+  ad_stack_count_alloca_llvm_.clear();
   // Pre-scan the task body for every `AdStackAllocaStmt` before any codegen runs, mirroring the SPIR-V pre-pass at
   // `spirv_codegen.cpp:138-166`. Each alloca claims a fixed slot inside the per-thread slice: offset equals the sum of
   // earlier siblings' sizes. Growing the stride lazily as `visit(AdStackAllocaStmt)` fires would bake a stale `stride`
@@ -2221,6 +2222,44 @@ void TaskCodeGenLLVM::ensure_ad_stack_metadata_llvm() {
   ad_stack_max_sizes_ptr_llvm_ = call("LLVMRuntime_get_adstack_max_sizes", get_runtime());
 }
 
+// Return (creating on first call) the per-stack `alloca i64` that holds the live push count for this stack on the
+// release-build path. The alloca is emitted in the entry block so `mem2reg` can promote it to an SSA register; the
+// init-store of zero happens at the AdStackAllocaStmt visit site (which may sit inside a loop body, so each loop
+// iteration that re-enters the AdStackAllocaStmt restarts the count - matching the `stack_init` semantics on the
+// debug path).
+llvm::Value *TaskCodeGenLLVM::ensure_ad_stack_count_alloca_llvm(const AdStackAllocaStmt *stack) {
+  auto it = ad_stack_count_alloca_llvm_.find(stack);
+  if (it != ad_stack_count_alloca_llvm_.end()) {
+    return it->second;
+  }
+  llvm::IRBuilderBase::InsertPointGuard guard(*builder);
+  builder->SetInsertPoint(entry_block, entry_block->getFirstInsertionPt());
+  auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+  llvm::Value *count_alloca = builder->CreateAlloca(i64ty);
+  ad_stack_count_alloca_llvm_[stack] = count_alloca;
+  return count_alloca;
+}
+
+// Compute the address of the top primal (or adjoint, when `adjoint_offset_bytes` == element_size) slot for an
+// in-flight push count. Mirrors the runtime helper math `stack + sizeof(u64) + idx * 2 * element_size`, with `idx`
+// being the saturating `count - 1` to match `stack_top_primal`'s underflow guard. Used by the release-build inline
+// codegen for `AdStackPushStmt` / `AdStackLoadTopStmt` / `AdStackLoadTopAdjStmt` / `AdStackAccAdjointStmt`.
+llvm::Value *TaskCodeGenLLVM::emit_ad_stack_top_slot_ptr(const AdStackAllocaStmt *stack,
+                                                         llvm::Value *count,
+                                                         std::size_t adjoint_offset_bytes) {
+  auto *i8ty = llvm::Type::getInt8Ty(*llvm_context);
+  auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+  llvm::Value *zero = llvm::ConstantInt::get(i64ty, 0);
+  llvm::Value *one = llvm::ConstantInt::get(i64ty, 1);
+  llvm::Value *count_minus_one = builder->CreateSub(count, one);
+  llvm::Value *positive = builder->CreateICmpUGT(count, zero);
+  llvm::Value *idx = builder->CreateSelect(positive, count_minus_one, zero);
+  std::size_t entry_size = stack->entry_size_in_bytes();
+  llvm::Value *slot_offset = builder->CreateAdd(llvm::ConstantInt::get(i64ty, sizeof(int64) + adjoint_offset_bytes),
+                                                builder->CreateMul(idx, llvm::ConstantInt::get(i64ty, entry_size)));
+  return builder->CreateGEP(i8ty, llvm_val[const_cast<AdStackAllocaStmt *>(stack)], slot_offset);
+}
+
 // Heap-backed adstack: the per-thread slice lives inside `runtime->adstack_heap_buffer`. The former
 // `create_entry_block_alloca` path put the adstack on the worker-thread stack, which capped CPU reverse-mode
 // kernels at the ~512 KB macOS secondary-thread budget and crashed with silently-zero gradients past that (the
@@ -2265,30 +2304,93 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   llvm::Value *total_offset = builder->CreateAdd(slice_offset, offset);
   llvm::Value *stack_ptr = builder->CreateGEP(i8ty, ad_stack_heap_base_llvm_, total_offset);
   llvm_val[stmt] = stack_ptr;
-  call("stack_init", llvm_val[stmt]);
+  if (compile_config.debug) {
+    call("stack_init", llvm_val[stmt]);
+    return;
+  }
+  // Release build: store 0 into the per-stack count alloca instead of zeroing the heap u64 header. Doing this at
+  // the AdStackAllocaStmt visit site (rather than once at task entry) restarts the count whenever an outer loop
+  // re-enters the alloca, matching `stack_init`'s semantics on the debug path.
+  auto *i64ty_init = llvm::Type::getInt64Ty(*llvm_context);
+  llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stmt);
+  builder->CreateStore(llvm::ConstantInt::get(i64ty_init, 0), count_alloca);
 }
 
 void TaskCodeGenLLVM::visit(AdStackPopStmt *stmt) {
-  call("stack_pop", llvm_val[stmt->stack]);
+  if (compile_config.debug) {
+    call("stack_pop", llvm_val[stmt->stack]);
+    return;
+  }
+  auto stack = stmt->stack->as<AdStackAllocaStmt>();
+  auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+  llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stack);
+  llvm::Value *count = builder->CreateLoad(i64ty, count_alloca);
+  llvm::Value *zero = llvm::ConstantInt::get(i64ty, 0);
+  llvm::Value *one = llvm::ConstantInt::get(i64ty, 1);
+  llvm::Value *count_minus_one = builder->CreateSub(count, one);
+  llvm::Value *positive = builder->CreateICmpUGT(count, zero);
+  llvm::Value *new_count = builder->CreateSelect(positive, count_minus_one, zero);
+  builder->CreateStore(new_count, count_alloca);
 }
 
 void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
-  ensure_ad_stack_metadata_llvm();
+  if (compile_config.debug) {
+    // Debug build: route through the bounds-checking helper so any sizer bug surfaces as an overflow flag at sync.
+    // The `max_size` load is only needed on this path.
+    ensure_ad_stack_metadata_llvm();
+    auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+    llvm::Value *stack_id_i64 = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(stack->stack_id));
+    llvm::Value *max_size_addr = builder->CreateGEP(i64ty, ad_stack_max_sizes_ptr_llvm_, stack_id_i64);
+    llvm::Value *max_size = builder->CreateLoad(i64ty, max_size_addr);
+    call("stack_push", get_runtime(), llvm_val[stack], max_size, tlctx->get_constant(stack->element_size_in_bytes()));
+    auto primal_ptr = call("stack_top_primal", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
+    primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(tlctx->get_data_type(stmt->ret_type), 0));
+    builder->CreateStore(llvm_val[stmt->v], primal_ptr);
+    return;
+  }
+  // Release build: emit the push as inline IR against the per-stack count alloca. After `mem2reg` promotes the
+  // alloca to SSA, `GVN` folds the chain of `count++` across consecutive unrolled pushes; the only surviving
+  // memory traffic in the unrolled body is the slot stores themselves. The runtime overflow check is dropped on
+  // this path because `determine_ad_stack_size` produces a valid upper bound on per-thread push count along every
+  // execution path (any unresolved stack is a hard compile error), so the `n + 1 > max_num_elements` guard inside
+  // `stack_push` is dead in correct compilations.
   auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
-  llvm::Value *stack_id_i64 = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(stack->stack_id));
-  llvm::Value *max_size_addr = builder->CreateGEP(i64ty, ad_stack_max_sizes_ptr_llvm_, stack_id_i64);
-  llvm::Value *max_size = builder->CreateLoad(i64ty, max_size_addr);
-  call("stack_push", get_runtime(), llvm_val[stack], max_size, tlctx->get_constant(stack->element_size_in_bytes()));
-  auto primal_ptr = call("stack_top_primal", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
-  primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(tlctx->get_data_type(stmt->ret_type), 0));
-  builder->CreateStore(llvm_val[stmt->v], primal_ptr);
+  llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stack);
+  llvm::Value *old_count = builder->CreateLoad(i64ty, count_alloca);
+  llvm::Value *new_count = builder->CreateAdd(old_count, llvm::ConstantInt::get(i64ty, 1));
+  builder->CreateStore(new_count, count_alloca);
+  // Slot is at index `new_count - 1`, which equals `old_count`. Skip the saturating-subtract that
+  // `emit_ad_stack_top_slot_ptr` does because we just incremented and `new_count` is provably >= 1.
+  std::size_t entry_size = stack->entry_size_in_bytes();
+  llvm::Value *slot_offset =
+      builder->CreateAdd(llvm::ConstantInt::get(i64ty, sizeof(int64)),
+                         builder->CreateMul(old_count, llvm::ConstantInt::get(i64ty, entry_size)));
+  auto *i8ty = llvm::Type::getInt8Ty(*llvm_context);
+  llvm::Value *primal_ptr = builder->CreateGEP(i8ty, llvm_val[stack], slot_offset);
+  // Zero the primal+adjoint slot pair to match `stack_push`'s `memset(top_primal, 0, 2 * element_size)`. Without
+  // this, a previous use of this slot's adjoint would persist into the new push's accumulator.
+  builder->CreateMemSet(primal_ptr, llvm::ConstantInt::get(llvm::Type::getInt8Ty(*llvm_context), 0),
+                        llvm::ConstantInt::get(i64ty, stack->entry_size_in_bytes()), llvm::MaybeAlign(8));
+  llvm::Value *primal_typed_ptr =
+      builder->CreateBitCast(primal_ptr, llvm::PointerType::get(tlctx->get_data_type(stmt->ret_type), 0));
+  builder->CreateStore(llvm_val[stmt->v], primal_typed_ptr);
 }
 
 void TaskCodeGenLLVM::visit(AdStackLoadTopStmt *stmt) {
   QD_ASSERT(stmt->return_ptr == false);
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
-  auto primal_ptr = call("stack_top_primal", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
+  if (compile_config.debug) {
+    auto primal_ptr = call("stack_top_primal", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
+    auto primal_ty = tlctx->get_data_type(stmt->ret_type);
+    primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(primal_ty, 0));
+    llvm_val[stmt] = builder->CreateLoad(primal_ty, primal_ptr);
+    return;
+  }
+  auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+  llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stack);
+  llvm::Value *count = builder->CreateLoad(i64ty, count_alloca);
+  llvm::Value *primal_ptr = emit_ad_stack_top_slot_ptr(stack, count, /*adjoint_offset_bytes=*/0);
   auto primal_ty = tlctx->get_data_type(stmt->ret_type);
   primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(primal_ty, 0));
   llvm_val[stmt] = builder->CreateLoad(primal_ty, primal_ptr);
@@ -2296,15 +2398,34 @@ void TaskCodeGenLLVM::visit(AdStackLoadTopStmt *stmt) {
 
 void TaskCodeGenLLVM::visit(AdStackLoadTopAdjStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
-  auto adjoint = call("stack_top_adjoint", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
+  if (compile_config.debug) {
+    auto adjoint = call("stack_top_adjoint", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
+    auto adjoint_ty = tlctx->get_data_type(stmt->ret_type);
+    adjoint = builder->CreateBitCast(adjoint, llvm::PointerType::get(adjoint_ty, 0));
+    llvm_val[stmt] = builder->CreateLoad(adjoint_ty, adjoint);
+    return;
+  }
+  auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+  llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stack);
+  llvm::Value *count = builder->CreateLoad(i64ty, count_alloca);
+  llvm::Value *adjoint_ptr =
+      emit_ad_stack_top_slot_ptr(stack, count, /*adjoint_offset_bytes=*/stack->element_size_in_bytes());
   auto adjoint_ty = tlctx->get_data_type(stmt->ret_type);
-  adjoint = builder->CreateBitCast(adjoint, llvm::PointerType::get(adjoint_ty, 0));
-  llvm_val[stmt] = builder->CreateLoad(adjoint_ty, adjoint);
+  adjoint_ptr = builder->CreateBitCast(adjoint_ptr, llvm::PointerType::get(adjoint_ty, 0));
+  llvm_val[stmt] = builder->CreateLoad(adjoint_ty, adjoint_ptr);
 }
 
 void TaskCodeGenLLVM::visit(AdStackAccAdjointStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
-  auto adjoint_ptr = call("stack_top_adjoint", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
+  llvm::Value *adjoint_ptr;
+  if (compile_config.debug) {
+    adjoint_ptr = call("stack_top_adjoint", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
+  } else {
+    auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+    llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stack);
+    llvm::Value *count = builder->CreateLoad(i64ty, count_alloca);
+    adjoint_ptr = emit_ad_stack_top_slot_ptr(stack, count, /*adjoint_offset_bytes=*/stack->element_size_in_bytes());
+  }
   auto adjoint_ty = tlctx->get_data_type(stack->ret_type);
   adjoint_ptr = builder->CreateBitCast(adjoint_ptr, llvm::PointerType::get(adjoint_ty, 0));
   auto old_val = builder->CreateLoad(adjoint_ty, adjoint_ptr);
