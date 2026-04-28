@@ -216,6 +216,17 @@ class QD_DLL_EXPORT GfxRuntime {
   std::unique_ptr<Pipeline> adstack_sizer_pipeline_{nullptr};
   std::unique_ptr<DeviceAllocationGuard> adstack_sizer_bytecode_buffer_;
   size_t adstack_sizer_bytecode_buffer_size_{0};
+  // Per-invocation interpreter scratch buffers for the on-device adstack sizer. The shader hosts its
+  // `values_arr` / `scope_arr` / `pending_*_arr` state in these SSBOs (binding 3 = i64-typed, binding 4 =
+  // i32-typed) rather than in `Function`-storage `OpVariable`s because Blackwell-class NVIDIA Vulkan
+  // drivers fail `vkCreateComputePipelines` with `VK_ERROR_UNKNOWN` once the cumulative per-thread private
+  // memory crosses ~32 KiB. Sizes are fixed at compile time
+  // (`kAdStackSizerScratchI64Elems` * `sizeof(int64_t)` and `kAdStackSizerScratchI32Elems` *
+  // `sizeof(int32_t)`); both are allocated lazily on the first sizer dispatch and reused across every
+  // subsequent dispatch in the runtime's lifetime - the sizer is `1x1x1` so there is no cross-thread
+  // contention to size around.
+  std::unique_ptr<DeviceAllocationGuard> adstack_sizer_scratch_i64_buffer_;
+  std::unique_ptr<DeviceAllocationGuard> adstack_sizer_scratch_i32_buffer_;
 
   // Owning `ProgramImpl` back-reference; propagated from `Params::program_impl`. See the comment on
   // `Params::program_impl` for the contract.

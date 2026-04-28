@@ -322,7 +322,12 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
     spirv::SType elem_type;
     maybe_retype_alloca(*ir_, *caps_, alloca, tensor_type, shared_float_allocas_with_atomic_rmw_,
                         uint_backed_shared_float_ptr_stmts_, elem_num, elem_type);
-    spirv::SType arr_type = ir_->get_array_type(elem_type, elem_num);
+    // Use `get_function_array_type` rather than `get_array_type`: the resulting array type backs an
+    // `OpVariable` in either `Workgroup` (shared) or `Function` storage class, neither of which is a
+    // storage-buffer / PSB / Uniform interface, so the `ArrayStride` decoration `get_array_type` adds
+    // would be illegal per `VUID-StandaloneSpirv-None-10684` and Blackwell-class NVIDIA Vulkan drivers
+    // refuse the resulting compute pipeline. Older drivers tolerated the over-decoration.
+    spirv::SType arr_type = ir_->get_function_array_type(elem_type, elem_num);
     if (alloca->is_shared) {  // for shared memory / workgroup memory
       ptr_val = ir_->alloca_workgroup_array(arr_type);
       shared_array_binds_.push_back(ptr_val);

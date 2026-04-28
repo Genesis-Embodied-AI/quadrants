@@ -187,6 +187,26 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     adstack_sizer_pipeline_ = std::move(pipeline);
   }
 
+  // Lazily allocate the two scratch SSBOs that host the sizer's per-invocation interpreter state. Bound on
+  // every sizer dispatch at slots 3 (i64) and 4 (i32). Sizes are fixed by the shader-side layout constants;
+  // see `kAdStackSizerScratchI64Elems` / `kAdStackSizerScratchI32Elems` in `adstack_sizer_shader.h`.
+  if (!adstack_sizer_scratch_i64_buffer_) {
+    auto [buf, res] = device_->allocate_memory_unique(
+        {static_cast<size_t>(spirv::kAdStackSizerScratchI64Elems) * sizeof(int64_t),
+         /*host_write=*/false, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
+    QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack sizer i64 scratch buffer ({} bytes)",
+                   static_cast<size_t>(spirv::kAdStackSizerScratchI64Elems) * sizeof(int64_t));
+    adstack_sizer_scratch_i64_buffer_ = std::move(buf);
+  }
+  if (!adstack_sizer_scratch_i32_buffer_) {
+    auto [buf, res] = device_->allocate_memory_unique(
+        {static_cast<size_t>(spirv::kAdStackSizerScratchI32Elems) * sizeof(int32_t),
+         /*host_write=*/false, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
+    QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack sizer i32 scratch buffer ({} bytes)",
+                   static_cast<size_t>(spirv::kAdStackSizerScratchI32Elems) * sizeof(int32_t));
+    adstack_sizer_scratch_i32_buffer_ = std::move(buf);
+  }
+
   // Encode per-task bytecodes and compute per-task metadata sizes. Each task's starting offset inside the
   // shared bytecode buffer must satisfy Vulkan's `minStorageBufferOffsetAlignment` because that offset flows
   // verbatim into `VkDescriptorBufferInfo::offset` through `bindings->rw_buffer(...)` below; raw
@@ -278,6 +298,11 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     // valid allocation is safe to bind here. Fall back to the bytecode buffer rather than plumbing a
     // conditional null-binding path that every RHI backend would need to support.
     bindings->rw_buffer(2, args_buffer ? *args_buffer : *adstack_sizer_bytecode_buffer_);
+    // Per-invocation interpreter scratch (see allocation site above). The contents are entirely overwritten on every
+    // dispatch (the shader zero-inits its `scope_arr` slice and writes-before-reads the rest as it walks the bytecode),
+    // so no inter-launch state needs to survive.
+    bindings->rw_buffer(3, *adstack_sizer_scratch_i64_buffer_);
+    bindings->rw_buffer(4, *adstack_sizer_scratch_i32_buffer_);
 
     sizer_cmdlist->bind_pipeline(adstack_sizer_pipeline_.get());
     RhiResult bind_res = sizer_cmdlist->bind_shader_resources(bindings.get());
