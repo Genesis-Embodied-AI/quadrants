@@ -330,6 +330,73 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
     execute_once_ = true;
   }
 
+  // Demand-driven `required_defs_` set: the SSA defining stmts that downstream consumers actually require to be
+  // available at every iteration. A consumer requires its operand iff its adjoint formula reads it - the precise
+  // set is the operands of any non-linear unary / binary / ternary op (per `NonLinearOps::*_collections`), the
+  // indices of any `GlobalPtrStmt` / `ExternalPtrStmt` (the reverse pass replays the load), and the `cond` of any
+  // `IfStmt` / the `begin`/`end` of any `RangeForStmt` (the reverse pass clones the control flow). Stmts outside
+  // this set are left in pure SSA form: their values stay register-resident inside the forward pass, and
+  // `MakeAdjoint`'s reverse-pass formulas (which never read those values directly) generate correct adjoint
+  // accumulations against the adstack-backed defs that ARE in the set. Skipping promotion for the rest of the
+  // body collapses the alloca + LocalStore + LocalLoad triple-multiplier on unrolled IR that emitted a spill +
+  // reload pair per non-required arithmetic op with no reverse-pass consumer for the spilled value.
+  //
+  // Operands of `LocalStoreStmt` are not added because `MakeAdjoint::visit(LocalStoreStmt)` reads only
+  // `adjoint(stmt->dest)`, not the forward `stmt->val`. Linear ops (add / sub / mod / cmp / neg / floor / ceil /
+  // cast / logic_not / bit-ops) are likewise excluded because their adjoint formulas read only `adjoint(stmt)`.
+  static void compute_required_defs(Block *block, std::unordered_set<Stmt *> &out) {
+    std::function<void(Block *)> walk = [&](Block *b) {
+      for (auto &owned : b->statements) {
+        Stmt *stmt = owned.get();
+        if (auto *u = stmt->cast<UnaryOpStmt>()) {
+          if (NonLinearOps::unary_collections.find(u->op_type) != NonLinearOps::unary_collections.end()) {
+            out.insert(u->operand);
+          }
+        } else if (auto *bin = stmt->cast<BinaryOpStmt>()) {
+          if (NonLinearOps::binary_collections.find(bin->op_type) != NonLinearOps::binary_collections.end()) {
+            out.insert(bin->lhs);
+            out.insert(bin->rhs);
+          }
+        } else if (auto *tern = stmt->cast<TernaryOpStmt>()) {
+          if (NonLinearOps::ternary_collections.find(tern->op_type) != NonLinearOps::ternary_collections.end()) {
+            out.insert(tern->op1);
+            out.insert(tern->op2);
+            out.insert(tern->op3);
+          }
+        } else if (auto *gp = stmt->cast<GlobalPtrStmt>()) {
+          for (auto *idx : gp->indices) {
+            out.insert(idx);
+          }
+        } else if (auto *ep = stmt->cast<ExternalPtrStmt>()) {
+          for (auto *idx : ep->indices) {
+            out.insert(idx);
+          }
+        } else if (auto *if_s = stmt->cast<IfStmt>()) {
+          out.insert(if_s->cond);
+          if (if_s->true_statements) {
+            walk(if_s->true_statements.get());
+          }
+          if (if_s->false_statements) {
+            walk(if_s->false_statements.get());
+          }
+        } else if (auto *rf = stmt->cast<RangeForStmt>()) {
+          out.insert(rf->begin);
+          out.insert(rf->end);
+          walk(rf->body.get());
+        } else if (auto *sf = stmt->cast<StructForStmt>()) {
+          if (sf->body) {
+            walk(sf->body.get());
+          }
+        } else if (auto *while_s = stmt->cast<WhileStmt>()) {
+          if (while_s->body) {
+            walk(while_s->body.get());
+          }
+        }
+      }
+    };
+    walk(block);
+  }
+
   void visit(Stmt *stmt) override {
     if (execute_once_)
       return;
@@ -339,36 +406,39 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
       return;
     }
 
+    // `AllocaStmt`s always need to be hoisted to the top of the IB regardless of consumer analysis: a user-level
+    // `var = ...` construct inside a loop body must own a fixed slot at the IB's entry so every iteration shares it
+    // (cross-iteration accumulators are exactly the shape that drives the hoist). The demand-driven gate only
+    // applies to value-producing stmts (UnaryOp / BinaryOp / TernaryOp / GlobalLoad / LoopIndex) where the
+    // alloca + LocalStore + LocalLoad triple is purely a reverse-pass-readable spill - those skip when no consumer
+    // requires the value.
     if (stmt->is<AllocaStmt>()) {
-      // Create a new alloc at the top of an ib to replace the old alloca
       auto dtype = stmt->ret_type.ptr_removed();
       auto alloc = Stmt::make<AllocaStmt>(dtype);
       auto alloc_ptr = alloc.get();
       QD_ASSERT(alloca_block_);
       alloca_block_->insert(std::move(alloc), 0);
-      // Replace all the usages of the old stmt with that of the new one
-      irpass::replace_all_usages_with(stmt->parent, stmt, alloc_ptr);
-
-      // Replace the old alloca with a local store
-      // and it will be replaced by a AdStackPushStmt in the following
-      // ReplaceLocalVarWithStacks pass
+      immediate_modifier_->replace_usages_with(stmt, alloc_ptr);
 
       auto zero = insert_const(dtype, stmt, 0);
       zero->insert_after_me(Stmt::make<LocalStoreStmt>(alloc_ptr, zero));
-      // Remove the old stmt
       stmt->parent->erase(stmt);
-    } else {
-      // Create a alloc
-      auto alloc = Stmt::make<AllocaStmt>(stmt->ret_type.ptr_removed());
-      auto alloc_ptr = alloc.get();
-      QD_ASSERT(alloca_block_);
-      alloca_block_->insert(std::move(alloc), 0);
-      auto load = stmt->insert_after_me(Stmt::make<LocalLoadStmt>(alloc_ptr));
-      irpass::replace_all_usages_with(stmt->parent, stmt, load);
-      // Create the load first so that the operand of the store won't get
-      // replaced
-      stmt->insert_after_me(Stmt::make<LocalStoreStmt>(alloc_ptr, stmt));
+      return;
     }
+
+    if (required_defs_.find(stmt) == required_defs_.end()) {
+      return;
+    }
+
+    auto alloc = Stmt::make<AllocaStmt>(stmt->ret_type.ptr_removed());
+    auto alloc_ptr = alloc.get();
+    QD_ASSERT(alloca_block_);
+    alloca_block_->insert(std::move(alloc), 0);
+    auto load = stmt->insert_after_me(Stmt::make<LocalLoadStmt>(alloc_ptr));
+    immediate_modifier_->replace_usages_with(stmt, load);
+    // Create the load first so that the operand of the store does not get rewritten to point at the load (the
+    // SSA value `stmt` is still the right thing to spill; only the downstream consumers see the load).
+    stmt->insert_after_me(Stmt::make<LocalStoreStmt>(alloc_ptr, stmt));
   }
 
   void visit(RangeForStmt *stmt) override {
@@ -381,10 +451,19 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
  private:
   Block *alloca_block_{nullptr};
   bool execute_once_;
+  std::unordered_set<Stmt *> required_defs_;
+  // ImmediateIRModifier collapses each `replace_usages_with` from a whole-tree walk (O(N)) to a constant-time
+  // operand-pointer rewrite: the modifier gathers every (consumer, operand_index) pair feeding any existing stmt
+  // once at construction (one O(N) pass), and per-replacement just looks up the table for `old_stmt` and rewrites
+  // each consumer's operand pointer. Without it, `PromoteSSA2LocalVar` ran K (= number of promoted defs) full IR
+  // walks - O(K*N), the dominant Quadrants-IR-side compile cost on unrolled reverse-mode bodies.
+  std::unique_ptr<ImmediateIRModifier> immediate_modifier_;
 
  public:
   static void run(Block *block) {
     PromoteSSA2LocalVar pass(block);
+    compute_required_defs(block, pass.required_defs_);
+    pass.immediate_modifier_ = std::make_unique<ImmediateIRModifier>(block);
     block->accept(&pass);
   }
 };
@@ -400,14 +479,18 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
     }
   }
 
-  // Check if there is a LocalLoadStmt - LocalStoreStmt cycle for an alloca
-  // Check if the alloca is load only
+  // Track whether the alloca has any store at all so a load-only alloca (no adstack-relevant data flow either
+  // direction) can short-circuit `run()` regardless of what the per-op visitors below find. The decision of
+  // whether the alloca needs adstack promotion is made entirely by the precise visitors: non-linear unary /
+  // binary / ternary, GlobalPtr / ExternalPtr index, and IfStmt / RangeForStmt bound. A load+store cycle alone
+  // is not sufficient evidence: a loop-carried accumulator like `acc = acc + sin(x[i])` has such a cycle yet
+  // only feeds linear add operations, whose adjoint formulas (`d/dop = 1`) never read the accumulator's
+  // per-iteration value, so adstack promotion would emit a push + pop per iteration with no reverse-pass
+  // consumer. Restricting `is_stack_needed_` to the consumer-shape visitors leaves accumulator-style allocas
+  // as plain `AllocaStmt`s while keeping every adstack promotion that the reverse pass actually needs.
   void visit(LocalStoreStmt *stmt) override {
     if (stmt->dest == target_alloca_backup_)
       load_only_ = false;
-    if (local_loaded_ && stmt->dest == target_alloca_backup_) {
-      is_stack_needed_ = true;
-    }
   }
 
   // Check if the alloca is load only
@@ -2723,6 +2806,95 @@ $tmp = mul b3, b2             -->  $tmp = mul $b3, $b2             --> $15 = mul
 $y = mul $tmp, $x             -->  $y = mul $tmp, $x               --> $14 = mul($y_adj, $x)
 */
 // clang-format on
+// Within a single straight-line block, multiple `AdStackLoadTopStmt` reads of the same stack with no
+// intervening `AdStackPushStmt` / `AdStackPopStmt` for that stack return the same value, and multiple
+// `AdStackLoadTopAdjStmt` reads are equivalent under the same conditions plus no intervening
+// `AdStackAccAdjointStmt`. After Python-side static unrolling collapses an inner loop into straight-line IR,
+// every iteration's read of an outer-loop-invariant adstack value emits a separate LoadTop in the same block;
+// each individual load is cheap (read u64 count + GEP) but unrolled-loop counts of hundreds to thousands
+// inflate PTX size and ptxas register-allocator cost. This pass walks each block, caches the most recent
+// LoadTop / LoadTopAdj per stack, replaces subsequent same-stack reads with the cached SSA value until a
+// Push / Pop / AccAdjoint invalidates the cache for that stack, and conservatively clears the cache when
+// crossing into nested control flow (IfStmt / RangeForStmt / StructForStmt / WhileStmt) where unseen
+// push/pop/AccAdjoint may appear.
+class CoalesceAdStackLoads : public BasicStmtVisitor {
+ public:
+  using BasicStmtVisitor::visit;
+
+  CoalesceAdStackLoads() {
+    invoke_default_visitor = true;
+    allow_undefined_visitor = true;
+  }
+
+  void visit(Block *block) override {
+    std::unordered_map<Stmt *, Stmt *> primal_cache;
+    std::unordered_map<Stmt *, Stmt *> adjoint_cache;
+    // Iterate over a snapshot so erase()s during the walk do not invalidate the iteration. The
+    // DelayedIRModifier still applies erases at the end via `modify_ir()` so SSA users get rewritten in one
+    // pass; the snapshot only protects the visitor's own walk.
+    std::vector<Stmt *> stmts;
+    stmts.reserve(block->statements.size());
+    for (auto &s : block->statements) {
+      stmts.push_back(s.get());
+    }
+    for (Stmt *s : stmts) {
+      if (auto *lt = s->cast<AdStackLoadTopStmt>()) {
+        // `return_ptr=true` returns a pointer into the stack slot rather than loading a value; coalescing
+        // those is unsound because subsequent stores via the pointer would alias with each other through
+        // the cached SSA value. The non-pointer variant is the common case driven by reverse-pass formulas.
+        if (lt->return_ptr) {
+          continue;
+        }
+        auto it = primal_cache.find(lt->stack);
+        if (it != primal_cache.end()) {
+          irpass::replace_all_usages_with(lt->parent, lt, it->second);
+          modifier_.erase(lt);
+        } else {
+          primal_cache[lt->stack] = lt;
+        }
+      } else if (auto *la = s->cast<AdStackLoadTopAdjStmt>()) {
+        auto it = adjoint_cache.find(la->stack);
+        if (it != adjoint_cache.end()) {
+          irpass::replace_all_usages_with(la->parent, la, it->second);
+          modifier_.erase(la);
+        } else {
+          adjoint_cache[la->stack] = la;
+        }
+      } else if (auto *p = s->cast<AdStackPushStmt>()) {
+        primal_cache.erase(p->stack);
+        adjoint_cache.erase(p->stack);
+      } else if (auto *po = s->cast<AdStackPopStmt>()) {
+        primal_cache.erase(po->stack);
+        adjoint_cache.erase(po->stack);
+      } else if (auto *aa = s->cast<AdStackAccAdjointStmt>()) {
+        // Accumulating into the top adjoint slot does not alter the primal half, so the primal cache for
+        // the same stack stays valid; only the adjoint cache must be invalidated.
+        adjoint_cache.erase(aa->stack);
+      } else if (s->is<IfStmt>() || s->is<RangeForStmt>() || s->is<StructForStmt>() || s->is<WhileStmt>()) {
+        // The pass is intentionally intra-block: any push / pop hidden inside a nested block would
+        // invalidate caches asymmetrically across branches and make a sound merge complex. Conservatively
+        // drop both caches before descending so reads after the nested block see no stale entries.
+        primal_cache.clear();
+        adjoint_cache.clear();
+        s->accept(this);
+      } else {
+        // Any other statement is assumed inert with respect to the AdStack count headers; recurse into
+        // potential nested blocks (defensively) but leave the caches intact.
+        s->accept(this);
+      }
+    }
+  }
+
+  static bool run(IRNode *root) {
+    CoalesceAdStackLoads pass;
+    root->accept(&pass);
+    return pass.modifier_.modify_ir();
+  }
+
+ private:
+  DelayedIRModifier modifier_;
+};
+
 void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_mode, bool use_stack) {
   QD_AUTO_PROF;
   if (autodiff_mode == AutodiffMode::kReverse) {
@@ -2740,6 +2912,11 @@ void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_
         MakeAdjoint::run(ib);
         type_check(root, config);
         BackupSSA::run(ib);
+        // After MakeAdjoint emits the reverse-pass body, an outer-loop-invariant value pulled into the
+        // reverse direction by `accumulate_unary_operand_checked` becomes a fresh `AdStackLoadTopStmt` per
+        // user-side use; in straight-line unrolled IR those reads coalesce to one load per stack per block,
+        // which the dedicated pass handles before the IR reaches `irpass::analysis::verify_if_debug`.
+        CoalesceAdStackLoads::run(ib);
         irpass::analysis::verify_if_debug(root, config);
       }
     } else {
@@ -2750,6 +2927,7 @@ void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_
         MakeAdjoint::run(ib);
         type_check(root, config);
         BackupSSA::run(ib);
+        CoalesceAdStackLoads::run(ib);
         irpass::analysis::verify_if_debug(root, config);
       }
     }
