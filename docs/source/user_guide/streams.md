@@ -9,6 +9,7 @@ and control synchronization with events.
 | Backend | Streams | Events | Notes |
 |---------|---------|--------|-------|
 | CUDA    | Yes     | Yes    | Full concurrent execution |
+| AMDGPU  | Yes     | Yes    | Full concurrent execution (requires ROCm >= 5.4) |
 | CPU     | No-op   | No-op  | `qd_stream` is silently ignored, kernels run serially |
 | Metal   | No-op   | No-op  | `qd_stream` is silently ignored, kernels run serially |
 | Vulkan  | No-op   | No-op  | `qd_stream` is silently ignored, kernels run serially |
