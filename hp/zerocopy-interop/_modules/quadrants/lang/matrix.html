@@ -405,7 +405,10 @@
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">diff</span><span class="p">):</span>
                 <span class="n">valid_attribs</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">valid_attribs</span><span class="p">))</span>
                 <span class="n">pattern</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">pattern</span><span class="p">)</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;vec</span><span class="si">{</span><span class="n">instance</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2"> only has &quot;</span> <span class="sa">f</span><span class="s2">&quot;attributes=</span><span class="si">{</span><span class="n">valid_attribs</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">pattern</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;vec</span><span class="si">{</span><span class="n">instance</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2"> only has &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;attributes=</span><span class="si">{</span><span class="n">valid_attribs</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">pattern</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
 
         <span class="k">return</span> <span class="n">check</span>
 
@@ -450,7 +453,9 @@
                 <span class="nd">@python_scope</span>
                 <span class="k">def</span><span class="w"> </span><span class="nf">prop_setter</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
                     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pattern</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-                        <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;value len does not match the swizzle pattern=</span><span class="si">{</span><span class="n">pattern</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;value len does not match the swizzle pattern=</span><span class="si">{</span><span class="n">pattern</span><span class="si">}</span><span class="s2">&quot;</span>
+                        <span class="p">)</span>
                     <span class="n">checker</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">pattern</span><span class="p">)</span>
                     <span class="k">for</span> <span class="n">ch</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
                         <span class="n">instance</span><span class="p">[</span><span class="n">key_group</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">ch</span><span class="p">)]</span> <span class="o">=</span> <span class="n">val</span>
@@ -472,7 +477,9 @@
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
         <span class="n">dt</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">get_rvalue_type</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">dt</span> <span class="o">==</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">DataType_unknown</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">&quot;Element type of the matrix cannot be inferred. Please set dt instead for now.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span>
+                <span class="s2">&quot;Element type of the matrix cannot be inferred. Please set dt instead for now.&quot;</span>
+            <span class="p">)</span>
         <span class="k">return</span> <span class="n">dt</span>
     <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">&quot;Element type of the matrix is invalid.&quot;</span><span class="p">)</span>
 
@@ -594,7 +601,9 @@
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">&quot;An Matrix/Vector can only be initialized with an array-like object&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span>
+                <span class="s2">&quot;An Matrix/Vector can only be initialized with an array-like object&quot;</span>
+            <span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">=</span> <span class="mi">0</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
@@ -699,7 +708,9 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
                 <span class="n">indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">indices</span><span class="p">]</span>
             <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
-            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Expected </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2"> indices, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Expected </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2"> indices, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">[</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">item</span>
             <span class="k">else</span><span class="p">:</span>
@@ -709,7 +720,9 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
             <span class="n">indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">indices</span><span class="p">]</span>
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
-        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Expected </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2"> indices, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Expected </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2"> indices, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">[</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">[</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]][</span><span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
@@ -763,7 +776,10 @@
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
                 <span class="k">return</span> <span class="p">[</span><span class="n">_read_host_access</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)]</span>
             <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span>
-            <span class="k">return</span> <span class="p">[[</span><span class="n">_read_host_access</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">])</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)]</span>
+            <span class="k">return</span> <span class="p">[</span>
+                <span class="p">[</span><span class="n">_read_host_access</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">])</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
+            <span class="p">]</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span></div>
 
 
@@ -789,7 +805,12 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">Vector</span><span class="p">([</span><span class="n">ops_mod</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">dtype</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)])</span>
-        <span class="k">return</span> <span class="n">Matrix</span><span class="p">([[</span><span class="n">ops_mod</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">],</span> <span class="n">dtype</span><span class="p">)</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)])</span></div>
+        <span class="k">return</span> <span class="n">Matrix</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="p">[</span><span class="n">ops_mod</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">],</span> <span class="n">dtype</span><span class="p">)</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Matrix.trace">
@@ -1263,7 +1284,9 @@
                 <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
             <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">shape</span> <span class="o">=</span> <span class="p">()</span>
-            <span class="n">mat_type</span> <span class="o">=</span> <span class="n">MatrixType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="n">ndim</span> <span class="k">if</span> <span class="n">ndim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="n">mat_type</span> <span class="o">=</span> <span class="n">MatrixType</span><span class="p">(</span>
+                <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="n">ndim</span> <span class="k">if</span> <span class="n">ndim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">mat_type</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">)</span>
 
         <span class="n">entries</span> <span class="o">=</span> <span class="p">[]</span>
@@ -1271,9 +1294,9 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
             <span class="c1"># set different dtype for each element in Matrix — see #2135</span>
             <span class="k">if</span> <span class="n">m</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="k">assert</span> <span class="p">(</span>
-                    <span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">))</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="o">==</span> <span class="n">n</span>
-                <span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;Please set correct dtype list for Vector. The shape of dtype list should be (</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, ) instead of </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">))</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="o">==</span> <span class="n">n</span><span class="p">,</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Please set correct dtype list for Vector. The shape of dtype list should be (</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, ) instead of </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
                     <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                         <span class="n">impl</span><span class="o">.</span><span class="n">create_field_member</span><span class="p">(</span>
@@ -1286,7 +1309,9 @@
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">assert</span> <span class="p">(</span>
                     <span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">))</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="o">==</span> <span class="n">n</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">dtype</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">==</span> <span class="n">m</span>
-                <span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;Please set correct dtype list for Matrix. The shape of dtype list should be (</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2">) instead of </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">),</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Please set correct dtype list for Matrix. The shape of dtype list should be (</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2">) instead of </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
                     <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
                         <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
@@ -1299,7 +1324,11 @@
                         <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span> <span class="o">*</span> <span class="n">m</span><span class="p">):</span>
-                <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">create_field_member</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="n">needs_grad</span><span class="p">,</span> <span class="n">needs_dual</span><span class="o">=</span><span class="n">needs_dual</span><span class="p">))</span>
+                <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">impl</span><span class="o">.</span><span class="n">create_field_member</span><span class="p">(</span>
+                        <span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="n">needs_grad</span><span class="p">,</span> <span class="n">needs_dual</span><span class="o">=</span><span class="n">needs_dual</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
         <span class="n">entries</span><span class="p">,</span> <span class="n">entries_grad</span><span class="p">,</span> <span class="n">entries_dual</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">entries</span><span class="p">)</span>
 
         <span class="n">entries</span> <span class="o">=</span> <span class="n">MatrixField</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">element_dim</span><span class="p">)</span>
@@ -1359,16 +1388,18 @@
                     <span class="p">)</span>
                 <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
                     <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entries_grad</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
-                        <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
-                            <span class="n">ScalarField</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
-                        <span class="p">)</span>
+                        <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span>
+                            <span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span>
+                        <span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">ScalarField</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">needs_dual</span><span class="p">:</span>
                     <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entries_dual</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
-                        <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
-                            <span class="n">ScalarField</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
-                        <span class="p">)</span>
+                        <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span>
+                            <span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span>
+                        <span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">ScalarField</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
+                <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
+                    <span class="n">entries</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
+                <span class="p">)</span>
                 <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
                     <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
                         <span class="n">entries_grad</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
@@ -1418,7 +1449,9 @@
 
             <span class="n">batch_ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">shape</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">py_tensor</span><span class="o">.</span><span class="n">create_tensor</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype_to_torch_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">),</span> <span class="n">batch_ndim</span><span class="o">=</span><span class="n">batch_ndim</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">py_tensor</span><span class="o">.</span><span class="n">create_tensor</span><span class="p">(</span>
+                <span class="n">shape</span><span class="p">,</span> <span class="n">dtype_to_torch_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">),</span> <span class="n">batch_ndim</span><span class="o">=</span><span class="n">batch_ndim</span>
+            <span class="p">)</span>
         <span class="n">arr</span> <span class="o">=</span> <span class="n">MatrixNdarray</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
             <span class="n">dt</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
@@ -1659,7 +1692,9 @@
 
             <span class="n">batch_ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">shape</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">py_tensor</span><span class="o">.</span><span class="n">create_tensor</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype_to_torch_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">),</span> <span class="n">batch_ndim</span><span class="o">=</span><span class="n">batch_ndim</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">py_tensor</span><span class="o">.</span><span class="n">create_tensor</span><span class="p">(</span>
+                <span class="n">shape</span><span class="p">,</span> <span class="n">dtype_to_torch_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">),</span> <span class="n">batch_ndim</span><span class="o">=</span><span class="n">batch_ndim</span>
+            <span class="p">)</span>
         <span class="n">arr</span> <span class="o">=</span> <span class="n">VectorNdarray</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
             <span class="n">dt</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
@@ -1729,7 +1764,9 @@
 
 <div class="viewcode-block" id="MatrixField.ptr">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.ptr">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">expr_matrix_field</span><span class="p">([</span><span class="n">var</span><span class="o">.</span><span class="n">ptr</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">],</span> <span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">][:</span><span class="n">ndim</span><span class="p">])</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">expr_matrix_field</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">var</span><span class="o">.</span><span class="n">ptr</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">],</span> <span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">][:</span><span class="n">ndim</span><span class="p">]</span>
+        <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="MatrixField.to_dlpack">
@@ -1740,7 +1777,9 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">materialize</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">capsule</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">field_to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)</span>
+            <span class="n">capsule</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">field_to_dlpack</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span>
+            <span class="p">)</span>
         <span class="k">except</span> <span class="ne">ModuleNotFoundError</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ModuleNotFoundError</span><span class="p">(</span>
                 <span class="s2">&quot;MatrixField.to_dlpack() requires torch to be installed &quot;</span>
@@ -1795,7 +1834,10 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_dynamic_index_stride</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
             <span class="k">return</span>
         <span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="o">!=</span> <span class="n">length</span> <span class="ow">or</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">is_quant</span><span class="p">(</span><span class="n">path</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_dtype</span><span class="p">)</span> <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="o">!=</span> <span class="n">length</span> <span class="ow">or</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">is_quant</span><span class="p">(</span><span class="n">path</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_dtype</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span>
+        <span class="p">):</span>
             <span class="k">return</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">length</span><span class="p">):</span>
             <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">path</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span><span class="p">):</span>
@@ -1805,7 +1847,8 @@
             <span class="k">if</span> <span class="nb">any</span><span class="p">(</span>
                 <span class="n">path</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">SNodeType</span><span class="o">.</span><span class="n">dense</span>
                 <span class="ow">or</span> <span class="n">path</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">_cell_size_bytes</span> <span class="o">!=</span> <span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">_cell_size_bytes</span>
-                <span class="ow">or</span> <span class="n">path</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_offset_bytes_in_parent_cell</span> <span class="o">!=</span> <span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_offset_bytes_in_parent_cell</span>
+                <span class="ow">or</span> <span class="n">path</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_offset_bytes_in_parent_cell</span>
+                <span class="o">!=</span> <span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_offset_bytes_in_parent_cell</span>
                 <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span>
             <span class="p">):</span>
                 <span class="k">return</span>
@@ -1831,7 +1874,9 @@
 <span class="sd">            val (Union[Number, Expr, List, Tuple, Matrix]): Values to fill,</span>
 <span class="sd">                should have consistent dimension consistent with `self`.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">val</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">()):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">val</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">()</span>
+        <span class="p">):</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
                 <span class="n">val</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">val</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">))</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">))</span>
             <span class="k">else</span><span class="p">:</span>
@@ -1917,7 +1962,9 @@
 
         <span class="n">as_vector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">keep_dims</span>
         <span class="n">shape_ext</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,)</span> <span class="k">if</span> <span class="n">as_vector</span> <span class="k">else</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)</span>
-        <span class="n">arr</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">+</span> <span class="n">shape_ext</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">to_pytorch_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">+</span> <span class="n">shape_ext</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">to_pytorch_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span>
+        <span class="p">)</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_to_ext_arr</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">matrix_to_ext_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">as_vector</span><span class="p">)</span>
@@ -1970,7 +2017,12 @@
         <span class="n">_host_access</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_host_access</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">Vector</span><span class="p">([</span><span class="n">_host_access</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)])</span>
-        <span class="k">return</span> <span class="n">Matrix</span><span class="p">([[</span><span class="n">_host_access</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">+</span> <span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)])</span>
+        <span class="k">return</span> <span class="n">Matrix</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="p">[</span><span class="n">_host_access</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">+</span> <span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># make interactive shell happy, prevent materialization</span>
@@ -2025,7 +2077,9 @@
 
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Custom type instances need to be created with an initial value.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="s2">&quot;Custom type instances need to be created with an initial value.&quot;</span>
+            <span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="c1"># Init from a real Matrix</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">():</span>
@@ -2063,7 +2117,9 @@
                     <span class="n">qd_python_core</span><span class="o">.</span><span class="n">make_get_element_expr</span><span class="p">(</span>
                         <span class="n">func_ret</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span>
                         <span class="n">ret_index</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span><span class="p">,),</span>
-                        <span class="n">_qd_python_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()),</span>
+                        <span class="n">_qd_python_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span>
+                            <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()</span>
+                        <span class="p">),</span>
                     <span class="p">)</span>
                 <span class="p">)</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
@@ -2101,11 +2157,15 @@
                     <span class="n">set_arg_func</span><span class="p">(</span><span class="n">ret_index</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">+</span> <span class="n">j</span><span class="p">,),</span> <span class="n">mat</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">])</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_instantiate_in_python_scope</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entries</span><span class="p">):</span>
-        <span class="n">entries</span> <span class="o">=</span> <span class="p">[[</span><span class="n">entries</span><span class="p">[</span><span class="n">k</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)]</span>
+        <span class="n">entries</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">[</span><span class="n">entries</span><span class="p">[</span><span class="n">k</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
+        <span class="p">]</span>
         <span class="k">return</span> <span class="n">Matrix</span><span class="p">(</span>
             <span class="p">[</span>
                 <span class="p">[</span>
-                    <span class="nb">int</span><span class="p">(</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">])</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">integer_types</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">])</span>
+                    <span class="nb">int</span><span class="p">(</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">])</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">integer_types</span>
+                    <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">])</span>
                     <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)</span>
                 <span class="p">]</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
@@ -2177,7 +2237,9 @@
 
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Custom type instances need to be created with an initial value.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="s2">&quot;Custom type instances need to be created with an initial value.&quot;</span>
+            <span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="c1"># Init from a real Matrix</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">():</span>
@@ -2210,7 +2272,9 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_instantiate_in_python_scope</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entries</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">Vector</span><span class="p">(</span>
             <span class="p">[</span>
-                <span class="nb">int</span><span class="p">(</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">integer_types</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="nb">int</span><span class="p">(</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">integer_types</span>
+                <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
             <span class="p">],</span>
             <span class="n">dt</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
@@ -2268,7 +2332,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_physical_shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
 <div class="viewcode-block" id="MatrixNdarray.element_type">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.element_type">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">element_type</span> <span class="o">=</span> <span class="n">DataTypeCxxWrapper</span><span class="p">(</span><span class="n">_type_factory</span><span class="o">.</span><span class="n">get_tensor_type</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span><span class="o">.</span><span class="n">get_ptr</span><span class="p">())</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">element_type</span> <span class="o">=</span> <span class="n">DataTypeCxxWrapper</span><span class="p">(</span>
+            <span class="n">_type_factory</span><span class="o">.</span><span class="n">get_tensor_type</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span><span class="o">.</span><span class="n">get_ptr</span><span class="p">()</span>
+        <span class="p">)</span></div>
 
         <span class="c1"># TODO: we should pass in element_type, shape, layout instead.</span>
 <div class="viewcode-block" id="MatrixNdarray.arr">
@@ -2309,8 +2375,19 @@
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
-        <span class="n">key</span> <span class="o">=</span> <span class="p">()</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="n">key</span><span class="p">,)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">)</span> <span class="k">else</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">Matrix</span><span class="p">([[</span><span class="n">NdarrayHostAccess</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">))</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)])</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">()</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="k">else</span> <span class="p">(</span><span class="n">key</span><span class="p">,)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">)</span>
+            <span class="k">else</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">Matrix</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="p">[</span><span class="n">NdarrayHostAccess</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">))</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
 
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="MatrixNdarray.to_numpy">
@@ -2352,9 +2429,31 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="MatrixNdarray.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.to_torch">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors</span>
-<span class="sd">        :meth:`MatrixField.to_torch`.&quot;&quot;&quot;</span>
+<span class="sd">        :meth:`MatrixField.to_torch`.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            device: Optional torch device for the returned tensor.</span>
+<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
+
+                <span class="n">tc</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">dlpack</span><span class="o">.</span><span class="n">from_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_dlpack</span><span class="p">())</span>
+                <span class="k">if</span> <span class="n">device</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">tc</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="n">device</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;copy=False incompatible with device transfer (</span><span class="si">{</span><span class="n">tc</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">)&quot;</span>
+                        <span class="p">)</span>
+                    <span class="n">tc</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+                    <span class="n">tc</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+                <span class="k">return</span> <span class="n">tc</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+                    <span class="k">raise</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_to_torch</span><span class="p">(</span><span class="n">as_vector</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span></div>
 
 
@@ -2429,7 +2528,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_physical_shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
 <div class="viewcode-block" id="VectorNdarray.element_type">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.element_type">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">element_type</span> <span class="o">=</span> <span class="n">DataTypeCxxWrapper</span><span class="p">(</span><span class="n">_type_factory</span><span class="o">.</span><span class="n">get_tensor_type</span><span class="p">((</span><span class="n">n</span><span class="p">,),</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span><span class="o">.</span><span class="n">get_ptr</span><span class="p">())</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">element_type</span> <span class="o">=</span> <span class="n">DataTypeCxxWrapper</span><span class="p">(</span>
+            <span class="n">_type_factory</span><span class="o">.</span><span class="n">get_tensor_type</span><span class="p">((</span><span class="n">n</span><span class="p">,),</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span><span class="o">.</span><span class="n">get_ptr</span><span class="p">()</span>
+        <span class="p">)</span></div>
 
 <div class="viewcode-block" id="VectorNdarray.arr">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.arr">[docs]</a>
@@ -2466,7 +2567,13 @@
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
-        <span class="n">key</span> <span class="o">=</span> <span class="p">()</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="n">key</span><span class="p">,)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">)</span> <span class="k">else</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">()</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="k">else</span> <span class="p">(</span><span class="n">key</span><span class="p">,)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">)</span>
+            <span class="k">else</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="n">Vector</span><span class="p">([</span><span class="n">NdarrayHostAccess</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span><span class="p">,))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)])</span>
 
     <span class="nd">@python_scope</span>
@@ -2512,9 +2619,31 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="VectorNdarray.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.to_torch">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``. Mirrors</span>
-<span class="sd">        :meth:`MatrixField.to_torch` on the vector code path.&quot;&quot;&quot;</span>
+<span class="sd">        :meth:`MatrixField.to_torch` on the vector code path.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            device: Optional torch device for the returned tensor.</span>
+<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
+
+                <span class="n">tc</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">dlpack</span><span class="o">.</span><span class="n">from_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_dlpack</span><span class="p">())</span>
+                <span class="k">if</span> <span class="n">device</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">tc</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="n">device</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;copy=False incompatible with device transfer (</span><span class="si">{</span><span class="n">tc</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">)&quot;</span>
+                        <span class="p">)</span>
+                    <span class="n">tc</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+                    <span class="n">tc</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+                <span class="k">return</span> <span class="n">tc</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+                    <span class="k">raise</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_to_torch</span><span class="p">(</span><span class="n">as_vector</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span></div>
 
 
