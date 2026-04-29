@@ -167,13 +167,34 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
                                                            error:&err];
 
     if (mtl_compute_pipeline_state == nil) {
+      std::array<char, 4096> msgbuf;
       if (err != nil) {
-        std::array<char, 4096> msgbuf;
         snprintf(msgbuf.data(), msgbuf.size(),
-                 "cannot create compute pipeline state: %s (code=%d)",
-                 err.localizedDescription.UTF8String, (int)err.code);
-        RHI_LOG_ERROR(msgbuf.data());
+                 "cannot create compute pipeline state for kernel '%s' "
+                 "(msl_bytes=%zu): %s (code=%d)",
+                 name.c_str(), msl.size(), err.localizedDescription.UTF8String,
+                 (int)err.code);
+      } else {
+        // Apple's MSL compiler service (XPC-backed) returns nil with err=nil
+        // when its connection drops mid-compile, typically because the
+        // cross-compiled MSL exceeds an internal compiler-service shader-size
+        // budget on the host's Metal toolchain version. Surface that as a clear
+        // actionable Python-level error pointing at the kernel size, rather
+        // than falling through to the generic `runtime.cpp:298 RhiResult=-1`
+        // line.
+        snprintf(msgbuf.data(), msgbuf.size(),
+                 "Apple's Metal compiler rejected the compute-pipeline build "
+                 "for kernel '%s' "
+                 "(cross-compiled MSL size: %zu bytes) without returning a "
+                 "structured error. This is the "
+                 "typical signature of an internal Metal-toolchain shader-size "
+                 "limit on this host: split "
+                 "the kernel into smaller pieces or reduce its body so the "
+                 "cross-compiled MSL drops below "
+                 "the host's threshold.",
+                 name.c_str(), msl.size());
       }
+      QD_ERROR("[metal_device.mm] {}", msgbuf.data());
       return nullptr;
     }
   }
@@ -1533,13 +1554,32 @@ MTLLibrary_id MetalDevice::get_mtl_library(const std::string &source) const {
   [msl_ns release];
 
   if (mtl_library == nil) {
+    std::array<char, 4096> msgbuf;
     if (err != nil) {
-      std::array<char, 4096> msgbuf;
       snprintf(msgbuf.data(), msgbuf.size(),
-               "cannot compile metal library from source: %s (code=%d)",
-               err.localizedDescription.UTF8String, (int)err.code);
-      RHI_LOG_ERROR(msgbuf.data());
+               "cannot compile metal library from source (msl_bytes=%zu): %s "
+               "(code=%d)",
+               source.size(), err.localizedDescription.UTF8String,
+               (int)err.code);
+    } else {
+      // See the matching `create_compute_pipeline` site for the diagnosis: nil
+      // library + nil NSError typically means the XPC-backed Metal compiler
+      // service dropped the connection mid-compile because the cross-compiled
+      // MSL exceeded an internal shader-size budget. Surface that as a
+      // Python-level error so users get an actionable message rather than the
+      // generic runtime.cpp `RhiResult=-1` line.
+      snprintf(msgbuf.data(), msgbuf.size(),
+               "Apple's Metal compiler rejected the metal-library build "
+               "(cross-compiled MSL size: %zu "
+               "bytes) without returning a structured error. This is the "
+               "typical signature of an internal "
+               "Metal-toolchain shader-size limit on this host: split the "
+               "kernel into smaller pieces or "
+               "reduce its body so the cross-compiled MSL drops below the "
+               "host's threshold.",
+               source.size());
     }
+    QD_ERROR("[metal_device.mm] {}", msgbuf.data());
     return nil;
   }
   return mtl_library;
