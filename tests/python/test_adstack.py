@@ -1001,8 +1001,7 @@ def test_adstack_overflow_raises():
     # it on the premise that `determine_ad_stack_size` produces a tight upper bound. This test deliberately
     # misconfigures the capacity below the kernel's actual peak push count, which the sizer cannot foresee, so the
     # runtime check has to be live for the deferred raise to fire. `debug=True` implies `check_out_of_bound=True`
-    # via `CompileConfig::fit`, so the bounds check is live on this path; the explicit-flag spelling is covered
-    # by `test_adstack_overflow_raises_check_oob_explicit` below.
+    # via `CompileConfig::fit`, so the bounds check is live on this path.
     compute, _, _ = _overflowing_compute()
     # On LLVM the runtime raises QuadrantsAssertionError (subclass of AssertionError) from
     # check_adstack_overflow; on SPIR-V the gfx runtime raises RuntimeError via QD_ERROR. We accept either,
@@ -1014,15 +1013,14 @@ def test_adstack_overflow_raises():
 
 @test_utils.test(require=qd.extension.adstack, exclude=[qd.metal, qd.vulkan], ad_stack_size=32, check_out_of_bound=True)
 def test_adstack_overflow_raises_check_oob_explicit():
-    # Same overflow scenario as `test_adstack_overflow_raises`, but with `check_out_of_bound=True` set explicitly
-    # without `debug=True`. Pins the gating to `check_out_of_bound` rather than `debug`: a user who only opts into
-    # bounds-checks (e.g. shipping a release-build app that still wants the deferred adstack-overflow error path)
-    # must get the same RuntimeError as a `debug=True` user. Regression coverage for the LLVM
-    # adstack-visitor codepaths gating on `check_out_of_bound` instead of `debug`.
+    # Same overflow scenario but with `check_out_of_bound=True` set explicitly without `debug=True`. Pins the
+    # gating to `check_out_of_bound` rather than `debug`: a user who only opts into bounds-checks (e.g. shipping
+    # a release-build app that still wants the deferred adstack-overflow error path) must get the same
+    # RuntimeError as a `debug=True` user. Regression coverage for the LLVM adstack-visitor codepaths gating on
+    # `check_out_of_bound` instead of `debug`.
     # Excludes Metal / Vulkan: `Program::init` force-disables `check_out_of_bound` on arches without
     # `Extension::assertion`, so the explicit-flag spelling alone cannot light up the bounds check there. The
-    # SPIR-V codegen gate ORs `debug` in to cover the `qd.init(debug=True)` path on those backends, which
-    # `test_adstack_overflow_raises` already exercises.
+    # SPIR-V codegen gate ORs `debug` in to cover the `qd.init(debug=True)` path on those backends.
     compute, _, _ = _overflowing_compute()
     with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
         compute.grad()
@@ -1034,8 +1032,7 @@ def test_adstack_overflow_flag_resets_after_catch():
     # Once `check_adstack_overflow()` raises, the runtime must clear its overflow flag so a subsequent `qd.sync()`
     # (with no new overflowing grad launch in between) returns normally. Without the reset the user would see a
     # stale overflow exception every time they sync after the first one, which makes diagnosis and recovery
-    # impossible. `debug=True` keeps the per-push bounds check live via the implied `check_out_of_bound=True` -
-    # see `test_adstack_overflow_raises` for the gating rationale.
+    # impossible. `debug=True` keeps the per-push bounds check live via the implied `check_out_of_bound=True`.
     compute, _, _ = _overflowing_compute()
     with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
         compute.grad()
