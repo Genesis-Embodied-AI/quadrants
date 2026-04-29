@@ -385,6 +385,13 @@ class FuncBase:
             autodiff_mode=autodiff_mode,
             raise_on_templated_floats=raise_on_templated_floats,
         )
+        if not is_kernel:
+            # Seed the func context with the caller's `loop_depth` so a non-static `range(...)` inside the func body
+            # sees any outer for-loops the caller is already inside. Without this seeding the dynamic-range backward-
+            # mode diagnostic at `ASTTransformer.build_For` only fires when the loop is written directly in the
+            # kernel, and routing the same loop through a `@qd.func` would silently emit a wrong adjoint. Kernels
+            # start at the top of the call stack so they always begin at depth 0.
+            ctx.loop_depth = global_context.caller_loop_depth
         return tree, ctx
 
     def fuse_args(
