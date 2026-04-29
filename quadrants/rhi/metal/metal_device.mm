@@ -175,35 +175,23 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
                  name.c_str(), msl.size(), err.localizedDescription.UTF8String,
                  (int)err.code);
       } else {
-        // Apple returned nil pipeline + nil NSError. The XPC-backed
-        // `com.apple.MTLCompilerService` dropped its connection mid-compile.
-        // The proximate cause observed on GitHub-hosted macos-15 runners is a
-        // hard 100 MB working-set cap on that XPC service, enforced by the XNU
-        // kernel via EXC_RESOURCE (`process MTLCompilerServi crossed memory
-        // high watermark (100 MB); EXC_RESOURCE` in the system log). The same
-        // MSL compiles cleanly via offline `xcrun metal -c` because the offline
-        // tool runs without the cap. Cap is not a runtime knob - shrinking the
-        // cross-compiled MSL / AIR working set is the only path. Surface the
-        // kernel name and MSL byte size so the next investigator can target the
-        // offending kernel without bisecting.
-        snprintf(
-            msgbuf.data(), msgbuf.size(),
-            "Apple's Metal compiler service (com.apple.MTLCompilerService) "
-            "dropped its XPC connection while "
-            "compiling the compute pipeline for kernel '%s' (cross-compiled "
-            "MSL size: %zu bytes), returning a "
-            "nil pipeline with no NSError. On GitHub-hosted macos-15 runners "
-            "the kernel log captures the "
-            "proximate cause as `process MTLCompilerServi crossed memory high "
-            "watermark (100 MB); EXC_RESOURCE` "
-            "- the XPC service is sandboxed with a hard 100 MB working-set cap "
-            "and is killed when the AIR -> "
-            "GPU compile of a large kernel exceeds it. The same MSL compiles "
-            "via offline `xcrun metal -c` "
-            "because the offline tool runs outside that sandbox. The cap is "
-            "not a runtime knob - reduce the "
-            "cross-compiled MSL / AIR working set for this kernel.",
-            name.c_str(), msl.size());
+        // Apple's `com.apple.MTLCompilerService` returned nil pipeline + nil
+        // NSError, meaning the XPC service dropped its connection mid-compile.
+        // One known trigger is the kernel hitting a per-process memory cap on
+        // the XPC service while compiling the AIR; large reverse-grad kernels
+        // are the typical offender. Surface the kernel name and MSL byte size
+        // so the offending kernel can be targeted without bisecting.
+        snprintf(msgbuf.data(), msgbuf.size(),
+                 "Apple's Metal compiler service dropped its XPC connection "
+                 "while compiling the compute pipeline "
+                 "for kernel '%s' (cross-compiled MSL size: %zu bytes), "
+                 "returning nil with no NSError. This can "
+                 "happen when the cross-compiled kernel is large enough that "
+                 "the compiler service exceeds a "
+                 "per-process memory budget mid-compile. Reducing the "
+                 "cross-compiled MSL / AIR working set for this "
+                 "kernel is the most reliable workaround.",
+                 name.c_str(), msl.size());
       }
       // Use QD_WARN (log + no-throw) rather than QD_ERROR (log + `throw
       // std::string`). `QD_ERROR` here would unwind through
@@ -1582,30 +1570,20 @@ MTLLibrary_id MetalDevice::get_mtl_library(const std::string &source) const {
                source.size(), err.localizedDescription.UTF8String,
                (int)err.code);
     } else {
-      // Apple returned nil library + nil NSError - the XPC-backed
-      // `com.apple.MTLCompilerService` dropped its connection during MSL -> AIR
-      // compile. On GitHub-hosted macos-15 runners the proximate cause logged
-      // in the kernel ring buffer is `process MTLCompilerServi crossed memory
-      // high watermark (100 MB); EXC_RESOURCE` - the XPC service has a hard 100
-      // MB working-set cap that the kernel enforces via EXC_RESOURCE. The same
-      // MSL compiles cleanly via offline `xcrun metal -c` because that tool
-      // runs outside the sandbox. Cap is not a runtime knob; the only path is
-      // to shrink the cross-compiled MSL / AIR working set.
+      // Apple's `com.apple.MTLCompilerService` returned nil library + nil
+      // NSError - the XPC service dropped its connection during MSL -> AIR
+      // compile. One known trigger is the compiler service exceeding a
+      // per-process memory budget on a large source. Surface the MSL byte size
+      // so the offending input is easy to spot.
       snprintf(msgbuf.data(), msgbuf.size(),
-               "Apple's Metal compiler service (com.apple.MTLCompilerService) "
-               "dropped its XPC connection while "
-               "compiling MSL -> AIR (cross-compiled MSL size: %zu bytes), "
-               "returning a nil library with no NSError. "
-               "On GitHub-hosted macos-15 runners the kernel log captures the "
-               "proximate cause as `process "
-               "MTLCompilerServi crossed memory high watermark (100 MB); "
-               "EXC_RESOURCE` - the XPC service is "
-               "sandboxed with a hard 100 MB working-set cap and is killed "
-               "when the compile working set exceeds it. "
-               "The same MSL compiles via offline `xcrun metal -c` because "
-               "that tool is not subject to the cap. The "
-               "cap is not a runtime knob - reduce the cross-compiled MSL "
-               "working set.",
+               "Apple's Metal compiler service dropped its XPC connection "
+               "while compiling MSL -> AIR "
+               "(cross-compiled MSL size: %zu bytes), returning nil with no "
+               "NSError. This can happen when the "
+               "cross-compiled source is large enough that the compiler "
+               "service exceeds a per-process memory "
+               "budget mid-compile. Reducing the cross-compiled MSL working "
+               "set is the most reliable workaround.",
                source.size());
     }
     // QD_WARN rather than QD_ERROR: see `create_compute_pipeline` for the
