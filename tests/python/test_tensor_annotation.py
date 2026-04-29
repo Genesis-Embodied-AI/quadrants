@@ -96,6 +96,21 @@ def test_tensor_accepts_field():
     np.testing.assert_array_equal(a.to_numpy(), [0, 10, 20, 30])
 
 
+@test_utils.test(arch=qd.cpu)
+def test_tensor_accepts_raw_field():
+    """A kernel parameter annotated ``qd.Tensor`` also accepts a raw ``qd.field()`` (not wrapped in ``qd.Tensor``).
+    The raw Field falls through to the template path internally."""
+    a = qd.field(qd.i32, shape=(4,))
+
+    @qd.kernel
+    def fill(x: qd.Tensor):
+        for i in range(4):
+            x[i] = i * 10
+
+    fill(a)
+    np.testing.assert_array_equal(a.to_numpy(), [0, 10, 20, 30])
+
+
 # ----------------------------------------------------------------------------
 # Cross-call dispatch: same kernel object, both backends, separate cache entries
 # ----------------------------------------------------------------------------
