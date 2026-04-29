@@ -26,12 +26,6 @@ class BufferViewType:
         self.boundary = boundary
         self.ndarray_type = NdarrayType(dtype=dtype, ndim=1, boundary=boundary)
 
-    @classmethod
-    def __class_getitem__(cls, args, **kwargs):
-        if not isinstance(args, tuple):
-            args = (args,)
-        return cls(*args, **kwargs)
-
     def __repr__(self):
         return f"BufferViewType(dtype={self.dtype}, boundary={self.boundary})"
 
