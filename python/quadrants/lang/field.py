@@ -43,11 +43,7 @@ class _DLDevice(ctypes.Structure):
 
 
 class _DLDataType(ctypes.Structure):
-    _fields_ = [
-        ("code", ctypes.c_uint8),
-        ("bits", ctypes.c_uint8),
-        ("lanes", ctypes.c_uint16),
-    ]
+    _fields_ = [("code", ctypes.c_uint8), ("bits", ctypes.c_uint8), ("lanes", ctypes.c_uint16)]
 
 
 class _DLTensor(ctypes.Structure):
@@ -96,15 +92,11 @@ def _patch_field_dlpack_canonical(capsule, layout):
     _PyCapsule_GetPointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
     raw = _PyCapsule_GetPointer(capsule, b"dltensor")
     if not raw:
-        raise RuntimeError(
-            "field_to_dlpack returned a capsule without the expected 'dltensor' name"
-        )
+        raise RuntimeError("field_to_dlpack returned a capsule without the expected 'dltensor' name")
     mt = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensor)).contents
     t = mt.dl_tensor
     if t.ndim < ndim:
-        raise RuntimeError(
-            f"field_to_dlpack returned ndim={t.ndim} but layout has rank {ndim}; cannot patch"
-        )
+        raise RuntimeError(f"field_to_dlpack returned ndim={t.ndim} but layout has rank {ndim}; cannot patch")
     # Only the first ``ndim`` axes carry the canonical permutation; any trailing axes (element dims for VectorField /
     # MatrixField) are already in innermost identity position and must not be permuted.
     shape_phys = [int(t.shape[i]) for i in range(ndim)]
@@ -138,9 +130,7 @@ def _compute_torch_mps_supports_dlpack_bytes_offset() -> bool:
         return False
 
 
-_TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET = (
-    _compute_torch_mps_supports_dlpack_bytes_offset()
-)
+_TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET = _compute_torch_mps_supports_dlpack_bytes_offset()
 
 
 def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False) -> bool:
@@ -153,7 +143,6 @@ def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False) -> bool:
         return False
     if arch == _ARCH_METAL and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET:
         return False
-    # 0-dim ScalarFields lack DLPack bytes_offset support in current PyTorch.
     if is_scalar and not field.shape:
         return False
     return True
@@ -167,9 +156,7 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
     """
     if not _can_zerocopy_field(field, is_scalar=is_scalar):
         if copy is False:
-            raise ValueError(
-                f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}"
-            )
+            raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
         return None
 
     import torch  # pylint: disable=C0415
@@ -247,9 +234,7 @@ class Field:
             layout = getattr(self, "_qd_layout", None)
             if layout is not None:
                 layout_t = tuple(layout)
-                if layout_t != tuple(range(len(layout_t))) and len(phys) == len(
-                    layout_t
-                ):
+                if layout_t != tuple(range(len(layout_t))) and len(phys) == len(layout_t):
                     # ``phys[p] = canonical[layout[p]]`` ⇒ ``canonical[a] = phys[inv_layout[a]]``.
                     inv = [0] * len(layout_t)
                     for p, a in enumerate(layout_t):
@@ -329,16 +314,11 @@ class Field:
         raise NotImplementedError()
 
     @python_scope
-    def to_torch(self, device=None, *, copy: bool | None = None):
+    def to_torch(self, device=None):
         """Converts `self` to a torch tensor.
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
-            copy: Controls copying behaviour:
-
-                - ``None`` (default) -- zero-copy when possible, copy otherwise.
-                - ``True`` -- always return an independent copy.
-                - ``False`` -- require zero-copy; raises if not possible.
 
         Returns:
             torch.tensor: The result torch tensor.
@@ -380,10 +360,7 @@ class Field:
         if not isinstance(other, Field):
             raise TypeError("Cannot copy from a non-field object")
         if self.shape != other.shape:
-            raise ValueError(
-                f"qd.field shape {self.shape} does not match"
-                f" the source field shape {other.shape}"
-            )
+            raise ValueError(f"qd.field shape {self.shape} does not match" f" the source field shape {other.shape}")
         from quadrants._kernels import tensor_to_tensor  # pylint: disable=C0415
 
         tensor_to_tensor(self, other)
@@ -519,9 +496,7 @@ class ScalarField(Field):
 
         import torch  # pylint: disable=C0415
 
-        arr = torch.zeros(
-            size=self.shape, dtype=to_pytorch_type(self.dtype), device=device
-        )
+        arr = torch.zeros(size=self.shape, dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import tensor_to_ext_arr  # pylint: disable=C0415
 
         tensor_to_ext_arr(self, arr)
@@ -531,16 +506,10 @@ class ScalarField(Field):
     @python_scope
     def _from_external_arr(self, arr):
         if len(self.shape) != len(arr.shape):
-            raise ValueError(
-                f"qd.field shape {self.shape} does not match"
-                f" the numpy array shape {arr.shape}"
-            )
+            raise ValueError(f"qd.field shape {self.shape} does not match" f" the numpy array shape {arr.shape}")
         for i, _ in enumerate(self.shape):
             if self.shape[i] != arr.shape[i]:
-                raise ValueError(
-                    f"qd.field shape {self.shape} does not match"
-                    f" the numpy array shape {arr.shape}"
-                )
+                raise ValueError(f"qd.field shape {self.shape} does not match" f" the numpy array shape {arr.shape}")
         from quadrants._kernels import ext_arr_to_tensor  # pylint: disable=C0415
 
         ext_arr_to_tensor(arr, self)
@@ -614,9 +583,7 @@ class SNodeHostAccessor:
                 and not impl.get_runtime().grad_replaced
             ):
                 for x in impl.get_runtime().target_tape.grad_checker.to_check:  # type: ignore
-                    assert snode != x.snode.ptr, (
-                        "Overwritten is prohibitive when doing grad check."
-                    )
+                    assert snode != x.snode.ptr, "Overwritten is prohibitive when doing grad check."
                 impl.get_runtime().target_tape.insert(write_func, (key, value))  # type: ignore
 
         self.getter = getter
@@ -653,16 +620,12 @@ class BitpackedFields:
         for arg in args:
             assert isinstance(arg, Field)
             for var in arg._get_field_members():
-                self.fields.append(
-                    (var.ptr, self.bit_struct_type_builder.add_member(var.ptr.get_dt()))
-                )
+                self.fields.append((var.ptr, self.bit_struct_type_builder.add_member(var.ptr.get_dt())))
                 count += 1
         if shared_exponent:
             self.bit_struct_type_builder.end_placing_shared_exponent()
             if count <= 1:
-                raise QuadrantsSyntaxError(
-                    "At least 2 fields need to be placed when shared_exponent=True"
-                )
+                raise QuadrantsSyntaxError("At least 2 fields need to be placed when shared_exponent=True")
 
 
 __all__ = ["BitpackedFields", "Field", "ScalarField"]

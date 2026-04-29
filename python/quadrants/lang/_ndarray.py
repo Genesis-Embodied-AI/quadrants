@@ -80,11 +80,7 @@ class Ndarray:
         return _ndarray_pickle.unpickle, (_ndarray_pickle.serialize(self),)
 
     def __del__(self):
-        if (
-            impl is not None
-            and impl.get_runtime is not None
-            and impl.get_runtime() is not None
-        ):
+        if impl is not None and impl.get_runtime is not None and impl.get_runtime() is not None:
             arr = getattr(self, "arr")
             if arr is not None:
                 prog = impl.get_runtime()._prog
@@ -155,9 +151,7 @@ class Ndarray:
         return tuple(phys[inv[i]] for i in range(len(phys)))
 
     def get_type(self):
-        return NdarrayTypeMetadata(
-            self.element_type, self._physical_shape, self.grad is not None
-        )
+        return NdarrayTypeMetadata(self.element_type, self._physical_shape, self.grad is not None)
 
     @property
     def element_shape(self):
@@ -197,10 +191,7 @@ class Ndarray:
         Args:
             val (Union[int, float]): Value to fill.
         """
-        if (
-            impl.current_cfg().arch != _qd_core.Arch.cuda
-            and impl.current_cfg().arch != _qd_core.Arch.x64
-        ):
+        if impl.current_cfg().arch != _qd_core.Arch.cuda and impl.current_cfg().arch != _qd_core.Arch.x64:
             self._fill_by_kernel(val)
         elif _qd_core.is_tensor(self.element_type):
             self._fill_by_kernel(val)
@@ -265,9 +256,7 @@ class Ndarray:
             raise TypeError(f"{np.ndarray} expected, but {type(arr)} provided")
         canonical_shape = tuple(self.shape)
         if canonical_shape != tuple(arr.shape):
-            raise ValueError(
-                f"Mismatch shape: {canonical_shape} expected, but {tuple(arr.shape)} provided"
-            )
+            raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(arr.shape)} provided")
         if not arr.flags.c_contiguous:
             arr = np.ascontiguousarray(arr)
 
@@ -288,11 +277,7 @@ class Ndarray:
 
         from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
 
-        out = torch.zeros(
-            size=tuple(self.arr.total_shape()),
-            dtype=to_pytorch_type(self.dtype),
-            device=device,
-        )
+        out = torch.zeros(size=tuple(self.arr.total_shape()), dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import (  # pylint: disable=C0415
             ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
         )
@@ -371,9 +356,9 @@ class Ndarray:
             other (Ndarray): The source ndarray.
         """
         assert isinstance(other, Ndarray)
-        assert tuple(self.shape) == tuple(other.shape), (
-            f"copy_from shape mismatch: destination {tuple(self.shape)} vs source {tuple(other.shape)}"
-        )
+        assert tuple(self.shape) == tuple(
+            other.shape
+        ), f"copy_from shape mismatch: destination {tuple(self.shape)} vs source {tuple(other.shape)}"
         from quadrants._kernels import ndarray_to_ndarray  # pylint: disable=C0415
 
         ndarray_to_ndarray(self, other)
@@ -410,9 +395,7 @@ class Ndarray:
         if not isinstance(key, (tuple, list)):
             key = (key,)
         if len(key) != len(self.arr.total_shape()):
-            raise QuadrantsIndexError(
-                f"{len(self.arr.total_shape())}d ndarray indexed with {len(key)}d indices: {key}"
-            )
+            raise QuadrantsIndexError(f"{len(self.arr.total_shape())}d ndarray indexed with {len(key)}d indices: {key}")
         return key
 
     @python_scope
@@ -444,11 +427,7 @@ class ScalarNdarray(Ndarray):
             self.arr = torch.zeros(shape=arr_shape, dtype=dtype_to_torch_dtype(dtype))
         else:
             self.arr = impl.get_runtime().prog.create_ndarray(
-                self.dtype,
-                arr_shape,
-                layout=Layout.NULL,
-                zero_fill=True,
-                dbg_info=_qd_core.DebugInfo(get_traceback()),
+                self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
             )
         self._physical_shape = tuple(self.arr.shape)
         self.element_type = dtype
@@ -487,33 +466,28 @@ class ScalarNdarray(Ndarray):
     def to_torch(self, device=None, *, copy=None):
         """Return a canonical-view torch tensor.
 
-        Mirrors :meth:`Field.to_torch`. When *copy* is not ``True``, tries zero-copy DLPack export first and falls
-        back to a kernel copy when DLPack is unavailable.
+        Mirrors :meth:`Field.to_torch`. The destination is a ``torch.zeros(self.shape, ...)`` allocation that the
+        bridge kernel writes into via the canonical iteration path, so layout-tagged ndarrays produce a canonical
+        view just like ``to_numpy()`` does.
 
         Args:
-            device: Optional torch device for the returned tensor.
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
         """
         if copy is False:
-            try:
-                import torch  # pylint: disable=C0415
+            from quadrants.lang.field import (  # pylint: disable=C0415
+                _try_zerocopy_torch,
+            )
 
-                tc = torch.utils.dlpack.from_dlpack(self.to_dlpack())
-                if device is not None and tc.device != torch.device(device):
-                    raise ValueError(
-                        f"copy=False incompatible with device transfer ({tc.device} -> {device})"
-                    )
+            tc = _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
+            if tc is not None:
                 return tc
-            except Exception:
-                raise
+
         import torch  # pylint: disable=C0415
 
         from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
 
         canonical_shape = tuple(self.shape)
-        out = torch.zeros(
-            size=canonical_shape, dtype=to_pytorch_type(self.dtype), device=device
-        )
+        out = torch.zeros(size=canonical_shape, dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import ndarray_to_ext_arr  # pylint: disable=C0415
 
         ndarray_to_ext_arr(self, out)
@@ -530,9 +504,7 @@ class ScalarNdarray(Ndarray):
         contig = arr.contiguous()
         canonical_shape = tuple(self.shape)
         if canonical_shape != tuple(contig.shape):
-            raise ValueError(
-                f"Mismatch shape: {canonical_shape} expected, but {tuple(contig.shape)} provided"
-            )
+            raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(contig.shape)} provided")
         from quadrants._kernels import ext_arr_to_ndarray  # pylint: disable=C0415
 
         ext_arr_to_ndarray(contig, self)
