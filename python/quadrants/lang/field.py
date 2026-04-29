@@ -105,6 +105,86 @@ def _patch_field_dlpack_canonical(capsule, layout):
 if TYPE_CHECKING:
     from quadrants.lang.expr import Expr
 
+_ARCH_METAL = _qd_core.Arch.metal
+_ARCH_VULKAN = _qd_core.Arch.vulkan
+
+_DLPACK_SUPPORTED_DTYPES = frozenset(
+    {
+        _qd_core.DataTypeCxx.f32,
+        _qd_core.DataTypeCxx.f64,
+        _qd_core.DataTypeCxx.i32,
+        _qd_core.DataTypeCxx.i64,
+        _qd_core.DataTypeCxx.u1,
+    }
+)
+
+
+def _compute_torch_mps_supports_dlpack_bytes_offset() -> bool:
+    try:
+        import torch  # pylint: disable=C0415
+    except ImportError:
+        return False
+    parts = torch.__version__.replace("+", ".").split(".")[:3]
+    try:
+        return tuple(map(int, parts)) > (2, 9, 1)
+    except ValueError:
+        return False
+
+
+_TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET = _compute_torch_mps_supports_dlpack_bytes_offset()
+
+
+def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False) -> bool:
+    """Check whether zero-copy DLPack export is available for this field on the current backend."""
+    dtype = field.dtype
+    if dtype not in _DLPACK_SUPPORTED_DTYPES:
+        return False
+    arch = impl.current_cfg().arch
+    if arch == _ARCH_VULKAN:
+        return False
+    if arch == _ARCH_METAL and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET:
+        return False
+    # 0-dim ScalarFields lack DLPack bytes_offset support in current PyTorch.
+    if is_scalar and not field.shape:
+        return False
+    return True
+
+
+def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = False):
+    """Try to return a zero-copy (or cloned) torch tensor via DLPack.
+
+    Returns the tensor on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``. Raises
+    ``ValueError`` when ``copy=False`` but zero-copy is not available.
+    """
+    if not _can_zerocopy_field(field, is_scalar=is_scalar):
+        if copy is False:
+            raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
+        return None
+
+    import torch  # pylint: disable=C0415
+
+    tc = torch.utils.dlpack.from_dlpack(field.to_dlpack())
+    if impl.current_cfg().arch == _ARCH_METAL:
+        impl.get_runtime().sync()
+
+    needs_device_transfer = device is not None and tc.device != torch.device(device)
+    if needs_device_transfer:
+        if copy is False:
+            raise ValueError(
+                f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})"
+            )
+        tc = tc.to(device)
+        if impl.current_cfg().arch == _ARCH_METAL:
+            torch.mps.synchronize()
+        return tc
+
+    if copy is True:
+        tc = tc.clone()
+        if impl.current_cfg().arch == _ARCH_METAL:
+            torch.mps.synchronize()
+
+    return tc
+
 
 class Field:
     """Quadrants field class.
@@ -236,11 +316,16 @@ class Field:
         raise NotImplementedError()
 
     @python_scope
-    def to_torch(self, device=None):
+    def to_torch(self, device=None, *, copy: bool | None = None):
         """Converts `self` to a torch tensor.
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
+            copy: Controls copying behaviour:
+
+                - ``None`` (default) -- zero-copy when possible, copy otherwise.
+                - ``True`` -- always return an independent copy.
+                - ``False`` -- require zero-copy; raises if not possible.
 
         Returns:
             torch.tensor: The result torch tensor.
@@ -404,16 +489,24 @@ class ScalarField(Field):
         return arr
 
     @python_scope
-    def to_torch(self, device=None):
-        """Converts this field to a `torch.tensor`."""
+    def to_torch(self, device=None, *, copy=None):
+        """Converts this field to a ``torch.Tensor``.
+
+        Args:
+            device: Optional torch device for the returned tensor.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+        """
+        if copy is not True:
+            tc = _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
+            if tc is not None:
+                return tc
+
         import torch  # pylint: disable=C0415
 
-        # pylint: disable=E1101
         arr = torch.zeros(size=self.shape, dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import tensor_to_ext_arr  # pylint: disable=C0415
 
         tensor_to_ext_arr(self, arr)
-        # TODO: can we remove .runtime_ops here?
         quadrants.lang.runtime_ops.sync()  # type: ignore
         return arr
 

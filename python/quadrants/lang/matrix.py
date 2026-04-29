@@ -19,7 +19,12 @@ from quadrants.lang.exception import (
     QuadrantsSyntaxError,
     QuadrantsTypeError,
 )
-from quadrants.lang.field import Field, ScalarField, SNodeHostAccess
+from quadrants.lang.field import (
+    Field,
+    ScalarField,
+    SNodeHostAccess,
+    _try_zerocopy_torch,
+)
 from quadrants.lang.util import (
     DataTypeCxxWrapper,
     cook_dtype,
@@ -1430,22 +1435,30 @@ class MatrixField(Field):
         runtime_ops.sync()
         return arr
 
-    def to_torch(self, device=None, keep_dims=False):
+    def to_torch(self, device=None, keep_dims=False, *, copy=None):
         """Converts the field instance to a PyTorch tensor.
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
             keep_dims (bool, optional): Whether to keep the dimension after conversion.
                 See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
         Returns:
             torch.tensor: The result torch tensor.
         """
+        if copy is not True:
+            tc = _try_zerocopy_torch(self, copy=copy, device=device)
+            if tc is not None:
+                as_vector = self.m == 1 and not keep_dims
+                if as_vector:
+                    tc = tc.reshape(self.shape + (self.n,))
+                return tc
+
         import torch  # pylint: disable=C0415
 
         as_vector = self.m == 1 and not keep_dims
         shape_ext = (self.n,) if as_vector else (self.n, self.m)
-        # pylint: disable=E1101
         arr = torch.empty(self.shape + shape_ext, dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import matrix_to_ext_arr  # pylint: disable=C0415
 
