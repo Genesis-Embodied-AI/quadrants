@@ -1,4 +1,4 @@
-"""Tests for BufferView: slice syntax, kernel annotation, @qd.func support, and debug-mode OOB detection with callstack."""
+"""Tests for BufferView: slice syntax, kernel annotation, @qd.func support, and debug-mode OOB with callstack."""
 
 import platform
 

@@ -2,6 +2,7 @@
 
 import re
 
+from quadrants import _logging
 from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.expr import Expr, make_expr_group
@@ -10,12 +11,14 @@ from quadrants.types.buffer_view_type import BufferViewType
 
 _LOC_RE = re.compile(r'File "(.+?)", line (\d+), in (\w+)')
 
+_CALLSTACK_WARNING_BYTE = 1024
 
-def _build_callstack(max_bytes):
+
+def _build_callstack():
     """Walk src_info_stack and extract deduplicated (file, line, func) frames.
 
     Returns (kernel_name, callstack_str).
-    The callstack is kept within *max_bytes* by trimming from the middle.
+    Warns if the callstack exceeds _CALLSTACK_WARNING_SIZE (large strings increase compiled binary size).
     """
     stack = impl.get_runtime().src_info_stack
     frames = []
@@ -44,9 +47,11 @@ def _build_callstack(max_bytes):
 
     callstack = _format_chain(frames)
 
-    budget = max_bytes // 2
-    if len(callstack) > budget:
-        callstack = callstack[: max(budget - 3, 0)] + "..."
+    if len(callstack) > _CALLSTACK_WARNING_BYTE:
+        _logging.warn(
+            f"BufferView debug callstack is {len(callstack)} bytes (limit {_CALLSTACK_WARNING_BYTE}). "
+            f"Large callstack strings increase compiled binary size."
+        )
 
     return kernel_name, callstack
 
@@ -148,7 +153,7 @@ class BufferView:
             dbg_info = _qd_core.DebugInfo(src_info)
             tid_expr = Expr(ast_builder.insert_thread_idx_expr())
 
-            kernel_name, callstack = _build_callstack(2048)
+            kernel_name, callstack = _build_callstack()
             msg = (
                 f"BufferView subview Out Of Range: kernel[{kernel_name}]"
                 " tid=%d, subview offset=%d, subview size=%d, parent size=%d.\n"
@@ -193,7 +198,7 @@ class BufferView:
 
             tid_expr = Expr(ast_builder.insert_thread_idx_expr())
 
-            kernel_name, callstack = _build_callstack(2048)
+            kernel_name, callstack = _build_callstack()
 
             msg = (
                 f"BufferView Out Of Range: kernel[{kernel_name}]"
