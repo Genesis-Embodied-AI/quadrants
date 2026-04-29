@@ -87,7 +87,7 @@ See also [Troubleshooting](./troubleshooting.md).
 
 ### Printing from kernels
 
-`print()` works inside kernels for scalar values:
+`print()` works inside kernels for scalar values, which can be useful for debugging:
 
 ```python
 @qd.kernel
