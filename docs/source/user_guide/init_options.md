@@ -81,7 +81,14 @@ Interaction with `debug`:
 - `debug=True` always implies `check_out_of_bound=True`. They cannot be split: `debug=True, check_out_of_bound=False` collapses to `debug=True` at init.
 - Use `check_out_of_bound=True` on its own when you want bounds + adstack safety in a release build without paying for everything else `debug` adds.
 
-Metal and Vulkan caveat (the field bounds check needs an in-kernel assertion mechanism Metal/Vulkan don't have):
-- `check_out_of_bound` is silently reset to `False` on those backends at `qd.init` time (a warning is logged).
-- `qd.init(check_out_of_bound=True)` on its own -> neither check fires.
-- `qd.init(debug=True)` -> adstack overflow check still fires; field bounds check does not.
+Per-backend support:
+
+| Backend | Field bounds check | Adstack overflow check |
+|---------|--------------------|------------------------|
+| CPU | with `check_out_of_bound=True` or `debug=True` | with `check_out_of_bound=True` or `debug=True` |
+| CUDA | with `check_out_of_bound=True` or `debug=True` | with `check_out_of_bound=True` or `debug=True` |
+| AMDGPU | with `check_out_of_bound=True` or `debug=True` | with `check_out_of_bound=True` or `debug=True` |
+| Metal | never (no in-kernel assertion mechanism) | with `debug=True` only |
+| Vulkan | never (no in-kernel assertion mechanism) | with `debug=True` only |
+
+The adstack overflow check is gated independently of the assertion mechanism, so `debug=True` activates it on every backend - including Metal and Vulkan, where the field bounds check stays unavailable. On Metal and Vulkan, `check_out_of_bound` is silently reset to `False` at `qd.init` time (a warning is logged); passing it on its own gives neither check on those backends.

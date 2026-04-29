@@ -2627,13 +2627,6 @@ void TaskCodegen::visit(AdStackAllocaStmt *stmt) {
   ad_stacks_[stmt] = info;
 }
 
-// Resolve the primal- or adjoint-slot pointer for `info` at index `idx`. The returned pointer is typed after the
-// adstack's backing storage (f32 for heap_float, i32 for heap_int) - which is the same as `info.elem_type` except
-// for u1 adstacks on the int heap, where backing is i32. Callers must explicitly convert between u1 and i32 via
-// `ir_->cast(...)` at store/load sites in that single special case. `primal=true` selects the primal half of the
-// slice, `false` selects the adjoint half. The per-alloca `offset` and (for f32 only) `adjoint_offset = offset +
-// max_size` come from the `AdStackMetadata` buffer via `ensure_ad_stack_metadata_loaded`; int-heap adstacks have
-// no adjoint slice and hit `QD_ASSERT(primal)` in that path.
 spirv::Value TaskCodegen::ad_stack_count_ptr(uint32_t stack_id) {
   // First call lazily allocates a single Function-scope `uint[num_ad_stacks_]` array shared across every adstack.
   // Each push / pop / load-top accesses its slot via OpAccessChain on this array - critically, an OpAccessChain
@@ -2652,6 +2645,13 @@ spirv::Value TaskCodegen::ad_stack_count_ptr(uint32_t stack_id) {
   return ir_->make_value(spv::OpAccessChain, ptr_type, ad_stack_count_array_var_, idx_const);
 }
 
+// Resolve the primal- or adjoint-slot pointer for `info` at index `idx`. The returned pointer is typed after the
+// adstack's backing storage (f32 for heap_float, i32 for heap_int) - which is the same as `info.elem_type` except
+// for u1 adstacks on the int heap, where backing is i32. Callers must explicitly convert between u1 and i32 via
+// `ir_->cast(...)` at store/load sites in that single special case. `primal=true` selects the primal half of the
+// slice, `false` selects the adjoint half. The per-alloca `offset` and (for f32 only) `adjoint_offset = offset +
+// max_size` come from the `AdStackMetadata` buffer via `ensure_ad_stack_metadata_loaded`; int-heap adstacks have
+// no adjoint slice and hit `QD_ASSERT(primal)` in that path.
 spirv::Value TaskCodegen::ad_stack_slot_ptr(AdStackSpirv &info, spirv::Value idx, bool primal) {
   ensure_ad_stack_metadata_loaded(info);
   spirv::Value slot_offset = primal ? info.offset_val : info.adjoint_offset_val;

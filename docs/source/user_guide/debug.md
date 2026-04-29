@@ -87,7 +87,7 @@ See also [Troubleshooting](./troubleshooting.md).
 
 ### Printing from kernels
 
-`print()` works inside kernels for scalar values, which can be useful for debugging:
+`print()` works inside kernels for scalar values:
 
 ```python
 @qd.kernel
@@ -96,7 +96,19 @@ def debug_kernel(a: qd.Template) -> None:
         print("i =", i, "val =", a[i])
 ```
 
-Note that print output from GPU kernels may appear out of order due to parallel execution.
+Per-backend support:
+
+| Backend | Kernel `print()` |
+|---------|------------------|
+| CPU | yes |
+| CUDA | yes |
+| AMDGPU | no (compile error) |
+| Metal | no (silently dropped) |
+| Vulkan | yes (via debug-printf SPIR-V extension) |
+
+Output from GPU kernels may appear out of order due to parallel execution.
+
+Important: remove kernel `print()` calls before benchmarking. Quadrants synchronizes the compute queue after every dispatch of a kernel that contains a `print()` so the output appears at the right place in the log; this synchronization happens unconditionally on every launch of that kernel, even when the surrounding control flow makes the `print()` unreachable. The cost is the full per-launch sync overhead, not just the cost of the `print()` itself.
 
 ### Dumping compiled IR
 
