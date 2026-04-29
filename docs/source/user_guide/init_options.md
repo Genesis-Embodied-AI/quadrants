@@ -58,7 +58,7 @@ Enables:
 - integer-overflow guards on arithmetic;
 - IR verification after every compiler pass.
 
-Cost: significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just bounds + adstack safety in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
+**Cost.** Significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just bounds + adstack safety in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
 
 ### `check_out_of_bound`
 
@@ -68,7 +68,7 @@ Enables:
 - field-bounds check on tensor indexing (out-of-range index raises `RuntimeError`);
 - adstack-overflow check on reverse-mode autodiff (a push past the per-stack capacity raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`).
 
-Cost: scales with how often kernels index into tensors and push onto the adstack. Cheaper than `debug=True`. Still leave off for benchmarks.
+**Cost.** Scales with how often kernels index into tensors and push onto the adstack. Cheaper than `debug=True`. Still leave off for benchmarks.
 
 Interaction with `debug`:
 
