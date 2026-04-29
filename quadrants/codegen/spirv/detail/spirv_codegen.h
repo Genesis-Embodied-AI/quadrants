@@ -20,6 +20,7 @@
 #include <unordered_set>
 
 namespace quadrants::lang {
+struct CompileConfig;
 namespace spirv {
 namespace detail {
 
@@ -37,6 +38,7 @@ class TaskCodegen : public IRVisitor {
     const KernelContextAttributes *ctx_attribs;
     std::string ti_kernel_name;
     int task_id_in_kernel;
+    const CompileConfig *compile_config{nullptr};
   };
 
   const bool use_64bit_pointers = false;
@@ -141,6 +143,7 @@ class TaskCodegen : public IRVisitor {
 
   Arch arch_;
   DeviceCapabilityConfig *caps_;
+  const CompileConfig *compile_config_;
 
   struct BufferInfoTypeTupleHasher {
     std::size_t operator()(const std::pair<BufferInfo, int> &buf) const {
@@ -246,6 +249,19 @@ class TaskCodegen : public IRVisitor {
   // path with no symbolic bound captured reproduces the pre-PR shader layout.
   uint32_t ad_stack_heap_per_thread_stride_float_{0};
   uint32_t ad_stack_heap_per_thread_stride_int_{0};
+  // Total number of `AdStackAllocaStmt` the body will visit, pre-computed by the same scan that builds the heap
+  // strides. Used to size a single shared Function-scope `uint[num_ad_stacks_]` count array (see
+  // `ensure_ad_stack_count_array_var`) so that all per-stack `count` values share one OpVariable accessed via
+  // OpAccessChain. The shared array prevents spirv-opt's `LocalMultiStoreElim` / `SSARewrite` from promoting each
+  // count to a separate phi at every enclosing loop header - reverse-grad kernels that allocate hundreds of
+  // adstacks across enclosing loops would otherwise grow phi mega-clusters of hundreds of entries per loop
+  // header, which spirv-cross emits as one `uint _N;` forward-decl and one `_N = _N;` alias copy per phi per
+  // predecessor branch in the cross-compiled MSL.
+  uint32_t num_ad_stacks_{0};
+  // Single Function-scope `uint[num_ad_stacks_]` array, allocated lazily on first `ad_stack_count_ptr` call.
+  // `info.count_var` for each stack is now an `OpAccessChain` pointer into element `stack_id` of this array
+  // rather than its own `OpVariable Function`.
+  spirv::Value ad_stack_count_array_var_;
   // Running offsets into the per-thread slice assigned to the next AdStackAllocaStmt visitor. Each ends equal to
   // the corresponding stride once every alloca has been visited; these feed the
   // `offset_in_elems_compile_time` of each alloca's `AdStackSizingAttribs::allocas` entry.
@@ -287,6 +303,10 @@ class TaskCodegen : public IRVisitor {
   // `info.heap_kind`. See comment on the implementation for the bool<->i32 conversion contract.
   spirv::Value ad_stack_slot_ptr(AdStackSpirv &info, spirv::Value idx, bool primal);
   spirv::SType ad_stack_backing_type(const AdStackSpirv &info) const;
+  // OpAccessChain pointer to element `stack_id` of the shared Function-scope count array. Lazily allocates
+  // `ad_stack_count_array_var_` on first call (sized at `num_ad_stacks_` from the pre-pass scan). Returned
+  // pointer feeds `info.count_var` and works with the existing `load_variable` / `store_variable` helpers.
+  spirv::Value ad_stack_count_ptr(uint32_t stack_id);
 };
 }  // namespace detail
 }  // namespace spirv

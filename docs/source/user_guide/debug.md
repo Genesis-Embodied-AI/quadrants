@@ -36,6 +36,10 @@ x[3] = 10.0   # AssertionError in debug mode, silent corruption otherwise
 a = x[-1]     # AssertionError in debug mode
 ```
 
+The same flag also enables a deferred runtime check on the adstack used by reverse-mode autodiff: a push past the per-stack capacity (set via `qd.init(ad_stack_size=...)` or per-alloca by `determine_ad_stack_size`) raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`. Without bounds-checking, an adstack overflow silently writes past the per-thread slab and produces a wrong gradient.
+
+`debug=True` is a superset of `check_out_of_bound=True`. Setting `qd.init(check_out_of_bound=True)` without `debug=True` enables the field bounds check and the adstack overflow check, but skips kernel `assert` evaluation, integer overflow detection on arithmetic, and the other checks listed below. Use this when you want bounds-safety in a release-build app without paying the full debug-mode cost.
+
 ### Assertions in kernels
 
 The `assert` statement works inside kernels when debug mode is enabled:
