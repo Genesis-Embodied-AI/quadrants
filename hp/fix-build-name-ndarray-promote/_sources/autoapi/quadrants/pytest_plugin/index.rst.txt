@@ -1,0 +1,27 @@
+quadrants.pytest_plugin
+=======================
+
+.. py:module:: quadrants.pytest_plugin
+
+.. autoapi-nested-parse::
+
+   Pytest plugin that auto-enables kernel coverage when pytest-cov is active.
+
+   Registered via the ``pytest11`` entry point so it loads automatically when quadrants is installed.
+   Opt out by setting ``QD_KERNEL_COVERAGE=0`` explicitly.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.pytest_plugin.pytest_configure
+
+
+Module Contents
+---------------
+
+.. py:function:: pytest_configure(config)
+
