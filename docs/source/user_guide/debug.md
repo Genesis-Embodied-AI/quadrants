@@ -36,11 +36,9 @@ x[3] = 10.0   # AssertionError in debug mode, silent corruption otherwise
 a = x[-1]     # AssertionError in debug mode
 ```
 
-The same flag also enables a deferred runtime check on the adstack used by reverse-mode autodiff: a push past the per-stack capacity (set via `qd.init(ad_stack_size=...)` or per-alloca by `determine_ad_stack_size`) raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`. Without bounds-checking, an adstack overflow silently writes past the per-thread slab and produces a wrong gradient.
+### Adstack overflow check
 
-`debug=True` is a superset of `check_out_of_bound=True`. Setting `qd.init(check_out_of_bound=True)` without `debug=True` enables the field bounds check and the adstack overflow check, but skips kernel `assert` evaluation, integer overflow detection on arithmetic, and the other checks listed below. Use this when you want bounds-safety in a release-build app without paying the full debug-mode cost.
-
-On the Metal and Vulkan backends, `check_out_of_bound=True` is silently disabled at `qd.init` time because those backends lack the in-kernel assertion extension that the field bounds check relies on; passing it on its own gives you neither the field bounds check nor the adstack overflow check. Pass `debug=True` instead: that keeps the adstack overflow check live (it is gated independently and does not need the assertion extension), but the field bounds check still does not fire on these backends.
+`debug=True` also enables a deferred runtime check on the adstack used by reverse-mode autodiff. A push past the per-stack capacity (set via `qd.init(ad_stack_size=...)` or per-alloca by `determine_ad_stack_size`) raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`. Without the check, an adstack overflow silently writes past the per-thread slab and produces a wrong gradient.
 
 ### Assertions in kernels
 
@@ -66,6 +64,8 @@ Debug mode adds runtime checks to every field access and assertion, which can si
 A typical workflow:
 1. Develop with `debug=True` to catch bounds errors and logic bugs
 2. Switch to `debug=False` (the default) for benchmarking and production runs
+
+For bounds safety in a release build without the rest of debug mode, set [`check_out_of_bound=True`](./init_options.md#check_out_of_bound) instead. `debug=True` always implies `check_out_of_bound=True`.
 
 ## Other debugging tools
 
