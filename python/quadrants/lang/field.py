@@ -512,7 +512,7 @@ class ScalarField(Field):
             device: Optional torch device for the returned tensor.
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
         """
-        if copy is not True:
+        if copy is False:
             tc = _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
             if tc is not None:
                 return tc

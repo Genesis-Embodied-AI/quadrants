@@ -1492,7 +1492,7 @@ class MatrixField(Field):
         Returns:
             torch.tensor: The result torch tensor.
         """
-        if copy is not True:
+        if copy is False:
             tc = _try_zerocopy_torch(self, copy=copy, device=device)
             if tc is not None:
                 as_vector = self.m == 1 and not keep_dims
@@ -1946,23 +1946,18 @@ class MatrixNdarray(Ndarray):
             device: Optional torch device for the returned tensor.
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
         """
-        if copy is not True:
+        if copy is False:
             try:
                 import torch  # pylint: disable=C0415
 
                 tc = torch.utils.dlpack.from_dlpack(self.to_dlpack())
                 if device is not None and tc.device != torch.device(device):
-                    if copy is False:
-                        raise ValueError(
-                            f"copy=False incompatible with device transfer ({tc.device} -> {device})"
-                        )
-                    tc = tc.to(device)
-                elif copy is True:
-                    tc = tc.clone()
+                    raise ValueError(
+                        f"copy=False incompatible with device transfer ({tc.device} -> {device})"
+                    )
                 return tc
             except Exception:
-                if copy is False:
-                    raise
+                raise
         return self._ndarray_matrix_to_torch(as_vector=0, device=device)
 
     @python_scope
@@ -2106,23 +2101,18 @@ class VectorNdarray(Ndarray):
             device: Optional torch device for the returned tensor.
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
         """
-        if copy is not True:
+        if copy is False:
             try:
                 import torch  # pylint: disable=C0415
 
                 tc = torch.utils.dlpack.from_dlpack(self.to_dlpack())
                 if device is not None and tc.device != torch.device(device):
-                    if copy is False:
-                        raise ValueError(
-                            f"copy=False incompatible with device transfer ({tc.device} -> {device})"
-                        )
-                    tc = tc.to(device)
-                elif copy is True:
-                    tc = tc.clone()
+                    raise ValueError(
+                        f"copy=False incompatible with device transfer ({tc.device} -> {device})"
+                    )
                 return tc
             except Exception:
-                if copy is False:
-                    raise
+                raise
         return self._ndarray_matrix_to_torch(as_vector=1, device=device)
 
     @python_scope

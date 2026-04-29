@@ -494,23 +494,18 @@ class ScalarNdarray(Ndarray):
             device: Optional torch device for the returned tensor.
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
         """
-        if copy is not True:
+        if copy is False:
             try:
                 import torch  # pylint: disable=C0415
 
                 tc = torch.utils.dlpack.from_dlpack(self.to_dlpack())
                 if device is not None and tc.device != torch.device(device):
-                    if copy is False:
-                        raise ValueError(
-                            f"copy=False incompatible with device transfer ({tc.device} -> {device})"
-                        )
-                    tc = tc.to(device)
-                elif copy is True:
-                    tc = tc.clone()
+                    raise ValueError(
+                        f"copy=False incompatible with device transfer ({tc.device} -> {device})"
+                    )
                 return tc
             except Exception:
-                if copy is False:
-                    raise
+                raise
         import torch  # pylint: disable=C0415
 
         from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
