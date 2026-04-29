@@ -86,7 +86,10 @@ def _gen_swizzles(cls):
             if len(diff):
                 valid_attribs = tuple(sorted(valid_attribs))
                 pattern = tuple(pattern)
-                raise QuadrantsSyntaxError(f"vec{instance.n} only has " f"attributes={valid_attribs}, got={pattern}")
+                raise QuadrantsSyntaxError(
+                    f"vec{instance.n} only has "
+                    f"attributes={valid_attribs}, got={pattern}"
+                )
 
         return check
 
@@ -131,7 +134,9 @@ def _gen_swizzles(cls):
                 @python_scope
                 def prop_setter(instance, value):
                     if len(pattern) != len(value):
-                        raise QuadrantsRuntimeError(f"value len does not match the swizzle pattern={pattern}")
+                        raise QuadrantsRuntimeError(
+                            f"value len does not match the swizzle pattern={pattern}"
+                        )
                     checker(instance, pattern)
                     for ch, val in zip(pattern, value):
                         instance[key_group.index(ch)] = val
@@ -153,7 +158,9 @@ def _infer_entry_dt(entry):
     if isinstance(entry, expr.Expr):
         dt = entry.ptr.get_rvalue_type()
         if dt == qd_python_core.DataType_unknown:
-            raise QuadrantsTypeError("Element type of the matrix cannot be inferred. Please set dt instead for now.")
+            raise QuadrantsTypeError(
+                "Element type of the matrix cannot be inferred. Please set dt instead for now."
+            )
         return dt
     raise QuadrantsTypeError("Element type of the matrix is invalid.")
 
@@ -273,7 +280,9 @@ class Matrix(QuadrantsOperations):
 
     def __init__(self, arr, dt=None):
         if not isinstance(arr, (list, tuple, np.ndarray)):
-            raise QuadrantsTypeError("An Matrix/Vector can only be initialized with an array-like object")
+            raise QuadrantsTypeError(
+                "An Matrix/Vector can only be initialized with an array-like object"
+            )
         if len(arr) == 0:
             self.ndim = 0
             self.n, self.m = 0, 0
@@ -375,7 +384,9 @@ class Matrix(QuadrantsOperations):
             if not isinstance(indices, (list, tuple)):
                 indices = [indices]
             assert len(indices) in [1, 2]
-            assert len(indices) == self.ndim, f"Expected {self.ndim} indices, got {len(indices)}"
+            assert len(indices) == self.ndim, (
+                f"Expected {self.ndim} indices, got {len(indices)}"
+            )
             if self.ndim == 1:
                 self.entries[indices[0]] = item
             else:
@@ -385,7 +396,9 @@ class Matrix(QuadrantsOperations):
         if not isinstance(indices, (list, tuple)):
             indices = [indices]
         assert len(indices) in [1, 2]
-        assert len(indices) == self.ndim, f"Expected {self.ndim} indices, got {len(indices)}"
+        assert len(indices) == self.ndim, (
+            f"Expected {self.ndim} indices, got {len(indices)}"
+        )
         if self.ndim == 1:
             return self.entries[indices[0]]
         return self.entries[indices[0]][indices[1]]
@@ -437,7 +450,10 @@ class Matrix(QuadrantsOperations):
             if self.ndim == 1:
                 return [_read_host_access(self.entries[i]) for i in range(self.n)]
             assert self.ndim == 2
-            return [[_read_host_access(self.entries[i][j]) for j in range(self.m)] for i in range(self.n)]
+            return [
+                [_read_host_access(self.entries[i][j]) for j in range(self.m)]
+                for i in range(self.n)
+            ]
         return self.entries.tolist()
 
     @quadrants_scope
@@ -460,7 +476,12 @@ class Matrix(QuadrantsOperations):
         """
         if self.ndim == 1:
             return Vector([ops_mod.cast(self[i], dtype) for i in range(self.n)])
-        return Matrix([[ops_mod.cast(self[i, j], dtype) for j in range(self.m)] for i in range(self.n)])
+        return Matrix(
+            [
+                [ops_mod.cast(self[i, j], dtype) for j in range(self.m)]
+                for i in range(self.n)
+            ]
+        )
 
     def trace(self):
         """The sum of a matrix diagonal elements.
@@ -871,7 +892,9 @@ class Matrix(QuadrantsOperations):
                 shape = (shape,)
             if shape is None:
                 shape = ()
-            mat_type = MatrixType(n, m, ndim=ndim if ndim is not None else 2, dtype=dtype)
+            mat_type = MatrixType(
+                n, m, ndim=ndim if ndim is not None else 2, dtype=dtype
+            )
             return impl.field(mat_type, shape=shape)
 
         entries = []
@@ -879,9 +902,9 @@ class Matrix(QuadrantsOperations):
         if isinstance(dtype, (list, tuple, np.ndarray)):
             # set different dtype for each element in Matrix — see #2135
             if m == 1:
-                assert (
-                    len(np.shape(dtype)) == 1 and len(dtype) == n
-                ), f"Please set correct dtype list for Vector. The shape of dtype list should be ({n}, ) instead of {np.shape(dtype)}"
+                assert len(np.shape(dtype)) == 1 and len(dtype) == n, (
+                    f"Please set correct dtype list for Vector. The shape of dtype list should be ({n}, ) instead of {np.shape(dtype)}"
+                )
                 for i in range(n):
                     entries.append(
                         impl.create_field_member(
@@ -894,7 +917,9 @@ class Matrix(QuadrantsOperations):
             else:
                 assert (
                     len(np.shape(dtype)) == 2 and len(dtype) == n and len(dtype[0]) == m
-                ), f"Please set correct dtype list for Matrix. The shape of dtype list should be ({n}, {m}) instead of {np.shape(dtype)}"
+                ), (
+                    f"Please set correct dtype list for Matrix. The shape of dtype list should be ({n}, {m}) instead of {np.shape(dtype)}"
+                )
                 for i in range(n):
                     for j in range(m):
                         entries.append(
@@ -907,7 +932,11 @@ class Matrix(QuadrantsOperations):
                         )
         else:
             for _ in range(n * m):
-                entries.append(impl.create_field_member(dtype, name=name, needs_grad=needs_grad, needs_dual=needs_dual))
+                entries.append(
+                    impl.create_field_member(
+                        dtype, name=name, needs_grad=needs_grad, needs_dual=needs_dual
+                    )
+                )
         entries, entries_grad, entries_dual = zip(*entries)
 
         entries = MatrixField(entries, n, m, element_dim)
@@ -967,16 +996,18 @@ class Matrix(QuadrantsOperations):
                     )
                 if needs_grad:
                     for e in entries_grad._get_field_members():
-                        impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
-                            ScalarField(e), offset=phys_offset
-                        )
+                        impl._create_snode(
+                            flat_axis_seq, shape_seq, same_level=True
+                        ).place(ScalarField(e), offset=phys_offset)
                 if needs_dual:
                     for e in entries_dual._get_field_members():
-                        impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
-                            ScalarField(e), offset=phys_offset
-                        )
+                        impl._create_snode(
+                            flat_axis_seq, shape_seq, same_level=True
+                        ).place(ScalarField(e), offset=phys_offset)
             else:
-                impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(entries, offset=phys_offset)
+                impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                    entries, offset=phys_offset
+                )
                 if needs_grad:
                     impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                         entries_grad, offset=phys_offset
@@ -1023,7 +1054,9 @@ class Matrix(QuadrantsOperations):
 
             batch_ndim = len(shape)
             shape = (*shape, m, n)
-            return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
+            return py_tensor.create_tensor(
+                shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim
+            )
         arr = MatrixNdarray(n, m, dtype, shape)
         if needs_grad:
             dt = cook_dtype(dtype)
@@ -1234,7 +1267,9 @@ class Vector(Matrix):
 
             batch_ndim = len(shape)
             shape = (*shape, n)
-            return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
+            return py_tensor.create_tensor(
+                shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim
+            )
         arr = VectorNdarray(n, dtype, shape)
         if needs_grad:
             dt = cook_dtype(dtype)
@@ -1286,7 +1321,9 @@ class MatrixField(Field):
         self.n = n
         self.m = m
         self.ndim = ndim
-        self.ptr = qd_python_core.expr_matrix_field([var.ptr for var in self.vars], [n, m][:ndim])
+        self.ptr = qd_python_core.expr_matrix_field(
+            [var.ptr for var in self.vars], [n, m][:ndim]
+        )
 
     def to_dlpack(self):
         """
@@ -1294,7 +1331,9 @@ class MatrixField(Field):
         """
         impl.get_runtime().materialize()
         try:
-            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, self.ndim, self.n, self.m)
+            capsule = impl.get_runtime().prog.field_to_dlpack(
+                self._snode.ptr, self.ndim, self.n, self.m
+            )
         except ModuleNotFoundError:
             raise ModuleNotFoundError(
                 "MatrixField.to_dlpack() requires torch to be installed "
@@ -1345,7 +1384,10 @@ class MatrixField(Field):
             self.ptr.set_dynamic_index_stride(0)
             return
         length = len(paths[0])
-        if any(len(path) != length or qd_python_core.is_quant(path[length - 1]._dtype) for path in paths):
+        if any(
+            len(path) != length or qd_python_core.is_quant(path[length - 1]._dtype)
+            for path in paths
+        ):
             return
         for i in range(length):
             if any(path[i] != paths[0][i] for path in paths):
@@ -1355,7 +1397,8 @@ class MatrixField(Field):
             if any(
                 path[i].ptr.type != qd_python_core.SNodeType.dense
                 or path[i]._cell_size_bytes != paths[0][i]._cell_size_bytes
-                or path[i + 1]._offset_bytes_in_parent_cell != paths[0][i + 1]._offset_bytes_in_parent_cell
+                or path[i + 1]._offset_bytes_in_parent_cell
+                != paths[0][i + 1]._offset_bytes_in_parent_cell
                 for path in paths
             ):
                 return
@@ -1379,7 +1422,9 @@ class MatrixField(Field):
             val (Union[Number, Expr, List, Tuple, Matrix]): Values to fill,
                 should have consistent dimension consistent with `self`.
         """
-        if isinstance(val, numbers.Number) or (isinstance(val, expr.Expr) and not val.is_tensor()):
+        if isinstance(val, numbers.Number) or (
+            isinstance(val, expr.Expr) and not val.is_tensor()
+        ):
             if self.ndim == 2:
                 val = tuple(tuple(val for _ in range(self.m)) for _ in range(self.n))
             else:
@@ -1459,7 +1504,9 @@ class MatrixField(Field):
 
         as_vector = self.m == 1 and not keep_dims
         shape_ext = (self.n,) if as_vector else (self.n, self.m)
-        arr = torch.empty(self.shape + shape_ext, dtype=to_pytorch_type(self.dtype), device=device)
+        arr = torch.empty(
+            self.shape + shape_ext, dtype=to_pytorch_type(self.dtype), device=device
+        )
         from quadrants._kernels import matrix_to_ext_arr  # pylint: disable=C0415
 
         matrix_to_ext_arr(self, arr, as_vector)
@@ -1508,7 +1555,12 @@ class MatrixField(Field):
         _host_access = self._host_access(key)
         if self.ndim == 1:
             return Vector([_host_access[i] for i in range(self.n)])
-        return Matrix([[_host_access[i * self.m + j] for j in range(self.m)] for i in range(self.n)])
+        return Matrix(
+            [
+                [_host_access[i * self.m + j] for j in range(self.m)]
+                for i in range(self.n)
+            ]
+        )
 
     def __repr__(self):
         # make interactive shell happy, prevent materialization
@@ -1562,7 +1614,9 @@ class MatrixType(CompoundType):
 
         """
         if len(args) == 0:
-            raise QuadrantsSyntaxError("Custom type instances need to be created with an initial value.")
+            raise QuadrantsSyntaxError(
+                "Custom type instances need to be created with an initial value."
+            )
         if len(args) == 1:
             # Init from a real Matrix
             if isinstance(args[0], expr.Expr) and args[0].ptr.is_tensor():
@@ -1600,7 +1654,9 @@ class MatrixType(CompoundType):
                     qd_python_core.make_get_element_expr(
                         func_ret.ptr,
                         ret_index + (i,),
-                        _qd_python_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                        _qd_python_core.DebugInfo(
+                            impl.get_runtime().get_current_src_info()
+                        ),
                     )
                 )
                 for i in range(self.m * self.n)
@@ -1638,11 +1694,15 @@ class MatrixType(CompoundType):
                     set_arg_func(ret_index + (i * self.m + j,), mat[i, j])
 
     def _instantiate_in_python_scope(self, entries):
-        entries = [[entries[k * self.m + i] for i in range(self.m)] for k in range(self.n)]
+        entries = [
+            [entries[k * self.m + i] for i in range(self.m)] for k in range(self.n)
+        ]
         return Matrix(
             [
                 [
-                    int(entries[i][j]) if self.dtype in primitive_types.integer_types else float(entries[i][j])
+                    int(entries[i][j])
+                    if self.dtype in primitive_types.integer_types
+                    else float(entries[i][j])
                     for j in range(self.m)
                 ]
                 for i in range(self.n)
@@ -1714,7 +1774,9 @@ class VectorType(MatrixType):
 
         """
         if len(args) == 0:
-            raise QuadrantsSyntaxError("Custom type instances need to be created with an initial value.")
+            raise QuadrantsSyntaxError(
+                "Custom type instances need to be created with an initial value."
+            )
         if len(args) == 1:
             # Init from a real Matrix
             if isinstance(args[0], expr.Expr) and args[0].ptr.is_tensor():
@@ -1747,7 +1809,9 @@ class VectorType(MatrixType):
     def _instantiate_in_python_scope(self, entries):
         return Vector(
             [
-                int(entries[i]) if self.dtype in primitive_types.integer_types else float(entries[i])
+                int(entries[i])
+                if self.dtype in primitive_types.integer_types
+                else float(entries[i])
                 for i in range(self.n)
             ],
             dt=self.dtype,
@@ -1792,7 +1856,9 @@ class MatrixNdarray(Ndarray):
         self.dtype = cook_dtype(dtype)
 
         self._physical_shape = tuple(shape)
-        self.element_type = DataTypeCxxWrapper(_type_factory.get_tensor_type((self.n, self.m), self.dtype).get_ptr())
+        self.element_type = DataTypeCxxWrapper(
+            _type_factory.get_tensor_type((self.n, self.m), self.dtype).get_ptr()
+        )
         # TODO: we should pass in element_type, shape, layout instead.
         self.arr = impl.get_runtime().prog.create_ndarray(
             cook_dtype(self.element_type),
@@ -1826,8 +1892,19 @@ class MatrixNdarray(Ndarray):
 
     @python_scope
     def __getitem__(self, key):
-        key = () if key is None else (key,) if isinstance(key, numbers.Number) else tuple(key)
-        return Matrix([[NdarrayHostAccess(self, key, (i, j)) for j in range(self.m)] for i in range(self.n)])
+        key = (
+            ()
+            if key is None
+            else (key,)
+            if isinstance(key, numbers.Number)
+            else tuple(key)
+        )
+        return Matrix(
+            [
+                [NdarrayHostAccess(self, key, (i, j)) for j in range(self.m)]
+                for i in range(self.n)
+            ]
+        )
 
     @python_scope
     def to_numpy(self, dtype=None):
@@ -1861,9 +1938,31 @@ class MatrixNdarray(Ndarray):
         self._ndarray_matrix_from_numpy(arr, as_vector=0)
 
     @python_scope
-    def to_torch(self, device=None):
+    def to_torch(self, device=None, *, copy=None):
         """Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
-        :meth:`MatrixField.to_torch`."""
+        :meth:`MatrixField.to_torch`.
+
+        Args:
+            device: Optional torch device for the returned tensor.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+        """
+        if copy is not True:
+            try:
+                import torch  # pylint: disable=C0415
+
+                tc = torch.utils.dlpack.from_dlpack(self.to_dlpack())
+                if device is not None and tc.device != torch.device(device):
+                    if copy is False:
+                        raise ValueError(
+                            f"copy=False incompatible with device transfer ({tc.device} -> {device})"
+                        )
+                    tc = tc.to(device)
+                elif copy is True:
+                    tc = tc.clone()
+                return tc
+            except Exception:
+                if copy is False:
+                    raise
         return self._ndarray_matrix_to_torch(as_vector=0, device=device)
 
     @python_scope
@@ -1923,7 +2022,9 @@ class VectorNdarray(Ndarray):
         self.dtype = cook_dtype(dtype)
 
         self._physical_shape = tuple(shape)
-        self.element_type = DataTypeCxxWrapper(_type_factory.get_tensor_type((n,), self.dtype).get_ptr())
+        self.element_type = DataTypeCxxWrapper(
+            _type_factory.get_tensor_type((n,), self.dtype).get_ptr()
+        )
         self.arr = impl.get_runtime().prog.create_ndarray(
             cook_dtype(self.element_type),
             shape,
@@ -1953,7 +2054,13 @@ class VectorNdarray(Ndarray):
 
     @python_scope
     def __getitem__(self, key):
-        key = () if key is None else (key,) if isinstance(key, numbers.Number) else tuple(key)
+        key = (
+            ()
+            if key is None
+            else (key,)
+            if isinstance(key, numbers.Number)
+            else tuple(key)
+        )
         return Vector([NdarrayHostAccess(self, key, (i,)) for i in range(self.n)])
 
     @python_scope
@@ -1991,9 +2098,31 @@ class VectorNdarray(Ndarray):
         self._ndarray_matrix_from_numpy(arr, as_vector=1)
 
     @python_scope
-    def to_torch(self, device=None):
+    def to_torch(self, device=None, *, copy=None):
         """Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``. Mirrors
-        :meth:`MatrixField.to_torch` on the vector code path."""
+        :meth:`MatrixField.to_torch` on the vector code path.
+
+        Args:
+            device: Optional torch device for the returned tensor.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+        """
+        if copy is not True:
+            try:
+                import torch  # pylint: disable=C0415
+
+                tc = torch.utils.dlpack.from_dlpack(self.to_dlpack())
+                if device is not None and tc.device != torch.device(device):
+                    if copy is False:
+                        raise ValueError(
+                            f"copy=False incompatible with device transfer ({tc.device} -> {device})"
+                        )
+                    tc = tc.to(device)
+                elif copy is True:
+                    tc = tc.clone()
+                return tc
+            except Exception:
+                if copy is False:
+                    raise
         return self._ndarray_matrix_to_torch(as_vector=1, device=device)
 
     @python_scope
