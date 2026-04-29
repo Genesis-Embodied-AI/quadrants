@@ -102,7 +102,7 @@ Per-backend support:
 |---------|------------------|
 | CPU | yes |
 | CUDA | yes |
-| AMDGPU | no (compile error) |
+| AMDGPU | no (silently dropped) |
 | Metal | no (silently dropped) |
 | Vulkan | yes (via debug-printf SPIR-V extension) |
 

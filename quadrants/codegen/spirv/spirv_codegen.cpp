@@ -2683,22 +2683,19 @@ void TaskCodegen::visit(AdStackPushStmt *stmt) {
   }
   spirv::Value one = ir_->uint_immediate_number(ir_->u32_type(), 1);
 
-  if (compile_config_ && (compile_config_->check_out_of_bound || compile_config_->debug)) {
-    // Debug / `check_out_of_bound` build: map an OOB push to the last valid slot via a `GLSLstd450UMin` clamp, then
-    // issue the primal/adjoint store and an unconditional `OpAtomicUMax(overflow_buffer, signal)` where
-    // `signal = (count >= max_size) ? stack_id + 1 : 0`. The atomic-max with 0 cannot raise the host-visible value, so
-    // the runtime only sees the flag set when an actual overflow happened. Concurrent threads that all witness an
-    // overflow on the same stack publish the same value, so the atomic-max also handles the concurrent-overflow case
-    // deterministically. The clamp + OpSelect formulation collapses what would otherwise be a per-push structured
-    // if-then-else region into straight-line code, which spirv-cross emits as straight-line MSL - critical for
-    // reverse-grad kernels with hundreds of adstacks pushed inside an inner loop, which otherwise blow through
-    // Apple's MSL-compiler-service shader-size threshold on macOS-15 M1 hosts. `max_val` is the runtime-published
-    // AdStackMetadata bound cached on `info.max_size_val` by `ensure_ad_stack_metadata_loaded`, not a compile-time
-    // immediate.
-    // The gate ORs `debug` with `check_out_of_bound` so this codepath stays live on Metal / Vulkan, where
-    // `Program::init` force-disables `check_out_of_bound` because those arches lack `Extension::assertion` (which only
-    // matters for in-kernel `assert()` and the field-bounds check, not for the adstack overflow path which uses an
-    // OpAtomicUMax + host readback that works on every SPIR-V backend).
+  if (compile_config_ && compile_config_->debug) {
+    // Debug build: map an OOB push to the last valid slot via a `GLSLstd450UMin` clamp, issue the primal/adjoint
+    // store, and publish `signal = (count >= max_size) ? stack_id + 1 : 0` to the host-visible AdStackOverflow
+    // buffer via `OpAtomicUMax`. The atomic-max with 0 cannot raise the host-visible value, so the runtime only
+    // sees the flag set on an actual overflow; concurrent threads that all witness the same overflow on the same
+    // stack publish the same value deterministically. The clamp + OpSelect formulation collapses what would
+    // otherwise be a per-push structured if-then-else region into straight-line code, which spirv-cross emits as
+    // straight-line MSL - critical for reverse-grad kernels with hundreds of adstacks pushed inside an inner loop
+    // on Apple's MSL-compiler-service shader-size threshold. `max_val` is the runtime-published AdStackMetadata
+    // bound cached on `info.max_size_val` by `ensure_ad_stack_metadata_loaded`, not a compile-time immediate.
+    // The gate is `debug` (not `check_out_of_bound`) so the field bounds check and the adstack overflow check stay
+    // on independent flags - Metal / Vulkan force-disable `check_out_of_bound` because they lack
+    // `Extension::assertion`, but `debug` reaches this codepath unaffected.
     spirv::Value max_val = info.max_size_val;
     spirv::Value max_minus_one = ir_->sub(max_val, one);
     spirv::Value clamped_idx = ir_->call_glsl450(ir_->u32_type(), GLSLstd450UMin, count, max_minus_one);
@@ -2755,10 +2752,10 @@ void TaskCodegen::visit(AdStackPopStmt *stmt) {
 // be above max_size (because the forward push increments count unconditionally and only signals via
 // OpAtomicUMax in the bounds-checked build), so the clamp keeps the OpAccessChain in-bounds; without it, hostile
 // Vulkan drivers (e.g. Adreno, Mali) TDR on OOB private-memory access before the host-side qd.sync() can raise
-// the deferred adstack-overflow exception. The release build (`check_out_of_bound=false`, no overflow signal
-// emitted) trusts the published `max_size` and skips both the cap subtract and the UMin call, mirroring LLVM's
-// release-build LoadTop emit. `max_size` is a runtime value loaded from AdStackMetadata, so `max_size - 1`
-// becomes an OpISub rather than a compile-time immediate when clamping is requested.
+// the deferred adstack-overflow exception. The release build (`debug=false`, no overflow signal emitted) trusts
+// the published `max_size` and skips both the cap subtract and the UMin call, mirroring LLVM's release-build
+// LoadTop emit. `max_size` is a runtime value loaded from AdStackMetadata, so `max_size - 1` becomes an OpISub
+// rather than a compile-time immediate when clamping is requested.
 static spirv::Value ad_stack_top_index(spirv::IRBuilder *ir,
                                        spirv::Value count,
                                        spirv::Value max_size_val,
@@ -2789,8 +2786,7 @@ void TaskCodegen::visit(AdStackLoadTopStmt *stmt) {
   ensure_ad_stack_metadata_loaded(info);
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value idx =
-      ad_stack_top_index(ir_.get(), count, info.max_size_val,
-                         compile_config_ && (compile_config_->check_out_of_bound || compile_config_->debug));
+      ad_stack_top_index(ir_.get(), count, info.max_size_val, compile_config_ && (compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/true);
   spirv::SType backing_type = ad_stack_backing_type(info);
   spirv::Value loaded = ir_->load_variable(ptr, backing_type);
@@ -2813,8 +2809,7 @@ void TaskCodegen::visit(AdStackLoadTopAdjStmt *stmt) {
   // unconditionally, so any cast would be a no-op.
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value idx =
-      ad_stack_top_index(ir_.get(), count, info.max_size_val,
-                         compile_config_ && (compile_config_->check_out_of_bound || compile_config_->debug));
+      ad_stack_top_index(ir_.get(), count, info.max_size_val, compile_config_ && (compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/false);
   spirv::Value loaded = ir_->load_variable(ptr, info.elem_type);
   ir_->register_value(stmt->raw_name(), loaded);
@@ -2828,8 +2823,7 @@ void TaskCodegen::visit(AdStackAccAdjointStmt *stmt) {
   // See the note in `AdStackLoadTopAdjStmt`: no cast is needed because heap_int is excluded by the assert above.
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value idx =
-      ad_stack_top_index(ir_.get(), count, info.max_size_val,
-                         compile_config_ && (compile_config_->check_out_of_bound || compile_config_->debug));
+      ad_stack_top_index(ir_.get(), count, info.max_size_val, compile_config_ && (compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/false);
   spirv::Value old_val = ir_->load_variable(ptr, info.elem_type);
   spirv::Value incr = ir_->query_value(stmt->v->raw_name());

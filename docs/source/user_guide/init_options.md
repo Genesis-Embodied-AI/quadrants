@@ -58,37 +58,33 @@ Enables:
 - integer-overflow guards on arithmetic;
 - IR verification after every compiler pass.
 
-**Cost.** Significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just bounds + adstack safety in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
+**Cost.** Significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
 
 ### `check_out_of_bound`
 
-Default `False`. Narrower than `debug`: turns on bounds-related checks only, without the rest.
+Default `False`. Enables the field-bounds check on tensor indexing - an out-of-range index raises `RuntimeError`.
 
-Enables:
-- field-bounds check on tensor indexing (out-of-range index raises `RuntimeError`);
-- adstack-overflow check on reverse-mode autodiff (a push past the per-stack capacity raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`).
-
-**Cost.** Scales with how often kernels index into tensors and push onto the adstack. Cheaper than `debug=True`. Still leave off for benchmarks.
+**Cost.** Scales with how often kernels index into tensors. Cheaper than `debug=True`. Still leave off for benchmarks.
 
 Interaction with `debug`:
 
 | Flags | Field bounds | Adstack overflow | Other `debug` checks |
 |-------|--------------|------------------|----------------------|
 | neither | off | off | off |
-| `check_out_of_bound=True` only | on | on | off |
+| `check_out_of_bound=True` only | on | off | off |
 | `debug=True` | on | on | on |
 
-- `debug=True` always implies `check_out_of_bound=True`. They cannot be split: `debug=True, check_out_of_bound=False` collapses to `debug=True` at init.
-- Use `check_out_of_bound=True` on its own when you want bounds + adstack safety in a release build without paying for everything else `debug` adds.
+- `debug=True` always implies `check_out_of_bound=True` (the field-bounds check fires whenever debug mode is on).
+- The adstack-overflow check on reverse-mode autodiff (a push past the per-stack capacity raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`) is on its own gate, controlled by `debug` - it is not enabled by `check_out_of_bound` alone.
 
 Per-backend support:
 
 | Backend | Field bounds check | Adstack overflow check |
 |---------|--------------------|------------------------|
-| CPU | with `check_out_of_bound=True` or `debug=True` | with `check_out_of_bound=True` or `debug=True` |
-| CUDA | with `check_out_of_bound=True` or `debug=True` | with `check_out_of_bound=True` or `debug=True` |
-| AMDGPU | with `check_out_of_bound=True` or `debug=True` | with `check_out_of_bound=True` or `debug=True` |
-| Metal | never (no in-kernel assertion mechanism) | with `debug=True` only |
-| Vulkan | never (no in-kernel assertion mechanism) | with `debug=True` only |
+| CPU | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
+| CUDA | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
+| AMDGPU | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
+| Metal | never (no in-kernel assertion mechanism) | with `debug=True` |
+| Vulkan | never (no in-kernel assertion mechanism) | with `debug=True` |
 
-The adstack overflow check is gated independently of the assertion mechanism, so `debug=True` activates it on every backend - including Metal and Vulkan, where the field bounds check stays unavailable. On Metal and Vulkan, `check_out_of_bound` is silently reset to `False` at `qd.init` time (a warning is logged); passing it on its own gives neither check on those backends.
+Metal and Vulkan lack the assertion extension that the field-bounds check relies on; `check_out_of_bound=True` is silently reset to `False` on those backends at `qd.init` time and a warning is logged. The adstack-overflow check is gated independently of the assertion extension, so `debug=True` activates it on every backend including Metal and Vulkan.

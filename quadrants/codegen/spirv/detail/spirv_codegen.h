@@ -251,7 +251,7 @@ class TaskCodegen : public IRVisitor {
   uint32_t ad_stack_heap_per_thread_stride_int_{0};
   // Total number of `AdStackAllocaStmt` the body will visit, pre-computed by the same scan that builds the heap
   // strides. Used to size a single shared Function-scope `uint[num_ad_stacks_]` count array (see
-  // `ensure_ad_stack_count_array_var`) so that all per-stack `count` values share one OpVariable accessed via
+  // `ad_stack_count_ptr`) so that all per-stack `count` values share one OpVariable accessed via
   // OpAccessChain. The shared array prevents spirv-opt's `LocalMultiStoreElim` / `SSARewrite` from promoting each
   // count to a separate phi at every enclosing loop header - reverse-grad kernels that allocate hundreds of
   // adstacks across enclosing loops would otherwise grow phi mega-clusters of hundreds of entries per loop
