@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.ast.ast_transformer &#8212; Quadrants 0.7.3 documentation</title>
+    <title>quadrants.lang.ast.ast_transformer &#8212; Quadrants 0.7.4 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../_static/documentation_options.js?v=c98573da"></script>
+    <script src="../../../../_static/documentation_options.js?v=020ce317"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.3" />
+  <meta name="docsearch:version" content="0.7.4" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
   
 </a></div>
     
@@ -459,8 +459,7 @@
 
 <span class="sd">        Args:</span>
 <span class="sd">           ctx (ast_builder_utils.BuilderContext): The builder context.</span>
-<span class="sd">           target (ast.Name): A variable name. `target.id` holds the name as</span>
-<span class="sd">           a string.</span>
+<span class="sd">           target (ast.Name): A variable name. `target.id` holds the name as a string.</span>
 <span class="sd">           annotation: A type we hope to assign to the target</span>
 <span class="sd">           value: A node representing the value.</span>
 <span class="sd">           is_static_assign: A boolean value indicating whether this is a static assignment</span>
@@ -493,9 +492,8 @@
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="n">is_static_assign</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">)</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">ptr</span> <span class="ow">is</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span>
 
-        <span class="c1"># Keep all generated assign statements and compose single one at last.</span>
-        <span class="c1"># The variable is introduced to support chained assignments.</span>
-        <span class="c1"># Ref https://github.com/taichi-dev/taichi/issues/2659.</span>
+        <span class="c1"># Keep all generated assign statements and compose single one at last. The variable is introduced to support</span>
+        <span class="c1"># chained assignments. Ref https://github.com/taichi-dev/taichi/issues/2659.</span>
         <span class="n">values</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span> <span class="k">if</span> <span class="n">is_static_assign</span> <span class="k">else</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">node_target</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">targets</span><span class="p">:</span>
@@ -616,6 +614,27 @@
 
 
     <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_unpack_layout_vector_index</span><span class="p">(</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">layout_len</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;If ``index`` is a rank-1 Vector of length ``layout_len``, return its component list so the layout permutation</span>
+<span class="sd">        can be applied per-axis. Otherwise return ``[index]`` unchanged.</span>
+
+<span class="sd">        Handles both forms a single subscript can take inside a kernel:</span>
+
+<span class="sd">        - ``Matrix`` (Python class) — produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``</span>
+<span class="sd">          returning a ``[Matrix([i, j])]`` list.</span>
+<span class="sd">        - ``Expr`` with tensor shape ``(N,)`` — produced by ``matrix.make_matrix(loop_indices, ...)`` in</span>
+<span class="sd">          :func:`build_struct_for` / :func:`build_grouped_ndrange_for`, which is what real kernels see for</span>
+<span class="sd">          ``for I in qd.grouped(...)``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">)</span> <span class="ow">and</span> <span class="n">index</span><span class="o">.</span><span class="n">n</span> <span class="o">==</span> <span class="n">layout_len</span> <span class="ow">and</span> <span class="n">index</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">index</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">index</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">():</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="n">index</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">layout_len</span><span class="p">:</span>
+                <span class="k">return</span> <span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">subscript</span><span class="p">(</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">layout_len</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">index</span><span class="p">]</span>
+
+    <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Subscript">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Subscript">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_Subscript</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Subscript</span><span class="p">):</span>
@@ -623,6 +642,29 @@
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">is_tuple</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="p">):</span>
             <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">]</span>
+        <span class="c1"># Tensors layout: a layout-tagged Ndarray or Field with a non-identity ``_qd_layout`` has its canonical indices</span>
+        <span class="c1"># permuted into physical-storage order before forwarding. ``None`` and identity layouts are handled</span>
+        <span class="c1"># transparently (no rewrite =&gt; byte-identical IR for legacy code).</span>
+        <span class="c1">#</span>
+        <span class="c1"># Both backends use the same attribute name (``_qd_layout``) and the same storage contract: the underlying</span>
+        <span class="c1"># buffer is allocated at the permuted physical shape (``[shape[a] for a in layout]``) with natural axis order,</span>
+        <span class="c1"># and the rewrite here translates each user-supplied canonical index tuple ``(i0, ..., i_{N-1})`` into</span>
+        <span class="c1"># ``(i_{layout[0]}, ..., i_{layout[N-1]})`` — the physical index tuple that the flat rank-N SNode / Ndarray</span>
+        <span class="c1"># expects.</span>
+        <span class="c1">#</span>
+        <span class="c1"># Two indexing forms must be permuted:</span>
+        <span class="c1"># 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is already a list of N scalars; permute by axis.</span>
+        <span class="c1"># 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack into N</span>
+        <span class="c1">#    scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller physical</span>
+        <span class="c1">#    buffer — silently OOB on permuted layouts.</span>
+        <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_unpack_layout_vector_index</span><span class="p">(</span>
+                    <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">):</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">layout</span><span class="p">]</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">subscript</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="o">*</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
         <span class="n">node</span><span class="o">.</span><span class="n">violates_pure</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">violates_pure</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">violates_pure</span><span class="p">:</span>
@@ -1023,6 +1065,18 @@
 
 
     <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_promote_ndarray_if_declared</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),</span>
+<span class="sd">        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span>  <span class="c1"># pylint: disable=C0415</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">value</span>
+        <span class="n">cache</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">ndarray_to_any_array</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">arr</span> <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">value</span>
+
+    <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Attribute">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Attribute">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_Attribute</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">):</span>
@@ -1091,9 +1145,28 @@
                 <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">tensor_ops</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">)</span>
                 <span class="nb">setattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">&quot;caller&quot;</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">):</span>
-            <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span> <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">))</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">)</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
+                <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">_TensorClass</span><span class="p">):</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_promote_ndarray_if_declared</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">)</span>
+            <span class="c1"># ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build</span>
+            <span class="c1"># time. The IR layer downstream (``build_Subscript`` -&gt; ``impl.subscript``) only knows about ``Ndarray`` /</span>
+            <span class="c1"># ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a kernel body</span>
+            <span class="c1"># resolves to the bare impl. Top-level wrapper args (``def k(x: qd.Tensor)``) are unwrapped earlier in</span>
+            <span class="c1"># ``Kernel.__call__``; this handles the in-struct case. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
+                <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">_TensorClass</span><span class="p">):</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_promote_ndarray_if_declared</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
             <span class="n">node</span><span class="o">.</span><span class="n">violates_pure</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">violates_pure</span>
             <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">violates_pure</span><span class="p">:</span>
                 <span class="n">node</span><span class="o">.</span><span class="n">violates_pure_reason</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">violates_pure_reason</span>
@@ -1512,17 +1585,43 @@
                 <span class="n">loop_indices</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">make_var_list</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">loop_var</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">ast_builder</span><span class="o">=</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">)</span>
                 <span class="n">expr_group</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">make_expr_group</span><span class="p">(</span><span class="n">loop_indices</span><span class="p">)</span>
                 <span class="n">impl</span><span class="o">.</span><span class="n">begin_frontend_struct_for</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">expr_group</span><span class="p">,</span> <span class="n">loop_var</span><span class="p">)</span>
-                <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">matrix</span><span class="o">.</span><span class="n">make_matrix</span><span class="p">(</span><span class="n">loop_indices</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">))</span>
+                <span class="c1"># Layout-tagged tensors (both ndarray and field): the runtime delivers *physical* loop indices (one</span>
+                <span class="c1"># per axis of the underlying buffer), but the user-visible ``I`` must be canonical so that ``x[I]``</span>
+                <span class="c1"># round-trips correctly through the canonical-&gt;physical AST rewrite in :func:`build_Subscript`.</span>
+                <span class="c1"># Reorder the indices so position ``m`` carries the canonical-axis-``m`` value.</span>
+                <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">loop_var</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">loop_indices</span><span class="p">):</span>
+                    <span class="n">invperm</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">axis</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layout</span><span class="p">):</span>
+                        <span class="n">invperm</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">k</span>
+                    <span class="n">user_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">loop_indices</span><span class="p">[</span><span class="n">invperm</span><span class="p">[</span><span class="n">m</span><span class="p">]]</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">))]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">user_indices</span> <span class="o">=</span> <span class="n">loop_indices</span>
+                <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">matrix</span><span class="o">.</span><span class="n">make_matrix</span><span class="p">(</span><span class="n">user_indices</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">))</span>
                 <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
                 <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">end_frontend_struct_for</span><span class="p">()</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">_vars</span> <span class="o">=</span> <span class="p">[]</span>
-                <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">targets</span><span class="p">:</span>
-                    <span class="n">var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
-                    <span class="n">_vars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">var</span><span class="p">)</span>
-                    <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span>
                 <span class="n">loop_var</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">ptr</span>
-                <span class="n">expr_group</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">make_expr_group</span><span class="p">(</span><span class="o">*</span><span class="n">_vars</span><span class="p">)</span>
+                <span class="c1"># Layout-tagged tensors (both ndarray and field): the runtime fills the loop-target slots with</span>
+                <span class="c1"># *physical* indices but the user spelled them with canonical names (``for i, j in x`` where ``i``</span>
+                <span class="c1"># is canonical axis 0). Allocate hidden physical slots and rebind each user name to the physical slot</span>
+                <span class="c1"># whose runtime value is the canonical-axis value the user expects.</span>
+                <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">loop_var</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">):</span>
+                    <span class="n">phys_vars</span> <span class="o">=</span> <span class="p">[</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">targets</span><span class="p">]</span>
+                    <span class="n">invperm</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">axis</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layout</span><span class="p">):</span>
+                        <span class="n">invperm</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">k</span>
+                    <span class="k">for</span> <span class="n">canon_idx</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">targets</span><span class="p">):</span>
+                        <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">phys_vars</span><span class="p">[</span><span class="n">invperm</span><span class="p">[</span><span class="n">canon_idx</span><span class="p">]])</span>
+                    <span class="n">expr_group</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">make_expr_group</span><span class="p">(</span><span class="o">*</span><span class="n">phys_vars</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">_vars</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">targets</span><span class="p">:</span>
+                        <span class="n">var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
+                        <span class="n">_vars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">var</span><span class="p">)</span>
+                        <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span>
+                    <span class="n">expr_group</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">make_expr_group</span><span class="p">(</span><span class="o">*</span><span class="n">_vars</span><span class="p">)</span>
                 <span class="n">impl</span><span class="o">.</span><span class="n">begin_frontend_struct_for</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">expr_group</span><span class="p">,</span> <span class="n">loop_var</span><span class="p">)</span>
                 <span class="n">ctx</span><span class="o">.</span><span class="n">loop_depth</span> <span class="o">+=</span> <span class="mi">1</span>
                 <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>

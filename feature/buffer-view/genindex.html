@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Index &#8212; Quadrants 0.7.3 documentation</title>
+    <title>Index &#8212; Quadrants 0.7.4 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="_static/documentation_options.js?v=c98573da"></script>
+    <script src="_static/documentation_options.js?v=020ce317"></script>
     <script src="_static/doctools.js?v=9bcbadda"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.3" />
+  <meta name="docsearch:version" content="0.7.4" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
   
 </a></div>
     
@@ -1014,6 +1014,10 @@
       <li><a href="autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.from_torch">from_torch() (quadrants.lang.field.Field method)</a>
 
       <ul>
+        <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.from_torch">(quadrants.lang.matrix.MatrixNdarray method)</a>
+</li>
+        <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.from_torch">(quadrants.lang.matrix.VectorNdarray method)</a>
+</li>
         <li><a href="autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.from_torch">(quadrants.lang.struct.StructField method)</a>
 </li>
       </ul></li>
@@ -1333,12 +1337,8 @@
 </li>
       <li><a href="autoapi/quadrants/types/enums/index.html#quadrants.types.enums.Layout">Layout (in module quadrants.types.enums)</a>
 </li>
-      <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.layout">layout (quadrants.lang.matrix.MatrixNdarray attribute)</a>
-
-      <ul>
-        <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.layout">(quadrants.lang.matrix.VectorNdarray attribute)</a>
+      <li><a href="autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.layout">layout (quadrants.lang.field.Field property)</a>
 </li>
-      </ul></li>
       <li><a href="autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.lazy_dual">lazy_dual() (quadrants.lang.snode.SNode method)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.lazy_grad">lazy_grad() (quadrants.lang.snode.SNode method)</a>
@@ -1680,6 +1680,8 @@
         <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Vector.ndarray">(quadrants.lang.matrix.Vector class method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.ndarray_to_any_array">ndarray_to_any_array (quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext attribute)</a>
+</li>
       <li><a href="autoapi/quadrants/types/buffer_view_type/index.html#quadrants.types.buffer_view_type.BufferViewType.ndarray_type">ndarray_type (quadrants.types.buffer_view_type.BufferViewType attribute)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.ndim">ndim (quadrants.lang.matrix.MatrixField attribute)</a>
@@ -2551,10 +2553,6 @@
       <ul>
         <li><a href="autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.shape">(quadrants.lang.field.Field property)</a>
 </li>
-        <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.shape">(quadrants.lang.matrix.MatrixNdarray attribute)</a>
-</li>
-        <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.shape">(quadrants.lang.matrix.VectorNdarray attribute)</a>
-</li>
         <li><a href="autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.shape">(quadrants.lang.snode.SNode property)</a>
 </li>
         <li><a href="autoapi/quadrants/linalg/sparse_matrix/index.html#quadrants.linalg.sparse_matrix.SparseMatrix.shape">(quadrants.linalg.sparse_matrix.SparseMatrix property)</a>
@@ -2626,12 +2624,12 @@
 </li>
       <li><a href="autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float16">spirv_has_atomic_float16 (quadrants.types.enums.DeviceCapability attribute)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float16_add">spirv_has_atomic_float16_add (quadrants.types.enums.DeviceCapability attribute)</a>
 </li>
       <li><a href="autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float16_minmax">spirv_has_atomic_float16_minmax (quadrants.types.enums.DeviceCapability attribute)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float64">spirv_has_atomic_float64 (quadrants.types.enums.DeviceCapability attribute)</a>
 </li>
       <li><a href="autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float64_add">spirv_has_atomic_float64_add (quadrants.types.enums.DeviceCapability attribute)</a>
@@ -2718,6 +2716,8 @@
 </li>
       <li><a href="autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.struct_methods">struct_methods (quadrants.lang.struct.StructField attribute)</a>
 </li>
+      <li><a href="autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.struct_ndarray_launch_info">struct_ndarray_launch_info (quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext attribute)</a>
+</li>
       <li><a href="autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField">StructField (class in quadrants.lang.struct)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.subscript">subscript() (quadrants.lang.buffer_view.BufferView method)</a>
@@ -2768,6 +2768,12 @@
 </li>
       <li><a href="autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.template_vars">template_vars (quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
 </li>
+      <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.tensor">tensor() (quadrants.lang.matrix.Matrix class method)</a>
+
+      <ul>
+        <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Vector.tensor">(quadrants.lang.matrix.Vector class method)</a>
+</li>
+      </ul></li>
       <li><a href="autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.thread_idx">thread_idx() (in module quadrants.lang.simt.block)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.Struct.to_dict">to_dict() (quadrants.lang.struct.Struct method)</a>
@@ -2804,6 +2810,10 @@
         <li><a href="autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_torch">(quadrants.lang.field.ScalarField method)</a>
 </li>
         <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.to_torch">(quadrants.lang.matrix.MatrixField method)</a>
+</li>
+        <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.to_torch">(quadrants.lang.matrix.MatrixNdarray method)</a>
+</li>
+        <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.to_torch">(quadrants.lang.matrix.VectorNdarray method)</a>
 </li>
         <li><a href="autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.to_torch">(quadrants.lang.struct.StructField method)</a>
 </li>
