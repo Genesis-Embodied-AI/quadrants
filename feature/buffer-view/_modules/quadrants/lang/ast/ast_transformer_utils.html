@@ -620,6 +620,16 @@
 <div class="viewcode-block" id="ASTTransformerGlobalContext.struct_ndarray_launch_info">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.struct_ndarray_launch_info">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">struct_ndarray_launch_info</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+        <span class="c1"># Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh</span>
+        <span class="c1"># `ASTTransformerFuncContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop</span>
+        <span class="c1"># inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-</span>
+        <span class="c1"># range diagnostic, silently emitting a wrong adjoint. `CallTransformer.build_Call` writes the caller</span>
+        <span class="c1"># `ctx.loop_depth` here before invoking the func and restores the previous value after, so the new func ctx</span>
+        <span class="c1"># can seed its `loop_depth` from this field via `_func_base.py`.</span>
+<div class="viewcode-block" id="ASTTransformerGlobalContext.caller_loop_depth">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.caller_loop_depth">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">caller_loop_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
 </div>
 
 
