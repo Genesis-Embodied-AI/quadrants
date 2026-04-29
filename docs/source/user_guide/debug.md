@@ -36,9 +36,9 @@ x[3] = 10.0   # AssertionError in debug mode, silent corruption otherwise
 a = x[-1]     # AssertionError in debug mode
 ```
 
-### Adstack overflow check
+#### Adstack overflow
 
-`debug=True` also enables a deferred runtime check on the adstack used by reverse-mode autodiff. A push past the per-stack capacity (set via `qd.init(ad_stack_size=...)` or per-alloca by `determine_ad_stack_size`) raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`. Without the check, an adstack overflow silently writes past the per-thread slab and produces a wrong gradient.
+`debug=True` also enables a deferred bounds check on the adstack used by reverse-mode autodiff. A push past the per-stack capacity (set via `qd.init(ad_stack_size=...)` or per-alloca by `determine_ad_stack_size`) raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`. Without the check, an adstack overflow silently writes past the per-thread slab and produces a wrong gradient.
 
 ### Assertions in kernels
 

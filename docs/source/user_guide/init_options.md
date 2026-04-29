@@ -45,6 +45,8 @@ Number of host threads used when compiling kernels. Default `4`. Raise on machin
 
 ## Debugging
 
+See [Debug mode](./debug.md) for runnable examples and a typical develop / benchmark workflow.
+
 ### `debug`
 
 Default `False`. Turns on every available correctness check. Use while iterating on a kernel that produces wrong numerics or while developing a new compiler pass; turn off for benchmarks and production.
