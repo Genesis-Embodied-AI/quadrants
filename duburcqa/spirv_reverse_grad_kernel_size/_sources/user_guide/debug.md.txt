@@ -40,6 +40,8 @@ The same flag also enables a deferred runtime check on the adstack used by rever
 
 `debug=True` is a superset of `check_out_of_bound=True`. Setting `qd.init(check_out_of_bound=True)` without `debug=True` enables the field bounds check and the adstack overflow check, but skips kernel `assert` evaluation, integer overflow detection on arithmetic, and the other checks listed below. Use this when you want bounds-safety in a release-build app without paying the full debug-mode cost.
 
+On the Metal and Vulkan backends, `check_out_of_bound=True` is silently disabled at `qd.init` time because those backends lack the in-kernel assertion extension that the field bounds check relies on; passing it on its own gives you neither the field bounds check nor the adstack overflow check. Pass `debug=True` instead: that keeps the adstack overflow check live (it is gated independently and does not need the assertion extension), but the field bounds check still does not fire on these backends.
+
 ### Assertions in kernels
 
 The `assert` statement works inside kernels when debug mode is enabled:
