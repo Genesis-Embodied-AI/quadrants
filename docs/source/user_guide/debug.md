@@ -65,7 +65,7 @@ A typical workflow:
 1. Develop with `debug=True` to catch bounds errors and logic bugs
 2. Switch to `debug=False` (the default) for benchmarking and production runs
 
-For bounds safety in a release build without the rest of debug mode, set [`check_out_of_bound=True`](./init_options.md#check_out_of_bound) instead. `debug=True` always implies `check_out_of_bound=True`.
+`debug=True` always implies `check_out_of_bound=True`. For bounds safety in a release build without the rest of debug mode, set [`check_out_of_bound=True`](./init_options.md#check_out_of_bound) instead.
 
 ## Other debugging tools
 
