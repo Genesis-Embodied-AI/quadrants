@@ -108,7 +108,7 @@ Per-backend support:
 
 **Note.** Output from GPU kernels may appear out of order due to parallel execution.
 
-**Important.** Avoid kernel `print()` calls in production code if possible. Quadrants synchronizes the compute queue after every dispatch of a kernel that contains a `print()` so the output appears at the right place in the log. The synchronization happens unconditionally on every launch of that kernel, even when the surrounding control flow leaves the `print()` unreached at runtime; the cost is the full per-launch sync overhead, not just the cost of the `print()` itself.
+**Important.** Avoid kernel `print()` calls in production code if possible. Quadrants synchronizes the compute queue after every dispatch of a kernel that contains a `print()` so the output appears as close as possible to the call site. The synchronization happens unconditionally on every launch of that kernel, even when the surrounding control flow leaves the `print()` unreached at runtime; the cost is the full per-launch sync overhead, not just the cost of the `print()` itself.
 
 ### Dumping compiled IR
 
