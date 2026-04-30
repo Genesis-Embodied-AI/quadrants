@@ -143,13 +143,32 @@ TaskCodegen::Result TaskCodegen::run() {
   // later allocas would raise the stride and leave the earlier base pointing past the thread's allotted slice,
   // overlapping neighbours.
   {
-    // Collect the parent block of every AdStackPushStmt / AdStackLoadTopStmt / AdStackLoadTopAdjStmt the body
-    // visits. Reduced post-scan to a single LCA via pairwise ancestor-chain intersection over `parent_block()`;
-    // the LCA is where `visit(Block *)` later emits the one-shot row-claim that materializes
-    // `ad_stack_row_id_var_`. Push and load-top cases are folded together because both reach the heap (push
-    // writes, load-top reads), and a row claim that dominates pushes but not load-tops would leave a load-top
-    // path observing UINT32_MAX. Pop is intentionally NOT collected: pops never read or write the heap (they
-    // only mutate the per-stack count_var) so they impose no dominance requirement on the row claim.
+    // Collect the parent block of every f32-typed AdStackPushStmt / AdStackLoadTopStmt / AdStackLoadTopAdjStmt the
+    // body visits, then reduce to a single Lowest Common Ancestor (LCA) via pairwise ancestor-chain intersection over
+    // `parent_block()`. The LCA is where `visit(Block *)` later emits the one-shot row-claim that materializes
+    // `ad_stack_row_id_var_float_`. Push and load-top cases are folded together because both reach the heap (push
+    // writes, load-top reads), and a row claim that dominates pushes but not load-tops would leave a load-top path
+    // observing UINT32_MAX. Pop is intentionally NOT collected: pops never read or write the heap (they only mutate
+    // the per-stack count_var) so they impose no dominance requirement on the row claim. Int-typed pushes
+    // (`stmt->stack` resolves to an `AdStackAllocaStmt` of i32 or u1 ret_type) are NOT collected either: the autodiff
+    // pass emits a handful of small i32 push sites at the offload body root for loop-index recovery, and folding them
+    // into this LCA computation would pull the LCA up to the root and eliminate the float-heap savings - which is the
+    // dominant footprint (per-thread float strides routinely reach thousands of f32 elements while int-stack strides
+    // typically stay in the tens). The int heap continues to use the eager `gl_GlobalInvocationID * stride_int`
+    // per-thread layout in `get_ad_stack_heap_thread_base_int()`; per-thread sizing for the int heap is acceptable
+    // because its total footprint at worst case scales with `dispatched_threads * O(10) * sizeof(i32)`, comfortably
+    // below typical device memory limits even at the largest dispatch sizes the SPIR-V backend handles.
+    auto stack_is_float = [](Stmt *push_or_load) -> bool {
+      AdStackAllocaStmt *alloca = nullptr;
+      if (auto *p = push_or_load->cast<AdStackPushStmt>()) {
+        alloca = p->stack ? p->stack->cast<AdStackAllocaStmt>() : nullptr;
+      } else if (auto *l = push_or_load->cast<AdStackLoadTopStmt>()) {
+        alloca = l->stack ? l->stack->cast<AdStackAllocaStmt>() : nullptr;
+      } else if (auto *l = push_or_load->cast<AdStackLoadTopAdjStmt>()) {
+        alloca = l->stack ? l->stack->cast<AdStackAllocaStmt>() : nullptr;
+      }
+      return alloca != nullptr && alloca->ret_type == PrimitiveType::f32;
+    };
     std::vector<Block *> push_side_blocks;
     std::function<void(IRNode *)> scan = [&](IRNode *node) {
       if (auto *blk = dynamic_cast<Block *>(node)) {
@@ -168,9 +187,13 @@ TaskCodegen::Result TaskCodegen::run() {
           ad_stack_heap_per_thread_stride_int_ += uint32_t(alloca->max_size);
           num_ad_stacks_++;
         }
-      } else if (dynamic_cast<AdStackPushStmt *>(node) || dynamic_cast<AdStackLoadTopStmt *>(node) ||
-                 dynamic_cast<AdStackLoadTopAdjStmt *>(node)) {
-        push_side_blocks.push_back(static_cast<Stmt *>(node)->parent);
+      } else if (auto *push_or_load_stmt = dynamic_cast<Stmt *>(node);
+                 push_or_load_stmt != nullptr &&
+                 (push_or_load_stmt->is<AdStackPushStmt>() || push_or_load_stmt->is<AdStackLoadTopStmt>() ||
+                  push_or_load_stmt->is<AdStackLoadTopAdjStmt>())) {
+        if (stack_is_float(push_or_load_stmt)) {
+          push_side_blocks.push_back(push_or_load_stmt->parent);
+        }
       } else if (auto *if_stmt = dynamic_cast<IfStmt *>(node)) {
         if (if_stmt->true_statements)
           scan(if_stmt->true_statements.get());
@@ -210,7 +233,7 @@ TaskCodegen::Result TaskCodegen::run() {
       for (size_t i = 1; i < push_side_blocks.size() && lca != nullptr; ++i) {
         lca = lca_of(lca, push_side_blocks[i]);
       }
-      ad_stack_lca_block_ = lca;
+      ad_stack_lca_block_float_ = lca;
     }
   }
 
@@ -225,7 +248,7 @@ TaskCodegen::Result TaskCodegen::run() {
   // falls back to the dispatched-threads worst-case sizing - no behavior change versus a kernel
   // without this metadata. RangeForStmt-owned blocks on the chain are skipped, not counted: the
   // for-loop iterates threads, it does not gate them; only IfStmt gates filter LCA reachability.
-  if (ad_stack_lca_block_ != nullptr) {
+  if (ad_stack_lca_block_float_ != nullptr) {
     auto match_field_source = [](Stmt *load_src, TaskAttributes::StaticBoundExpr &out) -> bool {
       if (auto *ext = load_src->cast<ExternalPtrStmt>()) {
         if (auto *base_arg = ext->base_ptr->cast<ArgLoadStmt>()) {
@@ -332,7 +355,7 @@ TaskCodegen::Result TaskCodegen::run() {
     int gate_count = 0;
     bool chain_ok = true;
     TaskAttributes::StaticBoundExpr captured;
-    for (Block *cur = ad_stack_lca_block_; cur != nullptr; cur = cur->parent_block()) {
+    for (Block *cur = ad_stack_lca_block_float_; cur != nullptr; cur = cur->parent_block()) {
       Stmt *parent = cur->parent_stmt();
       if (parent == nullptr) {
         break;  // task body root reached
@@ -394,22 +417,26 @@ void TaskCodegen::visit(OffloadedStmt *) {
 }
 
 void TaskCodegen::visit(Block *stmt) {
-  // Sparse adstack heap: when codegen enters the LCA block of every AdStackPushStmt / AdStackLoadTopStmt /
-  // AdStackLoadTopAdjStmt in this task, atomically claim a heap row id for this thread and store it into the
-  // Function-scope `ad_stack_row_id_var_`. The claim runs exactly once per thread per task: every thread that
-  // reaches a push / load-top must first pass through this block (by definition of LCA), and a thread that
-  // does not pass through this block also never reaches a push or load-top, so the unclaimed row_id_var
-  // (UINT32_MAX) is observable only at sites that are guaranteed not to execute. The store happens BEFORE any
-  // of this block's statements are codegen'd so all descendant push / load-top sites observe the claimed value.
-  // Both the `row_id_var` allocation and its UINT32_MAX-initialisation live on the same block-entry hook so
-  // that when LCA is the task body root (typical for kernels without a predicate gating all pushes), the init
-  // store dominates the atomic claim. `alloca_variable` hoists the OpVariable to the SPIR-V function entry
-  // block regardless of where it is called from, but the OpStore lands here in the LCA block and reaches all
-  // descendant sites by SPIR-V dominance.
-  if (stmt == ad_stack_lca_block_ && ad_stack_lca_block_ != nullptr) {
-    QD_ASSERT(ad_stack_row_id_var_.id == 0);
-    ad_stack_row_id_var_ = ir_->alloca_variable(ir_->u32_type());
-    ir_->store_variable(ad_stack_row_id_var_, ir_->uint_immediate_number(ir_->u32_type(), UINT32_MAX));
+  // Sparse adstack heap: when codegen enters the float Lowest Common Ancestor (LCA) block of every f32-typed
+  // AdStackPushStmt / AdStackLoadTopStmt / AdStackLoadTopAdjStmt in this task, atomically claim a heap row id
+  // for this thread and store it into the Function-scope `ad_stack_row_id_var_float_`. The claim runs exactly
+  // once per thread per task: every thread that reaches a float push / load-top must first pass through this
+  // block (by definition of LCA), and a thread that does not pass through this block also never reaches a
+  // float push or load-top, so the unclaimed row_id_var (UINT32_MAX) is observable only at sites that are
+  // guaranteed not to execute. The store happens BEFORE any of this block's statements are codegen'd so all
+  // descendant push / load-top sites observe the claimed value. Both the `row_id_var` allocation and its
+  // UINT32_MAX-initialisation live on the same block-entry hook so that when the float LCA is the task body
+  // root (typical for kernels without a predicate gating all f32 pushes), the init store dominates the atomic
+  // claim. `alloca_variable` hoists the OpVariable to the SPIR-V function entry block regardless of where it
+  // is called from, but the OpStore lands here in the LCA block and reaches all descendant sites by SPIR-V
+  // dominance. The int heap path is intentionally NOT routed through this row claim: int adstacks back loop-
+  // index recovery and if-branch flags that the autodiff pass emits unconditionally at the offload body root,
+  // and `get_ad_stack_heap_thread_base_int()` keeps the eager `gl_GlobalInvocationID * stride_int` per-thread
+  // layout instead of consulting any row_id_var.
+  if (stmt == ad_stack_lca_block_float_ && ad_stack_lca_block_float_ != nullptr) {
+    QD_ASSERT(ad_stack_row_id_var_float_.id == 0);
+    ad_stack_row_id_var_float_ = ir_->alloca_variable(ir_->u32_type());
+    ir_->store_variable(ad_stack_row_id_var_float_, ir_->uint_immediate_number(ir_->u32_type(), UINT32_MAX));
     if (ad_stack_row_counter_buffer_.id == 0) {
       ad_stack_row_counter_buffer_ = get_buffer_value({BufferType::AdStackRowCounter}, PrimitiveType::u32);
     }
@@ -425,7 +452,7 @@ void TaskCodegen::visit(Block *stmt) {
         ir_->make_value(spv::OpAtomicIAdd, ir_->u32_type(), counter_ptr,
                         /*scope=*/ir_->const_i32_one_,
                         /*semantics=*/ir_->const_i32_zero_, ir_->uint_immediate_number(ir_->u32_type(), 1));
-    ir_->store_variable(ad_stack_row_id_var_, claimed_row);
+    ir_->store_variable(ad_stack_row_id_var_float_, claimed_row);
   }
   for (auto &s : stmt->statements) {
     if (offload_loop_motion_.find(s.get()) == offload_loop_motion_.end()) {
@@ -2677,18 +2704,19 @@ spirv::Value TaskCodegen::get_ad_stack_metadata_stride_int() {
 
 spirv::Value TaskCodegen::get_ad_stack_heap_thread_base_float() {
   // `row_id * per_thread_stride`. `row_id` is loaded fresh at every call from the Function-scope
-  // `ad_stack_row_id_var_` (declared at the first alloca visit, written at the LCA-block claim site), and the
-  // resulting OpIMul lives in the call-site's basic block. The pre-`duburcqa/sparse_adstack_heap` layout cached
-  // a single `invoc_id * stride` SSA at the alloca site and reused it at every push / load-top; that worked
-  // because `invoc_id` and `stride` were both definitions in the alloca-site block which dominates every push
-  // descendant. The new layout cannot use the same single-cache trick: `row_id` is a Function-scope variable
-  // load, so every load yields a fresh SSA whose definition lives in the loading block; reusing one SSA across
-  // sibling blocks of the LCA would violate SPIR-V section 2.16 dominance the same way invoc_id-cached SSA
-  // would have. Re-emitting per call site is cheap (one OpLoad + one OpIMul per push / load-top) and spirv-opt
-  // / spirv-cross can still hoist or CSE redundant loads within a single basic block. Widened to u64 when the
-  // device has Int64 for the same reason as before: `row_id * stride` can wrap u32 on deeply-allocated kernels
-  // and silent wrap aliases threads into one another's heap slice.
-  spirv::Value row_id = ir_->load_variable(ad_stack_row_id_var_, ir_->u32_type());
+  // `ad_stack_row_id_var_float_` (declared at the first alloca visit, written at the float Lowest Common
+  // Ancestor (LCA) block claim site), and the resulting OpIMul lives in the call-site's basic block. The pre-
+  // `duburcqa/sparse_adstack_heap` layout cached a single `invoc_id * stride` SSA at the alloca site and reused
+  // it at every push / load-top; that worked because `invoc_id` and `stride` were both definitions in the
+  // alloca-site block which dominates every push descendant. The new layout cannot use the same single-cache
+  // trick: `row_id` is a Function-scope variable load, so every load yields a fresh SSA whose definition lives
+  // in the loading block; reusing one SSA across sibling blocks of the LCA would violate SPIR-V section 2.16
+  // dominance the same way invoc_id-cached SSA would have. Re-emitting per call site is cheap (one OpLoad +
+  // one OpIMul per push / load-top) and spirv-opt / spirv-cross can still hoist or CSE redundant loads within
+  // a single basic block. Widened to u64 when the device has Int64 for the same reason as before: `row_id *
+  // stride` can wrap u32 on deeply-allocated kernels and silent wrap aliases threads into one another's heap
+  // slice.
+  spirv::Value row_id = ir_->load_variable(ad_stack_row_id_var_float_, ir_->u32_type());
   spirv::Value stride_u32 = get_ad_stack_metadata_stride_float();
   if (caps_->get(DeviceCapability::spirv_has_int64)) {
     // `make_value(OpUConvert, ...)` directly rather than `ir_->cast()`: `cast()` between two unsigned integer
@@ -2725,9 +2753,16 @@ spirv::Value TaskCodegen::get_ad_stack_heap_buffer_int() {
 }
 
 spirv::Value TaskCodegen::get_ad_stack_heap_thread_base_int() {
-  // Mirror of `get_ad_stack_heap_thread_base_float()` for the int heap. See the float counterpart for the
-  // rationale around fresh row_id loads (no SSA cache) and the u64 widening on Int64-capable devices.
-  spirv::Value row_id = ir_->load_variable(ad_stack_row_id_var_, ir_->u32_type());
+  // Eager `gl_GlobalInvocationID * stride_int` per-thread layout. The int heap backs loop-index recovery and if-branch
+  // flag adstacks, which the autodiff pass emits unconditionally at the offload body root for reverse-pass control-flow
+  // replay; folding those root-level pushes into the float lazy-row-claim Lowest Common Ancestor (LCA) block
+  // computation would pull the LCA up to the offload root and eliminate the float-heap savings. Per-thread layout is
+  // correctness-equivalent to the prior single-counter mechanism for the int heap and keeps the heap allocation
+  // trivially predictable at `dispatched_threads * stride_int * sizeof(i32)` - small enough not to matter (per-thread
+  // int strides typically stay in the tens of i32 entries, two orders of magnitude below the float strides whose
+  // worst-case footprint motivated this change). The same u64 widening rule applies for the same wrap-aliasing reason
+  // as the float counterpart.
+  spirv::Value row_id = ir_->get_global_invocation_id(0);
   spirv::Value stride_u32 = get_ad_stack_metadata_stride_int();
   if (caps_->get(DeviceCapability::spirv_has_int64)) {
     spirv::Value row_id_u64 = ir_->make_value(spv::OpUConvert, ir_->u64_type(), row_id);

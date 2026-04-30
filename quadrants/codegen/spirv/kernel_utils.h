@@ -210,11 +210,10 @@ struct TaskAttributes {
     // predicate accordingly so the captured count always matches threads that reach LCA.
     bool polarity{true};
 
-    // Field source: SNode-backed (`qd.field(...)` with `qd.root.dense(...)`) selects the snode by
-    // its global id; NdArray-backed (`qd.ndarray(...)` kernel argument) selects via the
-    // `arg_id` list pointing into the kernel arg buffer. Stage 1 supports both because the
-    // Genesis MPM grid-op kernel uses SNode-backed `mass`, but smaller test repros tend to use
-    // ndarray-backed fields.
+    // Field source. SNode-backed fields (`qd.field(...)` placed under `qd.root.dense(...)`) are identified
+    // by the leaf snode's global id; ndarray-backed kernel arguments (`qd.ndarray(...)`) are identified by
+    // the `arg_id` list pointing into the kernel arg buffer. Stage 1 accepts both because sparse-grid
+    // workloads tend to gate on SNode-backed scalar fields while smaller test repros tend to use ndarrays.
     enum class FieldSourceKind : int32_t { SNode = 0, NdArray = 1 };
     FieldSourceKind field_source_kind{FieldSourceKind::SNode};
     int snode_id{-1};

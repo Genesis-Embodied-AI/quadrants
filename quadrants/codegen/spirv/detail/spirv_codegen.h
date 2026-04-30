@@ -290,24 +290,28 @@ class TaskCodegen : public IRVisitor {
   spirv::Value ad_stack_metadata_buffer_;
   spirv::Value ad_stack_metadata_stride_float_;
   spirv::Value ad_stack_metadata_stride_int_;
-  // Lowest common dominator (LCA) block of every AdStackPushStmt / AdStackLoadTopStmt / AdStackLoadTopAdjStmt
-  // in the task body, populated by the same pre-pass scan in `run()` that builds the heap strides. Computed via
-  // pairwise ancestor-chain intersection over each statement's `parent_block()`. The LCA is where `visit(Block
-  // *)` emits the one-shot row-claim: when codegen enters this block the kernel atomically increments the
-  // `BufferType::AdStackRowCounter` slot 0, stores the returned index into `ad_stack_row_id_var_`, and reuses
-  // that index for every `AdStackPushStmt` / `LoadTopStmt` / `LoadTopAdjStmt` inside the LCA's dominator
-  // subtree. Threads that never enter the LCA never claim a row and consume zero heap. `nullptr` when the task
-  // has no adstack push/load-top statements (the heap is unbound) or when the LCA reduces to the task body's
-  // root - in the latter case the claim still runs from the root, equivalent in row-occupancy to the prior
-  // `invoc_id`-keyed eager layout.
-  Block *ad_stack_lca_block_{nullptr};
+  // Lowest common dominator (LCA) block of every f32-typed AdStackPushStmt / AdStackLoadTopStmt /
+  // AdStackLoadTopAdjStmt in the task body, populated by the pre-pass scan in `run()` that also builds the heap
+  // strides. The LCA is where `visit(Block *)` emits the one-shot row-claim that materialises
+  // `ad_stack_row_id_var_float_`. Computed only over float-typed pushes deliberately: int-heap pushes for loop
+  // index recovery and if-branch flags often live unconditionally at the offload body root (the autodiff pass
+  // emits them outside any user gate so the reverse pass can replay control flow), and folding them into the
+  // LCA computation pulls the LCA up to the root for kernels with grid-style sparse predicates - eliminating
+  // the savings on the float heap, which is the only one large enough to matter (per-thread float strides
+  // measured in thousands of f32 elements dominate the footprint, while int-stack strides are typically two
+  // orders of magnitude smaller).
+  // `nullptr` when the task has no f32 adstack pushes (the float heap is unbound and no row-claim is emitted)
+  // or when the LCA reduces to the task body's root - in the latter case the claim still runs from the root,
+  // equivalent in row-occupancy to the prior `invoc_id`-keyed eager layout.
+  Block *ad_stack_lca_block_float_{nullptr};
   // Function-scope OpVariable<u32> initialized to UINT32_MAX at task entry; overwritten with the atomically
-  // claimed row index when codegen visits `ad_stack_lca_block_`. `get_ad_stack_heap_thread_base_float()` /
-  // `_int()` load this variable and multiply against the runtime stride to produce the per-thread heap base,
+  // claimed row index when codegen visits `ad_stack_lca_block_float_`. `get_ad_stack_heap_thread_base_float()`
+  // loads this variable and multiplies against the runtime float stride to produce the per-thread heap base,
   // replacing the prior `invoc_id * stride` formula. The variable is per-invocation (Function storage class) so
   // the load yields a fresh SSA at each push site without violating SPIR-V section 2.16 dominance even when push
-  // sites live in sibling blocks of the LCA.
-  spirv::Value ad_stack_row_id_var_;
+  // sites live in sibling blocks of the LCA. The int heap path uses the eager `gl_GlobalInvocationID *
+  // stride_int` layout in `get_ad_stack_heap_thread_base_int()` and does not consult any row_id_var.
+  spirv::Value ad_stack_row_id_var_float_;
   // Cached SSA handle to the per-dispatch StorageBuffer holding the single u32 atomic counter
   // (`BufferType::AdStackRowCounter`). Lazily populated on first use inside the LCA-block claim emission so the
   // `OpAtomicIAdd` lives in the dispatch body rather than the function header. Zero (default-constructed) when
