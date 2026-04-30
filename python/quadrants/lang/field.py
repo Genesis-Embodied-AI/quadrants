@@ -140,19 +140,18 @@ def _is_aos_struct_member(field: "Field") -> bool:
     AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous
     strides at the member dtype size, so a zero-copy view would silently read neighbouring members' bytes as garbage.
 
-    A ScalarField that is a direct child of a struct cell has parent_snode with num_ch > 1 (one child per struct
-    member). A MatrixField's elements are ScalarFields whose parent is the matrix SNode (num_ch = n*m), and the
-    matrix SNode's parent is the struct cell -- so we check the grandparent. For non-struct fields, the parent is
-    the root or a plain dense SNode with num_ch == 1.
+    SNode.place flattens vec/mat field components directly under the struct cell (no intermediate matrix SNode), so
+    both ScalarField and MatrixField members sit as direct children of the struct cell dense SNode. For a ScalarField,
+    num_ch > 1 means siblings exist (i.e. it's a struct member). For a MatrixField with n*m components, the field's
+    own components contribute n*m children, so num_ch > n*m means extra siblings exist (i.e. it's a struct member).
     """
     try:
         from quadrants.lang.matrix import MatrixField  # pylint: disable=C0415
 
+        parent_snode = field.parent()._snode.ptr
         if isinstance(field, MatrixField):
-            struct_snode = field.parent(2)._snode.ptr
-        else:
-            struct_snode = field.parent()._snode.ptr
-        return struct_snode.get_num_ch() > 1
+            return parent_snode.get_num_ch() > field.n * field.m
+        return parent_snode.get_num_ch() > 1
     except Exception:
         return False
 

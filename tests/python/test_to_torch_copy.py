@@ -3,7 +3,7 @@
 Covers:
 - ``copy=False`` -> DLPack zero-copy (shares memory, no data movement)
 - ``copy=True`` (default) -> kernel copy (always correct, independent memory)
-- AoS struct members -> default copy correct, ``copy=False`` returns garbage
+- AoS struct members -> default copy correct, ``copy=False`` raises
 - SoA struct members -> ``copy=False`` zero-copy works correctly
 - ``to_numpy(copy=False)`` -> zero-copy on CPU via ``np.from_dlpack``
 """
@@ -226,6 +226,29 @@ def test_struct_aos_copy_false_raises():
 
     with pytest.raises(ValueError, match="Zero-copy not available"):
         f.a.to_torch(copy=False)
+
+
+@test_utils.test()
+def test_struct_aos_vec_member_copy_false_raises():
+    """AoS struct with a vec3 member: copy=False on the vec member should raise."""
+    vec3 = qd.types.vector(3, qd.f32)
+    s = qd.types.struct(a=qd.f32, b=vec3)
+    f = s.field(shape=(4,), layout=qd.Layout.AOS)
+
+    @qd.kernel
+    def fill():
+        for i in range(4):
+            f[i].a = qd.f32(i)
+            f[i].b = qd.Vector([qd.f32(i * 10), qd.f32(i * 20), qd.f32(i * 30)])
+
+    fill()
+    qd.sync()
+
+    with pytest.raises(ValueError, match="Zero-copy not available"):
+        f.b.to_torch(copy=False)
+
+    t_b = f.b.to_torch(copy=True)
+    np.testing.assert_allclose(t_b.cpu().numpy(), [[0, 0, 0], [10, 20, 30], [20, 40, 60], [30, 60, 90]])
 
 
 @test_utils.test()
