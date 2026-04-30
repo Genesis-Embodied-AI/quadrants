@@ -3353,11 +3353,10 @@ def test_adstack_static_bound_expr_primal_dependent_inner_recurrence_grad_correc
     # iteration's `v`, and the per-`i` gradient diverges from the analytic oracle by a primal-dependent factor.
     #
     # `v = x[i]; for _: v = sin(v) + 0.01` then `out += v` produces a strictly nonlinear chain whose per-`i`
-    # gradient is computed offline via numpy on the same recurrence. `n=2048` makes capacity-vs-claims tight
-    # under the buggy length: a ~512-row capacity vs ~2048 claims means rows 512..2047 collapse to row 511 on
-    # every backend that under-sizes, and the corruption rate scales linearly with `n`. The test fits well
-    # under the 10 s / 500 MB budget on every supported backend (peak heap allocation `2048 * 64 * 8 ~= 1 MB`,
-    # forward-pass walk ~2048 * 8 ~= 16K f32 ops, reverse same again).
+    # gradient is computed offline via numpy on the same recurrence. `n` is chosen so that capacity-vs-claims
+    # under any under-sized reducer length aliases multiple gated iterations into the last reachable row;
+    # the divergence between the codegen output and the numpy reference scales linearly with the number of
+    # aliased iterations, so the assertion catches the regression on every backend that under-sizes.
     n = 512
     n_iter = 4
     eps = 1e-9
