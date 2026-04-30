@@ -196,7 +196,13 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
 
 
 def _mps_sync_if_metal():
-    """Call ``torch.mps.synchronize()`` when running on the Metal backend, no-op otherwise."""
+    """Call ``torch.mps.synchronize()`` when running on the Metal backend, no-op otherwise.
+
+    Quadrants and PyTorch MPS use separate Metal command queues, so ``qd.sync()`` only guarantees Quadrants writes are
+    complete. A subsequent ``.clone()`` or kernel copy is queued on the MPS stream and may execute *after* the next
+    Quadrants kernel overwrites the source buffer. We must also synchronize MPS after the copy.
+    """
+    # FIXME: DLPack may return old values on Apple Metal if sync is not systematically called manually.
     if impl.current_cfg().arch == _ARCH_METAL:
         import torch  # pylint: disable=C0415
 
