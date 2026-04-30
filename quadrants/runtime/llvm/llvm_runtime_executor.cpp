@@ -750,6 +750,11 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     }
   }
   const bool use_host_eval = !is_gpu_llvm || all_size_exprs_host_resolvable;
+  // Per-kind byte strides resolved either host-side (host-eval branch) or by reading back from the device
+  // runtime struct after the sizer kernel ran (GPU branch). Used below to size the float / int heaps
+  // independently for the unconditional split-heap layout.
+  std::size_t stride_float_bytes = 0;
+  std::size_t stride_int_bytes = 0;
   if (use_host_eval) {
     // CPU + GPU-without-ExternalTensorRead path: run the host evaluator directly. On CPU we use synchronous
     // `copy_h2d` (just `std::memcpy` for that arch), but on CUDA / AMDGPU we ship the same payload through
@@ -774,47 +779,30 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
       }
       host_max_sizes[i] = static_cast<uint64_t>(std::max<int64_t>(v, 1));
     }
-    // Two layouts depending on whether the task captured a `bound_expr`:
-    //   * No bound_expr: legacy single-heap layout. `host_offsets[i]` is the cumulative byte offset within the
-    //     combined slice; the published combined stride drives `linear_tid * stride + offset` addressing on the
-    //     codegen side. Float and int allocas share the same slice.
-    //   * Bound_expr captured: split-heap layout. Float allocas live in the dedicated float heap addressed by
-    //     `row_id_var * stride_float + float_offset`; their `host_offsets[i]` is the byte offset within the
-    //     float-only slice. Int allocas live in the combined heap addressed by `linear_tid * stride_int +
-    //     int_offset`; their `host_offsets[i]` is the byte offset within the int-only slice. The combined-heap
-    //     stride published to the runtime (`adstack_per_thread_stride`) is the int-only stride for these tasks
-    //     because the combined slice no longer holds the float allocas - they have migrated to the float heap.
-    // This split is what shrinks per-thread combined storage to int-only on tasks where the float allocations
-    // dominate, and lets the float heap be sized from the captured `bound_row_capacities[i]` count instead of
-    // the dispatched-threads worst case.
-    const bool split_layout = ad_stack.bound_expr.has_value();
+    // Unconditional split-heap layout: float allocas live at `host_offsets[i]` within the float-only slice
+    // (addressed on the codegen side as `heap_float + row_id_var * stride_float + float_offset` for bound_expr
+    // tasks, or `heap_float + linear_tid * stride_float + float_offset` for non-bound_expr tasks); int allocas
+    // live at `host_offsets[i]` within the int-only slice (addressed as `heap_int + linear_tid * stride_int +
+    // int_offset`). Same scheme regardless of `bound_expr` so the heap layout matches the SPIR-V backend's
+    // unconditional split into `BufferType::AdStackHeapFloat` + `AdStackHeapInt`. The legacy combined-heap path
+    // is no longer used by the codegen; the combined stride / heap fields stay in the LLVMRuntime struct only as
+    // a transitional fallback for offline-cache-loaded kernels that predate the split, and the published
+    // `adstack_per_thread_stride` mirrors `stride_int` so any such kernel sees the smaller int-only stride.
     std::vector<uint64_t> host_offsets(n_stacks);
-    std::size_t stride_combined = 0;
-    std::size_t stride_float = 0;
-    std::size_t stride_int = 0;
     for (std::size_t i = 0; i < n_stacks; ++i) {
       const std::size_t step = align_up_8(sizeof(int64_t) + ad_stack.allocas[i].entry_size_bytes * host_max_sizes[i]);
       const bool is_float = ad_stack.allocas[i].heap_kind == AdStackAllocaInfo::HeapKind::Float;
-      if (split_layout) {
-        host_offsets[i] = is_float ? stride_float : stride_int;
-      } else {
-        host_offsets[i] = stride_combined;
-      }
-      stride_combined += step;
+      host_offsets[i] = is_float ? stride_float_bytes : stride_int_bytes;
       if (is_float) {
-        stride_float += step;
+        stride_float_bytes += step;
       } else {
-        stride_int += step;
+        stride_int_bytes += step;
       }
     }
-    // Stride published into `runtime->adstack_per_thread_stride` is what the legacy combined-heap codegen reads
-    // for the `linear_tid * stride + offset` formula. On tasks with `bound_expr` the combined slice is int-only
-    // (float allocas migrated to the float heap), so we publish `stride_int`; on tasks without, the full combined
-    // stride. Tasks alternate using the same combined heap with different strides per launch.
-    stride = split_layout ? stride_int : stride_combined;
+    stride = stride_int_bytes;
     uint64_t stride_combined_u64 = static_cast<uint64_t>(stride);
-    uint64_t stride_float_u64 = static_cast<uint64_t>(stride_float);
-    uint64_t stride_int_u64 = static_cast<uint64_t>(stride_int);
+    uint64_t stride_float_u64 = static_cast<uint64_t>(stride_float_bytes);
+    uint64_t stride_int_u64 = static_cast<uint64_t>(stride_int_bytes);
     if (!is_gpu_llvm) {
       copy_h2d(offsets_dev_ptr, host_offsets.data(), n_stacks * sizeof(uint64_t));
       copy_h2d(max_sizes_dev_ptr, host_max_sizes.data(), n_stacks * sizeof(uint64_t));
@@ -1026,20 +1014,43 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     runtime_jit->call<void *, void *, void *>("runtime_eval_adstack_size_expr", llvm_runtime_,
                                               runtime_context_ptr_for_sizer, bytecode_dev_ptr);
 
-    // Read back the computed per-thread stride so we can size the heap on host. One 8-byte `DtoH` per launch.
-    uint64_t stride_u64 = 0;
-    copy_d2h(&stride_u64, runtime_adstack_stride_field_ptr_, sizeof(uint64_t));
-    stride = static_cast<std::size_t>(stride_u64);
+    // Read back the per-kind strides published by `runtime_eval_adstack_size_expr` so we can size the float
+    // and int heaps independently host-side. The combined stride is unused by the split-heap codegen but kept
+    // around for legacy-kernel backward compatibility (mirrors `stride_int` in the unconditional-split layout).
+    uint64_t stride_combined_readback = 0;
+    uint64_t stride_float_readback = 0;
+    uint64_t stride_int_readback = 0;
+    copy_d2h(&stride_combined_readback, runtime_adstack_stride_field_ptr_, sizeof(uint64_t));
+    if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
+      copy_d2h(&stride_float_readback, runtime_adstack_stride_float_field_ptr_, sizeof(uint64_t));
+    }
+    if (runtime_adstack_stride_int_field_ptr_ != nullptr) {
+      copy_d2h(&stride_int_readback, runtime_adstack_stride_int_field_ptr_, sizeof(uint64_t));
+    }
+    stride = static_cast<std::size_t>(stride_combined_readback);
+    stride_float_bytes = static_cast<std::size_t>(stride_float_readback);
+    stride_int_bytes = static_cast<std::size_t>(stride_int_readback);
   }
 
   std::size_t needed_bytes = stride * num_threads;
+  // Combined heap is left allocated for backward compatibility with offline-cache-loaded kernels that predate
+  // the unconditional split. The current codegen uses `heap_float` for f32 allocas and `heap_int` for i32 / u1
+  // allocas, so this path's slab is unused on freshly-compiled kernels. Sizing at `stride_int * num_threads` (the
+  // value `stride` carries on the host-eval path here) keeps it minimal.
   ensure_adstack_heap(needed_bytes);
-  // The float heap allocation is deferred to `ensure_per_task_float_heap_post_reducer`, which runs after the
-  // per-arch reducer publishes the captured row count into `runtime->adstack_bound_row_capacities[task_index]`.
-  // Sizing here would need to use `num_threads * per_thread_stride_float` worst case (no first-launch savings);
-  // sizing post-reducer lets the float heap shrink to `count * stride_float` whenever the captured gate matches
-  // fewer threads than the dispatched-threads count, which is the dominant savings on sparse-grid workloads
-  // (Genesis MPM observes ~47K matched out of ~604K dispatched on the largest grad kernel).
+  // Always allocate the int heap at `num_threads * stride_int_bytes` worst case. Int allocas are autodiff-emitted
+  // at the offload root unconditionally (loop-counter recovery, branch flags), so every dispatched thread reaches
+  // them and the eager `linear_tid * stride_int + int_offset` layout demands a row per thread.
+  if (stride_int_bytes > 0) {
+    ensure_adstack_heap_int(stride_int_bytes * num_threads);
+  }
+  // Float heap: deferred to `ensure_per_task_float_heap_post_reducer` for tasks with a captured `bound_expr`
+  // (the reducer-published count drives the sizing); for non-bound_expr tasks size at `num_threads *
+  // stride_float_bytes` worst case here. The eager float path uses `linear_tid` as the row index so every
+  // dispatched thread needs backing storage; only the bound_expr path can shrink to `count * stride_float_bytes`.
+  if (stride_float_bytes > 0 && !ad_stack.bound_expr.has_value()) {
+    ensure_adstack_heap_float(stride_float_bytes * num_threads);
+  }
   return needed_bytes;
 }
 
@@ -1272,6 +1283,74 @@ void LlvmRuntimeExecutor::publish_per_task_bound_count_device(std::size_t task_i
                                             runtime_context_ptr_for_reducer, params_dev_ptr);
 }
 
+void LlvmRuntimeExecutor::ensure_adstack_heap_int(std::size_t needed_bytes) {
+  if (needed_bytes == 0 || needed_bytes <= adstack_heap_size_int_) {
+    return;
+  }
+  std::size_t new_size = std::max(needed_bytes, std::size_t(2) * adstack_heap_size_int_);
+
+  Device::AllocParams params{};
+  params.size = new_size;
+  params.host_read = false;
+  params.host_write = false;
+  params.export_sharing = false;
+  params.usage = AllocUsage::Storage;
+  DeviceAllocation new_alloc;
+  RhiResult res = llvm_device()->allocate_memory(params, &new_alloc);
+  QD_ERROR_IF(res != RhiResult::success,
+              "Failed to allocate {} bytes for the adstack int heap (err: {}). Consider lowering "
+              "`ad_stack_size` or the per-kernel reverse-mode adstack count.",
+              new_size, int(res));
+  void *new_ptr = get_device_alloc_info_ptr(new_alloc);
+  auto new_guard = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+
+  // The split-heap field-of-LLVMRuntime addresses are cached together by `ensure_adstack_heap_float` on its
+  // first grow (the same `runtime_get_adstack_split_heap_field_ptrs` getter returns all four addresses - float-
+  // buffer, float-size, int-buffer, int-size - in fixed slot order). On a fresh executor where this is the very
+  // first split-heap call, resolve the addresses here so we can publish independently of the float heap path.
+  if (runtime_adstack_heap_buffer_int_field_ptr_ == nullptr) {
+    auto *const runtime_jit = get_runtime_jit_module();
+    runtime_jit->call<void *>("runtime_get_adstack_split_heap_field_ptrs", llvm_runtime_);
+    runtime_adstack_heap_buffer_float_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
+    runtime_adstack_heap_size_float_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id + 1, result_buffer_cache_));
+    runtime_adstack_heap_buffer_int_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id + 2, result_buffer_cache_));
+    runtime_adstack_heap_size_int_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id + 3, result_buffer_cache_));
+  }
+  uint64 size_u64 = static_cast<uint64>(new_size);
+  if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+    CUDADriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_buffer_int_field_ptr_, &new_ptr,
+                                                     sizeof(void *));
+    CUDADriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_size_int_field_ptr_, &size_u64,
+                                                     sizeof(uint64));
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+    AMDGPUDriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_buffer_int_field_ptr_, &new_ptr,
+                                                       sizeof(void *));
+    AMDGPUDriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_size_int_field_ptr_, &size_u64,
+                                                       sizeof(uint64));
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else {
+    *reinterpret_cast<void **>(runtime_adstack_heap_buffer_int_field_ptr_) = new_ptr;
+    *reinterpret_cast<uint64 *>(runtime_adstack_heap_size_int_field_ptr_) = size_u64;
+  }
+
+  adstack_heap_alloc_int_ = std::move(new_guard);
+  adstack_heap_size_int_ = new_size;
+  // DEBUG: int-heap allocation tracker. Mirrors the float-heap tracker. Revert before merging.
+  fprintf(stderr, "[ADSTACK-IHEAP-LLVM] alloc new_size=%zu (needed=%zu)\n", new_size, needed_bytes);
+  fflush(stderr);
+}
+
 void LlvmRuntimeExecutor::ensure_per_task_float_heap_post_reducer(std::size_t task_index,
                                                                   const AdStackSizingInfo &ad_stack,
                                                                   std::size_t num_threads) {
@@ -1310,7 +1389,30 @@ void LlvmRuntimeExecutor::ensure_per_task_float_heap_post_reducer(std::size_t ta
   // claim - the heap row stays unused. A 1-row allocation is cheap and keeps the heap pointer non-null.
   const std::size_t effective_rows =
       (count == std::numeric_limits<uint32_t>::max()) ? num_threads : std::max<std::size_t>(count, 1);
-  const std::size_t needed_bytes = effective_rows * ad_stack.per_thread_stride_float;
+  // Read back the per-thread float stride (in bytes) that `publish_adstack_metadata` published into
+  // `runtime->adstack_per_thread_stride_float`. `AdStackSizingInfo::per_thread_stride_float` from the analysis
+  // pre-pass is in entry-count units (`2 * max_size`), not bytes, and would massively undersize the heap.
+  uint64_t stride_float_bytes_u64 = 0;
+  if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
+    if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+      CUDADriver::get_instance().memcpy_device_to_host(&stride_float_bytes_u64, runtime_adstack_stride_float_field_ptr_,
+                                                       sizeof(uint64_t));
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+      AMDGPUDriver::get_instance().memcpy_device_to_host(&stride_float_bytes_u64,
+                                                         runtime_adstack_stride_float_field_ptr_, sizeof(uint64_t));
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else {
+      stride_float_bytes_u64 = *reinterpret_cast<const uint64_t *>(runtime_adstack_stride_float_field_ptr_);
+    }
+  }
+  const std::size_t needed_bytes = effective_rows * static_cast<std::size_t>(stride_float_bytes_u64);
   ensure_adstack_heap_float(needed_bytes);
 }
 

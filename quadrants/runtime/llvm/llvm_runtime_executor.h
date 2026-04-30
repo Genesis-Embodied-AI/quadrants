@@ -162,6 +162,11 @@ class LlvmRuntimeExecutor {
   // amortised-doubling growth and same release-deferred-until-next-launch semantics.
   void ensure_adstack_heap_float(std::size_t needed_bytes);
 
+  // Mirror of `ensure_adstack_heap_float` for the int / u1 heap. Sized at `num_threads * stride_int` worst case
+  // (every dispatched thread's int allocas - loop counters, branch flags - fit in the eager `linear_tid *
+  // stride_int + offset` layout). Independent grow-on-demand from the float heap.
+  void ensure_adstack_heap_int(std::size_t needed_bytes);
+
   // Read back the per-task gate-passing count the reducer wrote into `runtime->adstack_bound_row_capacities[
   // task_index]` and size `runtime->adstack_heap_buffer_float` to `count * per_thread_stride_float`. On CPU the
   // capacity slot is host memory so the readback is a direct load; on CUDA / AMDGPU it's a small DtoH per task.
@@ -273,6 +278,13 @@ class LlvmRuntimeExecutor {
   // addresses below.
   DeviceAllocationUnique adstack_heap_alloc_float_ = nullptr;
   std::size_t adstack_heap_size_float_{0};
+
+  // Mirror of `adstack_heap_alloc_float_` for the int / u1 heap. Sized at `num_threads * stride_int` worst case.
+  // All int allocas address through `runtime->adstack_heap_buffer_int + linear_tid * stride_int + int_offset`
+  // regardless of whether the task captured a `bound_expr`; the int allocas are autodiff-emitted unconditionally
+  // at the offload root (loop-index recovery, branch flags) so the lazy float row claim does not apply to them.
+  DeviceAllocationUnique adstack_heap_alloc_int_ = nullptr;
+  std::size_t adstack_heap_size_int_{0};
 
   // Cached device pointer to `runtime->temporaries`, populated lazily by `get_runtime_temporaries_device_ptr()`.
   void *runtime_temporaries_cache_{nullptr};

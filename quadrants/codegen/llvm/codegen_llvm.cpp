@@ -2517,23 +2517,27 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
                  "init_offloaded_task_function must cover every container statement holding an adstack.");
   QD_ASSERT(ad_stack_per_thread_stride_ > 0);
 
-  ensure_ad_stack_heap_base_llvm();
-  ensure_ad_stack_metadata_llvm();
+  ensure_ad_stack_heap_base_split_llvm();
+  ensure_ad_stack_metadata_split_llvm();
 
-  // Float allocas in tasks with a captured `bound_expr` route through the lazy float-heap path: do not bake a
-  // static base into `llvm_val[stmt]` here, because `linear_tid * stride` is the wrong index after the LCA-block
-  // atomic-rmw stores the per-thread claimed row id into `ad_stack_row_id_var_float_llvm_`. Mark the alloca for
+  // Unconditional split routing: float allocas address through `heap_float`, int / u1 allocas through `heap_int`,
+  // regardless of whether the task captured a `bound_expr`. The two heaps are sized independently by the host
+  // launcher (`ensure_adstack_heap_float` / `ensure_adstack_heap_int`); float can shrink to the reducer's count
+  // for bound_expr tasks via `ensure_per_task_float_heap_post_reducer`, while int stays at `num_threads *
+  // stride_int`. Mirrors the SPIR-V backend's unconditional `BufferType::AdStackHeapFloat` /
+  // `AdStackHeapInt` split.
+  //
+  // Float allocas in tasks with a captured `bound_expr` use the lazy claim path: do not bake a static base into
+  // `llvm_val[stmt]` here because `linear_tid * stride` is the wrong index after the LCA-block atomic-rmw stores
+  // the per-thread claimed row id into `ad_stack_row_id_var_float_llvm_`. Mark the alloca for
   // `get_ad_stack_base_llvm` so every push / load-top / load-top-adj / pop site recomputes the base as
-  // `heap + row_id_var * stride + offset` at use time. Threads that never reach the LCA never claim a row and
-  // never reach a push / load-top by definition of the LCA, so the unclaimed UINT32_MAX `row_id_var` is observed
-  // only at sites that do not execute. Int / u1 allocas in the same task continue to use the eager `linear_tid *
-  // stride + offset` mapping handled below; the analysis-tagged autodiff-bootstrap pushes still skip the slot
-  // store via the visit(AdStackPushStmt) gate.
-  if (ad_stack_static_bound_expr_.has_value() && stmt->ret_type == PrimitiveType::f32) {
+  // `heap_float + row_id_var * stride_float + float_offset` at use time. Threads that never reach the LCA never
+  // claim a row and never reach a push / load-top by definition of the LCA, so the unclaimed UINT32_MAX
+  // `row_id_var` is observed only at sites that do not execute.
+  const bool is_float = stmt->ret_type == PrimitiveType::f32;
+  if (is_float && ad_stack_static_bound_expr_.has_value()) {
     ad_stack_lazy_float_allocas_.insert(stmt);
     if (compile_config.debug) {
-      // Debug-build single-slot single-shot init: route through the lazy base so `stack_init` writes the u64
-      // count header at the threads-claim row rather than the offload-root row 0.
       call("stack_init", get_ad_stack_base_llvm(stmt));
       return;
     }
@@ -2546,27 +2550,23 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
     return;
   }
 
-  // Thread slot: on CPU it's `RuntimeContext::cpu_thread_id` (range [0, num_cpu_threads)); on CUDA / AMDGPU it's
-  // `block_idx() * block_dim() + thread_idx()`. `linear_thread_idx(context)` is the runtime helper that returns
-  // the arch-appropriate value, matching how `rand_states` is indexed and how the SPIR-V heap-backing indexes
-  // with `gl_GlobalInvocationID`. Widen to u64 before the mul because a deep-AD kernel can easily cross
-  // `i32_max / stride` on GPU grids (~65K threads x ~32K stride overflows i32).
-  //
-  // `stride` and `offset` come from the per-launch metadata the host publishes via
-  // `runtime_get_adstack_metadata_field_ptrs` rather than from codegen-time immediates. The old immediate path
-  // baked the sum of compile-time `max_size` values into the kernel, which could not scale when a `SizeExpr` leaf
-  // resolved to a different value at launch.
+  // Eager path for everything else: float allocas in non-bound_expr tasks address `heap_float + linear_tid *
+  // stride_float + offset`; int allocas always address `heap_int + linear_tid * stride_int + offset`. Each alloca's
+  // `host_offsets[stack_id]` is already an offset within its slice of the appropriate kind (float-only or
+  // int-only) thanks to the host-side split publication in `publish_adstack_metadata`; we just pick the right
+  // base + stride pair here.
   auto *i8ty = llvm::Type::getInt8Ty(*llvm_context);
   auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
   llvm::Value *linear_tid_i32 = call("linear_thread_idx", get_context());
   llvm::Value *linear_tid_i64 = builder->CreateZExt(linear_tid_i32, i64ty);
-  llvm::Value *stride = ad_stack_stride_llvm_;
+  llvm::Value *stride = is_float ? ad_stack_stride_float_llvm_ : ad_stack_stride_int_llvm_;
+  llvm::Value *heap_base = is_float ? ad_stack_heap_base_float_llvm_ : ad_stack_heap_base_int_llvm_;
   llvm::Value *stack_id_i64 = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(stmt->stack_id));
   llvm::Value *offset_addr = builder->CreateGEP(i64ty, ad_stack_offsets_ptr_llvm_, stack_id_i64);
   llvm::Value *offset = builder->CreateLoad(i64ty, offset_addr);
   llvm::Value *slice_offset = builder->CreateMul(linear_tid_i64, stride);
   llvm::Value *total_offset = builder->CreateAdd(slice_offset, offset);
-  llvm::Value *stack_ptr = builder->CreateGEP(i8ty, ad_stack_heap_base_llvm_, total_offset);
+  llvm::Value *stack_ptr = builder->CreateGEP(i8ty, heap_base, total_offset);
   llvm_val[stmt] = stack_ptr;
   if (compile_config.debug) {
     call("stack_init", llvm_val[stmt]);
