@@ -479,9 +479,16 @@ def test_scalar_field_to_numpy_copy_false_shares_memory():
     np.testing.assert_allclose(arr, [99, 88, 77, 66])
 
 
+def _np_supports_dlpack_v1():
+    """NumPy >= 2.1 can consume DLPack v1 capsules, which yield writable arrays."""
+    return tuple(int(x) for x in np.__version__.split(".")[:2]) >= (2, 1)
+
+
 @test_utils.test(arch=[qd.cpu])
 def test_scalar_field_to_numpy_copy_false_is_writable():
-    """to_numpy(copy=False) should return a writable array (DLPack v1 capsule)."""
+    """to_numpy(copy=False) should return a writable array on NumPy >= 2.1 (DLPack v1 capsule)."""
+    if not _np_supports_dlpack_v1():
+        pytest.skip("NumPy < 2.1 returns read-only arrays from DLPack v0 capsules")
     f = qd.field(qd.f32, shape=(4,))
     f.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
     qd.sync()
@@ -494,7 +501,9 @@ def test_scalar_field_to_numpy_copy_false_is_writable():
 
 @test_utils.test(arch=[qd.cpu])
 def test_scalar_ndarray_to_numpy_copy_false_is_writable():
-    """Ndarray to_numpy(copy=False) should return a writable array (DLPack v1 capsule)."""
+    """Ndarray to_numpy(copy=False) should return a writable array on NumPy >= 2.1 (DLPack v1 capsule)."""
+    if not _np_supports_dlpack_v1():
+        pytest.skip("NumPy < 2.1 returns read-only arrays from DLPack v0 capsules")
     nd = qd.ndarray(qd.f32, shape=(4,))
     nd.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
     qd.sync()
@@ -507,7 +516,9 @@ def test_scalar_ndarray_to_numpy_copy_false_is_writable():
 
 @test_utils.test(arch=[qd.cpu])
 def test_scalar_field_to_numpy_copy_false_write_visible():
-    """Writing to a to_numpy(copy=False) view should be visible to subsequent field reads."""
+    """Writing to a to_numpy(copy=False) view should be visible to subsequent field reads (NumPy >= 2.1)."""
+    if not _np_supports_dlpack_v1():
+        pytest.skip("NumPy < 2.1 returns read-only arrays from DLPack v0 capsules")
     f = qd.field(qd.f32, shape=(4,))
     f.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
     qd.sync()
@@ -517,6 +528,41 @@ def test_scalar_field_to_numpy_copy_false_write_visible():
     qd.sync()
     fresh = f.to_numpy()
     np.testing.assert_allclose(fresh[0], 100.0)
+
+
+# ---------------------------------------------------------------------------
+# Layout-tagged fields: to_numpy(copy=False) with order=
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_layout_tagged_field_to_numpy_copy_false():
+    """to_numpy(copy=False) on a layout-tagged (order='ji') field should return a correct canonical view."""
+    f = qd.field(qd.f32, shape=(3, 4), order="ji")
+    data = np.arange(12, dtype=np.float32).reshape(3, 4)
+    f.from_numpy(data)
+    qd.sync()
+
+    arr = f.to_numpy(copy=False)
+    np.testing.assert_allclose(arr, data)
+    assert arr.shape == (3, 4)
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_layout_tagged_field_to_numpy_copy_false_write_visible():
+    """Writes to a layout-tagged to_numpy(copy=False) view should be visible to subsequent field reads."""
+    if not _np_supports_dlpack_v1():
+        pytest.skip("NumPy < 2.1 returns read-only arrays from DLPack v0 capsules")
+    f = qd.field(qd.f32, shape=(3, 4), order="ji")
+    data = np.arange(12, dtype=np.float32).reshape(3, 4)
+    f.from_numpy(data)
+    qd.sync()
+
+    view = f.to_numpy(copy=False)
+    view[0, 0] = 999.0
+    qd.sync()
+    fresh = f.to_numpy()
+    np.testing.assert_allclose(fresh[0, 0], 999.0)
 
 
 @test_utils.test(arch=[qd.cpu])

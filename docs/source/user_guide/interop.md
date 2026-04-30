@@ -98,6 +98,8 @@ Zero-copy uses [DLPack](https://github.com/dmlc/dlpack) and requires:
 
 Zero-copy `to_numpy()` additionally requires a CPU backend, because numpy arrays cannot reference GPU memory. Note: `Field.to_numpy(copy=False)` and `MatrixField.to_numpy(copy=False)` currently require torch to be installed, because the C++ `field_to_dlpack` checks the torch version internally. `Ndarray.to_numpy(copy=False)` does not require torch.
 
+On **NumPy >= 2.1**, `to_numpy(copy=False)` returns a **writable** array (via a DLPack v1 capsule). On NumPy 1.26–2.0, the returned array is **read-only** because those versions only consume DLPack v0 capsules, which lack writability metadata. If you need writable zero-copy numpy views, upgrade to NumPy >= 2.1.
+
 ### Semantics of `copy`
 
 | Value | Behaviour |
@@ -227,7 +229,7 @@ The `versioned` parameter selects the DLPack protocol version:
 | `versioned` | Capsule type | Capsule name | Use case |
 |---|---|---|---|
 | `False` (default) | `DLManagedTensor` (v0) | `"dltensor"` | `torch.utils.dlpack.from_dlpack`, CuPy, JAX, and other v0 consumers. |
-| `True` | `DLManagedTensorVersioned` (v1) | `"dltensor_versioned"` | `np.from_dlpack` on NumPy >= 2.0 (v0 capsules produce read-only arrays). |
+| `True` | `DLManagedTensorVersioned` (v1) | `"dltensor_versioned"` | `np.from_dlpack` on NumPy >= 2.1 (v0 capsules produce read-only arrays on NumPy >= 2.0; v1 consumer support requires >= 2.1). |
 
 The same backend, dtype, and layout restrictions that apply to `to_torch(copy=False)` / `to_numpy(copy=False)` apply here — `to_dlpack()` is the underlying mechanism. The caller is responsible for calling `qd.sync()` between modifying the field and consuming the capsule.
 

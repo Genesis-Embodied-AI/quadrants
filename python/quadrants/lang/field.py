@@ -66,9 +66,27 @@ class _DLManagedTensor(ctypes.Structure):
     ]
 
 
+class _DLPackVersion(ctypes.Structure):
+    _fields_ = [("major", ctypes.c_uint32), ("minor", ctypes.c_uint32)]
+
+
+class _DLManagedTensorVersioned(ctypes.Structure):
+    """Matches the C ``DLManagedTensorVersioned`` layout: version, manager_ctx, deleter, flags, then dl_tensor."""
+
+    _fields_ = [
+        ("version", _DLPackVersion),
+        ("manager_ctx", ctypes.c_void_p),
+        ("deleter", ctypes.c_void_p),
+        ("flags", ctypes.c_uint64),
+        ("dl_tensor", _DLTensor),
+    ]
+
+
 def _patch_field_dlpack_canonical(capsule, layout):
     """Mutate the DLManagedTensor inside *capsule* so its shape/strides expose a canonical view of the
     permuted-physical field buffer.
+
+    Supports both v0 (``"dltensor"``) and v1 (``"dltensor_versioned"``) capsules.
 
     Invariants (input):
       * ``shape[i]`` = physical shape along axis ``i`` of the SNode (which is the *permuted* shape the field was
@@ -90,11 +108,17 @@ def _patch_field_dlpack_canonical(capsule, layout):
     _PyCapsule_GetPointer = ctypes.pythonapi.PyCapsule_GetPointer
     _PyCapsule_GetPointer.restype = ctypes.c_void_p
     _PyCapsule_GetPointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+
     raw = _PyCapsule_GetPointer(capsule, b"dltensor")
-    if not raw:
-        raise RuntimeError("field_to_dlpack returned a capsule without the expected 'dltensor' name")
-    mt = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensor)).contents
-    t = mt.dl_tensor
+    if raw:
+        t = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensor)).contents.dl_tensor
+    else:
+        ctypes.pythonapi.PyErr_Clear()
+        raw = _PyCapsule_GetPointer(capsule, b"dltensor_versioned")
+        if not raw:
+            raise RuntimeError("field_to_dlpack returned a capsule with an unrecognised name")
+        t = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensorVersioned)).contents.dl_tensor
+
     if t.ndim < ndim:
         raise RuntimeError(f"field_to_dlpack returned ndim={t.ndim} but layout has rank {ndim}; cannot patch")
     # Only the first ``ndim`` axes carry the canonical permutation; any trailing axes (element dims for VectorField /
@@ -260,8 +284,10 @@ def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False, is_nda
 
     import numpy as np  # pylint: disable=C0415
 
+    _np_ver = tuple(int(x) for x in np.__version__.split(".")[:2])
+    use_versioned = _np_ver >= (2, 1)
     try:
-        arr = np.from_dlpack(_DLPackV1Adapter(field.to_dlpack(versioned=True)))
+        arr = np.from_dlpack(_DLPackV1Adapter(field.to_dlpack(versioned=use_versioned)))
     except ModuleNotFoundError:
         if copy is False:
             raise ValueError(
@@ -530,7 +556,8 @@ class ScalarField(Field):
 
         Args:
             versioned: If True, emit a DLPack v1 ``DLManagedTensorVersioned`` capsule (``"dltensor_versioned"``,
-                ``flags=0``). NumPy >= 2.0 requires v1 for writable arrays. If False (default), emit a v0
+                ``flags=0``). NumPy >= 2.1 can consume v1 capsules and returns writable arrays; NumPy 2.0 marks v0
+                capsules read-only; NumPy < 2.1 cannot consume v1 capsules at all. If False (default), emit a v0
                 ``DLManagedTensor`` (``"dltensor"``), required by ``torch.utils.dlpack.from_dlpack``.
 
         Note: caller is responsible for calling qd.sync() between modifying the field and reading it.
