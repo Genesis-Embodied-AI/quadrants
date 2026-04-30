@@ -57,6 +57,7 @@ user_api = {}
 user_api[qd] = [
     "Backend",
     "BitpackedFields",
+    "BufferView",
     "CRITICAL",
     "DEBUG",
     "DeviceCapability",
