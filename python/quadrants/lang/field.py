@@ -157,7 +157,7 @@ def _is_aos_struct_member(field: "Field") -> bool:
         return False
 
 
-def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False) -> bool:
+def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False, is_ndarray: bool = False) -> bool:
     """Check whether zero-copy DLPack export is available for this field on the current backend."""
     dtype = field.dtype
     if dtype not in _DLPACK_SUPPORTED_DTYPES:
@@ -165,29 +165,33 @@ def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False) -> bool:
     arch = impl.current_cfg().arch
     if arch == _ARCH_VULKAN:
         return False
-    if arch == _ARCH_METAL and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET:
-        return False
-    if is_scalar and not field.shape:
-        return False
+    if not is_ndarray:
+        if arch == _ARCH_METAL and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET:
+            return False
+        if is_scalar and not field.shape:
+            return False
     if _is_aos_struct_member(field):
         return False
     return True
 
 
-def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = False):
+def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = False, is_ndarray: bool = False):
     """Try to return a zero-copy torch tensor via DLPack.
 
     Only called when ``copy is False``. Returns the tensor on success. Raises ``ValueError`` when zero-copy is not
     available. Does NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the copy=True
     (kernel-copy) path instead.
     """
-    if not _can_zerocopy_field(field, is_scalar=is_scalar):
+    if not _can_zerocopy_field(field, is_scalar=is_scalar, is_ndarray=is_ndarray):
         raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
 
     import torch  # pylint: disable=C0415
     import torch.utils.dlpack  # pylint: disable=C0415
 
-    tc = torch.utils.dlpack.from_dlpack(field.to_dlpack())
+    try:
+        tc = torch.utils.dlpack.from_dlpack(field.to_dlpack())
+    except RuntimeError as e:
+        raise ValueError(f"Zero-copy not available: {e}") from None
     if impl.current_cfg().arch == _ARCH_METAL:
         impl.get_runtime().sync()
 
@@ -238,7 +242,7 @@ class _DLPackV1Adapter:
         return (1, 0)  # kDLCPU = 1
 
 
-def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False):
+def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False, is_ndarray: bool = False):
     """Try to return a zero-copy numpy array via DLPack.
 
     Returns the array on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``. Raises
@@ -248,7 +252,7 @@ def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False):
         if copy is False:
             raise ValueError("Zero-copy numpy requires a CPU backend (numpy arrays cannot reference GPU memory)")
         return None
-    if not _can_zerocopy_field(field, is_scalar=is_scalar):
+    if not _can_zerocopy_field(field, is_scalar=is_scalar, is_ndarray=is_ndarray):
         if copy is False:
             raise ValueError(f"Zero-copy not available for dtype={field.dtype}")
         return None
@@ -263,6 +267,10 @@ def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False):
                 "Zero-copy numpy for fields requires torch (the C++ DLPack export checks torch version). "
                 "Install torch or use copy=True."
             ) from None
+        return None
+    except RuntimeError as e:
+        if copy is False:
+            raise ValueError(f"Zero-copy not available: {e}") from None
         return None
     if copy is True:
         arr = arr.copy()

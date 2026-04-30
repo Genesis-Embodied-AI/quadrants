@@ -462,7 +462,7 @@ class ScalarNdarray(Ndarray):
                 _try_zerocopy_numpy,
             )
 
-            arr = _try_zerocopy_numpy(self, copy=False, is_scalar=True)
+            arr = _try_zerocopy_numpy(self, copy=False, is_ndarray=True)
             if arr is not None:
                 if dtype is not None and arr.dtype != dtype:
                     raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
@@ -493,7 +493,7 @@ class ScalarNdarray(Ndarray):
                 _try_zerocopy_torch,
             )
 
-            return _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
+            return _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
 
         import torch  # pylint: disable=C0415
 

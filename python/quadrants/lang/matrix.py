@@ -1863,7 +1863,7 @@ class MatrixNdarray(Ndarray):
                [0. 0.]]]]
         """
         if copy is False:
-            arr = _try_zerocopy_numpy(self, copy=False)
+            arr = _try_zerocopy_numpy(self, copy=False, is_ndarray=True)
             if arr is not None:
                 if dtype is not None and arr.dtype != dtype:
                     raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
@@ -1895,7 +1895,7 @@ class MatrixNdarray(Ndarray):
             copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
         if copy is False:
-            return _try_zerocopy_torch(self, copy=copy, device=device)
+            return _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
         return self._ndarray_matrix_to_torch(as_vector=0, device=device)
 
     @python_scope
@@ -2006,7 +2006,7 @@ class VectorNdarray(Ndarray):
                     [0., 0., 0.]]], dtype=float32)
         """
         if copy is False:
-            arr = _try_zerocopy_numpy(self, copy=False)
+            arr = _try_zerocopy_numpy(self, copy=False, is_ndarray=True)
             if arr is not None:
                 if dtype is not None and arr.dtype != dtype:
                     raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
@@ -2041,7 +2041,7 @@ class VectorNdarray(Ndarray):
             copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
         if copy is False:
-            return _try_zerocopy_torch(self, copy=copy, device=device)
+            return _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
         return self._ndarray_matrix_to_torch(as_vector=1, device=device)
 
     @python_scope
