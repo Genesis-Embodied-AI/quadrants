@@ -10,35 +10,49 @@ namespace cuda {
 
 namespace {
 
+// SPIR-V's `generate_struct_for_kernel` dispatches at most 65536 threads (`advisory_total_num_threads = 65536`,
+// see `quadrants/codegen/spirv/spirv_codegen.cpp`) and grid-strides over the full element list inside the kernel
+// body. The CUDA / AMDGPU launcher path inherits `current_task->grid_dim = saturating_grid_dim` (~9000 blocks,
+// ~1.15M threads on a 144-SM Blackwell with `query_max_block_per_sm * 2`), giving the runtime kernel ~17x more
+// concurrent thread slots than SPIR-V dispatches for the same workload. Per-thread adstack heap rows scale
+// with that, so a bound_expr-less reverse kernel that fits in 1.2 GB on Metal balloons to ~20 GB worst case
+// here. `gpu_parallel_struct_for` and `gpu_parallel_range_for` both grid-stride (`i += grid_dim()` /
+// `idx += block_dim() * grid_dim()`) so reducing the concurrent thread count is correctness-equivalent;
+// we capped to the same 65536 advisory total to track the SPIR-V backend's heap footprint.
+constexpr std::size_t kAdStackMaxConcurrentThreads = 65536;
+
 // Resolve the tight thread count for a task's adstack sizing. For dynamic-bound range_for the begin / end
 // i32 values live in `runtime->temporaries` on device; the launcher fetches them via a 4-byte DtoH memcpy
 // each (dominated by the kernel-launch overhead that follows and only paid for kernels that actually use an
 // adstack under a dynamic iteration range). Const-bound range_for and non-range_for tasks use the codegen-
 // computed `static_num_threads`.
 std::size_t resolve_num_threads(const AdStackSizingInfo &info, LlvmRuntimeExecutor *executor) {
-  if (!info.dynamic_gpu_range_for) {
-    return info.static_num_threads;
-  }
-  std::int32_t begin = info.begin_const_value;
-  std::int32_t end = info.end_const_value;
-  if (info.begin_offset_bytes >= 0 || info.end_offset_bytes >= 0) {
-    auto *temp_dev_ptr = reinterpret_cast<uint8_t *>(executor->get_runtime_temporaries_device_ptr());
-    if (info.begin_offset_bytes >= 0) {
-      CUDADriver::get_instance().memcpy_device_to_host(&begin, temp_dev_ptr + info.begin_offset_bytes,
-                                                       sizeof(std::int32_t));
+  std::size_t base = info.static_num_threads;
+  if (info.dynamic_gpu_range_for) {
+    std::int32_t begin = info.begin_const_value;
+    std::int32_t end = info.end_const_value;
+    if (info.begin_offset_bytes >= 0 || info.end_offset_bytes >= 0) {
+      auto *temp_dev_ptr = reinterpret_cast<uint8_t *>(executor->get_runtime_temporaries_device_ptr());
+      if (info.begin_offset_bytes >= 0) {
+        CUDADriver::get_instance().memcpy_device_to_host(&begin, temp_dev_ptr + info.begin_offset_bytes,
+                                                         sizeof(std::int32_t));
+      }
+      if (info.end_offset_bytes >= 0) {
+        CUDADriver::get_instance().memcpy_device_to_host(&end, temp_dev_ptr + info.end_offset_bytes,
+                                                         sizeof(std::int32_t));
+      }
     }
-    if (info.end_offset_bytes >= 0) {
-      CUDADriver::get_instance().memcpy_device_to_host(&end, temp_dev_ptr + info.end_offset_bytes,
-                                                       sizeof(std::int32_t));
-    }
+    // Clamp the logical iteration count to the launched thread count: adstack slices are indexed by
+    // `linear_thread_idx()` (`block_idx * block_dim + thread_idx`), so only `static_num_threads = grid_dim *
+    // block_dim` slices can ever be touched concurrently. A logical range much larger than the launch size does
+    // not need more heap than `static_num_threads * per_thread_stride`; allocating the logical count would
+    // over-commit memory and trip OOM paths for no gain.
+    std::size_t iter = end > begin ? static_cast<std::size_t>(end - begin) : 0;
+    base = std::min(iter, info.static_num_threads);
   }
-  // Clamp the logical iteration count to the launched thread count: adstack slices are indexed by
-  // `linear_thread_idx()` (`block_idx * block_dim + thread_idx`), so only `static_num_threads = grid_dim *
-  // block_dim` slices can ever be touched concurrently. A logical range much larger than the launch size does
-  // not need more heap than `static_num_threads * per_thread_stride`; allocating the logical count would
-  // over-commit memory and trip OOM paths for no gain.
-  std::size_t iter = end > begin ? static_cast<std::size_t>(end - begin) : 0;
-  return std::min(iter, info.static_num_threads);
+  // Match the SPIR-V advisory cap on adstack-bearing kernels so the heap footprint scales with
+  // `kAdStackMaxConcurrentThreads * stride` instead of `saturating_grid_dim * block_dim * stride`.
+  return std::min(base, kAdStackMaxConcurrentThreads);
 }
 
 }  // namespace
@@ -71,9 +85,23 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // dispatched-threads worst case on sparse-grid workloads.
     executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n);
     ++task_index;
-    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
-    cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes, {&ctx.get_context()},
-                        {});
+    // For adstack-bearing tasks, dispatch at most `kAdStackMaxConcurrentThreads` (matching the heap row count
+    // resolved above). The runtime's grid-strided loop (`gpu_parallel_struct_for` / `gpu_parallel_range_for`,
+    // `quadrants/runtime/llvm/runtime_module/runtime.cpp`) walks the full element list / range with
+    // `i += grid_dim()`, so a smaller grid completes the same workload sequentially per slot. Tasks without an
+    // adstack keep the codegen-emitted `task.grid_dim` (saturating_grid_dim) for max throughput.
+    int effective_grid_dim = task.grid_dim;
+    if (!task.ad_stack.allocas.empty() && task.block_dim > 0) {
+      const std::size_t cap_blocks = (kAdStackMaxConcurrentThreads + static_cast<std::size_t>(task.block_dim) - 1) /
+                                     static_cast<std::size_t>(task.block_dim);
+      effective_grid_dim = static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(task.grid_dim), cap_blocks));
+      if (effective_grid_dim < 1) {
+        effective_grid_dim = 1;
+      }
+    }
+    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, effective_grid_dim, task.block_dim);
+    cuda_module->launch(task.name, effective_grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
+                        {&ctx.get_context()}, {});
   }
 }
 

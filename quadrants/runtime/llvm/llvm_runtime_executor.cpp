@@ -1032,12 +1032,11 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     stride_int_bytes = static_cast<std::size_t>(stride_int_readback);
   }
 
-  std::size_t needed_bytes = stride * num_threads;
-  // Combined heap is left allocated for backward compatibility with offline-cache-loaded kernels that predate
-  // the unconditional split. The current codegen uses `heap_float` for f32 allocas and `heap_int` for i32 / u1
-  // allocas, so this path's slab is unused on freshly-compiled kernels. Sizing at `stride_int * num_threads` (the
-  // value `stride` carries on the host-eval path here) keeps it minimal.
-  ensure_adstack_heap(needed_bytes);
+  // Legacy combined heap: not allocated. The unconditional-split codegen reads `heap_float` for f32 allocas and
+  // `heap_int` for i32 / u1 allocas; the legacy `adstack_heap_buffer` field is never dereferenced by freshly-
+  // compiled kernels. Skipping the allocation drops ~stride_int_bytes * num_threads of unused VRAM (on Genesis
+  // MPM mpm_grid_op grad that's ~6 GB on Nvidia / AMDGPU at saturating_grid_dim).
+  std::size_t needed_bytes = 0;
   // Always allocate the int heap at `num_threads * stride_int_bytes` worst case. Int allocas are autodiff-emitted
   // at the offload root unconditionally (loop-counter recovery, branch flags), so every dispatched thread reaches
   // them and the eager `linear_tid * stride_int + int_offset` layout demands a row per thread.

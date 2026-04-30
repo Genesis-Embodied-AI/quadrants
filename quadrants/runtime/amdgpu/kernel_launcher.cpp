@@ -8,6 +8,11 @@ namespace amdgpu {
 
 namespace {
 
+// Match the SPIR-V `advisory_total_num_threads = 65536` cap for adstack-bearing kernels so the heap footprint
+// scales with `kAdStackMaxConcurrentThreads * stride` instead of `saturating_grid_dim * block_dim * stride`.
+// See the matching comment in `runtime/cuda/kernel_launcher.cpp`.
+constexpr std::size_t kAdStackMaxConcurrentThreads = 65536;
+
 // Resolve the adstack thread count this task needs sizing for.
 //
 // For const-bound range_for and non-range_for tasks, codegen has already made `static_num_threads` tight
@@ -17,28 +22,29 @@ namespace {
 // For dynamic-bound range_for tasks, resolve `end - begin` by reading the values codegen stashed into
 // `runtime->temporaries` via a host-side DtoH memcpy. Mirrors `runtime/cuda/kernel_launcher.cpp`.
 std::size_t resolve_num_threads(const OffloadedTask &task, LlvmRuntimeExecutor *executor) {
-  if (!task.ad_stack.dynamic_gpu_range_for) {
-    return task.ad_stack.static_num_threads;
-  }
-  const auto &info = task.ad_stack;
-  std::int32_t begin = info.begin_const_value;
-  std::int32_t end = info.end_const_value;
-  if (info.begin_offset_bytes >= 0 || info.end_offset_bytes >= 0) {
-    auto *temp_dev_ptr = reinterpret_cast<uint8_t *>(executor->get_runtime_temporaries_device_ptr());
-    if (info.begin_offset_bytes >= 0) {
-      AMDGPUDriver::get_instance().memcpy_device_to_host(&begin, temp_dev_ptr + info.begin_offset_bytes,
-                                                         sizeof(std::int32_t));
+  std::size_t base = task.ad_stack.static_num_threads;
+  if (task.ad_stack.dynamic_gpu_range_for) {
+    const auto &info = task.ad_stack;
+    std::int32_t begin = info.begin_const_value;
+    std::int32_t end = info.end_const_value;
+    if (info.begin_offset_bytes >= 0 || info.end_offset_bytes >= 0) {
+      auto *temp_dev_ptr = reinterpret_cast<uint8_t *>(executor->get_runtime_temporaries_device_ptr());
+      if (info.begin_offset_bytes >= 0) {
+        AMDGPUDriver::get_instance().memcpy_device_to_host(&begin, temp_dev_ptr + info.begin_offset_bytes,
+                                                           sizeof(std::int32_t));
+      }
+      if (info.end_offset_bytes >= 0) {
+        AMDGPUDriver::get_instance().memcpy_device_to_host(&end, temp_dev_ptr + info.end_offset_bytes,
+                                                           sizeof(std::int32_t));
+      }
     }
-    if (info.end_offset_bytes >= 0) {
-      AMDGPUDriver::get_instance().memcpy_device_to_host(&end, temp_dev_ptr + info.end_offset_bytes,
-                                                         sizeof(std::int32_t));
-    }
+    // Clamp the logical iteration count to the launched thread count: adstack slices are indexed by
+    // `linear_thread_idx()`, so only `static_num_threads = grid_dim * block_dim` slices can be touched
+    // concurrently. See the matching comment in `runtime/cuda/kernel_launcher.cpp`.
+    std::size_t iter = end > begin ? static_cast<std::size_t>(end - begin) : 0;
+    base = std::min(iter, task.ad_stack.static_num_threads);
   }
-  // Clamp the logical iteration count to the launched thread count: adstack slices are indexed by
-  // `linear_thread_idx()`, so only `static_num_threads = grid_dim * block_dim` slices can be touched
-  // concurrently. See the matching comment in `runtime/cuda/kernel_launcher.cpp`.
-  std::size_t iter = end > begin ? static_cast<std::size_t>(end - begin) : 0;
-  return std::min(iter, task.ad_stack.static_num_threads);
+  return std::min(base, kAdStackMaxConcurrentThreads);
 }
 
 }  // namespace
@@ -68,8 +74,20 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // launcher post-reducer sizing.
     executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n_threads_amdgpu);
     ++task_index;
-    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
-    amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
+    // Match the heap-row count resolved above: adstack-bearing tasks dispatch at most
+    // `kAdStackMaxConcurrentThreads`. The runtime grid-strided loop walks the full element list / range with
+    // `i += grid_dim()` so a smaller grid completes the same workload sequentially per slot.
+    int effective_grid_dim = task.grid_dim;
+    if (!task.ad_stack.allocas.empty() && task.block_dim > 0) {
+      const std::size_t cap_blocks = (kAdStackMaxConcurrentThreads + static_cast<std::size_t>(task.block_dim) - 1) /
+                                     static_cast<std::size_t>(task.block_dim);
+      effective_grid_dim = static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(task.grid_dim), cap_blocks));
+      if (effective_grid_dim < 1) {
+        effective_grid_dim = 1;
+      }
+    }
+    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, effective_grid_dim, task.block_dim);
+    amdgpu_module->launch(task.name, effective_grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
                           {(void *)&context_pointer}, {arg_size});
   }
 }
