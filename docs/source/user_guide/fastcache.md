@@ -30,7 +30,7 @@ def my_kernel(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]) ->
         b[i] = a[i] * 2.0
 ```
 
-That's it. On the first call, the kernel compiles normally and the fastcache entry is written to disk. On subsequent calls (including in new Python sessions), the cached artifact is loaded directly.
+That's it. On the first call, the kernel compiles normally and the fastcache entry is written to disk. When the next Python process starts, the cached artifact is loaded directly.
 
 ### Deprecated alternatives
 
