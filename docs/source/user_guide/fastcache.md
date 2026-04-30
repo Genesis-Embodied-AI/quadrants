@@ -106,6 +106,16 @@ def good_kernel(a: qd.types.NDArray[qd.f32, 1]) -> None:
 
 Sub-functions called by the kernel are also checked — they must not capture external state either.
 
+**Exemptions:** The following may be accessed from the enclosing scope without violating purity:
+
+| Allowed capture | Why |
+|---|---|
+| `enum.Enum` values (e.g. `MyEnum.VALUE`) | Compile-time constants; any change to the enum definition changes the source hash. |
+| `math` / `numpy` constants (e.g. `math.pi`) | Stable across process runs; never change between compilations. |
+| Quadrants module attributes (e.g. `qd.f32`) | Part of the compiler's own API; always consistent with the Quadrants version hash. |
+
+Other named constants (non-enum, non-module) captured from scope will raise a `QuadrantsCompilationError`, except for `UPPERCASE` names which emit a warning instead.
+
 ### 2. Supported parameter types
 
 Fastcache supports the following parameter types:
