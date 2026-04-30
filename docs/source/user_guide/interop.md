@@ -219,10 +219,9 @@ f.fill(1.0)
 
 capsule = f.to_dlpack()                                   # v0 capsule ("dltensor")
 t = torch.utils.dlpack.from_dlpack(capsule)                # zero-copy torch tensor
-
-capsule_v1 = f.to_dlpack(versioned=True)                   # v1 capsule ("dltensor_versioned")
-arr = np.from_dlpack(capsule_v1)                           # writable zero-copy numpy array
 ```
+
+For NumPy, prefer `to_numpy(copy=False)` which handles the DLPack protocol adapter internally. If you need a raw v1 capsule for another consumer, use `f.to_dlpack(versioned=True)`. Note that `np.from_dlpack` does not accept raw `PyCapsule` objects — it requires an object exposing `__dlpack__()` and `__dlpack_device__()`, which `to_numpy(copy=False)` provides via an internal adapter.
 
 The `versioned` parameter selects the DLPack protocol version:
 
