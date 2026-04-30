@@ -19,7 +19,7 @@ On a Genesis simulator benchmark (`single_franka_envs.py`, Ubuntu 24.04, NVIDIA 
 
 ### Enabling fastcache on a kernel
 
-Add `fastcache=True` to the `@qd.kernel` decorator:
+Fastcache requires the kernel to be *pure*: all data it operates on must be passed as explicit parameters, with nothing captured from the enclosing Python scope (see [Constraints](#constraints) below). Because not all kernels satisfy this, fastcache is opt-in — you assert purity by adding `fastcache=True` to the `@qd.kernel` decorator:
 
 ```python
 import quadrants as qd
