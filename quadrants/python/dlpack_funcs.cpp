@@ -341,9 +341,9 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
     };
     auto capsule_deleter = [](PyObject *capsule) {
       if (PyCapsule_IsValid(capsule, "dltensor_versioned")) {
-        auto *vt = reinterpret_cast<DLManagedTensorVersioned *>(
-            PyCapsule_GetPointer(capsule, "dltensor_versioned"));
-        if (vt && vt->deleter) vt->deleter(vt);
+        auto *vt = reinterpret_cast<DLManagedTensorVersioned *>(PyCapsule_GetPointer(capsule, "dltensor_versioned"));
+        if (vt && vt->deleter)
+          vt->deleter(vt);
       }
     };
     return pybind11::capsule(vt, "dltensor_versioned", capsule_deleter);
@@ -361,9 +361,9 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
   };
   auto capsule_deleter = [](PyObject *capsule) {
     if (PyCapsule_IsValid(capsule, "dltensor")) {
-      auto *mt = reinterpret_cast<DLManagedTensor *>(
-          PyCapsule_GetPointer(capsule, "dltensor"));
-      if (mt && mt->deleter) mt->deleter(mt);
+      auto *mt = reinterpret_cast<DLManagedTensor *>(PyCapsule_GetPointer(capsule, "dltensor"));
+      if (mt && mt->deleter)
+        mt->deleter(mt);
     }
   };
   return pybind11::capsule(mt, "dltensor", capsule_deleter);
@@ -468,9 +468,9 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
     };
     auto capsule_deleter = [](PyObject *capsule) {
       if (PyCapsule_IsValid(capsule, "dltensor_versioned")) {
-        auto *vt = reinterpret_cast<DLManagedTensorVersioned *>(
-            PyCapsule_GetPointer(capsule, "dltensor_versioned"));
-        if (vt && vt->deleter) vt->deleter(vt);
+        auto *vt = reinterpret_cast<DLManagedTensorVersioned *>(PyCapsule_GetPointer(capsule, "dltensor_versioned"));
+        if (vt && vt->deleter)
+          vt->deleter(vt);
       }
     };
     return pybind11::capsule(vt, "dltensor_versioned", capsule_deleter);
@@ -491,9 +491,9 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
   };
   auto capsule_deleter = [](PyObject *capsule) {
     if (PyCapsule_IsValid(capsule, "dltensor")) {
-      auto *mt = reinterpret_cast<DLManagedTensor *>(
-          PyCapsule_GetPointer(capsule, "dltensor"));
-      if (mt && mt->deleter) mt->deleter(mt);
+      auto *mt = reinterpret_cast<DLManagedTensor *>(PyCapsule_GetPointer(capsule, "dltensor"));
+      if (mt && mt->deleter)
+        mt->deleter(mt);
     }
   };
   return pybind11::capsule(mt, "dltensor", capsule_deleter);
