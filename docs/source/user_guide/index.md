@@ -20,6 +20,7 @@ matrix_vector
 tensor
 compound_types
 static
+precise
 sub_functions
 parallelization
 ```

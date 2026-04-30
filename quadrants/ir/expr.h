@@ -125,6 +125,18 @@ Expr bit_cast(const Expr &input) {
   return quadrants::lang::bit_cast(input, get_data_type<T>());
 }
 
+// Canonical definition of `precise` semantics. The `precise` bool field on UnaryOp{Expression,Stmt} and
+// BinaryOp{Expression,Stmt} is a cross-reference to this contract.
+//
+// Return a fresh expression subtree in which every reachable BinaryOp and UnaryOp is tagged `precise`: IEEE-strict
+// evaluation in source order, with no reassociation, FMA contraction, approximate-transcendental substitution, or
+// algebraic simplification, regardless of the module-level `fast_math` setting. Mirrors MSL/HLSL `precise`. The walk
+// descends through BinaryOp / UnaryOp / TernaryOp wrappers and stops at any other expression kind (loads, constants,
+// qd.func calls, ndarray accesses, ...). `input` is NOT mutated: walked nodes are cloned bottom-up so aliasing the
+// original expression elsewhere does not retroactively inherit the tag; non-walked children are shared by reference
+// since they carry no `precise` field. The tag is propagated from Expression to Stmt by each class's `flatten()`.
+Expr precise(const Expr &input);
+
 // like Expr::Expr, but allows to explicitly specify the type
 template <typename T>
 Expr value(const T &val) {

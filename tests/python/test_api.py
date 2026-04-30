@@ -194,6 +194,7 @@ user_api[qd] = [
     "perf_dispatch",
     "polar_decompose",
     "pow",
+    "precise",
     "profiler",
     "pure",
     "pyfunc",
