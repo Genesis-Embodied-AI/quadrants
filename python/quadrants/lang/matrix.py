@@ -1301,8 +1301,9 @@ class MatrixField(Field):
         """
         impl.get_runtime().materialize()
         try:
-            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, self.ndim, self.n, self.m,
-                                                              versioned=versioned)
+            capsule = impl.get_runtime().prog.field_to_dlpack(
+                self._snode.ptr, self.ndim, self.n, self.m, versioned=versioned
+            )
         except ModuleNotFoundError:
             raise ModuleNotFoundError(
                 "MatrixField.to_dlpack() requires torch to be installed "

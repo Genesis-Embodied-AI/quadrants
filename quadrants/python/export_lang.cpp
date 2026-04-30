@@ -319,15 +319,13 @@ void export_lang(py::module &m) {
           "ndarray_to_dlpack",
           [](Program *program, pybind11::object owner, Ndarray *ndarray, const std::vector<int> &layout,
              bool versioned) { return ndarray_to_dlpack(program, owner, ndarray, layout, versioned); },
-          py::arg("owner"), py::arg("ndarray"), py::arg("layout") = std::vector<int>{},
-          py::arg("versioned") = false)
+          py::arg("owner"), py::arg("ndarray"), py::arg("layout") = std::vector<int>{}, py::arg("versioned") = false)
       .def(
           "field_to_dlpack",
           [](Program *program, SNode *snode, int element_ndim, int n, int m, bool versioned) {
             return field_to_dlpack(program, snode, element_ndim, n, m, versioned);
           },
-          py::arg("snode"), py::arg("element_ndim"), py::arg("n"), py::arg("m"),
-          py::arg("versioned") = false)
+          py::arg("snode"), py::arg("element_ndim"), py::arg("n"), py::arg("m"), py::arg("versioned") = false)
       .def("_get_num_ndarrays", &Program::get_num_ndarrays)
       .def("config", &Program::compile_config, py::return_value_policy::reference)
       .def("sync_kernel_profiler", [](Program *program) { program->profiler->sync(); })
