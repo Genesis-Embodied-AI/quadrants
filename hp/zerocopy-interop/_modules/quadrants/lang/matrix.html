@@ -1872,10 +1872,10 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the field instance to a NumPy array.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            keep_dims (bool, optional): Whether to keep the dimension after conversion. When keep_dims=True, on an</span>
-<span class="sd">                n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields. When</span>
-<span class="sd">                keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a</span>
-<span class="sd">                4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.</span>
+<span class="sd">            keep_dims (bool, optional): Whether to keep the dimension after conversion. When keep_dims=True, on an n-D</span>
+<span class="sd">                matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields. When</span>
+<span class="sd">                keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a 4x1</span>
+<span class="sd">                or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.</span>
 <span class="sd">            dtype (DataType, optional): The desired data type of returned numpy array.</span>
 <span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.</span>
 
@@ -2378,7 +2378,9 @@
 <div class="viewcode-block" id="MatrixNdarray.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.to_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors :meth:`MatrixField.to_torch`.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``.</span>
+
+<span class="sd">        Mirrors :meth:`MatrixField.to_torch`.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.</span>
@@ -2552,7 +2554,9 @@
 <div class="viewcode-block" id="VectorNdarray.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.to_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``. Mirrors :meth:`MatrixField.to_torch` on the vector code path.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``.</span>
+
+<span class="sd">        Mirrors :meth:`MatrixField.to_torch` on the vector code path.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.</span>

@@ -459,11 +459,11 @@
 <span class="sd">    AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous</span>
 <span class="sd">    strides at the member dtype size, so a zero-copy view would silently read neighbouring members&#39; bytes as garbage.</span>
 
-<span class="sd">    SNode.place flattens vec/mat field components directly under the struct cell (no intermediate matrix SNode), so</span>
-<span class="sd">    both ScalarField and MatrixField members sit as direct children of the struct cell dense SNode. For a ScalarField,</span>
-<span class="sd">    num_ch != 1 means it&#39;s not a standalone field. For a MatrixField with n*m components, num_ch != n*m means either</span>
-<span class="sd">    SOA layout (num_ch == 1, each component in its own subtree -- DLPack strides are wrong) or AOS struct member</span>
-<span class="sd">    (num_ch &gt; n*m, interleaved with other struct members). Only num_ch == n*m (standalone AOS) is safe for zero-copy.</span>
+<span class="sd">    SNode.place flattens vec/mat field components directly under the struct cell (no intermediate matrix SNode), so both</span>
+<span class="sd">    ScalarField and MatrixField members sit as direct children of the struct cell dense SNode. For a ScalarField, num_ch</span>
+<span class="sd">    != 1 means it&#39;s not a standalone field. For a MatrixField with n*m components, num_ch != n*m means either SOA layout</span>
+<span class="sd">    (num_ch == 1, each component in its own subtree -- DLPack strides are wrong) or AOS struct member (num_ch &gt; n*m,</span>
+<span class="sd">    interleaved with other struct members). Only num_ch == n*m (standalone AOS) is safe for zero-copy.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">MatrixField</span>  <span class="c1"># pylint: disable=C0415</span>
@@ -497,8 +497,8 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Try to return a zero-copy torch tensor via DLPack.</span>
 
 <span class="sd">    Only called when ``copy is False``. Returns the tensor on success. Raises ``ValueError`` when zero-copy is not</span>
-<span class="sd">    available. Does NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the</span>
-<span class="sd">    copy=True (kernel-copy) path instead.</span>
+<span class="sd">    available. Does NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the copy=True</span>
+<span class="sd">    (kernel-copy) path instead.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">_can_zerocopy_field</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="n">is_scalar</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Zero-copy not available for arch=</span><span class="si">{</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, dtype=</span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -560,8 +560,8 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_try_zerocopy_numpy</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="s2">&quot;Field&quot;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="p">,</span> <span class="n">is_scalar</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Try to return a zero-copy numpy array via DLPack.</span>
 
-<span class="sd">    Returns the array on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``.</span>
-<span class="sd">    Raises ``ValueError`` when ``copy=False`` but zero-copy is not available.</span>
+<span class="sd">    Returns the array on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``. Raises</span>
+<span class="sd">    ``ValueError`` when ``copy=False`` but zero-copy is not available.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_ARCH_CPU</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
@@ -574,7 +574,15 @@
 
     <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>  <span class="c1"># pylint: disable=C0415</span>
 
-    <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">from_dlpack</span><span class="p">(</span><span class="n">_DLPackV1Adapter</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">to_dlpack</span><span class="p">()))</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">from_dlpack</span><span class="p">(</span><span class="n">_DLPackV1Adapter</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">to_dlpack</span><span class="p">()))</span>
+    <span class="k">except</span> <span class="ne">ModuleNotFoundError</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Zero-copy numpy for fields requires torch (the C++ DLPack export checks torch version). &quot;</span>
+                <span class="s2">&quot;Install torch or use copy=True.&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+        <span class="k">return</span> <span class="kc">None</span>
     <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
         <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">arr</span>

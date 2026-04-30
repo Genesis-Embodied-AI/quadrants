@@ -1201,10 +1201,10 @@ should have consistent dimension consistent with <cite>self</cite>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>keep_dims</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to keep the dimension after conversion. When keep_dims=True, on an
-n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields. When
-keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a
-4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.</p></li>
+<li><p><strong>keep_dims</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to keep the dimension after conversion. When keep_dims=True, on an n-D
+matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields. When
+keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a 4x1
+or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.</p></li>
 <li><p><strong>dtype</strong> (<em>DataType</em><em>, </em><em>optional</em>) – The desired data type of returned numpy array.</p></li>
 <li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
 </ul>
@@ -1346,7 +1346,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.MatrixNdarray.to_torch">
 <span class="sig-name descname"><span class="pre">to_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixNdarray.to_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixNdarray.to_torch" title="Link to this definition">#</a></dt>
-<dd><p>Convert this matrix ndarray to a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> of shape <code class="docutils literal notranslate"><span class="pre">self.shape</span> <span class="pre">+</span> <span class="pre">(n,</span> <span class="pre">m)</span></code>. Mirrors <a class="reference internal" href="#quadrants.lang.matrix.MatrixField.to_torch" title="quadrants.lang.matrix.MatrixField.to_torch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">MatrixField.to_torch()</span></code></a>.</p>
+<dd><p>Convert this matrix ndarray to a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> of shape <code class="docutils literal notranslate"><span class="pre">self.shape</span> <span class="pre">+</span> <span class="pre">(n,</span> <span class="pre">m)</span></code>.</p>
+<p>Mirrors <a class="reference internal" href="#quadrants.lang.matrix.MatrixField.to_torch" title="quadrants.lang.matrix.MatrixField.to_torch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">MatrixField.to_torch()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
@@ -1451,7 +1452,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.VectorNdarray.to_torch">
 <span class="sig-name descname"><span class="pre">to_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#VectorNdarray.to_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.VectorNdarray.to_torch" title="Link to this definition">#</a></dt>
-<dd><p>Convert this vector ndarray to a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> of shape <code class="docutils literal notranslate"><span class="pre">self.shape</span> <span class="pre">+</span> <span class="pre">(n,)</span></code>. Mirrors <a class="reference internal" href="#quadrants.lang.matrix.MatrixField.to_torch" title="quadrants.lang.matrix.MatrixField.to_torch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">MatrixField.to_torch()</span></code></a> on the vector code path.</p>
+<dd><p>Convert this vector ndarray to a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> of shape <code class="docutils literal notranslate"><span class="pre">self.shape</span> <span class="pre">+</span> <span class="pre">(n,)</span></code>.</p>
+<p>Mirrors <a class="reference internal" href="#quadrants.lang.matrix.MatrixField.to_torch" title="quadrants.lang.matrix.MatrixField.to_torch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">MatrixField.to_torch()</span></code></a> on the vector code path.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
