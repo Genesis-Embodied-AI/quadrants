@@ -89,18 +89,20 @@ Module Contents
 
 
 
-   .. py:method:: to_numpy(dtype: quadrants._lib.core.quadrants_python.DataTypeCxx | None = None)
+   .. py:method:: to_numpy(dtype: quadrants._lib.core.quadrants_python.DataTypeCxx | None = None, *, copy=True)
       :abstractmethod:
 
 
       Converts `self` to a numpy array.
+
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
       :returns: The result numpy array.
       :rtype: numpy.ndarray
 
 
 
-   .. py:method:: to_torch(device=None)
+   .. py:method:: to_torch(device=None, *, copy=True)
       :abstractmethod:
 
 
@@ -108,6 +110,7 @@ Module Contents
 
       :param device: The desired device of returned tensor.
       :type device: torch.device, optional
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
       :returns: The result torch tensor.
       :rtype: torch.tensor
@@ -169,18 +172,21 @@ Module Contents
 
 
 
-   .. py:method:: to_numpy(dtype=None)
+   .. py:method:: to_numpy(dtype=None, *, copy=True)
 
-      Converts this field to a `numpy.ndarray`.
+      Converts this field to a ``numpy.ndarray``.
+
+      :param dtype: Optional target numpy dtype.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
 
 
-   .. py:method:: to_torch(device=None, *, copy=None)
+   .. py:method:: to_torch(device=None, *, copy=True)
 
       Converts this field to a ``torch.Tensor``.
 
       :param device: Optional torch device for the returned tensor.
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
 
 

@@ -752,24 +752,25 @@ Module Contents
 
 
 
-   .. py:method:: to_numpy(keep_dims=False, dtype=None)
+   .. py:method:: to_numpy(keep_dims=False, dtype=None, *, copy=True)
 
       Converts the field instance to a NumPy array.
 
-      :param keep_dims: Whether to keep the dimension after conversion.
-                        When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields.
-                        When keep_dims=False, the resulting numpy array should skip the matrix dims with size 1.
-                        For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
+      :param keep_dims: Whether to keep the dimension after conversion. When keep_dims=True, on an
+                        n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields. When
+                        keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a
+                        4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
       :type keep_dims: bool, optional
       :param dtype: The desired data type of returned numpy array.
       :type dtype: DataType, optional
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
       :returns: The result NumPy array.
       :rtype: numpy.ndarray
 
 
 
-   .. py:method:: to_torch(device=None, keep_dims=False, *, copy=None)
+   .. py:method:: to_torch(device=None, keep_dims=False, *, copy=True)
 
       Converts the field instance to a PyTorch tensor.
 
@@ -778,7 +779,7 @@ Module Contents
       :param keep_dims: Whether to keep the dimension after conversion.
                         See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
       :type keep_dims: bool, optional
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
       :returns: The result torch tensor.
       :rtype: torch.tensor
@@ -844,9 +845,11 @@ Module Contents
           (2, 2)
 
 
-   .. py:method:: to_numpy(dtype=None)
+   .. py:method:: to_numpy(dtype=None, *, copy=True)
 
-      Converts this ndarray to a `numpy.ndarray`.
+      Converts this ndarray to a ``numpy.ndarray``.
+
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
       Example::
 
@@ -872,12 +875,11 @@ Module Contents
 
 
 
-   .. py:method:: to_torch(device=None, *, copy=None)
+   .. py:method:: to_torch(device=None, *, copy=True)
 
-      Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
-      :meth:`MatrixField.to_torch`.
+      Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors :meth:`MatrixField.to_torch`.
 
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
 
 
@@ -930,9 +932,11 @@ Module Contents
           (3,)
 
 
-   .. py:method:: to_numpy(dtype=None)
+   .. py:method:: to_numpy(dtype=None, *, copy=True)
 
-      Converts this vector ndarray to a `numpy.ndarray`.
+      Converts this vector ndarray to a ``numpy.ndarray``.
+
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
       Example::
 
@@ -961,12 +965,11 @@ Module Contents
 
 
 
-   .. py:method:: to_torch(device=None, *, copy=None)
+   .. py:method:: to_torch(device=None, *, copy=True)
 
-      Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``. Mirrors
-      :meth:`MatrixField.to_torch` on the vector code path.
+      Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``. Mirrors :meth:`MatrixField.to_torch` on the vector code path.
 
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
 
 

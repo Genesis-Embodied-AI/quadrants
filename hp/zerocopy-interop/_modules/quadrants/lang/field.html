@@ -433,6 +433,7 @@
 
 <span class="n">_ARCH_METAL</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">metal</span>
 <span class="n">_ARCH_VULKAN</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">vulkan</span>
+<span class="n">_ARCH_CPU</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">x64</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">arm64</span><span class="p">})</span>
 
 <span class="n">_DLPACK_SUPPORTED_DTYPES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">f32</span><span class="p">,</span> <span class="n">f64</span><span class="p">,</span> <span class="n">i32</span><span class="p">,</span> <span class="n">i64</span><span class="p">,</span> <span class="n">u1</span><span class="p">})</span>
 
@@ -452,6 +453,28 @@
 <span class="n">_TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET</span> <span class="o">=</span> <span class="n">_compute_torch_mps_supports_dlpack_bytes_offset</span><span class="p">()</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_aos_struct_member</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="s2">&quot;Field&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;True when *field* is a member of a multi-member StructField with AOS layout.</span>
+
+<span class="sd">    AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous</span>
+<span class="sd">    strides at the member dtype size, so a zero-copy view would silently read neighbouring members&#39; bytes as garbage.</span>
+
+<span class="sd">    SNode.place flattens vec/mat field components directly under the struct cell (no intermediate matrix SNode), so</span>
+<span class="sd">    both ScalarField and MatrixField members sit as direct children of the struct cell dense SNode. For a ScalarField,</span>
+<span class="sd">    num_ch &gt; 1 means siblings exist (i.e. it&#39;s a struct member). For a MatrixField with n*m components, the field&#39;s</span>
+<span class="sd">    own components contribute n*m children, so num_ch &gt; n*m means extra siblings exist (i.e. it&#39;s a struct member).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">MatrixField</span>  <span class="c1"># pylint: disable=C0415</span>
+
+        <span class="n">parent_snode</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">MatrixField</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">parent_snode</span><span class="o">.</span><span class="n">get_num_ch</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">field</span><span class="o">.</span><span class="n">n</span> <span class="o">*</span> <span class="n">field</span><span class="o">.</span><span class="n">m</span>
+        <span class="k">return</span> <span class="n">parent_snode</span><span class="o">.</span><span class="n">get_num_ch</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">1</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_can_zerocopy_field</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="s2">&quot;Field&quot;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_scalar</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Check whether zero-copy DLPack export is available for this field on the current backend.&quot;&quot;&quot;</span>
     <span class="n">dtype</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">dtype</span>
@@ -464,19 +487,20 @@
         <span class="k">return</span> <span class="kc">False</span>
     <span class="k">if</span> <span class="n">is_scalar</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">field</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">if</span> <span class="n">_is_aos_struct_member</span><span class="p">(</span><span class="n">field</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">False</span>
     <span class="k">return</span> <span class="kc">True</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_try_zerocopy_torch</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="s2">&quot;Field&quot;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_scalar</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Try to return a zero-copy (or cloned) torch tensor via DLPack.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Try to return a zero-copy torch tensor via DLPack.</span>
 
-<span class="sd">    Returns the tensor on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``. Raises</span>
-<span class="sd">    ``ValueError`` when ``copy=False`` but zero-copy is not available.</span>
+<span class="sd">    Only called when ``copy is False``. Returns the tensor on success. Raises ``ValueError`` when zero-copy is not</span>
+<span class="sd">    available. Does NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the</span>
+<span class="sd">    copy=True (kernel-copy) path instead.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">_can_zerocopy_field</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="n">is_scalar</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Zero-copy not available for arch=</span><span class="si">{</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, dtype=</span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Zero-copy not available for arch=</span><span class="si">{</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, dtype=</span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
     <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
 
@@ -484,23 +508,66 @@
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_ARCH_METAL</span><span class="p">:</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
 
-    <span class="n">needs_device_transfer</span> <span class="o">=</span> <span class="n">device</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">tc</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">needs_device_transfer</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;copy=False is incompatible with device transfer (data on </span><span class="si">{</span><span class="n">tc</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, requested </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">)&quot;</span>
-            <span class="p">)</span>
-        <span class="n">tc</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_ARCH_METAL</span><span class="p">:</span>
-            <span class="n">torch</span><span class="o">.</span><span class="n">mps</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
-        <span class="k">return</span> <span class="n">tc</span>
-
-    <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
-        <span class="n">tc</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_ARCH_METAL</span><span class="p">:</span>
-            <span class="n">torch</span><span class="o">.</span><span class="n">mps</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">device</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">tc</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="n">device</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;copy=False is incompatible with device transfer (data on </span><span class="si">{</span><span class="n">tc</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, requested </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">tc</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_mps_sync_if_metal</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Call ``torch.mps.synchronize()`` when running on the Metal backend, no-op otherwise.</span>
+
+<span class="sd">    Quadrants and PyTorch MPS use separate Metal command queues, so ``qd.sync()`` only guarantees Quadrants writes are</span>
+<span class="sd">    complete. A subsequent ``.clone()`` or kernel copy is queued on the MPS stream and may execute *after* the next</span>
+<span class="sd">    Quadrants kernel overwrites the source buffer. We must also synchronize MPS after the copy.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># FIXME: DLPack may return old values on Apple Metal if sync is not systematically called manually.</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_ARCH_METAL</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
+
+        <span class="n">torch</span><span class="o">.</span><span class="n">mps</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_DLPackV1Adapter</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wraps a DLPack v0 PyCapsule into a v1-compatible object for ``np.from_dlpack``.</span>
+
+<span class="sd">    Quadrants&#39; C++ ``to_dlpack`` returns raw PyCapsules (v0 protocol). NumPy &gt;= 1.23 requires the v1 protocol -- an</span>
+<span class="sd">    object exposing ``__dlpack__`` and ``__dlpack_device__``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;_capsule&quot;</span><span class="p">,)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">capsule</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_capsule</span> <span class="o">=</span> <span class="n">capsule</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__dlpack__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stream</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_capsule</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__dlpack_device__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># kDLCPU = 1</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_try_zerocopy_numpy</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="s2">&quot;Field&quot;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="p">,</span> <span class="n">is_scalar</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Try to return a zero-copy numpy array via DLPack.</span>
+
+<span class="sd">    Returns the array on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``.</span>
+<span class="sd">    Raises ``ValueError`` when ``copy=False`` but zero-copy is not available.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_ARCH_CPU</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy numpy requires a CPU backend (numpy arrays cannot reference GPU memory)&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_can_zerocopy_field</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="n">is_scalar</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Zero-copy not available for dtype=</span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>  <span class="c1"># pylint: disable=C0415</span>
+
+    <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">from_dlpack</span><span class="p">(</span><span class="n">_DLPackV1Adapter</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">to_dlpack</span><span class="p">()))</span>
+    <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">arr</span>
 
 
 <div class="viewcode-block" id="Field">
@@ -658,8 +725,11 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="Field.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.to_numpy">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">DataTypeCxx</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">DataTypeCxx</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts `self` to a numpy array.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            numpy.ndarray: The result numpy array.</span>
@@ -670,11 +740,12 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="Field.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.to_torch">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts `self` to a torch tensor.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            device (torch.device, optional): The desired device of returned tensor.</span>
+<span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            torch.tensor: The result torch tensor.</span>
@@ -840,8 +911,20 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="ScalarField.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_numpy">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a `numpy.ndarray`.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a ``numpy.ndarray``.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            dtype: Optional target numpy dtype.</span>
+<span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="n">arr</span> <span class="o">=</span> <span class="n">_try_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">arr</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">dtype</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;copy=False is incompatible with dtype conversion (</span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">arr</span>
+
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">SNodeType</span><span class="o">.</span><span class="n">dynamic</span><span class="p">:</span>
             <span class="n">warn</span><span class="p">(</span>
                 <span class="s2">&quot;You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the snode will be converted to zeros in the resulting array.&quot;</span>
@@ -854,7 +937,6 @@
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">tensor_to_ext_arr</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">tensor_to_ext_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">)</span>
-        <span class="c1"># TODO: can we remove .runtime_ops here?</span>
         <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>  <span class="c1"># type: ignore</span>
         <span class="k">return</span> <span class="n">arr</span></div>
 
@@ -862,17 +944,15 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="ScalarField.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_torch">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a ``torch.Tensor``.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            device: Optional torch device for the returned tensor.</span>
-<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.</span>
+<span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="n">tc</span> <span class="o">=</span> <span class="n">_try_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">tc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="k">return</span> <span class="n">tc</span>
+            <span class="k">return</span> <span class="n">_try_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
         <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
 
@@ -881,6 +961,7 @@
 
         <span class="n">tensor_to_ext_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">)</span>
         <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>  <span class="c1"># type: ignore</span>
+        <span class="n">_mps_sync_if_metal</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">arr</span></div>
 
 
