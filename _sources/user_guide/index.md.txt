@@ -55,6 +55,7 @@ tile16
 :maxdepth: 1
 :titlesonly:
 
+fastcache
 graph
 perf_dispatch
 init_options
