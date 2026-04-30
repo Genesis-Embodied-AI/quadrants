@@ -50,6 +50,27 @@ qd.init(arch=qd.gpu)
 # qd.init(arch=qd.gpu, print_non_pure=True)
 ```
 
+## Dataclass fields with cached values
+
+By default, for `dataclasses.dataclass` parameters, fastcache only includes the *types* of each field in the cache key, not their values. This is fine for fields like ndarrays whose type and shape are enough to identify the compiled kernel.
+
+However, some dataclass fields hold configuration values (e.g. flags, counts) that get baked into the compiled kernel. If such a value changes, a different kernel must be compiled. Mark these fields with `add_value_to_cache_key` so their values are included in the cache key:
+
+```python
+import dataclasses
+from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE
+
+@dataclasses.dataclass
+class SimConfig:
+    num_envs: int = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
+    dt: float = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
+    use_gravity: bool = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
+```
+
+With this annotation, changing `num_envs` from 100 to 200 produces a different cache key and triggers recompilation. Without it, the stale cached kernel would be loaded.
+
+Note: `@qd.data_oriented` objects and `qd.Template` parameters already include primitive values in the cache key automatically — this annotation is only needed for `dataclasses.dataclass` fields.
+
 ## Constraints
 
 A kernel is eligible for fastcache only if all of the following hold:
