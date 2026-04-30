@@ -286,6 +286,11 @@ class QD_DLL_EXPORT GfxRuntime {
   // reuse the params / counter / overflow buffers as the placeholder. Lazy-allocated on first ndarray-only
   // dispatch, lives for the runtime's lifetime, never read by the shader.
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_root_placeholder_buffer_;
+  // Mirror placeholder for slot 0 (`args_buffer`): SNode-only kernels (e.g. `def compute() -> None` with only
+  // `qd.field` globals) have `get_args_buffer_size() == 0` and the launcher's `args_buffer` is nullptr. Slot 0
+  // requires a non-null binding for the descriptor layout, but reusing the params buffer would alias slot 2 and
+  // get rejected on Metal / MoltenVK by the same RHI rule the slot-3 placeholder above guards against.
+  std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_args_placeholder_buffer_;
 
   // Per-kernel `BufferType::AdStackBoundRowCapacity` (`uint[num_tasks_in_kernel]`). Populated by the host after
   // the bound-reducer dispatch with each task's exact reducer count (UINT32_MAX for tasks without a captured

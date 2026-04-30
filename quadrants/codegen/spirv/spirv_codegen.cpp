@@ -232,6 +232,21 @@ void TaskCodegen::visit(Block *stmt) {
     QD_ASSERT(ad_stack_row_id_var_float_.id == 0);
     ad_stack_row_id_var_float_ = ir_->alloca_variable(ir_->u32_type());
     ir_->store_variable(ad_stack_row_id_var_float_, ir_->uint_immediate_number(ir_->u32_type(), UINT32_MAX));
+  }
+  // Tasks without a captured `bound_expr` do not have a host-published row capacity and the float heap is
+  // sized at `dispatched_threads * stride_float` worst case. Emitting the LCA-block atomic-rmw claim in
+  // that case lets `claimed_row` exceed `dispatched_threads` whenever the kernel's iteration count exceeds
+  // the SPIR-V advisory cap (`advisory_total_num_threads = 65536` for struct_for, `<= 131072` for range_for)
+  // and the kernel grid-strides via `loop_var += total_invocs`, because every iteration that reaches the LCA
+  // increments the counter and the inert UINT32_MAX-capacity clamp does not bring the row back in-bounds.
+  // Fall back to the eager `gl_GlobalInvocationID * stride_float` mapping by storing the invocation id into
+  // `row_id_var_float` directly; downstream `get_ad_stack_heap_thread_base_float()` reads it and produces
+  // the same per-thread addressing the int heap uses.
+  if (stmt == ad_stack_lca_block_float_ && ad_stack_lca_block_float_ != nullptr &&
+      !task_attribs_.ad_stack.bound_expr.has_value()) {
+    spirv::Value invoc_id = ir_->get_global_invocation_id(0);
+    ir_->store_variable(ad_stack_row_id_var_float_, invoc_id);
+  } else if (stmt == ad_stack_lca_block_float_ && ad_stack_lca_block_float_ != nullptr) {
     if (ad_stack_row_counter_buffer_.id == 0) {
       ad_stack_row_counter_buffer_ = get_buffer_value({BufferType::AdStackRowCounter}, PrimitiveType::u32);
     }

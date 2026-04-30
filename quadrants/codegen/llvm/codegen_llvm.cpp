@@ -2648,12 +2648,21 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
   // row id), and the count u64 store would land ~ TB past the heap base. Same skip on debug as on release: the
   // count_alloca increment alone keeps push and pop balanced, and the bounds-check helper has nothing to do
   // for an autodiff-emitted const-init that never reads back its slot anyway.
-  if (ad_stack_bootstrap_pushes_.count(stmt) != 0 && !is_compile_time_single_slot(stack)) {
-    auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
-    llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stack);
-    llvm::Value *old_count = builder->CreateLoad(i64ty, count_alloca);
-    llvm::Value *new_count = builder->CreateAdd(old_count, llvm::ConstantInt::get(i64ty, 1));
-    builder->CreateStore(new_count, count_alloca);
+  if (ad_stack_bootstrap_pushes_.count(stmt) != 0) {
+    // Single-slot adstacks have no `count_alloca` (the slot index is fixed at 0), so there is nothing to
+    // increment. Multi-slot stacks bump `count_alloca` so the matching reverse pop balances. Either way we
+    // skip the slot store: the bootstrap value is dead memory (no `load_top` ever reads it back) and the
+    // single-slot store would otherwise route through `emit_ad_stack_single_slot_ptr ->
+    // get_ad_stack_base_llvm`, which on the lazy float path returns `heap_float + row_id_var * stride_float
+    // + offset` while `row_id_var` is still its UINT32_MAX entry-block init at the bootstrap site (the
+    // LCA-block atomic-rmw row claim runs strictly later) - the store would land ~ TB past the heap base.
+    if (!is_compile_time_single_slot(stack)) {
+      auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+      llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stack);
+      llvm::Value *old_count = builder->CreateLoad(i64ty, count_alloca);
+      llvm::Value *new_count = builder->CreateAdd(old_count, llvm::ConstantInt::get(i64ty, 1));
+      builder->CreateStore(new_count, count_alloca);
+    }
     return;
   }
   if (compile_config.debug) {

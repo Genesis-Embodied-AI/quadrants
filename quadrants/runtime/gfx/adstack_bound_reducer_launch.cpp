@@ -230,24 +230,23 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
     adstack_bound_reducer_params_buffer_size_ = new_size;
   }
 
-  // Resolve per-task length from the same end_shape_product cap the main-kernel dispatch applies (see the
-  // mirror computation around `runtime.cpp:564`); this keeps the reducer's iteration range consistent with
-  // the main task's actual dispatched thread count rather than the codegen fallback ceiling.
-  auto resolve_length = [&](const spirv::TaskAttributes &attribs) -> uint32_t {
-    int effective = attribs.advisory_total_num_threads;
-    if (attribs.range_for_attribs && !attribs.range_for_attribs->end_shape_product.empty()) {
-      const auto &range = *attribs.range_for_attribs;
-      int64_t iter_end = 1;
-      for (const auto &ref : range.end_shape_product) {
-        std::vector<int> indices = ref.arg_id;
-        indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
-        indices.push_back(ref.axis);
-        iter_end *= int64_t(host_ctx.get_struct_arg<int32_t>(indices));
-      }
-      int64_t iter_count = std::max<int64_t>(0, iter_end - int64_t(range.begin));
-      effective = int(std::min<int64_t>(int64_t(effective), std::max<int64_t>(1, iter_count)));
+  // Resolve per-task length. The reducer walks `selector[0..length)` and counts gate-passing cells; the
+  // main-kernel LCA-block atomic-rmw fires once per gated iteration across the full logical loop span
+  // (the kernel grid-strides via `loop_var += total_invocs` so dispatched-thread count does not cap the
+  // claim count). For ndarray-backed gates we therefore walk the gating ndarray's full flat element
+  // product - mirrors the LLVM launchers' shape-product walk and removes the prior cap at
+  // `advisory_total_num_threads` which under-counted on workloads larger than 65536 (struct_for) or
+  // 131072 (range_for). For SNode-backed gates `be.snode_iter_count` already carries the full iteration
+  // count, so the call site reads it directly without going through this lambda.
+  auto resolve_length_ndarray = [&](const spirv::TaskAttributes::StaticBoundExpr &be) -> uint32_t {
+    int64_t flat_len = 1;
+    for (int axis = 0; axis < be.ndarray_ndim; ++axis) {
+      std::vector<int> indices = be.ndarray_arg_id;
+      indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+      indices.push_back(axis);
+      flat_len *= int64_t(host_ctx.get_struct_arg<int32_t>(indices));
     }
-    return static_cast<uint32_t>(std::max(0, effective));
+    return static_cast<uint32_t>(std::max<int64_t>(0, flat_len));
   };
 
   // Build params blobs and write them into the params buffer. Resolve the captured ndarray data-ptr byte
@@ -281,7 +280,7 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
       }
       spirv::AdStackBoundReducerParams params{};
       params.task_id_in_kernel = static_cast<uint32_t>(ti);
-      params.length = is_snode ? be.snode_iter_count : resolve_length(attribs);
+      params.length = is_snode ? be.snode_iter_count : resolve_length_ndarray(be);
       params.arg_word_offset = arg_word_offset;
       params.op_code = static_cast<uint32_t>(encode_cmp_op(be.cmp_op));
       params.field_dtype_is_float = be.field_dtype_is_float ? 1u : 0u;
@@ -342,12 +341,22 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
     using FSK = spirv::TaskAttributes::StaticBoundExpr::FieldSourceKind;
     const bool is_snode = be.field_source_kind == FSK::SNode;
     auto bindings = device_->create_resource_set_unique();
-    // Slot 0 (args_buffer): required for ndarray-backed; supply the params buffer as a safe non-null placeholder
-    // for SNode-only tasks so the descriptor layout is satisfied without the shader actually reading it.
+    // Slot 0 (args_buffer): required for ndarray-backed; on SNode-only tasks supply a dedicated lazy-allocated
+    // placeholder buffer so the descriptor layout is satisfied. We cannot reuse the params buffer here because
+    // some RHI backends (Metal / MoltenVK) reject the same DeviceAllocation appearing on two slots of one
+    // descriptor set, and the params buffer is already bound at slot 2.
     if (args_buffer != nullptr) {
       bindings->rw_buffer(0, *args_buffer);
     } else {
-      bindings->rw_buffer(0, *adstack_bound_reducer_params_buffer_);
+      if (!adstack_bound_reducer_args_placeholder_buffer_) {
+        auto [buf, res] = device_->allocate_memory_unique({sizeof(uint32_t),
+                                                           /*host_write=*/false,
+                                                           /*host_read=*/false,
+                                                           /*export_sharing=*/false, AllocUsage::Storage});
+        QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack bound reducer slot-0 placeholder buffer");
+        adstack_bound_reducer_args_placeholder_buffer_ = std::move(buf);
+      }
+      bindings->rw_buffer(0, *adstack_bound_reducer_args_placeholder_buffer_);
     }
     bindings->rw_buffer(1, *adstack_row_counter_buffer_);
     bindings->rw_buffer(2, adstack_bound_reducer_params_buffer_->get_ptr(per_task_params_offsets[k]),
@@ -383,7 +392,7 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
     QD_ERROR_IF(bind_res != RhiResult::success, "adstack bound reducer resource binding error: RhiResult({})",
                 int(bind_res));
 
-    const uint32_t length = is_snode ? be.snode_iter_count : resolve_length(attribs);
+    const uint32_t length = is_snode ? be.snode_iter_count : resolve_length_ndarray(be);
     const uint32_t group_x =
         (length + spirv::kAdStackBoundReducerWorkgroupSize - 1) / spirv::kAdStackBoundReducerWorkgroupSize;
     if (group_x == 0) {

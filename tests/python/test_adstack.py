@@ -3400,3 +3400,64 @@ def test_adstack_static_bound_expr_primal_dependent_inner_recurrence_grad_correc
     got_grad = x.grad.to_numpy()
     assert not np.isnan(got_grad).any(), f"primal-dependent inner-recurrence grad returned NaN: {got_grad}"
     np.testing.assert_allclose(got_grad, expected, rtol=2e-4, atol=2e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case():
+    # Pins the `match_field_source` rejection of non-`LoopIndexStmt` index expressions in the captured
+    # `bound_expr`. The reducer walks the gating ndarray as `selector[0..length)` and counts gate-passing
+    # cells; the main-kernel LCA-block atomic-rmw fires once per gated iteration of the actual index. If
+    # the captured gate's index is anything other than the loop's own `LoopIndexStmt` (e.g. `selector[i %
+    # K]`, `selector[const]`, `selector[i + 1]`, `selector[other_field[i]]`), the reducer's flat-walk
+    # count diverges from the claim count and the codegen-emitted clamp aliases multiple gated iterations
+    # into the last reachable row - silent gradient corruption on LLVM, hard overflow on SPIR-V.
+    #
+    # The kernel below uses `selector[i % K]` so the SAME 4 selector cells (selector[0..4]) are read
+    # `n / K = 16` times each, but only `n_gated = 4` of those reads pass the gate (the cells where
+    # `selector[i % K] = 1.0`). On the unfixed analyser the gate is captured with the bogus index, the
+    # reducer counts at most 4 gate-passing cells in `selector[0..n)`, and the float heap is sized for 4
+    # rows while 16 gated LCA reaches happen on each of those rows - rows 1..15 of every iteration's
+    # claim alias into row 0/1/2/3, the inner-loop primal pushes overwrite each other, and the per-`i`
+    # gradient (`2 * x[i] * 1.05^n_iter`) reads back a cross-iteration value. The fix rejects the gate
+    # capture so the launcher falls back to the worst-case `num_threads * stride_float` heap sizing -
+    # safe (no aliasing), at the cost of the savings the bound-reducer path would have given.
+    n = 64
+    K = 4
+    n_iter = 8
+    eps = 1e-9
+
+    np.random.seed(0)
+    x_np = (0.05 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = np.zeros(n, dtype=np.float32)
+    selector_np[:K] = 1.0  # first K cells gated; rest zero
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if selector[i % K] > eps:
+                v = x[i] * x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[0] += v
+
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    # `selector[i % K]` is non-zero exactly when `i % K < K` and selector[i % K] = 1.0; with selector[:K] =
+    # 1.0 every iteration is gated. d(out)/d(x[i]) = 2 * x[i] * 1.05^n_iter on every i.
+    coeff = 1.05
+    expected = np.float32(2.0 * x_np * coeff**n_iter)
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"non-loop-var-index grad returned NaN: {got_grad}"
+    np.testing.assert_allclose(got_grad, expected, rtol=2e-4, atol=2e-6)
