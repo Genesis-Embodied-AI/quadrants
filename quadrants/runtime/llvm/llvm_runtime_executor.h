@@ -117,6 +117,18 @@ class LlvmRuntimeExecutor {
                                        LaunchContextBuilder *ctx,
                                        void *device_runtime_context_ptr = nullptr);
 
+  // Allocate-on-demand and clear the per-kernel lazy-claim arrays:
+  //   `adstack_row_counters[num_tasks]` = 0     (codegen-emitted LCA-block atomic-rmw target; each task counts
+  //                                              its own LCA-block-reaching threads in slot `task_codegen_id`)
+  //   `adstack_bound_row_capacities[num_tasks]` = UINT32_MAX (clamp value in the codegen-emitted bounds check; a
+  //                                              future reducer can override per-task with a tighter count, but
+  //                                              the default keeps the clamp inert)
+  // Called by every kernel launcher (CPU / CUDA / AMDGPU) before dispatching the first task in a kernel so each
+  // task observes a clean counter slot. Idempotent for `num_tasks <= adstack_lazy_claim_capacity_`; grows the
+  // arrays on amortised doubling otherwise. Publishes the array pointers into `runtime->adstack_row_counters` /
+  // `adstack_bound_row_capacities` via the cached field addresses on first call (and after every grow).
+  void publish_adstack_lazy_claim_buffers(std::size_t num_tasks);
+
   // Return (and lazily cache) the device pointer to `runtime->temporaries`, the global temporary buffer backing
   // `GlobalTemporaryStmt` loads and stores. GPU kernel launchers use this to read back dynamic range_for bounds
   // (begin / end i32 values at known byte offsets) via a host-side DtoH memcpy when sizing the adstack heap.
@@ -246,6 +258,18 @@ class LlvmRuntimeExecutor {
   // prior allocation.
   void *runtime_adstack_row_counters_field_ptr_{nullptr};
   void *runtime_adstack_bound_row_capacities_field_ptr_{nullptr};
+
+  // Host-owned storage for the per-kernel lazy-claim arrays:
+  // `adstack_row_counters_alloc_`: u32[num_tasks] atomic counter the codegen-emitted LCA-block row claim
+  // atomic-rmws into; cleared host-side at the start of each kernel-launch so each task's claims accumulate in
+  // its own slot from zero.
+  // `adstack_bound_row_capacities_alloc_`: u32[num_tasks] capacity each task's claim is clamped against; the
+  // host writes UINT32_MAX into every slot by default so the clamp is inert when no reducer count is published.
+  // Both buffers are sized at `max(num_tasks_observed)` and grown on demand; the pointers we publish into the
+  // runtime stay stable across launches unless we actually grow.
+  DeviceAllocationUnique adstack_row_counters_alloc_ = nullptr;
+  DeviceAllocationUnique adstack_bound_row_capacities_alloc_ = nullptr;
+  std::size_t adstack_lazy_claim_capacity_{0};
 
   // Host-owned storage for the two per-launch adstack metadata arrays. We reuse these buffers across launches so
   // the device pointers we publish remain stable; they are grown (never shrunk) when a larger task is hit.

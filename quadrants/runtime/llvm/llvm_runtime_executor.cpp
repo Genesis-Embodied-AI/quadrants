@@ -1,6 +1,9 @@
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 
+#include <limits>
+#include <vector>
+
 #include "quadrants/rhi/common/host_memory_pool.h"
 #include "quadrants/runtime/llvm/llvm_offline_cache.h"
 #include "quadrants/rhi/cpu/cpu_device.h"
@@ -507,6 +510,11 @@ void LlvmRuntimeExecutor::finalize() {
   runtime_temporaries_cache_ = nullptr;
   runtime_adstack_heap_buffer_field_ptr_ = nullptr;
   runtime_adstack_heap_size_field_ptr_ = nullptr;
+  runtime_adstack_row_counters_field_ptr_ = nullptr;
+  runtime_adstack_bound_row_capacities_field_ptr_ = nullptr;
+  adstack_row_counters_alloc_.reset();
+  adstack_bound_row_capacities_alloc_.reset();
+  adstack_lazy_claim_capacity_ = 0;
   // Release the pinned-host metadata scratch and its completion event. Sequence: first drain the pending in-flight
   // copy via `event_synchronize` (the next launch's reuse path would have done this lazily, but on shutdown there
   // is no next launch), then free the host pinning, then destroy the event. Skipping the synchronize before
@@ -996,6 +1004,82 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
   std::size_t needed_bytes = stride * num_threads;
   ensure_adstack_heap(needed_bytes);
   return needed_bytes;
+}
+
+void LlvmRuntimeExecutor::publish_adstack_lazy_claim_buffers(std::size_t num_tasks) {
+  if (num_tasks == 0) {
+    return;
+  }
+  // Cache the field-of-LLVMRuntime addresses for the row counter / bound row capacity array pointers. Resolved
+  // once per program lifetime; subsequent grows write the new array pointers directly to the cached addresses.
+  if (runtime_adstack_row_counters_field_ptr_ == nullptr) {
+    auto *const runtime_jit = get_runtime_jit_module();
+    runtime_jit->call<void *>("runtime_get_adstack_lazy_claim_field_ptrs", llvm_runtime_);
+    runtime_adstack_row_counters_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
+    runtime_adstack_bound_row_capacities_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id + 1, result_buffer_cache_));
+  }
+
+  auto grow_to = [&](DeviceAllocationUnique &alloc, std::size_t capacity_u32) {
+    Device::AllocParams params{};
+    params.size = capacity_u32 * sizeof(uint32_t);
+    params.host_read = false;
+    params.host_write = false;
+    params.export_sharing = false;
+    params.usage = AllocUsage::Storage;
+    DeviceAllocation new_alloc;
+    RhiResult res = llvm_device()->allocate_memory(params, &new_alloc);
+    QD_ERROR_IF(res != RhiResult::success, "Failed to allocate {} bytes for adstack lazy-claim array (err: {})",
+                params.size, int(res));
+    alloc = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+  };
+
+  bool grew = false;
+  if (num_tasks > adstack_lazy_claim_capacity_) {
+    std::size_t new_cap = std::max<std::size_t>(num_tasks, 2 * adstack_lazy_claim_capacity_);
+    grow_to(adstack_row_counters_alloc_, new_cap);
+    grow_to(adstack_bound_row_capacities_alloc_, new_cap);
+    adstack_lazy_claim_capacity_ = new_cap;
+    grew = true;
+  }
+  void *row_counters_dev_ptr = get_device_alloc_info_ptr(*adstack_row_counters_alloc_);
+  void *bound_capacities_dev_ptr = get_device_alloc_info_ptr(*adstack_bound_row_capacities_alloc_);
+
+  // After every grow, publish the new array pointers into the runtime so the codegen-emitted GEPs
+  // (`runtime->adstack_row_counters[task_codegen_id]` and `runtime->adstack_bound_row_capacities[task_codegen_id]`)
+  // resolve against the live allocations. Skipped between grows because the cached field address holds the same
+  // pointer value.
+  auto copy_h2d = [&](void *dst, const void *src, std::size_t bytes) {
+    if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+      CUDADriver::get_instance().memcpy_host_to_device(dst, const_cast<void *>(src), bytes);
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+      AMDGPUDriver::get_instance().memcpy_host_to_device(dst, const_cast<void *>(src), bytes);
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else {
+      std::memcpy(dst, src, bytes);
+    }
+  };
+  if (grew) {
+    copy_h2d(runtime_adstack_row_counters_field_ptr_, &row_counters_dev_ptr, sizeof(void *));
+    copy_h2d(runtime_adstack_bound_row_capacities_field_ptr_, &bound_capacities_dev_ptr, sizeof(void *));
+  }
+
+  // Per-launch reset: zero the counter slots (each task's LCA-block atomic-rmw add starts from 0 and accumulates
+  // its own claims) and write UINT32_MAX into the capacity slots so the codegen-emitted bounds clamp is inert
+  // unless a follow-up reducer overrides slots with tighter counts. Memset rather than per-slot store: the host
+  // pays one O(num_tasks) buffer fill per kernel-launch, regardless of arch.
+  std::vector<uint32_t> zero_buf(num_tasks, 0u);
+  std::vector<uint32_t> uint_max_buf(num_tasks, std::numeric_limits<uint32_t>::max());
+  copy_h2d(row_counters_dev_ptr, zero_buf.data(), num_tasks * sizeof(uint32_t));
+  copy_h2d(bound_capacities_dev_ptr, uint_max_buf.data(), num_tasks * sizeof(uint32_t));
 }
 
 void LlvmRuntimeExecutor::ensure_adstack_heap(std::size_t needed_bytes) {

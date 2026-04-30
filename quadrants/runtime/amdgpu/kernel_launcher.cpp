@@ -49,6 +49,10 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             void *context_pointer,
                                             int arg_size) {
   auto *executor = get_runtime_executor();
+  // Allocate / reset the per-kernel lazy-claim arrays once before the first task. See the matching CPU
+  // launcher block for rationale; on AMDGPU the same memcpy_host_to_device path through the cached field
+  // pointers publishes the cleared counter and UINT32_MAX-defaulted capacity arrays.
+  executor->publish_adstack_lazy_claim_buffers(offloaded_tasks.size());
   for (const auto &task : offloaded_tasks) {
     // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without this the
     // sizer launches with a host pointer and the next DtoH sync trips

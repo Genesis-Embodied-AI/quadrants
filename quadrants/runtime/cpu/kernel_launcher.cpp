@@ -11,6 +11,12 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             const std::vector<std::size_t> &num_threads_per_task) {
   auto *executor = get_runtime_executor();
   ctx.get_context().cpu_assert_failed = 0;
+  // Allocate / reset the per-kernel lazy-claim arrays once before the first task. The codegen-emitted LCA-block
+  // row claim atomic-rmws into `runtime->adstack_row_counters[task_codegen_id]`; clearing the slots ensures each
+  // task counts its own LCA-block-reaching threads from zero, and writing UINT32_MAX into
+  // `bound_row_capacities[task_codegen_id]` keeps the codegen-emitted bounds clamp inert until a follow-up
+  // reducer publishes tighter values per task.
+  executor->publish_adstack_lazy_claim_buffers(task_funcs.size());
   for (size_t i = 0; i < task_funcs.size(); ++i) {
     executor->publish_adstack_metadata(ad_stacks[i], num_threads_per_task[i], &ctx);
     task_funcs[i](&ctx.get_context());
