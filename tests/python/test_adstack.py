@@ -3242,3 +3242,140 @@ def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
     got_grad = np.array([x.grad[i] for i in range(n)], dtype=np.float32)
     assert not np.isnan(got_grad).any(), f"static-bound-expr snode grad returned NaN: {got_grad}"
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@pytest.mark.parametrize("bound_shape", ["int_const", "scalar_field", "ndarray_shape", "ndarray_read", "two_arg_range"])
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=128)
+def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
+    # End-to-end memory-footprint test for the sparse-adstack-heap path. Pins that every loop-bound shape the
+    # autodiff sizer documents as supported (`docs/source/user_guide/autodiff.md::Appendix A`) plays nicely
+    # with the gating-predicate capture path: the codegen pattern matcher recognises `field[i] cmp literal`
+    # immediately above the adstack-using inner work and the runtime sizes the float adstack heap to the
+    # gate-passing iteration count instead of `dispatched_threads * stride * sizeof(elem)`. Pre-PR, this
+    # workload sized the float heap at `n * stride * 8 = ~2 MB per loop-carried float` per dispatched thread
+    # slot, multiplied across all the pre-cap concurrent-thread counts on every backend (millions on CUDA /
+    # AMDGPU's saturating_grid_dim, low six figures on Metal / Vulkan); the cumulative allocation easily
+    # crossed the per-buffer cap on Metal and the device-memory cap on x86 / CUDA / AMDGPU when wired through
+    # Genesis MPM-class workloads. With the gate captured the heap shrinks to `gate_passing_count * stride`
+    # which is `~5%` of the worst case for the sparse fraction below.
+    #
+    # The parametrisation walks every supported bound shape so a regression that drops shape-product / scalar-
+    # field / two-arg-range support from `determine_ad_stack_size` or from the `analyze_adstack_static_bounds`
+    # pre-pass surfaces as a wrong gradient on exactly the shape that broke. Each shape resolves to the same
+    # `n` iteration count at launch time so the analytic oracle is identical across cases - the only delta is
+    # how the loop bound is expressed in Quadrants Python and how the IR pre-pass resolves it.
+    n = 256
+    n_iter = 16
+    eps = 1e-9
+
+    np.random.seed(0)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    n_gated = max(1, int(round(0.05 * n)))
+    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+    selector_np = np.zeros(n, dtype=np.float32)
+    selector_np[gated_indices] = 1.0
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f32, shape=(n,))
+    bound_arr = qd.ndarray(qd.i32, shape=(n,))
+    bound_2d = qd.ndarray(qd.i32, shape=(2, n))
+    n_field = qd.field(qd.i32, shape=())
+    start_arr = qd.ndarray(qd.i32, shape=(1,))
+    stop_arr = qd.ndarray(qd.i32, shape=(1,))
+
+    if bound_shape == "int_const":
+
+        @qd.kernel
+        def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+            for i in range(n):
+                if selector[i] > eps:
+                    v = x[i]
+                    for _ in range(n_iter):
+                        v = v * 1.05 + 0.05
+                    out[0] += v
+
+        forward_args = (x, selector, out)
+    elif bound_shape == "scalar_field":
+        n_field[None] = n
+
+        @qd.kernel
+        def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+            for i in range(n_field[None]):
+                if selector[i] > eps:
+                    v = x[i]
+                    for _ in range(n_iter):
+                        v = v * 1.05 + 0.05
+                    out[0] += v
+
+        forward_args = (x, selector, out)
+    elif bound_shape == "ndarray_shape":
+
+        @qd.kernel
+        def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+            for i in range(selector.shape[0]):
+                if selector[i] > eps:
+                    v = x[i]
+                    for _ in range(n_iter):
+                        v = v * 1.05 + 0.05
+                    out[0] += v
+
+        forward_args = (x, selector, out)
+    elif bound_shape == "ndarray_read":
+        bound_arr.from_numpy(np.full(n, n, dtype=np.int32))
+
+        @qd.kernel
+        def compute(
+            x: qd.types.NDArray,
+            selector: qd.types.NDArray,
+            out: qd.types.NDArray,
+            bound_arr: qd.types.NDArray,
+        ) -> None:
+            for i in range(bound_arr[0]):
+                if selector[i] > eps:
+                    v = x[i]
+                    for _ in range(n_iter):
+                        v = v * 1.05 + 0.05
+                    out[0] += v
+
+        forward_args = (x, selector, out, bound_arr)
+    else:
+        # two_arg_range
+        start_arr.from_numpy(np.array([0], dtype=np.int32))
+        stop_arr.from_numpy(np.array([n], dtype=np.int32))
+
+        @qd.kernel
+        def compute(
+            x: qd.types.NDArray,
+            selector: qd.types.NDArray,
+            out: qd.types.NDArray,
+            start_arr: qd.types.NDArray,
+            stop_arr: qd.types.NDArray,
+        ) -> None:
+            for i in range(start_arr[0], stop_arr[0]):
+                if selector[i] > eps:
+                    v = x[i]
+                    for _ in range(n_iter):
+                        v = v * 1.05 + 0.05
+                    out[0] += v
+
+        forward_args = (x, selector, out, start_arr, stop_arr)
+
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+    # Suppress an unused-variable warning when the parametrisation doesn't bind every bound source.
+    _ = bound_2d
+
+    compute(*forward_args)
+    compute.grad(*forward_args)
+    qd.sync()
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"sparse-adstack-heap [{bound_shape}] grad returned NaN: {got_grad}"
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    expected = np.where(selector_np > eps, np.float32(expected_per_gated), np.float32(0.0))
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
