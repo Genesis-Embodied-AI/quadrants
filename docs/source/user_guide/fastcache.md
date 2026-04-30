@@ -50,27 +50,6 @@ qd.init(arch=qd.gpu)
 # qd.init(arch=qd.gpu, print_non_pure=True)
 ```
 
-### Diagnostics
-
-You can inspect whether fastcache was used for a specific kernel via the `src_ll_cache_observations` attribute on the kernel's primal:
-
-```python
-@qd.kernel(fastcache=True)
-def my_kernel(x: qd.types.NDArray[qd.f32, 1]) -> None:
-    for i in range(x.shape[0]):
-        x[i] += 1.0
-
-my_kernel(some_array)
-
-obs = my_kernel._primal.src_ll_cache_observations
-print(obs.cache_key_generated)  # True if the cache key was computed
-print(obs.cache_validated)      # True if a cached entry was found and source hashes matched
-print(obs.cache_loaded)         # True if the compiled kernel was loaded from cache
-print(obs.cache_stored)         # True if the compiled kernel was stored to cache
-```
-
-On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the second run (after `qd.init`), `cache_loaded=True`.
-
 ## Constraints
 
 A kernel is eligible for fastcache only if all of the following hold:
@@ -134,3 +113,26 @@ The cache is automatically invalidated when any of the following change:
 - **Template parameter values** (since they are baked into the compiled kernel).
 
 You do not need to manually clear the cache when making code changes — the hash mismatch causes a transparent recompilation.
+
+## Advanced
+
+### Diagnostics
+
+You can inspect whether fastcache was used for a specific kernel via the `src_ll_cache_observations` attribute on the kernel's primal:
+
+```python
+@qd.kernel(fastcache=True)
+def my_kernel(x: qd.types.NDArray[qd.f32, 1]) -> None:
+    for i in range(x.shape[0]):
+        x[i] += 1.0
+
+my_kernel(some_array)
+
+obs = my_kernel._primal.src_ll_cache_observations
+print(obs.cache_key_generated)  # True if the cache key was computed
+print(obs.cache_validated)      # True if a cached entry was found and source hashes matched
+print(obs.cache_loaded)         # True if the compiled kernel was loaded from cache
+print(obs.cache_stored)         # True if the compiled kernel was stored to cache
+```
+
+On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the second run (after `qd.init`), `cache_loaded=True`.
