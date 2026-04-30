@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants.lang.field import _can_zerocopy_field
 
 from tests import test_utils
 
@@ -18,7 +19,12 @@ torch = pytest.importorskip("torch")
 
 pytestmark = pytest.mark.needs_torch
 
-copy_arch = [qd.cpu, qd.cuda]
+
+def _skip_if_no_zerocopy():
+    """Skip the current test if the active backend doesn't support DLPack zero-copy."""
+    probe = qd.field(qd.f32, shape=(1,))
+    if not _can_zerocopy_field(probe, is_scalar=True):
+        pytest.skip(f"DLPack zero-copy not available on {qd.cfg().arch.name}")
 
 
 # ---------------------------------------------------------------------------
@@ -26,9 +32,10 @@ copy_arch = [qd.cpu, qd.cuda]
 # ---------------------------------------------------------------------------
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 @pytest.mark.parametrize("dtype", [qd.f32, qd.i32])
 def test_scalar_field_copy_false(dtype):
+    _skip_if_no_zerocopy()
     f = qd.field(dtype, shape=(4,))
     f.from_numpy(np.arange(4, dtype=np.float32 if dtype is qd.f32 else np.int32))
     qd.sync()
@@ -38,7 +45,7 @@ def test_scalar_field_copy_false(dtype):
     np.testing.assert_allclose(t.cpu().numpy(), expected)
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_scalar_field_copy_none():
     f = qd.field(qd.f32, shape=(4,))
     f.from_numpy(np.array([1, 2, 3, 4], dtype=np.float32))
@@ -68,8 +75,9 @@ def test_scalar_field_copy_false_shares_memory():
 # ---------------------------------------------------------------------------
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_vector_field_copy_false():
+    _skip_if_no_zerocopy()
     f = qd.Vector.field(3, qd.f32, shape=(2,))
     f.from_numpy(np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32))
     qd.sync()
@@ -78,7 +86,7 @@ def test_vector_field_copy_false():
     np.testing.assert_allclose(t.cpu().numpy(), [[1, 2, 3], [4, 5, 6]])
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_vector_field_copy_none():
     f = qd.Vector.field(3, qd.f32, shape=(2,))
     f.from_numpy(np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32))
@@ -93,8 +101,9 @@ def test_vector_field_copy_none():
 # ---------------------------------------------------------------------------
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_scalar_ndarray_copy_false():
+    _skip_if_no_zerocopy()
     nd = qd.ndarray(qd.f32, shape=(4,))
     nd.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
     qd.sync()
@@ -103,7 +112,7 @@ def test_scalar_ndarray_copy_false():
     np.testing.assert_allclose(t.cpu().numpy(), [10, 20, 30, 40])
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_scalar_ndarray_copy_none():
     nd = qd.ndarray(qd.f32, shape=(4,))
     nd.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
@@ -118,13 +127,12 @@ def test_scalar_ndarray_copy_none():
 # ---------------------------------------------------------------------------
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_matrix_ndarray_copy_false():
+    _skip_if_no_zerocopy()
     mat_type = qd.types.matrix(2, 3, qd.f32)
     nd = qd.ndarray(mat_type, shape=(2,))
-    data = np.array(
-        [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], dtype=np.float32
-    )
+    data = np.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], dtype=np.float32)
     nd.from_numpy(data)
     qd.sync()
 
@@ -132,13 +140,11 @@ def test_matrix_ndarray_copy_false():
     np.testing.assert_allclose(t.cpu().numpy(), data)
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_matrix_ndarray_copy_none():
     mat_type = qd.types.matrix(2, 3, qd.f32)
     nd = qd.ndarray(mat_type, shape=(2,))
-    data = np.array(
-        [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], dtype=np.float32
-    )
+    data = np.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], dtype=np.float32)
     nd.from_numpy(data)
     qd.sync()
 
@@ -151,8 +157,9 @@ def test_matrix_ndarray_copy_none():
 # ---------------------------------------------------------------------------
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_vector_ndarray_copy_false():
+    _skip_if_no_zerocopy()
     vec_type = qd.types.vector(3, qd.f32)
     nd = qd.ndarray(vec_type, shape=(2,))
     data = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32)
@@ -163,7 +170,7 @@ def test_vector_ndarray_copy_false():
     np.testing.assert_allclose(t.cpu().numpy(), data)
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_vector_ndarray_copy_none():
     vec_type = qd.types.vector(3, qd.f32)
     nd = qd.ndarray(vec_type, shape=(2,))
@@ -180,7 +187,7 @@ def test_vector_ndarray_copy_none():
 # ---------------------------------------------------------------------------
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_struct_aos_copy_none_correct():
     """AoS struct member to_torch(copy=None) returns correct values via kernel copy."""
     s = qd.types.struct(a=qd.i32, b=qd.f32)
@@ -201,10 +208,11 @@ def test_struct_aos_copy_none_correct():
     np.testing.assert_allclose(t_b.cpu().numpy(), [0.0, 0.5, 1.0, 1.5])
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_struct_aos_copy_false_garbage():
     """AoS struct member to_torch(copy=False) returns garbage because DLPack assumes contiguous
     strides but AoS interleaves members. This documents the known limitation."""
+    _skip_if_no_zerocopy()
     s = qd.types.struct(a=qd.i32, b=qd.f32)
     f = s.field(shape=(4,), layout=qd.Layout.AOS)
 
@@ -221,9 +229,10 @@ def test_struct_aos_copy_false_garbage():
     assert not np.array_equal(t_a.cpu().numpy(), [0, 10, 20, 30])
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_struct_soa_copy_false_zerocopy():
     """SoA struct member to_torch(copy=False) returns correct values via DLPack zero-copy."""
+    _skip_if_no_zerocopy()
     s = qd.types.struct(a=qd.i32, b=qd.f32)
     f = s.field(shape=(4,), layout=qd.Layout.SOA)
 
@@ -270,7 +279,7 @@ def test_struct_soa_zerocopy_shares_memory():
     np.testing.assert_array_equal(t_a.numpy(), [0, 10, 999, 30])
 
 
-@test_utils.test(arch=copy_arch)
+@test_utils.test()
 def test_struct_default_layout_copy_none():
     """Struct fields with no explicit layout= default to AoS. copy=None should still be correct."""
     s = qd.types.struct(x=qd.f32, y=qd.f32)
@@ -292,13 +301,17 @@ def test_struct_default_layout_copy_none():
 
 
 # ---------------------------------------------------------------------------
-# Vulkan: copy=False should raise
+# Backends without DLPack: copy=False should raise
 # ---------------------------------------------------------------------------
 
 
-@test_utils.test(arch=[qd.vulkan])
-def test_vulkan_copy_false_raises():
-    """Vulkan does not support DLPack, so copy=False should raise."""
+@test_utils.test()
+def test_no_zerocopy_copy_false_raises():
+    """Backends that don't support DLPack (e.g. Vulkan) should raise on copy=False."""
+    probe = qd.field(qd.f32, shape=(1,))
+    if _can_zerocopy_field(probe, is_scalar=True):
+        pytest.skip(f"DLPack zero-copy is available on {qd.cfg().arch.name}")
+
     f = qd.field(qd.f32, shape=(4,))
     f.fill(1.0)
     qd.sync()
