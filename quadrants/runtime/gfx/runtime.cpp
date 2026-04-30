@@ -538,6 +538,16 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   std::vector<PerTaskAdStackRuntime> per_task_ad_stack = publish_adstack_metadata_spirv(
       host_ctx, args_buffer.get(), any_arrays, task_attribs, ti_kernel->ti_kernel_attribs().name);
 
+  // Static-IR-bound sparse-adstack-heap reducer dispatch. For each task with a Stage 1 captured bound_expr
+  // (ndarray-backed gating predicate above the Lowest Common Ancestor (LCA) block), dispatch a generic
+  // reducer compute shader that counts threads passing the predicate; the count then sizes the float
+  // adstack heap allocation exactly in the bind path below, instead of the dispatched-threads worst case.
+  // Tasks without a bound_expr (or with SNode-backed sources, or on capability-missing devices) keep the
+  // worst-case sizing. The reducer dispatch is fully serialised against any in-flight reader kernels via
+  // the helper's internal flush + wait_idle, mirroring `publish_adstack_metadata_spirv`.
+  std::unordered_map<int, uint32_t> per_task_bound_count =
+      dispatch_adstack_bound_reducers(host_ctx, args_buffer.get(), task_attribs);
+
   ensure_current_cmdlist();
 
   // Cache the kernel's per-task names so the post-launch `synchronize()` readback can map each slot of the
@@ -635,25 +645,35 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         }
         bindings->rw_buffer(bind.binding, *adstack_row_counter_buffer_);
       } else if (bind.buffer.type == BufferType::AdStackHeapFloat) {
-        // SPIR-V adstack primal/adjoint storage for f32 adstacks. Sized for the actual dispatched thread count
-        // (`group_x * block_dim`, which rounds `advisory_total_num_threads` up to a workgroup multiple) rather
-        // than the advisory so threads past the advisory - which still own an `invoc_id * stride` slice - stay
-        // in-bounds even if they ever reach a push/pop. Grown on demand and reused across launches; contents do
-        // not need to persist across kernels. On empty fields (`dispatched_threads == 0`) no push/pop can
-        // actually execute, so bind a null allocation instead of asking the RHI for a zero-sized buffer (which
-        // trips `RHI_ASSERT(params.size > 0)` on Vulkan and fails similarly on Metal). The stride used here is
+        // SPIR-V adstack primal/adjoint storage for f32 adstacks. Sized for `effective_rows`: the count of
+        // threads the static-IR-bound reducer pre-counted as passing the captured gate, when the task has
+        // a Stage 1 `bound_expr` consumable by the reducer; otherwise the dispatched-threads worst case
+        // (which is `group_x * block_dim`, the advisory rounded up to a workgroup multiple, so threads past
+        // the advisory - which still own an `invoc_id * stride` slice on the eager fallback path - stay
+        // in-bounds even if they ever reach a push). Grown on demand and reused across launches; contents
+        // do not need to persist across kernels. On empty rows (`effective_rows == 0`) no push/pop can
+        // execute, so bind a null allocation instead of asking the RHI for a zero-sized buffer (which trips
+        // `RHI_ASSERT(params.size > 0)` on Vulkan and fails similarly on Metal). The stride used here is
         // the per-launch value produced by `evaluate_adstack_size_expr` over every alloca (stored in
         // `ad_stack_stride_float`), not the compile-time `attribs.ad_stack.per_thread_stride_float_compile_time`.
         size_t dispatched_threads = size_t(group_x) * size_t(attribs.advisory_num_threads_per_group);
-        // The shader uses u64 index arithmetic for `invoc_id * stride + offset + count` when the device has
-        // Int64; without Int64 the shader falls back to u32 OpIMul, which silently wraps past 2^32 and aliases
-        // threads into one another's heap slice. Assert at launch time rather than emit silent corruption.
+        size_t effective_rows = dispatched_threads;
+        auto bound_count_it = per_task_bound_count.find(i);
+        if (bound_count_it != per_task_bound_count.end()) {
+          effective_rows = bound_count_it->second;
+        }
+        // The shader uses u64 index arithmetic for `row_id * stride + offset + count` when the device has
+        // Int64; without Int64 the shader falls back to u32 OpIMul, which silently wraps past 2^32 and
+        // aliases threads into one another's heap slice. Assert at launch time rather than emit silent
+        // corruption. effective_rows is the upper bound on the row index the kernel will produce (because
+        // the lazy LCA-block atomic claim hands out row ids in [0, count) where count is exactly the value
+        // the reducer published into this task's slot before this dispatch starts).
         QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_int64) ||
-                           size_t(ad_stack_stride_float) * dispatched_threads <= std::numeric_limits<uint32_t>::max(),
+                           size_t(ad_stack_stride_float) * effective_rows <= std::numeric_limits<uint32_t>::max(),
                        "adstack f32 heap offset would overflow u32 on a device without Int64: "
-                       "stride={} dispatched_threads={}",
-                       ad_stack_stride_float, dispatched_threads);
-        size_t required = size_t(ad_stack_stride_float) * dispatched_threads * sizeof(float);
+                       "stride={} effective_rows={}",
+                       ad_stack_stride_float, effective_rows);
+        size_t required = size_t(ad_stack_stride_float) * effective_rows * sizeof(float);
         if (required == 0) {
           bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
         } else {

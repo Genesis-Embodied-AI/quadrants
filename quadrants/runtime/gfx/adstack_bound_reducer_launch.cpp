@@ -1,0 +1,331 @@
+// Static-IR-bound sparse-adstack-heap reducer dispatch for SPIR-V backends. Extracted out of `runtime.cpp`
+// for the same reason `adstack_sizer_launch.cpp` is - keep `GfxRuntime::launch_kernel` focused on the main-
+// kernel record/submit flow. Every code path here is conditional on at least one task in the kernel having
+// a captured `TaskAttributes::AdStackSizingAttribs::bound_expr` whose `field_source_kind` is `NdArray`; on
+// kernels without such a task, or on devices missing the required SPIR-V capabilities, the helper returns
+// an empty map and the heap-bind path in `launch_kernel` falls through to the dispatched-threads worst-
+// case sizing - safe but no savings.
+//
+// Mechanism end-to-end:
+// 1. Filter `task_attribs` to the tasks whose `bound_expr` matches the supported shape (NdArray-backed,
+//    f32 or i32 element type). Build a parallel vector of `AdStackBoundReducerParams` blobs keyed by the
+//    task's `task_id_in_kernel`.
+// 2. Lazy-initialise the reducer pipeline (`adstack_bound_reducer_pipeline_`) on the first call.
+// 3. Lazy-grow the parameter blob storage buffer to fit `n_matches` blobs at descriptor-alignment offsets.
+// 4. Lazy-grow the `AdStackRowCounter` buffer to fit `num_tasks_in_kernel` u32 slots, then clear it (the
+//    reducer's atomic-adds accumulate into slot[task_id], so a leftover count from a prior launch would
+//    contaminate this launch's reduce).
+// 5. Build a fresh cmdlist, bind+dispatch the reducer per matched task at its corresponding params offset,
+//    submit_synced.
+// 6. Map the counter buffer, read each matched task's slot into the result map, unmap.
+// 7. Clear the counter buffer AGAIN before returning: the main task's own LCA-block atomic-add writes the
+//    same slots during its dispatch (Phase A+B+C lazy row claim), and a leftover reducer count there would
+//    skew the row id range the main pass produces.
+//
+// Caller responsibility: invoke `dispatch_adstack_bound_reducers` BEFORE the main task bind/dispatch loop
+// and consult the returned map at the AdStackHeapFloat bind site to size each matched task's heap
+// allocation to `count[task_id] * stride_float * sizeof(f32)`. Tasks not in the map (no `bound_expr`,
+// SNode-backed, or capability-missing fallback) keep the existing `dispatched_threads * stride_float`
+// worst-case sizing.
+
+#include "quadrants/runtime/gfx/runtime.h"
+
+#include <algorithm>
+#include <cstring>
+#include <unordered_map>
+#include <vector>
+
+#include "quadrants/codegen/spirv/adstack_bound_reducer_shader.h"
+#include "quadrants/common/logging.h"
+#include "quadrants/ir/stmt_op_types.h"
+#include "quadrants/ir/type.h"
+#include "quadrants/ir/type_factory.h"
+#include "quadrants/program/launch_context_builder.h"
+#include "quadrants/rhi/device.h"
+
+namespace quadrants::lang {
+namespace gfx {
+
+namespace {
+
+// Map a captured `BinaryOpType` (stored as int in `StaticBoundExpr::cmp_op`) onto the
+// `AdStackBoundReducerOpCode` value the shader's OpSwitch dispatches on. Returns an out-of-range value
+// when the captured op is not one of the six recognized comparisons; the caller is expected to have
+// already filtered such bound_exprs out at the IR-pattern-match stage, so reaching the default branch is
+// an internal-consistency error.
+spirv::AdStackBoundReducerOpCode encode_cmp_op(int captured_cmp_op) {
+  switch (static_cast<BinaryOpType>(captured_cmp_op)) {
+    case BinaryOpType::cmp_lt:
+      return spirv::kAdStackBoundReducerOpLt;
+    case BinaryOpType::cmp_le:
+      return spirv::kAdStackBoundReducerOpLe;
+    case BinaryOpType::cmp_gt:
+      return spirv::kAdStackBoundReducerOpGt;
+    case BinaryOpType::cmp_ge:
+      return spirv::kAdStackBoundReducerOpGe;
+    case BinaryOpType::cmp_eq:
+      return spirv::kAdStackBoundReducerOpEq;
+    case BinaryOpType::cmp_ne:
+      return spirv::kAdStackBoundReducerOpNe;
+    default:
+      QD_ERROR(
+          "static_bound_expr captured unsupported BinaryOpType={} (internal-consistency: the IR "
+          "pattern matcher should have rejected this at codegen time)",
+          captured_cmp_op);
+      return spirv::kAdStackBoundReducerOpEq;  // unreachable after QD_ERROR
+  }
+}
+
+// Resolve the byte offset within the kernel arg buffer where the ndarray's `data_ptr` (u64) lives.
+// Mirrors the `kNodeOffArgBufferOffset` precomputation the SizeExpr device-bytecode encoder does for its
+// own `ExternalTensorRead` nodes (see `adstack_size_expr_eval.cpp` near line 497) - the layout knowledge
+// is centralised in `LaunchContextBuilder::args_type->get_element_offset`, so any update to the args-
+// struct layout flows through both call sites uniformly. Returned offset is in BYTES; the shader divides
+// by 4 (because the params blob slot stores a u32 word offset into the arg buffer's u32[] view).
+size_t resolve_ndarray_data_ptr_byte_offset(LaunchContextBuilder &host_ctx, const std::vector<int> &arg_id_path) {
+  QD_ASSERT_INFO(host_ctx.args_type != nullptr,
+                 "adstack bound reducer: LaunchContextBuilder::args_type is null; cannot resolve ndarray "
+                 "data pointer offset for the captured StaticBoundExpr");
+  std::vector<int> indices = arg_id_path;
+  indices.push_back(TypeFactory::DATA_PTR_POS_IN_NDARRAY);
+  return host_ctx.args_type->get_element_offset(indices);
+}
+
+}  // namespace
+
+std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
+    LaunchContextBuilder &host_ctx,
+    DeviceAllocationGuard *args_buffer,
+    const std::vector<spirv::TaskAttributes> &task_attribs) {
+  std::unordered_map<int, uint32_t> result;
+
+  // Capability gate: the reducer shader builds an empty SPIR-V binary on devices without PSB+Int64, so
+  // the lazy-init below would fail and there is no correct host-eval fallback for an ndarray data pointer
+  // that lives in GPU-private memory. Skip the dispatch and return an empty map; the caller falls back
+  // to dispatched-threads worst-case heap sizing for every task. Every backend Quadrants targets that has
+  // adstack support advertises both caps, so this is a defensive guard rather than a routine path.
+  if (!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer)) {
+    return result;
+  }
+  if (!device_->get_caps().get(DeviceCapability::spirv_has_int64)) {
+    return result;
+  }
+
+  // Filter to the tasks whose bound_expr is consumable by the Stage 1 reducer (NdArray-backed source).
+  // SNode-backed bound_exprs are captured by the IR pattern matcher but the Stage 1 shader does not yet
+  // implement the SNode-tree access path; those tasks fall through to worst-case sizing in the caller.
+  std::vector<int> matched_task_indices;
+  matched_task_indices.reserve(task_attribs.size());
+  for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
+    const auto &be = task_attribs[ti].ad_stack.bound_expr;
+    if (!be.has_value()) {
+      continue;
+    }
+    if (be->field_source_kind != spirv::TaskAttributes::StaticBoundExpr::FieldSourceKind::NdArray) {
+      continue;
+    }
+    matched_task_indices.push_back(static_cast<int>(ti));
+  }
+  if (matched_task_indices.empty()) {
+    return result;
+  }
+
+  // Args buffer is required: the reducer reads the ndarray data pointer out of it via PSB. Forward-only
+  // launches without ndarray arguments never reach this helper because they cannot have bound_exprs;
+  // assert defensively rather than silently skip and risk a wrong gradient on the next launch.
+  QD_ASSERT_INFO(args_buffer != nullptr,
+                 "adstack bound reducer: matched task has NdArray-backed bound_expr but the kernel arg "
+                 "buffer is null; the launcher should have allocated it before reaching here");
+
+  // Lazy-init pipeline. Mirrors `adstack_sizer_launch.cpp`'s pattern: build the SPIR-V binary once via the
+  // shader-build helper, hand to the device's pipeline factory, cache for the runtime's lifetime.
+  if (!adstack_bound_reducer_pipeline_) {
+    std::vector<uint32_t> spirv = spirv::build_adstack_bound_reducer_spirv(Arch::vulkan, &device_->get_caps());
+    QD_ASSERT_INFO(!spirv.empty(),
+                   "build_adstack_bound_reducer_spirv returned an empty binary despite the PSB+Int64 cap "
+                   "check passing; bug in the shader builder's capability gating");
+    PipelineSourceDesc source_desc{PipelineSourceType::spirv_binary, (void *)spirv.data(),
+                                   spirv.size() * sizeof(uint32_t)};
+    auto [pipeline, res] = device_->create_pipeline_unique(source_desc, "adstack_bound_reducer", backend_cache_.get());
+    QD_ERROR_IF(res != RhiResult::success, "Failed to create pipeline for the adstack bound reducer (err: {})",
+                int(res));
+    adstack_bound_reducer_pipeline_ = std::move(pipeline);
+  }
+
+  // Pack one params blob per matched task at descriptor-alignment offsets. Vulkan's
+  // minStorageBufferOffsetAlignment caps at 256 B for the most conservative drivers in the wild (older
+  // NVIDIA), so we round up to that; this trades a little extra buffer space for a fixed alignment that
+  // every backend can bind without VUID-02999 violations. Pack the blobs into a single contiguous host-
+  // visible buffer and bind each task's per-task slice via `get_ptr(offset) + size`.
+  constexpr size_t kDescriptorOffsetAlignment = 256;
+  auto align_up = [](size_t v, size_t a) { return (v + a - 1) & ~(a - 1); };
+  const size_t params_size_bytes = spirv::AdStackBoundReducerParams::kNumWords * sizeof(uint32_t);
+  std::vector<size_t> per_task_params_offsets(matched_task_indices.size());
+  size_t total_params_bytes = 0;
+  for (size_t k = 0; k < matched_task_indices.size(); ++k) {
+    per_task_params_offsets[k] = align_up(total_params_bytes, kDescriptorOffsetAlignment);
+    total_params_bytes = per_task_params_offsets[k] + params_size_bytes;
+  }
+
+  if (!adstack_bound_reducer_params_buffer_ || adstack_bound_reducer_params_buffer_size_ < total_params_bytes) {
+    size_t new_size = std::max(total_params_bytes, 2 * adstack_bound_reducer_params_buffer_size_);
+    auto [buf, res] = device_->allocate_memory_unique(
+        {new_size, /*host_write=*/true, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
+    QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack bound reducer params buffer (size={})",
+                   new_size);
+    if (adstack_bound_reducer_params_buffer_) {
+      ctx_buffers_.push_back(std::move(adstack_bound_reducer_params_buffer_));
+    }
+    adstack_bound_reducer_params_buffer_ = std::move(buf);
+    adstack_bound_reducer_params_buffer_size_ = new_size;
+  }
+
+  // Resolve per-task length from the same end_shape_product cap the main-kernel dispatch applies (see the
+  // mirror computation around `runtime.cpp:564`); this keeps the reducer's iteration range consistent with
+  // the main task's actual dispatched thread count rather than the codegen fallback ceiling.
+  auto resolve_length = [&](const spirv::TaskAttributes &attribs) -> uint32_t {
+    int effective = attribs.advisory_total_num_threads;
+    if (attribs.range_for_attribs && !attribs.range_for_attribs->end_shape_product.empty()) {
+      const auto &range = *attribs.range_for_attribs;
+      int64_t iter_end = 1;
+      for (const auto &ref : range.end_shape_product) {
+        std::vector<int> indices = ref.arg_id;
+        indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+        indices.push_back(ref.axis);
+        iter_end *= int64_t(host_ctx.get_struct_arg<int32_t>(indices));
+      }
+      int64_t iter_count = std::max<int64_t>(0, iter_end - int64_t(range.begin));
+      effective = int(std::min<int64_t>(int64_t(effective), std::max<int64_t>(1, iter_count)));
+    }
+    return static_cast<uint32_t>(std::max(0, effective));
+  };
+
+  // Build params blobs and write them into the params buffer. Resolve the captured ndarray data-ptr byte
+  // offset via `LaunchContextBuilder::args_type::get_element_offset` (same path the SizeExpr encoder
+  // uses), then convert byte offset to u32 word offset for the shader's index arithmetic.
+  {
+    void *mapped = nullptr;
+    RhiResult map_res =
+        device_->map_range(adstack_bound_reducer_params_buffer_->get_ptr(0), total_params_bytes, &mapped);
+    QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack bound reducer params buffer");
+    for (size_t k = 0; k < matched_task_indices.size(); ++k) {
+      const int ti = matched_task_indices[k];
+      const auto &attribs = task_attribs[ti];
+      const auto &be = *attribs.ad_stack.bound_expr;
+      const size_t data_ptr_byte_off = resolve_ndarray_data_ptr_byte_offset(host_ctx, be.ndarray_arg_id);
+      QD_ASSERT_INFO(data_ptr_byte_off % sizeof(uint32_t) == 0,
+                     "adstack bound reducer: ndarray data pointer offset {} is not 4-byte aligned in the "
+                     "kernel arg buffer; layout mismatch with the SizeExpr encoder",
+                     data_ptr_byte_off);
+      spirv::AdStackBoundReducerParams params{};
+      params.task_id_in_kernel = static_cast<uint32_t>(ti);
+      params.length = resolve_length(attribs);
+      params.arg_word_offset = static_cast<uint32_t>(data_ptr_byte_off / sizeof(uint32_t));
+      params.op_code = static_cast<uint32_t>(encode_cmp_op(be.cmp_op));
+      params.field_dtype_is_float = be.field_dtype_is_float ? 1u : 0u;
+      params.polarity = be.polarity ? 1u : 0u;
+      params.threshold_bits = be.field_dtype_is_float ? *reinterpret_cast<const uint32_t *>(&be.literal_f32)
+                                                      : static_cast<uint32_t>(be.literal_i32);
+      std::memcpy(reinterpret_cast<char *>(mapped) + per_task_params_offsets[k], &params, params_size_bytes);
+    }
+    device_->unmap(*adstack_bound_reducer_params_buffer_);
+  }
+
+  // Ensure the per-task counter slots fit `num_tasks_in_kernel` u32 entries (same precondition the main-
+  // kernel codegen relies on for its LCA-block atomic-add) and clear them before the reducer dispatches.
+  // The buffer may have been grown by an earlier kernel launch with more tasks; we only grow on demand.
+  const size_t needed_counter_bytes = task_attribs.size() * sizeof(uint32_t);
+  if (!adstack_row_counter_buffer_ || adstack_row_counter_buffer_size_ < needed_counter_bytes) {
+    size_t new_size = std::max(needed_counter_bytes, 2 * adstack_row_counter_buffer_size_);
+    auto [buf, res] = device_->allocate_memory_unique({new_size,
+                                                       /*host_write=*/false,
+                                                       /*host_read=*/true,
+                                                       /*export_sharing=*/false, AllocUsage::Storage});
+    QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack row counter buffer (size={})", new_size);
+    if (adstack_row_counter_buffer_) {
+      ctx_buffers_.push_back(std::move(adstack_row_counter_buffer_));
+    }
+    adstack_row_counter_buffer_ = std::move(buf);
+    adstack_row_counter_buffer_size_ = new_size;
+  }
+
+  // Force visibility of prior writes the same way `adstack_sizer_launch.cpp` does (see its block comment
+  // around `flush(); device_->wait_idle();`): MoltenVK's PSB load path bypasses the descriptor-bound
+  // cache that a prior accessor kernel's submit_synced flushed via vkQueueWaitIdle, so without this
+  // sequence the reducer reads stale ndarray contents on Apple Silicon and undercounts.
+  flush();
+  device_->wait_idle();
+
+  // Zero the counter slots through a fresh cmdlist (RHI does not expose a host-side fill on a host_read-
+  // only allocation, and we want the clear ordered before the reducer dispatch). buffer_fill is the same
+  // primitive the main-launch path uses to clear the counter on `i==0`.
+  auto [clear_cmdlist, clear_cmdlist_res] = device_->get_compute_stream()->new_command_list_unique();
+  QD_ASSERT_INFO(clear_cmdlist_res == RhiResult::success, "Failed to create adstack reducer clear cmdlist");
+  clear_cmdlist->buffer_fill(adstack_row_counter_buffer_->get_ptr(0), needed_counter_bytes, /*data=*/0);
+  clear_cmdlist->buffer_barrier(*adstack_row_counter_buffer_);
+  device_->get_compute_stream()->submit_synced(clear_cmdlist.get());
+
+  // Dispatch the reducer per matched task. Each dispatch binds the same args + counter buffers but a
+  // different per-task slice of the params buffer; the shader reads `task_id_in_kernel` out of its slice
+  // and atomic-adds 1 into `counter[task_id]` for each matched thread.
+  auto [reducer_cmdlist, reducer_cmdlist_res] = device_->get_compute_stream()->new_command_list_unique();
+  QD_ASSERT_INFO(reducer_cmdlist_res == RhiResult::success, "Failed to create adstack reducer cmdlist");
+  for (size_t k = 0; k < matched_task_indices.size(); ++k) {
+    const int ti = matched_task_indices[k];
+    const auto &attribs = task_attribs[ti];
+    auto bindings = device_->create_resource_set_unique();
+    bindings->rw_buffer(0, *args_buffer);
+    bindings->rw_buffer(1, *adstack_row_counter_buffer_);
+    bindings->rw_buffer(2, adstack_bound_reducer_params_buffer_->get_ptr(per_task_params_offsets[k]),
+                        params_size_bytes);
+
+    reducer_cmdlist->bind_pipeline(adstack_bound_reducer_pipeline_.get());
+    RhiResult bind_res = reducer_cmdlist->bind_shader_resources(bindings.get());
+    QD_ERROR_IF(bind_res != RhiResult::success, "adstack bound reducer resource binding error: RhiResult({})",
+                int(bind_res));
+
+    const uint32_t length = resolve_length(attribs);
+    const uint32_t group_x =
+        (length + spirv::kAdStackBoundReducerWorkgroupSize - 1) / spirv::kAdStackBoundReducerWorkgroupSize;
+    if (group_x == 0) {
+      // Empty dispatch: the matched task has zero threads; record a zero count and skip the dispatch
+      // entirely (RHI rejects 0x1x1 dispatches on most backends).
+      result[ti] = 0;
+      continue;
+    }
+    RhiResult dispatch_res = reducer_cmdlist->dispatch(group_x, 1, 1);
+    QD_ERROR_IF(dispatch_res != RhiResult::success, "adstack bound reducer dispatch error: RhiResult({})",
+                int(dispatch_res));
+    reducer_cmdlist->buffer_barrier(*adstack_row_counter_buffer_);
+  }
+  device_->get_compute_stream()->submit_synced(reducer_cmdlist.get());
+
+  // Read back the matched tasks' counter slots into the result map. Tasks that hit the empty-dispatch
+  // shortcut above already have entries; the readback overrides them with the (still zero) post-dispatch
+  // value, which is consistent.
+  {
+    void *mapped = nullptr;
+    RhiResult map_res = device_->map(*adstack_row_counter_buffer_, &mapped);
+    QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack row counter buffer for readback");
+    const uint32_t *slots = reinterpret_cast<const uint32_t *>(mapped);
+    for (int ti : matched_task_indices) {
+      result[ti] = slots[ti];
+    }
+    device_->unmap(*adstack_row_counter_buffer_);
+  }
+
+  // Clear the counter slots before returning so the main kernel's per-task LCA-block atomic-add (Phase
+  // A+B+C) starts from zero. Without this the main pass would observe its slot pre-loaded with the
+  // reducer's count and assign row ids in `[count, 2*count)`, indexing past the heap allocation we just
+  // sized to `count` rows.
+  auto [post_clear_cmdlist, post_clear_res] = device_->get_compute_stream()->new_command_list_unique();
+  QD_ASSERT_INFO(post_clear_res == RhiResult::success, "Failed to create adstack reducer post-clear cmdlist");
+  post_clear_cmdlist->buffer_fill(adstack_row_counter_buffer_->get_ptr(0), needed_counter_bytes, /*data=*/0);
+  post_clear_cmdlist->buffer_barrier(*adstack_row_counter_buffer_);
+  device_->get_compute_stream()->submit_synced(post_clear_cmdlist.get());
+
+  return result;
+}
+
+}  // namespace gfx
+}  // namespace quadrants::lang

@@ -162,6 +162,20 @@ class QD_DLL_EXPORT GfxRuntime {
       const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
       const std::string &kernel_name);
 
+  // Static-IR-bound sparse-adstack-heap reducer dispatch. For each task with a captured ndarray-backed
+  // `bound_expr`, dispatches the generic reducer compute shader (see
+  // `quadrants/codegen/spirv/adstack_bound_reducer_shader.{h,cpp}`) over the task's iteration range and
+  // reads back the count of threads matching the predicate. Returns a map keyed by `task_id_in_kernel`;
+  // entries are absent for tasks without `bound_expr`, with SNode-backed bound_expr (Stage 1 follow-up),
+  // or on devices missing PSB+Int64 caps. The caller consumes the map at the AdStackHeapFloat bind site
+  // to size each matched task's float heap allocation to `count[task_id] * stride_float * sizeof(f32)`,
+  // falling through to the dispatched-threads worst-case sizing for tasks not in the map. Implementation
+  // lives in `runtime/gfx/adstack_bound_reducer_launch.cpp`.
+  std::unordered_map<int, uint32_t> dispatch_adstack_bound_reducers(
+      LaunchContextBuilder &host_ctx,
+      DeviceAllocationGuard *args_buffer,
+      const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs);
+
   void init_nonroot_buffers();
 
   Device *device_{nullptr};
