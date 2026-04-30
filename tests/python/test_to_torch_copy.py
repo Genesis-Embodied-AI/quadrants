@@ -527,3 +527,233 @@ def test_to_numpy_copy_false_raises_on_gpu():
 
     with pytest.raises(ValueError):
         f.to_numpy(copy=False)
+
+
+# ---------------------------------------------------------------------------
+# 0-dim ScalarField: copy=False should raise
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test()
+def test_0dim_scalar_field_copy_false_raises():
+    """0-dim ScalarField is not zero-copyable (PyTorch DLPack bytes_offset limitation)."""
+    _skip_if_no_zerocopy()
+    f = qd.field(qd.f32, shape=())
+    f.fill(42.0)
+    qd.sync()
+
+    with pytest.raises(ValueError, match="Zero-copy not available"):
+        f.to_torch(copy=False)
+
+    t = f.to_torch(copy=True)
+    np.testing.assert_allclose(t.cpu().numpy(), 42.0)
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_0dim_scalar_field_to_numpy_copy_false_raises():
+    """0-dim ScalarField to_numpy(copy=False) should also raise."""
+    f = qd.field(qd.f32, shape=())
+    f.fill(42.0)
+    qd.sync()
+
+    with pytest.raises(ValueError):
+        f.to_numpy(copy=False)
+
+    arr = f.to_numpy(copy=True)
+    np.testing.assert_allclose(arr, 42.0)
+
+
+# ---------------------------------------------------------------------------
+# Unsupported dtype: copy=False should raise
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test()
+def test_unsupported_dtype_copy_false_raises():
+    """Dtypes not in _DLPACK_SUPPORTED_DTYPES (e.g. f16) should raise on copy=False."""
+    _skip_if_no_zerocopy()
+    f = qd.field(qd.f16, shape=(4,))
+    f.fill(1.0)
+    qd.sync()
+
+    with pytest.raises(ValueError, match="Zero-copy not available"):
+        f.to_torch(copy=False)
+
+    t = f.to_torch(copy=True)
+    assert t.shape == (4,)
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_unsupported_dtype_to_numpy_copy_false_raises():
+    """Unsupported dtype to_numpy(copy=False) should raise."""
+    f = qd.field(qd.f16, shape=(4,))
+    f.fill(1.0)
+    qd.sync()
+
+    with pytest.raises(ValueError):
+        f.to_numpy(copy=False)
+
+
+# ---------------------------------------------------------------------------
+# copy=False with cross-device transfer should raise
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(exclude=[qd.cpu])
+def test_copy_false_cross_device_raises():
+    """copy=False with device='cpu' when data is on GPU should raise (can't move without copying)."""
+    _skip_if_no_zerocopy()
+    f = qd.field(qd.f32, shape=(4,))
+    f.fill(1.0)
+    qd.sync()
+
+    with pytest.raises(ValueError, match="incompatible with device transfer"):
+        f.to_torch(device="cpu", copy=False)
+
+
+# ---------------------------------------------------------------------------
+# MatrixField (n>1, m>1) copy=False
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test()
+def test_matrix_field_copy_false():
+    """Actual matrix field (2x3, not vector) with copy=False."""
+    _skip_if_no_zerocopy()
+    f = qd.Matrix.field(2, 3, qd.f32, shape=(2,))
+    data = np.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], dtype=np.float32)
+    f.from_numpy(data)
+    qd.sync()
+
+    t = f.to_torch(copy=False)
+    np.testing.assert_allclose(t.cpu().numpy(), data)
+
+
+@test_utils.test()
+def test_matrix_field_copy_true():
+    f = qd.Matrix.field(2, 3, qd.f32, shape=(2,))
+    data = np.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], dtype=np.float32)
+    f.from_numpy(data)
+    qd.sync()
+
+    t = f.to_torch(copy=True)
+    np.testing.assert_allclose(t.cpu().numpy(), data)
+
+
+# ---------------------------------------------------------------------------
+# MatrixNdarray to_numpy(copy=False)
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_matrix_ndarray_to_numpy_copy_false():
+    mat_type = qd.types.matrix(2, 3, qd.f32)
+    nd = qd.ndarray(mat_type, shape=(2,))
+    data = np.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], dtype=np.float32)
+    nd.from_numpy(data)
+    qd.sync()
+
+    arr = nd.to_numpy(copy=False)
+    np.testing.assert_allclose(arr, data)
+
+
+# ---------------------------------------------------------------------------
+# AoS struct member to_numpy(copy=False) should raise
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_struct_aos_to_numpy_copy_false_raises():
+    """AoS struct member to_numpy(copy=False) should raise, same as to_torch(copy=False)."""
+    s = qd.types.struct(a=qd.i32, b=qd.f32)
+    f = s.field(shape=(4,), layout=qd.Layout.AOS)
+
+    @qd.kernel
+    def fill():
+        for i in range(4):
+            f[i].a = i * 10
+            f[i].b = i * 0.5
+
+    fill()
+    qd.sync()
+
+    with pytest.raises(ValueError):
+        f.a.to_numpy(copy=False)
+
+    arr_a = f.a.to_numpy(copy=True)
+    arr_b = f.b.to_numpy(copy=True)
+    np.testing.assert_array_equal(arr_a, [0, 10, 20, 30])
+    np.testing.assert_allclose(arr_b, [0.0, 0.5, 1.0, 1.5])
+
+
+# ---------------------------------------------------------------------------
+# copy=True independence for vector/matrix/ndarray types
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_vector_field_copy_true_independent():
+    """Default copy=True on VectorField should return a buffer independent of the field."""
+    f = qd.Vector.field(3, qd.f32, shape=(2,))
+    f.from_numpy(np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32))
+    qd.sync()
+
+    t = f.to_torch()
+    f.from_numpy(np.array([[99, 88, 77], [66, 55, 44]], dtype=np.float32))
+    qd.sync()
+    np.testing.assert_allclose(t.numpy(), [[1, 2, 3], [4, 5, 6]])
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_matrix_field_copy_true_independent():
+    """Default copy=True on MatrixField should return a buffer independent of the field."""
+    f = qd.Matrix.field(2, 2, qd.f32, shape=(2,))
+    data = np.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=np.float32)
+    f.from_numpy(data)
+    qd.sync()
+
+    t = f.to_torch()
+    f.from_numpy(np.zeros_like(data))
+    qd.sync()
+    np.testing.assert_allclose(t.numpy(), data)
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_scalar_ndarray_copy_true_independent():
+    """Default copy=True on ScalarNdarray should return a buffer independent of the ndarray."""
+    nd = qd.ndarray(qd.f32, shape=(4,))
+    nd.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
+    qd.sync()
+
+    t = nd.to_torch()
+    nd.from_numpy(np.zeros(4, dtype=np.float32))
+    qd.sync()
+    np.testing.assert_allclose(t.numpy(), [10, 20, 30, 40])
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_vector_ndarray_copy_true_independent():
+    """Default copy=True on VectorNdarray should return a buffer independent of the ndarray."""
+    vec_type = qd.types.vector(3, qd.f32)
+    nd = qd.ndarray(vec_type, shape=(2,))
+    data = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32)
+    nd.from_numpy(data)
+    qd.sync()
+
+    t = nd.to_torch()
+    nd.from_numpy(np.zeros_like(data))
+    qd.sync()
+    np.testing.assert_allclose(t.numpy(), data)
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_vector_field_to_numpy_copy_true_independent():
+    """Default to_numpy() on VectorField should return an independent copy."""
+    f = qd.Vector.field(3, qd.f32, shape=(2,))
+    f.from_numpy(np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32))
+    qd.sync()
+
+    arr = f.to_numpy()
+    f.from_numpy(np.array([[99, 88, 77], [66, 55, 44]], dtype=np.float32))
+    qd.sync()
+    np.testing.assert_allclose(arr, [[1, 2, 3], [4, 5, 6]])
