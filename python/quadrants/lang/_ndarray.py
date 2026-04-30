@@ -463,7 +463,7 @@ class ScalarNdarray(Ndarray):
         self._ndarray_from_numpy(arr)
 
     @python_scope
-    def to_torch(self, device=None, *, copy=None):
+    def to_torch(self, device=None, *, copy=True):
         """Return a canonical-view torch tensor.
 
         Mirrors :meth:`Field.to_torch`. The destination is a ``torch.zeros(self.shape, ...)`` allocation that the
@@ -471,7 +471,7 @@ class ScalarNdarray(Ndarray):
         view just like ``to_numpy()`` does.
 
         Args:
-            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
         if copy is False:
             from quadrants.lang.field import (  # pylint: disable=C0415

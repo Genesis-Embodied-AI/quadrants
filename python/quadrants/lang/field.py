@@ -482,12 +482,12 @@ class ScalarField(Field):
         return arr
 
     @python_scope
-    def to_torch(self, device=None, *, copy=None):
+    def to_torch(self, device=None, *, copy=True):
         """Converts this field to a ``torch.Tensor``.
 
         Args:
             device: Optional torch device for the returned tensor.
-            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
         if copy is False:
             tc = _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)

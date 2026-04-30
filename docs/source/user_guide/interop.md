@@ -80,8 +80,8 @@ Quadrants' zero-copy interop has been designed with **PyTorch as the first-class
 f = qd.field(qd.f32, shape=(1024,))
 
 view  = f.to_torch(copy=False)  # zero-copy view: aliases f's memory
-clone = f.to_torch(copy=True)   # independent copy
-auto  = f.to_torch()            # default: copy=None (see below)
+clone = f.to_torch(copy=True)   # independent copy (default)
+auto  = f.to_torch()            # same as copy=True
 ```
 
 When using `copy=False`, modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated -- typically on `qd.init()` or `qd.reset()`, after which a fresh call to `to_torch(copy=False)` / `to_numpy(copy=False)` returns a new view.
@@ -102,11 +102,10 @@ Zero-copy `to_numpy()` additionally requires a CPU backend, because numpy arrays
 
 | Value | Behaviour |
 |---|---|
-| `None` (default) | Independent copy via kernel. Never raises for support reasons. |
+| `True` (default) | Independent copy via kernel. |
 | `False` | Zero-copy view via DLPack, or `ValueError` if zero-copy is unsupported for this backend/dtype. |
-| `True` | Independent copy via kernel (same as `None`). |
 
-`copy=True` always returns a buffer that is safe to mutate without affecting the field/ndarray.
+The default `copy=True` always returns a buffer that is safe to mutate without affecting the field/ndarray.
 
 ### Examples
 
@@ -189,7 +188,7 @@ qd.reset()
 view[0]                 # undefined: view aliases freed memory
 ```
 
-If you need a tensor that outlives the runtime, use `copy=True` or the default `copy=None` (both produce independent copies). Only `copy=False` views are affected by this caveat.
+The default `copy=True` produces an independent copy that is unaffected. Only `copy=False` views are affected by this caveat.
 
 ### Struct fields
 

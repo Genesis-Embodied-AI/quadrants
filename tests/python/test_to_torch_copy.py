@@ -2,8 +2,8 @@
 
 Covers:
 - ``copy=False`` -> DLPack zero-copy (shares memory, no data movement)
-- ``copy=None``  -> kernel copy (default, always correct, independent memory)
-- AoS struct members -> ``copy=None`` correct, ``copy=False`` returns garbage
+- ``copy=True`` (default) -> kernel copy (always correct, independent memory)
+- AoS struct members -> default copy correct, ``copy=False`` returns garbage
 - SoA struct members -> ``copy=False`` zero-copy works correctly
 """
 
@@ -51,7 +51,7 @@ def test_scalar_field_copy_none():
     f.from_numpy(np.array([1, 2, 3, 4], dtype=np.float32))
     qd.sync()
 
-    t = f.to_torch(copy=None)
+    t = f.to_torch()
     np.testing.assert_allclose(t.cpu().numpy(), [1, 2, 3, 4])
 
 
@@ -92,7 +92,7 @@ def test_vector_field_copy_none():
     f.from_numpy(np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32))
     qd.sync()
 
-    t = f.to_torch(copy=None)
+    t = f.to_torch()
     np.testing.assert_allclose(t.cpu().numpy(), [[1, 2, 3], [4, 5, 6]])
 
 
@@ -118,7 +118,7 @@ def test_scalar_ndarray_copy_none():
     nd.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
     qd.sync()
 
-    t = nd.to_torch(copy=None)
+    t = nd.to_torch(copy=True)
     np.testing.assert_allclose(t.cpu().numpy(), [10, 20, 30, 40])
 
 
@@ -148,7 +148,7 @@ def test_matrix_ndarray_copy_none():
     nd.from_numpy(data)
     qd.sync()
 
-    t = nd.to_torch(copy=None)
+    t = nd.to_torch(copy=True)
     np.testing.assert_allclose(t.cpu().numpy(), data)
 
 
@@ -178,7 +178,7 @@ def test_vector_ndarray_copy_none():
     nd.from_numpy(data)
     qd.sync()
 
-    t = nd.to_torch(copy=None)
+    t = nd.to_torch(copy=True)
     np.testing.assert_allclose(t.cpu().numpy(), data)
 
 
@@ -189,7 +189,7 @@ def test_vector_ndarray_copy_none():
 
 @test_utils.test()
 def test_struct_aos_copy_none_correct():
-    """AoS struct member to_torch(copy=None) returns correct values via kernel copy."""
+    """AoS struct member to_torch(copy=True) returns correct values via kernel copy."""
     s = qd.types.struct(a=qd.i32, b=qd.f32)
     f = s.field(shape=(4,), layout=qd.Layout.AOS)
 
@@ -202,8 +202,8 @@ def test_struct_aos_copy_none_correct():
     fill()
     qd.sync()
 
-    t_a = f.a.to_torch(copy=None)
-    t_b = f.b.to_torch(copy=None)
+    t_a = f.a.to_torch(copy=True)
+    t_b = f.b.to_torch(copy=True)
     np.testing.assert_array_equal(t_a.cpu().numpy(), [0, 10, 20, 30])
     np.testing.assert_allclose(t_b.cpu().numpy(), [0.0, 0.5, 1.0, 1.5])
 
@@ -281,7 +281,7 @@ def test_struct_soa_zerocopy_shares_memory():
 
 @test_utils.test()
 def test_struct_default_layout_copy_none():
-    """Struct fields with no explicit layout= default to AoS. copy=None should still be correct."""
+    """Struct fields with no explicit layout= default to AoS. copy=True should still be correct."""
     s = qd.types.struct(x=qd.f32, y=qd.f32)
     f = s.field(shape=(4,))
 
@@ -294,8 +294,8 @@ def test_struct_default_layout_copy_none():
     fill()
     qd.sync()
 
-    t_x = f.x.to_torch(copy=None)
-    t_y = f.y.to_torch(copy=None)
+    t_x = f.x.to_torch(copy=True)
+    t_y = f.y.to_torch(copy=True)
     np.testing.assert_allclose(t_x.cpu().numpy(), [0, 1, 2, 3])
     np.testing.assert_allclose(t_y.cpu().numpy(), [0, 2, 4, 6])
 

@@ -1435,14 +1435,14 @@ class MatrixField(Field):
         runtime_ops.sync()
         return arr
 
-    def to_torch(self, device=None, keep_dims=False, *, copy=None):
+    def to_torch(self, device=None, keep_dims=False, *, copy=True):
         """Converts the field instance to a PyTorch tensor.
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
             keep_dims (bool, optional): Whether to keep the dimension after conversion.
                 See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
-            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
         Returns:
             torch.tensor: The result torch tensor.
@@ -1862,11 +1862,11 @@ class MatrixNdarray(Ndarray):
         self._ndarray_matrix_from_numpy(arr, as_vector=0)
 
     @python_scope
-    def to_torch(self, device=None, *, copy=None):
+    def to_torch(self, device=None, *, copy=True):
         """Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors :meth:`MatrixField.to_torch`.
 
         Args:
-            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
         if copy is False:
             tc = _try_zerocopy_torch(self, copy=copy, device=device)
@@ -1999,11 +1999,11 @@ class VectorNdarray(Ndarray):
         self._ndarray_matrix_from_numpy(arr, as_vector=1)
 
     @python_scope
-    def to_torch(self, device=None, *, copy=None):
+    def to_torch(self, device=None, *, copy=True):
         """Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``. Mirrors :meth:`MatrixField.to_torch` on the vector code path.
 
         Args:
-            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
         if copy is False:
             tc = _try_zerocopy_torch(self, copy=copy, device=device)
