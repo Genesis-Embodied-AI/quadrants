@@ -52,7 +52,7 @@ qd.init(arch=qd.gpu)
 
 ## Dataclass fields with cached values
 
-By default, for `dataclasses.dataclass` parameters, fastcache only includes the *types* of each field in the cache key, not their values. This is fine for fields like ndarrays whose type and shape are enough to identify the compiled kernel.
+By default, for `dataclasses.dataclass` parameters, fastcache only includes the *types* of each field in the cache key, not their values. This is fine for fields like ndarrays, where the compiled kernel doesn't depend on the actual data, only the dtype and dimensionality.
 
 However, some dataclass fields hold configuration values (e.g. flags, counts) that get baked into the compiled kernel. If such a value changes, a different kernel must be compiled. Mark these fields with `add_value_to_cache_key` so their values are included in the cache key:
 
