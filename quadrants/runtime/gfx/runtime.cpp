@@ -720,14 +720,6 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
             }
             QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack heap float buffer (size={})",
                            new_size);
-            // DEBUG: Per-task float-heap allocation tracker. Lets the user verify the reducer-driven sizing path
-            // by inspecting `[ADSTACK-FHEAP]` lines in stderr; revert this commit before merging.
-            fprintf(stderr,
-                    "[ADSTACK-FHEAP] task=%s alloc new_size=%zu (required=%zu eff_rows=%zu disp_threads=%zu "
-                    "stride=%u)\n",
-                    attribs.name.c_str(), new_size, required, effective_rows_floored, dispatched_threads,
-                    ad_stack_stride_float);
-            fflush(stderr);
             // Defer the old buffer's free until the current cmdlist is submitted and synced: the previous launch
             // may still be in flight and referencing the old allocation, so freeing it synchronously here (via
             // `DeviceAllocationGuard`'s destructor, which runs on the `std::move` reassignment below) would

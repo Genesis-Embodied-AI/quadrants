@@ -1345,9 +1345,6 @@ void LlvmRuntimeExecutor::ensure_adstack_heap_int(std::size_t needed_bytes) {
 
   adstack_heap_alloc_int_ = std::move(new_guard);
   adstack_heap_size_int_ = new_size;
-  // DEBUG: int-heap allocation tracker. Mirrors the float-heap tracker. Revert before merging.
-  fprintf(stderr, "[ADSTACK-IHEAP-LLVM] alloc new_size=%zu (needed=%zu)\n", new_size, needed_bytes);
-  fflush(stderr);
 }
 
 void LlvmRuntimeExecutor::ensure_per_task_float_heap_post_reducer(std::size_t task_index,
@@ -1569,10 +1566,6 @@ void LlvmRuntimeExecutor::ensure_adstack_heap(std::size_t needed_bytes) {
   //     (it passes the `RuntimeContext` by host reference).
   adstack_heap_alloc_ = std::move(new_guard);
   adstack_heap_size_ = new_size;
-  // DEBUG: combined-heap allocation tracker. Lets the user see the legacy combined-heap allocations alongside
-  // the new split float-heap allocations the per-arch reducer drives. Revert before merging.
-  fprintf(stderr, "[ADSTACK-HEAP-LLVM] alloc new_size=%zu (needed=%zu)\n", new_size, needed_bytes);
-  fflush(stderr);
 }
 
 void LlvmRuntimeExecutor::ensure_adstack_heap_float(std::size_t needed_bytes) {
@@ -1642,10 +1635,6 @@ void LlvmRuntimeExecutor::ensure_adstack_heap_float(std::size_t needed_bytes) {
 
   adstack_heap_alloc_float_ = std::move(new_guard);
   adstack_heap_size_float_ = new_size;
-  // DEBUG: LLVM-side float-heap allocation tracker. Mirrors the SPIR-V `[ADSTACK-FHEAP]` print so the user can
-  // validate reducer-driven heap sizing on CUDA / AMDGPU. Revert before merging.
-  fprintf(stderr, "[ADSTACK-FHEAP-LLVM] alloc new_size=%zu (needed=%zu)\n", new_size, needed_bytes);
-  fflush(stderr);
 }
 
 void LlvmRuntimeExecutor::preallocate_runtime_memory() {
