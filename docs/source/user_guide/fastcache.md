@@ -128,9 +128,9 @@ If any parameter is of an unsupported type, fastcache is silently disabled for t
 
 Fastcache hashes the source code of the kernel and all sub-functions it calls. If the source file cannot be read at runtime (e.g. the kernel is defined in a frozen/compiled module, or the file has been deleted), fastcache cannot validate the cache and will fall back to normal compilation.
 
-## Cache invalidation
+## Cache keying
 
-The cache is automatically invalidated when any of the following change:
+Each compiled artifact is stored under a key derived from all of the following:
 
 - The **Quadrants version** (`quadrants.__version__`).
 - The **source code** of the kernel function or any `@qd.func` it calls.
@@ -138,7 +138,7 @@ The cache is automatically invalidated when any of the following change:
 - The **compiler configuration** (e.g. `arch`, `debug`, `opt_level`, `fast_math`).
 - **Template parameter values** (since they are baked into the compiled kernel).
 
-You do not need to manually clear the cache when making code changes — the hash mismatch causes a transparent recompilation.
+When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk — multiple cached versions coexist. You do not need to manually clear the cache when making code changes — the hash mismatch causes a transparent recompilation.
 
 ## Advanced
 
