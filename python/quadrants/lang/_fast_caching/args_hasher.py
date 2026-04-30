@@ -6,7 +6,8 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from quadrants import _logging
+from quadrants import _logging, _tensor_wrapper
+from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants.types.annotations import Template
 
 from .._ndarray import ScalarNdarray
@@ -33,17 +34,44 @@ g_num_ignored_calls = 0
 
 FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 
+_DC_REPR_NONE = object()
 
-def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], arg: Any) -> str:
+
+def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], arg: Any) -> str | None:
+    # PERF: For frozen dataclasses, the repr never changes. Cache it on the instance to avoid repeated
+    # ``dataclasses.fields()`` calls (which are slow due to extra runtime checks — see _template_mapper_hotpath.py
+    # module docstring). The cache is stored as ``_qd_dc_repr`` via ``object.__setattr__`` to bypass frozen guards.
+    # A cached ``None`` is stored as the sentinel ``_DC_REPR_NONE`` to distinguish "not yet computed" from
+    # "computed but not fast-cacheable".
+    is_frozen = type(arg).__hash__ is not None
+    if is_frozen:
+        cached = getattr(arg, "_qd_dc_repr", None)
+        if cached is _DC_REPR_NONE:
+            return None
+        if cached is not None:
+            return cached
     repr_l = []
     for field in dataclasses.fields(arg):
         child_value = getattr(arg, field.name)
         _repr = stringify_obj_type(raise_on_templated_floats, path + (field.name,), child_value, arg_meta=None)
+        if _repr is None:
+            if is_frozen:
+                try:
+                    object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
+                except AttributeError:
+                    pass
+            return None
         full_repr = f"{field.name}: ({_repr})"
         if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
             full_repr += f" = {child_value}"
         repr_l.append(full_repr)
-    return "[" + ",".join(repr_l) + "]"
+    result = "[" + ",".join(repr_l) + "]"
+    if is_frozen:
+        try:
+            object.__setattr__(arg, "_qd_dc_repr", result)
+        except AttributeError:
+            pass
+    return result
 
 
 def _is_template(arg_meta: ArgMetadata | None) -> bool:
@@ -72,18 +100,36 @@ def stringify_obj_type(
     - in data oriented objects, the values of all primitive types are added to the cache key, since they are baked
       into the kernel, and require a kernel recompilation, when they change
     """
+    # ``qd.Tensor`` wrappers passed as struct fields. The top-level kernel-arg unwrap hook in ``Kernel.__call__`` strips
+    # wrappers off positional / keyword args before the fastcache hasher sees them, but the dataclass / data-oriented
+    # walkers below (``dataclass_to_repr`` and the ``is_data_oriented`` branch) do raw ``getattr`` to fetch struct
+    # fields, so a wrapper stored as a struct field arrives here un-stripped. Without this branch the hasher falls
+    # through to the ``[FASTCACHE][PARAM_INVALID]`` warning and disables the fast path for the whole call. See
+    # ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
+    # ``qd.Tensor`` wrappers: unwrap to the bare impl so the type checks below match. After unwrap, ``_qd_layout`` (if
+    # any) is on the impl.
+    #
+    # PERF-CRITICAL: The _any_tensor_constructed guard makes this check zero-cost when no qd.Tensor has been created.
+    # ``type(obj) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer comparison (~10
+    # ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
+    if (
+        _tensor_wrapper._any_tensor_constructed and type(obj) in _TENSOR_WRAPPER_TYPES
+    ):  # pyright: ignore[reportOptionalMemberAccess]
+        obj = obj._unwrap()  # pyright: ignore[reportAttributeAccessIssue]
     arg_type = type(obj)
+    _layout = getattr(obj, "_qd_layout", None)
+    _layout_tag = "" if _layout is None else f"-L{_layout!r}"
     if isinstance(obj, ScalarNdarray):
-        return f"[nd-{obj.dtype}-{len(obj.shape)}]"
+        return f"[nd-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, VectorNdarray):
-        return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}]"
+        return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, ScalarField):
         # disabled for now, because we need to think about how to handle field offset
         # etc
         # TODO: think about whether there is a way to include fields
         return None
     if isinstance(obj, MatrixNdarray):
-        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}]"
+        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, torch_type):
         return f"[pt-{obj.dtype}-{obj.ndim}]"  # type: ignore
     if isinstance(obj, np.ndarray):

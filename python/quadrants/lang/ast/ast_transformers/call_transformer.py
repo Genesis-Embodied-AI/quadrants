@@ -178,7 +178,7 @@ class CallTransformer:
         func_id = ctx.func.func_id
         for arg in args:
             val = arg.ptr
-            if dataclasses.is_dataclass(val):
+            if dataclasses.is_dataclass(val) and isinstance(val, type):
                 dataclass_type = val
                 for field in dataclasses.fields(dataclass_type):
                     try:
@@ -224,7 +224,7 @@ class CallTransformer:
         added_kwargs = []
         for i, kwarg in enumerate(kwargs):
             val = kwarg.ptr[kwarg.arg]
-            if dataclasses.is_dataclass(val):
+            if dataclasses.is_dataclass(val) and isinstance(val, type):
                 dataclass_type = val
                 for field in dataclasses.fields(dataclass_type):
                     src_name = create_flat_name(kwarg.value.id, field.name)
@@ -361,31 +361,41 @@ class CallTransformer:
             return node.ptr
 
         CallTransformer._warn_if_is_external_func(ctx, node)
+        # Snapshot the caller's `loop_depth` on the global context so a `@qd.func` invocation routed through
+        # `func(*py_args, **py_kwargs)` below can seed its fresh `ASTTransformerFuncContext` from this value in
+        # `_func_base.py` and inherit any outer for-loops we are already inside. Save/restore unconditionally because
+        # we cannot tell from this site whether `func` is a Quadrants func, a builtin, or a Python callable; the
+        # snapshot is harmless for non-func callables and nests correctly through chained calls.
+        prev_caller_loop_depth = ctx.global_context.caller_loop_depth
+        ctx.global_context.caller_loop_depth = ctx.loop_depth
         try:
-            pruning = ctx.global_context.pruning
-            if pruning.enforcing:
-                py_args = pruning.filter_call_args(func, node, node_args, node_keywords, py_args)
+            try:
+                pruning = ctx.global_context.pruning
+                if pruning.enforcing:
+                    py_args = pruning.filter_call_args(func, node, node_args, node_keywords, py_args)
 
-            node.ptr = func(*py_args, **py_kwargs)
+                node.ptr = func(*py_args, **py_kwargs)
 
-            if not pruning.enforcing:
-                pruning.record_after_call(ctx, func, node, node_args, node_keywords)
-        except TypeError as e:
-            module = inspect.getmodule(func)
-            error_msg = re.sub(r"\bExpr\b", "Quadrants Expression", str(e))
-            func_name = getattr(func, "__name__", func.__class__.__name__)
-            msg = f"TypeError when calling `{func_name}`: {error_msg}."
-            if CallTransformer._is_external_func(ctx, node.func.ptr):
-                args_has_expr = any([isinstance(arg, Expr) for arg in args])
-                if args_has_expr and (module == math or module == np):
-                    exec_str = f"from quadrants import {func.__name__}"
-                    try:
-                        exec(exec_str, {})
-                    except:
-                        pass
-                    else:
-                        msg += f"\nDid you mean to use `qd.{func.__name__}` instead of `{module.__name__}.{func.__name__}`?"
-            raise QuadrantsTypeError(msg)
+                if not pruning.enforcing:
+                    pruning.record_after_call(ctx, func, node, node_args, node_keywords)
+            except TypeError as e:
+                module = inspect.getmodule(func)
+                error_msg = re.sub(r"\bExpr\b", "Quadrants Expression", str(e))
+                func_name = getattr(func, "__name__", func.__class__.__name__)
+                msg = f"TypeError when calling `{func_name}`: {error_msg}."
+                if CallTransformer._is_external_func(ctx, node.func.ptr):
+                    args_has_expr = any([isinstance(arg, Expr) for arg in args])
+                    if args_has_expr and (module == math or module == np):
+                        exec_str = f"from quadrants import {func.__name__}"
+                        try:
+                            exec(exec_str, {})
+                        except:
+                            pass
+                        else:
+                            msg += f"\nDid you mean to use `qd.{func.__name__}` instead of `{module.__name__}.{func.__name__}`?"
+                raise QuadrantsTypeError(msg)
+        finally:
+            ctx.global_context.caller_loop_depth = prev_caller_loop_depth
 
         if getattr(func, "_is_quadrants_function", False):
             ctx.func.has_print |= func.wrapper.has_print

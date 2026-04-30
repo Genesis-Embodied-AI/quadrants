@@ -65,10 +65,7 @@ def test_dlpack_types(tensor_type, dtype, shape: tuple[int], poses: list[tuple[i
 
 @test_utils.test(arch=dlpack_arch)
 def test_dlpack_ndarray_mem_stays_alloced() -> None:
-    """
-    On fields, memory always stays allocated till qd.reset(), so we
-    don't need to check. Not true with ndarrays.
-    """
+    """On fields, memory always stays allocated till qd.reset(), so we don't need to check. Not true with ndarrays."""
 
     def create_tensor(shape, dtype):
         nd = qd.ndarray(dtype, shape)
@@ -148,9 +145,7 @@ def test_dlpack_mat2x3(tensor_type):
 @test_utils.test(arch=dlpack_arch)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_dlpack_2_arrays(tensor_type):
-    """
-    Just in case we need to handle offset (which we do, for fields)
-    """
+    """Just in case we need to handle offset (which we do, for fields)."""
     a = tensor_type(qd.i32, (100,))
     b = tensor_type(qd.i32, (100,))
     a[0] = 123
@@ -161,8 +156,7 @@ def test_dlpack_2_arrays(tensor_type):
     qd.sync()
 
     # first field has offset 0
-    # second field has non-zero offset, so we are testing
-    # non-zero offsets
+    # second field has non-zero offset, so we are testing non-zero offsets
     a_t = qd_to_torch(a)
     b_t = qd_to_torch(b)
 
@@ -177,20 +171,24 @@ def test_dlpack_2_arrays(tensor_type):
 
 @test_utils.test(arch=dlpack_arch)
 def test_dlpack_non_sequenced_axes():
+    """Fields whose SNode chain places axes in a non-i,j,k order (here i, k, j) must still produce a *canonical*
+    DLPack view: shape in canonical (i, j, k) order, with permuted strides reflecting the actual physical memory
+    layout. Mirrors the ndarray-side layout-tagged behaviour."""
     field_ikj = qd.field(qd.f32)
     qd.root.dense(qd.i, 3).dense(qd.k, 2).dense(qd.j, 4).place(field_ikj)
-    # create the field (since we arent initializing its value in any way, which would implicilty
-    # call qd.sync())
     qd.sync()
-    with pytest.raises(RuntimeError):
-        qd_to_torch(field_ikj)
+    t = qd_to_torch(field_ikj)
+    # canonical (i, j, k) shape: extents 3, 4, 2.
+    assert tuple(t.shape) == (3, 4, 2)
+    # Physical memory layout is (i, k, j), so the canonical view is not contiguous — the strides reflect the actual
+    # SNode order.
+    assert not t.is_contiguous()
 
 
 @test_utils.test(arch=dlpack_arch)
 def test_dlpack_field_multiple_tree_nodes():
-    """
-    each qd.sync causes the fields to be written to a new snode tree node
-    each tree node has its own memory block, so we want to test:
+    """each qd.sync causes the fields to be written to a new snode tree node each tree node has its own memory block,
+    so we want to test:
     - multiple snodes within same tree node
     - different tree nodes
     ... just to check we aren't aliasing somehow in the to_dlpack function
@@ -245,9 +243,8 @@ def test_dlpack_field_multiple_tree_nodes():
 @pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.f32, qd.f64, qd.u1, qd.i8, qd.types.vector(3, qd.i32)])
 @pytest.mark.parametrize("shape", [3, 1, 4, 5, 7, 2])
 def test_dlpack_mixed_types_memory_alignment_field(dtype, shape: tuple[int]) -> None:
-    """
-    Note: The mixed type here means that within a single SNode tree, fields use different data types (for example, curr_cnt in qd.i32 and pos in qd.i64). This leads to memory alignment issues and mismatched SNode offsets.
-    """
+    """Note: The mixed type here means that within a single SNode tree, fields use different data types (for example,
+    curr_cnt in qd.i32 and pos in qd.i64). This leads to memory alignment issues and mismatched SNode offsets."""
     if qd.cfg.arch == qd.metal and dtype in [qd.i64, qd.f64]:
         pytest.skip(reason="64-bit types not supported on Metal")
     vtype = qd.i32 if qd.cfg.arch == qd.metal else qd.i64

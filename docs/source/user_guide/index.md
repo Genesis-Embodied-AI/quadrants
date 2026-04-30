@@ -17,6 +17,7 @@ supported_systems
 tensor_types
 scalar_tensors
 matrix_vector
+tensor
 compound_types
 buffer_view
 static
@@ -56,6 +57,7 @@ tile16
 
 graph
 perf_dispatch
+init_options
 ```
 
 ```{toctree}

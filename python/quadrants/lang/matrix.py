@@ -55,9 +55,8 @@ def _generate_swizzle_patterns(key_group: str, required_length=4):
 
     Example:
 
-        For `key_group=xyzw` and `required_length=4`, this function will return a
-        list consists of all possible strings (no repeats) in characters
-        `x`, `y`, `z`, `w` and of length<=4:
+        For `key_group=xyzw` and `required_length=4`, this function will return a list consists of all possible strings
+        (no repeats) in characters `x`, `y`, `z`, `w` and of length<=4:
         [`x`, `y`, `z`, `w`, `xx`, `xy`, `yx`, ..., `xxxx`, `xxxy`, `xyzw`, ...]
         The length of the list will be 4 + 4x4 + 4x4x4 + 4x4x4x4 = 340.
     """
@@ -218,9 +217,8 @@ def _write_host_access(x, value):
 class Matrix(QuadrantsOperations):
     """The matrix class.
 
-    A matrix is a 2-D rectangular array with scalar entries, it's row-majored, and is
-    aligned continuously. We recommend only use matrix with no more than 32 elements for
-    efficiency considerations.
+    A matrix is a 2-D rectangular array with scalar entries, it's row-majored, and is aligned continuously. We
+    recommend only use matrix with no more than 32 elements for efficiency considerations.
 
     Note: in quadrants a matrix is strictly two-dimensional and only stores scalars.
 
@@ -552,8 +550,7 @@ class Matrix(QuadrantsOperations):
 
     @staticmethod
     def diag(dim, val):
-        """Returns a diagonal square matrix with the diagonals filled
-        with `val`.
+        """Returns a diagonal square matrix with the diagonals filled with `val`.
 
         Args:
             dim (int): the dimension of the wanted square matrix.
@@ -733,8 +730,7 @@ class Matrix(QuadrantsOperations):
         """Python scope matrix print support."""
         if impl.inside_kernel():
             """
-            It seems that when pybind11 got an type mismatch, it will try
-            to invoke `repr` to show the object... e.g.:
+            It seems that when pybind11 got an type mismatch, it will try to invoke `repr` to show the object... e.g.:
 
             TypeError: make_const_expr_f32(): incompatible function arguments. The following argument types are supported:
                 1. (arg0: float) -> quadrants_python.Expr
@@ -857,12 +853,10 @@ class Matrix(QuadrantsOperations):
             shape (Union[int, tuple of int], optional): The desired shape of the Matrix.
             order (str, optional): order of the shape laid out in memory.
             name (string, optional): The custom name of the field.
-            offset (Union[int, tuple of int], optional): The coordinate offset
-                of all elements in a field.
+            offset (Union[int, tuple of int], optional): The coordinate offset of all elements in a field.
             needs_grad (bool, optional): Whether the Matrix need grad field (reverse mode autodiff).
             needs_dual (bool, optional): Whether the Matrix need dual field (forward mode autodiff).
-            layout (Layout, optional): The field layout, either Array Of
-                Structure (AOS) or Structure Of Array (SOA).
+            layout (Layout, optional): The field layout, either Array Of Structure (AOS) or Structure Of Array (SOA).
 
         Returns:
             :class:`~quadrants.Matrix`: A matrix.
@@ -878,8 +872,7 @@ class Matrix(QuadrantsOperations):
         entries = []
         element_dim = ndim if ndim is not None else 2
         if isinstance(dtype, (list, tuple, np.ndarray)):
-            # set different dtype for each element in Matrix
-            # see #2135
+            # set different dtype for each element in Matrix — see #2135
             if m == 1:
                 assert (
                     len(np.shape(dtype)) == 1 and len(dtype) == n
@@ -955,27 +948,50 @@ class Matrix(QuadrantsOperations):
             else:
                 axis_seq = list(range(dim))
                 shape_seq = list(shape)
-            same_level = order is None
+            # See ``lang/impl.py::_field`` for the layout semantics: a single rank-``dim`` dense SNode is allocated
+            # at the permuted physical shape (``shape_seq``) with natural axes, and the canonical->physical
+            # permutation is encoded as ``_qd_layout`` on the field for AST-level subscript rewriting.
+            flat_axis_seq = list(range(dim))
+            phys_offset = offset
+            if order is not None and offset is not None:
+                phys_offset = tuple(offset[axis_seq[p]] for p in range(dim))
             if layout == Layout.SOA:
                 for e in entries._get_field_members():
-                    impl._create_snode(axis_seq, shape_seq, same_level).place(ScalarField(e), offset=offset)
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                        ScalarField(e), offset=phys_offset
+                    )
                 if needs_grad:
                     for e in entries_grad._get_field_members():
-                        impl._create_snode(axis_seq, shape_seq, same_level).place(ScalarField(e), offset=offset)
+                        impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                            ScalarField(e), offset=phys_offset
+                        )
                 if needs_dual:
                     for e in entries_dual._get_field_members():
-                        impl._create_snode(axis_seq, shape_seq, same_level).place(ScalarField(e), offset=offset)
+                        impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                            ScalarField(e), offset=phys_offset
+                        )
             else:
-                impl._create_snode(axis_seq, shape_seq, same_level).place(entries, offset=offset)
+                impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(entries, offset=phys_offset)
                 if needs_grad:
-                    impl._create_snode(axis_seq, shape_seq, same_level).place(entries_grad, offset=offset)
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                        entries_grad, offset=phys_offset
+                    )
                 if needs_dual:
-                    impl._create_snode(axis_seq, shape_seq, same_level).place(entries_dual, offset=offset)
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                        entries_dual, offset=phys_offset
+                    )
+            if order is not None:
+                _qd_layout = tuple(axis_seq)
+                entries._qd_layout = _qd_layout
+                if needs_grad:
+                    entries_grad._qd_layout = _qd_layout
+                if needs_dual:
+                    entries_dual._qd_layout = _qd_layout
         return entries
 
     @classmethod
     @python_scope
-    def ndarray(cls, n, m, dtype, shape):
+    def ndarray(cls, n, m, dtype, shape, needs_grad=False):
         """Defines a Quadrants ndarray with matrix elements.
         This function must be called in Python scope, and after `qd.init` is called.
 
@@ -984,11 +1000,13 @@ class Matrix(QuadrantsOperations):
             m (int): Number of columns of the matrix.
             dtype (DataType): Data type of each value.
             shape (Union[int, tuple[int]]): Shape of the ndarray.
+            needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,
+                accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
+                Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
 
         Example::
 
-            The code below shows how a Quadrants ndarray with matrix elements \
-            can be declared and defined::
+            The code below shows how a Quadrants ndarray with matrix elements can be declared and defined::
 
                 >>> x = qd.Matrix.ndarray(4, 5, qd.f32, shape=(16, 8))
         """
@@ -1001,12 +1019,43 @@ class Matrix(QuadrantsOperations):
             batch_ndim = len(shape)
             shape = (*shape, m, n)
             return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
-        return MatrixNdarray(n, m, dtype, shape)
+        arr = MatrixNdarray(n, m, dtype, shape)
+        if needs_grad:
+            dt = cook_dtype(dtype)
+            if not qd_python_core.is_real(dt):
+                raise QuadrantsRuntimeError(
+                    f"{dtype} is not supported for Matrix.ndarray with needs_grad=True; element dtype must be real (floating-point)."
+                )
+            arr._set_grad(cls.ndarray(n, m, dtype, shape, needs_grad=False))
+        return arr
+
+    @classmethod
+    def tensor(cls, n, m, dtype, shape, **kwargs):
+        """Allocate a tensor whose elements are ``n``-by-``m`` matrices.
+
+        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for matrix-valued elements. Selects
+        between ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.
+
+        Args:
+            n (int): Number of rows of each matrix element.
+            m (int): Number of columns of each matrix element.
+            dtype: Element data type (e.g. ``qd.f32``).
+            shape: Shape of the tensor (excluding the matrix dimensions) as an ``int`` or tuple of ``int``.
+            backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.
+            **kwargs: Forwarded verbatim to the underlying ``qd.Matrix.field`` / ``qd.Matrix.ndarray`` call.
+
+        Example::
+
+            >>> a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))
+            >>> b = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+        """
+        from quadrants._tensor import _tensor_mat  # pylint: disable=C0415
+
+        return _tensor_mat(n, m, dtype, shape, **kwargs)
 
     @staticmethod
     def rows(rows):
-        """Constructs a matrix by concatenating a list of
-        vectors/lists row by row. Must be called in Quadrants scope.
+        """Constructs a matrix by concatenating a list of vectors/lists row by row. Must be called in Quadrants scope.
 
         Args:
             rows (List): A list of Vector (1-D Matrix) or a list of list.
@@ -1089,11 +1138,9 @@ class Matrix(QuadrantsOperations):
 
         Both two vectors must have the same dimension <= 3.
 
-        For two 2d vectors (x1, y1) and (x2, y2), the return value is the
-        scalar `x1*y2 - x2*y1`.
+        For two 2d vectors (x1, y1) and (x2, y2), the return value is the scalar `x1*y2 - x2*y1`.
 
-        For two 3d vectors `v` and `w`, the return value is the 3d vector
-        `v x w`.
+        For two 3d vectors `v` and `w`, the return value is the 3d vector `v x w`.
 
         Args:
             other (:class:`~quadrants.Matrix`): The input Vector.
@@ -1158,13 +1205,16 @@ class Vector(Matrix):
 
     @classmethod
     @python_scope
-    def ndarray(cls, n, dtype, shape):
+    def ndarray(cls, n, dtype, shape, needs_grad=False):
         """Defines a Quadrants ndarray with vector elements.
 
         Args:
             n (int): Size of the vector.
             dtype (DataType): Data type of each value.
             shape (Union[int, tuple[int]]): Shape of the ndarray.
+            needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,
+                accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
+                Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
 
         Example:
             The code below shows how a Quadrants ndarray with vector elements can be declared and defined::
@@ -1180,7 +1230,38 @@ class Vector(Matrix):
             batch_ndim = len(shape)
             shape = (*shape, n)
             return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
-        return VectorNdarray(n, dtype, shape)
+        arr = VectorNdarray(n, dtype, shape)
+        if needs_grad:
+            dt = cook_dtype(dtype)
+            if not qd_python_core.is_real(dt):
+                raise QuadrantsRuntimeError(
+                    f"{dtype} is not supported for Vector.ndarray with needs_grad=True; element dtype must be real (floating-point)."
+                )
+            arr._set_grad(cls.ndarray(n, dtype, shape, needs_grad=False))
+        return arr
+
+    @classmethod
+    def tensor(cls, n, dtype, shape, **kwargs):
+        """Allocate a tensor whose elements are length-``n`` vectors.
+
+        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for vector-valued elements. Selects
+        between ``qd.Vector.field`` and ``qd.Vector.ndarray`` based on the ``backend=`` keyword.
+
+        Args:
+            n (int): Length of each vector element.
+            dtype: Element data type (e.g. ``qd.f32``).
+            shape: Shape of the tensor (excluding the vector dimension) as an ``int`` or tuple of ``int``.
+            backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.
+            **kwargs: Forwarded verbatim to the underlying ``qd.Vector.field`` / ``qd.Vector.ndarray`` call.
+
+        Example::
+
+            >>> v = qd.Vector.tensor(3, qd.f32, shape=(4,))
+            >>> u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+        """
+        from quadrants._tensor import _tensor_vec  # pylint: disable=C0415
+
+        return _tensor_vec(n, dtype, shape, **kwargs)
 
 
 class MatrixField(Field):
@@ -1204,11 +1285,26 @@ class MatrixField(Field):
 
     def to_dlpack(self):
         """
-        Note: caller is responsible for calling qd.sync() between modifying the field, and
-        reading it.
+        Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.
         """
         impl.get_runtime().materialize()
-        return impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, self.ndim, self.n, self.m)
+        try:
+            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, self.ndim, self.n, self.m)
+        except ModuleNotFoundError:
+            raise ModuleNotFoundError(
+                "MatrixField.to_dlpack() requires torch to be installed "
+                "(the C++ layer checks torch version for DLPack byte_offset support)"
+            ) from None
+        # See ``Field.to_dlpack`` for the rationale. Only the outer ``len(layout)`` spatial axes are permuted — the
+        # trailing element axes (``n``, ``m``) sit innermost and stay identity.
+        layout = getattr(self, "_qd_layout", None)
+        if layout is not None:
+            from quadrants.lang.field import (  # pylint: disable=C0415
+                _patch_field_dlpack_canonical,
+            )
+
+            _patch_field_dlpack_canonical(capsule, tuple(layout))
+        return capsule
 
     def get_scalar_field(self, *indices):
         """Creates a ScalarField using a specific field member.
@@ -1222,7 +1318,14 @@ class MatrixField(Field):
         assert len(indices) in [1, 2]
         i = indices[0]
         j = 0 if len(indices) == 1 else indices[1]
-        return ScalarField(self.vars[i * self.m + j])
+        sf = ScalarField(self.vars[i * self.m + j])
+        # Propagate the canonical->physical layout from the parent MatrixField so that subscripts / ``get_addr`` on
+        # the extracted ScalarField go through the same rewrite (each member lives in the same permuted-physical SNode
+        # hierarchy as the parent).
+        parent_layout = getattr(self, "_qd_layout", None)
+        if parent_layout is not None:
+            sf._qd_layout = tuple(parent_layout)
+        return sf
 
     def _get_dynamic_index_stride(self):
         if self.ptr.get_dynamic_indexable():
@@ -1463,8 +1566,7 @@ class MatrixType(CompoundType):
                 entries = [args[0] for _ in range(self.m) for _ in range(self.n)]
                 return self._instantiate(entries)
             args = args[0]
-        # collect all input entries to a 1d list and then reshape
-        # this is mostly for glsl style like vec4(v.xyz, 1.)
+        # collect all input entries to a 1d list and then reshape — this is mostly for glsl style like vec4(v.xyz, 1.)
         entries = []
         for x in args:
             if isinstance(x, (list, tuple)):
@@ -1614,8 +1716,7 @@ class VectorType(MatrixType):
                 entries = [args[0] for _ in range(self.n)]
                 return self._instantiate(entries)
             args = args[0]
-        # collect all input entries to a 1d list and then reshape
-        # this is mostly for glsl style like vec4(v.xyz, 1.)
+        # collect all input entries to a 1d list and then reshape — this is mostly for glsl style like vec4(v.xyz, 1.)
         entries = []
         for x in args:
             if isinstance(x, (list, tuple)):
@@ -1677,8 +1778,7 @@ class MatrixNdarray(Ndarray):
         # TODO(zhanlue): remove self.dtype and migrate its usages to element_type
         self.dtype = cook_dtype(dtype)
 
-        self.layout = Layout.AOS
-        self.shape = tuple(shape)
+        self._physical_shape = tuple(shape)
         self.element_type = DataTypeCxxWrapper(_type_factory.get_tensor_type((self.n, self.m), self.dtype).get_ptr())
         # TODO: we should pass in element_type, shape, layout instead.
         self.arr = impl.get_runtime().prog.create_ndarray(
@@ -1719,7 +1819,7 @@ class MatrixNdarray(Ndarray):
         return Matrix([[NdarrayHostAccess(self, key, (i, j)) for j in range(self.m)] for i in range(self.n)])
 
     @python_scope
-    def to_numpy(self):
+    def to_numpy(self, dtype=None):
         """Converts this ndarray to a `numpy.ndarray`.
 
         Example::
@@ -1732,7 +1832,10 @@ class MatrixNdarray(Ndarray):
              [[[0. 0.]
                [0. 0.]]]]
         """
-        return self._ndarray_matrix_to_numpy(as_vector=0)
+        arr = self._ndarray_matrix_to_numpy(as_vector=0)
+        if dtype is not None and arr.dtype != dtype:
+            arr = arr.astype(dtype)
+        return arr
 
     @python_scope
     def from_numpy(self, arr):
@@ -1747,8 +1850,22 @@ class MatrixNdarray(Ndarray):
         self._ndarray_matrix_from_numpy(arr, as_vector=0)
 
     @python_scope
+    def to_torch(self, device=None):
+        """Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
+        :meth:`MatrixField.to_torch`."""
+        return self._ndarray_matrix_to_torch(as_vector=0, device=device)
+
+    @python_scope
+    def from_torch(self, arr):
+        """Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
+        :meth:`MatrixField.from_torch`."""
+        self._ndarray_matrix_from_torch(arr, as_vector=0)
+
+    @python_scope
     def __deepcopy__(self, memo=None):
-        ret_arr = MatrixNdarray(self.n, self.m, self.dtype, self.shape)
+        ret_arr = MatrixNdarray(self.n, self.m, self.dtype, self._physical_shape)
+        if self._qd_layout is not None:
+            ret_arr._qd_layout = self._qd_layout
         ret_arr.copy_from(self)
         return ret_arr
 
@@ -1794,8 +1911,7 @@ class VectorNdarray(Ndarray):
         # TODO(zhanlue): remove self.dtype and migrate its usages to element_type
         self.dtype = cook_dtype(dtype)
 
-        self.layout = Layout.AOS
-        self.shape = tuple(shape)
+        self._physical_shape = tuple(shape)
         self.element_type = DataTypeCxxWrapper(_type_factory.get_tensor_type((n,), self.dtype).get_ptr())
         self.arr = impl.get_runtime().prog.create_ndarray(
             cook_dtype(self.element_type),
@@ -1832,7 +1948,7 @@ class VectorNdarray(Ndarray):
         return Vector([NdarrayHostAccess(self, key, (i,)) for i in range(self.n)])
 
     @python_scope
-    def to_numpy(self):
+    def to_numpy(self, dtype=None):
         """Converts this vector ndarray to a `numpy.ndarray`.
 
         Example::
@@ -1845,7 +1961,10 @@ class VectorNdarray(Ndarray):
                    [[0., 0., 0.],
                     [0., 0., 0.]]], dtype=float32)
         """
-        return self._ndarray_matrix_to_numpy(as_vector=1)
+        arr = self._ndarray_matrix_to_numpy(as_vector=1)
+        if dtype is not None and arr.dtype != dtype:
+            arr = arr.astype(dtype)
+        return arr
 
     @python_scope
     def from_numpy(self, arr):
@@ -1863,8 +1982,21 @@ class VectorNdarray(Ndarray):
         self._ndarray_matrix_from_numpy(arr, as_vector=1)
 
     @python_scope
+    def to_torch(self, device=None):
+        """Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``. Mirrors
+        :meth:`MatrixField.to_torch` on the vector code path."""
+        return self._ndarray_matrix_to_torch(as_vector=1, device=device)
+
+    @python_scope
+    def from_torch(self, arr):
+        """Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n,)``."""
+        self._ndarray_matrix_from_torch(arr, as_vector=1)
+
+    @python_scope
     def __deepcopy__(self, memo=None):
-        ret_arr = VectorNdarray(self.n, self.dtype, self.shape)
+        ret_arr = VectorNdarray(self.n, self.dtype, self._physical_shape)
+        if self._qd_layout is not None:
+            ret_arr._qd_layout = self._qd_layout
         ret_arr.copy_from(self)
         return ret_arr
 

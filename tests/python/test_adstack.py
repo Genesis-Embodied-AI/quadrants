@@ -412,24 +412,48 @@ def test_adstack_basic_gradient_f64(n_iter):
 
 
 @pytest.mark.parametrize("n_iter", [1, 3, 10])
+@pytest.mark.parametrize("wrap_inner_in_func", [False, True])
 @test_utils.test(ad_stack_experimental_enabled=False)
-def test_adstack_basic_gradient_negative(n_iter):
+def test_adstack_basic_gradient_negative(wrap_inner_in_func, n_iter):
     # Negative counterpart of `test_adstack_basic_gradient`: with the adstack disabled the backward compiler
     # cannot reverse a dynamic `range(n_iter)`, so `compute.grad()` raises `QuadrantsCompilationError("Cannot use
     # non static range in Backwards mode")` deterministically for every `n_iter`. Inlined rather than reusing
     # `_run_basic_gradient` because the shall-not-pass path never reaches the gradient assertion, so a shared
     # helper would carry a dead `rel_tol` argument down this branch.
+    #
+    # Internal details: the `wrap_inner_in_func` axis covers both shapes that should produce the same diagnostic.
+    # When False, the dynamic-range loop sits directly inside the outer struct-for, so `ctx.loop_depth > 0` at the
+    # range-for visit and the AST transformer raises. When True, the same dynamic-range loop body lives inside a
+    # nested `@qd.func` and is invoked from the outer struct-for; the func body must inherit the caller's
+    # `loop_depth` so the nested-range check still fires - if the func compile path resets `loop_depth` back to 0
+    # the kernel compiles silently and the backward pass produces a wrong gradient with no diagnostic.
     n = 4
     x = qd.field(qd.f32, shape=n, needs_grad=True)
     y = qd.field(qd.f32, shape=(), needs_grad=True)
 
-    @qd.kernel
-    def compute():
-        for i in x:
-            v = x[i]
-            for _ in range(n_iter):
-                v = v * 0.95 + 0.01
-            y[None] += v
+    @qd.func
+    def inner(v_in: qd.f32) -> qd.f32:
+        v = v_in
+        for _ in range(n_iter):
+            v = v * 0.95 + 0.01
+        return v
+
+    if wrap_inner_in_func:
+
+        @qd.kernel
+        def compute():
+            for i in x:
+                y[None] += inner(x[i])
+
+    else:
+
+        @qd.kernel
+        def compute():
+            for i in x:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 0.95 + 0.01
+                y[None] += v
 
     x_vals = [0.1, 0.3, 0.5, 0.8]
     for i, v in enumerate(x_vals):
@@ -439,6 +463,277 @@ def test_adstack_basic_gradient_negative(n_iter):
 
     with pytest.raises(qd.QuadrantsCompilationError, match=r"non static range"):
         compute.grad()
+
+
+_REVERSE_GLOBAL_CROSS_ITER_PATTERNS = [
+    # `(has_outer_for, in_func, load_kind)` toggles for `_run_reverse_global_cross_iter`. `load_kind` selects which
+    # `out[...]` index expression the inner range loads from: `cross_iter` is the canonical `out[i-1]` shape with a
+    # genuine cross-iteration RAW; `constant_outside_iter_range` reads from a slot of `out` that the loop never
+    # writes to, so the load and store live on disjoint iteration slices and the diagnostic must not fire.
+    pytest.param(False, False, "cross_iter", id="kernel_top_inline_cross_iter"),
+    pytest.param(False, True, "cross_iter", id="kernel_top_in_func_cross_iter"),
+    pytest.param(True, False, "cross_iter", id="outer_for_inline_cross_iter"),
+    pytest.param(True, True, "cross_iter", id="outer_for_in_func_cross_iter"),
+    pytest.param(False, False, "constant_outside_iter_range", id="kernel_top_inline_constant_outside"),
+    pytest.param(False, True, "constant_outside_iter_range", id="kernel_top_in_func_constant_outside"),
+    pytest.param(True, False, "constant_outside_iter_range", id="outer_for_inline_constant_outside"),
+    pytest.param(True, True, "constant_outside_iter_range", id="outer_for_in_func_constant_outside"),
+]
+
+
+def _run_reverse_global_cross_iter(has_outer_for, in_func, load_kind, expect_raise):
+    # Single factory covering the reverse-mode shapes that read and write the same `needs_grad` global field
+    # `out` from inside an inner non-static range, parametrised on three orthogonal axes:
+    #   - `has_outer_for`: when True the inner range is nested under a `range(1)`, so it is AST-nested at
+    #     `loop_depth == 1`; when False the inner range becomes the offload-level loop after inlining. The
+    #     toggle is materialised via the `range(1) if qd.static(...) else qd.static(range(1))` inline-if pattern
+    #     (already used by `_run_unary_loop_carried` in this file) so a single kernel template covers both.
+    #   - `in_func`: when True the inner range body lives inside a `@qd.func` invoked from the kernel; when
+    #     False the same body is written directly inside the kernel.
+    #   - `load_kind`: `cross_iter` puts the canonical `out[i-1]` cross-iteration RAW shape in the body;
+    #     `constant_outside_iter_range` replaces the load with `out[n]` (a slot strictly outside the iteration
+    #     range `[0, n)`), so the load and store live on disjoint iteration slices and there is no real
+    #     cross-iter dependency. Pins the offload-level guard's `references_loop_index` gate.
+    n = 4
+    out_shape = 2 * n if load_kind == "constant_outside_iter_range" else n
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    out = qd.field(qd.f32, shape=out_shape, needs_grad=True)
+
+    @qd.func
+    def func_body_cross_iter():
+        for i in range(n):
+            if i == 0:
+                out[i] = x[None]
+            else:
+                out[i] = out[i - 1] + x[None]
+
+    @qd.func
+    def func_body_constant_outside():
+        for i in range(n):
+            out[i] = out[n] + x[None]
+
+    @qd.kernel
+    def compute():
+        for _ in range(1) if qd.static(has_outer_for) else qd.static(range(1)):
+            if qd.static(in_func):
+                if qd.static(load_kind == "cross_iter"):
+                    func_body_cross_iter()
+                else:
+                    func_body_constant_outside()
+            else:
+                if qd.static(load_kind == "cross_iter"):
+                    for i in range(n):
+                        if i == 0:
+                            out[i] = x[None]
+                        else:
+                            out[i] = out[i - 1] + x[None]
+                else:
+                    for i in range(n):
+                        out[i] = out[n] + x[None]
+
+    x[None] = 1.0
+    if load_kind == "constant_outside_iter_range":
+        out[n] = 0.5
+    compute()
+    for i in range(out_shape):
+        out.grad[i] = 0.0
+    if load_kind == "cross_iter":
+        out.grad[n - 1] = 1.0
+        expected_x_grad = float(n)
+    else:
+        for i in range(n):
+            out.grad[i] = 1.0
+        expected_x_grad = float(n)
+    x.grad[None] = 0.0
+    if expect_raise:
+        with pytest.raises(
+            (qd.QuadrantsCompilationError, RuntimeError),
+            match=r"non static range|Cross-iteration read-after-write",
+        ):
+            compute.grad()
+    else:
+        compute.grad()
+        assert float(x.grad[None]) == pytest.approx(expected_x_grad, rel=1e-6)
+
+
+@pytest.mark.parametrize("has_outer_for, in_func, load_kind", _REVERSE_GLOBAL_CROSS_ITER_PATTERNS)
+@test_utils.test(require=qd.extension.adstack)
+def test_reverse_global_cross_iter_with_adstack(has_outer_for, in_func, load_kind):
+    # Reverse-mode AD on a kernel that reads and writes the same `needs_grad` global field from inside a non-static
+    # range must either produce the analytical gradient or raise a clear diagnostic. With adstack on, only the
+    # kernel-top shapes with a genuine cross-iteration RAW raise; the outer-for shapes and the
+    # constant-outside-iter-range shapes produce the analytical gradient.
+    #
+    # Internal details: `AdStackAllocaJudger` only promotes cross-iter dependencies on local `AllocaStmt`s, never
+    # through global field stores; cross-iter through a global needs_grad field at the offload level is therefore
+    # not handled in either adstack setting and must raise. The offload-level guard in `auto_diff.cpp` pairs same-
+    # SNode `(GlobalStore, GlobalLoad)` and raises on structurally-different index `Stmt*`s, but only when both
+    # indices transitively reference a `LoopIndexStmt` - which suppresses the false positive on the
+    # constant-outside-iter-range shape where the load reads a slot the loop never writes to. The outer-for shapes
+    # route the cross-iter chain through an AST-nested range whose backward the AD pass handles correctly via the
+    # IB analysis when adstack is on.
+    expect_raise = (not has_outer_for) and load_kind == "cross_iter"
+    _run_reverse_global_cross_iter(has_outer_for, in_func, load_kind, expect_raise)
+
+
+@pytest.mark.parametrize("has_outer_for, in_func, load_kind", _REVERSE_GLOBAL_CROSS_ITER_PATTERNS)
+@test_utils.test()
+def test_reverse_global_cross_iter_without_adstack(has_outer_for, in_func, load_kind):
+    # Same eight shapes as the with-adstack companion. With adstack off, every outer-for shape raises via the
+    # AST-level `loop_depth > 0` check (purely on nesting, regardless of body content), and the kernel-top
+    # cross-iter shapes raise via the offload-level guard in `auto_diff.cpp`. The kernel-top
+    # constant-outside-iter-range shape is the only combination that compiles cleanly: nesting is zero so the
+    # AST guard does not fire, and the load index is iteration-independent so the offload-level guard's
+    # `references_loop_index` gate also does not fire.
+    #
+    # Internal details: the caller-loop-depth propagation in `_func_base.py` is what makes the @qd.func variant
+    # of the outer-for shape behave identically to the inline variant - without it, the func context would
+    # start at `loop_depth = 0` and the AST guard would never fire for the func-routed nested shape.
+    expect_raise = has_outer_for or load_kind == "cross_iter"
+    _run_reverse_global_cross_iter(has_outer_for, in_func, load_kind, expect_raise)
+
+
+_REVERSE_SIBLING_COMPONENT_PATTERNS = [
+    # `(has_outer_for, in_func)` toggles for `_run_reverse_sibling_component_correct_gradient`. Same axes as the
+    # cross-iter matrix, minus the `load_kind` dimension (the body shape here is fixed: same loop index on
+    # axis 0 of `out`, differing constants on axis 1).
+    pytest.param(False, False, id="kernel_top_inline"),
+    pytest.param(False, True, id="kernel_top_in_func"),
+    pytest.param(True, False, id="outer_for_inline"),
+    pytest.param(True, True, id="outer_for_in_func"),
+]
+
+
+def _run_reverse_sibling_component_correct_gradient(has_outer_for, in_func):
+    # Drives a kernel that writes `out[i, 0]` and reads `out[i, 1]` on a 2-axis `needs_grad` field. The store
+    # and load both reference `LoopIndexStmt(i)` on axis 0 (same `Stmt*`) and have differing `ConstStmt`s on
+    # axis 1. The offload-level guard's per-axis rule treats the differing constant axis as iter-independent
+    # sibling access, so the kernel must compile and produce the analytical gradient.
+    n = 4
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    out = qd.field(qd.f32, shape=(n, 2), needs_grad=True)
+
+    @qd.func
+    def func_body():
+        for i in range(n):
+            out[i, 1] = x[None]
+            out[i, 0] = out[i, 1] * 2.0
+
+    @qd.kernel
+    def compute():
+        for _ in range(1) if qd.static(has_outer_for) else qd.static(range(1)):
+            if qd.static(in_func):
+                func_body()
+            else:
+                for i in range(n):
+                    out[i, 1] = x[None]
+                    out[i, 0] = out[i, 1] * 2.0
+
+    x[None] = 1.0
+    compute()
+    for i in range(n):
+        out.grad[i, 0] = 1.0
+        out.grad[i, 1] = 0.0
+    x.grad[None] = 0.0
+    compute.grad()
+    # `out[i, 0] = (out[i, 1] = x) * 2.0 = 2x` per iter; seed `out.grad[i, 0] = 1` for every i.
+    # `d(out[i, 0]) / d(x) = 2` per iter -> `x.grad = 2 * n`.
+    assert float(x.grad[None]) == pytest.approx(2.0 * n, rel=1e-6)
+
+
+@pytest.mark.parametrize("has_outer_for, in_func", _REVERSE_SIBLING_COMPONENT_PATTERNS)
+@test_utils.test(require=qd.extension.adstack)
+def test_reverse_sibling_component_correct_gradient_with_adstack(has_outer_for, in_func):
+    # Sibling-component access on a multi-axis `needs_grad` field must compile and produce the analytical
+    # gradient. The store and load share the same `LoopIndexStmt` on axis 0 and differ only on a constant
+    # axis, which is sibling access in the same iteration, not cross-iter RAW.
+    #
+    # Internal details: the offload-level guard's per-axis `indices_have_no_cross_iter_dependency` rule
+    # treats axes where neither index references `LoopIndexStmt` as iter-independent and ignores their
+    # difference, so `out[i, 0]` vs `out[i, 1]` is not flagged.
+    _run_reverse_sibling_component_correct_gradient(has_outer_for, in_func)
+
+
+def _run_reverse_kernel_top_indep_iters_correct_gradient():
+    # Independent-iteration kernel-top range-for (no cross-iteration RAW). Both adstack settings must
+    # produce the analytical gradient `2 * n` for the per-iteration store `out[i] = x[None] * 2`.
+    n = 4
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    out = qd.field(qd.f32, shape=n, needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in range(n):
+            out[i] = x[None] * 2.0
+
+    x[None] = 1.0
+    compute()
+    for i in range(n):
+        out.grad[i] = 1.0
+    x.grad[None] = 0.0
+    compute.grad()
+    assert float(x.grad[None]) == pytest.approx(2.0 * n, rel=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_reverse_kernel_top_indep_iters_with_adstack():
+    # Kernel-top non-static range whose body has no cross-iter RAW on a `needs_grad` field must
+    # produce the analytical gradient with adstack on.
+    #
+    # Internal details: the offload-level guard pairs only same-SNode `(store, load)`, so a body
+    # that only stores `out[i] = x[None] * 2` (no load on `out`) compiles cleanly. Adstack itself has
+    # nothing to do here either - each iteration is independent.
+    _run_reverse_kernel_top_indep_iters_correct_gradient()
+
+
+@test_utils.test()
+def test_reverse_kernel_top_indep_iters_without_adstack():
+    # Same independent-iteration shape as the with-adstack companion, must produce the analytical
+    # gradient with adstack off.
+    #
+    # Internal details: the AST-level `loop_depth > 0` check does not fire (range-for is at
+    # `loop_depth == 0`) and there is no cross-iter chain to drop, so the gradient comes out correct
+    # without the adstack.
+    _run_reverse_kernel_top_indep_iters_correct_gradient()
+
+
+def _run_reverse_kernel_top_in_place_accum_correct_gradient():
+    # In-place accumulation `out[i] = out[i] + x[None]` at the kernel-top range-for. Sanity check that
+    # the offload-level guard's pointer-equality on index `Stmt*`s allows this shape - store and
+    # load on `out` share the same `LoopIndexStmt` so `indices_pointer_match` returns true and the
+    # guard does not fire.
+    n = 4
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    out = qd.field(qd.f32, shape=n, needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in range(n):
+            out[i] = out[i] + x[None]
+
+    x[None] = 1.0
+    for i in range(n):
+        out[i] = 0.0
+    compute()
+    for i in range(n):
+        out.grad[i] = 1.0
+    x.grad[None] = 0.0
+    compute.grad()
+    # `out[i] = out[i] + x` reduces to `out[i] += x`; with `out[i]` initialised to 0, the per-iteration
+    # adjoint accumulates 1 into `x.grad` for each of n elements when `out.grad[i] = 1`.
+    assert float(x.grad[None]) == pytest.approx(float(n), rel=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_reverse_kernel_top_in_place_accum_with_adstack():
+    # In-place accumulation `out[i] = out[i] + x[None]` at the offload-level loop must compile and
+    # produce the analytical gradient: the offload-level guard intentionally exempts this shape.
+    #
+    # Internal details: the store dest `out[i]` and the load src `out[i]` reference the same
+    # `LoopIndexStmt`, so `OffloadLevelGlobalCrossIterRAWChecker::indices_pointer_match` returns true
+    # and the guard does not fire. The per-iteration adjoint already handles in-place accumulation
+    # correctly: `x.grad` accumulates 1 per element.
+    _run_reverse_kernel_top_in_place_accum_correct_gradient()
 
 
 @test_utils.test(
@@ -510,8 +805,8 @@ def test_adstack_mixed_f32_and_non_f32():
     x.grad[0] = 0.0
     compute.grad()
     # d y / d x[0] = sum_{k=0..4} (k+1): v at iter k is x[0] + 0.1*k, weight is k+1, so coefficient on x[0] is
-    # sum_{k=0..4} (k+1) = 15. Five exactly-representable f32 accumulations so the result is exact up to a
-    # handful of ULPs.
+    # sum_{k=0..4} (k+1) = 15. Five exactly-representable f32 accumulations so the result is exact up to a handful of
+    # ULPs.
     assert x.grad[0] == pytest.approx(15.0, rel=1e-6)
 
 
@@ -692,7 +987,7 @@ def _overflowing_compute(n_elements=1, n_iter=64):
     return compute, x, y
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
 def test_adstack_overflow_raises():
     # Runs a backward pass with a for-loop longer than the adstack can hold, and asserts the overflow surfaces as a
     # regular Python exception on the next `qd.sync()` - not a silent wrong gradient and not a process crash. This
@@ -702,8 +997,10 @@ def test_adstack_overflow_raises():
     # Internal detail: both LLVM and SPIR-V defer the error to the next `qd.sync()` (same pattern as CUDA async
     # errors) so we do not pay a sync-per-launch. LLVM polls `runtime->adstack_overflow_flag` from
     # `LlvmProgramImpl::synchronize()` via `check_adstack_overflow()`; SPIR-V's gfx runtime raises via `QD_ERROR`
-    # on sync. The test launches the overflowing grad kernel and calls `qd.sync()` inside the same `pytest.raises`
-    # block so the deferred surfacing point is caught.
+    # on sync. The bounds-check codepath in both backends is gated on `debug`; release builds elide it on the
+    # premise that `determine_ad_stack_size` produces a tight upper bound. This test deliberately misconfigures
+    # the capacity below the kernel's actual peak push count, which the sizer cannot foresee, so the runtime
+    # check has to be live for the deferred raise to fire - `debug=True` keeps it live.
     compute, _, _ = _overflowing_compute()
     # On LLVM the runtime raises QuadrantsAssertionError (subclass of AssertionError) from
     # check_adstack_overflow; on SPIR-V the gfx runtime raises RuntimeError via QD_ERROR. We accept either,
@@ -713,12 +1010,12 @@ def test_adstack_overflow_raises():
         qd.sync()
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
 def test_adstack_overflow_flag_resets_after_catch():
     # Once `check_adstack_overflow()` raises, the runtime must clear its overflow flag so a subsequent `qd.sync()`
     # (with no new overflowing grad launch in between) returns normally. Without the reset the user would see a
     # stale overflow exception every time they sync after the first one, which makes diagnosis and recovery
-    # impossible.
+    # impossible. `debug=True` keeps the per-push bounds check live.
     compute, _, _ = _overflowing_compute()
     with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
         compute.grad()
@@ -805,12 +1102,14 @@ def test_adstack_heap_backed_exceeds_old_threadstack_budget():
         assert x.grad[i] == pytest.approx(8.0 * geom, rel=1e-5)
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
 def test_adstack_overflow_multithreaded():
     # Multi-element field so several threads execute the overflowing grad body in parallel. Asserts the overflow
     # still surfaces as a single Python exception rather than deadlocking, crashing, or racing on the flag. Every
     # thread writes the same flag value (non-zero), so a race on the write is benign; this test pins that the
-    # read side is also safe (one raise per sync regardless of how many threads flipped the bit).
+    # read side is also safe (one raise per sync regardless of how many threads flipped the bit). `debug=True`
+    # keeps the per-push bounds check live (release-build codegen elides it - see `test_adstack_overflow_raises`
+    # for the rationale).
     compute, _, _ = _overflowing_compute(n_elements=16)
     with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
         compute.grad()
@@ -838,11 +1137,16 @@ def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
     # them) is too late. The subprocess is launched from a temp file because `python -c "<kernel>"` breaks
     # Quadrants' kernel source-inspect (`getsourcelines` cannot find the source of an inlined `-c` string); the
     # grad call is deliberately left unsynced so this is the teardown path, not the user-catch path.
+    # `debug=True` is required for the same reason as `test_adstack_overflow_raises`: release-build LLVM codegen
+    # elides the per-push bounds check on the premise the sizer's bound is tight, so a manually-misconfigured
+    # `ad_stack_size=32` kernel only flips the runtime overflow flag in debug mode. Without the flag set there
+    # is no flag for the teardown guard to swallow, and the bug this test pins (re-raise during destructor path
+    # leading to `std::terminate()`) cannot trigger.
     child_script = textwrap.dedent(
         """
         import quadrants as qd
 
-        qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=32)
+        qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=32, debug=True)
 
         x = qd.field(qd.f32)
         y = qd.field(qd.f32)
@@ -884,21 +1188,19 @@ def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
 @pytest.mark.parametrize("n_iter", [30, 100])
 @test_utils.test(require=qd.extension.adstack)
 def test_adstack_near_capacity(n_iter):
-    # Pins that a field-load-bounded reverse-mode loop sizes its adstack from the live field value at each
-    # launch. Parametrized on both sides of the previous K+2=32 overflow boundary: `n_iter=30` would have
-    # required 32 slots, `n_iter=100` would have required 102 slots. Both cases now run to completion with
-    # the analytical gradient since the structural pre-pass captures the symbolic trip count and the host
-    # launcher evaluates it per dispatch.
+    # Pins that a field-load-bounded reverse-mode loop sizes its adstack from the live field value at each launch.
+    # Parametrized on both sides of the previous K+2=32 overflow boundary: `n_iter=30` would have required 32 slots,
+    # `n_iter=100` would have required 102 slots. Both cases now run to completion with the analytical gradient since
+    # the structural pre-pass captures the symbolic trip count and the host launcher evaluates it per dispatch.
     #
-    # Internal details: the trip count is loaded from a runtime field (`n_iter_fld`) rather than a Python
-    # int constant so the `irpass::determine_ad_stack_size` structural pre-pass captures a `SizeExpr::FieldLoad`
-    # (not a `Const`). The host evaluator in `LlvmRuntimeExecutor::publish_adstack_metadata` reads `n_iter_fld`
-    # via `SNodeRwAccessorsBank`, recomputes the per-launch stride / offsets / max-sizes, and writes them into
-    # the runtime metadata buffers that the LLVM codegen for `AdStack*` reads via `LLVMRuntime_get_adstack_*`.
-    # Restricted to LLVM-CPU here: SPIR-V still bakes `max_size` as a codegen-time immediate (future work will
-    # move SPIR-V onto the same per-launch metadata path, at which point the arch restriction can drop).
-    # Companion to `test_adstack_overflow_raises` which still exercises the explicit `ad_stack_size=32` knob
-    # (that path forces every adstack to exactly 32 slots and intentionally overflows).
+    # Internal details: the trip count is loaded from a runtime field (`n_iter_fld`) rather than a Python int constant
+    # so the `irpass::determine_ad_stack_size` structural pre-pass captures a `SizeExpr::FieldLoad` (not a `Const`). The
+    # host evaluator in `LlvmRuntimeExecutor::publish_adstack_metadata` reads `n_iter_fld` via `SNodeRwAccessorsBank`,
+    # recomputes the per-launch stride / offsets / max-sizes, and writes them into the runtime metadata buffers that the
+    # LLVM codegen for `AdStack*` reads via `LLVMRuntime_get_adstack_*`. Restricted to LLVM-CPU here: SPIR-V still bakes
+    # `max_size` as a codegen-time immediate (future work will move SPIR-V onto the same per-launch metadata path, at
+    # which point the arch restriction can drop). Companion to `test_adstack_overflow_raises` which still exercises the
+    # explicit `ad_stack_size=32` knob (that path forces every adstack to exactly 32 slots and intentionally overflows).
     x = qd.field(qd.f32)
     y = qd.field(qd.f32)
     n_iter_fld = qd.field(qd.i32, shape=())
@@ -1403,12 +1705,11 @@ def test_adstack_ndrange_over_ndarray_shape_does_not_oversize_heap():
     got_grad = arr.grad.to_numpy()
     assert not np.isnan(got_grad).any(), f"ndrange-over-shape grad returned NaN: {got_grad}"
 
-    # Analytic oracle. The kernel is affine in `arr[i, j]` (each `v_k` is `v_k * c_k + d_k` for three
-    # iterations, so `d(v_k_final) / d(arr[i, j]) = c_k^3`), and `out[0]` sums all ten recurrences, so the
-    # closed-form gradient per cell is `sum_k c_k^3`. Independent of the backward emission so a
-    # wrong-but-non-NaN gradient (the failure mode when the adstack heap was bound to Metal's nil-fallback
-    # and reads came back as zero) still trips the assertion; tolerance bounded by f32 accumulation roundoff
-    # only, not finite-difference cancellation.
+    # Analytic oracle. The kernel is affine in `arr[i, j]` (each `v_k` is `v_k * c_k + d_k` for three iterations, so
+    # `d(v_k_final) / d(arr[i, j]) = c_k^3`), and `out[0]` sums all ten recurrences, so the closed-form gradient per
+    # cell is `sum_k c_k^3`. Independent of the backward emission so a wrong-but-non-NaN gradient (the failure mode when
+    # the adstack heap was bound to Metal's nil-fallback and reads came back as zero) still trips the assertion;
+    # tolerance bounded by f32 accumulation roundoff only, not finite-difference cancellation.
     coeffs = np.array([1.01, 1.02, 1.03, 1.04, 1.05, 1.06, 1.07, 1.08, 1.09, 1.10], dtype=np.float64)
     expected_per_cell = float((coeffs**3).sum())
     # `rtol=1e-4` rather than tight-to-backward-roundoff because on AMD Vulkan (RADV) the adjoint accumulation
@@ -1420,19 +1721,17 @@ def test_adstack_ndrange_over_ndarray_shape_does_not_oversize_heap():
 
 @test_utils.test(require=qd.extension.adstack)
 def test_adstack_bounded_inner_loop_sized_by_structural_prepass():
-    # Pins that reverse-mode AD on SPIR-V backends through a statically bounded inner `range(N)` sizes the
-    # adstack from the product of enclosing `RangeForStmt` trip counts via the structural pre-pass, not
-    # from any compile-time fallback. There is no `default_ad_stack_size` anymore: any alloca the pre-pass
-    # cannot bound is a hard compile error, so the only way this test passes is through the structural
-    # walk correctly folding the constant trip counts.
+    # Pins that reverse-mode AD on SPIR-V backends through a statically bounded inner `range(N)` sizes the adstack from
+    # the product of enclosing `RangeForStmt` trip counts via the structural pre-pass, not from any compile-time
+    # fallback. There is no `default_ad_stack_size` anymore: any alloca the pre-pass cannot bound is a hard compile
+    # error, so the only way this test passes is through the structural walk correctly folding the constant trip counts.
     #
     # Internal details: `irpass::determine_ad_stack_size` runs a structural pre-pass that walks each adaptive
-    # `AdStackAllocaStmt`'s push sites and computes `max_size` from the product of enclosing `RangeForStmt`
-    # trip counts when every enclosing range has a constant integer begin/end (folded through `BinaryOpStmt`).
-    # Runs on every backend: on SPIR-V this is the only bound-derivation path; on LLVM the inner-range bounds
-    # are rewritten through `LoopIndexStmt` in a shape the structural analyzer does not fold, and the kernel
-    # routes through the symbolic-tree runtime-evaluator path instead - the gradient assertion catches a
-    # regression in either path.
+    # `AdStackAllocaStmt`'s push sites and computes `max_size` from the product of enclosing `RangeForStmt` trip counts
+    # when every enclosing range has a constant integer begin/end (folded through `BinaryOpStmt`). Runs on every
+    # backend: on SPIR-V this is the only bound-derivation path; on LLVM the inner-range bounds are rewritten through
+    # `LoopIndexStmt` in a shape the structural analyzer does not fold, and the kernel routes through the symbolic-tree
+    # runtime-evaluator path instead - the gradient assertion catches a regression in either path.
     x = qd.field(qd.f32, shape=(1,), needs_grad=True)
     y = qd.field(qd.f32, shape=(), needs_grad=True)
 
@@ -1464,7 +1763,7 @@ def test_adstack_bounded_inner_loop_sized_by_structural_prepass():
     assert x.grad[0] == pytest.approx(dv_dx, rel=1e-6)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.metal, qd.vulkan], default_ip=qd.i64)
+@test_utils.test(require=qd.extension.adstack, default_ip=qd.i64)
 def test_adstack_bounded_inner_loop_pre_pass_handles_i64_bounds():
     # Pins that the structural pre-pass in `irpass::determine_ad_stack_size` accepts integer
     # `ConstStmt` loop bounds of any signed or unsigned width (not just i32). A kernel compiled
@@ -1639,17 +1938,17 @@ def test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read():
 )
 @test_utils.test(require=qd.extension.adstack)
 def test_adstack_sizer_trip_count_qd_ndarray_mutated_by_separate_kernel():
-    # Pins the cross-kernel silent-wrong-gradient pattern: a reverse-mode kernel reads `a[i_e]` as an
-    # inner-loop trip count on a device-resident `qd.ndarray`, and a separate kernel mutates `a` between
-    # the forward and `.grad()` calls. The reverse pass walks with the post-mutation trip count, so
-    # `x.grad` ends up non-zero at indices the forward never visited.
+    # Pins the cross-kernel silent-wrong-gradient pattern: a reverse-mode kernel reads `a[i_e]` as an inner-loop trip
+    # count on a device-resident `qd.ndarray`, and a separate kernel mutates `a` between the forward and `.grad()`
+    # calls. The reverse pass walks with the post-mutation trip count, so `x.grad` ends up non-zero at indices the
+    # forward never visited.
     #
-    # Internal details: the forward sizer reads `a = 5` and the main kernel pushes 5 entries per outer
-    # iter; the sibling kernel then writes `a = 10` on device; the backward sizer re-dispatches, reads
-    # `a = 10`, and the reverse pass walks 10 inner iterations. The result is `x.grad[5..9] = 0.8` at
-    # `x[k] = 0.1` instead of the analytical `0.0`. `qd.ndarray` (rather than numpy) is required so the
-    # sibling kernel's device write persists across launches; the same construction with a numpy ndarray
-    # may not reproduce because per-launch h2d uploads can erase the sibling kernel's device write.
+    # Internal details: the forward sizer reads `a = 5` and the main kernel pushes 5 entries per outer iter; the sibling
+    # kernel then writes `a = 10` on device; the backward sizer re-dispatches, reads `a = 10`, and the reverse pass
+    # walks 10 inner iterations. The result is `x.grad[5..9] = 0.8` at `x[k] = 0.1` instead of the analytical `0.0`.
+    # `qd.ndarray` (rather than numpy) is required so the sibling kernel's device write persists across launches; the
+    # same construction with a numpy ndarray may not reproduce because per-launch h2d uploads can erase the sibling
+    # kernel's device write.
     N_X = 16
     N = 4
 
@@ -1694,19 +1993,19 @@ def test_adstack_sizer_trip_count_qd_ndarray_mutated_by_separate_kernel():
 
 @test_utils.test(require=qd.extension.adstack)
 def test_adstack_field_load_bounded_loop_evaluated_per_launch():
-    # Pins the host-evaluated SizeExpr path end-to-end: a reverse-mode adstack whose inner-loop bound is a scalar
-    # i32 field load must size the per-thread heap slice from the live field value at each launch. The
-    # structural pre-pass captures a `SizeExpr::FieldLoad` leaf; the launcher evaluates it via
-    # `SNodeRwAccessorsBank` before each dispatch and resizes the heap accordingly. The kernel is run with
-    # `n_iter_fld[None]` set to 1, 20 and then 50 in sequence: each launch picks up the current field value,
-    # resizes the adstack heap, and runs to completion with the analytical gradient `0.95 ** n_iter`.
+    # Pins the host-evaluated SizeExpr path end-to-end: a reverse-mode adstack whose inner-loop bound is a scalar i32
+    # field load must size the per-thread heap slice from the live field value at each launch. The structural pre-pass
+    # captures a `SizeExpr::FieldLoad` leaf; the launcher evaluates it via `SNodeRwAccessorsBank` before each dispatch
+    # and resizes the heap accordingly. The kernel is run with `n_iter_fld[None]` set to 1, 20 and then 50 in sequence:
+    # each launch picks up the current field value, resizes the adstack heap, and runs to completion with the analytical
+    # gradient `0.95 ** n_iter`.
     #
-    # Internal details: the symbolic bound tree is flattened into the serialisable `SerializedSizeExpr` form and
-    # stored inside the per-backend per-alloca task attributes, so this test exercises the same path whether the
-    # kernel is freshly compiled or restored from the offline cache. On LLVM the bound is published into
-    # `LLVMRuntime::adstack_{per_thread_stride,offsets,max_sizes}` by `publish_adstack_metadata` before each
-    # dispatch; on SPIR-V it is uploaded into the `AdStackMetadata` StorageBuffer that the shader reads at every
-    # push / load-top site.
+    # Internal details: the symbolic bound tree is flattened into the serialisable `SerializedSizeExpr` form and stored
+    # inside the per-backend per-alloca task attributes, so this test exercises the same path whether the kernel is
+    # freshly compiled or restored from the offline cache. On LLVM the bound is published into
+    # `LLVMRuntime::adstack_{per_thread_stride,offsets,max_sizes}` by `publish_adstack_metadata` before each dispatch;
+    # on SPIR-V it is uploaded into the `AdStackMetadata` StorageBuffer that the shader reads at every push / load-top
+    # site.
     x = qd.field(qd.f32)
     y = qd.field(qd.f32)
     n_iter_fld = qd.field(qd.i32, shape=())
@@ -1735,31 +2034,29 @@ def test_adstack_field_load_bounded_loop_evaluated_per_launch():
 
 
 @pytest.mark.parametrize("ndarray_kind", ["numpy", "qd_ndarray"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_inner_range_bounded_by_ndarray_read_at_outer_index(ndarray_kind):
-    # Pins the `ExternalTensorRead`-over-`LoopIndex` `MaxOverRange` wrap in the `SizeExpr` pre-pass: a
-    # reverse-mode adstack whose inner range `range(a[i])` is bounded by a scalar ndarray read at the enclosing
-    # outer loop index. The pre-pass must build `MaxOverRange(var, 0, outer_end, ExternalTensorRead(a, [var]))`
-    # for the alloca's multiplier; the launch-time evaluator enumerates the outer range, reads `a[var]` at each
-    # iteration, and takes the max to size the per-thread adstack heap exactly.
+    # Pins the `ExternalTensorRead`-over-`LoopIndex` `MaxOverRange` wrap in the `SizeExpr` pre-pass: a reverse-mode
+    # adstack whose inner range `range(a[i])` is bounded by a scalar ndarray read at the enclosing outer loop index. The
+    # pre-pass must build `MaxOverRange(var, 0, outer_end, ExternalTensorRead(a, [var]))` for the alloca's multiplier;
+    # the launch-time evaluator enumerates the outer range, reads `a[var]` at each iteration, and takes the max to size
+    # the per-thread adstack heap exactly.
     #
     # Internal details: runs on every backend. On CPU the launch-time SizeExpr is evaluated host-side via
     # `evaluate_adstack_size_expr`, with ndarray element reads going through the real host pointer
-    # `set_host_accessible_ndarray_ptrs` mirrored into `array_ptrs`. On CUDA / AMDGPU the host encodes the
-    # tree into device-side bytecode (`encode_adstack_size_expr_device_bytecode`) and calls
-    # `runtime_eval_adstack_size_expr` to run the interpreter on the device. On Metal / Vulkan the bytecode
-    # is emitted as a SPIR-V compute shader launched from `GfxRuntime::launch_kernel`. All three paths are
-    # the only way to resolve an `ExternalTensorRead` against a GPU-private ndarray without round-tripping
-    # the whole allocation to host. Asserts the analytical gradient `0.95 ** a[i]` per outer iteration so a
-    # regression in the wrap or in either the host or device evaluator shows up as a value mismatch rather
-    # than an overflow crash. Parametrised over the ndarray argument kind because `numpy`/torch inputs lower
-    # through
-    # `set_arg_external_array_with_shape` (writes the raw host pointer straight into `array_ptrs`) while
-    # `qd.ndarray` inputs lower through `set_arg_ndarray_impl` + `set_ndarray_ptrs` (stashes a
-    # `DeviceAllocation *` first, then the launcher resolves it). The CPU launcher mirrors the resolved
-    # pointer back into `array_ptrs`; the CUDA / AMDGPU launchers don't need to because the device interpreter
-    # reads the ndarray data pointer straight out of `ctx->arg_buffer` at the offset the encoder precomputed
-    # from `args_type`, sidestepping the host-side `array_ptrs` map entirely.
+    # `set_host_accessible_ndarray_ptrs` mirrored into `array_ptrs`. On CUDA / AMDGPU the host encodes the tree into
+    # device-side bytecode (`encode_adstack_size_expr_device_bytecode`) and calls `runtime_eval_adstack_size_expr` to
+    # run the interpreter on the device. On Metal / Vulkan the bytecode is emitted as a SPIR-V compute shader launched
+    # from `GfxRuntime::launch_kernel`. All three paths are the only way to resolve an `ExternalTensorRead` against a
+    # GPU-private ndarray without round-tripping the whole allocation to host. Asserts the analytical gradient `0.95 **
+    # a[i]` per outer iteration so a regression in the wrap or in either the host or device evaluator shows up as a
+    # value mismatch rather than an overflow crash. Parametrised over the ndarray argument kind because `numpy`/torch
+    # inputs lower through `set_arg_external_array_with_shape` (writes the raw host pointer straight into `array_ptrs`)
+    # while `qd.ndarray` inputs lower through `set_arg_ndarray_impl` + `set_ndarray_ptrs` (stashes a `DeviceAllocation
+    # *` first, then the launcher resolves it). The CPU launcher mirrors the resolved pointer back into `array_ptrs`;
+    # the CUDA / AMDGPU launchers don't need to because the device interpreter reads the ndarray data pointer straight
+    # out of `ctx->arg_buffer` at the offset the encoder precomputed from `args_type`, sidestepping the host-side
+    # `array_ptrs` map entirely.
     N = 4
     arr_data = np.array([2, 3, 1, 2], dtype=np.int32)
 
@@ -1798,30 +2095,28 @@ def test_adstack_inner_range_bounded_by_ndarray_read_at_outer_index(ndarray_kind
 
 @test_utils.test(require=qd.extension.adstack)
 def test_adstack_inner_range_bounded_by_multidim_ndarray_read():
-    # Pins multi-axis stride handling in the `ExternalTensorRead` evaluator. The sizer routes a
-    # reverse-mode inner trip count `range(a[i, j])` through `SizeExpr::ExternalTensorRead(a, [var_i, var_j])`
-    # for a 2-D ndarray `a`; the host evaluator, the CUDA / AMDGPU device interpreter in the LLVM runtime,
-    # and the SPIR-V sizer compute shader must all fold the indices into a C-order linear offset
-    # `i * shape[1] + j`, not the naive stride-1 sum `i + j`. The worst-case shape below isolates a single
-    # non-zero entry at `a[2, 2] = 100` so the stride-1 path (sum over `(i, j)` with `i + j < rows + cols -
-    # 1`) visits only the leading diagonal and the first row/column, all of which are zero; the buggy
-    # sizer then picks `max = 0`, clamps to 1, and the `a[2, 2] = 100` cell pushes 100 times into an
-    # adstack sized for 1. The fixed evaluator picks `max = 100` and the kernel runs to completion with
-    # the analytical gradient. Any backend whose sizer still uses the stride-1 sum raises
-    # `QuadrantsAssertionError: Adstack overflow` at the next `qd.sync()`.
+    # Pins multi-axis stride handling in the `ExternalTensorRead` evaluator. The sizer routes a reverse-mode inner trip
+    # count `range(a[i, j])` through `SizeExpr::ExternalTensorRead(a, [var_i, var_j])` for a 2-D ndarray `a`; the host
+    # evaluator, the CUDA / AMDGPU device interpreter in the LLVM runtime, and the SPIR-V sizer compute shader must all
+    # fold the indices into a C-order linear offset `i * shape[1] + j`, not the naive stride-1 sum `i + j`. The
+    # worst-case shape below isolates a single non-zero entry at `a[2, 2] = 100` so the stride-1 path (sum over `(i, j)`
+    # with `i + j < rows + cols - 1`) visits only the leading diagonal and the first row/column, all of which are zero;
+    # the buggy sizer then picks `max = 0`, clamps to 1, and the `a[2, 2] = 100` cell pushes 100 times into an adstack
+    # sized for 1. The fixed evaluator picks `max = 100` and the kernel runs to completion with the analytical gradient.
+    # Any backend whose sizer still uses the stride-1 sum raises `QuadrantsAssertionError: Adstack overflow` at the next
+    # `qd.sync()`.
     #
-    # Internal details: CPU uses the host evaluator (`evaluate_adstack_size_expr` in
-    # `adstack_size_expr_eval.cpp`) which reads shapes off `LaunchContextBuilder` via the same
-    # `SHAPE_POS_IN_NDARRAY` path that `ExternalTensorShape` leaves use. CUDA / AMDGPU encode the node
-    # bytecode and the device interpreter in `runtime/llvm/runtime_module/runtime.cpp`'s
-    # `runtime_eval_adstack_size_expr` sums indices; Metal / Vulkan drive the SPIR-V sizer shader in
-    # `codegen/spirv/adstack_sizer_shader.cpp` whose `compute_linear_index` does the same accumulation.
-    # All three need per-axis stride support. The kernel uses nested `for i: for j:` rather than
-    # `qd.ndrange(shape[0], shape[1])` so the pre-pass sees two distinct `LoopIndexStmt`s (one per axis)
-    # as the `ExternalPtrStmt` index operands; the 2-index ndrange lowering flattens `(i, j)` through
-    # `div`/`mod` arithmetic that `determine_ad_stack_size.cpp::build_value_expr` does not fold, so the
-    # pre-pass would fall back to `default_ad_stack_size` and the kernel would pass trivially on every
-    # backend without exercising the multi-axis evaluator.
+    # Internal details: CPU uses the host evaluator (`evaluate_adstack_size_expr` in `adstack_size_expr_eval.cpp`) which
+    # reads shapes off `LaunchContextBuilder` via the same `SHAPE_POS_IN_NDARRAY` path that `ExternalTensorShape` leaves
+    # use. CUDA / AMDGPU encode the node bytecode and the device interpreter in
+    # `runtime/llvm/runtime_module/runtime.cpp`'s `runtime_eval_adstack_size_expr` sums indices; Metal / Vulkan drive
+    # the SPIR-V sizer shader in `codegen/spirv/adstack_sizer_shader.cpp` whose `compute_linear_index` does the same
+    # accumulation. All three need per-axis stride support. The kernel uses nested `for i: for j:` rather than
+    # `qd.ndrange(shape[0], shape[1])` so the pre-pass sees two distinct `LoopIndexStmt`s (one per axis) as the
+    # `ExternalPtrStmt` index operands; the 2-index ndrange lowering flattens `(i, j)` through `div`/`mod` arithmetic
+    # that `determine_ad_stack_size.cpp::build_value_expr` does not fold, so the pre-pass would fall back to
+    # `default_ad_stack_size` and the kernel would pass trivially on every backend without exercising the multi-axis
+    # evaluator.
     rows, cols = 3, 5
     arr_np = np.zeros((rows, cols), dtype=np.int32)
     arr_np[2, 2] = 100  # sole non-zero cell; stride-1 sum never visits (i=2, j=2) -> max evaluated to 0
@@ -1865,26 +2160,24 @@ def test_adstack_inner_range_bounded_by_multidim_ndarray_read():
 
 
 @pytest.mark.parametrize("outer_bound", ["const", "dynamic"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_ext_tensor_read_indexed_by_stashed_outer_loop_var(outer_bound):
-    # Pins the `ExternalPtrStmt` indexed by `AdStackLoadTopStmt` grammar gap. The kernel walks a
-    # parent/child hierarchical-array layout: an outer parallel-for whose body casts its loop variable
-    # (`i_l = qd.cast(i_l_, qd.i32)`), branches on `ndarray[i_l] != -1`, and drives a nested range-for
-    # from `ndarray[i_l] - ndarray[i_l]`. Under `ad_stack_experimental_enabled=True` the autodiff
-    # pipeline stashes the cast loop index onto a dedicated adstack and reloads it via `stack_load_top`
-    # so the reverse pass can reconstruct it; every downstream `ndarray[i_l]` lowers to
-    # `ExternalPtrStmt(arr, [AdStackLoadTopStmt])`. The pre-pass upper-bounds the loaded value by
-    # recognising the stash pattern (single loop-index push plus const-zero initialiser) and folding
-    # through to the backing `LoopIndexStmt`.
+    # Pins the `ExternalPtrStmt` indexed by `AdStackLoadTopStmt` grammar gap. The kernel walks a parent/child
+    # hierarchical-array layout: an outer parallel-for whose body casts its loop variable (`i_l = qd.cast(i_l_,
+    # qd.i32)`), branches on `ndarray[i_l] != -1`, and drives a nested range-for from `ndarray[i_l] - ndarray[i_l]`.
+    # Under `ad_stack_experimental_enabled=True` the autodiff pipeline stashes the cast loop index onto a dedicated
+    # adstack and reloads it via `stack_load_top` so the reverse pass can reconstruct it; every downstream
+    # `ndarray[i_l]` lowers to `ExternalPtrStmt(arr, [AdStackLoadTopStmt])`. The pre-pass upper-bounds the loaded value
+    # by recognising the stash pattern (single loop-index push plus const-zero initialiser) and folding through to the
+    # backing `LoopIndexStmt`.
     #
     # Internal details: runs on every backend - LLVM evaluates the stash-backed SizeExpr through
-    # `publish_adstack_metadata`, SPIR-V through `GfxRuntime::launch_kernel`'s AdStackMetadata upload. Parametrised
-    # over `outer_bound` because const and dynamic outer range-for bounds lower very differently - a constant
-    # collapses into the offload's `const_end` at offload time (no prep task), a dynamic bound lowers to a prep
-    # serial task that writes the value into the kernel's global-temporary buffer for the main range-for task to
-    # read back. The grammar covers both paths via `resolve_global_tmp_value`, so the
-    # `ExternalPtrStmt`-with-stashed-index pattern works whether the outermost parallel-for is sized at launch
-    # time (e.g. `arr.shape[0]`) or hard-coded.
+    # `publish_adstack_metadata`, SPIR-V through `GfxRuntime::launch_kernel`'s AdStackMetadata upload. Parametrised over
+    # `outer_bound` because const and dynamic outer range-for bounds lower very differently - a constant collapses into
+    # the offload's `const_end` at offload time (no prep task), a dynamic bound lowers to a prep serial task that writes
+    # the value into the kernel's global-temporary buffer for the main range-for task to read back. The grammar covers
+    # both paths via `resolve_global_tmp_value`, so the `ExternalPtrStmt`-with-stashed-index pattern works whether the
+    # outermost parallel-for is sized at launch time (e.g. `arr.shape[0]`) or hard-coded.
     N_ENT = 1
     link_start_np = np.array([0], dtype=np.int32)
     link_end_np = np.array([2], dtype=np.int32)
@@ -1941,22 +2234,20 @@ def test_adstack_ext_tensor_read_indexed_by_stashed_outer_loop_var(outer_bound):
 
 @test_utils.test(require=qd.extension.adstack)
 def test_adstack_field_ptr_indexed_by_stashed_outer_loop_var():
-    # Pins the `GlobalPtrStmt`-index stash-chase extension in the `SizeExpr` pre-pass. The kernel reads
-    # two scalar quadrants fields `link_start[i_outer]` / `link_end[i_outer]` as the bounds of an inner
-    # range-for, where `i_outer` is an outer parallel-for index that `ad_stack_experimental_enabled=True`
-    # stashes onto a dedicated adstack for the reverse pass. Every downstream `link_start[i_outer]` then
-    # lowers to `GlobalPtrStmt(<field>, [AdStackLoadTopStmt])`. Before the fix, the pre-pass's
-    # `GlobalPtrStmt` branch rejected any non-const index and the reverse-mode adstack bound would hard-
-    # error as "unresolved after Bellman-Ford + structural pre-pass"; the fix walks the index through the
-    # same stash chase the `ExternalPtrStmt` branch uses and falls back to the snode's
+    # Pins the `GlobalPtrStmt`-index stash-chase extension in the `SizeExpr` pre-pass. The kernel reads two scalar
+    # quadrants fields `link_start[i_outer]` / `link_end[i_outer]` as the bounds of an inner range-for, where `i_outer`
+    # is an outer parallel-for index that `ad_stack_experimental_enabled=True` stashes onto a dedicated adstack for the
+    # reverse pass. Every downstream `link_start[i_outer]` then lowers to `GlobalPtrStmt(<field>,
+    # [AdStackLoadTopStmt])`. Before the fix, the pre-pass's `GlobalPtrStmt` branch rejected any non-const index and the
+    # reverse-mode adstack bound would hard-error as "unresolved after Bellman-Ford + structural pre-pass"; the fix
+    # walks the index through the same stash chase the `ExternalPtrStmt` branch uses and falls back to the snode's
     # `shape_along_axis(axis)` as a safe upper bound when the stash has no single loop-index push.
     #
     # Internal details: runs on every backend - LLVM evaluates the stash-backed `SizeExpr` through
-    # `publish_adstack_metadata`, SPIR-V through `GfxRuntime::launch_kernel`'s `AdStackMetadata` upload.
-    # The inner `range(link_start[i_outer_c], link_end[i_outer_c])` fans into four differentiable-body
-    # iterations per outer index; each touches a distinct `x[i_inner]` so the analytical gradient is the
-    # same constant per slot and a bound-too-small regression surfaces as either the old "unresolved"
-    # error or an adstack-overflow at `qd.sync()`.
+    # `publish_adstack_metadata`, SPIR-V through `GfxRuntime::launch_kernel`'s `AdStackMetadata` upload. The inner
+    # `range(link_start[i_outer_c], link_end[i_outer_c])` fans into four differentiable-body iterations per outer index;
+    # each touches a distinct `x[i_inner]` so the analytical gradient is the same constant per slot and a
+    # bound-too-small regression surfaces as either the old "unresolved" error or an adstack-overflow at `qd.sync()`.
     N_OUTER = 4
     link_start = qd.field(qd.i32, shape=(N_OUTER,))
     link_end = qd.field(qd.i32, shape=(N_OUTER,))
@@ -2002,30 +2293,29 @@ def test_adstack_field_ptr_indexed_by_stashed_outer_loop_var():
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_triangular_ndrange_self_referential_push_idempotency():
-    # Pins the phase-2 idempotency-at-zero probe ordering in `build_value_expr` for a reverse-mode push whose
-    # value expression is self-referential by construction. The kernel couples a 2D `qd.ndrange` outer parallel
-    # scan with a triangular inner `for j in range(i_outer, ...)` and a nested `range(begin_fld[j], end_fld[j])`
-    # whose bounds come from scalar fields indexed by the stashed outer index. On the experimental adstack path
-    # that shape lowers reverse-mode pushes of the form `sub(load_top($S), load_top($S))` where both load_top
-    # reads target the very stack the push feeds - a zero-net push that must be treated as idempotent at zero
-    # rather than rejected as a stash data-flow cycle. The structural pre-pass must try the idempotency probe
-    # (which substitutes `load_top(self) -> 0`) BEFORE its generic visited-set cycle guard fires; without that
-    # ordering the cycle guard aborts the walk first, the probe never runs, and the grad kernel fails to
-    # compile with "stash data-flow cycle ... idempotency-at-zero probe could not discharge it".
+    # Pins the phase-2 idempotency-at-zero probe ordering in `build_value_expr` for a reverse-mode push whose value
+    # expression is self-referential by construction. The kernel couples a 2D `qd.ndrange` outer parallel scan with a
+    # triangular inner `for j in range(i_outer, ...)` and a nested `range(begin_fld[j], end_fld[j])` whose bounds come
+    # from scalar fields indexed by the stashed outer index. On the experimental adstack path that shape lowers
+    # reverse-mode pushes of the form `sub(load_top($S), load_top($S))` where both load_top reads target the very stack
+    # the push feeds - a zero-net push that must be treated as idempotent at zero rather than rejected as a stash
+    # data-flow cycle. The structural pre-pass must try the idempotency probe (which substitutes `load_top(self) -> 0`)
+    # BEFORE its generic visited-set cycle guard fires; without that ordering the cycle guard aborts the walk first, the
+    # probe never runs, and the grad kernel fails to compile with "stash data-flow cycle ... idempotency-at-zero probe
+    # could not discharge it".
     #
-    # Internal details: names are deliberately domain-neutral. `outer_size` + `batch_probe.shape[1]` feed the
-    # 2D `qd.ndrange` (the batch-dim probe is a grad-requiring field whose only in-kernel use is the shape
-    # read, matching the minimal pattern that triggers the cycle). `group_begin` / `group_end` gate the middle
-    # range, `sub_begin` / `sub_end` gate the innermost range, `src_offset` / `dst_offset` offset the scalar
-    # scatter. The scalar reads from `src_buf[src_offset + k, i_b]` packed into a `qd.Vector` then written into
-    # `dst_buf[dst_offset + j, i_b]` via `qd.static(range(3))` is load-bearing: without a differentiable
-    # Vector-packed reverse body the `sub(load_top($S), load_top($S))` push shape does not arise. The trailing
-    # `dst_vec_buf[i_l, i_b] = src_vec_buf[i_l, n_sub, i_b]` Vector copy outside the innermost range but inside
-    # the triangular loop is also load-bearing - removing it collapses the enclosing-loop structure enough that
-    # the pre-pass resolves the adstack by other means. `cfg_optimization=False` + `ad_stack_experimental_enabled=True`
-    # are the minimum flags that surface the cycle: with CFG optimization on the store-to-load forwarder collapses
-    # the self-referential push before the sizing pass sees it, and the non-experimental path uses a different
-    # sizing strategy that sidesteps the probe altogether.
+    # Internal details: names are deliberately domain-neutral. `outer_size` + `batch_probe.shape[1]` feed the 2D
+    # `qd.ndrange` (the batch-dim probe is a grad-requiring field whose only in-kernel use is the shape read, matching
+    # the minimal pattern that triggers the cycle). `group_begin` / `group_end` gate the middle range, `sub_begin` /
+    # `sub_end` gate the innermost range, `src_offset` / `dst_offset` offset the scalar scatter. The scalar reads from
+    # `src_buf[src_offset + k, i_b]` packed into a `qd.Vector` then written into `dst_buf[dst_offset + j, i_b]` via
+    # `qd.static(range(3))` is load-bearing: without a differentiable Vector-packed reverse body the `sub(load_top($S),
+    # load_top($S))` push shape does not arise. The trailing `dst_vec_buf[i_l, i_b] = src_vec_buf[i_l, n_sub, i_b]`
+    # Vector copy outside the innermost range but inside the triangular loop is also load-bearing - removing it
+    # collapses the enclosing-loop structure enough that the pre-pass resolves the adstack by other means.
+    # `cfg_optimization=False` + `ad_stack_experimental_enabled=True` are the minimum flags that surface the cycle: with
+    # CFG optimization on the store-to-load forwarder collapses the self-referential push before the sizing pass sees
+    # it, and the non-experimental path uses a different sizing strategy that sidesteps the probe altogether.
     outer_size = qd.field(qd.i32, shape=(1,))
     group_begin = qd.field(qd.i32, shape=(1,))
     group_end = qd.field(qd.i32, shape=(1,))
@@ -2082,10 +2372,9 @@ def test_adstack_triangular_ndrange_self_referential_push_idempotency():
     src_offset[0] = 0
     dst_offset[0] = 0
 
-    # Pre-fix the grad compile raises RuntimeError("stash data-flow cycle ..."); post-fix it must compile
-    # cleanly and run to completion. The assertion is the absence of that RuntimeError - no gradient value is
-    # checked because the minimal-shape fields have a single element and the bug is purely a compile-time
-    # cycle-detection regression.
+    # Pre-fix the grad compile raises RuntimeError("stash data-flow cycle ..."); post-fix it must compile cleanly and
+    # run to completion. The assertion is the absence of that RuntimeError - no gradient value is checked because the
+    # minimal-shape fields have a single element and the bug is purely a compile-time cycle-detection regression.
     compute.grad(
         batch_probe,
         dst_vec_buf,
@@ -2105,29 +2394,28 @@ def test_adstack_triangular_ndrange_self_referential_push_idempotency():
 
 
 @pytest.mark.parametrize("inner_loop_shape", ["begin_end", "sub_then_range"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_shape_ends(inner_loop_shape):
-    # Covers the two user-facing surface forms of a reverse-mode kernel whose inner range-for trip count is
-    # the difference between two reads of parallel ndarrays indexed by the SAME outer loop. Both lower to a
-    # Sub-of-two-MaxOverRange where the `end` operands are structurally equal (both come from the single
-    # enclosing outer loop's end, not from each read's own ndarray shape), so the walker's strict-equality
-    # fusion path already fires without the `ExternalTensorShape` same-axis extension. The test pins that
-    # strict path continues to work on both spellings and that the resulting adstack bound matches the actual
-    # reverse-pass push count.
+    # Covers the two user-facing surface forms of a reverse-mode kernel whose inner range-for trip count is the
+    # difference between two reads of parallel ndarrays indexed by the SAME outer loop. Both lower to a
+    # Sub-of-two-MaxOverRange where the `end` operands are structurally equal (both come from the single enclosing outer
+    # loop's end, not from each read's own ndarray shape), so the walker's strict-equality fusion path already fires
+    # without the `ExternalTensorShape` same-axis extension. The test pins that strict path continues to work on both
+    # spellings and that the resulting adstack bound matches the actual reverse-pass push count.
     #
-    # Internal details: runs on every backend now that the runtime-evaluator ships on both the LLVM and SPIR-V
-    # paths. Two surface spellings share a single test body via `qd.static` because both produce the same
-    # `expr_sub` call at walker time, just via different `build_value_expr` recursion paths:
-    #   - `begin_end`: `for i_j_ in range(start[i_o], end[i_o])` - `compute_bounded_adstack_size` multiplies
-    #     `end_upper - begin_lower`, `resolve_loop_begin_lower_bound` drops non-const begins to `Const(0)`,
-    #     so the fused bound is the `end[i_o]` MaxOverRange alone (no two-operand Sub is built for this
-    #     spelling); the test still passes because the body's push count is bounded by `end[i_o]`, which the
-    #     walker tracks soundly via the single MaxOverRange.
-    #   - `sub_then_range`: user materialises `n_inner = end[i_o] - start[i_o]` and passes `range(n_inner)`;
-    #     this makes the `Sub` explicit in the range-for's `end` stmt, `build_value_expr` recurses into both
-    #     operands, each wraps with the SAME outer-loop end, and strict fusion collapses the pair.
-    # `qd.cast(e - s, qd.f32)` is a multiplicative factor inside the body so `full_simplify` does not inline
-    # the subtraction back into the range-for bounds and collapse the two patterns.
+    # Internal details: runs on every backend now that the runtime-evaluator ships on both the LLVM and SPIR-V paths.
+    # Two surface spellings share a single test body via `qd.static` because both produce the same `expr_sub` call at
+    # walker time, just via different `build_value_expr` recursion paths:
+    #   - `begin_end`: `for i_j_ in range(start[i_o], end[i_o])` - `compute_bounded_adstack_size` multiplies `end_upper
+    #     - begin_lower`, `resolve_loop_begin_lower_bound` drops non-const begins to `Const(0)`, so the fused bound is
+    #     the `end[i_o]` MaxOverRange alone (no two-operand Sub is built for this spelling); the test still passes
+    #     because the body's push count is bounded by `end[i_o]`, which the walker tracks soundly via the single
+    #     MaxOverRange.
+    #   - `sub_then_range`: user materialises `n_inner = end[i_o] - start[i_o]` and passes `range(n_inner)`; this makes
+    #     the `Sub` explicit in the range-for's `end` stmt, `build_value_expr` recurses into both operands, each wraps
+    #     with the SAME outer-loop end, and strict fusion collapses the pair.
+    # `qd.cast(e - s, qd.f32)` is a multiplicative factor inside the body so `full_simplify` does not inline the
+    # subtraction back into the range-for bounds and collapse the two patterns.
     IS_BEGIN_END = inner_loop_shape == "begin_end"
     N_X = 8
 
@@ -2170,24 +2458,22 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_s
         assert x.grad[j] == pytest.approx(0.0, abs=1e-7)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched_shape_ends():
-    # Pins the `expr_sub` fusion for the Sub-of-two-MaxOverRange shape that the walker builds when an inner
-    # range-for's trip count is computed as the difference between two ndarray reads whose indices come from
-    # two DIFFERENT enclosing range-fors. Each read wraps into its own `MaxOverRange(outer_i, 0, shape(arr_i),
-    # ExtRead(arr_i, [outer_i]))`; the `end` operands are then `ExternalTensorShape` nodes pointing at
-    # distinct `arg_id`s so `expr_equal` rejects them and the pre-fusion walker falls back to
-    # `max_i arr_a[i] - max_j arr_b[j]`, which under-counts `max_i (arr_a[i] - arr_b[i])` whenever the two
-    # per-index maxima land at different slots. With `arr_a = [1, 5]`, `arr_b = [4, 0]` the unfused bound
-    # collapses to `5 - 4 = 1` per outer pair and the full trip multiplier undershoots the actual push count
-    # of 7 (the (1,1) pair alone pushes 5), so the reverse pass overflows the heap and raises at `qd.sync()`.
-    # The fusion emits the tight `MaxOverRange(v, 0, shape(arr_a), Sub(arr_a[v], arr_b[v]))` which correctly
-    # evaluates to 5, and the adstack gets sized to fit.
+    # Pins the `expr_sub` fusion for the Sub-of-two-MaxOverRange shape that the walker builds when an inner range-for's
+    # trip count is computed as the difference between two ndarray reads whose indices come from two DIFFERENT enclosing
+    # range-fors. Each read wraps into its own `MaxOverRange(outer_i, 0, shape(arr_i), ExtRead(arr_i, [outer_i]))`; the
+    # `end` operands are then `ExternalTensorShape` nodes pointing at distinct `arg_id`s so `expr_equal` rejects them
+    # and the pre-fusion walker falls back to `max_i arr_a[i] - max_j arr_b[j]`, which under-counts `max_i (arr_a[i] -
+    # arr_b[i])` whenever the two per-index maxima land at different slots. With `arr_a = [1, 5]`, `arr_b = [4, 0]` the
+    # unfused bound collapses to `5 - 4 = 1` per outer pair and the full trip multiplier undershoots the actual push
+    # count of 7 (the (1,1) pair alone pushes 5), so the reverse pass overflows the heap and raises at `qd.sync()`. The
+    # fusion emits the tight `MaxOverRange(v, 0, shape(arr_a), Sub(arr_a[v], arr_b[v]))` which correctly evaluates to 5,
+    # and the adstack gets sized to fit.
     #
-    # Internal details: runs on every backend now that the runtime-evaluator ships on both the LLVM and SPIR-V
-    # paths. The trivial `range(1)` wrapper keeps the kernel AST inside a top-level for-loop, which the
-    # autodiff front-end requires (`reverse_segments` rejects mixed
-    # statement-plus-for kernel bodies).
+    # Internal details: runs on every backend now that the runtime-evaluator ships on both the LLVM and SPIR-V paths.
+    # The trivial `range(1)` wrapper keeps the kernel AST inside a top-level for-loop, which the autodiff front-end
+    # requires (`reverse_segments` rejects mixed statement-plus-for kernel bodies).
     N_X = 16
 
     x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
@@ -2217,12 +2503,11 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
     compute.grad(arr_a_np, arr_b_np)
     qd.sync()
 
-    # For (i_a, i_b) in {(0,0), (0,1), (1,0), (1,1)} the inner trip n = max(0, arr_a[i_a] - arr_b[i_b]) is
-    # {0, 1, 1, 5}. Total push count is 7 (the (1,1) pair contributes 5); the pre-fusion adstack bound of 4
-    # overflows. loss = (0 + 1 + 1 + 5) * x[0..4]^2 = 0.07 with every x[i] = 0.1.
-    # x.grad[k] = 2 * (count of inner iterations that visit index k) * 0.1. k = 0 is visited by every
-    # non-empty pair (3 visits), k in [1, 4] is visited only by the (1, 1) pair (1 visit each), k >= 5 is
-    # never visited.
+    # For (i_a, i_b) in {(0,0), (0,1), (1,0), (1,1)} the inner trip n = max(0, arr_a[i_a] - arr_b[i_b]) is {0, 1, 1, 5}.
+    # Total push count is 7 (the (1,1) pair contributes 5); the pre-fusion adstack bound of 4 overflows. loss = (0 + 1 +
+    # 1 + 5) * x[0..4]^2 = 0.07 with every x[i] = 0.1. x.grad[k] = 2 * (count of inner iterations that visit index k) *
+    # 0.1. k = 0 is visited by every non-empty pair (3 visits), k in [1, 4] is visited only by the (1, 1) pair (1 visit
+    # each), k >= 5 is never visited.
     assert loss[None] == pytest.approx(0.07, rel=1e-5)
     assert x.grad[0] == pytest.approx(0.6, rel=1e-5)
     for k in range(1, 5):
@@ -2240,17 +2525,16 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
 )
 @test_utils.test(require=qd.extension.adstack)
 def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe(arr_a_values, arr_b_values):
-    # Pins that a reverse-mode kernel whose inner trip count is `arr_a[i_a] - arr_b[i_b]` over two
-    # independent outer loops of shape `arr_a.shape[0]` and `arr_b.shape[0]` computes the correct
-    # gradient when the two ndarrays along the fused axis have different lengths - both when the
-    # longer ndarray's peak fits inside the shorter ndarray's shape and when it sits past it.
+    # Pins that a reverse-mode kernel whose inner trip count is `arr_a[i_a] - arr_b[i_b]` over two independent outer
+    # loops of shape `arr_a.shape[0]` and `arr_b.shape[0]` computes the correct gradient when the two ndarrays along the
+    # fused axis have different lengths - both when the longer ndarray's peak fits inside the shorter ndarray's shape
+    # and when it sits past it.
     #
-    # Internal details: the `expr_sub` MaxOverRange fusion in `determine_ad_stack_size.cpp` must
-    # produce a bound that simultaneously keeps the fused `arr_a[v] - arr_b[v]` body in-bounds for the
-    # shorter ndarray and covers `max_ia arr_a[ia] - max_ib arr_b[ib]` from the unfused form. A too-
-    # tight fused end OOB-reads the shorter ndarray at launch (`cudaErrorIllegalAddress` on CUDA); a
-    # too-permissive clamp silently drops the longer ndarray's peak-past-shape pushes and overflows
-    # the adstack at `qd.sync()`. The two parametrisations exercise the same invariant at both
+    # Internal details: the `expr_sub` MaxOverRange fusion in `determine_ad_stack_size.cpp` must produce a bound that
+    # simultaneously keeps the fused `arr_a[v] - arr_b[v]` body in-bounds for the shorter ndarray and covers `max_ia
+    # arr_a[ia] - max_ib arr_b[ib]` from the unfused form. A too-tight fused end OOB-reads the shorter ndarray at launch
+    # (`cudaErrorIllegalAddress` on CUDA); a too-permissive clamp silently drops the longer ndarray's peak-past-shape
+    # pushes and overflows the adstack at `qd.sync()`. The two parametrisations exercise the same invariant at both
     # boundary conditions - touch the cross-ndarray fusion path with care for both.
     N_X = 16
 
@@ -2297,23 +2581,37 @@ def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe(arr
             assert x.grad[k] == pytest.approx(2 * expected_visits[k] * 0.1, rel=1e-5)
 
 
+@pytest.mark.parametrize(
+    "x_unused_val",
+    [0.1, 100.0],
+    ids=["uniform_x", "amplified_unused_x"],
+)
 @test_utils.test(require=qd.extension.adstack)
-def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread():
-    # Pins that a reverse-mode kernel whose inner trip count is `fld[i] - arr[i]` - a scalar field
-    # minus an ndarray element, both indexed by the outer loop variable - compiles and produces the
-    # correct gradient on every supported backend.
+def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread(x_unused_val):
+    # Pins that a reverse-mode kernel whose inner trip count is `fld[i] - arr[i]` - a scalar field minus an ndarray
+    # element, both indexed by the outer loop variable - compiles and produces the correct gradient on every supported
+    # backend.
     #
-    # Internal details: the walker in `determine_ad_stack_size.cpp` wraps each operand of the inner
-    # `Sub` in its own `MaxOverRange(i, 0, shape, leaf)` (`FieldLoad` on the field side,
-    # `ExternalTensorRead` on the ndarray side); `expr_sub`'s `end_eq` branch then sees structurally-
-    # equal `ExternalTensorShape(arr, 0)` ends and would fuse them into a single `MaxOverRange(v, 0,
-    # shape, Sub(FieldLoad(fld, [v]), ExternalTensorRead(arr, [v])))`. The LLVM encoder's closed-
-    # subtree lift only folds `FieldLoad` leaves with no free bound vars, so the mixed body - whose
-    # `FieldLoad` carries the free `v` - falls through to `encode_subtree`'s `FieldLoad` branch and
-    # hard-errors on the LLVM path (CUDA / AMDGPU have no on-device SNode access). The fusion must
-    # therefore decline whenever its synthesised body would pair a bound-var-indexed `FieldLoad` with
-    # an `ExternalTensorRead`; the unfused `Sub(MaxOverRange(i, 0, shape, FieldLoad), MaxOverRange(i,
-    # 0, shape, ExternalTensorRead))` keeps each operand closed and host-foldable on both encoders.
+    # Internal details: the walker in `determine_ad_stack_size.cpp` wraps each operand of the inner `Sub` in its own
+    # `MaxOverRange(i, 0, shape, leaf)` (`FieldLoad` on the field side, `ExternalTensorRead` on the ndarray side);
+    # `expr_sub`'s `end_eq` branch then sees structurally-equal `ExternalTensorShape(arr, 0)` ends and would fuse them
+    # into a single `MaxOverRange(v, 0, shape, Sub(FieldLoad(fld, [v]), ExternalTensorRead(arr, [v])))`. The LLVM
+    # encoder's closed-subtree lift only folds `FieldLoad` leaves with no free bound vars, so the mixed body - whose
+    # `FieldLoad` carries the free `v` - falls through to `encode_subtree`'s `FieldLoad` branch and hard-errors on the
+    # LLVM path (CUDA / AMDGPU have no on-device SNode access). The fusion must therefore decline whenever its
+    # synthesised body would pair a bound-var-indexed `FieldLoad` with an `ExternalTensorRead`; the unfused
+    # `Sub(MaxOverRange(i, 0, shape, FieldLoad), MaxOverRange(i, 0, shape, ExternalTensorRead))` keeps each operand
+    # closed and host-foldable on both encoders.
+    #
+    # The `x_unused_val` parametrization sets `x[8..15]` to `x_unused_val` while keeping `x[0..7]` at `0.1`. Only
+    # `x[0..7]` is reached by the kernel under correct sizing, so `x_unused_val` does not affect the expected loss /
+    # gradient at all and the assertions are identical across parametrizations. The `amplified_unused_x` variant
+    # (`x_unused_val=100.0`) exists so that any regression that mis-routes a stack push / pop to a slot outside the
+    # intended index range surfaces as a multi-order-of-magnitude gradient delta (e.g. a single spurious visit to
+    # `x[8]` produces `x.grad[8]=200.0` instead of the `0.2` an `x_unused_val=0.1` setup would produce), so the
+    # failure cannot be misread as a tolerance issue. The original `uniform_x` (`x_unused_val=0.1`) parametrization
+    # preserves the historical loss / gradient magnitudes for direct continuity with the prior fixed-fixture form of
+    # this test.
     N = 4
     N_X = 16
 
@@ -2333,7 +2631,7 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
             loss[None] += accum
 
     for i in range(N_X):
-        x[i] = 0.1
+        x[i] = 0.1 if i < 8 else x_unused_val
     for i in range(N):
         fld[i] = 10
     arr_np = np.array([2, 2, 2, 2], dtype=np.int32)
@@ -2346,7 +2644,8 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
     qd.sync()
 
     # Each of the 4 outer iterations runs `fld[i] - arr[i] = 10 - 2 = 8` inner iters. Total pushes = 32.
-    # x[0..7] is visited 4 times (once per outer iter); x[8..] is never visited.
+    # x[0..7] is visited 4 times (once per outer iter); x[8..] is never visited, so the loss and gradients
+    # are independent of `x_unused_val`.
     assert loss[None] == pytest.approx(4 * 8 * 0.01, rel=1e-5)
     for k in range(8):
         assert x.grad[k] == pytest.approx(4 * 2 * 0.1, rel=1e-5)
@@ -2354,29 +2653,28 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
         assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal], cfg_optimization=False)
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_spirv_metadata_per_task_buffer():
-    # SPIR-V launcher used to share a single grow-on-demand `AdStackMetadata` device buffer across every
-    # task in a kernel. Per-task `(stride_float, stride_int, offset_i, max_size_i, ...)` tables were
-    # host-memcpy'd into that buffer inside the cmdlist record loop, and the `bindings` descriptor for each
-    # task's dispatch captured the same buffer handle. Record is host-synchronous but execute is deferred,
-    # so by submit time the buffer holds only the LAST task's metadata and every dispatch in the cmdlist
-    # reads those bytes. Earlier tasks then see shorter sibling stacks' `max_size` where their own should
-    # be - e.g. a stack whose sizer wrote `max_size=9` observes a runtime `max_size=3`, its first guarded
-    # push trips the `count < max_size` check at `count=3`, the overflow flag flips, and `qd.sync()` raises
-    # even though the kernel's actual per-thread push count fits the per-stack bound the sizer computed.
+    # SPIR-V launcher used to share a single grow-on-demand `AdStackMetadata` device buffer across every task in a
+    # kernel. Per-task `(stride_float, stride_int, offset_i, max_size_i, ...)` tables were host-memcpy'd into that
+    # buffer inside the cmdlist record loop, and the `bindings` descriptor for each task's dispatch captured the same
+    # buffer handle. Record is host-synchronous but execute is deferred, so by submit time the buffer holds only the
+    # LAST task's metadata and every dispatch in the cmdlist reads those bytes. Earlier tasks then see shorter sibling
+    # stacks' `max_size` where their own should be - e.g. a stack whose sizer wrote `max_size=9` observes a runtime
+    # `max_size=3`, its first guarded push trips the `count < max_size` check at `count=3`, the overflow flag flips, and
+    # `qd.sync()` raises even though the kernel's actual per-thread push count fits the per-stack bound the sizer
+    # computed.
     #
-    # Internal details: `cfg_optimization=False` is load-bearing - with it enabled, the CFG pass sinks / merges
-    # the bind-and-dispatch pair in a way that masks the cross-task buffer reuse on this kernel shape; with it
-    # disabled the raw record-then-execute race surfaces. The pinned regression is SPIR-V-specific (the LLVM
-    # path publishes metadata host-side via `publish_adstack_metadata` directly into each launch's own
-    # `AdStackSizingInfo` with no cross-task aliasing), but the test runs on every backend so a future
-    # regression in either path that produces wrong values rather than an overflow is still caught. The kernel
-    # shape (two sibling `qd.ndrange` offloads, the second one carrying a triangular i<=j<k nested loop that
-    # stashes a multiplicative reduction onto its own adstack) is the minimum that exhibits the bug: you need
-    # at least two tasks in the same kernel so the second task's record overwrites the first task's metadata
-    # before submit. The post-fix runtime allocates a fresh metadata buffer per task record and retires it into
-    # `ctx_buffers_` so it stays alive until the sync window closes.
+    # Internal details: `cfg_optimization=False` is load-bearing - with it enabled, the CFG pass sinks / merges the
+    # bind-and-dispatch pair in a way that masks the cross-task buffer reuse on this kernel shape; with it disabled the
+    # raw record-then-execute race surfaces. The pinned regression is SPIR-V-specific (the LLVM path publishes metadata
+    # host-side via `publish_adstack_metadata` directly into each launch's own `AdStackSizingInfo` with no cross-task
+    # aliasing), but the test runs on every backend so a future regression in either path that produces wrong values
+    # rather than an overflow is still caught. The kernel shape (two sibling `qd.ndrange` offloads, the second one
+    # carrying a triangular i<=j<k nested loop that stashes a multiplicative reduction onto its own adstack) is the
+    # minimum that exhibits the bug: you need at least two tasks in the same kernel so the second task's record
+    # overwrites the first task's metadata before submit. The post-fix runtime allocates a fresh metadata buffer per
+    # task record and retires it into `ctx_buffers_` so it stays alive until the sync window closes.
     tri_mat = qd.field(dtype=qd.f32, shape=(2, 7, 7, 1))
     src_mat = qd.field(dtype=qd.types.matrix(3, 3, qd.f32), shape=(1, 1), needs_grad=True)
     dst_mat = qd.field(dtype=qd.types.matrix(3, 3, qd.f32), shape=(1, 1), needs_grad=True)
@@ -2408,3 +2706,303 @@ def test_adstack_spirv_metadata_per_task_buffer():
     # own sizer-computed 9. Post-fix: finishes cleanly because each task gets its own metadata buffer.
     kernel_two_offloads_with_tri_reduce.grad()
     qd.sync()
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("n_iter", [4, 32])
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_linear_only_accumulator_with_nonlinear_operand(n_iter):
+    # Cross-check `d/dx sum_i sum_j sin(x[i] + j*step)` against PyTorch autograd for the kernel shape
+    # that mixes a loop-carried accumulator (`acc = acc + ...`) with a non-linear operand
+    # (`sin(a)` where `a = x[i] + j*step`) inside an unrolled inner loop.
+    #
+    # Internal details: the operand `a` feeds `sin`, which is in `NonLinearOps::unary_collections`, so
+    # `AdStackAllocaJudger::visit(UnaryOpStmt)` promotes its alloca to an adstack and the reverse pass
+    # reads `a` back via `AdStackLoadTopStmt`. The accumulator `acc` only feeds linear `add`, never
+    # reaches the non-linear / index / control-flow consumer visitors, but its adjoint chain still has
+    # to weave through the adstack push / pop sites the operand introduces. `n_iter=32` keeps the
+    # unrolled body wide enough that any miscalculation in the slot offset for the operand's stack -
+    # e.g. an off-by-one in the inline `count - 1` saturation, a misaligned slot stride, or a missed
+    # primal+adjoint zero-init on push - surfaces here as a wrong gradient long before it would surface
+    # as an overflow at runtime.
+    import torch
+
+    n = 4
+    step = 0.07
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            acc = 0.0
+            for j in qd.static(range(n_iter)):
+                a = x[i] + qd.cast(j, qd.f32) * step
+                acc = acc + qd.sin(a)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.18 + i * 0.05
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.18 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        acc_t = torch.zeros((), dtype=torch.float32)
+        for j in range(n_iter):
+            a_t = x_t[i] + float(j) * step
+            acc_t = acc_t + torch.sin(a_t)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    for i in range(n):
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("n_inner", [4, 32])
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_repeated_load_top_of_outer_value_in_unrolled_inner_loop(n_inner):
+    # Cross-check `d/dx sum_i sum_j cos(sin(x[i])) * (1 + j*0.01)` against PyTorch autograd for the
+    # kernel shape where an outer-loop value (`a = sin(x[i])`) is consumed by a non-linear unary op
+    # `cos(a)` repeatedly inside an unrolled inner loop, producing N consecutive `AdStackLoadTopStmt`
+    # reads of the same stack in the reverse pass with no intervening Push / Pop / AccAdjoint.
+    #
+    # Internal details: each inner-loop iteration's reverse-pass adjoint formula reads `a`'s primal
+    # (for `d/da cos(a) = -sin(a)`) and adjoint via the inline slot-pointer math. With `n_inner=32`
+    # straight-line LoadTops on the same stack inside one block, the inline codegen emits 32
+    # independent count-load + slot-GEP + value-load sequences. A regression that miscalculates the
+    # saturating `count - 1` index under repeated reads, races the count alloca's mem2reg promotion
+    # across the LoadTops, or short-circuits the slot offset math, surfaces here as a wrong gradient.
+    import torch
+
+    n = 3
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            a = qd.sin(x[i])
+            acc = 0.0
+            for j in qd.static(range(n_inner)):
+                acc = acc + qd.cos(a) * (1.0 + qd.cast(j, qd.f32) * 0.01)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.21 + i * 0.05
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.21 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        a_t = torch.sin(x_t[i])
+        acc_t = torch.zeros((), dtype=torch.float32)
+        for j in range(n_inner):
+            acc_t = acc_t + torch.cos(a_t) * (1.0 + float(j) * 0.01)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    # Tolerance is `rel=5e-6` rather than the f32 floor `1e-6` because the kernel is unusually deep on the
+    # numeric side: each contribution is `cos(sin(x[i])) * (1 + j*0.01)` and the test sums up to 32 of them per
+    # outer iteration, so the per-sum drift accumulates to a few ULPs at the order of magnitude of the final
+    # value across every backend that auto-promotes to FMA or drops guard bits (CUDA's NVPTX and Vulkan's
+    # SPIR-V both observed). The test's purpose is to pin slot-pointer / count-recurrence correctness under
+    # repeated LoadTop, not bit-exact float behavior; 5e-6 is the smallest tolerance that still passes on every
+    # backend while staying inside the f32 noise band.
+    assert y[None] == pytest.approx(y_t.item(), rel=5e-6)
+    for i in range(n):
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=5e-6)
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("n_iter", [4, 16])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], require=qd.extension.adstack)
+def test_adstack_f16_unrolled_pushes_alignment(n_iter):
+    # Cross-check `d/dx sum_i sum_j sin(x[i] + j*step)` against PyTorch autograd for an `f16` field whose
+    # operand `a = x[i] + j*step` adstack-promotes through `sin`. Each adstack slot is `2 * element_size`
+    # = 4 bytes wide, so slot N starts at byte offset `8 + 4*N` from the per-thread slab base. Slot 0 is
+    # 8-aligned but every odd slot index (1, 3, 5, ...) lands on a 4-byte-aligned address that is NOT
+    # 8-aligned.
+    #
+    # Internal details: `AdStackPushStmt`'s inline IR emits a `llvm.memset` zeroing the primal+adjoint
+    # slot pair before storing the pushed value. The destination alignment passed to `CreateMemSet` must
+    # reflect the actual slot pointer alignment - `min(8, 2 * element_size)` = 4 bytes for f16. An
+    # over-stated 8-byte alignment lets NVPTX / AMDGCN lowering pick a wider store (`st.b64`) than the
+    # 4-aligned slot pointer can satisfy, which traps as a misaligned-address fault on stricter GPU
+    # backends or silently corrupts adjoint state on tolerant ones - either way producing wrong
+    # gradients. `n_iter=16` ensures multiple non-zero slot offsets get exercised, including odd
+    # slot indices where the alignment claim matters most. Tolerance `rel=4e-3` is the f16 precision
+    # floor for sums of ~16 `sin` values. SPIR-V backends (Metal / MoltenVK / Vulkan) are excluded
+    # from the arch list because their MSL / Vulkan shader compilation fails on the reverse-mode
+    # `y[None] += acc` adstack shape with `qd.f16` fields - the host-side type-check warns
+    # `Atomic add may lose precision: f16 <- f32` and the underlying compute pipeline build then
+    # rejects the shader, so the alignment regression this test pins on the LLVM CUDA / AMDGPU
+    # backends cannot run on the SPIR-V backends regardless of slot alignment correctness.
+    import torch
+
+    n = 4
+    step = 0.05
+    x = qd.field(qd.f16, shape=n, needs_grad=True)
+    y = qd.field(qd.f16, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            acc = 0.0
+            for j in qd.static(range(n_iter)):
+                a = x[i] + qd.cast(j, qd.f16) * qd.f16(step)
+                acc = acc + qd.sin(a)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.21 + i * 0.05
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.21 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        acc_t = torch.zeros((), dtype=torch.float32)
+        for j in range(n_iter):
+            a_t = x_t[i] + float(j) * step
+            acc_t = acc_t + torch.sin(a_t)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    assert float(y[None]) == pytest.approx(y_t.item(), rel=4e-3)
+    for i in range(n):
+        assert float(x.grad[i]) == pytest.approx(x_t.grad[i].item(), rel=4e-3)
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("n_iter", [4, 16, 64])
+@pytest.mark.parametrize("n_stacks", [1, 3])
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_unrolled_many_pushes_across_multiple_stacks(n_iter, n_stacks):
+    # Cross-check `d/dx sum_i sum_s sum_j sin(x[i] + j*step + s*offset)` against PyTorch autograd for the
+    # kernel shape where `n_stacks` parallel adstacks each receive `n_iter` straight-line pushes inside an
+    # unrolled inner loop, fanning out to a separate non-linear `sin` per stack per iteration.
+    #
+    # Internal details: this is the regime the LLVM release-build inline AdStack codegen targets - each `s`
+    # promotes its operand `a = x[i] + j*step + s*offset` onto its own per-stack `alloca i64` count, and
+    # the unrolled inner loop body emits `n_iter` consecutive `count++` increments per stack. After mem2reg
+    # lifts the alloca to SSA and GVN folds the increment chain to constants `0, 1, ..., n_iter - 1`, the
+    # only memory ops left in the unrolled body are the slot stores. `n_iter=64` is well above the adstack
+    # capacity floor of 32, so any regression that miscalculates the slot offset under multiple sibling
+    # stacks (e.g. by hoisting the count alloca shared across stacks instead of per-stack), that
+    # short-circuits / silently drops pushes via a wrong saturating subtract on count, or that races a
+    # cross-stack increment, surfaces here as a wrong gradient long before it would surface as an overflow
+    # at runtime. The cross-check tolerance `rel=1e-6` is the f32 floor; a few-ULP drift per `sin` over up
+    # to `n_stacks * n_iter <= 192` summed terms still fits within it.
+    import torch
+
+    n = 4
+    step = 0.07
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            acc = 0.0
+            for s in qd.static(range(n_stacks)):
+                s_offset = qd.cast(s, qd.f32) * 0.13
+                for j in qd.static(range(n_iter)):
+                    a = x[i] + qd.cast(j, qd.f32) * step + s_offset
+                    acc += qd.sin(a)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.21 + i * 0.05
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.21 + i * 0.05 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        acc_t = torch.zeros((), dtype=torch.float32)
+        for s in range(n_stacks):
+            s_offset_t = float(s) * 0.13
+            for j in range(n_iter):
+                a_t = x_t[i] + float(j) * step + s_offset_t
+                acc_t = acc_t + torch.sin(a_t)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    for i in range(n):
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("n_inner", [4, 32])
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=64)
+def test_adstack_min_loop_carried_serial_range_for(n_inner):
+    # Cross-check `d/dx sum_i acc_n` where `acc` is initialized to 1.0 and updated per iteration of a serial
+    # `for j in range(n_inner)` body via `acc = qd.min(acc * 0.5 + 0.05, x[i] + j*0.05)`. The min winner flips
+    # between the lhs and rhs across iterations (rhs wins on iter 0 because acc starts at 1.0 vs x[i]=~0.3,
+    # then lhs wins on later iterations as acc shrinks). The reverse pass must use the per-iteration forward
+    # lhs/rhs to route the gradient correctly.
+    #
+    # Internal details: pins the snap-stack fix in `MakeAdjoint::visit(BinaryOpStmt)`'s min/max branch. The
+    # forward cmp `lhs < rhs` (min) / `rhs < lhs` (max) is computed at forward time and pushed onto a
+    # dedicated 1-push-per-bin-execution adstack, then read back in reverse with a matching pop. Without the
+    # snap-stack, BackupSSA spills `bin->lhs` / `bin->rhs` to single overwrite-each-iteration allocas and
+    # every reverse iteration reads the last forward iteration's values, so the cmp flips on iterations where
+    # the actual winner changed and the gradient routes through the wrong branch (visible as `x.grad=0`
+    # instead of the analytical `0.125` for `x[i]=0.31`, `n_inner=4`).
+    import torch
+
+    n = 4
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            acc = 1.0
+            for j in range(n_inner):
+                acc = qd.min(acc * 0.5 + 0.05, x[i] + qd.cast(j, qd.f32) * 0.05)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.31 + i * 0.07
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.31 + i * 0.07 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        acc_t = torch.tensor(1.0, dtype=torch.float32)
+        for j in range(n_inner):
+            acc_t = torch.minimum(acc_t * 0.5 + 0.05, x_t[i] + float(j) * 0.05)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    for i in range(n):
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-4)

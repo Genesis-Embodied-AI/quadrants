@@ -15,7 +15,7 @@ from quadrants._lib.core.quadrants_python import (
     Program,
 )
 from quadrants._snode import fields_builder
-from quadrants.lang._ndarray import ScalarNdarray
+from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang._ndrange import GroupedNDRange, _Ndrange
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
@@ -76,8 +76,6 @@ from quadrants.types.primitive_types import (
 )
 
 if TYPE_CHECKING:
-    from quadrants.lang._ndarray import Ndarray
-
     from .ast.ast_transformer_utils import ASTTransformerGlobalContext
 
 
@@ -209,6 +207,20 @@ def validate_subscript_index(value, index):
 def subscript(ast_builder, value, *_indices, skip_reordered=False):
     dbg_info = _qd_core.DebugInfo(get_runtime().get_current_src_info())
     ast_builder = get_runtime().compiling_callable.ast_builder()
+    # Ndarray from struct template field: resolve via the AnyArray cache populated by _predeclare_struct_ndarrays
+    # during kernel compilation.
+    if isinstance(value, Ndarray):
+        gc = getattr(get_runtime(), "_current_global_context", None)
+        if gc is not None:
+            arr = gc.ndarray_to_any_array.get(id(value))
+            if arr is not None:
+                value = arr
+        if isinstance(value, Ndarray):
+            raise QuadrantsCompilationError(
+                f"Ndarray {value!r} used in kernel scope but not registered "
+                "as a kernel parameter. Pass it via qd.Tensor annotation or "
+                "through a @qd.data_oriented / frozen-dataclass template."
+            )
     # Directly evaluate in Python for non-Quadrants types
     if not isinstance(
         value,
@@ -462,10 +474,9 @@ class PyQuadrants:
         if root.finalized:
             return
         if not is_first_call and root.empty:
-            # We have to forcefully finalize when `is_first_call` is True (even
-            # if the root itself is empty), so that there is a valid struct
-            # llvm::Module, if no field has been declared before the first kernel
-            # invocation. Example case:
+            # We have to forcefully finalize when `is_first_call` is True (even if the root itself is empty), so that
+            # there is a valid struct llvm::Module, if no field has been declared before the first kernel invocation.
+            # Example case:
             # https://github.com/taichi-dev/taichi/blob/27bb1dc3227d9273a79fcb318fdb06fd053068f5/tests/python/test_ad_basics.py#L260-L266
             return
 
@@ -586,6 +597,9 @@ def reset():
     for k in old_kernels:
         k.reset()
     _qd_core.reset_default_compile_config()
+    from quadrants.lang._func_base import _frozen_dc_plans  # pylint: disable=C0415
+
+    _frozen_dc_plans.clear()
 
 
 @quadrants_scope
@@ -640,16 +654,13 @@ class _UninitializedRootFieldsBuilder:
         raise QuadrantsRuntimeError("Please call init() first")
 
 
-# `root` initialization must be delayed until after the program is
-# created. Unfortunately, `root` exists in both quadrants.lang.impl module and
-# the top-level quadrants module at this point; so if `root` itself is written, we
-# would have to make sure that `root` in all the modules get updated to the same
-# instance. This is an error-prone process.
+# `root` initialization must be delayed until after the program is created. Unfortunately, `root` exists in both
+# quadrants.lang.impl module and the top-level quadrants module at this point; so if `root` itself is written, we would
+# have to make sure that `root` in all the modules get updated to the same instance. This is an error-prone process.
 #
-# To avoid this situation, we create `root` once during the import time, and
-# never write to it. The core part, `_root_fb`, is the one whose initialization
-# gets delayed. `_root_fb` will only exist in the quadrants.lang.impl module, so
-# writing to it is would result in less for maintenance cost.
+# To avoid this situation, we create `root` once during the import time, and never write to it. The core part,
+# `_root_fb`, is the one whose initialization gets delayed. `_root_fb` will only exist in the quadrants.lang.impl
+# module, so writing to it is would result in less for maintenance cost.
 #
 # `_root_fb` will be overridden inside :func:`quadrants.lang.init`.
 _root_fb = _UninitializedRootFieldsBuilder()
@@ -836,12 +847,38 @@ def _field(
         else:
             axis_seq = list(range(dim))
             shape_seq = list(shape)
-        same_level = order is None
-        _create_snode(axis_seq, shape_seq, same_level).place(x, offset=offset)
+        # Allocate as a SINGLE rank-``dim`` dense SNode, always.
+        #
+        # When ``order`` is set the canonical-axis permutation is encoded as:
+        #   * the SNode is allocated at the *permuted physical shape* (``shape_seq`` above already reflects
+        #     ``shape[axis_seq]``), using the natural ``axes(0, 1, ..., dim-1)`` declaration, and
+        #   * the field is tagged with ``_qd_layout = tuple(axis_seq)`` so that ``build_Subscript`` /
+        #     ``build_struct_for`` permute canonical user indices into physical storage order at the AST level (same
+        #     rewrite mechanism as layout-tagged ndarrays).
+        #
+        # This replaces the legacy scheme of building a nested stack of rank-1 dense SNodes (one per axis), which
+        # doubled the number of ``linearize`` / SNode ``lookup`` operations per subscript for no memory-layout benefit
+        # (physical byte order is determined by the shape-permutation, not by SNode nesting depth). See the CHI IR
+        # comparison in ``perso_hugh/doc/regression_2026apr23_stork_log.md`` (Experiment N+1) and the byte-identity
+        # regression tests in ``tests/python/test_tensor_layout_physical_bytes.py``.
+        flat_axis_seq = list(range(dim))
+        phys_offset = offset
+        if order is not None and offset is not None:
+            phys_offset = tuple(offset[axis_seq[p]] for p in range(dim))
+        _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x, offset=phys_offset)
         if needs_grad:
-            _create_snode(axis_seq, shape_seq, same_level).place(x_grad, offset=offset)
+            _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_grad, offset=phys_offset)
         if needs_dual:
-            _create_snode(axis_seq, shape_seq, same_level).place(x_dual, offset=offset)
+            _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_dual, offset=phys_offset)
+        if order is not None:
+            # Identity layout is normalised out earlier by ``_layout_to_order`` (``order=`` is not passed when layout
+            # is the default permutation).
+            _qd_layout = tuple(axis_seq)
+            object.__setattr__(x, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
+            if x_grad is not None:
+                object.__setattr__(x_grad, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
+            if x_dual is not None:
+                object.__setattr__(x_dual, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
     return x
 
 
@@ -849,10 +886,9 @@ def _field(
 def field(dtype, shape=None, *args, **kwargs):
     """Defines a Quadrants field.
 
-    A Quadrants field can be viewed as an abstract N-dimensional array, hiding away
-    the complexity of how its underlying :class:`~quadrants.lang.snode.SNode` are
-    actually defined. The data in a Quadrants field can be directly accessed by
-    a Quadrants :func:`~quadrants.lang.kernel_impl.kernel`.
+    A Quadrants field can be viewed as an abstract N-dimensional array, hiding away the complexity of how its
+    underlying :class:`~quadrants.lang.snode.SNode` are actually defined. The data in a Quadrants field can be
+    directly accessed by a Quadrants :func:`~quadrants.lang.kernel_impl.kernel`.
 
     See also https://docs.taichi-lang.org/docs/field
 
@@ -862,10 +898,10 @@ def field(dtype, shape=None, *args, **kwargs):
         order (str, optional): order of the shape laid out in memory.
         name (str, optional): name of the field.
         offset (Union[int, tuple[int]], optional): offset of the field domain.
-        needs_grad (bool, optional): whether this field participates in autodiff (reverse mode)
-            and thus needs an adjoint field to store the gradients.
-        needs_dual (bool, optional): whether this field participates in autodiff (forward mode)
-            and thus needs an dual field to store the gradients.
+        needs_grad (bool, optional): whether this field participates in autodiff (reverse mode) and thus needs an
+            adjoint field to store the gradients.
+        needs_dual (bool, optional): whether this field participates in autodiff (forward mode) and thus needs a dual
+            field to store the gradients.
 
     Example::
 
@@ -1073,8 +1109,7 @@ def qd_format(*args):
 
 @quadrants_scope
 def qd_assert(cond, msg, extra_args, dbg_info):
-    # Mostly a wrapper to help us convert from Expr (defined in Python) to
-    # _qd_core.Expr (defined in C++)
+    # Mostly a wrapper to help us convert from Expr (defined in Python) to _qd_core.Expr (defined in C++)
     ast_builder = get_runtime().compiling_callable.ast_builder()
     ast_builder.create_assert_stmt(Expr(cond).ptr, msg, extra_args, dbg_info)
 
@@ -1186,9 +1221,8 @@ def static(x, *xs) -> Any:
             >>>     else:
             >>>         do_b()
 
-        Depending on the value of ``cond``, ``run()`` will be directly compiled
-        into either ``do_a()`` or ``do_b()``. Thus there won't be a runtime
-        condition check.
+        Depending on the value of ``cond``, ``run()`` will be directly compiled into either ``do_a()`` or ``do_b()``.
+        Thus there won't be a runtime condition check.
 
         Another common usage is for compile-time loop unrolling::
 
@@ -1313,9 +1347,8 @@ def get_max_shared_memory_bytes(*, is_lowerbound_ok):
     """Return the maximum shared memory per block in bytes.
 
     Args:
-        is_lowerbound_ok: If True, return a conservative lower bound based on
-            hardware specifications. If False, raise RuntimeError for backends
-            where the exact value cannot be queried.
+        is_lowerbound_ok: If True, return a conservative lower bound based on hardware specifications. If False,
+            raise RuntimeError for backends where the exact value cannot be queried.
     """
     arch = current_cfg().arch
     if arch == _qd_core.cuda:
@@ -1329,8 +1362,7 @@ def get_max_shared_memory_bytes(*, is_lowerbound_ok):
             # https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
             return 32 * 1024
         if arch == _qd_core.amdgpu:
-            # AMD GPUs have 64KB LDS per workgroup since at least RDNA 2
-            # (Nov 2020).
+            # AMD GPUs have 64KB LDS per workgroup since at least RDNA 2 (Nov 2020).
             # https://rocm.docs.amd.com/en/docs-6.0.2/reference/gpu-arch/gpu-arch-spec-overview.html
             return 64 * 1024
         if arch == _qd_core.vulkan:

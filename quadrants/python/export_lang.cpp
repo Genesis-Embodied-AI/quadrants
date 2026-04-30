@@ -315,8 +315,12 @@ void export_lang(py::module &m) {
 
   py::class_<Program>(m, "Program")
       .def(py::init<>())
-      .def("ndarray_to_dlpack", [](Program *program, pybind11::object owner,
-                                   Ndarray *ndarray) { return ndarray_to_dlpack(program, owner, ndarray); })
+      .def(
+          "ndarray_to_dlpack",
+          [](Program *program, pybind11::object owner, Ndarray *ndarray, const std::vector<int> &layout) {
+            return ndarray_to_dlpack(program, owner, ndarray, layout);
+          },
+          py::arg("owner"), py::arg("ndarray"), py::arg("layout") = std::vector<int>{})
       .def("field_to_dlpack", [](Program *program, SNode *snode, int element_ndim, int n,
                                  int m) { return field_to_dlpack(program, snode, element_ndim, n, m); })
       .def("_get_num_ndarrays", &Program::get_num_ndarrays)
