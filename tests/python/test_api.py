@@ -264,6 +264,7 @@ user_api[qd.Field] = [
     "parent",
     "shape",
     "snode",
+    "to_dlpack",
     "to_numpy",
     "to_torch",
 ]
@@ -435,6 +436,7 @@ user_api[qd.StructField] = [
     "parent",
     "shape",
     "snode",
+    "to_dlpack",
     "to_numpy",
     "to_torch",
 ]

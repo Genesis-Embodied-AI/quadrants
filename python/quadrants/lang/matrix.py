@@ -19,7 +19,14 @@ from quadrants.lang.exception import (
     QuadrantsSyntaxError,
     QuadrantsTypeError,
 )
-from quadrants.lang.field import Field, ScalarField, SNodeHostAccess
+from quadrants.lang.field import (
+    Field,
+    ScalarField,
+    SNodeHostAccess,
+    _mps_sync_if_metal,
+    _try_zerocopy_numpy,
+    _try_zerocopy_torch,
+)
 from quadrants.lang.util import (
     DataTypeCxxWrapper,
     cook_dtype,
@@ -1406,19 +1413,31 @@ class MatrixField(Field):
             field_fill_quadrants_scope(self, val)
 
     @python_scope
-    def to_numpy(self, keep_dims=False, dtype=None):
+    def to_numpy(self, keep_dims=False, dtype=None, *, copy=True):
         """Converts the field instance to a NumPy array.
 
         Args:
-            keep_dims (bool, optional): Whether to keep the dimension after conversion.
-                When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields.
-                When keep_dims=False, the resulting numpy array should skip the matrix dims with size 1.
-                For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
+            keep_dims (bool, optional): Whether to keep the dimension after conversion. When keep_dims=True, on an n-D
+                matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields. When
+                keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a 4x1
+                or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
             dtype (DataType, optional): The desired data type of returned numpy array.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
         Returns:
             numpy.ndarray: The result NumPy array.
         """
+        if copy is False:
+            arr = _try_zerocopy_numpy(self, copy=False)
+            if arr is not None:
+                as_vector = self.m == 1 and not keep_dims
+                expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
+                if arr.shape != expected:
+                    arr = arr.reshape(expected)
+                if dtype is not None and arr.dtype != dtype:
+                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                return arr
+
         if dtype is None:
             dtype = to_numpy_type(self.dtype)
         as_vector = self.m == 1 and not keep_dims
@@ -1430,17 +1449,26 @@ class MatrixField(Field):
         runtime_ops.sync()
         return arr
 
-    def to_torch(self, device=None, keep_dims=False):
+    def to_torch(self, device=None, keep_dims=False, *, copy=True):
         """Converts the field instance to a PyTorch tensor.
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
             keep_dims (bool, optional): Whether to keep the dimension after conversion.
                 See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
         Returns:
             torch.tensor: The result torch tensor.
         """
+        if copy is False:
+            tc = _try_zerocopy_torch(self, copy=copy, device=device)
+            as_vector = self.m == 1 and not keep_dims
+            expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
+            if tc.shape != expected:
+                tc = tc.reshape(expected)
+            return tc
+
         import torch  # pylint: disable=C0415
 
         as_vector = self.m == 1 and not keep_dims
@@ -1451,6 +1479,7 @@ class MatrixField(Field):
 
         matrix_to_ext_arr(self, arr, as_vector)
         runtime_ops.sync()
+        _mps_sync_if_metal()
         return arr
 
     @python_scope
@@ -1817,8 +1846,11 @@ class MatrixNdarray(Ndarray):
         return Matrix([[NdarrayHostAccess(self, key, (i, j)) for j in range(self.m)] for i in range(self.n)])
 
     @python_scope
-    def to_numpy(self, dtype=None):
-        """Converts this ndarray to a `numpy.ndarray`.
+    def to_numpy(self, dtype=None, *, copy=True):
+        """Converts this ndarray to a ``numpy.ndarray``.
+
+        Args:
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
         Example::
 
@@ -1830,6 +1862,12 @@ class MatrixNdarray(Ndarray):
              [[[0. 0.]
                [0. 0.]]]]
         """
+        if copy is False:
+            arr = _try_zerocopy_numpy(self, copy=False)
+            if arr is not None:
+                if dtype is not None and arr.dtype != dtype:
+                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                return arr
         arr = self._ndarray_matrix_to_numpy(as_vector=0)
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
@@ -1848,9 +1886,16 @@ class MatrixNdarray(Ndarray):
         self._ndarray_matrix_from_numpy(arr, as_vector=0)
 
     @python_scope
-    def to_torch(self, device=None):
-        """Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
-        :meth:`MatrixField.to_torch`."""
+    def to_torch(self, device=None, *, copy=True):
+        """Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``.
+
+        Mirrors :meth:`MatrixField.to_torch`.
+
+        Args:
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+        """
+        if copy is False:
+            return _try_zerocopy_torch(self, copy=copy, device=device)
         return self._ndarray_matrix_to_torch(as_vector=0, device=device)
 
     @python_scope
@@ -1944,8 +1989,11 @@ class VectorNdarray(Ndarray):
         return Vector([NdarrayHostAccess(self, key, (i,)) for i in range(self.n)])
 
     @python_scope
-    def to_numpy(self, dtype=None):
-        """Converts this vector ndarray to a `numpy.ndarray`.
+    def to_numpy(self, dtype=None, *, copy=True):
+        """Converts this vector ndarray to a ``numpy.ndarray``.
+
+        Args:
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
         Example::
 
@@ -1957,6 +2005,12 @@ class VectorNdarray(Ndarray):
                    [[0., 0., 0.],
                     [0., 0., 0.]]], dtype=float32)
         """
+        if copy is False:
+            arr = _try_zerocopy_numpy(self, copy=False)
+            if arr is not None:
+                if dtype is not None and arr.dtype != dtype:
+                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                return arr
         arr = self._ndarray_matrix_to_numpy(as_vector=1)
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
@@ -1978,9 +2032,16 @@ class VectorNdarray(Ndarray):
         self._ndarray_matrix_from_numpy(arr, as_vector=1)
 
     @python_scope
-    def to_torch(self, device=None):
-        """Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``. Mirrors
-        :meth:`MatrixField.to_torch` on the vector code path."""
+    def to_torch(self, device=None, *, copy=True):
+        """Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``.
+
+        Mirrors :meth:`MatrixField.to_torch` on the vector code path.
+
+        Args:
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+        """
+        if copy is False:
+            return _try_zerocopy_torch(self, copy=copy, device=device)
         return self._ndarray_matrix_to_torch(as_vector=1, device=device)
 
     @python_scope

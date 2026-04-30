@@ -1,7 +1,8 @@
 # Numpy and Torch interop
 
-Quadrants provides interop with both numpy and PyTorch. There are two mechanisms:
+Quadrants provides interop with both numpy and PyTorch. There are three mechanisms:
 - **Copy-based**: convert data between quadrants fields/ndarrays and numpy arrays or torch tensors
+- **Zero-copy via DLPack**: obtain a torch tensor or numpy array that aliases the underlying Quadrants memory
 - **Direct pass-through**: pass torch tensors directly into kernels as ndarray arguments (zero-copy)
 
 ## Copy-based interop
@@ -67,6 +68,142 @@ The shape of the numpy array or torch tensor must match the shape of the field o
 m = qd.Matrix.field(3, 2, qd.f32, shape=(4,))
 arr = np.zeros((4, 3, 2), dtype=np.float32)
 m.from_numpy(arr)
+```
+
+## Zero-copy interop via DLPack
+
+Quadrants' zero-copy interop has been designed with **PyTorch as the first-class user interface**: support, defaults, and supported-dtype/backend matrices are driven by what PyTorch can consume cleanly via DLPack. NumPy is supported on CPU backends as a free side benefit of the same DLPack capsule. Several of the limitations below (e.g. the Apple Metal `torch >= 2.9.2` requirement, or the 0-dim `ScalarField` carve-out) are inherited from PyTorch's current DLPack importer rather than from Quadrants itself.
+
+`to_torch()` and `to_numpy()` accept a keyword-only `copy` argument that controls whether the returned tensor/array is an independent copy of the data or a zero-copy view that aliases the underlying Quadrants memory.
+
+```python
+f = qd.field(qd.f32, shape=(1024,))
+
+view  = f.to_torch(copy=False)  # zero-copy view: aliases f's memory
+clone = f.to_torch(copy=True)   # independent copy (default)
+auto  = f.to_torch()            # same as copy=True
+```
+
+When using `copy=False`, modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated -- typically on `qd.init()` or `qd.reset()`, after which a fresh call to `to_torch(copy=False)` / `to_numpy(copy=False)` returns a new view.
+
+### When zero-copy is available
+
+Zero-copy uses [DLPack](https://github.com/dmlc/dlpack) and requires:
+
+- a backend with DLPack support: `cpu` (`x64`/`arm64`), `cuda`, `amdgpu`, or `metal`. Vulkan is not supported: Vulkan-backed DLPack tensors are not processed by many well-known scientific computing libraries (torch, numpy, etc.);
+- a DLPack-supported dtype: `i32`, `i64`, `f32`, `f64`, `u1` (other dtypes such as `f16`, `u8`, `u16` fall back to the kernel-copy path);
+- on Apple Metal, `torch >= 2.9.2` for fields (required for DLPack `bytes_offset` on MPS; see [pytorch/pytorch#168193](https://github.com/pytorch/pytorch/pull/168193));
+- 0-dim `ScalarField` instances are not zero-copyable on any backend (PyTorch DLPack `bytes_offset` limitation);
+- members of an AOS `StructField` (the default `Struct.field(..., layout=Layout.AOS)`) are not zero-copyable yet (see [Struct fields](#struct-fields) below); members of an SOA `StructField` (`layout=Layout.SOA`) **are** zero-copyable individually.
+
+Zero-copy `to_numpy()` additionally requires a CPU backend, because numpy arrays cannot reference GPU memory. Note: `Field.to_numpy(copy=False)` and `MatrixField.to_numpy(copy=False)` currently require torch to be installed, because the C++ `field_to_dlpack` checks the torch version internally. `Ndarray.to_numpy(copy=False)` does not require torch.
+
+### Semantics of `copy`
+
+| Value | Behaviour |
+|---|---|
+| `True` (default) | Independent copy via kernel. |
+| `False` | Zero-copy view via DLPack, or `ValueError` if zero-copy is unsupported for this backend/dtype. |
+
+The default `copy=True` always returns a buffer that is safe to mutate without affecting the field/ndarray.
+
+### Examples
+
+```python
+import quadrants as qd
+
+qd.init(arch=qd.cuda)
+
+f = qd.field(qd.f32, shape=(1024,))
+f.fill(1.0)
+
+view = f.to_torch(copy=False)
+view *= 2.0           # mutates f's underlying memory directly
+qd.sync()             # not strictly required; safe pattern
+
+print(f[0])           # 2.0
+```
+
+Round-trip with NumPy on a CPU backend:
+
+```python
+qd.init(arch=qd.cpu)
+
+a = qd.ndarray(qd.i32, shape=(8,))
+a.from_numpy(np.arange(8, dtype=np.int32))
+
+view = a.to_numpy(copy=False)
+view[0] = 100
+print(a.to_numpy()[0])   # 100
+```
+
+### Caching
+
+Each call to `to_torch(copy=False)` builds a fresh DLPack capsule, but the returned tensor aliases the same underlying memory. Downstream frameworks (e.g. Genesis) may cache the returned view on the field object for hot-path reuse; Quadrants itself does not cache views internally.
+
+```python
+v1 = f.to_torch(copy=False)
+v2 = f.to_torch(copy=False)
+assert v1.data_ptr() == v2.data_ptr()   # same underlying memory
+```
+
+### Apple Metal: synchronisation
+
+On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Every `to_torch()` / `to_numpy()` call runs `qd.sync()` internally to flush the Quadrants queue. Additionally, `copy=True` (the default) calls `torch.mps.synchronize()` after the kernel copy. This is necessary because, on Metal, Quadrants and Torch do not share the same compute streams. `copy=False` does **not** call `torch.mps.synchronize()`:
+
+```python
+qd.init(arch=qd.metal)
+f = qd.field(qd.f32, shape=(64,))
+
+run_kernel(f)                       # queues writes on the Quadrants Metal stream
+view = f.to_torch(copy=False)       # qd.sync() only
+copy = f.to_torch(copy=True)        # qd.sync() + torch.mps.synchronize()
+```
+
+The reverse direction (PyTorch writes to a zero-copy view, then a Quadrants kernel reads from the same field) is **not** automatically synchronised. Because Quadrants and PyTorch MPS submit work to separate Metal command queues, a kernel launched immediately after a torch write may execute before the torch write has actually committed to memory:
+
+```python
+qd.init(arch=qd.metal)
+f = qd.field(qd.f32, shape=(64,))
+
+view = f.to_torch(copy=False)
+view.zero_()                     # queued on the torch MPS stream
+my_kernel(f)                     # may run BEFORE view.zero_() commits!
+
+torch.mps.synchronize()          # required to flush the torch MPS stream first
+my_kernel(f)                     # now safe
+```
+
+This is intentional: forcing a sync on every Quadrants kernel that touches a previously-zerocopied field would be very expensive in workloads that batch many torch ops and many kernels back-to-back. If you mutate fields from torch and then read them from a Quadrants kernel on Metal, call `torch.mps.synchronize()` once between the torch ops and the kernels.
+
+### Lifetime caveats
+
+A zero-copy view becomes invalid when the underlying Quadrants storage is freed. This happens on `qd.reset()` and `qd.init()`. Holding a `copy=False` tensor across either is undefined behaviour:
+
+```python
+view = f.to_torch(copy=False)
+qd.reset()
+view[0]                 # undefined: view aliases freed memory
+```
+
+The default `copy=True` produces an independent copy that is unaffected. Only `copy=False` views are affected by this caveat.
+
+### Struct fields
+
+`StructField.to_torch()` and `StructField.to_numpy()` return a dictionary mapping each member name to a tensor / array; the `copy` argument is propagated to each member, so zero-copy availability is decided per member. The relevant axis is the SNode layout chosen at construction:
+
+- **AOS** (default `Struct.field(..., layout=Layout.AOS)`): all members share the struct cell, e.g. `Struct.field({"a": i32, "b": f32}, shape=(N,))` stores `[a0, b0, a1, b1, ...]` in memory, with stride `sizeof(cell)` between consecutive `a`'s. Quadrants' C++ DLPack export does not currently emit cell-stride-aware views for individual members (it computes contiguous strides at the member dtype size, which would interleave neighbouring members' bytes), so AOS members fall back to a kernel copy and `copy=False` raises on each AOS member.
+- **SOA** (`Struct.field(..., layout=Layout.SOA)`): each member sits in its own dense SNode subtree with contiguous storage, so members are zero-copyable individually under the usual backend / dtype rules. `copy=False` succeeds and returns aliasing views.
+
+```python
+S_aos = qd.Struct.field({"pos": qd.f32, "vel": qd.f32}, shape=(16,))   # AOS (default)
+d_aos = S_aos.to_torch()                                                # dict of kernel copies
+d_aos["pos"][0] = 1.0                                                   # does NOT write back
+
+S_soa = qd.Struct.field({"pos": qd.f32, "vel": qd.f32}, shape=(16,),
+                        layout=qd.Layout.SOA)
+d_soa = S_soa.to_torch(copy=False)                                      # dict of zero-copy views
+d_soa["pos"][0] = 1.0                                                   # writes through to S_soa.pos
 ```
 
 ## Direct torch tensor pass-through
@@ -139,6 +276,9 @@ print(x.grad[0])  # 4.0
 
 | Method | Copies data? | Works with fields? | Works with ndarrays? |
 |--------|-------------|-------------------|---------------------|
-| `to_numpy()` / `from_numpy()` | yes | yes | yes |
-| `to_torch()` / `from_torch()` | yes | yes | no |
+| `to_numpy()` / `from_numpy()` (default) | yes | yes | yes |
+| `to_torch()` / `from_torch()` (default) | yes | yes | yes |
+| `to_numpy(copy=False)` / `to_torch(copy=False)` | no (DLPack view) | yes | yes |
 | Direct pass-through | no | no | yes (as kernel arg) |
+
+The `copy` parameter is supported on `to_numpy()` and `to_torch()` for `ScalarField`, `MatrixField` (and `VectorField`), `StructField`, and all `Ndarray` types. See [Zero-copy interop via DLPack](#zero-copy-interop-via-dlpack) for the support matrix and lifetime rules.

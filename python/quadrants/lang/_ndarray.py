@@ -285,6 +285,9 @@ class Ndarray:
         layout_is_aos = 1
         ndarray_matrix_to_ext_arr(self, out, layout_is_aos, as_vector)
         impl.get_runtime().sync()
+        from quadrants.lang.field import _mps_sync_if_metal  # pylint: disable=C0415
+
+        _mps_sync_if_metal()
         return out
 
     @python_scope
@@ -447,12 +450,24 @@ class ScalarNdarray(Ndarray):
         return self.host_accessor.getter(*self._pad_key(key))
 
     @python_scope
-    def to_numpy(self, dtype=None):
+    def to_numpy(self, dtype=None, *, copy=True):
         """Return a canonical-view NumPy array.
 
-        ``dtype``: optional numpy dtype to cast the result to (matches :meth:`Field.to_numpy`'s signature). ``None``
-        keeps the native ndarray dtype.
+        Args:
+            dtype: Optional numpy dtype to cast the result to. ``None`` keeps the native ndarray dtype.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
+        if copy is False:
+            from quadrants.lang.field import (  # pylint: disable=C0415
+                _try_zerocopy_numpy,
+            )
+
+            arr = _try_zerocopy_numpy(self, copy=False, is_scalar=True)
+            if arr is not None:
+                if dtype is not None and arr.dtype != dtype:
+                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                return arr
+
         arr = self._ndarray_to_numpy()
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
@@ -463,13 +478,23 @@ class ScalarNdarray(Ndarray):
         self._ndarray_from_numpy(arr)
 
     @python_scope
-    def to_torch(self, device=None):
+    def to_torch(self, device=None, *, copy=True):
         """Return a canonical-view torch tensor.
 
         Mirrors :meth:`Field.to_torch`. The destination is a ``torch.zeros(self.shape, ...)`` allocation that the
         bridge kernel writes into via the canonical iteration path, so layout-tagged ndarrays produce a canonical
         view just like ``to_numpy()`` does.
+
+        Args:
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
+        if copy is False:
+            from quadrants.lang.field import (  # pylint: disable=C0415
+                _try_zerocopy_torch,
+            )
+
+            return _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
+
         import torch  # pylint: disable=C0415
 
         from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
@@ -480,6 +505,9 @@ class ScalarNdarray(Ndarray):
 
         ndarray_to_ext_arr(self, out)
         impl.get_runtime().sync()
+        from quadrants.lang.field import _mps_sync_if_metal  # pylint: disable=C0415
+
+        _mps_sync_if_metal()
         return out
 
     @python_scope
