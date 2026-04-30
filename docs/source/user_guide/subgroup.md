@@ -175,6 +175,17 @@ Returns `1` on lane 0 of every subgroup and `0` on every other lane. Useful for 
 - Caller contract on every backend: call from uniform control flow with all lanes active. Calling either op from divergent control flow has implementation-defined behaviour (CUDA's `nvvm.bar.warp.sync` will deadlock if the mask does not match the active set; AMDGPU's `wave.barrier` is a no-op on most chips so divergent calls silently pass through).
 - The legacy names `subgroup.barrier()` and `subgroup.memory_barrier()` are still available as deprecated aliases. They forward to `sync()` / `mem_fence()` and emit a `DeprecationWarning` on first use; prefer the new names in new code.
 
+### `ballot(predicate)`
+
+Each lane evaluates `predicate` (an `i32`; non-zero is true, zero is false) and the result is a `u32` bitmask where bit `i` is set if lane `i`'s predicate was non-zero.
+
+- Returns a `u32`. Bit 0 corresponds to lane 0, bit 1 to lane 1, etc.
+- On CUDA, maps to `__ballot_sync(0xFFFFFFFF, predicate)`. On SPIR-V, maps to `OpGroupNonUniformBallot` (component 0 of the uvec4 result). On AMDGPU, maps to the `ballot.i32` intrinsic.
+- The result covers the first 32 lanes. On AMDGPU CDNA with 64-wide wavefronts only the low 32 bits are returned; the upper 32 lanes are not represented. This is consistent with the 32-bit return type.
+- Must be called from uniform control flow (all active lanes must execute the ballot).
+
+Ballot is a building block for warp-cooperative algorithms: population counts (`popcount(ballot(cond))` counts how many lanes satisfy `cond`), prefix masks, and lane compaction.
+
 ### `reduce_add(value, log2_size)`
 
 Sums `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. The result is valid **in lane 0** of each group; other lanes hold partial sums and should be considered undefined.
@@ -264,6 +275,21 @@ def broadcast(a: qd.types.ndarray(dtype=qd.f32, ndim=1)):
 ```
 
 After the kernel, every lane in a subgroup holds the original value of its lane 0. `subgroup.broadcast(a[i], qd.u32(0))` is interchangeable here.
+
+### Ballot: count how many lanes satisfy a condition
+
+```python
+@qd.kernel
+def count_positive(a: qd.types.ndarray(dtype=qd.f32, ndim=1),
+                   counts: qd.types.ndarray(dtype=qd.u32, ndim=1)):
+    qd.loop_config(block_dim=32)
+    for i in range(a.shape[0]):
+        mask = subgroup.ballot(qd.i32(a[i] > 0.0))
+        if subgroup.invocation_id() == 0:
+            counts[i // 32] = mask
+```
+
+After the kernel, `counts[g]` contains a bitmask of which lanes in group `g` had positive values. Use `popcount(mask)` on the host to get the count.
 
 ### Identity shuffle (each lane reads its own id)
 
@@ -382,6 +408,7 @@ After the call, lane `k` (within each group of 32) holds `a[group_start] + a[gro
 - Shuffles are register-to-register on CUDA (`__shfl_sync`, `__shfl_down_sync`, `__shfl_up_sync`) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.
 - AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` all go through `ds_permute` / `ds_bpermute` today (LDS-routed, roughly tens of cycles).
 - `shuffle_xor` and `broadcast_first` are `@qd.func` wrappers over `shuffle` / `broadcast` and inline at trace time, so on every backend they cost exactly the same as the underlying op.
+- `ballot` is a single hardware instruction on every backend — one cycle on CUDA (`__ballot_sync`), one instruction on AMDGPU (`v_ballot_b32`), and `OpGroupNonUniformBallot` on SPIR-V.
 - `reduce_add` and `reduce_all_add` both issue exactly `log2_size` shuffles and `log2_size` adds per call. No barriers, no shared memory, no launch overhead (they inline).
 - Pick `reduce_all_add` over `reduce_add + broadcast` when you need the result in every lane — same cost, one fewer shuffle.
 - 64-bit dtypes (`i64`, `u64`, `f64`) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.

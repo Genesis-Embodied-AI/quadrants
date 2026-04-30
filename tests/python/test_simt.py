@@ -1391,6 +1391,87 @@ def test_subgroup_all_equal_float_contract(dtype, log2_size):
 
 
 @test_utils.test(arch=qd.gpu)
+def test_subgroup_ballot_all_true():
+    """Ballot with all lanes voting true should return a full bitmask."""
+    N = 32
+    result = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            result[i] = subgroup.ballot(1)
+
+    foo()
+
+    for i in range(N):
+        assert result[i] != 0, f"lane {i}: ballot returned 0, expected non-zero"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_ballot_all_false():
+    """Ballot with all lanes voting false should return zero."""
+    N = 32
+    result = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            result[i] = subgroup.ballot(0)
+
+    foo()
+
+    for i in range(N):
+        assert result[i] == 0, f"lane {i}: ballot returned {result[i]}, expected 0"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_ballot_even_lanes():
+    """Even-numbered lanes vote true; odd lanes vote false."""
+    N = 32
+    result = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            result[i] = subgroup.ballot(1 - lane % 2)
+
+    foo()
+
+    mask = result[0]
+    assert mask & 0x1, "lane 0 should have voted true"
+    assert not (mask & 0x2), "lane 1 should have voted false"
+    assert mask & 0x4, "lane 2 should have voted true"
+    assert not (mask & 0x8), "lane 3 should have voted false"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_ballot_popcount():
+    """Verify popcount of ballot(1) equals the subgroup size."""
+    N = 32
+    ballot_val = qd.field(dtype=qd.u32, shape=N)
+    sg_size = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            ballot_val[i] = subgroup.ballot(1)
+            sg_size[i] = subgroup.group_size()
+
+    foo()
+
+    bv = ballot_val[0]
+    sz = sg_size[0]
+    actual_popcount = bin(bv).count("1")
+    expected = min(sz, N)
+    assert actual_popcount == expected, f"popcount({bv:#x}) = {actual_popcount}, expected {expected} (subgroup size {sz})"
+
+
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_invocation_id_range():
     """Verify invocation IDs are non-negative."""
     N = 64

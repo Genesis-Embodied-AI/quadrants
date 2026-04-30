@@ -574,6 +574,7 @@ class IRBuilder {
   SType t_v2_int_;
   SType t_v3_int_;
   SType t_v3_uint_;
+  SType t_v4_uint_;
   SType t_v4_fp32_;
   SType t_v3_fp32_;
   SType t_v2_fp32_;

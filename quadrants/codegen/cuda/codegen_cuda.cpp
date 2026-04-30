@@ -744,6 +744,8 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type,
           /* offset=*/llvm_val[stmt->args[1]]);
+    } else if (stmt->func_name == "subgroupBallot") {
+      llvm_val[stmt] = call("cuda_ballot_i32", llvm_val[stmt->args[0]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("cuda_lane_id");
     } else if (stmt->func_name == "subgroupSize") {

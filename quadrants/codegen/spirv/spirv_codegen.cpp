@@ -1452,6 +1452,13 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     auto index = ir_->query_value(stmt->args[1]->raw_name());
     val = ir_->make_value(spv::OpGroupNonUniformBroadcast, value.stype,
                           ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), value, index);
+  } else if (stmt->func_name == "subgroupBallot") {
+    auto predicate = ir_->query_value(stmt->args[0]->raw_name());
+    auto pred_bool = ir_->make_value(spv::OpINotEqual, ir_->bool_type(), predicate,
+                                     ir_->int_immediate_number(ir_->i32_type(), 0));
+    auto ballot_vec = ir_->make_value(spv::OpGroupNonUniformBallot, ir_->t_v4_uint_,
+                                      ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), pred_bool);
+    val = ir_->make_value(spv::OpCompositeExtract, ir_->u32_type(), ballot_vec, 0);
   } else if (shuffle_ops.find(stmt->func_name) != shuffle_ops.end()) {
     auto arg0 = ir_->query_value(stmt->args[0]->raw_name());
     auto arg1 = ir_->query_value(stmt->args[1]->raw_name());

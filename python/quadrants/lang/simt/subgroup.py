@@ -61,6 +61,16 @@ def elect():
     return i32(invocation_id() == 0)
 
 
+def ballot(predicate):
+    """Return a ``u32`` bitmask whose bit ``i`` is set iff lane ``i``'s ``predicate`` is non-zero.
+
+    Single hardware instruction on every backend (``__ballot_sync`` on CUDA, ``v_ballot_b32`` on AMDGPU,
+    ``OpGroupNonUniformBallot`` on SPIR-V).  The result covers the first 32 lanes; on AMDGPU CDNA wave64 only the low
+    32 bits are returned, consistent with the ``u32`` return type.  Caller contract: uniform CF + all lanes active.
+    """
+    return impl.call_internal("subgroupBallot", predicate, with_runtime_context=False)
+
+
 # --- Voting / predicate ops ------------------------------------------------------------
 #
 # All three are group-scoped over ``2**log2_size`` consecutive lanes, mirror the API of ``reduce_all_add`` /
@@ -508,6 +518,7 @@ __all__ = [
     "barrier",
     "memory_barrier",
     "elect",
+    "ballot",
     "all_true",
     "any_true",
     "all_equal",
