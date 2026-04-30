@@ -3244,6 +3244,81 @@ def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
+@test_utils.test(arch=[qd.cpu], require=qd.extension.adstack, ad_stack_size=0, debug=False)
+def test_adstack_static_bound_expr_snode_gate_cpu_grad_correct():
+    # Pins the SNode-backed bound_expr arm of `publish_per_task_bound_count_cpu` (the LLVM CPU host reducer in
+    # `runtime/llvm/llvm_runtime_executor.cpp`). The CPU launcher passes `bound_count_length = snode_iter_count`
+    # for SNode source kinds, but without the host-side SNode walk the reducer leaves the per-task capacity
+    # slot at the `publish_adstack_lazy_claim_buffers` UINT32_MAX default; `ensure_per_task_float_heap_post_reducer`
+    # then falls back to sizing the float adstack heap at `num_cpu_threads * stride_float`, while the codegen-
+    # emitted LCA-block atomic-rmw fires once per gated iteration and produces row ids 0..n_gated-1. With the
+    # bounds clamp inert (UINT32_MAX), the over-claimed rows index off the heap end and either SIGBUS / SIGSEGV
+    # (the row's slot lands on an unmapped page) or alias to whatever follows the float-heap allocation.
+    #
+    # Internal details: the kernel uses a SNode-backed `selector` field placed under `qd.root.dense(...)` so
+    # the analysis pass captures the gating predicate as a `StaticBoundExpr` carrying the SNode descriptor
+    # triple (`byte_base_offset`, `byte_cell_stride`, `iter_count`). The inner recurrence `v = v * v + 0.05`
+    # is primal-dependent so any cross-row aliasing would re-read a different thread's pushed primal and
+    # surface as a wrong gradient even when the OOB write happens to land within the heap allocation's
+    # over-allocated tail. `ad_stack_size = 0` lets the sizer pick the per-thread stride; with 8 cpu threads
+    # and `n_gated = 2048` gated iterations the row counter advances well past the eight-row fallback so the
+    # OOB write reliably escapes the page mapped by the heap allocation guard. `arch = [qd.cpu]` because this
+    # test pins the host-side reducer specifically; CUDA / AMDGPU run the device-side reducer
+    # (`runtime_eval_static_bound_count`) and SPIR-V the compute-shader reducer.
+    n = 4096
+    n_iter = 8
+    eps = 1e-9
+
+    selector = qd.field(qd.f32, shape=(n,))
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in selector:
+            if selector[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * v + 0.05
+                out[None] += v
+
+    np.random.seed(1)
+    x_np = (0.001 * np.ones(n)).astype(np.float32)
+    n_gated = max(1, n // 2)
+    selector_np = np.zeros(n, dtype=np.float32)
+    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+    selector_np[gated_indices] = 1.0
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros(n, dtype=np.float32))
+
+    compute()
+    compute.grad()
+    qd.sync()
+
+    expected = np.zeros(n, dtype=np.float32)
+    for i in range(n):
+        if selector_np[i] <= eps:
+            continue
+        v = float(x_np[i])
+        primals = [v]
+        for _ in range(n_iter):
+            v = v * v + 0.05
+            primals.append(v)
+        d = 1.0
+        for k in range(n_iter):
+            d = d * (2.0 * primals[n_iter - 1 - k])
+        expected[i] = np.float32(d)
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any()
+    assert not np.isinf(got_grad).any()
+    for i in range(n):
+        assert got_grad[i] == pytest.approx(expected[i], rel=1e-5, abs=1e-7)
+
+
 @pytest.mark.parametrize("bound_shape", ["int_const", "scalar_field", "ndarray_shape", "ndarray_read", "two_arg_range"])
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=128)
 def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
