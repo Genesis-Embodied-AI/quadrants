@@ -217,14 +217,35 @@ class LlvmRuntimeExecutor {
   // launch is required per grow.
   void *runtime_adstack_heap_buffer_field_ptr_{nullptr};
   void *runtime_adstack_heap_size_field_ptr_{nullptr};
+  // Cached field-of-LLVMRuntime addresses for the split float / int heap layout. Resolved alongside the legacy
+  // combined `adstack_heap_buffer` / `_size` fields by `runtime_get_adstack_heap_field_ptrs` (which now returns
+  // the float-buffer-ptr, float-size, int-buffer-ptr, int-size in fixed slot order). Used by
+  // `ensure_adstack_heap` to publish the two grown heap allocations independently.
+  void *runtime_adstack_heap_buffer_float_field_ptr_{nullptr};
+  void *runtime_adstack_heap_size_float_field_ptr_{nullptr};
+  void *runtime_adstack_heap_buffer_int_field_ptr_{nullptr};
+  void *runtime_adstack_heap_size_int_field_ptr_{nullptr};
 
   // Cached device pointers to the per-launch metadata fields
   // `runtime->{adstack_per_thread_stride, adstack_offsets, adstack_max_sizes}`. Populated lazily on the first
   // `publish_adstack_metadata` call via a one-shot `runtime_get_adstack_metadata_field_ptrs` kernel and reused
   // for every subsequent launch.
   void *runtime_adstack_stride_field_ptr_{nullptr};
+  // Cached field-of-LLVMRuntime addresses for the split per-thread strides
+  // (`adstack_per_thread_stride_float` / `_int`). Returned by `runtime_get_adstack_metadata_field_ptrs` in slots
+  // 0 and 1; the legacy combined `adstack_per_thread_stride` field is no longer present (the combined value is
+  // computed host-side as `float + int` and written into the legacy cache for code paths that have not yet
+  // migrated to the split layout).
+  void *runtime_adstack_stride_float_field_ptr_{nullptr};
+  void *runtime_adstack_stride_int_field_ptr_{nullptr};
   void *runtime_adstack_offsets_field_ptr_{nullptr};
   void *runtime_adstack_max_sizes_field_ptr_{nullptr};
+  // Cached field-of-LLVMRuntime addresses for the per-task lazy-claim counter array and bound row capacity
+  // array. Resolved by `runtime_get_adstack_lazy_claim_field_ptrs`; the executor publishes the two array pointers
+  // via `memcpy_host_to_device` to these cached addresses whenever the per-task slot count grows beyond the
+  // prior allocation.
+  void *runtime_adstack_row_counters_field_ptr_{nullptr};
+  void *runtime_adstack_bound_row_capacities_field_ptr_{nullptr};
 
   // Host-owned storage for the two per-launch adstack metadata arrays. We reuse these buffers across launches so
   // the device pointers we publish remain stable; they are grown (never shrunk) when a larger task is hit.

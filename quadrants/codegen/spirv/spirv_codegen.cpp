@@ -138,293 +138,47 @@ TaskCodegen::Result TaskCodegen::run() {
   ir_->debug_name(spv::OpName, kernel_function_, "main");
   scan_shared_atomic_allocs(task_ir_->body.get(), shared_float_allocas_with_atomic_rmw_);
 
-  // Pre-compute the total per-thread heap strides by counting every heap-eligible AdStackAllocaStmt the body will
-  // visit. f32 adstacks go on the f32 heap; i32 and u1 adstacks share the int heap (u1 is stored as i32 to match
-  // the historical Function-scope path's `get_array_type` bool->int remap). Other primitive types (f64, i64, ...)
-  // are hard-errored in `visit(AdStackAllocaStmt)` and never reach this scan. Growing the strides lazily as
-  // visitors run would bake a stale stride into `invoc_id * stride` once the first Push/LoadTop emits the base:
-  // later allocas would raise the stride and leave the earlier base pointing past the thread's allotted slice,
-  // overlapping neighbours.
-  {
-    // Collect the parent block of every f32-typed AdStackPushStmt / AdStackLoadTopStmt / AdStackLoadTopAdjStmt the
-    // body visits, then reduce to a single Lowest Common Ancestor (LCA) via pairwise ancestor-chain intersection over
-    // `parent_block()`. The LCA is where `visit(Block *)` later emits the one-shot row-claim that materializes
-    // `ad_stack_row_id_var_float_`. Push and load-top cases are folded together because both reach the heap (push
-    // writes, load-top reads), and a row claim that dominates pushes but not load-tops would leave a load-top path
-    // observing UINT32_MAX. Pop is intentionally NOT collected: pops never read or write the heap (they only mutate
-    // the per-stack count_var) so they impose no dominance requirement on the row claim. Int-typed pushes
-    // (`stmt->stack` resolves to an `AdStackAllocaStmt` of i32 or u1 ret_type) are NOT collected either: the autodiff
-    // pass emits a handful of small i32 push sites at the offload body root for loop-index recovery, and folding them
-    // into this LCA computation would pull the LCA up to the root and eliminate the float-heap savings - which is the
-    // dominant footprint (per-thread float strides routinely reach thousands of f32 elements while int-stack strides
-    // typically stay in the tens). The int heap continues to use the eager `gl_GlobalInvocationID * stride_int`
-    // per-thread layout in `get_ad_stack_heap_thread_base_int()`; per-thread sizing for the int heap is acceptable
-    // because its total footprint at worst case scales with `dispatched_threads * O(10) * sizeof(i32)`, comfortably
-    // below typical device memory limits even at the largest dispatch sizes the SPIR-V backend handles.
-    auto stack_is_float = [](Stmt *push_or_load) -> bool {
-      AdStackAllocaStmt *alloca = nullptr;
-      if (auto *p = push_or_load->cast<AdStackPushStmt>()) {
-        alloca = p->stack ? p->stack->cast<AdStackAllocaStmt>() : nullptr;
-      } else if (auto *l = push_or_load->cast<AdStackLoadTopStmt>()) {
-        alloca = l->stack ? l->stack->cast<AdStackAllocaStmt>() : nullptr;
-      } else if (auto *l = push_or_load->cast<AdStackLoadTopAdjStmt>()) {
-        alloca = l->stack ? l->stack->cast<AdStackAllocaStmt>() : nullptr;
-      }
-      return alloca != nullptr && alloca->ret_type == PrimitiveType::f32;
-    };
-    std::vector<Block *> push_side_blocks;
-    std::function<void(IRNode *)> scan = [&](IRNode *node) {
-      if (auto *blk = dynamic_cast<Block *>(node)) {
-        for (auto &s : blk->statements)
-          scan(s.get());
-      } else if (auto *alloca = dynamic_cast<AdStackAllocaStmt *>(node)) {
-        if (alloca->ret_type == PrimitiveType::f32) {
-          ad_stack_heap_per_thread_stride_float_ += 2u * uint32_t(alloca->max_size);
-          num_ad_stacks_++;
-        } else if (alloca->ret_type == PrimitiveType::i32 || alloca->ret_type == PrimitiveType::u1) {
-          // Only primal storage: i32 and u1 adstacks record control-flow state (loop counters and if-branch
-          // flags) for the reverse pass to replay, and auto_diff.cpp only emits AdStackAccAdjoint/LoadTopAdj on
-          // real-typed stacks (see the `is_real` guard around line 1175). An int adjoint would also be
-          // meaningless - docs/source/user_guide/autodiff.md states gradients silently read as zero through
-          // integer casts.
-          ad_stack_heap_per_thread_stride_int_ += uint32_t(alloca->max_size);
-          num_ad_stacks_++;
-        }
-      } else if (auto *push_or_load_stmt = dynamic_cast<Stmt *>(node);
-                 push_or_load_stmt != nullptr &&
-                 (push_or_load_stmt->is<AdStackPushStmt>() || push_or_load_stmt->is<AdStackLoadTopStmt>() ||
-                  push_or_load_stmt->is<AdStackLoadTopAdjStmt>())) {
-        if (stack_is_float(push_or_load_stmt)) {
-          push_side_blocks.push_back(push_or_load_stmt->parent);
-        }
-      } else if (auto *if_stmt = dynamic_cast<IfStmt *>(node)) {
-        if (if_stmt->true_statements)
-          scan(if_stmt->true_statements.get());
-        if (if_stmt->false_statements)
-          scan(if_stmt->false_statements.get());
-      } else if (auto *range_for = dynamic_cast<RangeForStmt *>(node)) {
-        scan(range_for->body.get());
-      } else if (auto *struct_for = dynamic_cast<StructForStmt *>(node)) {
-        scan(struct_for->body.get());
-      } else if (auto *mesh_for = dynamic_cast<MeshForStmt *>(node)) {
-        scan(mesh_for->body.get());
-      } else if (auto *while_stmt = dynamic_cast<WhileStmt *>(node)) {
-        scan(while_stmt->body.get());
-      }
-    };
-    scan(task_ir_->body.get());
-    // Pairwise reduce to the LCA. Empty `push_side_blocks` means the task has no adstack push/load-top sites
-    // and `ad_stack_lca_block_` stays `nullptr`; the heap is unbound and no row claim is emitted. A single
-    // collected block is its own LCA. Multiple blocks reduce by intersecting `parent_block()` ancestor chains.
-    if (!push_side_blocks.empty()) {
-      auto lca_of = [](Block *a, Block *b) -> Block * {
-        if (a == b)
-          return a;
-        std::unordered_set<Block *> a_ancestors;
-        for (Block *cur = a; cur != nullptr; cur = cur->parent_block())
-          a_ancestors.insert(cur);
-        for (Block *cur = b; cur != nullptr; cur = cur->parent_block()) {
-          if (a_ancestors.count(cur))
-            return cur;
-        }
-        // Shouldn't happen: both blocks live under the same task-body root, so their ancestor chains converge
-        // at that root at the latest. Falling through to `nullptr` would degrade to the eager (root-block)
-        // claim path which is still correct, just non-optimal.
-        return nullptr;
-      };
-      Block *lca = push_side_blocks[0];
-      for (size_t i = 1; i < push_side_blocks.size() && lca != nullptr; ++i) {
-        lca = lca_of(lca, push_side_blocks[i]);
-      }
-      ad_stack_lca_block_float_ = lca;
+  // Run the shared static-adstack analysis over the task body. Returns the LCA of every f32 push/load-top site,
+  // the set of autodiff-bootstrap const-init pushes the codegen must skip the slot store for, the per-thread
+  // strides, and an optional `StaticBoundExpr` capturing the gating predicate when the LCA-to-root chain has a
+  // single recognized gate. The SNode descriptor resolver below turns the SPIR-V backend's
+  // `compiled_structs_` / `snode_to_root_` state into the generic `SNodeFieldDescriptor` the analysis consumes;
+  // ndarray-backed gates are recognized without the resolver.
+  auto snode_descriptor_resolver = [this](const SNode *leaf,
+                                          const SNode *dense) -> std::optional<SNodeFieldDescriptor> {
+    if (leaf == nullptr || dense == nullptr || dense->parent == nullptr) {
+      return std::nullopt;
     }
-  }
-
-  // Static-IR-bound sparse-adstack-heap path: walk the LCA dominator chain back
-  // through `parent_stmt() / parent_block()` collecting every IfStmt gate; capture the gating
-  // condition iff exactly one gate is on the chain and the condition matches the recognized
-  // grammar `BinaryOp(cmp, GlobalLoadStmt(field[I]), ConstStmt(literal))`. The captured
-  // `StaticBoundExpr` is later consumed at runtime: a generic SPIR-V reducer kernel is dispatched
-  // before the main task, evaluates the predicate over the bound iteration range, and the
-  // resulting count is used to size the AdStackHeapFloat / AdStackHeapInt buffers exactly. When no
-  // gate is captured (root-LCA, multi-gate chain, unrecognized condition shape), the runtime
-  // falls back to the dispatched-threads worst-case sizing - no behavior change versus a kernel
-  // without this metadata. RangeForStmt-owned blocks on the chain are skipped, not counted: the
-  // for-loop iterates threads, it does not gate them; only IfStmt gates filter LCA reachability.
-  if (ad_stack_lca_block_float_ != nullptr) {
-    auto match_field_source = [&snode_to_root = snode_to_root_, &compiled_structs = compiled_structs_](
-                                  Stmt *load_src, TaskAttributes::StaticBoundExpr &out) -> bool {
-      if (auto *ext = load_src->cast<ExternalPtrStmt>()) {
-        if (auto *base_arg = ext->base_ptr->cast<ArgLoadStmt>()) {
-          out.field_source_kind = TaskAttributes::StaticBoundExpr::FieldSourceKind::NdArray;
-          out.ndarray_arg_id = base_arg->arg_id;
-          return true;
-        }
-        return false;
-      }
-      // SNode-backed: lower_access leaves the load source as `GetChStmt -> SNodeLookupStmt -> ...`, ending at the
-      // leaf SNode whose id is stable across launches and round-trips through the offline cache via the kernel's
-      // `compiled_structs`. Match the `GetChStmt` chain by walking its `output_snode` until we reach the field's
-      // leaf snode (the one carrying the dtype), then walk the descriptor chain from that leaf up to root and fold
-      // the per-level `mem_offset_in_parent_cell` values into the captured `snode_byte_base_offset`. The captured
-      // `snode_byte_cell_stride` is the dense parent's `cell_stride`, i.e. the stride per `gid` step the reducer
-      // shader uses to walk the field at dispatch time. Only the `root -> dense -> place(scalar)` shape is
-      // supported here; SNode trees with sparse / bitmasked / hash branches above the leaf have iteration mechanics
-      // the reducer cannot mirror without re-emitting the full lookup chain, so we reject those and fall through to
-      // worst-case sizing in the runtime.
-      if (auto *getch = load_src->cast<GetChStmt>()) {
-        const SNode *leaf = getch->output_snode;
-        if (leaf == nullptr) {
-          return false;
-        }
-        const SNode *dense = leaf->parent;
-        if (dense == nullptr || dense->type != SNodeType::dense) {
-          return false;
-        }
-        const SNode *root_snode = dense->parent;
-        if (root_snode == nullptr || root_snode->type != SNodeType::root) {
-          return false;
-        }
-        auto root_it = snode_to_root.find(root_snode->id);
-        if (root_it == snode_to_root.end()) {
-          return false;
-        }
-        const int root_id = root_it->second;
-        const auto &snode_descs = compiled_structs[root_id].snode_descriptors;
-        auto leaf_desc_it = snode_descs.find(leaf->id);
-        auto dense_desc_it = snode_descs.find(dense->id);
-        if (leaf_desc_it == snode_descs.end() || dense_desc_it == snode_descs.end()) {
-          return false;
-        }
-        const auto &leaf_desc = leaf_desc_it->second;
-        const auto &dense_desc = dense_desc_it->second;
-        out.field_source_kind = TaskAttributes::StaticBoundExpr::FieldSourceKind::SNode;
-        out.snode_id = leaf->id;
-        out.snode_root_id = root_id;
-        // Base byte offset: the dense's offset within its single root cell plus the leaf's offset within
-        // the dense's per-cell layout. Both come from the snode descriptor's compile-time prefix-sum so
-        // the captured value is stable across launches.
-        out.snode_byte_base_offset =
-            static_cast<uint32_t>(dense_desc.mem_offset_in_parent_cell + leaf_desc.mem_offset_in_parent_cell);
-        out.snode_byte_cell_stride = static_cast<uint32_t>(dense_desc.cell_stride);
-        out.snode_iter_count = static_cast<uint32_t>(dense_desc.total_num_cells_from_root);
-        return true;
-      }
-      return false;
-    };
-    auto try_match_gate_cond = [&](Stmt *cond, bool polarity, TaskAttributes::StaticBoundExpr &out) -> bool {
-      auto *bin = cond->cast<BinaryOpStmt>();
-      if (bin == nullptr) {
-        return false;
-      }
-      const auto op = bin->op_type;
-      const bool is_cmp = (op == BinaryOpType::cmp_lt || op == BinaryOpType::cmp_le || op == BinaryOpType::cmp_gt ||
-                           op == BinaryOpType::cmp_ge || op == BinaryOpType::cmp_eq || op == BinaryOpType::cmp_ne);
-      if (!is_cmp) {
-        return false;
-      }
-      // Accept either `field cmp literal` (the typical `if mass[I] > eps`) or the symmetric
-      // `literal cmp field` (e.g. `if eps < mass[I]`). The symmetric form gets the comparison
-      // op flipped so the runtime reducer always evaluates `field cmp literal` against the
-      // captured `literal_*`.
-      Stmt *lhs = bin->lhs;
-      Stmt *rhs = bin->rhs;
-      auto *lhs_load = lhs->cast<GlobalLoadStmt>();
-      auto *rhs_const = rhs->cast<ConstStmt>();
-      auto *rhs_load = rhs->cast<GlobalLoadStmt>();
-      auto *lhs_const = lhs->cast<ConstStmt>();
-      GlobalLoadStmt *load = nullptr;
-      ConstStmt *cst = nullptr;
-      BinaryOpType captured_op = op;
-      if (lhs_load != nullptr && rhs_const != nullptr) {
-        load = lhs_load;
-        cst = rhs_const;
-      } else if (rhs_load != nullptr && lhs_const != nullptr) {
-        load = rhs_load;
-        cst = lhs_const;
-        // Flip cmp so post-flip the LHS is the field load.
-        switch (op) {
-          case BinaryOpType::cmp_lt:
-            captured_op = BinaryOpType::cmp_gt;
-            break;
-          case BinaryOpType::cmp_le:
-            captured_op = BinaryOpType::cmp_ge;
-            break;
-          case BinaryOpType::cmp_gt:
-            captured_op = BinaryOpType::cmp_lt;
-            break;
-          case BinaryOpType::cmp_ge:
-            captured_op = BinaryOpType::cmp_le;
-            break;
-          case BinaryOpType::cmp_eq:
-          case BinaryOpType::cmp_ne:
-            // Symmetric.
-            break;
-          default:
-            return false;
-        }
-      } else {
-        return false;
-      }
-      if (!match_field_source(load->src, out)) {
-        return false;
-      }
-      out.cmp_op = static_cast<int>(captured_op);
-      out.polarity = polarity;
-      // Encode the literal threshold as either f32 or i32 based on the constant's primitive type.
-      // Other types (f64, i64, etc.) fall through to "no match" so the reducer kernel never has
-      // to dispatch on a heterogeneous literal kind.
-      if (cst->val.dt->is_primitive(PrimitiveTypeID::f32)) {
-        out.field_dtype_is_float = true;
-        out.literal_f32 = cst->val.val_f32;
-        return true;
-      }
-      if (cst->val.dt->is_primitive(PrimitiveTypeID::i32)) {
-        out.field_dtype_is_float = false;
-        out.literal_i32 = cst->val.val_i32;
-        return true;
-      }
-      return false;
-    };
-
-    // Collect IfStmt gates on the chain from LCA up to the task body root. RangeForStmt /
-    // WhileStmt parents are skipped (they own their body block via parent_stmt but they are
-    // iterators, not gates). If we land on a parent_stmt that is anything other than nullptr
-    // (root), an IfStmt, a RangeForStmt, or a WhileStmt, we bail - unfamiliar control-flow
-    // structures might gate threads in ways the reducer cannot mirror, and falling through to
-    // worst-case sizing is the safe choice.
-    int gate_count = 0;
-    bool chain_ok = true;
-    TaskAttributes::StaticBoundExpr captured;
-    for (Block *cur = ad_stack_lca_block_float_; cur != nullptr; cur = cur->parent_block()) {
-      Stmt *parent = cur->parent_stmt();
-      if (parent == nullptr) {
-        break;  // task body root reached
-      }
-      if (auto *if_stmt = parent->cast<IfStmt>()) {
-        const bool polarity = (cur == if_stmt->true_statements.get());
-        ++gate_count;
-        if (gate_count > 1) {
-          chain_ok = false;
-          break;  // compound predicate territory; fall back.
-        }
-        if (!try_match_gate_cond(if_stmt->cond, polarity, captured)) {
-          chain_ok = false;
-          break;
-        }
-      } else if (parent->is<RangeForStmt>() || parent->is<StructForStmt>() || parent->is<MeshForStmt>() ||
-                 parent->is<WhileStmt>() || parent->is<OffloadedStmt>()) {
-        // Iterator and offload-task parents do not gate threads (offload is the kernel boundary itself,
-        // for-style iterators sweep threads rather than filtering them). Skip and keep walking the chain.
-        continue;
-      } else {
-        chain_ok = false;
-        break;
-      }
+    auto root_it = snode_to_root_.find(dense->parent->id);
+    if (root_it == snode_to_root_.end()) {
+      return std::nullopt;
     }
-    if (chain_ok && gate_count == 1) {
-      task_attribs_.ad_stack.bound_expr = captured;
+    const int root_id = root_it->second;
+    const auto &snode_descs = compiled_structs_[root_id].snode_descriptors;
+    auto leaf_desc_it = snode_descs.find(leaf->id);
+    auto dense_desc_it = snode_descs.find(dense->id);
+    if (leaf_desc_it == snode_descs.end() || dense_desc_it == snode_descs.end()) {
+      return std::nullopt;
     }
+    SNodeFieldDescriptor desc;
+    desc.root_id = root_id;
+    // Combined byte offset: dense's offset within its single root cell plus the leaf's offset within the dense's
+    // per-cell layout. Both come from the snode descriptor's compile-time prefix-sum so the captured value is
+    // stable across launches.
+    desc.byte_base_offset = static_cast<uint32_t>(dense_desc_it->second.mem_offset_in_parent_cell +
+                                                  leaf_desc_it->second.mem_offset_in_parent_cell);
+    desc.byte_cell_stride = static_cast<uint32_t>(dense_desc_it->second.cell_stride);
+    desc.iter_count = static_cast<uint32_t>(dense_desc_it->second.total_num_cells_from_root);
+    return desc;
+  };
+  auto adstack_analysis = analyze_adstack_static_bounds(task_ir_, snode_descriptor_resolver);
+  ad_stack_heap_per_thread_stride_float_ = adstack_analysis.per_thread_stride_float;
+  ad_stack_heap_per_thread_stride_int_ = adstack_analysis.per_thread_stride_int;
+  num_ad_stacks_ = adstack_analysis.num_ad_stacks;
+  ad_stack_lca_block_float_ = adstack_analysis.lca_block_float;
+  ad_stack_bootstrap_pushes_ = std::move(adstack_analysis.bootstrap_pushes);
+  if (adstack_analysis.bound_expr.has_value()) {
+    task_attribs_.ad_stack.bound_expr = *adstack_analysis.bound_expr;
   }
 
   if (task_ir_->task_type == OffloadedTaskType::serial) {
@@ -2999,6 +2753,19 @@ void TaskCodegen::visit(AdStackPushStmt *stmt) {
     val = ir_->cast(backing_type, val);  // u1 -> i32 for the heap_int path
   }
   spirv::Value one = ir_->uint_immediate_number(ir_->u32_type(), 1);
+
+  // Autodiff-bootstrap const-init pushes on the float heap: keep `count_var` balanced with the matching reverse
+  // pop, but skip the slot store. These pushes execute on every thread regardless of any later gating, while the
+  // float heap row claim only fires on threads that reach the LCA (inside the gate); skipping the LCA contribution
+  // (handled in the pre-pass above) is what shrinks the heap, but it leaves `row_id_var` as UINT32_MAX for
+  // never-gated threads, so a slot store here would write the bootstrap value into row UINT32_MAX (out of bounds,
+  // arbitrary heap corruption). Dropping the store is safe because the matching reverse pop never reads the slot
+  // back via `load_top` - it only mutates `count_var`. Limited to the pre-pass-recognized bootstrap set so non-
+  // bootstrap const pushes (e.g. const-folded payloads at deeper sites) keep their slot stores.
+  if (info.heap_kind != AdStackHeapKind::heap_int && ad_stack_bootstrap_pushes_.count(stmt) != 0) {
+    ir_->store_variable(info.count_var, ir_->add(count, one));
+    return;
+  }
 
   if (compile_config_ && compile_config_->debug) {
     // Debug build: map an OOB push to the last valid slot via a `GLSLstd450UMin` clamp, issue the primal/adjoint

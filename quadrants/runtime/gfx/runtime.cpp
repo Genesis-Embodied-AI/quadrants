@@ -687,7 +687,16 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
                        "adstack f32 heap offset would overflow u32 on a device without Int64: "
                        "stride={} effective_rows={}",
                        ad_stack_stride_float, effective_rows);
-        size_t required = size_t(ad_stack_stride_float) * effective_rows * sizeof(float);
+        // Floor `effective_rows` at 1 when the codegen emitted a float-heap binding (`ad_stack_stride_float > 0`):
+        // the bound-expr reducer can legitimately count 0 threads passing the gate (e.g. on a workload that
+        // exercises a kernel whose gate never matches in the current scene), but Metal RHI rejects a null
+        // `DeviceAllocation` bind on a slot the descriptor set declares - and the codegen still emits the slot for
+        // every task with float adstacks, so we cannot route this through `kDeviceNullAllocation`. Allocating one
+        // unused row is correct: with `effective_rows == 0` no thread ever reaches the LCA-block claim, so the row
+        // stays idle and incurs only `stride_float * 4` bytes (typically a few hundred). For tasks without a float
+        // heap binding (`stride_float == 0`), the codegen does not emit this branch and we never get here.
+        const size_t effective_rows_floored = std::max<size_t>(effective_rows, ad_stack_stride_float > 0 ? 1 : 0);
+        size_t required = size_t(ad_stack_stride_float) * effective_rows_floored * sizeof(float);
         if (required == 0) {
           bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
         } else {

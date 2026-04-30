@@ -280,6 +280,13 @@ class QD_DLL_EXPORT GfxRuntime {
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_params_buffer_;
   size_t adstack_bound_reducer_params_buffer_size_{0};
 
+  // Tiny one-word scratch buffer dedicated to the bound-reducer's slot-3 (root buffer) placeholder when the
+  // captured `bound_expr` is ndarray-backed and no real root buffer is needed. Some RHI backends (Metal /
+  // MoltenVK) reject the same DeviceAllocation appearing on two slots of one descriptor set, so we cannot
+  // reuse the params / counter / overflow buffers as the placeholder. Lazy-allocated on first ndarray-only
+  // dispatch, lives for the runtime's lifetime, never read by the shader.
+  std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_root_placeholder_buffer_;
+
   // Per-kernel `BufferType::AdStackBoundRowCapacity` (`uint[num_tasks_in_kernel]`). Populated by the host after
   // the bound-reducer dispatch with each task's exact reducer count (UINT32_MAX for tasks without a captured
   // captured `bound_expr`, so the codegen-emitted defense-in-depth bounds check is inert on those). Bound to the

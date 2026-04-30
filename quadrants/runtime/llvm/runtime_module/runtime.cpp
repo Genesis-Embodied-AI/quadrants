@@ -584,29 +584,52 @@ struct LLVMRuntime {
   // that Program::synchronize runs.
   i64 adstack_overflow_flag = 0;
 
-  // Per-runtime heap-backed autodiff stack slab. Replaces the function-scope `create_entry_block_alloca` that used
-  // to hold every adstack on the worker-thread stack (capped at ~512 KB on macOS secondary threads).
-  // The buffer is host-owned: `LlvmRuntimeExecutor::ensure_adstack_heap(bytes)` grows it via the device allocator
-  // before each kernel launch based on `OffloadedTask::ad_stack.per_thread_stride * num_threads`. The new pointer
-  // and size are published into these two fields without a per-grow kernel launch: a one-shot
-  // `runtime_get_adstack_heap_field_ptrs` kernel (see below) caches the device addresses of the two fields in the
-  // host-side executor, and subsequent grows write to those cached addresses via `memcpy_host_to_device` on
-  // CUDA / AMDGPU, or via direct pointer stores on CPU. Device kernels only read these fields; they do not grow
-  // the buffer, so there is no device-side lock, no `locked_task` emulation, and no cross-wavefront visibility
-  // concern.
+  // Combined-heap fields. The codegen single-heap path reads these directly; the split-heap path leaves them
+  // untouched and uses the per-kind fields below. Kept for backward compatibility with kernels that have not yet
+  // migrated to the split layout (no codegen-side opt-in), so existing AdStack* tests stay byte-identical.
   Ptr adstack_heap_buffer = nullptr;
   u64 adstack_heap_size = 0;
+  u64 adstack_per_thread_stride = 0;
+
+  // Split-heap fields. Float allocas (`AdStackAllocaStmt::ret_type == f32`) live in `adstack_heap_buffer_float`,
+  // addressed by `row_id_var * adstack_per_thread_stride_float + float_offset_within_slice`; the row claim happens
+  // lazily at the float Lowest Common Ancestor (LCA) block via an atomic-add into
+  // `adstack_row_counters[task_id_in_kernel]`. Int / u1 allocas live in `adstack_heap_buffer_int`, addressed by
+  // `linear_thread_idx * adstack_per_thread_stride_int + int_offset_within_slice` (eager per-thread layout, no
+  // row claim). Splitting is what lets the host shrink the float heap to `effective_rows * stride_float` (where
+  // `effective_rows` is the count of threads passing the captured `bound_expr` gate) instead of
+  // `num_threads * stride_total`. Each buffer is host-owned and grown via the device allocator before each
+  // launch; the host caches the field-of-LLVMRuntime pointers via `runtime_get_adstack_heap_field_ptrs` and
+  // subsequent grows write through those cached pointers.
+  Ptr adstack_heap_buffer_float = nullptr;
+  u64 adstack_heap_size_float = 0;
+  Ptr adstack_heap_buffer_int = nullptr;
+  u64 adstack_heap_size_int = 0;
+  u64 adstack_per_thread_stride_float = 0;
+  u64 adstack_per_thread_stride_int = 0;
 
   // Per-launch adstack metadata buffers. Populated by the host right before each kernel launch from the
-  // `AdStackAllocaStmt::size_expr` host evaluator, consumed inside the kernel by the LLVM codegen base-address and
-  // push-overflow math. `adstack_per_thread_stride` is the same sum-of-sizes that used to be baked as an immediate
-  // at codegen time; `adstack_offsets[stack_id]` and `adstack_max_sizes[stack_id]` are indexed by the
-  // `AdStackAllocaStmt::stack_id` assigned in the codegen pre-scan. Both arrays live in device-visible memory and
-  // are published through `runtime_get_adstack_metadata_field_ptrs` using the same host-write-through-cached-pointer
-  // pattern as `adstack_heap_buffer`.
-  u64 adstack_per_thread_stride = 0;
+  // `AdStackAllocaStmt::size_expr` host evaluator, consumed inside the kernel by the LLVM codegen base-address
+  // and push-overflow math. `adstack_offsets[stack_id]` is the byte offset within the per-thread slice of the
+  // appropriate kind (the codegen selects the slice at compile time based on `AdStackAllocaStmt::ret_type`), and
+  // `adstack_max_sizes[stack_id]` is the per-launch max-size. Both arrays live in device-visible memory.
   u64 *adstack_offsets = nullptr;
   u64 *adstack_max_sizes = nullptr;
+
+  // Per-task atomic counter array (`u32[num_tasks_in_kernel]`) for the lazy LCA-block float-heap row claim. Each
+  // task with a float adstack atomic-adds 1 into its slot at the LCA block; the returned value becomes the
+  // thread's `row_id_var`. Host clears slots before the launch and reads them back after to drive the
+  // grow-on-demand path on `adstack_heap_buffer_float`. Sized for the largest kernel observed; lives with the
+  // LLVMRuntime for its full lifetime.
+  u32 *adstack_row_counters = nullptr;
+  u64 adstack_row_counters_capacity = 0;
+
+  // Per-task captured row capacity (`u32[num_tasks_in_kernel]`) consumed by the codegen-emitted defense-in-depth
+  // bounds check at the float LCA-block claim site. For tasks where the host reducer published a per-task count,
+  // the slot holds that count; for every other task, the slot holds UINT32_MAX so the bounds check is inert by
+  // construction. Same lifetime / sizing pattern as `adstack_row_counters`.
+  u32 *adstack_bound_row_capacities = nullptr;
+  u64 adstack_bound_row_capacities_capacity = 0;
 
   Ptr result_buffer;
   i32 allocator_lock;
@@ -644,8 +667,16 @@ STRUCT_FIELD(LLVMRuntime, profiler_stop);
 STRUCT_FIELD(LLVMRuntime, adstack_heap_buffer);
 STRUCT_FIELD(LLVMRuntime, adstack_heap_size);
 STRUCT_FIELD(LLVMRuntime, adstack_per_thread_stride);
+STRUCT_FIELD(LLVMRuntime, adstack_heap_buffer_float);
+STRUCT_FIELD(LLVMRuntime, adstack_heap_size_float);
+STRUCT_FIELD(LLVMRuntime, adstack_heap_buffer_int);
+STRUCT_FIELD(LLVMRuntime, adstack_heap_size_int);
+STRUCT_FIELD(LLVMRuntime, adstack_per_thread_stride_float);
+STRUCT_FIELD(LLVMRuntime, adstack_per_thread_stride_int);
 STRUCT_FIELD(LLVMRuntime, adstack_offsets);
 STRUCT_FIELD(LLVMRuntime, adstack_max_sizes);
+STRUCT_FIELD(LLVMRuntime, adstack_row_counters);
+STRUCT_FIELD(LLVMRuntime, adstack_bound_row_capacities);
 
 // NodeManager of node S (hash, pointer) managers the memory allocation of S_ch
 // It makes use of three ListManagers.
@@ -753,20 +784,44 @@ void runtime_get_temporaries_ptr(LLVMRuntime *runtime) {
 // two simple `memcpy_host_to_device` writes - no per-grow kernel launch for the setters, which sidesteps any
 // questions about AMDGPU kernel calling convention on the auto-generated STRUCT_FIELD setters vs the
 // hand-written `runtime_*` wrappers.
+// Writes the addresses of the legacy combined-heap fields into the result buffer so the host caches them and
+// then issues per-launch grows via `memcpy_host_to_device` to the cached pointers. Returns two addresses:
+// combined-heap-ptr, combined-heap-size. The split-heap path uses a separate getter below.
 void runtime_get_adstack_heap_field_ptrs(LLVMRuntime *runtime) {
   runtime->set_result(quadrants_result_buffer_ret_value_id, (u64)(void *)&runtime->adstack_heap_buffer);
   runtime->set_result(quadrants_result_buffer_ret_value_id + 1, (u64)(void *)&runtime->adstack_heap_size);
 }
 
-// Mirrors `runtime_get_adstack_heap_field_ptrs` for the three per-launch metadata fields. The host caches the three
-// returned addresses once per program and then publishes new values (stride + offsets array ptr + max_sizes array
-// ptr) before every kernel launch via the same `memcpy_host_to_device` / direct-store path used for the heap
-// buffer. Writing all three addresses in one call keeps the launch-time host path to a single
-// already-cached-address memcpy per field rather than one kernel launch per field.
+// Per-kind heap field getters for the split-heap path. Returns four addresses in fixed slot order:
+// float-buffer-ptr, float-size, int-buffer-ptr, int-size.
+void runtime_get_adstack_split_heap_field_ptrs(LLVMRuntime *runtime) {
+  runtime->set_result(quadrants_result_buffer_ret_value_id, (u64)(void *)&runtime->adstack_heap_buffer_float);
+  runtime->set_result(quadrants_result_buffer_ret_value_id + 1, (u64)(void *)&runtime->adstack_heap_size_float);
+  runtime->set_result(quadrants_result_buffer_ret_value_id + 2, (u64)(void *)&runtime->adstack_heap_buffer_int);
+  runtime->set_result(quadrants_result_buffer_ret_value_id + 3, (u64)(void *)&runtime->adstack_heap_size_int);
+}
+
+// Mirrors `runtime_get_adstack_heap_field_ptrs` for the per-launch metadata fields. The host caches the four
+// returned addresses once per program and then publishes new values (combined stride + offsets array pointer +
+// max_sizes array pointer + float stride + int stride) before every kernel launch via the same
+// `memcpy_host_to_device` / direct-store path used for the heap buffers. Slots 0/1/2 keep the legacy ordering
+// (combined-stride, offsets, max_sizes) so any host code that has not migrated still works; slots 3/4 are the
+// new per-kind strides.
 void runtime_get_adstack_metadata_field_ptrs(LLVMRuntime *runtime) {
   runtime->set_result(quadrants_result_buffer_ret_value_id, (u64)(void *)&runtime->adstack_per_thread_stride);
   runtime->set_result(quadrants_result_buffer_ret_value_id + 1, (u64)(void *)&runtime->adstack_offsets);
   runtime->set_result(quadrants_result_buffer_ret_value_id + 2, (u64)(void *)&runtime->adstack_max_sizes);
+  runtime->set_result(quadrants_result_buffer_ret_value_id + 3, (u64)(void *)&runtime->adstack_per_thread_stride_float);
+  runtime->set_result(quadrants_result_buffer_ret_value_id + 4, (u64)(void *)&runtime->adstack_per_thread_stride_int);
+}
+
+// Writes the addresses of the per-task lazy-claim counter and bound-row-capacity arrays into the result buffer so
+// the host caches them once. The arrays themselves are device-resident; the host publishes the array pointers via
+// `memcpy_host_to_device` to the cached field addresses whenever the per-task slot count grows beyond the prior
+// allocation.
+void runtime_get_adstack_lazy_claim_field_ptrs(LLVMRuntime *runtime) {
+  runtime->set_result(quadrants_result_buffer_ret_value_id, (u64)(void *)&runtime->adstack_row_counters);
+  runtime->set_result(quadrants_result_buffer_ret_value_id + 1, (u64)(void *)&runtime->adstack_bound_row_capacities);
 }
 
 // Device-resident adstack SizeExpr interpreter. Runs on whatever backend the LLVM runtime JIT-compiles this
@@ -964,7 +1019,15 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
   for (i32 k = 0; k < kDeviceBoundVarCap; ++k)
     scope.values[k] = 0;
 
+  // Combined running offset for the legacy single-heap codegen path: each stack's `out_offsets[i]` is the byte
+  // offset within the combined per-thread slice, addressed by `linear_tid * combined_stride + offset`. Per-kind
+  // running offsets are also tracked for the future split-heap codegen path (where float allocas address via
+  // `row_id_var * stride_float + float_offset` and int via `linear_tid * stride_int + int_offset`); the per-kind
+  // strides are published into `runtime->adstack_per_thread_stride_{float,int}` so the host can size a separate
+  // float heap from the gate-passing thread count.
   u64 running_offset = 0;
+  u64 running_offset_float = 0;
+  u64 running_offset_int = 0;
   for (u32 i = 0; i < header->n_stacks; ++i) {
     const auto &sh = stack_headers[i];
     u64 max_size;
@@ -975,21 +1038,25 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
       i64 v = device_eval_node(nodes, indices, sh.root_node_idx, &scope, arg_buffer);
       // Floor at 1 to match the host evaluator (`evaluate_adstack_size_expr`); a tree that evaluates to 0 or negative
       // leaves one slot reserved so the heap base address is still valid and any spurious push surfaces as an overflow
-      // rather than a zero-slice alias. Do NOT clamp upward against `max_size_compile_time`: for non-const symbolic
-      // bounds the pre-pass seeds it from `default_ad_stack_size` as a conservative placeholder (see the "conservative
-      // seed" note in `determine_ad_stack_size.cpp`), not as a proven upper bound, so clamping would silently truncate
-      // correct per-launch values above the seed and trigger an overflow at the next `qd.sync()`. The CPU path in
-      // `LlvmRuntimeExecutor::publish_adstack_metadata` follows the same floor-only rule.
+      // rather than a zero-slice alias.
       if (v < 1)
         v = 1;
       max_size = static_cast<u64>(v);
     }
     out_max_sizes[i] = max_size;
     out_offsets[i] = running_offset;
-    running_offset += align_up_8(sizeof(i64) + (u64)sh.entry_size_bytes * max_size);
+    const u64 step = align_up_8(sizeof(i64) + (u64)sh.entry_size_bytes * max_size);
+    running_offset += step;
+    if (sh.heap_kind == 0u) {
+      running_offset_float += step;
+    } else {
+      running_offset_int += step;
+    }
   }
 
   runtime->adstack_per_thread_stride = running_offset;
+  runtime->adstack_per_thread_stride_float = running_offset_float;
+  runtime->adstack_per_thread_stride_int = running_offset_int;
 }
 
 void runtime_retrieve_and_reset_error_code(LLVMRuntime *runtime) {
@@ -1228,8 +1295,18 @@ void runtime_initialize(Ptr result_buffer,
   runtime->adstack_heap_buffer = nullptr;
   runtime->adstack_heap_size = 0;
   runtime->adstack_per_thread_stride = 0;
+  runtime->adstack_heap_buffer_float = nullptr;
+  runtime->adstack_heap_size_float = 0;
+  runtime->adstack_heap_buffer_int = nullptr;
+  runtime->adstack_heap_size_int = 0;
+  runtime->adstack_per_thread_stride_float = 0;
+  runtime->adstack_per_thread_stride_int = 0;
   runtime->adstack_offsets = nullptr;
   runtime->adstack_max_sizes = nullptr;
+  runtime->adstack_row_counters = nullptr;
+  runtime->adstack_row_counters_capacity = 0;
+  runtime->adstack_bound_row_capacities = nullptr;
+  runtime->adstack_bound_row_capacities_capacity = 0;
   runtime->adstack_overflow_flag = 0;
 
   runtime->temporaries = (Ptr)runtime->allocate_aligned(runtime->runtime_objects_chunk,

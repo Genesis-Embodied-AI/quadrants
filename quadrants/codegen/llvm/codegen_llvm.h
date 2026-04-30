@@ -1,8 +1,10 @@
 // The LLVM backend for CPUs/NVPTX/AMDGPU
 #pragma once
 
+#include <optional>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 
 #ifdef QD_WITH_LLVM
 
@@ -75,20 +77,54 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // `LLVMRuntime_get_adstack_heap_buffer(runtime)` at the top of the task body - emitted once and reused at every
   // AdStack* visit to avoid redundant runtime calls. All three reset to empty / nullptr per task.
   std::size_t ad_stack_per_thread_stride_{0};
+  // Per-thread strides per heap kind. Float allocas live on the lazy float heap (sized by the launcher to the
+  // count of threads passing the captured `bound_expr` gate, when one is recognized); int allocas live on the
+  // eager int heap (sized to `num_threads * stride_int`). Each alloca's `ad_stack_offsets_[stack_id]` is the byte
+  // offset within its slice of the appropriate kind, NOT within a combined slice.
+  std::size_t ad_stack_per_thread_stride_float_{0};
+  std::size_t ad_stack_per_thread_stride_int_{0};
   std::vector<std::size_t> ad_stack_offsets_;
   // Mirror of the pre-scan output copied into `current_task->ad_stack` in `finalize_offloaded_task_function`. Kept
   // as class state so the scan (which runs before `current_task` is constructed) can still push entries in order.
   std::vector<AdStackAllocaInfo> ad_stack_allocas_info_;
   std::vector<SerializedSizeExpr> ad_stack_size_exprs_;
   llvm::Value *ad_stack_heap_base_llvm_{nullptr};
-  // Cached SSA values for the three per-launch metadata fields the host publishes into
-  // `LLVMRuntime.adstack_{per_thread_stride,offsets,max_sizes}` before each dispatch. Loaded once at
-  // `entry_block` (via `ensure_ad_stack_metadata_llvm`) and reused by every `AdStack*` visit. Resolving via
-  // runtime fields lets `AdStackAllocaStmt`'s base-address math and `AdStackPushStmt`'s overflow bound scale per
-  // launch from `SizeExpr` without a recompile.
+  // Cached SSA bases for the split float / int heaps, loaded once at the top of the task body via
+  // `LLVMRuntime_get_adstack_heap_buffer_float` / `_int` and reused at every per-alloca base computation.
+  llvm::Value *ad_stack_heap_base_float_llvm_{nullptr};
+  llvm::Value *ad_stack_heap_base_int_llvm_{nullptr};
+  // Cached SSA values for the per-launch metadata fields the host publishes into
+  // `LLVMRuntime.adstack_{per_thread_stride_float,per_thread_stride_int,offsets,max_sizes}` before each dispatch.
+  // Loaded once at `entry_block` (via `ensure_ad_stack_metadata_llvm`) and reused by every `AdStack*` visit.
+  // Resolving via runtime fields lets `AdStackAllocaStmt`'s base-address math and `AdStackPushStmt`'s overflow
+  // bound scale per launch from `SizeExpr` without a recompile. `ad_stack_stride_llvm_` is the legacy combined
+  // stride loaded from the deprecated `LLVMRuntime_get_adstack_per_thread_stride` getter; new code paths read
+  // the split fields below directly.
   llvm::Value *ad_stack_stride_llvm_{nullptr};
+  llvm::Value *ad_stack_stride_float_llvm_{nullptr};
+  llvm::Value *ad_stack_stride_int_llvm_{nullptr};
   llvm::Value *ad_stack_offsets_ptr_llvm_{nullptr};
   llvm::Value *ad_stack_max_sizes_ptr_llvm_{nullptr};
+  // Float-heap lazy claim state. `ad_stack_lca_block_float_ir_` is the IR-level Block at which the codegen emits
+  // the one-shot atomic-rmw row claim into `LLVMRuntime.adstack_row_counters[task_id]`; `ad_stack_lca_block_float_
+  // llvm_` is the matching LLVM basic block (cached at the IR-level Block visit so the claim emit lands in the
+  // right LLVM-side block). `ad_stack_row_id_var_float_llvm_` is a Function-scope `alloca i32` initialised to
+  // UINT32_MAX at task entry; the claim site writes the atomic-add result, and every per-alloca base computation
+  // for a float-typed alloca reads it back. Threads that never reach the LCA never claim a row and never touch
+  // the float heap, which is exactly the property the captured `bound_expr` reducer relies on to size the heap.
+  Block *ad_stack_lca_block_float_ir_{nullptr};
+  llvm::BasicBlock *ad_stack_lca_block_float_llvm_{nullptr};
+  llvm::Value *ad_stack_row_id_var_float_llvm_{nullptr};
+  // Set of autodiff-bootstrap const-init pushes identified by the shared analysis: `push(stack, ConstStmt)` whose
+  // parent block is the offload body and whose previous sibling is the matching alloca. The `visit(AdStackPushStmt)`
+  // visitor skips the slot store at these sites (only the count_var increment is kept so push and pop stay
+  // balanced), because the bootstrap value is dead memory (no `load_top` ever reads it back) and writing through
+  // a possibly-unclaimed `row_id_var` would corrupt arbitrary heap rows.
+  std::unordered_set<AdStackPushStmt *> ad_stack_bootstrap_pushes_;
+  // Captured static gate predicate from the shared analysis. Propagated through to
+  // `current_task->ad_stack.bound_expr` so the host launcher can dispatch the per-arch reducer to size the float
+  // heap to the actual gate-passing thread count.
+  std::optional<StaticAdStackBoundExpr> ad_stack_static_bound_expr_;
   // Per-task per-stack `alloca i64` holding the live push count, hoisted to the entry block so `mem2reg` can
   // promote it to SSA and `GVN` can fold consecutive count loads / stores across straight-line unrolled bodies.
   // Replaces the heap-resident `u64` count header at `stack_ptr[0..8)` for every AdStack op when

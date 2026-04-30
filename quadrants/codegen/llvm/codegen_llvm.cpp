@@ -1741,28 +1741,45 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   current_loop_reentry = nullptr;
   current_while_after_loop = nullptr;
 
-  // Reset per-task heap-adstack state. `ad_stack_per_thread_stride_` and `ad_stack_offsets_` are (re)populated by
-  // the pre-scan below; `ad_stack_heap_base_llvm_` is emitted lazily when the first AdStack* stmt of this task
-  // fires. Clearing is important because a kernel with multiple offloaded tasks shares this visitor instance and
-  // a stale map/base from the previous task would either grow stride unboundedly or (worse) reuse an SSA value
-  // from a different function, tripping `verifyFunction` inside `finalize_offloaded_task_function`.
+  // Reset per-task heap-adstack state. `ad_stack_per_thread_stride_*` and `ad_stack_offsets_` are (re)populated by
+  // the pre-scan below; `ad_stack_heap_base_*_llvm_` is emitted lazily when the first AdStack* stmt of this task
+  // fires. Clearing is important because a kernel with multiple offloaded tasks shares this visitor instance and a
+  // stale map/base from the previous task would either grow stride unboundedly or (worse) reuse an SSA value from
+  // a different function, tripping `verifyFunction` inside `finalize_offloaded_task_function`.
   ad_stack_per_thread_stride_ = 0;
+  ad_stack_per_thread_stride_float_ = 0;
+  ad_stack_per_thread_stride_int_ = 0;
   ad_stack_offsets_.clear();
   ad_stack_allocas_info_.clear();
   ad_stack_size_exprs_.clear();
   ad_stack_heap_base_llvm_ = nullptr;
+  ad_stack_heap_base_float_llvm_ = nullptr;
+  ad_stack_heap_base_int_llvm_ = nullptr;
   ad_stack_stride_llvm_ = nullptr;
+  ad_stack_stride_float_llvm_ = nullptr;
+  ad_stack_stride_int_llvm_ = nullptr;
   ad_stack_offsets_ptr_llvm_ = nullptr;
   ad_stack_max_sizes_ptr_llvm_ = nullptr;
   ad_stack_count_alloca_llvm_.clear();
-  // Pre-scan the task body for every `AdStackAllocaStmt` before any codegen runs, mirroring the SPIR-V pre-pass at
-  // `spirv_codegen.cpp:138-166`. Each alloca claims a fixed slot inside the per-thread slice: offset equals the sum of
-  // earlier siblings' sizes. Growing the stride lazily as `visit(AdStackAllocaStmt)` fires would bake a stale `stride`
-  // into `thread_slot * stride` for earlier allocas (since the host-side `ensure_adstack_heap` sizes the slab at the
-  // cached stride) and a later push/load would then escape the thread's slice and alias the neighbour's. Sizes are
-  // rounded up to 8 bytes so `stack_top_primal`'s `stack + sizeof(u64) + idx * 2 * element_size` math stays naturally
-  // aligned for every element type the IR may emit (i8 / u1 pack especially, on which the raw `size_in_bytes()` is
-  // otherwise unaligned).
+  ad_stack_lca_block_float_llvm_ = nullptr;
+  ad_stack_row_id_var_float_llvm_ = nullptr;
+  ad_stack_bootstrap_pushes_.clear();
+  ad_stack_static_bound_expr_.reset();
+
+  // The shared static-adstack analysis (LCA + bootstrap-push detection + bound_expr capture) is wired up but
+  // intentionally not called yet on the LLVM path: the codegen-side consumers (lazy LCA-block row claim,
+  // const-init slot store skip, split float / int heap routing, host reducer dispatch) are not yet implemented,
+  // so running the analysis here would only consume cycles for no behaviour change. The fields remain reset to
+  // their default values; the SPIR-V backend already calls the analysis on its own pre-pass.
+
+  // Pre-scan the task body for every `AdStackAllocaStmt` before any codegen runs. Each alloca claims a fixed slot
+  // inside the COMBINED per-thread slice (legacy single-heap layout, addressed by `linear_tid * combined_stride +
+  // offset`); the kind classification (`HeapKind::Float` / `HeapKind::Int`) is recorded into `info.heap_kind` so
+  // the host launcher knows which kind each alloca belongs to, but the codegen-side addressing stays single-heap
+  // for now. Splitting the layout into separate float / int heaps with `row_id_var * stride_float + float_offset`
+  // is a follow-up that requires updating `visit(AdStackAllocaStmt)` to route base computation per kind. The
+  // shared analysis output (LCA, bootstrap pushes, captured `bound_expr`) propagates to `current_task->ad_stack`
+  // so the host launcher can dispatch the per-arch reducer; the heap addressing change comes after.
   {
     auto align_up_8 = [](std::size_t n) -> std::size_t { return (n + 7u) & ~std::size_t{7u}; };
     std::function<void(IRNode *)> scan = [&](IRNode *node) {
@@ -1773,13 +1790,17 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
         alloca->stack_id = static_cast<int>(ad_stack_offsets_.size());
         ad_stack_offsets_.push_back(ad_stack_per_thread_stride_);
         ad_stack_per_thread_stride_ += align_up_8(alloca->size_in_bytes());
-        // Mirror the compile-time sizing into the per-task metadata: the launcher uses
-        // `allocas[stack_id]` to publish stride / offset / max_size values into the per-launch runtime buffers
-        // regardless of whether the symbolic `size_expr` survived the offline-cache round-trip.
+        const bool is_float = alloca->ret_type == PrimitiveType::f32;
+        if (is_float) {
+          ad_stack_per_thread_stride_float_ += align_up_8(alloca->size_in_bytes());
+        } else {
+          ad_stack_per_thread_stride_int_ += align_up_8(alloca->size_in_bytes());
+        }
         AdStackAllocaInfo info;
         info.offset = ad_stack_offsets_.back();
         info.max_size_compile_time = alloca->max_size;
         info.entry_size_bytes = alloca->entry_size_in_bytes();
+        info.heap_kind = is_float ? AdStackAllocaInfo::HeapKind::Float : AdStackAllocaInfo::HeapKind::Int;
         ad_stack_allocas_info_.push_back(info);
         ad_stack_size_exprs_.push_back(alloca->size_expr ? alloca->size_expr->serialize() : SerializedSizeExpr{});
       } else if (auto *if_stmt = dynamic_cast<IfStmt *>(node)) {
@@ -1840,8 +1861,11 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
   // are finalized (see codegen_cpu / codegen_cuda / codegen_amdgpu).
   if (current_task) {
     current_task->ad_stack.per_thread_stride = ad_stack_per_thread_stride_;
+    current_task->ad_stack.per_thread_stride_float = ad_stack_per_thread_stride_float_;
+    current_task->ad_stack.per_thread_stride_int = ad_stack_per_thread_stride_int_;
     current_task->ad_stack.allocas = ad_stack_allocas_info_;
     current_task->ad_stack.size_exprs = ad_stack_size_exprs_;
+    current_task->ad_stack.bound_expr = ad_stack_static_bound_expr_;
   }
 
   // entry_block should jump to the body after all allocas are inserted

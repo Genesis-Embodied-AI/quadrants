@@ -9,6 +9,7 @@
 #include "quadrants/ir/type.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/rhi/device.h"
+#include "quadrants/transforms/static_adstack_analysis.h"
 
 namespace quadrants::lang {
 
@@ -188,72 +189,16 @@ struct TaskAttributes {
     SerializedSizeExpr size_expr{};
     QD_IO_DEF(heap_kind, offset_in_elems_compile_time, max_size_compile_time, size_expr);
   };
-  // Captured upper bound on the per-task LCA-block-reaching thread count, derived at codegen time
-  // by walking the LCA dominator chain and pattern-matching the gating condition. When set, the
-  // runtime dispatches a generic reducer kernel before the main task to evaluate the captured
-  // predicate over the bound iteration range; the resulting count is then used to size the
-  // AdStackHeapFloat / AdStackHeapInt allocations exactly. When `nullopt` (the gate did not match
-  // a recognized grammar, or the LCA pre-pass placed the LCA at the task body root with no gate
-  // above it), the runtime falls back to the dispatched-threads worst-case sizing - no behavior
-  // change versus a kernel without this metadata.
-  //
-  // The grammar (recognized by `find_adstack_bound_expr`): exactly one `IfStmt` gate above the
-  // LCA, condition shaped as `BinaryOp(cmp, GlobalLoadStmt(field[I]), ConstStmt(literal))` where
-  // `cmp` is in `{<, <=, >, >=, ==, !=}` and `I` is a loop index of the dispatch range. the compound-predicate path
-  // extends to compound predicates over `BinaryOp(land, ...)` / `BinaryOp(lor, ...)` trees of the
-  // leaf shape; that path leaves the leaf-only fields below empty and uses the post-order
-  // node tree instead.
-  struct StaticBoundExpr {
-    // Comparison op (stored as int instead of `BinaryOpType` to keep this header dependency-light;
-    // the IR pass and the runtime reducer kernel agree on the encoding via cast through
-    // `BinaryOpType`).
-    int cmp_op{0};
-
-    // Literal threshold from the gate's right-hand `ConstStmt`. The active union member is
-    // selected by the GlobalLoad result's primitive type the IR pass observed; the reducer kernel
-    // bitcasts the right one based on `field_dtype_is_float` at dispatch time.
-    bool field_dtype_is_float{true};
-    float literal_f32{0.0f};
-    int32_t literal_i32{0};
-
-    // True when the LCA enters on the gate condition holding (typical `if cmp:` shape); false when
-    // the LCA sits inside the `else` branch (`if cmp: else: <gate>`). The reducer flips the
-    // predicate accordingly so the captured count always matches threads that reach LCA.
-    bool polarity{true};
-
-    // Field source. SNode-backed fields (`qd.field(...)` placed under `qd.root.dense(...)`) are identified
-    // by the leaf snode's global id; ndarray-backed kernel arguments (`qd.ndarray(...)`) are identified by
-    // the `arg_id` list pointing into the kernel arg buffer. The IR pass accepts both because sparse-grid
-    // workloads tend to gate on SNode-backed scalar fields while smaller test repros tend to use ndarrays.
-    enum class FieldSourceKind : int32_t { SNode = 0, NdArray = 1 };
-    FieldSourceKind field_source_kind{FieldSourceKind::SNode};
-    int snode_id{-1};
-    std::vector<int> ndarray_arg_id;
-
-    // SNode-source extras. The IR pattern matcher fills these for `SNode`-backed gates by walking the snode
-    // descriptor chain from the leaf up to root and combining the per-level `mem_offset_in_parent_cell` /
-    // `cell_stride` values into a flat (base, stride) pair the reducer shader can use without re-emitting the
-    // SNode-tree lookup chain at dispatch time. `snode_root_id` selects the right root buffer to bind on the
-    // reducer dispatch (a kernel may have multiple roots; the snode-descriptor map is keyed per-root). Set to
-    // -1 / 0 for ndarray-backed gates.
-    int snode_root_id{-1};
-    uint32_t snode_byte_base_offset{0};
-    uint32_t snode_byte_cell_stride{0};
-    uint32_t snode_iter_count{0};
-
-    QD_IO_DEF(cmp_op,
-              field_dtype_is_float,
-              literal_f32,
-              literal_i32,
-              polarity,
-              field_source_kind,
-              snode_id,
-              ndarray_arg_id,
-              snode_root_id,
-              snode_byte_base_offset,
-              snode_byte_cell_stride,
-              snode_iter_count);
-  };
+  // Captured upper bound on the per-task LCA-block-reaching thread count, derived at codegen time by walking the
+  // LCA dominator chain and pattern-matching the gating condition. When set, the runtime dispatches a generic
+  // reducer kernel before the main task to evaluate the captured predicate over the bound iteration range; the
+  // resulting count is then used to size the AdStackHeapFloat / AdStackHeapInt allocations exactly. When `nullopt`
+  // (the gate did not match a recognized grammar, or the LCA pre-pass placed the LCA at the task body root with
+  // no gate above it), the runtime falls back to the dispatched-threads worst-case sizing - no behavior change
+  // versus a kernel without this metadata. Aliased to the shared cross-backend struct in
+  // `quadrants/transforms/static_adstack_analysis.h`; the SPIR-V codegen and the LLVM codegen consume the same
+  // captured representation through that header.
+  using StaticBoundExpr = ::quadrants::lang::StaticAdStackBoundExpr;
 
   struct AdStackSizingAttribs {
     // Compile-time-derived per-thread strides in elements of each heap's element type. The runtime

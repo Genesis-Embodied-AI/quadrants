@@ -362,7 +362,20 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
                      be.snode_root_id);
       bindings->rw_buffer(3, *root_alloc);
     } else {
-      bindings->rw_buffer(3, *adstack_bound_reducer_params_buffer_);
+      // ndarray-only path: bind a non-null storage buffer the shader's branch never reads. Some RHI backends
+      // (Metal / MoltenVK) reject the same DeviceAllocation appearing on two slots of one descriptor set, so
+      // we cannot reuse the params or counter buffer here. Lazy-allocate a one-word scratch buffer dedicated
+      // to this placeholder slot the first time we need it; it lives for the runtime's lifetime and never
+      // gets read.
+      if (!adstack_bound_reducer_root_placeholder_buffer_) {
+        auto [buf, res] = device_->allocate_memory_unique({sizeof(uint32_t),
+                                                           /*host_write=*/false,
+                                                           /*host_read=*/false,
+                                                           /*export_sharing=*/false, AllocUsage::Storage});
+        QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack bound reducer slot-3 placeholder buffer");
+        adstack_bound_reducer_root_placeholder_buffer_ = std::move(buf);
+      }
+      bindings->rw_buffer(3, *adstack_bound_reducer_root_placeholder_buffer_);
     }
 
     reducer_cmdlist->bind_pipeline(adstack_bound_reducer_pipeline_.get());

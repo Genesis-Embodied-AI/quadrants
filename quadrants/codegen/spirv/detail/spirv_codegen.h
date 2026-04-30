@@ -304,6 +304,15 @@ class TaskCodegen : public IRVisitor {
   // or when the LCA reduces to the task body's root - in the latter case the claim still runs from the root,
   // equivalent in row-occupancy to the prior `invoc_id`-keyed eager layout.
   Block *ad_stack_lca_block_float_{nullptr};
+  // Set of `AdStackPushStmt`s recognized as autodiff-bootstrap const-init pushes by the LCA pre-pass: parent block
+  // is the offload body, previous sibling is the matching alloca, pushed value is a `ConstStmt`. These pushes run
+  // unconditionally on every dispatched thread, so the LCA computation skips them (folding their parent block in
+  // would drag the LCA up to the offload root and revert to per-thread sizing); the `visit(AdStackPushStmt)`
+  // visitor also skips the slot store for these (the matching reverse pop only decrements `count_var` and never
+  // reads the slot back via `load_top`, so the bootstrap value is dead memory and writing it through a possibly-
+  // unclaimed `row_id_var` would corrupt arbitrary heap rows). Only the `count_var` increment is kept so push and
+  // pop stay balanced.
+  std::unordered_set<AdStackPushStmt *> ad_stack_bootstrap_pushes_;
   // Function-scope OpVariable<u32> initialized to UINT32_MAX at task entry; overwritten with the atomically
   // claimed row index when codegen visits `ad_stack_lca_block_float_`. `get_ad_stack_heap_thread_base_float()`
   // loads this variable and multiplies against the runtime float stride to produce the per-thread heap base,

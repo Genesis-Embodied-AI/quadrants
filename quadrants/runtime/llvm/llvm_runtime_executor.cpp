@@ -689,12 +689,18 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
   if (runtime_adstack_stride_field_ptr_ == nullptr) {
     auto *const runtime_jit = get_runtime_jit_module();
     runtime_jit->call<void *>("runtime_get_adstack_metadata_field_ptrs", llvm_runtime_);
+    // Slot order: combined-stride, offsets, max_sizes, float-stride, int-stride. Slots 0/1/2 keep the legacy
+    // ordering for code paths that have not migrated to the split layout; slots 3/4 are new.
     runtime_adstack_stride_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
         fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
     runtime_adstack_offsets_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
         fetch_result_uint64(quadrants_result_buffer_ret_value_id + 1, result_buffer_cache_));
     runtime_adstack_max_sizes_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
         fetch_result_uint64(quadrants_result_buffer_ret_value_id + 2, result_buffer_cache_));
+    runtime_adstack_stride_float_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id + 3, result_buffer_cache_));
+    runtime_adstack_stride_int_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id + 4, result_buffer_cache_));
   }
   copy_h2d(runtime_adstack_offsets_field_ptr_, &offsets_dev_ptr, sizeof(void *));
   copy_h2d(runtime_adstack_max_sizes_field_ptr_, &max_sizes_dev_ptr, sizeof(void *));
@@ -750,27 +756,47 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
       }
       host_max_sizes[i] = static_cast<uint64_t>(std::max<int64_t>(v, 1));
     }
+    // Combined running offset for the legacy single-heap codegen path. Per-kind running offsets are tracked
+    // alongside so the host can publish `adstack_per_thread_stride_{float,int}` for the split-heap codegen path
+    // (sizing the float heap from gate-passing thread count). The combined offset / combined stride are what
+    // `linear_tid * stride + offset` reads on the legacy codegen path.
     std::vector<uint64_t> host_offsets(n_stacks);
+    std::size_t stride_float = 0;
+    std::size_t stride_int = 0;
     for (std::size_t i = 0; i < n_stacks; ++i) {
       host_offsets[i] = stride;
-      stride += align_up_8(sizeof(int64_t) + ad_stack.allocas[i].entry_size_bytes * host_max_sizes[i]);
+      const std::size_t step = align_up_8(sizeof(int64_t) + ad_stack.allocas[i].entry_size_bytes * host_max_sizes[i]);
+      stride += step;
+      if (ad_stack.allocas[i].heap_kind == AdStackAllocaInfo::HeapKind::Float) {
+        stride_float += step;
+      } else {
+        stride_int += step;
+      }
     }
-    uint64_t stride_u64 = static_cast<uint64_t>(stride);
+    uint64_t stride_combined_u64 = static_cast<uint64_t>(stride);
+    uint64_t stride_float_u64 = static_cast<uint64_t>(stride_float);
+    uint64_t stride_int_u64 = static_cast<uint64_t>(stride_int);
     if (!is_gpu_llvm) {
       copy_h2d(offsets_dev_ptr, host_offsets.data(), n_stacks * sizeof(uint64_t));
       copy_h2d(max_sizes_dev_ptr, host_max_sizes.data(), n_stacks * sizeof(uint64_t));
-      copy_h2d(runtime_adstack_stride_field_ptr_, &stride_u64, sizeof(uint64_t));
+      copy_h2d(runtime_adstack_stride_field_ptr_, &stride_combined_u64, sizeof(uint64_t));
+      // Per-kind strides used by the split-heap codegen path; harmless when the codegen has not migrated yet
+      // (the kernel reads only the combined stride). Skipped when the cache is empty (first launch on a stale
+      // executor instance where `runtime_get_adstack_metadata_field_ptrs` populated only the legacy slots; the
+      // null check is defensive - any host writing to `nullptr` would crash with no diagnostic).
+      if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
+        copy_h2d(runtime_adstack_stride_float_field_ptr_, &stride_float_u64, sizeof(uint64_t));
+      }
+      if (runtime_adstack_stride_int_field_ptr_ != nullptr) {
+        copy_h2d(runtime_adstack_stride_int_field_ptr_, &stride_int_u64, sizeof(uint64_t));
+      }
     } else {
-      // Three-block payload packed into the pinned-host scratch as `[stride_u64, offsets[n_stacks],
-      // max_sizes[n_stacks]]`. Three async DMAs land on the three target device addresses (the runtime
-      // struct's stride field, the offsets storage buffer, the max_sizes storage buffer) sourced from
-      // the corresponding offsets within the pinned scratch. The driver's H2D DMA engine reads from the
-      // pinned bytes at execution time, so we must not overwrite the scratch before all three copies
-      // have completed - hence the per-launch `event_record` after the last copy and the
-      // `event_synchronize` at the top of the next launch. The wait is typically a no-op because a few
-      // microseconds of small copies finish well before the host returns, dispatches the main kernel,
-      // and re-enters this function on the next launch.
-      const std::size_t header_bytes = sizeof(uint64_t);
+      // Five-block payload packed into the pinned-host scratch as `[stride_combined, stride_float, stride_int,
+      // offsets[n_stacks], max_sizes[n_stacks]]`. Five async DMAs land on the matching device addresses; the
+      // driver's H2D DMA engine reads from the pinned bytes at execution time, so we must not overwrite the
+      // scratch before all copies have completed - hence the per-launch `event_record` after the last copy and
+      // the `event_synchronize` at the top of the next launch.
+      const std::size_t header_bytes = 3 * sizeof(uint64_t);
       const std::size_t array_bytes = n_stacks * sizeof(uint64_t);
       const std::size_t total_bytes = header_bytes + 2 * array_bytes;
 
@@ -846,9 +872,11 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
       wait_pending();
 
       auto *pinned = static_cast<uint64_t *>(pinned_metadata_scratch_);
-      pinned[0] = stride_u64;
-      std::memcpy(pinned + 1, host_offsets.data(), array_bytes);
-      std::memcpy(pinned + 1 + n_stacks, host_max_sizes.data(), array_bytes);
+      pinned[0] = stride_combined_u64;
+      pinned[1] = stride_float_u64;
+      pinned[2] = stride_int_u64;
+      std::memcpy(pinned + 3, host_offsets.data(), array_bytes);
+      std::memcpy(pinned + 3 + n_stacks, host_max_sizes.data(), array_bytes);
 
       // Queue the metadata copies on the same stream the subsequent main-kernel dispatch will run on, so the
       // GPU stream-orders the copies before the kernel reads `adstack_max_sizes` etc. On CUDA the active
@@ -859,10 +887,18 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
 #if defined(QD_WITH_CUDA)
       if (config_.arch == Arch::cuda) {
         void *active_stream = CUDAContext::get_instance().get_stream();
-        CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned, header_bytes,
-                                                               active_stream);
-        CUDADriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 1, array_bytes, active_stream);
-        CUDADriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 1 + n_stacks, array_bytes,
+        CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned,
+                                                               sizeof(uint64_t), active_stream);
+        if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
+          CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_float_field_ptr_, pinned + 1,
+                                                                 sizeof(uint64_t), active_stream);
+        }
+        if (runtime_adstack_stride_int_field_ptr_ != nullptr) {
+          CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_int_field_ptr_, pinned + 2,
+                                                                 sizeof(uint64_t), active_stream);
+        }
+        CUDADriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 3, array_bytes, active_stream);
+        CUDADriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 3 + n_stacks, array_bytes,
                                                                active_stream);
         CUDADriver::get_instance().event_record(pinned_metadata_event_, active_stream);
       }
@@ -871,10 +907,18 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
       if (config_.arch == Arch::amdgpu) {
         void *active_stream = nullptr;  // AMDGPUContext::launch always uses the default stream.
         AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned,
-                                                                 header_bytes, active_stream);
-        AMDGPUDriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 1, array_bytes,
+                                                                 sizeof(uint64_t), active_stream);
+        if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
+          AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_float_field_ptr_, pinned + 1,
+                                                                   sizeof(uint64_t), active_stream);
+        }
+        if (runtime_adstack_stride_int_field_ptr_ != nullptr) {
+          AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_int_field_ptr_, pinned + 2,
+                                                                   sizeof(uint64_t), active_stream);
+        }
+        AMDGPUDriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 3, array_bytes,
                                                                  active_stream);
-        AMDGPUDriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 1 + n_stacks, array_bytes,
+        AMDGPUDriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 3 + n_stacks, array_bytes,
                                                                  active_stream);
         AMDGPUDriver::get_instance().event_record(pinned_metadata_event_, active_stream);
       }
