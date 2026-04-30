@@ -271,7 +271,7 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
                 raise QuadrantsSyntaxError("BufferView only supports 1D slicing in kernels")
             s = indices[0]
             if s.step is not None:
-                raise QuadrantsSyntaxError("BufferView slice requires step=1 (or omit step)")
+                raise QuadrantsSyntaxError("BufferView slice does not support an explicit step in kernels")
             start = s.start if s.start is not None else Expr(0)
             stop = s.stop if s.stop is not None else Expr(value.size)
             return value.subview(start, Expr(stop) - Expr(start))

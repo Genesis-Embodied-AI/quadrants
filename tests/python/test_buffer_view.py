@@ -421,7 +421,7 @@ def test_kernel_slice_step_error():
         for i in range(sub.size):
             sub[i] = 1.0
 
-    with pytest.raises(QSE, match="step=1"):
+    with pytest.raises(QSE, match="explicit step"):
         k(data[:16])
 
 

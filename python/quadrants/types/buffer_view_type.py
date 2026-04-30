@@ -22,11 +22,10 @@ class BufferViewType:
 
     def __init__(self, dtype=None, boundary="unsafe"):
         self.dtype = dtype
-        self.boundary = boundary
         self.ndarray_type = NdarrayType(dtype=dtype, ndim=1, boundary=boundary)
 
     def __repr__(self):
-        return f"BufferViewType(dtype={self.dtype}, boundary={self.boundary})"
+        return f"BufferViewType(dtype={self.dtype}, boundary={self.ndarray_type.boundary})"
 
 
 __all__ = ["BufferViewType"]

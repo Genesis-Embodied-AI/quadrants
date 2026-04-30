@@ -18,7 +18,7 @@ def _build_callstack():
     """Walk src_info_stack and extract deduplicated (file, line, func) frames.
 
     Returns (kernel_name, callstack_str).
-    Warns if the callstack exceeds _CALLSTACK_WARNING_SIZE (large strings increase compiled binary size).
+    Warns if the callstack exceeds _CALLSTACK_WARNING_BYTE (large strings increase compiled binary size).
     """
     stack = impl.get_runtime().src_info_stack
     frames = []
