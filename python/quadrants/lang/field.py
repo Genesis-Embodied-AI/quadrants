@@ -139,12 +139,22 @@ def _is_aos_struct_member(field: "Field") -> bool:
 
     AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous
     strides at the member dtype size, so a zero-copy view would silently read neighbouring members' bytes as garbage.
+
+    A ScalarField that is a direct child of a struct cell has parent_snode with num_ch > 1 (one child per struct
+    member). A MatrixField's elements are ScalarFields whose parent is the matrix SNode (num_ch = n*m), and the
+    matrix SNode's parent is the struct cell -- so we check the grandparent. For non-struct fields, the parent is
+    the root or a plain dense SNode with num_ch == 1.
     """
     try:
-        parent_snode = field.parent()._snode.ptr
+        from quadrants.lang.matrix import MatrixField  # pylint: disable=C0415
+
+        if isinstance(field, MatrixField):
+            struct_snode = field.parent(2)._snode.ptr
+        else:
+            struct_snode = field.parent()._snode.ptr
+        return struct_snode.get_num_ch() > 1
     except Exception:
         return False
-    return parent_snode.get_num_ch() > 1
 
 
 def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False) -> bool:
@@ -200,6 +210,25 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
     return tc
 
 
+class _DLPackV1Adapter:
+    """Wraps a DLPack v0 PyCapsule into a v1-compatible object for ``np.from_dlpack``.
+
+    Quadrants' C++ ``to_dlpack`` returns raw PyCapsules (v0 protocol). NumPy >= 1.23 requires the v1 protocol -- an
+    object exposing ``__dlpack__`` and ``__dlpack_device__``.
+    """
+
+    __slots__ = ("_capsule",)
+
+    def __init__(self, capsule):
+        self._capsule = capsule
+
+    def __dlpack__(self, stream=None):
+        return self._capsule
+
+    def __dlpack_device__(self):
+        return (1, 0)  # kDLCPU = 1
+
+
 def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False):
     """Try to return a zero-copy numpy array via DLPack.
 
@@ -217,7 +246,7 @@ def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False):
 
     import numpy as np  # pylint: disable=C0415
 
-    arr = np.from_dlpack(field.to_dlpack())
+    arr = np.from_dlpack(_DLPackV1Adapter(field.to_dlpack()))
     if copy is True:
         arr = arr.copy()
     return arr
