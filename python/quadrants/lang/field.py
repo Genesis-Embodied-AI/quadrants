@@ -142,16 +142,17 @@ def _is_aos_struct_member(field: "Field") -> bool:
 
     SNode.place flattens vec/mat field components directly under the struct cell (no intermediate matrix SNode), so
     both ScalarField and MatrixField members sit as direct children of the struct cell dense SNode. For a ScalarField,
-    num_ch > 1 means siblings exist (i.e. it's a struct member). For a MatrixField with n*m components, the field's
-    own components contribute n*m children, so num_ch > n*m means extra siblings exist (i.e. it's a struct member).
+    num_ch != 1 means it's not a standalone field. For a MatrixField with n*m components, num_ch != n*m means either
+    SOA layout (num_ch == 1, each component in its own subtree -- DLPack strides are wrong) or AOS struct member
+    (num_ch > n*m, interleaved with other struct members). Only num_ch == n*m (standalone AOS) is safe for zero-copy.
     """
     try:
         from quadrants.lang.matrix import MatrixField  # pylint: disable=C0415
 
         parent_snode = field.parent()._snode.ptr
         if isinstance(field, MatrixField):
-            return parent_snode.get_num_ch() > field.n * field.m
-        return parent_snode.get_num_ch() > 1
+            return parent_snode.get_num_ch() != field.n * field.m
+        return parent_snode.get_num_ch() != 1
     except Exception:
         return False
 

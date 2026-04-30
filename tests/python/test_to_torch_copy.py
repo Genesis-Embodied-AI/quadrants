@@ -111,6 +111,21 @@ def test_vector_field_copy_none():
 
 
 @test_utils.test()
+def test_vector_field_soa_copy_false_raises():
+    """SOA Vector.field has non-contiguous component layout -- copy=False should raise."""
+    _skip_if_no_zerocopy()
+    f = qd.Vector.field(3, qd.f32, shape=(4,), layout=qd.Layout.SOA)
+    f.from_numpy(np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], dtype=np.float32))
+    qd.sync()
+
+    with pytest.raises(ValueError, match="Zero-copy not available"):
+        f.to_torch(copy=False)
+
+    t = f.to_torch(copy=True)
+    np.testing.assert_allclose(t.cpu().numpy(), [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
+
+
+@test_utils.test()
 def test_vector_field_copy_false_keep_dims():
     """copy=False with keep_dims=True should produce the same shape as copy=True with keep_dims=True."""
     _skip_if_no_zerocopy()
