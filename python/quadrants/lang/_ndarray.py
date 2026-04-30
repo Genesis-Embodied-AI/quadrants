@@ -447,12 +447,24 @@ class ScalarNdarray(Ndarray):
         return self.host_accessor.getter(*self._pad_key(key))
 
     @python_scope
-    def to_numpy(self, dtype=None):
+    def to_numpy(self, dtype=None, *, copy=True):
         """Return a canonical-view NumPy array.
 
-        ``dtype``: optional numpy dtype to cast the result to (matches :meth:`Field.to_numpy`'s signature). ``None``
-        keeps the native ndarray dtype.
+        Args:
+            dtype: Optional numpy dtype to cast the result to. ``None`` keeps the native ndarray dtype.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
+        if copy is False:
+            from quadrants.lang.field import (  # pylint: disable=C0415
+                _try_zerocopy_numpy,
+            )
+
+            arr = _try_zerocopy_numpy(self, copy=False, is_scalar=True)
+            if arr is not None:
+                if dtype is not None and arr.dtype != dtype:
+                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                return arr
+
         arr = self._ndarray_to_numpy()
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)

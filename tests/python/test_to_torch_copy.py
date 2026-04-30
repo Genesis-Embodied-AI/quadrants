@@ -1,10 +1,11 @@
-"""Tests for the ``copy=`` parameter on ``to_torch`` across field and ndarray types.
+"""Tests for the ``copy=`` parameter on ``to_torch`` and ``to_numpy`` across field and ndarray types.
 
 Covers:
 - ``copy=False`` -> DLPack zero-copy (shares memory, no data movement)
 - ``copy=True`` (default) -> kernel copy (always correct, independent memory)
 - AoS struct members -> default copy correct, ``copy=False`` returns garbage
 - SoA struct members -> ``copy=False`` zero-copy works correctly
+- ``to_numpy(copy=False)`` -> zero-copy on CPU via ``np.from_dlpack``
 """
 
 import numpy as np
@@ -317,3 +318,90 @@ def test_no_zerocopy_copy_false_raises():
 
     with pytest.raises(Exception):
         f.to_torch(copy=False)
+
+
+# ---------------------------------------------------------------------------
+# to_numpy(copy=...) -- CPU only (numpy arrays cannot reference GPU memory)
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_scalar_field_to_numpy_copy_false():
+    f = qd.field(qd.f32, shape=(4,))
+    f.from_numpy(np.array([1, 2, 3, 4], dtype=np.float32))
+    qd.sync()
+
+    arr = f.to_numpy(copy=False)
+    np.testing.assert_allclose(arr, [1, 2, 3, 4])
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_scalar_field_to_numpy_copy_false_shares_memory():
+    """to_numpy(copy=False) on CPU should produce a zero-copy view that reflects mutations."""
+    f = qd.field(qd.f32, shape=(4,))
+    f.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
+    qd.sync()
+
+    arr = f.to_numpy(copy=False)
+    np.testing.assert_allclose(arr, [10, 20, 30, 40])
+
+    f.from_numpy(np.array([99, 88, 77, 66], dtype=np.float32))
+    qd.sync()
+    np.testing.assert_allclose(arr, [99, 88, 77, 66])
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_scalar_field_to_numpy_default_is_copy():
+    """Default to_numpy() returns an independent copy, not a view."""
+    f = qd.field(qd.f32, shape=(4,))
+    f.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
+    qd.sync()
+
+    arr = f.to_numpy()
+    f.from_numpy(np.array([99, 88, 77, 66], dtype=np.float32))
+    qd.sync()
+    np.testing.assert_allclose(arr, [10, 20, 30, 40])
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_vector_field_to_numpy_copy_false():
+    f = qd.Vector.field(3, qd.f32, shape=(2,))
+    f.from_numpy(np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32))
+    qd.sync()
+
+    arr = f.to_numpy(copy=False)
+    np.testing.assert_allclose(arr, [[1, 2, 3], [4, 5, 6]])
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_scalar_ndarray_to_numpy_copy_false():
+    nd = qd.ndarray(qd.f32, shape=(4,))
+    nd.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
+    qd.sync()
+
+    arr = nd.to_numpy(copy=False)
+    np.testing.assert_allclose(arr, [10, 20, 30, 40])
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_vector_ndarray_to_numpy_copy_false():
+    vec_type = qd.types.vector(3, qd.f32)
+    nd = qd.ndarray(vec_type, shape=(2,))
+    data = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32)
+    nd.from_numpy(data)
+    qd.sync()
+
+    arr = nd.to_numpy(copy=False)
+    np.testing.assert_allclose(arr, data)
+
+
+@test_utils.test(exclude=[qd.cpu])
+def test_to_numpy_copy_false_raises_on_gpu():
+    """to_numpy(copy=False) should raise on GPU backends since numpy can't reference GPU memory."""
+    _skip_if_no_zerocopy()
+    f = qd.field(qd.f32, shape=(4,))
+    f.fill(1.0)
+    qd.sync()
+
+    with pytest.raises(ValueError):
+        f.to_numpy(copy=False)

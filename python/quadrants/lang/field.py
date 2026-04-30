@@ -114,6 +114,7 @@ if TYPE_CHECKING:
 
 _ARCH_METAL = _qd_core.Arch.metal
 _ARCH_VULKAN = _qd_core.Arch.vulkan
+_ARCH_CPU = frozenset({_qd_core.Arch.x64, _qd_core.Arch.arm64})
 
 _DLPACK_SUPPORTED_DTYPES = frozenset({f32, f64, i32, i64, u1})
 
@@ -182,6 +183,29 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
             torch.mps.synchronize()
 
     return tc
+
+
+def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False):
+    """Try to return a zero-copy numpy array via DLPack.
+
+    Returns the array on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``.
+    Raises ``ValueError`` when ``copy=False`` but zero-copy is not available.
+    """
+    if impl.current_cfg().arch not in _ARCH_CPU:
+        if copy is False:
+            raise ValueError("Zero-copy numpy requires a CPU backend (numpy arrays cannot reference GPU memory)")
+        return None
+    if not _can_zerocopy_field(field, is_scalar=is_scalar):
+        if copy is False:
+            raise ValueError(f"Zero-copy not available for dtype={field.dtype}")
+        return None
+
+    import numpy as np  # pylint: disable=C0415
+
+    arr = np.from_dlpack(field.to_dlpack())
+    if copy is True:
+        arr = arr.copy()
+    return arr
 
 
 class Field:
@@ -305,8 +329,11 @@ class Field:
         raise NotImplementedError()
 
     @python_scope
-    def to_numpy(self, dtype: DataTypeCxx | None = None):
+    def to_numpy(self, dtype: DataTypeCxx | None = None, *, copy=True):
         """Converts `self` to a numpy array.
+
+        Args:
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
         Returns:
             numpy.ndarray: The result numpy array.
@@ -314,11 +341,12 @@ class Field:
         raise NotImplementedError()
 
     @python_scope
-    def to_torch(self, device=None):
+    def to_torch(self, device=None, *, copy=True):
         """Converts `self` to a torch tensor.
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
         Returns:
             torch.tensor: The result torch tensor.
@@ -463,8 +491,20 @@ class ScalarField(Field):
             field_fill_quadrants_scope(self, val)
 
     @python_scope
-    def to_numpy(self, dtype=None):
-        """Converts this field to a `numpy.ndarray`."""
+    def to_numpy(self, dtype=None, *, copy=True):
+        """Converts this field to a ``numpy.ndarray``.
+
+        Args:
+            dtype: Optional target numpy dtype.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+        """
+        if copy is False:
+            arr = _try_zerocopy_numpy(self, copy=False, is_scalar=True)
+            if arr is not None:
+                if dtype is not None and arr.dtype != dtype:
+                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                return arr
+
         if self.parent()._snode.ptr.type == _qd_core.SNodeType.dynamic:
             warn(
                 "You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the snode will be converted to zeros in the resulting array."
@@ -477,7 +517,6 @@ class ScalarField(Field):
         from quadrants._kernels import tensor_to_ext_arr  # pylint: disable=C0415
 
         tensor_to_ext_arr(self, arr)
-        # TODO: can we remove .runtime_ops here?
         quadrants.lang.runtime_ops.sync()  # type: ignore
         return arr
 
