@@ -222,12 +222,12 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
     if (auto *ext = load_src->cast<ExternalPtrStmt>()) {
       if (auto *base_arg = ext->base_ptr->cast<ArgLoadStmt>()) {
         // Validate the gate's index expression: every axis must be a `LoopIndexStmt`. Anything more complex
-        // (`selector[i % 5]`, `selector[42]`, `selector[2 * i]`, `selector[i + 1]`, `selector[other_field[i]]`)
-        // would have the reducer walk `selector[0..length)` and count gate-passing cells on a different
-        // index basis than the main pass's LCA-block atomic-rmw, causing the reducer count to diverge from
-        // the actual claim count and either undersize the heap (silent gradient corruption on LLVM, hard
-        // overflow on SPIR-V) or oversize it. Plain `selector[i]` (one axis = one `LoopIndexStmt`) is the
-        // only shape the reducer's flat-walk semantics matches.
+        // (`selector[i % 5]`, `selector[42]`, `selector[2 * i]`, `selector[i + 1]`, `selector[other_field[i]]`) would
+        // have the reducer walk `selector[0..length)` and count gate-passing cells on a different index basis than
+        // the main pass's LCA-block atomic-rmw, causing the reducer count to diverge from the actual claim count and
+        // either undersize the heap (silent gradient corruption on LLVM, hard overflow on SPIR-V) or oversize it.
+        // Plain `selector[i]` (one axis = one `LoopIndexStmt`) is the only shape the reducer's flat-walk semantics
+        // matches.
         for (Stmt *idx : ext->indices) {
           if (idx == nullptr || !idx->is<LoopIndexStmt>()) {
             return false;

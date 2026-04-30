@@ -3402,7 +3402,7 @@ def test_adstack_static_bound_expr_primal_dependent_inner_recurrence_grad_correc
     np.testing.assert_allclose(got_grad, expected, rtol=2e-4, atol=2e-6)
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(require=[qd.extension.adstack, qd.extension.data64], default_fp=qd.f64, ad_stack_size=32)
 def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case():
     # Pins the `match_field_source` rejection of non-`LoopIndexStmt` index expressions in the captured
     # `bound_expr`. The reducer walks the gating ndarray as `selector[0..length)` and counts gate-passing
@@ -3426,16 +3426,19 @@ def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case()
     n = 64
     K = 4
     n_iter = 8
-    eps = 1e-9
+    eps = 1e-12
 
     np.random.seed(0)
-    x_np = (0.05 + 0.001 * np.arange(n)).astype(np.float32)
-    selector_np = np.zeros(n, dtype=np.float32)
+    # Spread `x` widely across the f64 representable range so per-`i` `cos(x[i])` differs by O(0.1) between
+    # adjacent indices; under f64 precision the multi-thread CPU race produces a clearly observable drift in
+    # the per-`i` chain-rule product when the gate-capture pretends `selector[i % K]` is loop-index-shaped.
+    x_np = (0.5 + 0.05 * np.arange(n)).astype(np.float64)
+    selector_np = np.zeros(n, dtype=np.float64)
     selector_np[:K] = 1.0  # first K cells gated; rest zero
 
-    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
-    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
-    selector = qd.ndarray(qd.f32, shape=(n,))
+    x = qd.ndarray(qd.f64, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f64, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f64, shape=(n,))
 
     @qd.kernel
     def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
@@ -3448,8 +3451,8 @@ def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case()
 
     x.from_numpy(x_np)
     selector.from_numpy(selector_np)
-    out.from_numpy(np.zeros((1,), dtype=np.float32))
-    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    out.from_numpy(np.zeros((1,), dtype=np.float64))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float64))
     x.grad.from_numpy(np.zeros_like(x_np))
 
     compute(x, selector, out)
@@ -3463,10 +3466,9 @@ def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case()
     v_np = x_np.copy()
     grad_np = np.ones(n, dtype=np.float64)
     for _ in range(n_iter):
-        grad_np *= np.cos(v_np.astype(np.float64))
-        v_np = np.sin(v_np) + np.float32(0.01)
-    expected = grad_np.astype(np.float32)
+        grad_np *= np.cos(v_np)
+        v_np = np.sin(v_np) + 0.01
 
     got_grad = x.grad.to_numpy()
     assert not np.isnan(got_grad).any(), f"non-loop-var-index grad returned NaN: {got_grad}"
-    np.testing.assert_allclose(got_grad, expected, rtol=2e-4, atol=2e-6)
+    np.testing.assert_allclose(got_grad, grad_np, rtol=1e-12, atol=1e-14)

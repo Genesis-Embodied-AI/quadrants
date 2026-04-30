@@ -230,13 +230,12 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
     adstack_bound_reducer_params_buffer_size_ = new_size;
   }
 
-  // Resolve per-task length. The reducer walks `selector[0..length)` and counts gate-passing cells; the
-  // main-kernel LCA-block atomic-rmw fires once per gated iteration across the full logical loop span
-  // (the kernel grid-strides via `loop_var += total_invocs` so dispatched-thread count does not cap the
-  // claim count). For ndarray-backed gates we therefore walk the gating ndarray's full flat element
-  // product - mirrors the LLVM launchers' shape-product walk and removes the prior cap at
-  // `advisory_total_num_threads` which under-counted on workloads larger than 65536 (struct_for) or
-  // 131072 (range_for). For SNode-backed gates `be.snode_iter_count` already carries the full iteration
+  // Resolve per-task length. The reducer walks `selector[0..length)` and counts gate-passing cells; the main-kernel
+  // LCA-block atomic-rmw fires once per gated iteration across the full logical loop span (the kernel grid-strides via
+  // `loop_var += total_invocs` so dispatched-thread count does not cap the claim count). For ndarray-backed gates we
+  // therefore walk the gating ndarray's full flat element product - mirrors the LLVM launchers' shape-product walk and
+  // removes the prior cap at `advisory_total_num_threads` which under-counted on workloads larger than 65536
+  // (struct_for) or 131072 (range_for). For SNode-backed gates `be.snode_iter_count` already carries the full iteration
   // count, so the call site reads it directly without going through this lambda.
   auto resolve_length_ndarray = [&](const spirv::TaskAttributes::StaticBoundExpr &be) -> uint32_t {
     int64_t flat_len = 1;
