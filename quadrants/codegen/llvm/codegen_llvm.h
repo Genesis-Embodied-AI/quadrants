@@ -133,6 +133,12 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // compute their per-thread base. Threads that never reach the LCA never claim a row and never touch the float
   // heap.
   llvm::Value *ensure_ad_stack_row_id_var_float_llvm();
+  // Emit the float-heap lazy row claim at the current insertion point. Called from `visit(Block *)` exactly once
+  // per task at the IR-level Lowest Common Ancestor (LCA) of every f32 push / load-top site. Atomic-adds 1 into
+  // `runtime->adstack_row_counters[task_codegen_id]`, clamps against `runtime->adstack_bound_row_capacities[task_
+  // codegen_id]`, stores the result into `ad_stack_row_id_var_float_llvm_`. Threads that never reach this block
+  // never claim a row.
+  void emit_ad_stack_row_claim_llvm();
   // Captured static gate predicate from the shared analysis. Propagated through to
   // `current_task->ad_stack.bound_expr` so the host launcher can dispatch the per-arch reducer to size the float
   // heap to the actual gate-passing thread count.

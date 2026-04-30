@@ -110,6 +110,17 @@ CodeGenStmtGuard make_while_after_loop_guard(TaskCodeGenLLVM *cg) {
 
 // TaskCodeGenLLVM
 void TaskCodeGenLLVM::visit(Block *stmt_list) {
+  // Float-heap lazy row claim hook at the IR-level Lowest Common Ancestor (LCA) of every f32 push / load-top
+  // site. Mirrors the SPIR-V codegen's `visit(Block *)` pivot. Wired but currently dormant: activation requires
+  // the runtime to have allocated `adstack_row_counters` and `adstack_bound_row_capacities` arrays the
+  // atomicrmw target reads from, which lands in a follow-up commit. The gate (`use_split_layout`) stays false
+  // for every task today so the claim never fires; once the runtime ships, flipping the gate to
+  // `bound_expr.has_value()` enables the lazy claim per task.
+  const bool use_split_layout = false;
+  if (use_split_layout && ad_stack_static_bound_expr_.has_value() && ad_stack_lca_block_float_ir_ != nullptr &&
+      stmt_list == ad_stack_lca_block_float_ir_) {
+    emit_ad_stack_row_claim_llvm();
+  }
   for (auto &stmt : stmt_list->statements) {
     stmt->accept(this);
     if (returned) {
@@ -2303,6 +2314,46 @@ llvm::Value *TaskCodeGenLLVM::ensure_ad_stack_row_id_var_float_llvm() {
   builder->CreateStore(llvm::ConstantInt::get(i32ty, std::numeric_limits<uint32_t>::max()),
                        ad_stack_row_id_var_float_llvm_);
   return ad_stack_row_id_var_float_llvm_;
+}
+
+// Emit the float-heap lazy row claim at the current insertion point. Called from `visit(Block *)` exactly once
+// per task at the IR-level Lowest Common Ancestor (LCA) of every f32 push / load-top site (the same block the
+// SPIR-V codegen pivots on at `spirv_codegen.cpp:visit(Block *)`):
+//   - atomic-add 1 into `runtime->adstack_row_counters[task_codegen_id]` and read back the previous value
+//   - clamp the claimed row against `runtime->adstack_bound_row_capacities[task_codegen_id]` so a reducer / main
+//     divergence cannot OOB-write the heap; for tasks where the launcher did not publish a real capacity the slot
+//     holds UINT32_MAX and the clamp is inert
+//   - store the (possibly-clamped) row id into `ad_stack_row_id_var_float_llvm_` so every descendant float push /
+//     load-top site reads it back
+// Threads that never reach this block never claim a row and never touch the float heap, which is exactly the
+// property the captured `bound_expr` reducer relies on to size the heap to gate-passing thread count.
+void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
+  llvm::Value *row_id_var = ensure_ad_stack_row_id_var_float_llvm();
+
+  auto *i32ty = llvm::Type::getInt32Ty(*llvm_context);
+  auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+  llvm::Value *task_id_i64 = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(task_codegen_id));
+
+  // Per-task counter slot: `runtime->adstack_row_counters[task_codegen_id]`.
+  llvm::Value *row_counters_base = call("LLVMRuntime_get_adstack_row_counters", get_runtime());
+  llvm::Value *counter_slot_ptr = builder->CreateGEP(i32ty, row_counters_base, task_id_i64);
+  llvm::Value *one_i32 = llvm::ConstantInt::get(i32ty, 1);
+  llvm::Value *claimed_row = builder->CreateAtomicRMW(llvm::AtomicRMWInst::Add, counter_slot_ptr, one_i32,
+                                                      llvm::MaybeAlign(), llvm::AtomicOrdering::SequentiallyConsistent);
+
+  // Per-task capacity slot for the defense-in-depth bounds check: clamp the claimed row at `capacity - 1` so any
+  // overshoot stays in-bounds. For tasks without a captured `bound_expr` the launcher writes UINT32_MAX into this
+  // slot so the clamp is inert. The divergence-overflow signal that the SPIR-V codegen emits via OpAtomicUMax is
+  // not yet wired on the LLVM side - it requires a `__atomic_or_n` against `runtime->adstack_overflow_flag` and
+  // a matching runtime-side getter; in its absence we still get the in-bounds clamp, so the kernel cannot
+  // silently corrupt the heap end. Surface the divergence as a separate follow-up.
+  llvm::Value *capacities_base = call("LLVMRuntime_get_adstack_bound_row_capacities", get_runtime());
+  llvm::Value *capacity_slot_ptr = builder->CreateGEP(i32ty, capacities_base, task_id_i64);
+  llvm::Value *capacity = builder->CreateLoad(i32ty, capacity_slot_ptr);
+  llvm::Value *capacity_minus_one = builder->CreateSub(capacity, one_i32);
+  llvm::Value *cmp = builder->CreateICmpUGT(claimed_row, capacity_minus_one);
+  llvm::Value *clamped_row = builder->CreateSelect(cmp, capacity_minus_one, claimed_row);
+  builder->CreateStore(clamped_row, row_id_var);
 }
 
 // Return (creating on first call) the per-stack `alloca i64` that holds the live push count for this stack on the
