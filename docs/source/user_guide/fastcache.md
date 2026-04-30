@@ -74,7 +74,7 @@ class SimConfig:
     use_gravity: bool = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
 ```
 
-With this annotation, changing `num_envs` from 100 to 200 produces a different cache key so the correct compiled kernel is looked up (or compiled if not yet cached). Without it, the stale cached kernel would be loaded.
+With this annotation, changing `num_envs` from 100 to 200 produces a different cache key so the correct compiled kernel is looked up (or compiled if not yet cached). Without it, the wrong kernel could be loaded.
 
 Note: `@qd.data_oriented` objects and `qd.Template` parameters already include primitive values in the cache key automatically — this annotation is only needed for `dataclasses.dataclass` fields.
 
