@@ -18,6 +18,10 @@ def elect():
     return impl.call_internal("subgroupElect", with_runtime_context=False)
 
 
+def ballot(predicate):
+    return impl.call_internal("subgroupBallot", predicate, with_runtime_context=False)
+
+
 def all_true(cond):
     # TODO
     pass
@@ -173,6 +177,7 @@ __all__ = [
     "barrier",
     "memory_barrier",
     "elect",
+    "ballot",
     "all_true",
     "any_true",
     "all_equal",

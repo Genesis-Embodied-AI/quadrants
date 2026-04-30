@@ -10,6 +10,7 @@ Subgroup ops live under `qd.simt.subgroup` and are written so the same Python so
 |---------------------------------------------|------|--------|-----------------|------------------------------|
 | `subgroup.shuffle(v, idx)`                  | yes  | yes    | yes             | i32, u32, f32, f64, i64, u64 |
 | `subgroup.shuffle_down(v, n)`               | yes  | yes\*  | yes             | i32, u32, f32, f64, i64, u64 |
+| `subgroup.ballot(predicate)`                | yes  | yes    | yes             | i32 predicate → u32 bitmask  |
 | `subgroup.reduce_add(v, log2_size)`         | yes  | yes\*  | yes             | any type supporting `+`      |
 | `subgroup.reduce_all_add(v, log2_size)`     | yes  | yes    | yes             | any type supporting `+`      |
 
@@ -41,6 +42,17 @@ Lane `i` returns the `value` held by lane `i + offset`. Lanes near the top of th
 
 - Ops are issued under a full active mask on CUDA (`0xFFFFFFFF`). Call them from uniform control flow; calling from divergent control flow is undefined on most backends. (this means: all threads have to execute the shuffle)
 - Subgroup size varies by backend (32 on NVIDIA, 32 or 64 on AMD, 32 in Vulkan compute on most GPUs).
+
+### `ballot(predicate)`
+
+Each lane evaluates `predicate` (an `i32`; non-zero is true, zero is false) and the result is a `u32` bitmask where bit `i` is set if lane `i`'s predicate was non-zero.
+
+- Returns a `u32`. Bit 0 corresponds to lane 0, bit 1 to lane 1, etc.
+- On CUDA, maps to `__ballot_sync(0xFFFFFFFF, predicate)`. On SPIR-V, maps to `OpGroupNonUniformBallot` (component 0 of the uvec4 result). On AMDGPU, maps to the `ballot.i32` intrinsic.
+- The result covers the first 32 lanes. On AMDGPU CDNA with 64-wide wavefronts only the low 32 bits are returned; the upper 32 lanes are not represented. This is consistent with the 32-bit return type.
+- Must be called from uniform control flow (all active lanes must execute the ballot).
+
+Ballot is a building block for warp-cooperative algorithms: population counts (`popcount(ballot(cond))` counts how many lanes satisfy `cond`), prefix masks, and lane compaction.
 
 ### `reduce_add(value, log2_size)`
 
@@ -77,6 +89,21 @@ def broadcast(a: qd.types.ndarray(dtype=qd.f32, ndim=1)):
 ```
 
 After the kernel, every lane in a subgroup holds the original value of its lane 0.
+
+### Ballot: count how many lanes satisfy a condition
+
+```python
+@qd.kernel
+def count_positive(a: qd.types.ndarray(dtype=qd.f32, ndim=1),
+                   counts: qd.types.ndarray(dtype=qd.u32, ndim=1)):
+    qd.loop_config(block_dim=32)
+    for i in range(a.shape[0]):
+        mask = subgroup.ballot(qd.i32(a[i] > 0.0))
+        if subgroup.invocation_id() == 0:
+            counts[i // 32] = mask
+```
+
+After the kernel, `counts[g]` contains a bitmask of which lanes in group `g` had positive values. Use `popcount(mask)` on the host to get the count.
 
 ### Identity shuffle (each lane reads its own id)
 
@@ -182,6 +209,7 @@ Every lane in each group of 32 sees the same `total`.
 
 - Shuffles are register-to-register on CUDA (`__shfl_sync`, `__shfl_down_sync`) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.
 - AMDGPU `shuffle` and `shuffle_down` both go through `ds_permute`/`ds_bpermute` today (LDS-routed, roughly tens of cycles).
+- `ballot` is a single hardware instruction on all backends — one cycle on CUDA (`__ballot_sync`), one instruction on AMDGPU (`v_ballot_b32`), and `OpGroupNonUniformBallot` on SPIR-V.
 - `reduce_add` and `reduce_all_add` both issue exactly `log2_size` shuffles and `log2_size` adds per call. No barriers, no shared memory, no launch overhead (they inline).
 - Pick `reduce_all_add` over `reduce_add + broadcast` when you need the result in every lane — same cost, one fewer shuffle.
 - 64-bit dtypes (`i64`, `u64`, `f64`) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.
@@ -190,5 +218,6 @@ Every lane in each group of 32 sees the same `total`.
 
 - [tile16](tile16.md) — `Tile16x16` builds on `subgroup.shuffle` to implement register-resident 16x16 matrix tiles.
 - `subgroup.invocation_id()` — returns this lane's subgroup-local index.
-- `subgroup.size()` — returns the active subgroup size.
+- `subgroup.group_size()` — returns the active subgroup size.
+- `subgroup.ballot` — returns a u32 bitmask of lanes where the predicate is non-zero (see above).
 - `subgroup.reduce_add` / `subgroup.reduce_all_add` — portable sized sum reductions built on `shuffle_down` / `shuffle` (see above).
