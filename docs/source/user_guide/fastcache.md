@@ -15,10 +15,6 @@ On a Genesis simulator benchmark (`single_franka_envs.py`, Ubuntu 24.04, NVIDIA 
 | Other caches (no fastcache) | 7.2 s |
 | + fastcache | 0.3 s |
 
-## Why you want it
-
-Applications with many kernels (physics simulators, RL environments) pay a multi-second cost every time a new Python process starts, even when all kernels are already cached on disk. Fastcache turns that into a fraction of a second.
-
 ## How to use it
 
 ### Enabling fastcache on a kernel
