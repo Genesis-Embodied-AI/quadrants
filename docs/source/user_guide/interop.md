@@ -84,7 +84,9 @@ clone = f.to_torch(copy=True)   # independent copy (default)
 auto  = f.to_torch()            # same as copy=True
 ```
 
-When using `copy=False`, modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated -- typically on `qd.init()` or `qd.reset()`, after which a fresh call to `to_torch(copy=False)` / `to_numpy(copy=False)` returns a new view.
+When using `to_torch(copy=False)`, the returned tensor shares memory with the field. Modifications via the tensor are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated -- typically on `qd.init()` or `qd.reset()`, after which a fresh call to `to_torch(copy=False)` returns a new view.
+
+`to_numpy(copy=False)` also shares memory, but the returned array is **read-only** on NumPy >= 2.0 (NumPy flags arrays imported via DLPack v0 capsules as non-writable). Use `to_torch(copy=False)` if you need a writable zero-copy view.
 
 ### When zero-copy is available
 
@@ -124,7 +126,7 @@ qd.sync()             # not strictly required; safe pattern
 print(f[0])           # 2.0
 ```
 
-Round-trip with NumPy on a CPU backend:
+Read-only view with NumPy on a CPU backend:
 
 ```python
 qd.init(arch=qd.cpu)
@@ -132,9 +134,9 @@ qd.init(arch=qd.cpu)
 a = qd.ndarray(qd.i32, shape=(8,))
 a.from_numpy(np.arange(8, dtype=np.int32))
 
-view = a.to_numpy(copy=False)
-view[0] = 100
-print(a.to_numpy()[0])   # 100
+view = a.to_numpy(copy=False)   # read-only zero-copy view
+print(view[0])                  # 0 -- reads directly from a's memory
+print(view.flags.writeable)     # False (NumPy >= 2.0, DLPack v0 capsule)
 ```
 
 ### Caching
