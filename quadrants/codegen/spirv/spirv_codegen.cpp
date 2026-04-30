@@ -252,7 +252,8 @@ TaskCodegen::Result TaskCodegen::run() {
   // without this metadata. RangeForStmt-owned blocks on the chain are skipped, not counted: the
   // for-loop iterates threads, it does not gate them; only IfStmt gates filter LCA reachability.
   if (ad_stack_lca_block_float_ != nullptr) {
-    auto match_field_source = [](Stmt *load_src, TaskAttributes::StaticBoundExpr &out) -> bool {
+    auto match_field_source = [&snode_to_root = snode_to_root_, &compiled_structs = compiled_structs_](
+                                  Stmt *load_src, TaskAttributes::StaticBoundExpr &out) -> bool {
       if (auto *ext = load_src->cast<ExternalPtrStmt>()) {
         if (auto *base_arg = ext->base_ptr->cast<ArgLoadStmt>()) {
           out.field_source_kind = TaskAttributes::StaticBoundExpr::FieldSourceKind::NdArray;
@@ -261,16 +262,53 @@ TaskCodegen::Result TaskCodegen::run() {
         }
         return false;
       }
-      // SNode-backed: lower_access leaves the load source as `GetChStmt -> SNodeLookupStmt -> ...`,
-      // ending at the leaf SNode whose id is stable across launches and round-trips through the
-      // offline cache via the kernel's `compiled_structs`. Match the `GetChStmt` chain by walking
-      // its `output_snode` until we reach the field's leaf snode (the one carrying the dtype).
+      // SNode-backed: lower_access leaves the load source as `GetChStmt -> SNodeLookupStmt -> ...`, ending at the
+      // leaf SNode whose id is stable across launches and round-trips through the offline cache via the kernel's
+      // `compiled_structs`. Match the `GetChStmt` chain by walking its `output_snode` until we reach the field's
+      // leaf snode (the one carrying the dtype), then walk the descriptor chain from that leaf up to root and fold
+      // the per-level `mem_offset_in_parent_cell` values into the captured `snode_byte_base_offset`. The captured
+      // `snode_byte_cell_stride` is the dense parent's `cell_stride`, i.e. the stride per `gid` step the reducer
+      // shader uses to walk the field at dispatch time. Only the `root -> dense -> place(scalar)` shape is
+      // supported here; SNode trees with sparse / bitmasked / hash branches above the leaf have iteration mechanics
+      // the reducer cannot mirror without re-emitting the full lookup chain, so we reject those and fall through to
+      // worst-case sizing in the runtime.
       if (auto *getch = load_src->cast<GetChStmt>()) {
-        if (getch->output_snode != nullptr) {
-          out.field_source_kind = TaskAttributes::StaticBoundExpr::FieldSourceKind::SNode;
-          out.snode_id = getch->output_snode->id;
-          return true;
+        const SNode *leaf = getch->output_snode;
+        if (leaf == nullptr) {
+          return false;
         }
+        const SNode *dense = leaf->parent;
+        if (dense == nullptr || dense->type != SNodeType::dense) {
+          return false;
+        }
+        const SNode *root_snode = dense->parent;
+        if (root_snode == nullptr || root_snode->type != SNodeType::root) {
+          return false;
+        }
+        auto root_it = snode_to_root.find(root_snode->id);
+        if (root_it == snode_to_root.end()) {
+          return false;
+        }
+        const int root_id = root_it->second;
+        const auto &snode_descs = compiled_structs[root_id].snode_descriptors;
+        auto leaf_desc_it = snode_descs.find(leaf->id);
+        auto dense_desc_it = snode_descs.find(dense->id);
+        if (leaf_desc_it == snode_descs.end() || dense_desc_it == snode_descs.end()) {
+          return false;
+        }
+        const auto &leaf_desc = leaf_desc_it->second;
+        const auto &dense_desc = dense_desc_it->second;
+        out.field_source_kind = TaskAttributes::StaticBoundExpr::FieldSourceKind::SNode;
+        out.snode_id = leaf->id;
+        out.snode_root_id = root_id;
+        // Base byte offset: the dense's offset within its single root cell plus the leaf's offset within
+        // the dense's per-cell layout. Both come from the snode descriptor's compile-time prefix-sum so
+        // the captured value is stable across launches.
+        out.snode_byte_base_offset =
+            static_cast<uint32_t>(dense_desc.mem_offset_in_parent_cell + leaf_desc.mem_offset_in_parent_cell);
+        out.snode_byte_cell_stride = static_cast<uint32_t>(dense_desc.cell_stride);
+        out.snode_iter_count = static_cast<uint32_t>(dense_desc.total_num_cells_from_root);
+        return true;
       }
       return false;
     };

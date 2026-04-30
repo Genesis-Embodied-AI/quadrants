@@ -112,9 +112,10 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
     return result;
   }
 
-  // Filter to the tasks whose bound_expr is consumable by the reducer (NdArray-backed source).
-  // SNode-backed bound_exprs are captured by the IR pattern matcher but the reducer shader does not yet
-  // implement the SNode-tree access path; those tasks fall through to worst-case sizing in the caller.
+  // Filter to the tasks whose bound_expr is consumable by the reducer (NdArray-backed via the kernel arg buffer +
+  // PSB load, or SNode-backed via a direct word load from the matching root buffer at compile-time-precomputed
+  // byte offset / cell stride). Both source kinds use the same generic shader; the dispatch-time params blob's
+  // `field_source_is_snode` flag picks the path per task.
   std::vector<int> matched_task_indices;
   matched_task_indices.reserve(task_attribs.size());
   for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
@@ -122,7 +123,8 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
     if (!be.has_value()) {
       continue;
     }
-    if (be->field_source_kind != spirv::TaskAttributes::StaticBoundExpr::FieldSourceKind::NdArray) {
+    using FSK = spirv::TaskAttributes::StaticBoundExpr::FieldSourceKind;
+    if (be->field_source_kind != FSK::NdArray && be->field_source_kind != FSK::SNode) {
       continue;
     }
     matched_task_indices.push_back(static_cast<int>(ti));
@@ -165,11 +167,24 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
     return result;
   }
 
-  // Args buffer is required: the reducer reads the ndarray data pointer out of it via PSB. Forward-only
-  // launches without ndarray arguments never reach this helper because they cannot have bound_exprs;
-  // assert defensively rather than silently skip and risk a wrong gradient on the next launch.
-  QD_ASSERT_INFO(args_buffer != nullptr,
-                 "adstack bound reducer: matched task has NdArray-backed bound_expr but the kernel arg "
+  // Resolve buffers per source kind. The reducer dispatch always binds slots 0/1/2/3; binding slot 0 (args_buffer)
+  // and slot 3 (root_buffer) is required to satisfy the descriptor set layout, but only the slot matching the
+  // captured `field_source_kind` is read by the shader. For tasks whose source kind has no real backing buffer in
+  // this kernel, fall back to the params buffer as a safe non-null placeholder (the shader's load against the
+  // placeholder is never executed because of the `field_source_is_snode` branch).
+  bool any_ndarray_source = false;
+  bool any_snode_source = false;
+  for (int ti : matched_task_indices) {
+    using FSK = spirv::TaskAttributes::StaticBoundExpr::FieldSourceKind;
+    const auto &be = *task_attribs[ti].ad_stack.bound_expr;
+    if (be.field_source_kind == FSK::NdArray) {
+      any_ndarray_source = true;
+    } else if (be.field_source_kind == FSK::SNode) {
+      any_snode_source = true;
+    }
+  }
+  QD_ASSERT_INFO(!any_ndarray_source || args_buffer != nullptr,
+                 "adstack bound reducer: a matched task has NdArray-backed bound_expr but the kernel arg "
                  "buffer is null; the launcher should have allocated it before reaching here");
 
   // Lazy-init pipeline. Mirrors `adstack_sizer_launch.cpp`'s pattern: build the SPIR-V binary once via the
@@ -247,20 +262,35 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
       const int ti = matched_task_indices[k];
       const auto &attribs = task_attribs[ti];
       const auto &be = *attribs.ad_stack.bound_expr;
-      const size_t data_ptr_byte_off = resolve_ndarray_data_ptr_byte_offset(host_ctx, be.ndarray_arg_id);
-      QD_ASSERT_INFO(data_ptr_byte_off % sizeof(uint32_t) == 0,
-                     "adstack bound reducer: ndarray data pointer offset {} is not 4-byte aligned in the "
-                     "kernel arg buffer; layout mismatch with the SizeExpr encoder",
-                     data_ptr_byte_off);
+      using FSK = spirv::TaskAttributes::StaticBoundExpr::FieldSourceKind;
+      const bool is_snode = be.field_source_kind == FSK::SNode;
+      uint32_t arg_word_offset = 0;
+      if (!is_snode) {
+        const size_t data_ptr_byte_off = resolve_ndarray_data_ptr_byte_offset(host_ctx, be.ndarray_arg_id);
+        QD_ASSERT_INFO(data_ptr_byte_off % sizeof(uint32_t) == 0,
+                       "adstack bound reducer: ndarray data pointer offset {} is not 4-byte aligned in the "
+                       "kernel arg buffer; layout mismatch with the SizeExpr encoder",
+                       data_ptr_byte_off);
+        arg_word_offset = static_cast<uint32_t>(data_ptr_byte_off / sizeof(uint32_t));
+      } else {
+        QD_ASSERT_INFO(
+            be.snode_byte_base_offset % sizeof(uint32_t) == 0 && be.snode_byte_cell_stride % sizeof(uint32_t) == 0,
+            "adstack bound reducer: SNode-backed bound_expr offsets must be 4-byte aligned "
+            "(base={}, stride={})",
+            be.snode_byte_base_offset, be.snode_byte_cell_stride);
+      }
       spirv::AdStackBoundReducerParams params{};
       params.task_id_in_kernel = static_cast<uint32_t>(ti);
-      params.length = resolve_length(attribs);
-      params.arg_word_offset = static_cast<uint32_t>(data_ptr_byte_off / sizeof(uint32_t));
+      params.length = is_snode ? be.snode_iter_count : resolve_length(attribs);
+      params.arg_word_offset = arg_word_offset;
       params.op_code = static_cast<uint32_t>(encode_cmp_op(be.cmp_op));
       params.field_dtype_is_float = be.field_dtype_is_float ? 1u : 0u;
       params.polarity = be.polarity ? 1u : 0u;
       params.threshold_bits = be.field_dtype_is_float ? *reinterpret_cast<const uint32_t *>(&be.literal_f32)
                                                       : static_cast<uint32_t>(be.literal_i32);
+      params.field_source_is_snode = is_snode ? 1u : 0u;
+      params.snode_byte_base_offset = be.snode_byte_base_offset;
+      params.snode_byte_cell_stride = be.snode_byte_cell_stride;
       std::memcpy(reinterpret_cast<char *>(mapped) + per_task_params_offsets[k], &params, params_size_bytes);
     }
     device_->unmap(*adstack_bound_reducer_params_buffer_);
@@ -308,18 +338,39 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
   for (size_t k = 0; k < matched_task_indices.size(); ++k) {
     const int ti = matched_task_indices[k];
     const auto &attribs = task_attribs[ti];
+    const auto &be = *attribs.ad_stack.bound_expr;
+    using FSK = spirv::TaskAttributes::StaticBoundExpr::FieldSourceKind;
+    const bool is_snode = be.field_source_kind == FSK::SNode;
     auto bindings = device_->create_resource_set_unique();
-    bindings->rw_buffer(0, *args_buffer);
+    // Slot 0 (args_buffer): required for ndarray-backed; supply the params buffer as a safe non-null placeholder
+    // for SNode-only tasks so the descriptor layout is satisfied without the shader actually reading it.
+    if (args_buffer != nullptr) {
+      bindings->rw_buffer(0, *args_buffer);
+    } else {
+      bindings->rw_buffer(0, *adstack_bound_reducer_params_buffer_);
+    }
     bindings->rw_buffer(1, *adstack_row_counter_buffer_);
     bindings->rw_buffer(2, adstack_bound_reducer_params_buffer_->get_ptr(per_task_params_offsets[k]),
                         params_size_bytes);
+    // Slot 3 (root_buffer): required for SNode-backed; supply the params buffer as a placeholder for ndarray-only
+    // tasks so the descriptor layout is satisfied without the shader actually reading it.
+    if (is_snode) {
+      DeviceAllocation *root_alloc = get_root_buffer(be.snode_root_id);
+      QD_ASSERT_INFO(root_alloc != nullptr,
+                     "adstack bound reducer: SNode-backed bound_expr references root_id={} but the runtime has no "
+                     "matching root buffer; check that the kernel's snode tree was registered",
+                     be.snode_root_id);
+      bindings->rw_buffer(3, *root_alloc);
+    } else {
+      bindings->rw_buffer(3, *adstack_bound_reducer_params_buffer_);
+    }
 
     reducer_cmdlist->bind_pipeline(adstack_bound_reducer_pipeline_.get());
     RhiResult bind_res = reducer_cmdlist->bind_shader_resources(bindings.get());
     QD_ERROR_IF(bind_res != RhiResult::success, "adstack bound reducer resource binding error: RhiResult({})",
                 int(bind_res));
 
-    const uint32_t length = resolve_length(attribs);
+    const uint32_t length = is_snode ? be.snode_iter_count : resolve_length(attribs);
     const uint32_t group_x =
         (length + spirv::kAdStackBoundReducerWorkgroupSize - 1) / spirv::kAdStackBoundReducerWorkgroupSize;
     if (group_x == 0) {

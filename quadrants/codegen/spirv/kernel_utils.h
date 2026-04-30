@@ -230,6 +230,17 @@ struct TaskAttributes {
     int snode_id{-1};
     std::vector<int> ndarray_arg_id;
 
+    // SNode-source extras. The IR pattern matcher fills these for `SNode`-backed gates by walking the snode
+    // descriptor chain from the leaf up to root and combining the per-level `mem_offset_in_parent_cell` /
+    // `cell_stride` values into a flat (base, stride) pair the reducer shader can use without re-emitting the
+    // SNode-tree lookup chain at dispatch time. `snode_root_id` selects the right root buffer to bind on the
+    // reducer dispatch (a kernel may have multiple roots; the snode-descriptor map is keyed per-root). Set to
+    // -1 / 0 for ndarray-backed gates.
+    int snode_root_id{-1};
+    uint32_t snode_byte_base_offset{0};
+    uint32_t snode_byte_cell_stride{0};
+    uint32_t snode_iter_count{0};
+
     QD_IO_DEF(cmp_op,
               field_dtype_is_float,
               literal_f32,
@@ -237,7 +248,11 @@ struct TaskAttributes {
               polarity,
               field_source_kind,
               snode_id,
-              ndarray_arg_id);
+              ndarray_arg_id,
+              snode_root_id,
+              snode_byte_base_offset,
+              snode_byte_cell_stride,
+              snode_iter_count);
   };
 
   struct AdStackSizingAttribs {

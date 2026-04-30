@@ -319,7 +319,7 @@ class TaskCodegen : public IRVisitor {
   spirv::Value ad_stack_row_counter_buffer_;
   // Cached SSA handle to the per-kernel `BufferType::AdStackBoundRowCapacity` (`uint[num_tasks_in_kernel]`). Lazily
   // populated at the float Lowest Common Ancestor (LCA) block emission site when the defense-in-depth bounds check
-  // fires; the host writes the per-task capacity (the reducer's count for tasks with a Stage 1 `bound_expr`,
+  // fires; the host writes the per-task capacity (the reducer's count for tasks with a captured `bound_expr`,
   // UINT32_MAX otherwise) so the OpAtomicUMax sentinel only fires on a reducer / main divergence. Zero-default when
   // the task has no float adstack push sites and the buffer is not bound.
   spirv::Value ad_stack_bound_row_capacity_buffer_;

@@ -116,14 +116,19 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
   IRBuilder ir(arch, caps);
   ir.init_header();
 
-  // Storage-buffer bindings (set 0). Layout matches `AdStackBoundReducerParams` documentation in the header
-  // and the host launcher's per-dispatch parameter-blob writeback path. All three are plain uint32[] arrays;
-  // `buffer_argument` produces a SSBO-bound runtime array typed as u32 elements, and the per-thread loads
-  // index into them by word offset (matching the encoder's little-endian POD-memcpy convention used for the
-  // arg buffer).
+  // Storage-buffer bindings (set 0). Layout matches `AdStackBoundReducerParams` documentation in the header and
+  // the host launcher's per-dispatch parameter-blob writeback path. All four are plain uint32[] arrays;
+  // `buffer_argument` produces a SSBO-bound runtime array typed as u32 elements, and the per-thread loads index into
+  // them by word offset (matching the encoder's little-endian POD-memcpy convention used for the arg buffer). Slot 3
+  // is the root buffer for SNode-backed gates - bound to the same root SSBO the main kernel uses, read at byte
+  // offset `snode_byte_base_offset + gid * snode_byte_cell_stride` to load the gating field's value at cell `gid`.
+  // For ndarray-backed gates the host can bind any non-null storage buffer here (the shader's load path against it
+  // is dead-stripped under spirv-opt's branch elimination once `field_source_is_snode` is constant-folded by
+  // descriptor-set binding inputs).
   Value args_buf = ir.buffer_argument(ir.u32_type(), 0, 0, "adstack_bound_reducer_args");
   Value counter_buf = ir.buffer_argument(ir.u32_type(), 0, 1, "adstack_bound_reducer_counter");
   Value params_buf = ir.buffer_argument(ir.u32_type(), 0, 2, "adstack_bound_reducer_params");
+  Value root_buf = ir.buffer_argument(ir.u32_type(), 0, 3, "adstack_bound_reducer_root");
 
   Value main_func = ir.new_function();
   ir.start_function(main_func);
@@ -150,6 +155,15 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
       ir, params_buf, ir.uint_immediate_number(ir.u32_type(), AdStackBoundReducerParams::kWordOffsetPolarity));
   Value threshold_bits = load_buf_u32(
       ir, params_buf, ir.uint_immediate_number(ir.u32_type(), AdStackBoundReducerParams::kWordOffsetThresholdBits));
+  Value field_source_is_snode_u32 =
+      load_buf_u32(ir, params_buf,
+                   ir.uint_immediate_number(ir.u32_type(), AdStackBoundReducerParams::kWordOffsetFieldSourceIsSnode));
+  Value snode_byte_base_offset =
+      load_buf_u32(ir, params_buf,
+                   ir.uint_immediate_number(ir.u32_type(), AdStackBoundReducerParams::kWordOffsetSnodeByteBaseOffset));
+  Value snode_byte_cell_stride =
+      load_buf_u32(ir, params_buf,
+                   ir.uint_immediate_number(ir.u32_type(), AdStackBoundReducerParams::kWordOffsetSnodeByteCellStride));
 
   // Trailing-workgroup bounds check. `gid >= length` threads exit early; remaining threads atomic-add into
   // the counter slot. The early return must be a structured branch so spirv-val accepts the function body
@@ -163,12 +177,42 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
 
   ir.start_label(active_block);
   {
-    // Read the ndarray PSB pointer from the kernel arg buffer at the encoder-precomputed word offset, then
-    // PSB-load the gating field's element at `gid`. The element width is fixed at 4 bytes for both f32 and
-    // i32 here, so a single `psb_load_u32` covers both cases; the bitcast to f32 happens after the
-    // load on the float path.
-    Value ndarray_ptr_u64 = load_arg_buf_u64_ptr(ir, args_buf, arg_word_offset);
-    Value field_word = psb_load_u32(ir, ndarray_ptr_u64, gid_u32);
+    // Resolve the gating field's element at `gid`. Two source kinds are supported, branched on
+    // `field_source_is_snode_u32`: ndarray-backed (read the data pointer out of the kernel arg buffer at the
+    // encoder-precomputed word offset, PSB-load the element at `gid`) and SNode-backed (compute byte offset
+    // `snode_byte_base_offset + gid * snode_byte_cell_stride` directly into the bound root buffer and load one
+    // u32 word). The element width is fixed at 4 bytes for both f32 and i32 here, so a single u32 load covers
+    // both element kinds on each source path; the bitcast to f32 happens after the load on the float path.
+    Value field_word_var = ir.alloca_variable(ir.u32_type());
+    Value field_source_is_snode = ir.ne(field_source_is_snode_u32, ir.uint_immediate_number(ir.u32_type(), 0u));
+    Label src_snode_lbl = ir.new_label();
+    Label src_ndarr_lbl = ir.new_label();
+    Label src_merge = ir.new_label();
+    ir.make_inst(spv::OpSelectionMerge, src_merge, spv::SelectionControlMaskNone);
+    ir.make_inst(spv::OpBranchConditional, field_source_is_snode, src_snode_lbl, src_ndarr_lbl);
+
+    ir.start_label(src_snode_lbl);
+    {
+      // Direct word load from the bound root buffer at byte offset `snode_byte_base_offset + gid *
+      // snode_byte_cell_stride`. The byte offset is divided by 4 to index the u32[] view; per-snode-descriptor
+      // alignment guarantees both `snode_byte_base_offset` and `snode_byte_cell_stride` are multiples of 4.
+      Value byte_off = ir.add(snode_byte_base_offset, ir.mul(gid_u32, snode_byte_cell_stride));
+      Value word_idx = ir.div(byte_off, ir.uint_immediate_number(ir.u32_type(), 4u));
+      Value loaded = load_buf_u32(ir, root_buf, word_idx);
+      ir.store_variable(field_word_var, loaded);
+      ir.make_inst(spv::OpBranch, src_merge);
+    }
+
+    ir.start_label(src_ndarr_lbl);
+    {
+      Value ndarray_ptr_u64 = load_arg_buf_u64_ptr(ir, args_buf, arg_word_offset);
+      Value loaded = psb_load_u32(ir, ndarray_ptr_u64, gid_u32);
+      ir.store_variable(field_word_var, loaded);
+      ir.make_inst(spv::OpBranch, src_merge);
+    }
+
+    ir.start_label(src_merge);
+    Value field_word = ir.load_variable(field_word_var, ir.u32_type());
 
     // Branch on `field_dtype_is_float`. The float path reinterprets the loaded bits as f32 and the
     // threshold likewise; the int path reinterprets both as i32. Each path emits its own `emit_compare`
@@ -241,7 +285,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
   ir.make_inst(spv::OpReturn);
   ir.make_inst(spv::OpFunctionEnd);
 
-  std::vector<Value> entry_args = {args_buf, counter_buf, params_buf};
+  std::vector<Value> entry_args = {args_buf, counter_buf, params_buf, root_buf};
   ir.commit_kernel_function(main_func, "main", entry_args, {static_cast<int>(kAdStackBoundReducerWorkgroupSize), 1, 1});
 
   return ir.finalize();

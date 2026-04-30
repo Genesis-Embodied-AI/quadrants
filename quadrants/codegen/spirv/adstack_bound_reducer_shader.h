@@ -70,6 +70,19 @@ struct AdStackBoundReducerParams {
   // i32 otherwise. Stored in the parameter blob rather than embedded as a SPIR-V `OpConstant` because the
   // shader is compiled once per `GfxRuntime` and the threshold varies per kernel.
   uint32_t threshold_bits;
+  // 0 when the gating field comes from a kernel ndarray argument (resolved via the kernel arg buffer + Physical
+  // Storage Buffer load); 1 when it comes from an SNode-backed `qd.field(...)` placed under `qd.root.dense(...)`
+  // (resolved via a direct word load from the bound root buffer at byte offset
+  // `snode_byte_base_offset + gid * snode_byte_cell_stride`). The two paths are mutually exclusive per dispatch.
+  uint32_t field_source_is_snode;
+  // Byte offset within the bound root buffer of the gating field's first cell value. Equals
+  // `dense_snode.mem_offset_in_parent_cell + leaf_snode.mem_offset_in_parent_cell` (precomputed by the IR pattern
+  // matcher from the snode descriptor's prefix sums). Read only when `field_source_is_snode == 1`.
+  uint32_t snode_byte_base_offset;
+  // Stride per `gid` step in bytes for SNode-backed gates - the dense parent's `cell_stride`. The shader walks the
+  // gating field via `byte_offset = snode_byte_base_offset + gid * snode_byte_cell_stride` and loads one u32 word
+  // from there. Read only when `field_source_is_snode == 1`.
+  uint32_t snode_byte_cell_stride;
 
   // Offset into the parameter blob (in u32 words) for each field; published to the shader and the host
   // launcher as compile-time constants so each side reads/writes the same slots without a separate header
@@ -81,7 +94,10 @@ struct AdStackBoundReducerParams {
   static constexpr uint32_t kWordOffsetFieldDtypeIsFloat = 4;
   static constexpr uint32_t kWordOffsetPolarity = 5;
   static constexpr uint32_t kWordOffsetThresholdBits = 6;
-  static constexpr uint32_t kNumWords = 7;
+  static constexpr uint32_t kWordOffsetFieldSourceIsSnode = 7;
+  static constexpr uint32_t kWordOffsetSnodeByteBaseOffset = 8;
+  static constexpr uint32_t kWordOffsetSnodeByteCellStride = 9;
+  static constexpr uint32_t kNumWords = 10;
 };
 
 // Op-code values written into `AdStackBoundReducerParams::op_code`. Kept as a free enum (not a class enum)
