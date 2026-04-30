@@ -480,6 +480,46 @@ def test_scalar_field_to_numpy_copy_false_shares_memory():
 
 
 @test_utils.test(arch=[qd.cpu])
+def test_scalar_field_to_numpy_copy_false_is_writable():
+    """to_numpy(copy=False) should return a writable array (DLPack v1 capsule)."""
+    f = qd.field(qd.f32, shape=(4,))
+    f.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
+    qd.sync()
+
+    arr = f.to_numpy(copy=False)
+    assert arr.flags.writeable, "to_numpy(copy=False) should return a writable array"
+    arr[0] = 99.0
+    np.testing.assert_allclose(arr[0], 99.0)
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_scalar_ndarray_to_numpy_copy_false_is_writable():
+    """Ndarray to_numpy(copy=False) should return a writable array (DLPack v1 capsule)."""
+    nd = qd.ndarray(qd.f32, shape=(4,))
+    nd.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
+    qd.sync()
+
+    arr = nd.to_numpy(copy=False)
+    assert arr.flags.writeable, "to_numpy(copy=False) should return a writable array"
+    arr[0] = 99.0
+    np.testing.assert_allclose(arr[0], 99.0)
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_scalar_field_to_numpy_copy_false_write_visible():
+    """Writing to a to_numpy(copy=False) view should be visible to subsequent field reads."""
+    f = qd.field(qd.f32, shape=(4,))
+    f.from_numpy(np.array([10, 20, 30, 40], dtype=np.float32))
+    qd.sync()
+
+    view = f.to_numpy(copy=False)
+    view[0] = 100.0
+    qd.sync()
+    fresh = f.to_numpy()
+    np.testing.assert_allclose(fresh[0], 100.0)
+
+
+@test_utils.test(arch=[qd.cpu])
 def test_scalar_field_to_numpy_default_is_copy():
     """Default to_numpy() returns an independent copy, not a view."""
     f = qd.field(qd.f32, shape=(4,))
