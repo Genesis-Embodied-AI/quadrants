@@ -24,8 +24,8 @@ _NO_ZEROCOPY_ARCHS = {qd.vulkan}
 
 def _skip_if_no_zerocopy():
     """Skip the current test if the active backend doesn't support DLPack zero-copy."""
-    if qd.cfg().arch in _NO_ZEROCOPY_ARCHS:
-        pytest.skip(f"DLPack zero-copy not supported on {qd.cfg().arch.name}")
+    if qd.cfg.arch in _NO_ZEROCOPY_ARCHS:
+        pytest.skip(f"DLPack zero-copy not supported on {qd.cfg.arch.name}")
 
 
 # ---------------------------------------------------------------------------
@@ -307,8 +307,8 @@ def test_struct_default_layout_copy_none():
 @test_utils.test()
 def test_no_zerocopy_copy_false_raises():
     """Backends that don't support DLPack (e.g. Vulkan) should raise on copy=False."""
-    if qd.cfg().arch not in _NO_ZEROCOPY_ARCHS:
-        pytest.skip(f"DLPack zero-copy is available on {qd.cfg().arch.name}")
+    if qd.cfg.arch not in _NO_ZEROCOPY_ARCHS:
+        pytest.skip(f"DLPack zero-copy is available on {qd.cfg.arch.name}")
 
     f = qd.field(qd.f32, shape=(4,))
     f.fill(1.0)
