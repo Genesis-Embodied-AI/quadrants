@@ -254,6 +254,18 @@ class QD_DLL_EXPORT GfxRuntime {
   std::unique_ptr<DeviceAllocationGuard> adstack_sizer_scratch_i64_buffer_;
   std::unique_ptr<DeviceAllocationGuard> adstack_sizer_scratch_i32_buffer_;
 
+  // Per-`GfxRuntime` compiled bound-reducer pipeline for the static-IR-bound sparse-adstack-heap path
+  // (`quadrants/codegen/spirv/adstack_bound_reducer_shader.{h,cpp}`). Built once on the first launch that contains a
+  // task with a captured `TaskAttributes::AdStackSizingAttribs::bound_expr`, reused across every such launch
+  // afterwards. Null on backends without `spirv_has_physical_storage_buffer + spirv_has_int64`; in that case the
+  // runtime falls back to dispatched-threads worst-case heap sizing for every task (safe but no savings). The grow-
+  // on-demand parameter buffer below holds the per-task `AdStackBoundReducerParams` blobs the shader reads on slot 2;
+  // one blob per matched task per launch, packed at descriptor-alignment boundaries so each task's bind range starts
+  // on a Vulkan-legal offset.
+  std::unique_ptr<Pipeline> adstack_bound_reducer_pipeline_{nullptr};
+  std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_params_buffer_;
+  size_t adstack_bound_reducer_params_buffer_size_{0};
+
   // Owning `ProgramImpl` back-reference; propagated from `Params::program_impl`. See the comment on
   // `Params::program_impl` for the contract.
   ProgramImpl *program_impl_{nullptr};
