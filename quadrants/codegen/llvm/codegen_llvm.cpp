@@ -2506,7 +2506,7 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
 
 void TaskCodeGenLLVM::visit(AdStackPopStmt *stmt) {
   if (compile_config.debug) {
-    call("stack_pop", llvm_val[stmt->stack]);
+    call("stack_pop", get_ad_stack_base_llvm(stmt->stack->as<AdStackAllocaStmt>()));
     return;
   }
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
@@ -2551,8 +2551,9 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
     llvm::Value *stack_id_i64 = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(stack->stack_id));
     llvm::Value *max_size_addr = builder->CreateGEP(i64ty, ad_stack_max_sizes_ptr_llvm_, stack_id_i64);
     llvm::Value *max_size = builder->CreateLoad(i64ty, max_size_addr);
-    call("stack_push", get_runtime(), llvm_val[stack], max_size, tlctx->get_constant(stack->element_size_in_bytes()));
-    auto primal_ptr = call("stack_top_primal", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
+    llvm::Value *stack_base = get_ad_stack_base_llvm(stack);
+    call("stack_push", get_runtime(), stack_base, max_size, tlctx->get_constant(stack->element_size_in_bytes()));
+    auto primal_ptr = call("stack_top_primal", stack_base, tlctx->get_constant(stack->element_size_in_bytes()));
     primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(tlctx->get_data_type(stmt->ret_type), 0));
     builder->CreateStore(llvm_val[stmt->v], primal_ptr);
     return;
@@ -2580,7 +2581,7 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
     llvm::Value *slot_offset =
         builder->CreateAdd(llvm::ConstantInt::get(i64ty, sizeof(int64)),
                            builder->CreateMul(old_count, llvm::ConstantInt::get(i64ty, entry_size)));
-    primal_ptr = builder->CreateGEP(i8ty, llvm_val[stack], slot_offset);
+    primal_ptr = builder->CreateGEP(i8ty, get_ad_stack_base_llvm(stack), slot_offset);
   }
   // Zero the primal+adjoint slot pair to match `stack_push`'s `memset(top_primal, 0, 2 * element_size)`. Without
   // this, a previous use of this slot's adjoint would persist into the new push's accumulator. Slot pointer is
@@ -2601,7 +2602,8 @@ void TaskCodeGenLLVM::visit(AdStackLoadTopStmt *stmt) {
   QD_ASSERT(stmt->return_ptr == false);
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
   if (compile_config.debug) {
-    auto primal_ptr = call("stack_top_primal", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
+    auto primal_ptr =
+        call("stack_top_primal", get_ad_stack_base_llvm(stack), tlctx->get_constant(stack->element_size_in_bytes()));
     auto primal_ty = tlctx->get_data_type(stmt->ret_type);
     primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(primal_ty, 0));
     llvm_val[stmt] = builder->CreateLoad(primal_ty, primal_ptr);
@@ -2624,7 +2626,8 @@ void TaskCodeGenLLVM::visit(AdStackLoadTopStmt *stmt) {
 void TaskCodeGenLLVM::visit(AdStackLoadTopAdjStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
   if (compile_config.debug) {
-    auto adjoint = call("stack_top_adjoint", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
+    auto adjoint =
+        call("stack_top_adjoint", get_ad_stack_base_llvm(stack), tlctx->get_constant(stack->element_size_in_bytes()));
     auto adjoint_ty = tlctx->get_data_type(stmt->ret_type);
     adjoint = builder->CreateBitCast(adjoint, llvm::PointerType::get(adjoint_ty, 0));
     llvm_val[stmt] = builder->CreateLoad(adjoint_ty, adjoint);
@@ -2648,7 +2651,8 @@ void TaskCodeGenLLVM::visit(AdStackAccAdjointStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
   llvm::Value *adjoint_ptr;
   if (compile_config.debug) {
-    adjoint_ptr = call("stack_top_adjoint", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
+    adjoint_ptr =
+        call("stack_top_adjoint", get_ad_stack_base_llvm(stack), tlctx->get_constant(stack->element_size_in_bytes()));
   } else if (is_compile_time_single_slot(stack)) {
     adjoint_ptr = emit_ad_stack_single_slot_ptr(stack, /*adjoint_offset_bytes=*/stack->element_size_in_bytes());
   } else {
