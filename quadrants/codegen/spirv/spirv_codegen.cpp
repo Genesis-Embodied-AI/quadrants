@@ -268,8 +268,17 @@ void TaskCodegen::visit(Block *stmt) {
         ir_->struct_array_access(ir_->u32_type(), ad_stack_bound_row_capacity_buffer_,
                                  ir_->uint_immediate_number(ir_->i32_type(), task_id_in_kernel_));
     spirv::Value capacity = ir_->load_variable(capacity_ptr, ir_->u32_type());
-    spirv::Value capacity_minus_one = ir_->sub(capacity, ir_->uint_immediate_number(ir_->u32_type(), 1));
-    spirv::Value clamped_row = ir_->call_glsl450(ir_->u32_type(), GLSLstd450UMin, claimed_row, capacity_minus_one);
+    // Guard the `capacity - 1` clamp upper bound against `capacity == 0`: a naive `sub(capacity, 1)`
+    // wraps in u32 to UINT32_MAX, the `UMin(claimed_row, UINT32_MAX)` returns `claimed_row` unchanged
+    // for any realistic value, and the clamp goes inert. Clamp the upper bound to row 0 in that case
+    // (the launcher floors the heap allocation at one row precisely so the single-slot fallback is
+    // always backed by real storage). Mirrors the LLVM-side `select(capacity == 0, 0, capacity - 1)`.
+    spirv::Value zero_u32 = ir_->uint_immediate_number(ir_->u32_type(), 0);
+    spirv::Value one_u32 = ir_->uint_immediate_number(ir_->u32_type(), 1);
+    spirv::Value capacity_is_zero = ir_->eq(capacity, zero_u32);
+    spirv::Value capacity_minus_one_raw = ir_->sub(capacity, one_u32);
+    spirv::Value clamp_upper = ir_->select(capacity_is_zero, zero_u32, capacity_minus_one_raw);
+    spirv::Value clamped_row = ir_->call_glsl450(ir_->u32_type(), GLSLstd450UMin, claimed_row, clamp_upper);
     ir_->store_variable(ad_stack_row_id_var_float_, clamped_row);
     spirv::Value overflow_signal =
         ir_->select(ir_->ge(claimed_row, capacity), ir_->uint_immediate_number(ir_->u32_type(), UINT32_MAX),

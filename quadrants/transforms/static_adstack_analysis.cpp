@@ -15,16 +15,40 @@ namespace quadrants::lang {
 
 namespace {
 
-// True iff the push is an autodiff-bootstrap shape: parent block belongs to an `OffloadedStmt`, the previous
-// sibling is the matching `AdStackAllocaStmt`, and the pushed value is a `ConstStmt`. The autodiff transform emits
-// these immediately after the alloca so the matching reverse pop has a value to consume on every dispatched thread
-// regardless of any later gating.
+// True iff the push is an autodiff-bootstrap shape: parent block belongs to an `OffloadedStmt`, the pushed value
+// is a `ConstStmt`, and the matching `AdStackAllocaStmt` lies just before the push - either as the immediately
+// previous sibling (SPIR-V IR shape, the const literal is folded into the push's `v` field as a `ConstStmt` that
+// is itself the previous sibling), or with the const's `ConstStmt` sitting between them (LLVM IR shape, the
+// const is materialised as its own statement between the alloca and the push). The autodiff transform emits these
+// pushes immediately after the alloca so the matching reverse pop has a value to consume on every dispatched
+// thread regardless of any later gating.
 bool is_autodiff_bootstrap_push(AdStackPushStmt *p) {
   if (p->v == nullptr || !p->v->is<ConstStmt>()) {
     return false;
   }
   Block *parent = p->parent;
-  if (parent == nullptr || parent->parent_stmt() == nullptr || !parent->parent_stmt()->is<OffloadedStmt>()) {
+  if (parent == nullptr) {
+    return false;
+  }
+  // Accept a parent block whose owning statement is either the `OffloadedStmt` directly (the SPIR-V codegen IR
+  // shape) or a `RangeForStmt` / `StructForStmt` / `MeshForStmt` that is itself a direct child of an
+  // `OffloadedStmt` (the LLVM codegen IR shape, where the offload's body contains a single for-stmt that wraps
+  // the user's loop body). In both shapes the push runs unconditionally on every dispatched thread - the inner
+  // for body iterates once per logical loop iteration, but each iteration's bootstrap push is balanced by its
+  // matching pop, so the "always executes" property `is_autodiff_bootstrap_push` is checking still holds.
+  Stmt *parent_stmt = parent->parent_stmt();
+  if (parent_stmt == nullptr) {
+    return false;
+  }
+  bool unconditional_in_offload = parent_stmt->is<OffloadedStmt>();
+  if (!unconditional_in_offload &&
+      (parent_stmt->is<RangeForStmt>() || parent_stmt->is<StructForStmt>() || parent_stmt->is<MeshForStmt>())) {
+    Block *grand = parent_stmt->parent;
+    if (grand != nullptr && grand->parent_stmt() != nullptr && grand->parent_stmt()->is<OffloadedStmt>()) {
+      unconditional_in_offload = true;
+    }
+  }
+  if (!unconditional_in_offload) {
     return false;
   }
   AdStackAllocaStmt *target = p->stack ? p->stack->cast<AdStackAllocaStmt>() : nullptr;
@@ -41,7 +65,20 @@ bool is_autodiff_bootstrap_push(AdStackPushStmt *p) {
   if (idx <= 0) {
     return false;
   }
-  return parent->statements[idx - 1].get() == target;
+  Stmt *prev = parent->statements[idx - 1].get();
+  if (prev == target) {
+    return true;
+  }
+  // Allow a single intermediary `ConstStmt` between the alloca and the push - this is the LLVM IR shape, where
+  // the const value the push consumes is materialised as its own statement (`ConstStmt` -> `AdStackPushStmt(v =
+  // const)`) rather than being inlined as the push's `v` operand from the alloca's previous sibling. The const
+  // sitting between them is by construction the same `ConstStmt` `p->v` points to (no other statement is emitted
+  // between an autodiff-emitted alloca and its bootstrap push in either pipeline), so we identity-check it to
+  // keep the predicate as tight as the SPIR-V-shape variant above.
+  if (prev == p->v && idx >= 2 && parent->statements[idx - 2].get() == target) {
+    return true;
+  }
+  return false;
 }
 
 // The float-stack predicate folded into the LCA computation: push/load-top/load-top-adj sites where the underlying

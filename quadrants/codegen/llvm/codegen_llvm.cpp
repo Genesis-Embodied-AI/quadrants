@@ -2640,11 +2640,15 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
   // Autodiff-bootstrap const-init pushes (identified by the shared static-adstack analysis): keep the count_var
   // increment so the matching reverse pop balances, but skip the slot store. These pushes execute on every
   // dispatched thread regardless of any later gating; the bootstrap value is dead memory because no `load_top`
-  // ever reads it back. Skipping the store is what lets the future split-heap layout place the float row claim
-  // inside the gating branch without dragging the LCA up to the offload root through these unconditional pushes.
-  // On the current combined-heap layout the skip is a no-op for correctness (the slot is the thread's own
-  // address, harmless to leave uninitialised), but it cuts a memset and a store per bootstrap push.
-  if (ad_stack_bootstrap_pushes_.count(stmt) != 0 && !compile_config.debug && !is_compile_time_single_slot(stack)) {
+  // ever reads it back. Skipping the store is what lets the split-heap layout place the float row claim inside
+  // the gating branch without dragging the LCA up to the offload root through these unconditional pushes; on
+  // the lazy float path the runtime-helper `stack_push` (debug build) would otherwise dereference
+  // `heap_float + row_id_var * stride_float + offset` while `row_id_var` is still its UINT32_MAX entry-block
+  // init at the bootstrap site (which sits ABOVE the LCA where the atomic-rmw row claim writes the per-thread
+  // row id), and the count u64 store would land ~ TB past the heap base. Same skip on debug as on release: the
+  // count_alloca increment alone keeps push and pop balanced, and the bounds-check helper has nothing to do
+  // for an autodiff-emitted const-init that never reads back its slot anyway.
+  if (ad_stack_bootstrap_pushes_.count(stmt) != 0 && !is_compile_time_single_slot(stack)) {
     auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
     llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stack);
     llvm::Value *old_count = builder->CreateLoad(i64ty, count_alloca);

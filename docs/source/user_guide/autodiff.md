@@ -311,10 +311,12 @@ where each quantity means:
 
 | Quantity | What it is |
 | --- | --- |
-| `num_threads` | Threads the kernel actually dispatches. On CPU: the thread-pool size, typically tens. On GPU: the full ndrange. |
+| `num_threads` | Threads the kernel actually has live concurrent slots for. On CPU: the thread-pool size, typically tens. On GPU: capped at 65536 for kernels that allocate any adstack, regardless of the logical ndrange (the kernel's grid-strided loop walks the rest of the iteration space sequentially per slot, so a smaller dispatch is correctness-equivalent). Forward-only kernels with no adstack keep the full ndrange dispatch. |
 | `stack_size` | Per-launch capacity resolved by the sizer. Varies between launches - if an ndarray-bounded loop iterates 16 times at one dispatch and 1024 at another, `stack_size` tracks each. |
 | `bytes_per_slot` | Depends on `T` and on the backend (see table below). |
 | `num_buffers` | Number of adstacks the kernel allocates - one per loop-carried variable plus one per dependent branch flag (see [One adstack per variable](#one-adstack-per-variable)). |
+
+For an important class of kernels the floating-point adstacks shrink further than the formula above suggests. When the compiler sees a kernel of the shape `for i in range(...): if field[i] cmp literal: <adstack-using gradient work>` (a runtime gate immediately above the adstack-using body, comparing one ndarray or scalar field entry per iteration to a constant), it captures the gate predicate and dispatches a small per-task reducer at launch time that counts how many iterations actually pass the gate. The float adstacks then back exactly that count, not `num_threads * stack_size` - so a sparse-grid workload whose gate matches 5% of iterations pays 5% of the float-adstack cost. Integer / boolean adstacks stay at `num_threads * stack_size` because the autodiff transform emits their pushes unconditionally for control-flow replay. The savings happen automatically when the gate shape matches; you do not need to opt in. The float-heap allocation grows on demand on subsequent launches whose gate matches more iterations.
 
 Every adstack slot always stores a *primal* value - the forward-pass value the reverse pass pops to recover the chain-rule step. Floating-point adstacks additionally store an *adjoint* slot where the reverse pass accumulates chain-rule contributions. Integer / boolean adstacks do not need an adjoint slot.
 

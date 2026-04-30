@@ -3008,7 +3008,7 @@ def test_adstack_min_loop_carried_serial_range_for(n_inner):
         assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-4)
 
 
-@pytest.mark.parametrize("gated_fraction", [0.05, 0.5, 1.0])
+@pytest.mark.parametrize("gated_fraction", [0.0, 0.05, 0.5, 1.0])
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
 def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
     # Pins the static-IR-bound sparse-adstack-heap path end to end across every backend that ships the
@@ -3064,10 +3064,11 @@ def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
 
     np.random.seed(0)
     x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
-    n_gated = max(1, int(round(gated_fraction * n)))
+    n_gated = int(round(gated_fraction * n))
     selector_np = np.zeros(n, dtype=np.float32)
-    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
-    selector_np[gated_indices] = 1.0
+    if n_gated > 0:
+        gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+        selector_np[gated_indices] = 1.0
     x.from_numpy(x_np)
     selector.from_numpy(selector_np)
     out.from_numpy(np.zeros((1,), dtype=np.float32))
@@ -3083,14 +3084,20 @@ def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
 
     # Analytic oracle. For gated i, the inner recurrence `v = v*c + d` over `n_iter` steps is linear in v
     # with slope `c^n_iter`, where `c = 1.05`. So `d(out[0])/d(x[i]) = c^n_iter` for gated i, 0 otherwise.
+    # `gated_fraction == 0` is the per-task-reducer-count-zero edge case: every dispatched thread misses
+    # the gate, the reducer publishes capacity = 0, the codegen-emitted clamp at the LCA-block claim site
+    # has to keep the row id at 0 (a naive `capacity - 1` underflow to UINT32_MAX leaves the clamp inert
+    # and a divergent over-claim writes past the float-heap end). Float-heap allocation is floored at one
+    # row precisely so the single-row fallback is always backed by real storage.
     coeff = 1.05
     expected_per_gated = coeff**n_iter
     expected = np.where(selector_np > eps, np.float32(expected_per_gated), np.float32(0.0))
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
+@pytest.mark.parametrize("alloca_outside_gate", [False, True])
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
-def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct():
+def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct(alloca_outside_gate):
     # Pins the lazy-row claim path under `debug=True`. The release-build codegen tracks the per-stack push
     # count in a function-scope alloca and never dereferences the heap header for `count`, so the alloca-site
     # init can be a plain `count = 0` store; the debug-build codegen routes every push / pop / load-top
@@ -3105,12 +3112,23 @@ def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct():
     # emit the `stack_init` at the LCA block, right after the atomic-rmw row claim, so `row_id_var`
     # points at the thread's actual row.
     #
-    # Internal details: kernel shape mirrors `test_adstack_static_bound_expr_ndarray_gate_grad_correct` so
-    # the analytic oracle is the same; the only delta is the `debug=True` qd.init option which flips
-    # both the bounds-check codepath and the runtime-helper push / pop emission. `gated_fraction=0.5` is
-    # picked because (a) it places ~half the LCA reaches on a non-trivial row in `[0, count)` so the row
-    # mapping has to be correct (a regression that always claims row 0 would still pass the 100% case),
-    # and (b) it keeps the test fast enough to run on every backend without a parametrize sweep.
+    # The `alloca_outside_gate` parametrisation pins both shapes the codegen has to handle:
+    # - `False` (alloca inside the gate's true branch): the `AdStackAllocaStmt` and any autodiff-emitted
+    #   bootstrap push live in the if-true block, BELOW the LCA, so the bootstrap push's `stack_push` runs
+    #   AFTER the row claim and `row_id_var` is already valid.
+    # - `True` (alloca above the gate at the offload root): the `AdStackAllocaStmt` and the autodiff
+    #   bootstrap push (`is_autodiff_bootstrap_push`-classified, parent block is the OffloadedStmt body)
+    #   sit ABOVE the LCA. The bootstrap-skip guard at the push site has to fire on the debug build too,
+    #   otherwise the runtime-helper `stack_push` runs at the offload root with `row_id_var = UINT32_MAX`
+    #   and writes the count u64 ~ TB past the heap base. Without that fix, this case crashes the worker
+    #   with SIGSEGV / CUDA_ERROR_ILLEGAL_ADDRESS / hipErrorIllegalAddress at the first `compute.grad()`.
+    #
+    # Internal details: kernel shape mirrors `test_adstack_static_bound_expr_ndarray_gate_grad_correct`
+    # otherwise; the only delta is the `debug=True` qd.init option which flips both the bounds-check
+    # codepath and the runtime-helper push / pop emission. `gated_fraction=0.5` is picked because (a) it
+    # places ~half the LCA reaches on a non-trivial row in `[0, count)` so the row mapping has to be
+    # correct (a regression that always claims row 0 would still pass the 100% case), and (b) it keeps
+    # the test fast enough to run on every backend without a parametrize sweep on the fraction axis.
     n = 256
     n_iter = 8
     eps = 1e-9
@@ -3120,14 +3138,28 @@ def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct():
     out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
     selector = qd.ndarray(qd.f32, shape=(n,))
 
-    @qd.kernel
-    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
-        for i in range(n):
-            if selector[i] > eps:
-                v = x[i]
-                for _ in range(n_iter):
-                    v = v * 1.05 + 0.05
+    if alloca_outside_gate:
+
+        @qd.kernel
+        def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+            for i in range(n):
+                v = qd.cast(0.0, qd.f32)
+                if selector[i] > eps:
+                    v = x[i]
+                    for _ in range(n_iter):
+                        v = v * 1.05 + 0.05
                 out[0] += v
+
+    else:
+
+        @qd.kernel
+        def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+            for i in range(n):
+                if selector[i] > eps:
+                    v = x[i]
+                    for _ in range(n_iter):
+                        v = v * 1.05 + 0.05
+                    out[0] += v
 
     np.random.seed(2)
     x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
