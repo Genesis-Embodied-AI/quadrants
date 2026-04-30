@@ -228,6 +228,9 @@ class _DLPackV1Adapter:
 
     Quadrants' C++ ``to_dlpack`` returns raw PyCapsules (v0 protocol). NumPy >= 1.23 requires the v1 protocol -- an
     object exposing ``__dlpack__`` and ``__dlpack_device__``.
+
+    FIXME: NumPy >= 2.0 marks arrays from v0 capsules as read-only. Upgrade the C++ to emit DLManagedTensorVersioned
+    (v1, capsule name "dltensor_versioned") with flags=0 so numpy views are writable. See PR #450 discussion.
     """
 
     __slots__ = ("_capsule",)
