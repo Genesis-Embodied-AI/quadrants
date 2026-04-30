@@ -110,14 +110,14 @@ CodeGenStmtGuard make_while_after_loop_guard(TaskCodeGenLLVM *cg) {
 
 // TaskCodeGenLLVM
 void TaskCodeGenLLVM::visit(Block *stmt_list) {
-  // Float-heap lazy row claim hook at the IR-level Lowest Common Ancestor (LCA) of every f32 push / load-top
-  // site. Mirrors the SPIR-V codegen's `visit(Block *)` pivot. Wired but currently dormant: activation requires
-  // the runtime to have allocated `adstack_row_counters` and `adstack_bound_row_capacities` arrays the
-  // atomicrmw target reads from, which lands in a follow-up commit. The gate (`use_split_layout`) stays false
-  // for every task today so the claim never fires; once the runtime ships, flipping the gate to
-  // `bound_expr.has_value()` enables the lazy claim per task.
-  const bool use_split_layout = false;
-  if (use_split_layout && ad_stack_static_bound_expr_.has_value() && ad_stack_lca_block_float_ir_ != nullptr &&
+  // Float-heap lazy row claim at the IR-level Lowest Common Ancestor (LCA) of every f32 push / load-top site.
+  // Mirrors the SPIR-V codegen's `visit(Block *)` pivot. Active only when the shared static analysis captured a
+  // gating `bound_expr` for this task and resolved a non-trivial LCA: tasks without a captured gate keep the
+  // legacy combined-heap eager addressing and never enter this branch. The runtime-side counter
+  // (`runtime->adstack_row_counters[task_codegen_id]`) and capacity (`adstack_bound_row_capacities`) arrays the
+  // atomicrmw and clamp read against are allocated and reset by every launcher (CPU / CUDA / AMDGPU) before the
+  // first task in a kernel via `publish_adstack_lazy_claim_buffers`, so the claim is safe to fire.
+  if (ad_stack_static_bound_expr_.has_value() && ad_stack_lca_block_float_ir_ != nullptr &&
       stmt_list == ad_stack_lca_block_float_ir_) {
     emit_ad_stack_row_claim_llvm();
   }
