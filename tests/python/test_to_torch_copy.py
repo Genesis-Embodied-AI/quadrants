@@ -27,7 +27,9 @@ def _skip_if_no_zerocopy():
     if qd.cfg.arch in _NO_ZEROCOPY_ARCHS:
         pytest.skip(f"DLPack zero-copy not supported on {qd.cfg.arch.name}")
     if qd.cfg.arch == qd.metal:
-        from quadrants.lang.field import _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET  # pylint: disable=C0415
+        from quadrants.lang.field import (
+            _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET,  # pylint: disable=C0415
+        )
 
         if not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET:
             pytest.skip("Metal DLPack zero-copy requires torch >= 2.9.2")

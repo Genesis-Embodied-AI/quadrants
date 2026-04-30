@@ -436,6 +436,7 @@ user_api[qd.StructField] = [
     "parent",
     "shape",
     "snode",
+    "to_dlpack",
     "to_numpy",
     "to_torch",
 ]

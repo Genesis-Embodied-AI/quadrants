@@ -589,7 +589,7 @@ class ScalarField(Field):
         from quadrants._kernels import tensor_to_ext_arr  # pylint: disable=C0415
 
         tensor_to_ext_arr(self, arr)
-        quadrants.lang.runtime_ops.sync()  # type: ignore
+        quadrants.lang.runtime_ops.sync()  # type: ignore  # TODO: can we remove .runtime_ops here?
         return arr
 
     @python_scope
@@ -609,7 +609,7 @@ class ScalarField(Field):
         from quadrants._kernels import tensor_to_ext_arr  # pylint: disable=C0415
 
         tensor_to_ext_arr(self, arr)
-        quadrants.lang.runtime_ops.sync()  # type: ignore
+        quadrants.lang.runtime_ops.sync()  # type: ignore  # TODO: can we remove .runtime_ops here?
         _mps_sync_if_metal()
         return arr
 
