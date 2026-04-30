@@ -185,6 +185,7 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
         raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
 
     import torch  # pylint: disable=C0415
+    import torch.utils.dlpack  # pylint: disable=C0415
 
     tc = torch.utils.dlpack.from_dlpack(field.to_dlpack())
     if impl.current_cfg().arch == _ARCH_METAL:
