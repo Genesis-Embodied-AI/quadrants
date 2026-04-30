@@ -346,17 +346,13 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/buffer_view_type/index.html#quadrants.types.buffer_view_type.BufferViewType.dtype">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span></div>
 
-<div class="viewcode-block" id="BufferViewType.boundary">
-<a class="viewcode-back" href="../../../autoapi/quadrants/types/buffer_view_type/index.html#quadrants.types.buffer_view_type.BufferViewType.boundary">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">boundary</span> <span class="o">=</span> <span class="n">boundary</span></div>
-
 <div class="viewcode-block" id="BufferViewType.ndarray_type">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/buffer_view_type/index.html#quadrants.types.buffer_view_type.BufferViewType.ndarray_type">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">ndarray_type</span> <span class="o">=</span> <span class="n">NdarrayType</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="n">boundary</span><span class="p">)</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;BufferViewType(dtype=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, boundary=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">boundary</span><span class="si">}</span><span class="s2">)&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;BufferViewType(dtype=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, boundary=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">boundary</span><span class="si">}</span><span class="s2">)&quot;</span></div>
 
 
 

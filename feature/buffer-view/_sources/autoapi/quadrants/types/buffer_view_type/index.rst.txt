@@ -39,11 +39,6 @@ Module Contents
 
 
 
-   .. py:attribute:: boundary
-      :value: 'unsafe'
-
-
-
    .. py:attribute:: ndarray_type
 
 

@@ -337,7 +337,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Walk src_info_stack and extract deduplicated (file, line, func) frames.</span>
 
 <span class="sd">    Returns (kernel_name, callstack_str).</span>
-<span class="sd">    Warns if the callstack exceeds _CALLSTACK_WARNING_SIZE (large strings increase compiled binary size).</span>
+<span class="sd">    Warns if the callstack exceeds _CALLSTACK_WARNING_BYTE (large strings increase compiled binary size).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">stack</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">src_info_stack</span>
     <span class="n">frames</span> <span class="o">=</span> <span class="p">[]</span>
