@@ -724,9 +724,14 @@ Module Contents
    .. py:attribute:: ptr
 
 
-   .. py:method:: to_dlpack()
+   .. py:method:: to_dlpack(versioned=False)
 
-      Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.
+      Export this matrix field as a DLPack capsule.
+
+      :param versioned: If True, emit a DLPack v1 capsule (writable numpy arrays). If False (default), emit v0
+                        (required by ``torch.utils.dlpack.from_dlpack``). See :meth:`ScalarField.to_dlpack`.
+
+      Note: caller is responsible for calling qd.sync() between modifying the field and reading it.
 
 
 

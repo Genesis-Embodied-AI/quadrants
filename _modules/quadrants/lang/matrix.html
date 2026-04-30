@@ -1736,13 +1736,20 @@
 
 <div class="viewcode-block" id="MatrixField.to_dlpack">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.to_dlpack">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">versioned</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Export this matrix field as a DLPack capsule.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            versioned: If True, emit a DLPack v1 capsule (writable numpy arrays). If False (default), emit v0</span>
+<span class="sd">                (required by ``torch.utils.dlpack.from_dlpack``). See :meth:`ScalarField.to_dlpack`.</span>
+
+<span class="sd">        Note: caller is responsible for calling qd.sync() between modifying the field and reading it.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">materialize</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">capsule</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">field_to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)</span>
+            <span class="n">capsule</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">field_to_dlpack</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">,</span> <span class="n">versioned</span><span class="o">=</span><span class="n">versioned</span>
+            <span class="p">)</span>
         <span class="k">except</span> <span class="ne">ModuleNotFoundError</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ModuleNotFoundError</span><span class="p">(</span>
                 <span class="s2">&quot;MatrixField.to_dlpack() requires torch to be installed &quot;</span>

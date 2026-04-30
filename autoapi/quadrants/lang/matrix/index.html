@@ -1161,8 +1161,15 @@ between <code class="docutils literal notranslate"><span class="pre">qd.Vector.f
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.MatrixField.to_dlpack">
-<span class="sig-name descname"><span class="pre">to_dlpack</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixField.to_dlpack"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixField.to_dlpack" title="Link to this definition">#</a></dt>
-<dd><p>Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.</p>
+<span class="sig-name descname"><span class="pre">to_dlpack</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">versioned</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixField.to_dlpack"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixField.to_dlpack" title="Link to this definition">#</a></dt>
+<dd><p>Export this matrix field as a DLPack capsule.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>versioned</strong> – If True, emit a DLPack v1 capsule (writable numpy arrays). If False (default), emit v0
+(required by <code class="docutils literal notranslate"><span class="pre">torch.utils.dlpack.from_dlpack</span></code>). See <code class="xref py py-meth docutils literal notranslate"><span class="pre">ScalarField.to_dlpack()</span></code>.</p>
+</dd>
+</dl>
+<p>Note: caller is responsible for calling qd.sync() between modifying the field and reading it.</p>
 </dd></dl>
 
 <dl class="py method">
