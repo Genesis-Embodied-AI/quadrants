@@ -98,7 +98,7 @@ If any parameter is of an unsupported type, fastcache is silently disabled for t
 
 Fastcache hashes the source code of the kernel and all sub-functions it calls. If the source file cannot be read at runtime (e.g. the kernel is defined in a frozen/compiled module, or the file has been deleted), fastcache cannot validate the cache and will fall back to normal compilation.
 
-### 4. Cache invalidation
+## Cache invalidation
 
 The cache is automatically invalidated when any of the following change:
 
