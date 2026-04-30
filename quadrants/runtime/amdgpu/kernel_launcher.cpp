@@ -83,7 +83,11 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         std::vector<int> indices = task.ad_stack.bound_expr->ndarray_arg_id;
         indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
         indices.push_back(axis);
-        flat_len *= int64_t(ctx.get_struct_arg<int32_t>(indices));
+        // get_struct_arg_host (NOT get_struct_arg): launch_llvm_kernel above has swapped
+        // ctx_->arg_buffer to a device pointer at amdgpu:230-235, so a plain get_struct_arg
+        // would dereference device memory from the host. See the matching CUDA launcher
+        // comment for the full rationale.
+        flat_len *= int64_t(ctx.get_struct_arg_host<int32_t>(indices));
       }
       bound_count_length = static_cast<std::size_t>(std::max<int64_t>(0, flat_len));
     }
