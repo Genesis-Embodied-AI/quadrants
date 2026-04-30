@@ -105,19 +105,21 @@ def _patch_field_dlpack_canonical(capsule, layout):
         return
     if tuple(layout) == tuple(range(ndim)):
         return  # identity layout — nothing to do
+    _PyCapsule_IsValid = ctypes.pythonapi.PyCapsule_IsValid
+    _PyCapsule_IsValid.restype = ctypes.c_int
+    _PyCapsule_IsValid.argtypes = [ctypes.py_object, ctypes.c_char_p]
     _PyCapsule_GetPointer = ctypes.pythonapi.PyCapsule_GetPointer
     _PyCapsule_GetPointer.restype = ctypes.c_void_p
     _PyCapsule_GetPointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
 
-    raw = _PyCapsule_GetPointer(capsule, b"dltensor")
-    if raw:
+    if _PyCapsule_IsValid(capsule, b"dltensor"):
+        raw = _PyCapsule_GetPointer(capsule, b"dltensor")
         t = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensor)).contents.dl_tensor
-    else:
-        ctypes.pythonapi.PyErr_Clear()
+    elif _PyCapsule_IsValid(capsule, b"dltensor_versioned"):
         raw = _PyCapsule_GetPointer(capsule, b"dltensor_versioned")
-        if not raw:
-            raise RuntimeError("field_to_dlpack returned a capsule with an unrecognised name")
         t = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensorVersioned)).contents.dl_tensor
+    else:
+        raise RuntimeError("field_to_dlpack returned a capsule with an unrecognised name")
 
     if t.ndim < ndim:
         raise RuntimeError(f"field_to_dlpack returned ndim={t.ndim} but layout has rank {ndim}; cannot patch")
