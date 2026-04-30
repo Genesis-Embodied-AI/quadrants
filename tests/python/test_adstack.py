@@ -3009,15 +3009,17 @@ def test_adstack_min_loop_carried_serial_range_for(n_inner):
 
 
 @pytest.mark.parametrize("gated_fraction", [0.05, 0.5, 1.0])
-@test_utils.test(arch=[qd.metal, qd.vulkan], require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
 def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
-    # Pins the static-IR-bound sparse-adstack-heap path end to end on the SPIR-V backend. Kernel shape:
+    # Pins the static-IR-bound sparse-adstack-heap path end to end across every backend that ships the
+    # lazy-row claim (CPU LLVM, CUDA / AMDGPU LLVM, Metal / Vulkan SPIR-V). Kernel shape:
     # `for i in range(n): if selector[i] > eps: <adstack-using gradient work>` with `selector` as an ndarray
     # argument. The codegen pattern matcher captures the gating predicate as a `StaticBoundExpr` carrying
-    # the ndarray's `arg_id` and the comparison `> eps`; the runtime dispatches the generic bound-reducer
-    # compute shader which counts threads with `selector[i] > eps`, and the float adstack heap is sized
-    # to exactly that count instead of the dispatched-threads worst case. The lazy LCA-block atomic claim
-    # then maps each gated thread to a unique row in `[0, count)` of the smaller heap.
+    # the ndarray's `arg_id` and the comparison `> eps`; the runtime walks the gating ndarray (host-side on
+    # CPU, single-thread reducer kernel on CUDA / AMDGPU, compute-shader reducer on SPIR-V) which counts
+    # threads with `selector[i] > eps`, and the float adstack heap is sized to exactly that count instead
+    # of the dispatched-threads worst case. The lazy LCA-block atomic claim then maps each gated thread
+    # to a unique row in `[0, count)` of the smaller heap.
     #
     # The test parametrises the gated-element fraction so it covers three regimes the runtime path treats
     # differently: (a) sparse (5%) - the heap is much smaller than dispatched_threads and most threads
@@ -3035,6 +3037,14 @@ def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
     # regression that corrupts the row mapping fails on the gradient oracle. The kernel is structured
     # with the gate immediately above the inner range-for so the LCA pre-pass places the float-LCA inside
     # the gate, which is the precondition for the bound_expr capture to succeed.
+    #
+    # `n=256` is deliberately larger than a typical CPU worker pool (~8 threads) so the CPU host reducer
+    # has to walk the full ndarray to count gate-passing iterations, not just the worker-pool prefix; a
+    # regression that walks `[0, num_cpu_threads)` undercounts in the sparse case and ends up clamping
+    # every later iteration's claimed row into a single alias slot - silently corrupting gradients. The
+    # `gated_fraction=0.5` parametrisation is the tightest catch for that class of bug because the count
+    # mismatch then aliases ~128 iterations into a handful of rows, overwhelming the per-row stack's
+    # `max_size=32` headroom and tripping the bounds-checked overflow on the debug build.
     n = 256
     n_iter = 8
     eps = 1e-9
@@ -3073,6 +3083,71 @@ def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
 
     # Analytic oracle. For gated i, the inner recurrence `v = v*c + d` over `n_iter` steps is linear in v
     # with slope `c^n_iter`, where `c = 1.05`. So `d(out[0])/d(x[i]) = c^n_iter` for gated i, 0 otherwise.
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    expected = np.where(selector_np > eps, np.float32(expected_per_gated), np.float32(0.0))
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
+def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct():
+    # Pins the lazy-row claim path under `debug=True`. The release-build codegen tracks the per-stack push
+    # count in a function-scope alloca and never dereferences the heap header for `count`, so the alloca-site
+    # init can be a plain `count = 0` store; the debug-build codegen routes every push / pop / load-top
+    # through the runtime helpers (`stack_push`, `stack_top_primal`, ...) which read the count u64 prefix
+    # word from the heap row itself. That means each lazy float alloca needs its row's count header
+    # initialised to 0 BEFORE the first push - and crucially, AFTER the LCA-block atomic-rmw stores the
+    # per-thread claimed row id into `row_id_var`. A naive "init at the alloca visit site" mirrors the
+    # eager path's `stack_init` call on `linear_thread_idx * stride + offset`, but for the lazy path that
+    # alloca site sits at the offload root, where `row_id_var` is still its entry-block UINT32_MAX init -
+    # the dereference would write the count u64 to address `heap_float + UINT32_MAX * stride_float +
+    # offset` (~64 GB past the heap base) and segfault before the test asserts anything. The fix is to
+    # emit the `stack_init` at the LCA block, right after the atomic-rmw row claim, so `row_id_var`
+    # points at the thread's actual row.
+    #
+    # Internal details: kernel shape mirrors `test_adstack_static_bound_expr_ndarray_gate_grad_correct` so
+    # the analytic oracle is the same; the only delta is the `debug=True` qd.init option which flips
+    # both the bounds-check codepath and the runtime-helper push / pop emission. `gated_fraction=0.5` is
+    # picked because (a) it places ~half the LCA reaches on a non-trivial row in `[0, count)` so the row
+    # mapping has to be correct (a regression that always claims row 0 would still pass the 100% case),
+    # and (b) it keeps the test fast enough to run on every backend without a parametrize sweep.
+    n = 256
+    n_iter = 8
+    eps = 1e-9
+    gated_fraction = 0.5
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if selector[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[0] += v
+
+    np.random.seed(2)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    n_gated = max(1, int(round(gated_fraction * n)))
+    selector_np = np.zeros(n, dtype=np.float32)
+    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+    selector_np[gated_indices] = 1.0
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"debug-build static-bound-expr grad returned NaN: {got_grad}"
+
     coeff = 1.05
     expected_per_gated = coeff**n_iter
     expected = np.where(selector_np > eps, np.float32(expected_per_gated), np.float32(0.0))
