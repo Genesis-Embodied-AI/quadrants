@@ -22,7 +22,7 @@ def _build_callstack():
     """
     stack = impl.get_runtime().src_info_stack
     frames = []
-    prev_func = None
+    prev_key = None
     for info in stack:
         if not info:
             continue
@@ -30,9 +30,10 @@ def _build_callstack():
         if not m:
             continue
         filepath, lineno, funcname = m.group(1), m.group(2), m.group(3)
-        if funcname != prev_func:
+        key = (filepath, funcname)
+        if key != prev_key:
             frames.append((filepath, lineno, funcname))
-            prev_func = funcname
+            prev_key = key
 
     if not frames:
         return "<unknown>", "<unknown>"
