@@ -118,7 +118,7 @@ Fastcache supports the following parameter types:
 | `dataclasses.dataclass` | Yes | field types recursively; field values if annotated with `add_value_to_cache_key` (see [above](#dataclass-fields-with-cached-values)) |
 | `@qd.data_oriented` objects | Yes | member types and primitive member values recursively |
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
-| Non-template primitives (int, float) | Yes | type only |
+| Non-template primitives (int, float, bool) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
 | `qd.field` / `ScalarField` / `MatrixField` | **No** | — |
 
