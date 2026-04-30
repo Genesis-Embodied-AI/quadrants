@@ -292,6 +292,7 @@ class Kernel(FuncBase):
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
         self.use_cuda_graph: bool = False
+        self.fn_attrs: dict[str, dict[str, str]] | None = None
         self.graph_do_while_arg: str | None = None
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
@@ -329,7 +330,7 @@ class Kernel(FuncBase):
         if self.runtime.src_ll_cache and self.quadrants_callable and self.quadrants_callable.is_pure:
             kernel_source_info, _src = get_source_info_and_src(self.func)
             self.fast_checksum = src_hasher.create_cache_key(
-                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas
+                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, self.fn_attrs
             )
             used_py_dataclass_parameters = None
             if self.fast_checksum:
@@ -406,6 +407,8 @@ class Kernel(FuncBase):
                 quadrants_kernel = impl.get_runtime().prog.create_kernel(
                     quadrants_ast_generator, kernel_name, self.autodiff_mode
                 )
+                if self.fn_attrs:
+                    quadrants_kernel.set_fn_attrs(self.fn_attrs)
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel

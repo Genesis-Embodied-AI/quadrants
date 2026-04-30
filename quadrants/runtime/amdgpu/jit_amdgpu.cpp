@@ -87,12 +87,22 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
           kernel_name.find("_kernel_update_search_direction") !=
               std::string::npos;
 
-      if (!is_lightweight_cg_subkernel) {
+      // Each default below is skipped if the kernel already carries that
+      // attribute (set upstream in codegen_llvm.cpp from user-supplied
+      // @qd.kernel(fn_attrs={...})). User values win.
+      if (!is_lightweight_cg_subkernel &&
+          !F.hasFnAttribute("amdgpu-waves-per-eu")) {
         F.addFnAttr("amdgpu-waves-per-eu", "1,2");
       }
-      F.addFnAttr("uniform-work-group-size", "true");
-      F.addFnAttr("amdgpu-ieee", "false");
-      F.addFnAttr("amdgpu-dx10-clamp", "false");
+      if (!F.hasFnAttribute("uniform-work-group-size")) {
+        F.addFnAttr("uniform-work-group-size", "true");
+      }
+      if (!F.hasFnAttribute("amdgpu-ieee")) {
+        F.addFnAttr("amdgpu-ieee", "false");
+      }
+      if (!F.hasFnAttribute("amdgpu-dx10-clamp")) {
+        F.addFnAttr("amdgpu-dx10-clamp", "false");
+      }
     }
   }
 

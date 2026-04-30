@@ -21,6 +21,7 @@ def create_cache_key(
     kernel_source_info: FunctionSourceInfo,
     args: Sequence[Any],
     arg_metas: Sequence[ArgMetadata],
+    fn_attrs: dict[str, dict[str, str]] | None = None,
 ) -> str | None:
     """
     cache key takes into account:
@@ -28,6 +29,7 @@ def create_cache_key(
     - cache value arg values
     - kernel function (but not sub functions)
     - compilation config (which includes arch, and debug)
+    - per-kernel fn_attrs (set via @qd.kernel(fn_attrs=...))
     """
     args_hash = args_hasher.hash_args(raise_on_templated_floats, args, arg_metas)
     if args_hash is None:
@@ -40,6 +42,7 @@ def create_cache_key(
         return None
     kernel_hash = function_hasher.hash_kernel(kernel_source_info)
     config_hash = config_hasher.hash_compile_config()
+    fn_attrs_hash = json.dumps(fn_attrs or {}, sort_keys=True)
     cache_key = hash_iterable_strings(
         (
             quadrants.__version_str__,
@@ -49,6 +52,7 @@ def create_cache_key(
             kernel_source_info.filepath,
             str(kernel_source_info.start_lineno),
             "pruned",
+            fn_attrs_hash,
         )
     )
     return cache_key
