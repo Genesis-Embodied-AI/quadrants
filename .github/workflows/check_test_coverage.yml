@@ -30,7 +30,7 @@ jobs:
 
           # Diff of source-only files (excluding tests/, benchmarks/, docs/, scripts/, misc/)
           git diff "$MERGE_BASE...HEAD" \
-            -- '*.py' '*.cpp' '*.h' '*.hpp' '*.c' '*.cc' \
+            -- '*.py' '*.cpp' '*.h' '*.hpp' '*.c' '*.cc' '*.cu' \
             ':!tests/' ':!benchmarks/' ':!docs/' ':!scripts/' ':!misc/' \
             > /tmp/source_diff.patch
 
