@@ -97,8 +97,9 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // `i += grid_dim()` so a smaller grid completes the same workload sequentially per slot.
     int effective_grid_dim = task.grid_dim;
     if (!task.ad_stack.allocas.empty() && task.block_dim > 0) {
-      const std::size_t cap_blocks = (kAdStackMaxConcurrentThreads + static_cast<std::size_t>(task.block_dim) - 1) /
-                                     static_cast<std::size_t>(task.block_dim);
+      // Floor division - see the matching comment in `runtime/cuda/kernel_launcher.cpp`.
+      const std::size_t cap_blocks =
+          std::max<std::size_t>(1u, kAdStackMaxConcurrentThreads / static_cast<std::size_t>(task.block_dim));
       effective_grid_dim = static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(task.grid_dim), cap_blocks));
       if (effective_grid_dim < 1) {
         effective_grid_dim = 1;

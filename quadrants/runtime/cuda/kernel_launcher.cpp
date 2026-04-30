@@ -117,8 +117,13 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // adstack keep the codegen-emitted `task.grid_dim` (saturating_grid_dim) for max throughput.
     int effective_grid_dim = task.grid_dim;
     if (!task.ad_stack.allocas.empty() && task.block_dim > 0) {
-      const std::size_t cap_blocks = (kAdStackMaxConcurrentThreads + static_cast<std::size_t>(task.block_dim) - 1) /
-                                     static_cast<std::size_t>(task.block_dim);
+      // Floor division (not ceiling): the heap-row count `n` resolved by `resolve_num_threads` floors at
+      // `kAdStackMaxConcurrentThreads`, so dispatching `cap_blocks * block_dim` threads must not exceed that count.
+      // Ceiling division would over-dispatch by `block_dim - 1` threads when `block_dim` does not divide
+      // `kAdStackMaxConcurrentThreads` evenly (e.g. `block_dim=192`: `ceil(65536/192)*192 = 65664`), and threads with
+      // `linear_thread_idx >= 65536` would index past the heap end.
+      const std::size_t cap_blocks =
+          std::max<std::size_t>(1u, kAdStackMaxConcurrentThreads / static_cast<std::size_t>(task.block_dim));
       effective_grid_dim = static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(task.grid_dim), cap_blocks));
       if (effective_grid_dim < 1) {
         effective_grid_dim = 1;

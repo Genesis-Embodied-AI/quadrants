@@ -520,11 +520,15 @@ void LlvmRuntimeExecutor::finalize() {
   runtime_adstack_heap_size_int_field_ptr_ = nullptr;
   adstack_heap_alloc_float_.reset();
   adstack_heap_size_float_ = 0;
+  adstack_heap_alloc_int_.reset();
+  adstack_heap_size_int_ = 0;
   runtime_adstack_row_counters_field_ptr_ = nullptr;
   runtime_adstack_bound_row_capacities_field_ptr_ = nullptr;
   adstack_row_counters_alloc_.reset();
   adstack_bound_row_capacities_alloc_.reset();
   adstack_lazy_claim_capacity_ = 0;
+  adstack_bound_reducer_params_alloc_.reset();
+  adstack_bound_reducer_params_capacity_ = 0;
   // Release the pinned-host metadata scratch and its completion event. Sequence: first drain the pending in-flight
   // copy via `event_synchronize` (the next launch's reuse path would have done this lazily, but on shutdown there
   // is no next launch), then free the host pinning, then destroy the event. Skipping the synchronize before
