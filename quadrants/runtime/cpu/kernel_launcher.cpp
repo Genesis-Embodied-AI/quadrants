@@ -14,11 +14,18 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
   // Allocate / reset the per-kernel lazy-claim arrays once before the first task. The codegen-emitted LCA-block
   // row claim atomic-rmws into `runtime->adstack_row_counters[task_codegen_id]`; clearing the slots ensures each
   // task counts its own LCA-block-reaching threads from zero, and writing UINT32_MAX into
-  // `bound_row_capacities[task_codegen_id]` keeps the codegen-emitted bounds clamp inert until a follow-up
-  // reducer publishes tighter values per task.
+  // `bound_row_capacities[task_codegen_id]` keeps the codegen-emitted bounds clamp inert until the per-task host
+  // reducer below tightens specific slots.
   executor->publish_adstack_lazy_claim_buffers(task_funcs.size());
   for (size_t i = 0; i < task_funcs.size(); ++i) {
     executor->publish_adstack_metadata(ad_stacks[i], num_threads_per_task[i], &ctx);
+    // Host-side reducer for tasks with a captured ndarray-backed `bound_expr`: walks the gating ndarray, counts
+    // the threads that pass the predicate, writes the count into `runtime->adstack_bound_row_capacities[i]`.
+    // The codegen-emitted bounds clamp at the float LCA-block claim site reads this slot back; with the count
+    // known, an over-claim (claimed_row >= count) is clamped at `count - 1` before any descendant push / load-
+    // top site uses the row id. Tasks without a captured gate keep the UINT32_MAX default and the clamp stays
+    // inert. SNode-backed gates are not captured on the LLVM analysis path so they also keep the default.
+    executor->publish_per_task_bound_count_cpu(i, ad_stacks[i], num_threads_per_task[i], &ctx);
     task_funcs[i](&ctx.get_context());
     if (ctx.get_context().cpu_assert_failed)
       break;

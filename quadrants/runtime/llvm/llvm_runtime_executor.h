@@ -129,6 +129,21 @@ class LlvmRuntimeExecutor {
   // `adstack_bound_row_capacities` via the cached field addresses on first call (and after every grow).
   void publish_adstack_lazy_claim_buffers(std::size_t num_tasks);
 
+  // Per-task host-side evaluation of the captured `StaticAdStackBoundExpr` (ndarray-backed; SNode-backed gates
+  // are not captured on the LLVM analysis path so this never sees them). Walks `[0, length)` reading the gating
+  // ndarray on the host (pointer is in `ctx->array_ptrs[arg_id, DATA_PTR_POS_IN_NDARRAY]` populated by the
+  // launcher), evaluates the captured comparison + polarity, returns the count of gate-passing threads. Writes
+  // that count into `runtime->adstack_bound_row_capacities[task_index]` so the codegen-emitted bounds clamp at
+  // the float LCA-block claim site activates for legitimate over-claim, and so a future split-heap allocator
+  // can size the float heap at `count * stride_float` instead of the dispatched-threads worst case. Returns
+  // `UINT32_MAX` (meaning "no capacity known, leave the default") when the field source is not ndarray, when
+  // `arch != cpu` (the host can't reach GPU-private memory cheaply), or when the data pointer is not
+  // host-accessible.
+  uint32_t publish_per_task_bound_count_cpu(std::size_t task_index,
+                                            const AdStackSizingInfo &ad_stack,
+                                            std::size_t length,
+                                            LaunchContextBuilder *ctx);
+
   // Return (and lazily cache) the device pointer to `runtime->temporaries`, the global temporary buffer backing
   // `GlobalTemporaryStmt` loads and stores. GPU kernel launchers use this to read back dynamic range_for bounds
   // (begin / end i32 values at known byte offsets) via a host-side DtoH memcpy when sizing the adstack heap.

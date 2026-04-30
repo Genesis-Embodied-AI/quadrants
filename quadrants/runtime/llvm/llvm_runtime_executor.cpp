@@ -1006,6 +1006,100 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
   return needed_bytes;
 }
 
+namespace {
+
+// Encode the captured `BinaryOpType` (stored as int in `cmp_op`) and evaluate against typed operands. Mirrors the
+// SPIR-V reducer's `OpSwitch` over the same encoding.
+template <typename T>
+inline bool eval_cmp(int cmp_op, T lhs, T rhs) {
+  switch (static_cast<BinaryOpType>(cmp_op)) {
+    case BinaryOpType::cmp_lt:
+      return lhs < rhs;
+    case BinaryOpType::cmp_le:
+      return lhs <= rhs;
+    case BinaryOpType::cmp_gt:
+      return lhs > rhs;
+    case BinaryOpType::cmp_ge:
+      return lhs >= rhs;
+    case BinaryOpType::cmp_eq:
+      return lhs == rhs;
+    case BinaryOpType::cmp_ne:
+      return lhs != rhs;
+    default:
+      return false;
+  }
+}
+
+}  // namespace
+
+uint32_t LlvmRuntimeExecutor::publish_per_task_bound_count_cpu(std::size_t task_index,
+                                                               const AdStackSizingInfo &ad_stack,
+                                                               std::size_t length,
+                                                               LaunchContextBuilder *ctx) {
+  // Default to UINT32_MAX (no clamp); only override on a successful host evaluation. The codegen-emitted bounds
+  // clamp at the float LCA-block claim site stays inert when the slot holds UINT32_MAX, so this fall-through is
+  // a no-op that preserves the existing behaviour.
+  if (config_.arch != Arch::x64 && config_.arch != Arch::arm64) {
+    return std::numeric_limits<uint32_t>::max();
+  }
+  if (!ad_stack.bound_expr.has_value()) {
+    return std::numeric_limits<uint32_t>::max();
+  }
+  const auto &be = ad_stack.bound_expr.value();
+  if (be.field_source_kind != StaticAdStackBoundExpr::FieldSourceKind::NdArray) {
+    return std::numeric_limits<uint32_t>::max();  // SNode-backed gates are not captured on the LLVM analysis path.
+  }
+  if (ctx == nullptr || ctx->args_type == nullptr || ctx->get_context().arg_buffer == nullptr) {
+    return std::numeric_limits<uint32_t>::max();
+  }
+
+  // Resolve the ndarray data pointer: walk `ctx->args_type->get_element_offset(arg_id + DATA_PTR_POS_IN_NDARRAY)`
+  // to find where the data pointer lives in the arg buffer, then dereference. Mirrors the SPIR-V reducer's
+  // `resolve_ndarray_data_ptr_byte_offset`. On CPU `arg_buffer` is host memory, so the deref is direct.
+  std::vector<int> indices = be.ndarray_arg_id;
+  indices.push_back(TypeFactory::DATA_PTR_POS_IN_NDARRAY);
+  std::size_t data_ptr_byte_off = ctx->args_type->get_element_offset(indices);
+  const char *arg_buffer = static_cast<const char *>(ctx->get_context().arg_buffer);
+  void *data_ptr = *reinterpret_cast<void *const *>(arg_buffer + data_ptr_byte_off);
+  if (data_ptr == nullptr) {
+    return std::numeric_limits<uint32_t>::max();
+  }
+
+  // Walk `[0, length)` evaluating the captured predicate on each thread's `field[i]`. The polarity bit selects
+  // enter-on-true vs enter-on-false at the LCA's IfStmt; the count we publish is always the number of threads
+  // that REACH the LCA, regardless of the gate orientation.
+  uint32_t count = 0;
+  if (be.field_dtype_is_float) {
+    const float *fdata = static_cast<const float *>(data_ptr);
+    for (std::size_t i = 0; i < length; ++i) {
+      const bool match = eval_cmp<float>(be.cmp_op, fdata[i], be.literal_f32);
+      if (be.polarity ? match : !match) {
+        ++count;
+      }
+    }
+  } else {
+    const int32_t *idata = static_cast<const int32_t *>(data_ptr);
+    for (std::size_t i = 0; i < length; ++i) {
+      const bool match = eval_cmp<int32_t>(be.cmp_op, idata[i], be.literal_i32);
+      if (be.polarity ? match : !match) {
+        ++count;
+      }
+    }
+  }
+
+  // Publish the count into `runtime->adstack_bound_row_capacities[task_index]` so the codegen-emitted bounds
+  // clamp at the float LCA-block claim site reads it back as the per-task capacity. Slot was reset to
+  // UINT32_MAX by `publish_adstack_lazy_claim_buffers`; this overwrite tightens it to the real count.
+  if (runtime_adstack_bound_row_capacities_field_ptr_ == nullptr || adstack_bound_row_capacities_alloc_ == nullptr) {
+    return count;
+  }
+  void *bound_capacities_dev_ptr = get_device_alloc_info_ptr(*adstack_bound_row_capacities_alloc_);
+  // CPU only: write directly into the host-resident array.
+  uint32_t *slots = static_cast<uint32_t *>(bound_capacities_dev_ptr);
+  slots[task_index] = count;
+  return count;
+}
+
 void LlvmRuntimeExecutor::publish_adstack_lazy_claim_buffers(std::size_t num_tasks) {
   if (num_tasks == 0) {
     return;
