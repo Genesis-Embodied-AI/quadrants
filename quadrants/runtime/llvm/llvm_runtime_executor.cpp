@@ -510,6 +510,12 @@ void LlvmRuntimeExecutor::finalize() {
   runtime_temporaries_cache_ = nullptr;
   runtime_adstack_heap_buffer_field_ptr_ = nullptr;
   runtime_adstack_heap_size_field_ptr_ = nullptr;
+  runtime_adstack_heap_buffer_float_field_ptr_ = nullptr;
+  runtime_adstack_heap_size_float_field_ptr_ = nullptr;
+  runtime_adstack_heap_buffer_int_field_ptr_ = nullptr;
+  runtime_adstack_heap_size_int_field_ptr_ = nullptr;
+  adstack_heap_alloc_float_.reset();
+  adstack_heap_size_float_ = 0;
   runtime_adstack_row_counters_field_ptr_ = nullptr;
   runtime_adstack_bound_row_capacities_field_ptr_ = nullptr;
   adstack_row_counters_alloc_.reset();
@@ -764,23 +770,44 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
       }
       host_max_sizes[i] = static_cast<uint64_t>(std::max<int64_t>(v, 1));
     }
-    // Combined running offset for the legacy single-heap codegen path. Per-kind running offsets are tracked
-    // alongside so the host can publish `adstack_per_thread_stride_{float,int}` for the split-heap codegen path
-    // (sizing the float heap from gate-passing thread count). The combined offset / combined stride are what
-    // `linear_tid * stride + offset` reads on the legacy codegen path.
+    // Two layouts depending on whether the task captured a `bound_expr`:
+    //   * No bound_expr: legacy single-heap layout. `host_offsets[i]` is the cumulative byte offset within the
+    //     combined slice; the published combined stride drives `linear_tid * stride + offset` addressing on the
+    //     codegen side. Float and int allocas share the same slice.
+    //   * Bound_expr captured: split-heap layout. Float allocas live in the dedicated float heap addressed by
+    //     `row_id_var * stride_float + float_offset`; their `host_offsets[i]` is the byte offset within the
+    //     float-only slice. Int allocas live in the combined heap addressed by `linear_tid * stride_int +
+    //     int_offset`; their `host_offsets[i]` is the byte offset within the int-only slice. The combined-heap
+    //     stride published to the runtime (`adstack_per_thread_stride`) is the int-only stride for these tasks
+    //     because the combined slice no longer holds the float allocas - they have migrated to the float heap.
+    // This split is what shrinks per-thread combined storage to int-only on tasks where the float allocations
+    // dominate, and lets the float heap be sized from the captured `bound_row_capacities[i]` count instead of
+    // the dispatched-threads worst case.
+    const bool split_layout = ad_stack.bound_expr.has_value();
     std::vector<uint64_t> host_offsets(n_stacks);
+    std::size_t stride_combined = 0;
     std::size_t stride_float = 0;
     std::size_t stride_int = 0;
     for (std::size_t i = 0; i < n_stacks; ++i) {
-      host_offsets[i] = stride;
       const std::size_t step = align_up_8(sizeof(int64_t) + ad_stack.allocas[i].entry_size_bytes * host_max_sizes[i]);
-      stride += step;
-      if (ad_stack.allocas[i].heap_kind == AdStackAllocaInfo::HeapKind::Float) {
+      const bool is_float = ad_stack.allocas[i].heap_kind == AdStackAllocaInfo::HeapKind::Float;
+      if (split_layout) {
+        host_offsets[i] = is_float ? stride_float : stride_int;
+      } else {
+        host_offsets[i] = stride_combined;
+      }
+      stride_combined += step;
+      if (is_float) {
         stride_float += step;
       } else {
         stride_int += step;
       }
     }
+    // Stride published into `runtime->adstack_per_thread_stride` is what the legacy combined-heap codegen reads
+    // for the `linear_tid * stride + offset` formula. On tasks with `bound_expr` the combined slice is int-only
+    // (float allocas migrated to the float heap), so we publish `stride_int`; on tasks without, the full combined
+    // stride. Tasks alternate using the same combined heap with different strides per launch.
+    stride = split_layout ? stride_int : stride_combined;
     uint64_t stride_combined_u64 = static_cast<uint64_t>(stride);
     uint64_t stride_float_u64 = static_cast<uint64_t>(stride_float);
     uint64_t stride_int_u64 = static_cast<uint64_t>(stride_int);
@@ -1003,6 +1030,17 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
 
   std::size_t needed_bytes = stride * num_threads;
   ensure_adstack_heap(needed_bytes);
+  // Float heap: when the task captured a `bound_expr`, allocate a dedicated float slab so the codegen-emitted
+  // `heap_float + row_id_var * stride_float + offset` formula has backing storage. Sized at
+  // `num_threads * per_thread_stride_float`, where `per_thread_stride_float` is the compile-time sum of float
+  // alloca sizes (from `AdStackSizingInfo::per_thread_stride_float`). On the GPU path the per-launch value lives
+  // in `runtime->adstack_per_thread_stride_float` written by the on-device sizer; reading it back here would
+  // require an extra DtoH so we use the compile-time value, which serves as an upper bound for the same reason
+  // the legacy combined `per_thread_stride` is - the runtime-evaluated SizeExprs only ever equal-or-shrink the
+  // compile-time bound.
+  if (ad_stack.bound_expr.has_value() && ad_stack.per_thread_stride_float > 0) {
+    ensure_adstack_heap_float(ad_stack.per_thread_stride_float * num_threads);
+  }
   return needed_bytes;
 }
 
@@ -1254,6 +1292,75 @@ void LlvmRuntimeExecutor::ensure_adstack_heap(std::size_t needed_bytes) {
   //     (it passes the `RuntimeContext` by host reference).
   adstack_heap_alloc_ = std::move(new_guard);
   adstack_heap_size_ = new_size;
+}
+
+void LlvmRuntimeExecutor::ensure_adstack_heap_float(std::size_t needed_bytes) {
+  if (needed_bytes == 0 || needed_bytes <= adstack_heap_size_float_) {
+    return;
+  }
+  // Mirror `ensure_adstack_heap`'s amortised-doubling growth and grow-on-demand semantics. The float heap is
+  // allocated independently from the combined heap so a kernel with bound_expr tasks can shrink the combined
+  // slice to int-only while still backing float allocas at `row_id_var * stride_float + float_offset`.
+  std::size_t new_size = std::max(needed_bytes, std::size_t(2) * adstack_heap_size_float_);
+
+  Device::AllocParams params{};
+  params.size = new_size;
+  params.host_read = false;
+  params.host_write = false;
+  params.export_sharing = false;
+  params.usage = AllocUsage::Storage;
+  DeviceAllocation new_alloc;
+  RhiResult res = llvm_device()->allocate_memory(params, &new_alloc);
+  QD_ERROR_IF(res != RhiResult::success,
+              "Failed to allocate {} bytes for the adstack float heap (err: {}). Consider lowering "
+              "`ad_stack_size` or the per-kernel reverse-mode adstack count.",
+              new_size, int(res));
+  void *new_ptr = get_device_alloc_info_ptr(new_alloc);
+  auto new_guard = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+
+  // Resolve and cache the field-of-LLVMRuntime addresses for the split-heap fields on first grow. The
+  // `runtime_get_adstack_split_heap_field_ptrs` helper returns four addresses in fixed slot order: float-buffer-
+  // ptr, float-size, int-buffer-ptr, int-size. We only consume the float pair here; the int half is reserved for
+  // a future symmetric `ensure_adstack_heap_int` if it becomes useful (today the int allocas in bound_expr tasks
+  // ride the combined heap with a smaller stride).
+  if (runtime_adstack_heap_buffer_float_field_ptr_ == nullptr) {
+    auto *const runtime_jit = get_runtime_jit_module();
+    runtime_jit->call<void *>("runtime_get_adstack_split_heap_field_ptrs", llvm_runtime_);
+    runtime_adstack_heap_buffer_float_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
+    runtime_adstack_heap_size_float_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id + 1, result_buffer_cache_));
+    runtime_adstack_heap_buffer_int_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id + 2, result_buffer_cache_));
+    runtime_adstack_heap_size_int_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id + 3, result_buffer_cache_));
+  }
+  uint64 size_u64 = static_cast<uint64>(new_size);
+  if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+    CUDADriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_buffer_float_field_ptr_, &new_ptr,
+                                                     sizeof(void *));
+    CUDADriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_size_float_field_ptr_, &size_u64,
+                                                     sizeof(uint64));
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+    AMDGPUDriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_buffer_float_field_ptr_, &new_ptr,
+                                                       sizeof(void *));
+    AMDGPUDriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_size_float_field_ptr_, &size_u64,
+                                                       sizeof(uint64));
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else {
+    *reinterpret_cast<void **>(runtime_adstack_heap_buffer_float_field_ptr_) = new_ptr;
+    *reinterpret_cast<uint64 *>(runtime_adstack_heap_size_float_field_ptr_) = size_u64;
+  }
+
+  adstack_heap_alloc_float_ = std::move(new_guard);
+  adstack_heap_size_float_ = new_size;
 }
 
 void LlvmRuntimeExecutor::preallocate_runtime_memory() {

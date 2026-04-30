@@ -2412,20 +2412,20 @@ llvm::Value *TaskCodeGenLLVM::get_ad_stack_base_llvm(AdStackAllocaStmt *stack) {
   if (ad_stack_lazy_float_allocas_.count(stack) == 0) {
     return llvm_val[stack];
   }
-  ensure_ad_stack_heap_base_llvm();
-  ensure_ad_stack_metadata_llvm();
+  ensure_ad_stack_heap_base_split_llvm();
+  ensure_ad_stack_metadata_split_llvm();
   llvm::Value *row_id_var = ensure_ad_stack_row_id_var_float_llvm();
   auto *i32ty = llvm::Type::getInt32Ty(*llvm_context);
   auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
   auto *i8ty = llvm::Type::getInt8Ty(*llvm_context);
   llvm::Value *row_id_i32 = builder->CreateLoad(i32ty, row_id_var);
   llvm::Value *row_id_i64 = builder->CreateZExt(row_id_i32, i64ty);
-  llvm::Value *slice_offset = builder->CreateMul(row_id_i64, ad_stack_stride_llvm_);
+  llvm::Value *slice_offset = builder->CreateMul(row_id_i64, ad_stack_stride_float_llvm_);
   llvm::Value *stack_id_i64 = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(stack->stack_id));
   llvm::Value *offset_addr = builder->CreateGEP(i64ty, ad_stack_offsets_ptr_llvm_, stack_id_i64);
   llvm::Value *offset = builder->CreateLoad(i64ty, offset_addr);
   llvm::Value *total_offset = builder->CreateAdd(slice_offset, offset);
-  return builder->CreateGEP(i8ty, ad_stack_heap_base_llvm_, total_offset);
+  return builder->CreateGEP(i8ty, ad_stack_heap_base_float_llvm_, total_offset);
 }
 
 // Compute the address of the top primal (or adjoint, when `adjoint_offset_bytes` == element_size) slot for an

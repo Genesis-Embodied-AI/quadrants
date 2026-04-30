@@ -144,6 +144,11 @@ class LlvmRuntimeExecutor {
                                             std::size_t length,
                                             LaunchContextBuilder *ctx);
 
+  // Grow `runtime->adstack_heap_buffer_float` to at least `needed_bytes` and publish the new pointer / size into
+  // the runtime struct via the cached field addresses. Mirrors `ensure_adstack_heap` for the legacy combined
+  // heap; same amortised-doubling growth and same release-deferred-until-next-launch semantics.
+  void ensure_adstack_heap_float(std::size_t needed_bytes);
+
   // Return (and lazily cache) the device pointer to `runtime->temporaries`, the global temporary buffer backing
   // `GlobalTemporaryStmt` loads and stores. GPU kernel launchers use this to read back dynamic range_for bounds
   // (begin / end i32 values at known byte offsets) via a host-side DtoH memcpy when sizing the adstack heap.
@@ -234,6 +239,15 @@ class LlvmRuntimeExecutor {
   // `hipFree(context_pointer)` without simultaneously fixing the AMDGPU release path.
   DeviceAllocationUnique adstack_heap_alloc_ = nullptr;
   std::size_t adstack_heap_size_{0};
+  // Split-layout float heap: dedicated slab holding only the f32 adstack rows for tasks that captured a
+  // `bound_expr`. Sized by the launcher at `min(num_threads, max_bound_capacity) * max_stride_float` instead of
+  // the dispatched-threads worst case, so workloads where the gating predicate matches few threads (sparse-grid
+  // MPM, masked update kernels) shrink the float storage proportionally. Independent grow-on-demand from the
+  // combined heap; the codegen-emitted `heap_float + row_id_var * stride_float + offset` formula reads from
+  // `runtime->adstack_heap_buffer_float` (and `_size_float`) which the host writes via the cached field
+  // addresses below.
+  DeviceAllocationUnique adstack_heap_alloc_float_ = nullptr;
+  std::size_t adstack_heap_size_float_{0};
 
   // Cached device pointer to `runtime->temporaries`, populated lazily by `get_runtime_temporaries_device_ptr()`.
   void *runtime_temporaries_cache_{nullptr};
