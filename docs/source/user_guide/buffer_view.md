@@ -105,6 +105,7 @@ kernel (script.py:11)
 
 The callstack shows every function frame from the kernel down to the leaf function where the access occurred. Bounds checking has no cost when `debug=False` (the default).
 
-## Limitation
+## Limitations
 
-Only **1D** ndarrays are supported as the backing buffer.
+- Only **1D** ndarrays are supported as the backing buffer.
+- Ndarrays with `needs_grad=True` are not supported. BufferView will raise `TypeError` on construction.
