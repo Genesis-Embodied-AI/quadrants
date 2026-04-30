@@ -121,6 +121,18 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // balanced), because the bootstrap value is dead memory (no `load_top` ever reads it back) and writing through
   // a possibly-unclaimed `row_id_var` would corrupt arbitrary heap rows.
   std::unordered_set<AdStackPushStmt *> ad_stack_bootstrap_pushes_;
+  // Helpers that load the split-heap runtime fields once at `entry_block`. `ensure_ad_stack_heap_base_split_llvm`
+  // caches the float / int heap base pointers; `ensure_ad_stack_metadata_split_llvm` adds the per-kind strides on
+  // top of the legacy combined stride / offsets / max_sizes loads. Tasks without a captured `bound_expr` keep the
+  // combined-heap path and never call into these.
+  void ensure_ad_stack_heap_base_split_llvm();
+  void ensure_ad_stack_metadata_split_llvm();
+  // Returns (creating on first call) the Function-scope `alloca i32` initialised to UINT32_MAX at task entry that
+  // holds this thread's lazily-claimed float-heap row id. The atomic-rmw claim at the float LCA block overwrites
+  // it with the value the launcher's row counter returns; downstream float push / load-top sites read it back to
+  // compute their per-thread base. Threads that never reach the LCA never claim a row and never touch the float
+  // heap.
+  llvm::Value *ensure_ad_stack_row_id_var_float_llvm();
   // Captured static gate predicate from the shared analysis. Propagated through to
   // `current_task->ad_stack.bound_expr` so the host launcher can dispatch the per-arch reducer to size the float
   // heap to the actual gate-passing thread count.

@@ -2239,6 +2239,23 @@ void TaskCodeGenLLVM::ensure_ad_stack_heap_base_llvm() {
   ad_stack_heap_base_llvm_ = call("LLVMRuntime_get_adstack_heap_buffer", get_runtime());
 }
 
+// Split-heap counterpart of `ensure_ad_stack_heap_base_llvm`. Loads the per-kind heap base pointers from the
+// runtime fields the launcher publishes alongside the legacy combined buffer. Cached at `entry_block` so each
+// downstream `AdStack*` visit reuses a dominating SSA value and `verifyFunction` stays happy regardless of
+// which branch first triggered the load. Float allocas address through `_float`; int / u1 allocas through
+// `_int`. Tasks where the analysis did not capture a `bound_expr` continue to hit the combined-heap path
+// above; tasks with a captured gate route here so the launcher can size the float heap from the reducer's
+// gate-passing thread count instead of the dispatched-threads worst case.
+void TaskCodeGenLLVM::ensure_ad_stack_heap_base_split_llvm() {
+  if (ad_stack_heap_base_float_llvm_ != nullptr) {
+    return;
+  }
+  llvm::IRBuilderBase::InsertPointGuard guard(*builder);
+  builder->SetInsertPoint(entry_block);
+  ad_stack_heap_base_float_llvm_ = call("LLVMRuntime_get_adstack_heap_buffer_float", get_runtime());
+  ad_stack_heap_base_int_llvm_ = call("LLVMRuntime_get_adstack_heap_buffer_int", get_runtime());
+}
+
 // Cache the per-launch adstack metadata SSA values at `entry_block` on first need. Mirrors
 // `ensure_ad_stack_heap_base_llvm`: one getter call per task, hoisted to the entry block so every downstream
 // `AdStack*` visit (which may live in nested blocks) reuses a dominating SSA value and `verifyFunction` stays happy.
@@ -2251,6 +2268,41 @@ void TaskCodeGenLLVM::ensure_ad_stack_metadata_llvm() {
   ad_stack_stride_llvm_ = call("LLVMRuntime_get_adstack_per_thread_stride", get_runtime());
   ad_stack_offsets_ptr_llvm_ = call("LLVMRuntime_get_adstack_offsets", get_runtime());
   ad_stack_max_sizes_ptr_llvm_ = call("LLVMRuntime_get_adstack_max_sizes", get_runtime());
+}
+
+// Split-heap counterpart that also loads the per-kind strides. `_float` drives the lazy float heap addressed by
+// `row_id_var * stride_float + float_offset`; `_int` drives the eager int heap addressed by `linear_thread_idx *
+// stride_int + int_offset`. Cached at `entry_block` like `ensure_ad_stack_metadata_llvm`. The legacy combined
+// stride / offsets / max_sizes loads remain valid for tasks that have not migrated to the split layout.
+void TaskCodeGenLLVM::ensure_ad_stack_metadata_split_llvm() {
+  if (ad_stack_stride_float_llvm_ != nullptr) {
+    return;
+  }
+  ensure_ad_stack_metadata_llvm();
+  llvm::IRBuilderBase::InsertPointGuard guard(*builder);
+  builder->SetInsertPoint(entry_block);
+  ad_stack_stride_float_llvm_ = call("LLVMRuntime_get_adstack_per_thread_stride_float", get_runtime());
+  ad_stack_stride_int_llvm_ = call("LLVMRuntime_get_adstack_per_thread_stride_int", get_runtime());
+}
+
+// Function-scope `alloca i32` holding the lazily-claimed float-heap row id for this task. Initialised to
+// UINT32_MAX at task entry so any pre-LCA observation (none should reach a real read on a correct codegen)
+// surfaces as an obviously-out-of-range index rather than aliasing row 0. The atomic-rmw claim at the float
+// LCA block overwrites this with the per-thread row, after which every descendant float push / load-top reads
+// the claimed value. The alloca is hoisted to the entry block (via the IRBuilder InsertPointGuard) regardless
+// of where this helper is first called from, so `mem2reg` promotes it to SSA and the row id flows through
+// downstream visits without per-site reloads.
+llvm::Value *TaskCodeGenLLVM::ensure_ad_stack_row_id_var_float_llvm() {
+  if (ad_stack_row_id_var_float_llvm_ != nullptr) {
+    return ad_stack_row_id_var_float_llvm_;
+  }
+  llvm::IRBuilderBase::InsertPointGuard guard(*builder);
+  builder->SetInsertPoint(entry_block, entry_block->getFirstInsertionPt());
+  auto *i32ty = llvm::Type::getInt32Ty(*llvm_context);
+  ad_stack_row_id_var_float_llvm_ = builder->CreateAlloca(i32ty);
+  builder->CreateStore(llvm::ConstantInt::get(i32ty, std::numeric_limits<uint32_t>::max()),
+                       ad_stack_row_id_var_float_llvm_);
+  return ad_stack_row_id_var_float_llvm_;
 }
 
 // Return (creating on first call) the per-stack `alloca i64` that holds the live push count for this stack on the
