@@ -210,10 +210,8 @@ def test_struct_aos_copy_none_correct():
 
 
 @test_utils.test()
-def test_struct_aos_copy_false_garbage():
-    """AoS struct member to_torch(copy=False) returns garbage because DLPack assumes contiguous strides but AoS
-    interleaves members. This documents the known limitation."""
-    _skip_if_no_zerocopy()
+def test_struct_aos_copy_false_raises():
+    """AoS struct member to_torch(copy=False) should raise because DLPack can't represent the interleaved strides."""
     s = qd.types.struct(a=qd.i32, b=qd.f32)
     f = s.field(shape=(4,), layout=qd.Layout.AOS)
 
@@ -226,8 +224,8 @@ def test_struct_aos_copy_false_garbage():
     fill()
     qd.sync()
 
-    t_a = f.a.to_torch(copy=False)
-    assert not np.array_equal(t_a.cpu().numpy(), [0, 10, 20, 30])
+    with pytest.raises(ValueError, match="Zero-copy not available"):
+        f.a.to_torch(copy=False)
 
 
 @test_utils.test()

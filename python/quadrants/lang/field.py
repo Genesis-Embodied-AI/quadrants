@@ -134,6 +134,19 @@ def _compute_torch_mps_supports_dlpack_bytes_offset() -> bool:
 _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET = _compute_torch_mps_supports_dlpack_bytes_offset()
 
 
+def _is_aos_struct_member(field: "Field") -> bool:
+    """True when *field* is a member of a multi-member StructField with AOS layout.
+
+    AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous
+    strides at the member dtype size, so a zero-copy view would silently read neighbouring members' bytes as garbage.
+    """
+    try:
+        parent_snode = field.parent()._snode.ptr
+    except Exception:
+        return False
+    return parent_snode.get_num_ch() > 1
+
+
 def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False) -> bool:
     """Check whether zero-copy DLPack export is available for this field on the current backend."""
     dtype = field.dtype
@@ -145,6 +158,8 @@ def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False) -> bool:
     if arch == _ARCH_METAL and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET:
         return False
     if is_scalar and not field.shape:
+        return False
+    if _is_aos_struct_member(field):
         return False
     return True
 
