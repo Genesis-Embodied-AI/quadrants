@@ -108,6 +108,8 @@ class BufferView:
         else:
             # Host-side path: coerce to int and validate bounds.
             offset, size = int(offset), int(size)
+            if getattr(arr, "grad", None) is not None:
+                raise TypeError("BufferView does not support ndarrays with gradients (needs_grad=True)")
             arr_shape = getattr(arr, "shape", None)
             if arr_shape is not None:
                 if len(arr_shape) != 1:

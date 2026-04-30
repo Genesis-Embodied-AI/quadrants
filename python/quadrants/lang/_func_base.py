@@ -682,7 +682,7 @@ class FuncBase:
             launch_ctx_buffer[_QD_ARRAY].append((index, inner.arr))
             launch_ctx_buffer[_INT].append((index + 1, int(v.offset)))
             launch_ctx_buffer[_INT].append((index + 2, int(v.size)))
-            return 3, True
+            return 3, False
         if needed_arg_basetype is ndarray_type.NdarrayType and isinstance(v, Ndarray):
             v_primal = v.arr
             v_grad = v.grad.arr if v.grad else None
