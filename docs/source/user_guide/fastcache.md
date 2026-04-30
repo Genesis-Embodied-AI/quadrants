@@ -19,8 +19,6 @@ On a Genesis simulator benchmark (`single_franka_envs.py`, Ubuntu 24.04, NVIDIA 
 
 ### Enabling fastcache on a kernel
 
-Add `fastcache=True` to the `@qd.kernel` decorator:
-
 ```python
 import quadrants as qd
 
