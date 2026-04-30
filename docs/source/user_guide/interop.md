@@ -206,6 +206,31 @@ d_soa = S_soa.to_torch(copy=False)                                      # dict o
 d_soa["pos"][0] = 1.0                                                   # writes through to S_soa.pos
 ```
 
+### Raw DLPack export with `to_dlpack()`
+
+All field and ndarray types expose a `to_dlpack()` method that returns a raw [DLPack](https://github.com/dmlc/dlpack) `PyCapsule`. This is the low-level primitive that `to_torch(copy=False)` and `to_numpy(copy=False)` are built on; use it when you need to feed Quadrants data into a framework that speaks DLPack directly (e.g. JAX, CuPy, or a custom C extension).
+
+```python
+qd.init(arch=qd.cpu)
+f = qd.field(qd.f32, shape=(8,))
+f.fill(1.0)
+
+capsule = f.to_dlpack()                                   # v0 capsule ("dltensor")
+t = torch.utils.dlpack.from_dlpack(capsule)                # zero-copy torch tensor
+
+capsule_v1 = f.to_dlpack(versioned=True)                   # v1 capsule ("dltensor_versioned")
+arr = np.from_dlpack(capsule_v1)                           # writable zero-copy numpy array
+```
+
+The `versioned` parameter selects the DLPack protocol version:
+
+| `versioned` | Capsule type | Capsule name | Use case |
+|---|---|---|---|
+| `False` (default) | `DLManagedTensor` (v0) | `"dltensor"` | `torch.utils.dlpack.from_dlpack`, CuPy, JAX, and other v0 consumers. |
+| `True` | `DLManagedTensorVersioned` (v1) | `"dltensor_versioned"` | `np.from_dlpack` on NumPy >= 2.0 (v0 capsules produce read-only arrays). |
+
+The same backend, dtype, and layout restrictions that apply to `to_torch(copy=False)` / `to_numpy(copy=False)` apply here — `to_dlpack()` is the underlying mechanism. The caller is responsible for calling `qd.sync()` between modifying the field and consuming the capsule.
+
 ## Direct torch tensor pass-through
 
 Torch tensors can be passed directly into kernels where `qd.types.ndarray()` parameters are expected. The kernel reads from and writes to the torch tensor directly:
@@ -279,6 +304,7 @@ print(x.grad[0])  # 4.0
 | `to_numpy()` / `from_numpy()` (default) | yes | yes | yes |
 | `to_torch()` / `from_torch()` (default) | yes | yes | yes |
 | `to_numpy(copy=False)` / `to_torch(copy=False)` | no (DLPack view) | yes | yes |
+| `to_dlpack()` | no (raw capsule) | yes | yes |
 | Direct pass-through | no | no | yes (as kernel arg) |
 
 The `copy` parameter is supported on `to_numpy()` and `to_torch()` for `ScalarField`, `MatrixField` (and `VectorField`), `StructField`, and all `Ndarray` types. See [Zero-copy interop via DLPack](#zero-copy-interop-via-dlpack) for the support matrix and lifetime rules.
