@@ -3600,3 +3600,62 @@ def test_adstack_gpu_dispatch_cap_uses_floor_division():
 
     got_grad = x.grad.to_numpy()
     np.testing.assert_allclose(got_grad, grad_ref, rtol=1e-5, atol=1e-6)
+
+
+@test_utils.test(arch=[qd.cuda, qd.amdgpu], require=qd.extension.adstack, ad_stack_size=0, debug=False)
+def test_adstack_static_bound_expr_device_sizer_per_kind_offsets_grad_correct():
+    # Pins the per-kind out_offsets[i] write in the LLVM device sizer (`runtime_eval_adstack_size_expr` in
+    # `runtime/llvm/runtime_module/runtime.cpp`). The sizer runs on CUDA / AMDGPU when at least one captured
+    # SizeExpr contains an ExternalTensorRead leaf, defeating `use_host_eval` in `publish_adstack_metadata`
+    # so the host-side per-kind offset publication is skipped and the device-side write is the authoritative
+    # source. The codegen reads `adstack_offsets[stack_id]` as an offset within the per-kind slice (float
+    # allocas: `heap_float + linear_tid * stride_float + offsets[i]`; int / u1 allocas: `heap_int + linear_tid
+    # * stride_int + offsets[i]`), so the device sizer must write per-kind running offsets, not the combined
+    # prefix sum across all stacks.
+    #
+    # Internal details: the kernel below interleaves two f32 allocas (`v0`, `v1`) and one i32 alloca (`j`) in
+    # source order so the IR pre-scan in `init_offloaded_task_function` assigns stack ids 0 (float), 1 (int),
+    # 2 (float). Under a combined prefix sum, `out_offsets[2] = step_v0 + step_j` - non-zero - which the
+    # codegen interprets as a byte offset within `heap_float`'s slice for `v1`. With `stride_float = step_v0
+    # + step_v1` and `step_v0 + step_j > step_v0`, `v1`'s tape for thread `t` lands inside thread `(t+1)`'s
+    # float slice; thread `t`'s reverse pass then reads `v1`'s saved primal that thread `(t+1)` wrote, which
+    # is x[(t+1)]'s tape. Restricted to LLVM CUDA / AMDGPU because (a) CPU goes through `use_host_eval=true`
+    # and uses the host-eval branch in `llvm_runtime_executor.cpp:792-801` whose per-kind write is correct,
+    # (b) Metal / Vulkan use the SPIR-V sizer compute shader (`codegen/spirv/adstack_sizer_shader.cpp`) which
+    # already does per-kind offsets correctly. `ad_stack_size=0` lets the SizeExpr's launch-time evaluator
+    # pick the per-launch bound; `debug=False` keeps the release-build inline push / pop emit path so the
+    # tape addressing math goes through `get_ad_stack_base_llvm` rather than the runtime helper-call path
+    # which would also exercise the bug but takes a different code path through `stack_init`.
+    n_outer = 8
+    a_np = np.array([2, 3, 1, 2, 3, 1, 2, 3], dtype=np.int32)
+
+    x = qd.field(qd.f32, shape=(n_outer,), needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in x:
+            v0 = x[i] * 1.0
+            j = 0
+            v1 = x[i] * 2.0
+            n = a[i]
+            for _ in range(n):
+                v0 = v0 * 0.95 + 0.01
+                j = j + 1
+                v1 = v1 * 0.9 + 0.02
+            y[None] += v0 + v1 + qd.cast(j, qd.f32) * 0.0
+
+    for i in range(n_outer):
+        x[i] = 0.1 + 0.05 * i
+
+    compute(a_np)
+    y.grad[None] = 1.0
+    for i in range(n_outer):
+        x.grad[i] = 0.0
+    compute.grad(a_np)
+    qd.sync()
+
+    for i in range(n_outer):
+        # d(v0_n + v1_n) / dx[i] = 1.0 * 0.95**a[i] + 2.0 * 0.9**a[i].
+        expected = 1.0 * (0.95 ** int(a_np[i])) + 2.0 * (0.9 ** int(a_np[i]))
+        assert x.grad[i] == pytest.approx(expected, rel=1e-5)
