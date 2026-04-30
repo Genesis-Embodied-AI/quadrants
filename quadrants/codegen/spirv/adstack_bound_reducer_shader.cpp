@@ -177,12 +177,15 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
     Label int_lbl = ir.new_label();
     Label dtype_merge = ir.new_label();
 
+    // `alloca_variable` hoists the OpVariable to the function entry block regardless of where it is called from, but
+    // a paired init OpStore would need a currently-active basic block - which we are about to leave via
+    // OpBranchConditional. Allocate the variable BEFORE the SelectionMerge / branch and skip the explicit zero-init:
+    // every reachable path through the dtype-branch below stores into `matched_var` before the merge block reads it,
+    // so the load is never observed against an undefined value.
+    Value matched_var = ir.alloca_variable(ir.bool_type());
     Value is_float = ir.ne(field_dtype_is_float_u32, ir.uint_immediate_number(ir.u32_type(), 0u));
     ir.make_inst(spv::OpSelectionMerge, dtype_merge, spv::SelectionControlMaskNone);
     ir.make_inst(spv::OpBranchConditional, is_float, float_lbl, int_lbl);
-
-    Value matched_var = ir.alloca_variable(ir.bool_type());
-    ir.store_variable(matched_var, ir.uint_immediate_number(ir.bool_type(), 0u));
 
     ir.start_label(float_lbl);
     {
