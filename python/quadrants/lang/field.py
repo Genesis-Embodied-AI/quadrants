@@ -508,7 +508,7 @@ class Field:
     def _host_access(self, key):
         return [SNodeHostAccess(e, key) for e in self.host_accessors]  # type: ignore
 
-    def to_dlpack(self):
+    def to_dlpack(self, versioned=False):
         raise NotImplementedError
 
     def __iter__(self):
