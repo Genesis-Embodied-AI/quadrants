@@ -3008,46 +3008,45 @@ def test_adstack_min_loop_carried_serial_range_for(n_inner):
         assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-4)
 
 
-@pytest.mark.parametrize("active_fraction", [0.05, 0.5, 1.0])
+@pytest.mark.parametrize("gated_fraction", [0.05, 0.5, 1.0])
 @test_utils.test(arch=[qd.metal, qd.vulkan], require=qd.extension.adstack, ad_stack_size=32)
-def test_adstack_static_bound_expr_ndarray_gate_grad_correct(active_fraction):
-    # Pins the static-IR-bound sparse-adstack-heap path (Stage 1) end to end on the SPIR-V backend: kernel
-    # shape `for I in range(N): if mass[I] > eps: <adstack-using gradient work>` with `mass` as an ndarray
+def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
+    # Pins the static-IR-bound sparse-adstack-heap path end to end on the SPIR-V backend. Kernel shape:
+    # `for i in range(n): if selector[i] > eps: <adstack-using gradient work>` with `selector` as an ndarray
     # argument. The codegen pattern matcher captures the gating predicate as a `StaticBoundExpr` carrying
-    # the ndarray's `arg_id` and the comparison `> 1e-9`; the runtime dispatches the generic bound-reducer
-    # compute shader which counts threads with `mass[I] > 1e-9`, and the float adstack heap is sized to
-    # exactly that count instead of the dispatched-threads worst case. The lazy LCA-block atomic claim
-    # (Phases A+B+C) maps each gated thread to a unique row in `[0, count)` of the smaller heap.
+    # the ndarray's `arg_id` and the comparison `> eps`; the runtime dispatches the generic bound-reducer
+    # compute shader which counts threads with `selector[i] > eps`, and the float adstack heap is sized
+    # to exactly that count instead of the dispatched-threads worst case. The lazy LCA-block atomic claim
+    # then maps each gated thread to a unique row in `[0, count)` of the smaller heap.
     #
-    # The test parametrises the active-mass fraction so it covers three regimes the runtime path treats
+    # The test parametrises the gated-element fraction so it covers three regimes the runtime path treats
     # differently: (a) sparse (5%) - the heap is much smaller than dispatched_threads and most threads
     # never reach the LCA block, exercising the savings path; (b) half (50%) - the heap is half of
     # dispatched and the per-row claim still has to map cleanly; (c) full (100%) - every thread passes
     # the gate, the reducer's count equals dispatched_threads, and the resulting heap layout matches what
-    # the eager fallback path would have produced. All three should yield gradients that match a
-    # finite-difference oracle within f32 accumulation roundoff; a wrong-but-non-NaN gradient (the failure
-    # mode when row-claim and heap-sizing disagree) trips the assertion.
+    # the eager fallback path would have produced. All three should yield gradients that match an
+    # analytic oracle within f32 accumulation roundoff; a wrong-but-non-NaN gradient (the failure mode
+    # when row-claim and heap-sizing disagree) trips the assertion.
     #
     # Internal details: `ad_stack_size=32` overrides the default so the per-stack max_size stays small and
-    # the worst-case heap allocation (without Stage 1) is much larger than what the active-mass set
-    # actually consumes - amplifying the savings ratio so a regression that breaks the reducer dispatch
-    # and silently falls back to worst-case sizing still produces a passing test, while a regression that
-    # corrupts the row mapping fails on the gradient oracle. The kernel is structured with the gate
-    # immediately above the inner range-for so the LCA pre-pass places the float-LCA inside the gate
-    # (Stage 1.5 split-LCA mechanism), which is the precondition for the bound_expr capture to succeed.
+    # the worst-case heap allocation (without the bound-reducer path) is much larger than what the gated
+    # subset actually consumes - amplifying the savings ratio so a regression that breaks the reducer
+    # dispatch and silently falls back to worst-case sizing still produces a passing test, while a
+    # regression that corrupts the row mapping fails on the gradient oracle. The kernel is structured
+    # with the gate immediately above the inner range-for so the LCA pre-pass places the float-LCA inside
+    # the gate, which is the precondition for the bound_expr capture to succeed.
     n = 256
     n_iter = 8
     eps = 1e-9
-    threshold = 0.5
 
     x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
     out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
-    mass = qd.ndarray(qd.f32, shape=(n,))
+    selector = qd.ndarray(qd.f32, shape=(n,))
 
     @qd.kernel
-    def compute(x: qd.types.NDArray, mass: qd.types.NDArray, out: qd.types.NDArray) -> None:
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
         for i in range(n):
-            if mass[i] > eps:
+            if selector[i] > eps:
                 v = x[i]
                 for _ in range(n_iter):
                     v = v * 1.05 + 0.05
@@ -3055,26 +3054,84 @@ def test_adstack_static_bound_expr_ndarray_gate_grad_correct(active_fraction):
 
     np.random.seed(0)
     x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
-    n_active = max(1, int(round(active_fraction * n)))
-    mass_np = np.zeros(n, dtype=np.float32)
-    active_indices = np.sort(np.random.choice(n, size=n_active, replace=False))
-    mass_np[active_indices] = threshold + 0.1
+    n_gated = max(1, int(round(gated_fraction * n)))
+    selector_np = np.zeros(n, dtype=np.float32)
+    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+    selector_np[gated_indices] = 1.0
     x.from_numpy(x_np)
-    mass.from_numpy(mass_np)
+    selector.from_numpy(selector_np)
     out.from_numpy(np.zeros((1,), dtype=np.float32))
     out.grad.from_numpy(np.ones((1,), dtype=np.float32))
     x.grad.from_numpy(np.zeros_like(x_np))
 
-    compute(x, mass, out)
-    compute.grad(x, mass, out)
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
     qd.sync()
 
     got_grad = x.grad.to_numpy()
     assert not np.isnan(got_grad).any(), f"static-bound-expr grad returned NaN: {got_grad}"
 
-    # Analytic oracle. For active i, the inner recurrence `v = v*c + d` over `n_iter` steps is linear in v
-    # with slope `c^n_iter`, where `c = 1.05`. So `d(out[0])/d(x[i]) = c^n_iter` for active i, 0 otherwise.
+    # Analytic oracle. For gated i, the inner recurrence `v = v*c + d` over `n_iter` steps is linear in v
+    # with slope `c^n_iter`, where `c = 1.05`. So `d(out[0])/d(x[i]) = c^n_iter` for gated i, 0 otherwise.
     coeff = 1.05
-    expected_per_active = coeff**n_iter
-    expected = np.where(mass_np > eps, np.float32(expected_per_active), np.float32(0.0))
+    expected_per_gated = coeff**n_iter
+    expected = np.where(selector_np > eps, np.float32(expected_per_gated), np.float32(0.0))
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@pytest.mark.parametrize("gated_fraction", [0.05, 0.5, 1.0])
+@test_utils.test(arch=[qd.metal, qd.vulkan], require=qd.extension.adstack, ad_stack_size=32)
+def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
+    # Pins the static-IR-bound sparse-adstack-heap path on SNode-backed gating predicates. Kernel shape
+    # `for i in selector: if selector[i] > eps: <adstack-using gradient work>` with `selector` declared via
+    # `qd.field(...)` placed under `qd.root.dense(...)` - the layout most sparse-grid workloads use for the
+    # value the gate reads. The codegen pattern matcher captures the gating predicate as a `StaticBoundExpr`
+    # carrying the leaf snode id plus the precomputed `(byte_base_offset, byte_cell_stride, iter_count)` triple
+    # the runtime needs to walk the field at dispatch time without re-emitting the SNode lookup chain. The
+    # runtime then dispatches the bound-reducer compute shader against the bound root buffer, counts threads
+    # whose `selector[i] > eps`, and sizes the float adstack heap to exactly that count.
+    #
+    # The test is the SNode counterpart to the ndarray-backed test above and exercises the same three regimes
+    # (sparse 5%, half 50%, full 100%) so a regression in the SNode root-buffer load path or the byte-offset
+    # precomputation surfaces as a wrong gradient.
+    n = 256
+    n_iter = 8
+    eps = 1e-9
+
+    selector = qd.field(qd.f32, shape=(n,))
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in selector:
+            if selector[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(1)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    n_gated = max(1, int(round(gated_fraction * n)))
+    selector_np = np.zeros(n, dtype=np.float32)
+    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+    selector_np[gated_indices] = 1.0
+    for i in range(n):
+        x[i] = float(x_np[i])
+        selector[i] = float(selector_np[i])
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+
+    compute()
+    compute.grad()
+    qd.sync()
+
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    expected = np.where(selector_np > eps, np.float32(expected_per_gated), np.float32(0.0))
+    got_grad = np.array([x.grad[i] for i in range(n)], dtype=np.float32)
+    assert not np.isnan(got_grad).any(), f"static-bound-expr snode grad returned NaN: {got_grad}"
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
