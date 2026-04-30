@@ -33,14 +33,22 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // count gate-passing items in only `[0, 8)` and clamp every later iteration's claimed row into a single
     // alias slot. Mirrors the SPIR-V launcher's `resolve_length` over `range_for_attribs->end_shape_product`.
     std::size_t bound_count_length = num_threads_per_task[i];
-    if (ad_stacks[i].bound_expr.has_value() &&
-        ad_stacks[i].bound_expr->field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::NdArray &&
-        !ad_stacks[i].bound_expr->ndarray_arg_id.empty()) {
-      const int top_arg_id = ad_stacks[i].bound_expr->ndarray_arg_id.front();
-      auto runtime_size_it = ctx.array_runtime_sizes.find(top_arg_id);
-      if (runtime_size_it != ctx.array_runtime_sizes.end()) {
-        // The captured gate's `field_dtype_is_float` selects f32 vs i32; both element types are 4 bytes today.
-        bound_count_length = static_cast<std::size_t>(runtime_size_it->second / sizeof(int32_t));
+    if (ad_stacks[i].bound_expr.has_value()) {
+      using FSK = StaticAdStackBoundExpr::FieldSourceKind;
+      const auto &be = *ad_stacks[i].bound_expr;
+      if (be.field_source_kind == FSK::NdArray && !be.ndarray_arg_id.empty()) {
+        const int top_arg_id = be.ndarray_arg_id.front();
+        auto runtime_size_it = ctx.array_runtime_sizes.find(top_arg_id);
+        if (runtime_size_it != ctx.array_runtime_sizes.end()) {
+          // The captured gate's `field_dtype_is_float` selects f32 vs i32; both element types are 4 bytes today.
+          bound_count_length = static_cast<std::size_t>(runtime_size_it->second / sizeof(int32_t));
+        }
+      } else if (be.field_source_kind == FSK::SNode) {
+        // SNode-backed gates carry the dense field's iteration count straight in the captured descriptor
+        // (`snode_iter_count = leaf_desc.iter_count`, populated by the codegen-time SNode descriptor
+        // resolver). Use it as the reducer walk bound so the host evaluator sees the same per-iteration
+        // count the device-side reducer sees on CUDA / AMDGPU.
+        bound_count_length = static_cast<std::size_t>(be.snode_iter_count);
       }
     }
     executor->publish_per_task_bound_count_cpu(i, ad_stacks[i], bound_count_length, &ctx);

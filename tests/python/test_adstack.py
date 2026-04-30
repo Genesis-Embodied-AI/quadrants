@@ -3155,7 +3155,7 @@ def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct():
 
 
 @pytest.mark.parametrize("gated_fraction", [0.05, 0.5, 1.0])
-@test_utils.test(arch=[qd.metal, qd.vulkan], require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
 def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
     # Pins the static-IR-bound sparse-adstack-heap path on SNode-backed gating predicates. Kernel shape
     # `for i in selector: if selector[i] > eps: <adstack-using gradient work>` with `selector` declared via

@@ -1093,23 +1093,63 @@ uint32_t LlvmRuntimeExecutor::publish_per_task_bound_count_cpu(std::size_t task_
     return std::numeric_limits<uint32_t>::max();
   }
   const auto &be = ad_stack.bound_expr.value();
-  if (be.field_source_kind != StaticAdStackBoundExpr::FieldSourceKind::NdArray) {
-    return std::numeric_limits<uint32_t>::max();  // SNode-backed gates are not captured on the LLVM analysis path.
-  }
-  if (ctx == nullptr || ctx->args_type == nullptr || ctx->get_context().arg_buffer == nullptr) {
+
+  // Resolve the per-iteration field address. Two source kinds (mirrors the device-side reducer in
+  // `runtime_eval_static_bound_count`):
+  //   * NdArray: walk `arg_buffer + data_ptr_byte_off` to fetch the ndarray's data pointer; the gating field
+  //     is then `data_ptr[i]` for `i in [0, length)`. On CPU `arg_buffer` lives in host memory, so the deref
+  //     is direct.
+  //   * SNode: walk `runtime->roots[snode_root_id] + snode_byte_base_offset + i * snode_byte_cell_stride`
+  //     for `i in [0, length)`. The byte offset / cell stride were resolved by the codegen-time SNode
+  //     descriptor resolver (via `compile_snode_structs`); `runtime->roots` is host-resident on CPU and
+  //     reachable through the `LLVMRuntime_get_roots` STRUCT_FIELD_ARRAY getter.
+  // Without the SNode arm, kernels with a captured SNode-backed bound_expr leave the capacity slot at
+  // UINT32_MAX (the `publish_adstack_lazy_claim_buffers` default), `ensure_per_task_float_heap_post_reducer`
+  // sizes the float heap at the worst-case num_threads count, and the codegen-emitted clamp goes inert -
+  // exactly the regression a `for i in selector: if selector[i] > eps:` SNode-gated reverse kernel hits
+  // when the float adstack heap can only hold `num_cpu_threads` rows but the LCA-block atomic-rmw fires
+  // once per gated iteration.
+  using FSK = StaticAdStackBoundExpr::FieldSourceKind;
+  if (be.field_source_kind != FSK::NdArray && be.field_source_kind != FSK::SNode) {
     return std::numeric_limits<uint32_t>::max();
   }
 
-  // Resolve the ndarray data pointer: walk `ctx->args_type->get_element_offset(arg_id + DATA_PTR_POS_IN_NDARRAY)`
-  // to find where the data pointer lives in the arg buffer, then dereference. Mirrors the SPIR-V reducer's
-  // `resolve_ndarray_data_ptr_byte_offset`. On CPU `arg_buffer` is host memory, so the deref is direct.
-  std::vector<int> indices = be.ndarray_arg_id;
-  indices.push_back(TypeFactory::DATA_PTR_POS_IN_NDARRAY);
-  std::size_t data_ptr_byte_off = ctx->args_type->get_element_offset(indices);
-  const char *arg_buffer = static_cast<const char *>(ctx->get_context().arg_buffer);
-  void *data_ptr = *reinterpret_cast<void *const *>(arg_buffer + data_ptr_byte_off);
-  if (data_ptr == nullptr) {
-    return std::numeric_limits<uint32_t>::max();
+  const char *field_base = nullptr;
+  std::size_t field_stride_bytes = 0;
+  if (be.field_source_kind == FSK::NdArray) {
+    if (ctx == nullptr || ctx->args_type == nullptr || ctx->get_context().arg_buffer == nullptr) {
+      return std::numeric_limits<uint32_t>::max();
+    }
+    std::vector<int> indices = be.ndarray_arg_id;
+    indices.push_back(TypeFactory::DATA_PTR_POS_IN_NDARRAY);
+    std::size_t data_ptr_byte_off = ctx->args_type->get_element_offset(indices);
+    const char *arg_buffer = static_cast<const char *>(ctx->get_context().arg_buffer);
+    void *data_ptr = *reinterpret_cast<void *const *>(arg_buffer + data_ptr_byte_off);
+    if (data_ptr == nullptr) {
+      return std::numeric_limits<uint32_t>::max();
+    }
+    field_base = static_cast<const char *>(data_ptr);
+    field_stride_bytes = sizeof(int32_t);  // f32 / i32 element step within a 1-D dense ndarray.
+  } else {
+    // SNode-backed source: query the host-resident `runtime->roots[snode_root_id]` pointer through the
+    // STRUCT_FIELD_ARRAY getter; on CPU this is an in-process call (no DtoH stage) and returns the dense
+    // root buffer base address directly.
+    if (be.snode_root_id < 0 || llvm_runtime_ == nullptr || result_buffer_cache_ == nullptr) {
+      return std::numeric_limits<uint32_t>::max();
+    }
+    // `RUNTIME_STRUCT_FIELD_ARRAY(LLVMRuntime, roots)` defines `runtime_LLVMRuntime_get_roots(LLVMRuntime
+    // *runtime, LLVMRuntime *s, int i)` (the macro takes a struct-of-interest argument distinct from the
+    // runtime context, but for fields of `LLVMRuntime` itself the two pointers are the same). `runtime_query`
+    // auto-prepends `llvm_runtime_` as the first arg, so we pass `(llvm_runtime_, root_id)` to make the call
+    // resolve to the 3-arg signature `(llvm_runtime_, llvm_runtime_, root_id)`. Mirrors the `node_allocators`
+    // call site a few hundred lines above.
+    void *root_ptr =
+        runtime_query<void *>("LLVMRuntime_get_roots", result_buffer_cache_, llvm_runtime_, be.snode_root_id);
+    if (root_ptr == nullptr) {
+      return std::numeric_limits<uint32_t>::max();
+    }
+    field_base = static_cast<const char *>(root_ptr) + be.snode_byte_base_offset;
+    field_stride_bytes = static_cast<std::size_t>(be.snode_byte_cell_stride);
   }
 
   // Walk `[0, length)` evaluating the captured predicate on each thread's `field[i]`. The polarity bit selects
@@ -1117,17 +1157,17 @@ uint32_t LlvmRuntimeExecutor::publish_per_task_bound_count_cpu(std::size_t task_
   // that REACH the LCA, regardless of the gate orientation.
   uint32_t count = 0;
   if (be.field_dtype_is_float) {
-    const float *fdata = static_cast<const float *>(data_ptr);
     for (std::size_t i = 0; i < length; ++i) {
-      const bool match = eval_cmp<float>(be.cmp_op, fdata[i], be.literal_f32);
+      const float v = *reinterpret_cast<const float *>(field_base + i * field_stride_bytes);
+      const bool match = eval_cmp<float>(be.cmp_op, v, be.literal_f32);
       if (be.polarity ? match : !match) {
         ++count;
       }
     }
   } else {
-    const int32_t *idata = static_cast<const int32_t *>(data_ptr);
     for (std::size_t i = 0; i < length; ++i) {
-      const bool match = eval_cmp<int32_t>(be.cmp_op, idata[i], be.literal_i32);
+      const int32_t v = *reinterpret_cast<const int32_t *>(field_base + i * field_stride_bytes);
+      const bool match = eval_cmp<int32_t>(be.cmp_op, v, be.literal_i32);
       if (be.polarity ? match : !match) {
         ++count;
       }

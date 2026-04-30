@@ -1214,6 +1214,11 @@ void runtime_ListManager_get_num_active_chunks(LLVMRuntime *runtime, ListManager
 
 RUNTIME_STRUCT_FIELD_ARRAY(LLVMRuntime, node_allocators);
 RUNTIME_STRUCT_FIELD_ARRAY(LLVMRuntime, element_lists);
+// Host-side runtime-query getter for `runtime->roots[snode_root_id]`. The CPU bound-reducer host evaluator
+// in `LlvmRuntimeExecutor::publish_per_task_bound_count_cpu` uses this to walk SNode-backed gating fields
+// (`field_base = roots[id] + snode_byte_base_offset`); the device-side reducer reads the same array directly
+// from device code, so no runtime_query wrapper is needed there.
+RUNTIME_STRUCT_FIELD_ARRAY(LLVMRuntime, roots);
 RUNTIME_STRUCT_FIELD(LLVMRuntime, total_requested_memory);
 
 RUNTIME_STRUCT_FIELD(NodeManager, free_list);
