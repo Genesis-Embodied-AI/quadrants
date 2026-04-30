@@ -46,6 +46,19 @@ def test_scalar_field_copy_false(dtype):
     np.testing.assert_allclose(t.cpu().numpy(), expected)
 
 
+@test_utils.test(exclude=[qd.cpu])
+def test_scalar_field_copy_false_device_no_index():
+    """copy=False with device='cuda' (no index) should not raise when data is already on that device."""
+    _skip_if_no_zerocopy()
+    f = qd.field(qd.f32, shape=(4,))
+    f.from_numpy(np.array([1, 2, 3, 4], dtype=np.float32))
+    qd.sync()
+
+    device_type = "cuda" if qd.cfg.arch == qd.cuda else qd.cfg.arch.name
+    t = f.to_torch(device=device_type, copy=False)
+    np.testing.assert_allclose(t.cpu().numpy(), [1, 2, 3, 4])
+
+
 @test_utils.test()
 def test_scalar_field_copy_none():
     f = qd.field(qd.f32, shape=(4,))

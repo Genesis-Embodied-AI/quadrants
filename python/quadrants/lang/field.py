@@ -189,8 +189,16 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
     if impl.current_cfg().arch == _ARCH_METAL:
         impl.get_runtime().sync()
 
-    if device is not None and tc.device != torch.device(device):
-        raise ValueError(f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})")
+    if device is not None:
+        requested = torch.device(device)
+        type_mismatch = tc.device.type != requested.type
+        index_mismatch = (
+            requested.index is not None and tc.device.index is not None and tc.device.index != requested.index
+        )
+        if type_mismatch or index_mismatch:
+            raise ValueError(
+                f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})"
+            )
 
     return tc
 
