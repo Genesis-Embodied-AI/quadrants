@@ -36,6 +36,10 @@ x[3] = 10.0   # AssertionError in debug mode, silent corruption otherwise
 a = x[-1]     # AssertionError in debug mode
 ```
 
+#### Adstack overflow
+
+`debug=True` also enables a deferred bounds check on the adstack used by reverse-mode autodiff. A push past the per-stack capacity (set via `qd.init(ad_stack_size=...)` or per-alloca by `determine_ad_stack_size`) raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`. Without the check, an adstack overflow silently writes past the per-thread slab and produces a wrong gradient.
+
 ### Assertions in kernels
 
 The `assert` statement works inside kernels when debug mode is enabled:
@@ -60,6 +64,8 @@ Debug mode adds runtime checks to every field access and assertion, which can si
 A typical workflow:
 1. Develop with `debug=True` to catch bounds errors and logic bugs
 2. Switch to `debug=False` (the default) for benchmarking and production runs
+
+`debug=True` always implies `check_out_of_bound=True`. For bounds safety in a release build without the rest of debug mode, set [`check_out_of_bound=True`](./init_options.md#check_out_of_bound) instead.
 
 ## Other debugging tools
 
@@ -90,7 +96,19 @@ def debug_kernel(a: qd.Template) -> None:
         print("i =", i, "val =", a[i])
 ```
 
-Note that print output from GPU kernels may appear out of order due to parallel execution.
+Per-backend support:
+
+| Backend | Kernel `print()` |
+|---------|------------------|
+| CPU | yes |
+| CUDA | yes |
+| AMDGPU | no (silently dropped) |
+| Metal | no (silently dropped) |
+| Vulkan | yes (via debug-printf SPIR-V extension) |
+
+**Note.** Output from GPU kernels appears in order despite parallel execution because all kernels are queued in the same compute stream.
+
+**Important.** Avoid kernel `print()` calls in production code where you can. Quadrants synchronizes the compute queue after every dispatch of a kernel that contains a `print()` so the output appears as close as possible to the call site. The synchronization happens unconditionally on every launch of that kernel, even when the surrounding control flow leaves the `print()` unreached at runtime; the cost is the full per-launch sync overhead, not just the cost of the `print()` itself.
 
 ### Dumping compiled IR
 

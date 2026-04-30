@@ -86,6 +86,10 @@ class ASTTransformer(Builder):
         if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__qd_"):
             ctx.global_context.pruning.mark_used(ctx.func.func_id, node.id)
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
+        # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
+        # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
+        # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
+        node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node.ptr, Expr):
             node.ptr.dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)

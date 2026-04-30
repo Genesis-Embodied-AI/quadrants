@@ -997,10 +997,10 @@ def test_adstack_overflow_raises():
     # Internal detail: both LLVM and SPIR-V defer the error to the next `qd.sync()` (same pattern as CUDA async
     # errors) so we do not pay a sync-per-launch. LLVM polls `runtime->adstack_overflow_flag` from
     # `LlvmProgramImpl::synchronize()` via `check_adstack_overflow()`; SPIR-V's gfx runtime raises via `QD_ERROR`
-    # on sync. `debug=True` is required because release-build LLVM codegen elides the per-push bounds check on the
-    # premise that `determine_ad_stack_size` produces a tight upper bound; this test deliberately misconfigures
+    # on sync. The bounds-check codepath in both backends is gated on `debug`; release builds elide it on the
+    # premise that `determine_ad_stack_size` produces a tight upper bound. This test deliberately misconfigures
     # the capacity below the kernel's actual peak push count, which the sizer cannot foresee, so the runtime
-    # check has to be live for the deferred raise to fire.
+    # check has to be live for the deferred raise to fire - `debug=True` keeps it live.
     compute, _, _ = _overflowing_compute()
     # On LLVM the runtime raises QuadrantsAssertionError (subclass of AssertionError) from
     # check_adstack_overflow; on SPIR-V the gfx runtime raises RuntimeError via QD_ERROR. We accept either,
@@ -1015,8 +1015,7 @@ def test_adstack_overflow_flag_resets_after_catch():
     # Once `check_adstack_overflow()` raises, the runtime must clear its overflow flag so a subsequent `qd.sync()`
     # (with no new overflowing grad launch in between) returns normally. Without the reset the user would see a
     # stale overflow exception every time they sync after the first one, which makes diagnosis and recovery
-    # impossible. `debug=True` keeps the per-push bounds check live (release-build codegen elides it - see
-    # `test_adstack_overflow_raises` for the rationale).
+    # impossible. `debug=True` keeps the per-push bounds check live.
     compute, _, _ = _overflowing_compute()
     with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
         compute.grad()
