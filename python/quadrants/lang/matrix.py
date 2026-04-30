@@ -1863,8 +1863,7 @@ class MatrixNdarray(Ndarray):
 
     @python_scope
     def to_torch(self, device=None, *, copy=None):
-        """Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
-        :meth:`MatrixField.to_torch`.
+        """Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors :meth:`MatrixField.to_torch`.
 
         Args:
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
@@ -2001,8 +2000,7 @@ class VectorNdarray(Ndarray):
 
     @python_scope
     def to_torch(self, device=None, *, copy=None):
-        """Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``. Mirrors
-        :meth:`MatrixField.to_torch` on the vector code path.
+        """Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``. Mirrors :meth:`MatrixField.to_torch` on the vector code path.
 
         Args:
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.

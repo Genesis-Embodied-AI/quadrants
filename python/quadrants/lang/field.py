@@ -151,8 +151,8 @@ def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False) -> bool:
 def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = False):
     """Try to return a zero-copy (or cloned) torch tensor via DLPack.
 
-    Returns the tensor on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``. Raises
-    ``ValueError`` when ``copy=False`` but zero-copy is not available.
+    Returns the tensor on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``.
+    Raises ``ValueError`` when ``copy=False`` but zero-copy is not available.
     """
     if not _can_zerocopy_field(field, is_scalar=is_scalar):
         if copy is False:
