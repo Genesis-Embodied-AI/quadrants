@@ -1291,8 +1291,13 @@ class MatrixField(Field):
         self.ptr = qd_python_core.expr_matrix_field([var.ptr for var in self.vars], [n, m][:ndim])
 
     def to_dlpack(self, versioned=False):
-        """
-        Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.
+        """Export this matrix field as a DLPack capsule.
+
+        Args:
+            versioned: If True, emit a DLPack v1 capsule (writable numpy arrays). If False (default), emit v0
+                (required by ``torch.utils.dlpack.from_dlpack``). See :meth:`ScalarField.to_dlpack`.
+
+        Note: caller is responsible for calling qd.sync() between modifying the field and reading it.
         """
         impl.get_runtime().materialize()
         try:

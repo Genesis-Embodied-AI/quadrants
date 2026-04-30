@@ -90,13 +90,13 @@ class Ndarray:
     def to_dlpack(self, versioned=False):
         """Export this ndarray as a DLPack capsule.
 
+        Args:
+            versioned: If True, emit a DLPack v1 capsule (writable numpy arrays). If False (default), emit v0
+                (required by ``torch.utils.dlpack.from_dlpack``). See :meth:`ScalarField.to_dlpack`.
+
         The returned capsule carries the *canonical* shape and a permuted strides array on layout-tagged ndarrays, so
         consumers (`torch.utils.dlpack.from_dlpack`, etc.) see a transposed view of the physical buffer with no data
         movement. On untagged ndarrays this is byte-identical to the legacy export.
-
-        Mirrors the field-backend behaviour: ``to_dlpack()`` on a field allocated via ``qd.tensor(...,
-        backend=qd.Backend.FIELD, layout=...)`` (translated to ``order=...``) likewise returns a canonical view via
-        permuted strides — see the C++ ``field_to_dlpack`` SNode-walk path.
         """
         if impl.current_cfg().arch == _arch_metal:
             impl.get_runtime().sync()

@@ -526,8 +526,14 @@ class ScalarField(Field):
         super().__init__([var])
 
     def to_dlpack(self, versioned=False):
-        """
-        Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.
+        """Export this field as a DLPack capsule.
+
+        Args:
+            versioned: If True, emit a DLPack v1 ``DLManagedTensorVersioned`` capsule (``"dltensor_versioned"``,
+                ``flags=0``). NumPy >= 2.0 requires v1 for writable arrays. If False (default), emit a v0
+                ``DLManagedTensor`` (``"dltensor"``), required by ``torch.utils.dlpack.from_dlpack``.
+
+        Note: caller is responsible for calling qd.sync() between modifying the field and reading it.
         """
         impl.get_runtime().materialize()
         try:
