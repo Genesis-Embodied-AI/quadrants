@@ -39,6 +39,7 @@ from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 from quadrants.lang.ast import ASTTransformerFuncContext
+from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import (
     QuadrantsRuntimeError,
     QuadrantsRuntimeTypeError,
@@ -49,6 +50,7 @@ from quadrants.lang.matrix import MatrixType
 from quadrants.lang.struct import StructType
 from quadrants.lang.util import cook_dtype, has_pytorch
 from quadrants.types import (
+    buffer_view_type,
     ndarray_type,
     primitive_types,
     sparse_matrix_builder,
@@ -248,6 +250,11 @@ class FuncBase:
                     pass
                 elif self.is_kernel and isinstance(annotation, sparse_matrix_builder):
                     pass
+                elif annotation_type is buffer_view_type.BufferViewType:
+                    pass
+                elif annotation is BufferViewInstance:
+                    # v: BufferView (no dtype) — infer dtype from the passed argument
+                    annotation = buffer_view_type.BufferViewType()
                 else:
                     raise QuadrantsSyntaxError(f"Invalid type annotation (argument {i}) of Taichi kernel: {annotation}")
             self.arg_metas.append(ArgMetadata(annotation, param.name, param.default))
@@ -669,6 +676,13 @@ class FuncBase:
                 idx += num_args_
                 is_launch_ctx_cacheable &= is_launch_ctx_cacheable_
             return idx, is_launch_ctx_cacheable
+        if needed_arg_basetype is buffer_view_type.BufferViewType and isinstance(v, BufferViewInstance):
+            inner = v.get_ndarray()
+            assert isinstance(inner, Ndarray)
+            launch_ctx_buffer[_QD_ARRAY].append((index, inner.arr))
+            launch_ctx_buffer[_INT].append((index + 1, int(v.offset)))
+            launch_ctx_buffer[_INT].append((index + 2, int(v.size)))
+            return 3, True
         if needed_arg_basetype is ndarray_type.NdarrayType and isinstance(v, Ndarray):
             v_primal = v.arr
             v_grad = v.grad.arr if v.grad else None
