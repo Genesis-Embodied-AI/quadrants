@@ -64,6 +64,9 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // Device-side reducer for tasks with a captured ndarray-backed `bound_expr`. Mirrors the CUDA launcher
     // block; on AMDGPU the runtime function dispatches as a single-thread HIP kernel via runtime_jit->call.
     executor->publish_per_task_bound_count_device(task_index, task.ad_stack, n_threads_amdgpu, &ctx, context_pointer);
+    // Size the float heap from the published gate-passing count (DtoH'd per task). Mirrors the CUDA / CPU
+    // launcher post-reducer sizing.
+    executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n_threads_amdgpu);
     ++task_index;
     QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
     amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,

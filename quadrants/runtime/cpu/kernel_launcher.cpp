@@ -26,6 +26,12 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // top site uses the row id. Tasks without a captured gate keep the UINT32_MAX default and the clamp stays
     // inert. SNode-backed gates are not captured on the LLVM analysis path so they also keep the default.
     executor->publish_per_task_bound_count_cpu(i, ad_stacks[i], num_threads_per_task[i], &ctx);
+    // Size the float heap from the reducer's gate-passing count now that the capacity slot is populated. Float
+    // allocas (in tasks with a captured `bound_expr`) address through `heap_float + row_id_var * stride_float +
+    // float_offset`; sizing the heap at `count * stride_float` instead of the dispatched-threads worst case is
+    // where the actual memory savings on sparse-grid workloads come from. Tasks without a captured gate keep
+    // num_threads worst case via the UINT32_MAX fallback inside the helper.
+    executor->ensure_per_task_float_heap_post_reducer(i, ad_stacks[i], num_threads_per_task[i]);
     task_funcs[i](&ctx.get_context());
     if (ctx.get_context().cpu_assert_failed)
       break;

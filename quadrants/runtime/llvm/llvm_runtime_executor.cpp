@@ -1034,17 +1034,12 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
 
   std::size_t needed_bytes = stride * num_threads;
   ensure_adstack_heap(needed_bytes);
-  // Float heap: when the task captured a `bound_expr`, allocate a dedicated float slab so the codegen-emitted
-  // `heap_float + row_id_var * stride_float + offset` formula has backing storage. Sized at
-  // `num_threads * per_thread_stride_float`, where `per_thread_stride_float` is the compile-time sum of float
-  // alloca sizes (from `AdStackSizingInfo::per_thread_stride_float`). On the GPU path the per-launch value lives
-  // in `runtime->adstack_per_thread_stride_float` written by the on-device sizer; reading it back here would
-  // require an extra DtoH so we use the compile-time value, which serves as an upper bound for the same reason
-  // the legacy combined `per_thread_stride` is - the runtime-evaluated SizeExprs only ever equal-or-shrink the
-  // compile-time bound.
-  if (ad_stack.bound_expr.has_value() && ad_stack.per_thread_stride_float > 0) {
-    ensure_adstack_heap_float(ad_stack.per_thread_stride_float * num_threads);
-  }
+  // The float heap allocation is deferred to `ensure_per_task_float_heap_post_reducer`, which runs after the
+  // per-arch reducer publishes the captured row count into `runtime->adstack_bound_row_capacities[task_index]`.
+  // Sizing here would need to use `num_threads * per_thread_stride_float` worst case (no first-launch savings);
+  // sizing post-reducer lets the float heap shrink to `count * stride_float` whenever the captured gate matches
+  // fewer threads than the dispatched-threads count, which is the dominant savings on sparse-grid workloads
+  // (Genesis MPM observes ~47K matched out of ~604K dispatched on the largest grad kernel).
   return needed_bytes;
 }
 
@@ -1275,6 +1270,48 @@ void LlvmRuntimeExecutor::publish_per_task_bound_count_device(std::size_t task_i
       device_runtime_context_ptr != nullptr ? device_runtime_context_ptr : static_cast<void *>(&ctx->get_context());
   runtime_jit->call<void *, void *, void *>("runtime_eval_static_bound_count", llvm_runtime_,
                                             runtime_context_ptr_for_reducer, params_dev_ptr);
+}
+
+void LlvmRuntimeExecutor::ensure_per_task_float_heap_post_reducer(std::size_t task_index,
+                                                                  const AdStackSizingInfo &ad_stack,
+                                                                  std::size_t num_threads) {
+  // Skip when the task has no float heap need (no f32 allocas, or analysis didn't capture a gate so we wouldn't
+  // have routed it through the lazy float path on the codegen side).
+  if (!ad_stack.bound_expr.has_value() || ad_stack.per_thread_stride_float == 0) {
+    return;
+  }
+
+  // Read the per-task count the reducer published. On CPU the capacity buffer is host-resident; on CUDA / AMDGPU
+  // it's device memory and the read is a small (4-byte) DtoH per task. Cost is dominated by the actual main
+  // kernel.
+  uint32_t count = std::numeric_limits<uint32_t>::max();
+  if (adstack_bound_row_capacities_alloc_) {
+    void *capacities_dev_ptr = get_device_alloc_info_ptr(*adstack_bound_row_capacities_alloc_);
+    char *slot_ptr = static_cast<char *>(capacities_dev_ptr) + task_index * sizeof(uint32_t);
+    if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+      CUDADriver::get_instance().memcpy_device_to_host(&count, slot_ptr, sizeof(uint32_t));
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+      AMDGPUDriver::get_instance().memcpy_device_to_host(&count, slot_ptr, sizeof(uint32_t));
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else {
+      count = *reinterpret_cast<const uint32_t *>(slot_ptr);
+    }
+  }
+
+  // Floor at 1 row when the captured count is zero (no thread passed the gate this launch). The codegen-emitted
+  // bounds clamp keeps `claimed_row` in [0, count-1] so threads that miss the gate never reach the LCA-block
+  // claim - the heap row stays unused. A 1-row allocation is cheap and keeps the heap pointer non-null.
+  const std::size_t effective_rows =
+      (count == std::numeric_limits<uint32_t>::max()) ? num_threads : std::max<std::size_t>(count, 1);
+  const std::size_t needed_bytes = effective_rows * ad_stack.per_thread_stride_float;
+  ensure_adstack_heap_float(needed_bytes);
 }
 
 void LlvmRuntimeExecutor::publish_adstack_lazy_claim_buffers(std::size_t num_tasks) {

@@ -162,6 +162,18 @@ class LlvmRuntimeExecutor {
   // amortised-doubling growth and same release-deferred-until-next-launch semantics.
   void ensure_adstack_heap_float(std::size_t needed_bytes);
 
+  // Read back the per-task gate-passing count the reducer wrote into `runtime->adstack_bound_row_capacities[
+  // task_index]` and size `runtime->adstack_heap_buffer_float` to `count * per_thread_stride_float`. On CPU the
+  // capacity slot is host memory so the readback is a direct load; on CUDA / AMDGPU it's a small DtoH per task.
+  // Falls back to `num_threads * per_thread_stride_float` (the codegen worst case) when the slot still holds
+  // UINT32_MAX (no reducer ran for this task) or the task did not capture a `bound_expr`. Called by every kernel
+  // launcher (CPU / CUDA / AMDGPU) per task between `publish_per_task_bound_count_{cpu,device}` and the main task
+  // dispatch so the float heap is sized exactly to the reducer's count instead of the dispatched-threads worst
+  // case.
+  void ensure_per_task_float_heap_post_reducer(std::size_t task_index,
+                                               const AdStackSizingInfo &ad_stack,
+                                               std::size_t num_threads);
+
   // Return (and lazily cache) the device pointer to `runtime->temporaries`, the global temporary buffer backing
   // `GlobalTemporaryStmt` loads and stores. GPU kernel launchers use this to read back dynamic range_for bounds
   // (begin / end i32 values at known byte offsets) via a host-side DtoH memcpy when sizing the adstack heap.

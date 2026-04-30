@@ -66,6 +66,10 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // claim site reads it back. Tasks without a captured gate keep the UINT32_MAX default and the clamp stays
     // inert.
     executor->publish_per_task_bound_count_device(task_index, task.ad_stack, n, &ctx, device_context_ptr);
+    // Size the float heap from the published gate-passing count (DtoH'd per task). Mirrors the CPU launcher's
+    // post-reducer sizing call - this is what shrinks the float slab to `count * stride_float` instead of the
+    // dispatched-threads worst case on sparse-grid workloads.
+    executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n);
     ++task_index;
     QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
     cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes, {&ctx.get_context()},
