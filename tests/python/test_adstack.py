@@ -3095,6 +3095,82 @@ def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
+@test_utils.test(require=[qd.extension.adstack, qd.extension.data64], ad_stack_size=32)
+def test_adstack_static_bound_expr_f64_gate_grad_correct():
+    # Pins the f64-typed gating-predicate arm of the static-IR-bound sparse-adstack-heap reducer dispatch.
+    # Kernel shape mirrors test_adstack_static_bound_expr_ndarray_gate_grad_correct but the gating ndarray's
+    # element type is f64 while the loop-carried adstack push stays f32 (SPIR-V's adstack heap is a typed
+    # Array<f32> SSBO and rejects f64 AdStackAllocaStmts; LLVM accepts both, but for backend parity the
+    # test stays on f32 push + f64 gate). The captured `StaticAdStackBoundExpr` carries
+    # `field_dtype_is_float = True` AND `field_dtype_is_double = True` plus the threshold in `literal_f64`.
+    #
+    # On the SPIR-V reducer the bug surfaces as a missing f64 arm: the launcher reads `literal_f32`
+    # (struct-default 0.0f for f64-captured gates) and the shader walks the source ndarray with a 4-byte
+    # u32 stride and bitcasts to f32. The threshold therefore decodes as 0u and the source ndarray is
+    # misread (the second f64 cell aliases on top of the high half of the first). The reducer's per-task
+    # count diverges from the main kernel's actual gate-passing count, the float heap is sized too small
+    # for some kernels and over-sized for others, and the codegen-emitted clamp at the LCA-block claim
+    # site aliases multiple gated iterations onto the same row. Resulting gradients are wrong on every
+    # gated index where the f64 cell's top-32-bits bit pattern flips the bitcast comparison's outcome
+    # against the misdecoded threshold.
+    #
+    # Internal details: the fix extends `AdStackBoundReducerParams` with `field_dtype_is_double` and
+    # `threshold_bits_high`, adds a `psb_load_u64_pair` helper to the shader (two 4-byte u32 PSB loads at
+    # offsets 0 and 4 from `elem_idx * 8`, reassembled into a u64 in registers because PSB requires
+    # Aligned 8 for a single 8-byte load), and routes f64 captures through an f64 OpFOrd* comparison arm.
+    # `require=qd.extension.data64` skips on backends without f64 (e.g. Metal: Apple silicon does not
+    # advertise SPIR-V `Float64`, and the kernel codegen would reject the f64 ndarray at the IR pre-pass).
+    # The test runs on CPU LLVM, CUDA / AMDGPU LLVM (where the f64 reducer arm already lives in
+    # `runtime_eval_static_bound_count`) and Vulkan SPIR-V (the arm this fix adds).
+    #
+    # The selector layout puts non-gated cells at 0.25 and gated cells at 1.0, with `threshold = 0.5`.
+    # A misdecoded threshold of 0.0 (the bug's signature on SPIR-V) would spuriously include the 0.25
+    # cells, doubling the gate-passing count - the analytic per-i oracle then fails on every previously
+    # non-gated cell because the codegen clamps the over-claimed rows onto valid heap slots and the
+    # adjoint's reverse pop reads back zeros (the bootstrap-init slot) instead of the primal value.
+    n = 256
+    n_iter = 8
+    threshold = 0.5
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f64, shape=(n,))
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if selector[i] > threshold:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[0] += v
+
+    np.random.seed(0)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = np.full(n, 0.25, dtype=np.float64)
+    gated_indices = np.sort(np.random.choice(n, size=n // 2, replace=False))
+    selector_np[gated_indices] = 1.0
+
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"f64-gate static-bound-expr grad returned NaN: {got_grad}"
+
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    expected = np.where(selector_np > threshold, np.float32(expected_per_gated), np.float32(0.0))
+    for i in range(n):
+        assert got_grad[i] == pytest.approx(expected[i], rel=1e-6, abs=1e-7)
+
+
 @pytest.mark.parametrize("alloca_outside_gate", [False, True])
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
 def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct(alloca_outside_gate):
