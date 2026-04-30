@@ -565,6 +565,46 @@ def test_layout_tagged_field_to_numpy_copy_false_write_visible():
     np.testing.assert_allclose(fresh[0, 0], 999.0)
 
 
+# ---------------------------------------------------------------------------
+# MatrixField / Tensor wrapper: to_dlpack(versioned=True)
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_matrix_field_to_dlpack_versioned():
+    """MatrixField.to_dlpack(versioned=True) should produce a writable numpy array on NumPy >= 2.1."""
+    if not _np_supports_dlpack_v1():
+        pytest.skip("NumPy < 2.1 cannot consume v1 capsules")
+    from quadrants.lang.field import _DLPackV1Adapter
+
+    f = qd.Matrix.field(2, 3, qd.f32, shape=(2,))
+    data = np.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], dtype=np.float32)
+    f.from_numpy(data)
+    qd.sync()
+
+    capsule = f.to_dlpack(versioned=True)
+    arr = np.from_dlpack(_DLPackV1Adapter(capsule))
+    assert arr.flags.writeable
+    np.testing.assert_allclose(arr, data)
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_tensor_to_dlpack_versioned():
+    """Tensor.to_dlpack(versioned=True) should forward to the impl and produce a valid v1 capsule."""
+    if not _np_supports_dlpack_v1():
+        pytest.skip("NumPy < 2.1 cannot consume v1 capsules")
+    from quadrants.lang.field import _DLPackV1Adapter
+
+    t = qd.tensor(qd.f32, shape=(8,))
+    t.fill(42.0)
+    qd.sync()
+
+    capsule = t.to_dlpack(versioned=True)
+    arr = np.from_dlpack(_DLPackV1Adapter(capsule))
+    assert arr.flags.writeable
+    np.testing.assert_allclose(arr, 42.0)
+
+
 @test_utils.test(arch=[qd.cpu])
 def test_scalar_field_to_numpy_default_is_copy():
     """Default to_numpy() returns an independent copy, not a view."""
