@@ -84,7 +84,7 @@ clone = f.to_torch(copy=True)   # independent copy
 auto  = f.to_torch()            # default: copy=None (see below)
 ```
 
-Modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated -- typically on `qd.init()` or `qd.reset()`, after which a fresh call to `to_torch()` / `to_numpy()` returns a new view.
+When using `copy=False`, modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated -- typically on `qd.init()` or `qd.reset()`, after which a fresh call to `to_torch(copy=False)` / `to_numpy(copy=False)` returns a new view.
 
 ### When zero-copy is available
 
