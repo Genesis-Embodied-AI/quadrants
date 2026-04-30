@@ -94,15 +94,11 @@ Fastcache supports the following parameter types:
 
 If any parameter is of an unsupported type, fastcache is silently disabled for that call and the kernel falls back to normal compilation. A warning is logged at the `warn` level identifying the offending parameter.
 
-### 3. Fields are not supported
-
-Kernels that use `qd.field` as parameters cannot use fastcache because field memory layout and offsets are not captured in the cache key. Use `qd.ndarray` instead if you want fastcache.
-
-### 4. Source code must be readable
+### 3. Source code must be readable
 
 Fastcache hashes the source code of the kernel and all sub-functions it calls. If the source file cannot be read at runtime (e.g. the kernel is defined in a frozen/compiled module, or the file has been deleted), fastcache cannot validate the cache and will fall back to normal compilation.
 
-### 5. Cache invalidation
+### 4. Cache invalidation
 
 The cache is automatically invalidated when any of the following change:
 
