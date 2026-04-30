@@ -100,42 +100,16 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
     const std::vector<spirv::TaskAttributes> &task_attribs) {
   std::unordered_map<int, uint32_t> result;
 
-  // Capability gate: the reducer shader builds an empty SPIR-V binary on devices without PSB+Int64, so
-  // the lazy-init below would fail and there is no correct host-eval fallback for an ndarray data pointer
-  // that lives in GPU-private memory. Skip the dispatch and return an empty map; the caller falls back
-  // to dispatched-threads worst-case heap sizing for every task. Every backend Quadrants targets that has
-  // adstack support advertises both caps, so this is a defensive guard rather than a routine path.
-  if (!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer)) {
-    return result;
-  }
-  if (!device_->get_caps().get(DeviceCapability::spirv_has_int64)) {
-    return result;
-  }
-
-  // Filter to the tasks whose bound_expr is consumable by the reducer (NdArray-backed via the kernel arg buffer +
-  // PSB load, or SNode-backed via a direct word load from the matching root buffer at compile-time-precomputed
-  // byte offset / cell stride). Both source kinds use the same generic shader; the dispatch-time params blob's
-  // `field_source_is_snode` flag picks the path per task.
-  std::vector<int> matched_task_indices;
-  matched_task_indices.reserve(task_attribs.size());
-  for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
-    const auto &be = task_attribs[ti].ad_stack.bound_expr;
-    if (!be.has_value()) {
-      continue;
-    }
-    using FSK = spirv::TaskAttributes::StaticBoundExpr::FieldSourceKind;
-    if (be->field_source_kind != FSK::NdArray && be->field_source_kind != FSK::SNode) {
-      continue;
-    }
-    matched_task_indices.push_back(static_cast<int>(ti));
-  }
-
-  // Even when no task in this kernel needs the reducer dispatched, the codegen-emitted defense-in-depth bounds
-  // check at the float Lowest Common Ancestor (LCA) block still loads `AdStackBoundRowCapacity[task_id]`; binding
-  // a null allocation there reads zero, the bounds check `claimed_row >= 0` always fires, and every kernel raises
-  // the divergence error spuriously. Always populate the capacity buffer with the UINT32_MAX default so the bounds
-  // check is inert by construction on every task that does not have a captured `bound_expr`. The buffer follows
-  // the same grow-on-demand amortised-doubling policy as the row counter; sized from `task_attribs.size()`.
+  // Hoisted ABOVE the capability gates so cap-missing devices still receive inert UINT32_MAX defaults: every
+  // reverse-mode kernel with at least one f32 adstack reaches the codegen-emitted defense-in-depth bounds check
+  // at the float Lowest Common Ancestor (LCA) block, which loads `AdStackBoundRowCapacity[task_id]`. If the
+  // buffer stays unallocated on cap-missing devices the runtime bind path routes `kDeviceNullAllocation` there,
+  // robustBufferAccess returns 0, and the divergence-overflow OpAtomicUMax fires unconditionally
+  // (`claimed_row >= 0u` is always true for u32) - hard-erroring every adstack-bearing kernel at sync. The
+  // capacity-buffer alloc + UINT32_MAX fill is host-side only (SSBO host-write through map_range) and does NOT
+  // require PSB or Int64 - those caps gate the reducer compute shader, not the host-side buffer fill. Run the
+  // fill first so cap-missing devices still produce inert defaults that the codegen clamp leaves alone, then
+  // early-return on cap-miss for the dispatch.
   const size_t needed_capacity_bytes = std::max<size_t>(task_attribs.size(), 1) * sizeof(uint32_t);
   if (!adstack_bound_row_capacity_buffer_ || adstack_bound_row_capacity_buffer_size_ < needed_capacity_bytes) {
     size_t new_size = std::max(needed_capacity_bytes, 2 * adstack_bound_row_capacity_buffer_size_);
@@ -161,6 +135,44 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
       slots[ti] = std::numeric_limits<uint32_t>::max();
     }
     device_->unmap(*adstack_bound_row_capacity_buffer_);
+  }
+
+  // Capability gate: the reducer shader builds an empty SPIR-V binary on devices without PSB+Int64, so
+  // the lazy-init below would fail and there is no correct host-eval fallback for an ndarray data pointer
+  // that lives in GPU-private memory. Skip the dispatch and return an empty map; the caller falls back
+  // to dispatched-threads worst-case heap sizing for every task with the inert UINT32_MAX defaults the
+  // hoisted capacity-fill above produced. Every backend Quadrants targets that has adstack support advertises
+  // both caps, so this is a defensive guard rather than a routine path.
+  if (!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer)) {
+    return result;
+  }
+  if (!device_->get_caps().get(DeviceCapability::spirv_has_int64)) {
+    return result;
+  }
+
+  // Filter to the tasks whose bound_expr is consumable by the reducer (NdArray-backed via the kernel arg buffer +
+  // PSB load, or SNode-backed via a direct word load from the matching root buffer at compile-time-precomputed
+  // byte offset / cell stride). Both source kinds use the same generic shader; the dispatch-time params blob's
+  // `field_source_is_snode` flag picks the path per task.
+  const bool has_f64 = device_->get_caps().get(DeviceCapability::spirv_has_float64);
+  std::vector<int> matched_task_indices;
+  matched_task_indices.reserve(task_attribs.size());
+  for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
+    const auto &be = task_attribs[ti].ad_stack.bound_expr;
+    if (!be.has_value()) {
+      continue;
+    }
+    using FSK = spirv::TaskAttributes::StaticBoundExpr::FieldSourceKind;
+    if (be->field_source_kind != FSK::NdArray && be->field_source_kind != FSK::SNode) {
+      continue;
+    }
+    // f64-captured gates need the f64 reducer arm in the shader; on devices without `spirv_has_float64` the
+    // shader was built without an OpType for f64 and the f64-bitcast / OpFOrd* for f64 would not be valid,
+    // so route those tasks through the worst-case heap-sizing fallback (drop them from the matched set).
+    if (be->field_dtype_is_float && be->field_dtype_is_double && !has_f64) {
+      continue;
+    }
+    matched_task_indices.push_back(static_cast<int>(ti));
   }
 
   if (matched_task_indices.empty()) {
@@ -283,9 +295,23 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
       params.arg_word_offset = arg_word_offset;
       params.op_code = static_cast<uint32_t>(encode_cmp_op(be.cmp_op));
       params.field_dtype_is_float = be.field_dtype_is_float ? 1u : 0u;
+      params.field_dtype_is_double = be.field_dtype_is_double ? 1u : 0u;
       params.polarity = be.polarity ? 1u : 0u;
-      params.threshold_bits = be.field_dtype_is_float ? *reinterpret_cast<const uint32_t *>(&be.literal_f32)
-                                                      : static_cast<uint32_t>(be.literal_i32);
+      // Threshold encoding mirrors the LLVM reducer's `LlvmAdStackBoundReducerDeviceParams.threshold_bits[_high]`
+      // pair (see runtime_eval_static_bound_count in runtime/llvm/runtime_module/runtime.cpp). f64 splits the
+      // 64-bit literal across the low / high u32 pair so the shader can reassemble it without hardcoding a
+      // 64-bit OpConstant; f32 / i32 keep the high half at zero.
+      if (be.field_dtype_is_float && be.field_dtype_is_double) {
+        const uint64_t bits64 = *reinterpret_cast<const uint64_t *>(&be.literal_f64);
+        params.threshold_bits = static_cast<uint32_t>(bits64 & 0xFFFFFFFFu);
+        params.threshold_bits_high = static_cast<uint32_t>(bits64 >> 32);
+      } else if (be.field_dtype_is_float) {
+        params.threshold_bits = *reinterpret_cast<const uint32_t *>(&be.literal_f32);
+        params.threshold_bits_high = 0u;
+      } else {
+        params.threshold_bits = static_cast<uint32_t>(be.literal_i32);
+        params.threshold_bits_high = 0u;
+      }
       params.field_source_is_snode = is_snode ? 1u : 0u;
       params.snode_byte_base_offset = be.snode_byte_base_offset;
       params.snode_byte_cell_stride = be.snode_byte_cell_stride;

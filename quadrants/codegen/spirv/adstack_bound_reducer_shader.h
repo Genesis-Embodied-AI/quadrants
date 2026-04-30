@@ -58,17 +58,20 @@ struct AdStackBoundReducerParams {
   // 3 = cmp_ge, 4 = cmp_eq, 5 = cmp_ne. The shader uses a switch over this code to emit the right SPIR-V
   // comparison op.
   uint32_t op_code;
-  // 1 when the gating field's element type is f32 (the threshold and the loaded element are bitcast to
-  // float for the comparison); 0 when the element type is i32 (signed integer comparison). Other types
-  // are not yet supported and fall back to worst-case sizing in the runtime caller.
+  // 1 when the gating field's element type is f32 / f64 (the threshold and the loaded element are bitcast to
+  // float for the comparison); 0 when the element type is i32 (signed integer comparison). Other types fall
+  // back to worst-case sizing in the runtime caller. Combine with `field_dtype_is_double` to pick element
+  // width (4 vs 8 bytes) and the f32 / f64 comparison arm.
   uint32_t field_dtype_is_float;
   // 1 when the gate enters on the predicate holding (typical `if cmp:` shape); 0 when it sits inside the
   // `else` branch and the predicate must be inverted before counting. The shader applies the polarity flip
   // via XOR after the comparison so the captured count always matches threads that reach the LCA block.
   uint32_t polarity;
-  // Bit-pattern of the captured threshold literal. Reinterpreted as f32 when `field_dtype_is_float`, as
-  // i32 otherwise. Stored in the parameter blob rather than embedded as a SPIR-V `OpConstant` because the
-  // shader is compiled once per `GfxRuntime` and the threshold varies per kernel.
+  // Low 32 bits of the captured threshold literal. Reinterpreted as f32 when `field_dtype_is_float == 1`
+  // and `field_dtype_is_double == 0`, as i32 when `field_dtype_is_float == 0`. f64 thresholds use the
+  // `(threshold_bits_high, threshold_bits)` pair (low half here, high half below). Stored in the parameter
+  // blob rather than embedded as a SPIR-V `OpConstant` because the shader is compiled once per `GfxRuntime`
+  // and the threshold varies per kernel.
   uint32_t threshold_bits;
   // 0 when the gating field comes from a kernel ndarray argument (resolved via the kernel arg buffer + Physical
   // Storage Buffer load); 1 when it comes from an SNode-backed `qd.field(...)` placed under `qd.root.dense(...)`
@@ -80,9 +83,18 @@ struct AdStackBoundReducerParams {
   // matcher from the snode descriptor's prefix sums). Read only when `field_source_is_snode == 1`.
   uint32_t snode_byte_base_offset;
   // Stride per `gid` step in bytes for SNode-backed gates - the dense parent's `cell_stride`. The shader walks the
-  // gating field via `byte_offset = snode_byte_base_offset + gid * snode_byte_cell_stride` and loads one u32 word
-  // from there. Read only when `field_source_is_snode == 1`.
+  // gating field via `byte_offset = snode_byte_base_offset + gid * snode_byte_cell_stride` and loads either one
+  // u32 word (i32 / f32 element type) or two adjacent u32 words (f64 element type). Read only when
+  // `field_source_is_snode == 1`.
   uint32_t snode_byte_cell_stride;
+  // 1 when the gating field's element type is f64 (the source ndarray / SNode cell stride is 8 bytes per
+  // element). The shader walks elements with a doubled byte stride and reassembles the two adjacent u32
+  // words into a u64 -> bitcast f64 for the comparison. Read only when `field_dtype_is_float == 1`; 0 for
+  // i32 and f32 gates.
+  uint32_t field_dtype_is_double;
+  // High 32 bits of an f64 threshold, valid only when `field_dtype_is_double == 1`. The shader reassembles
+  // the 64-bit bit pattern from `(threshold_bits_high << 32) | threshold_bits` and bitcasts to f64.
+  uint32_t threshold_bits_high;
 
   // Offset into the parameter blob (in u32 words) for each field; published to the shader and the host
   // launcher as compile-time constants so each side reads/writes the same slots without a separate header
@@ -97,7 +109,9 @@ struct AdStackBoundReducerParams {
   static constexpr uint32_t kWordOffsetFieldSourceIsSnode = 7;
   static constexpr uint32_t kWordOffsetSnodeByteBaseOffset = 8;
   static constexpr uint32_t kWordOffsetSnodeByteCellStride = 9;
-  static constexpr uint32_t kNumWords = 10;
+  static constexpr uint32_t kWordOffsetFieldDtypeIsDouble = 10;
+  static constexpr uint32_t kWordOffsetThresholdBitsHigh = 11;
+  static constexpr uint32_t kNumWords = 12;
 };
 
 // Op-code values written into `AdStackBoundReducerParams::op_code`. Kept as a free enum (not a class enum)
