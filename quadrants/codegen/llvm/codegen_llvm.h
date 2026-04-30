@@ -121,6 +121,14 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // balanced), because the bootstrap value is dead memory (no `load_top` ever reads it back) and writing through
   // a possibly-unclaimed `row_id_var` would corrupt arbitrary heap rows.
   std::unordered_set<AdStackPushStmt *> ad_stack_bootstrap_pushes_;
+  // Set of f32-typed `AdStackAllocaStmt`s the codegen must address lazily through the split float heap (because
+  // the task captured a `bound_expr`). The base for these allocas changes after the LCA-block atomic-rmw claim
+  // updates `ad_stack_row_id_var_float_llvm_`, so `visit(AdStackAllocaStmt)` does not cache a static base in
+  // `llvm_val[stmt]`; every push / load-top / load-top-adj / pop site calls `get_ad_stack_base_llvm(stack)` which
+  // computes `heap_float + row_id_var * stride_float + offset` at the call site. Int / u1 allocas in the same
+  // task use the eager split-int layout (`heap_int + linear_tid * stride_int + offset`); both paths skip the
+  // legacy combined-heap addressing.
+  std::unordered_set<AdStackAllocaStmt *> ad_stack_lazy_float_allocas_;
   // Helpers that load the split-heap runtime fields once at `entry_block`. `ensure_ad_stack_heap_base_split_llvm`
   // caches the float / int heap base pointers; `ensure_ad_stack_metadata_split_llvm` adds the per-kind strides on
   // top of the legacy combined stride / offsets / max_sizes loads. Tasks without a captured `bound_expr` keep the
@@ -139,6 +147,13 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // codegen_id]`, stores the result into `ad_stack_row_id_var_float_llvm_`. Threads that never reach this block
   // never claim a row.
   void emit_ad_stack_row_claim_llvm();
+  // Return the per-thread base pointer for `stack`. For lazy float allocas (in tasks with `bound_expr`), emits
+  // `heap_float + row_id_var * stride_float + offset` at the current insertion point - because `row_id_var`
+  // changes after the LCA-block atomic-rmw, the base must be recomputed at every push / load-top / load-top-adj
+  // / pop site rather than cached in `llvm_val[stack]`. For all other allocas (eager int in split-layout tasks
+  // and any alloca in combined-layout tasks), returns the cached `llvm_val[stack]` set by
+  // `visit(AdStackAllocaStmt)`.
+  llvm::Value *get_ad_stack_base_llvm(AdStackAllocaStmt *stack);
   // Captured static gate predicate from the shared analysis. Propagated through to
   // `current_task->ad_stack.bound_expr` so the host launcher can dispatch the per-arch reducer to size the float
   // heap to the actual gate-passing thread count.
