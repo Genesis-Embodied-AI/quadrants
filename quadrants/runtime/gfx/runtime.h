@@ -195,13 +195,31 @@ class QD_DLL_EXPORT GfxRuntime {
   // zeros it for the next window.
   std::unique_ptr<DeviceAllocationGuard> adstack_overflow_buffer_;
 
-  // Single u32 SSBO that the SPIR-V codegen `OpAtomicIAdd`s into at the LCA-block claim site to lazily allocate
-  // per-thread heap rows. Allocated lazily on the first launch that binds `BufferType::AdStackRowCounter`, zeroed
-  // before each dispatch (the per-launch row claim sequence has to start at 0 every time), and reused across
-  // launches. Read back in the heap-binding path to clamp `effective_advisory_threads` against the prior
-  // launch's observed claim count and trigger the grow-and-retry path if the next launch's heap allocation is
-  // undersized for the row count.
+  // Per-task atomic-counter array (`uint[num_tasks_in_kernel]`) that the SPIR-V codegen `OpAtomicIAdd`s into at
+  // the LCA-block claim site, slot `task_id_in_kernel`. Allocated lazily on first bind, grown lazily when a
+  // kernel with more tasks than the current allocation lands, and zeroed exactly once per kernel-launch (gated
+  // on `i == 0` in the task loop in `launch_kernel`). Read back at `synchronize()` to update
+  // `last_observed_rows_per_task_` keyed by task name; the heap-bind path consults that map on subsequent
+  // launches to size each task's float / int heap from `last_observed * 1.5` rather than the dispatched-threads
+  // worst case, realising the actual per-thread-row sparsity.
   std::unique_ptr<DeviceAllocationGuard> adstack_row_counter_buffer_;
+  size_t adstack_row_counter_buffer_size_{0};
+
+  // Cached task names of the kernel most recently submitted via `launch_kernel`. Populated alongside the
+  // per-task counter buffer bind so the post-launch `synchronize()` readback can map each slot of the counter
+  // buffer back to its task name in `last_observed_rows_per_task_`. Multi-launch sequences without an
+  // intervening sync overwrite this on every launch, so only the LAST kernel's per-task observations land in
+  // the map per sync window - same temporal-resolution limitation the existing `adstack_overflow_buffer_`
+  // readback has, acceptable for the heap-sizing use case where the same kernel is typically dispatched
+  // repeatedly between syncs (forward + backward + step in a training loop).
+  std::vector<std::string> last_kernel_task_names_;
+
+  // Per-task observed row claim count, keyed by task name (`task_attribs.name`, of the form
+  // `<kernel>_<id>_t<NN>...`). Updated at `synchronize()` from the row-counter buffer readback. Consulted by
+  // the heap-bind path on subsequent launches to size the float / int heaps from this observation rather than
+  // the dispatched-threads worst case. Tasks that have never been observed (first-ever launch) are absent from
+  // the map; the heap-bind path falls back to the worst case in that case for correctness.
+  std::unordered_map<std::string, uint32_t> last_observed_rows_per_task_;
 
   // Per-dispatch heaps for SPIR-V adstack primal/adjoint storage. The float heap backs f32-valued adstacks; the
   // int heap backs i32 and u1 adstacks (u1 stored as i32 to match the historical Function-scope path's bool->int

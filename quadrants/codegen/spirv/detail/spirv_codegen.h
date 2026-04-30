@@ -144,6 +144,12 @@ class TaskCodegen : public IRVisitor {
   Arch arch_;
   DeviceCapabilityConfig *caps_;
   const CompileConfig *compile_config_;
+  // Index of this task within its kernel's task list (`KernelCodegen::run` -> `tasks[i]` for offload-stmt `i`).
+  // Stored from `Params::task_id_in_kernel` at construction so the LCA-block row-claim can OpAtomicIAdd into its
+  // own slot of the per-kernel `BufferType::AdStackRowCounter` array. Per-task slots are what makes the
+  // post-launch host readback usable - a single shared slot 0 would have the next task's bind clear it before
+  // the host reads, losing every task except the last.
+  int task_id_in_kernel_{0};
 
   struct BufferInfoTypeTupleHasher {
     std::size_t operator()(const std::pair<BufferInfo, int> &buf) const {

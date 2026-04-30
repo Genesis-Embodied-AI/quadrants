@@ -80,6 +80,7 @@ TaskCodegen::TaskCodegen(const Params &params)
     : arch_(params.arch),
       caps_(params.caps),
       compile_config_(params.compile_config),
+      task_id_in_kernel_(params.task_id_in_kernel),
       task_ir_(params.task_ir),
       compiled_structs_(params.compiled_structs),
       ctx_attribs_(params.ctx_attribs),
@@ -263,8 +264,14 @@ void TaskCodegen::visit(Block *stmt) {
     if (ad_stack_row_counter_buffer_.id == 0) {
       ad_stack_row_counter_buffer_ = get_buffer_value({BufferType::AdStackRowCounter}, PrimitiveType::u32);
     }
-    spirv::Value counter_ptr = ir_->struct_array_access(ir_->u32_type(), ad_stack_row_counter_buffer_,
-                                                        ir_->uint_immediate_number(ir_->i32_type(), 0));
+    // Per-task slot: the host allocates the counter buffer as `uint[num_tasks_in_kernel]`, clears it once at the
+    // start of each kernel-launch (not between tasks), so each task's atomic claims accumulate in its own slot
+    // and survive until the post-launch host readback at `synchronize()`. Without per-task slots a single shared
+    // slot would have the next task's bind-time clear destroy this task's count before the host can observe it,
+    // and the heap-sizing path would only ever see the LAST task's claim count - useless for tasks that come
+    // earlier in a multi-task kernel and have wildly different work patterns.
+    spirv::Value counter_ptr = ir_->struct_array_access(
+        ir_->u32_type(), ad_stack_row_counter_buffer_, ir_->uint_immediate_number(ir_->i32_type(), task_id_in_kernel_));
     spirv::Value claimed_row =
         ir_->make_value(spv::OpAtomicIAdd, ir_->u32_type(), counter_ptr,
                         /*scope=*/ir_->const_i32_one_,

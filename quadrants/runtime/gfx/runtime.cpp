@@ -540,6 +540,15 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   ensure_current_cmdlist();
 
+  // Cache the kernel's per-task names so the post-launch `synchronize()` readback can map each slot of the
+  // adstack row counter buffer back to its task name in `last_observed_rows_per_task_`. The vector is cleared
+  // and refilled on every launch - last-launch-wins for sync windows that contain multiple launches.
+  last_kernel_task_names_.clear();
+  last_kernel_task_names_.reserve(task_attribs.size());
+  for (const auto &t : task_attribs) {
+    last_kernel_task_names_.push_back(t.name);
+  }
+
   for (int i = 0; i < task_attribs.size(); ++i) {
     const auto &attribs = task_attribs[i];
     auto vp = ti_kernel->get_pipeline(i);
@@ -602,21 +611,28 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         }
         bindings->rw_buffer(bind.binding, *adstack_overflow_buffer_);
       } else if (bind.buffer.type == BufferType::AdStackRowCounter) {
-        // Single-u32 atomic counter that the SPIR-V codegen OpAtomicIAdds into at the LCA-block claim site
-        // (`spirv_codegen.cpp:visit(Block *)`) to lazily allocate per-thread heap rows. Cleared to 0 before
-        // every dispatch so each launch starts the row claim sequence at index 0. Allocated lazily on first
-        // bind and reused across launches. The host-readable + host-writable allocation flags let the host
-        // both read the post-launch value (driving the grow-and-retry path on the float / int heap allocations
-        // when the observed claim count exceeds the row capacity the heap was sized for) and zero the counter
-        // before the next dispatch via `buffer_fill`.
-        if (!adstack_row_counter_buffer_) {
-          auto [buf, res] = device_->allocate_memory_unique({sizeof(uint32_t), /*host_write=*/true, /*host_read=*/true,
+        // Per-task atomic-counter array (`uint[num_tasks_in_kernel]`) that the SPIR-V codegen `OpAtomicIAdd`s
+        // into at the LCA-block claim site, slot `task_id_in_kernel`. The host needs each task's claim count to
+        // survive until the post-launch readback at `synchronize()`, so the buffer is cleared exactly once per
+        // kernel-launch (gated on `i == 0`, the first task in this kernel's task loop). Sized to fit
+        // `task_attribs.size()` slots and grown lazily on launches that exceed the prior allocation.
+        const size_t needed_size = std::max<size_t>(task_attribs.size(), 1) * sizeof(uint32_t);
+        if (!adstack_row_counter_buffer_ || adstack_row_counter_buffer_size_ < needed_size) {
+          auto [buf, res] = device_->allocate_memory_unique({needed_size, /*host_write=*/true, /*host_read=*/true,
                                                              /*export_sharing=*/false, AllocUsage::Storage});
-          QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack row counter buffer");
+          QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack row counter buffer (needed_size={})",
+                         needed_size);
           adstack_row_counter_buffer_ = std::move(buf);
+          adstack_row_counter_buffer_size_ = needed_size;
         }
-        current_cmdlist_->buffer_fill(adstack_row_counter_buffer_->get_ptr(0), kBufferSizeEntireSize, /*data=*/0);
-        current_cmdlist_->buffer_barrier(*adstack_row_counter_buffer_);
+        if (i == 0) {
+          // First task of this kernel-launch: zero every slot so every per-task atomic counter starts at 0.
+          // Subsequent task binds in the same launch leave the buffer alone - this task's claim count must not
+          // be clobbered by a later task's bind, and the per-slot indexing in the codegen guarantees no
+          // cross-task collision.
+          current_cmdlist_->buffer_fill(adstack_row_counter_buffer_->get_ptr(0), kBufferSizeEntireSize, /*data=*/0);
+          current_cmdlist_->buffer_barrier(*adstack_row_counter_buffer_);
+        }
         bindings->rw_buffer(bind.binding, *adstack_row_counter_buffer_);
       } else if (bind.buffer.type == BufferType::AdStackHeapFloat) {
         // SPIR-V adstack primal/adjoint storage for f32 adstacks. Sized for the actual dispatched thread count
@@ -845,6 +861,21 @@ void GfxRuntime::synchronize() {
                 "(rewrite it, or extend the grammar), or the Bellman-Ford analyzer undercounted the "
                 "forward-pass accumulation on this stack (file a bug with the kernel IR via `QD_DUMP_IR=1`).",
                 flag_val - 1);
+  }
+  // Sparse-adstack-heap row-counter readback: the SPIR-V codegen `OpAtomicIAdd`s into one slot per task of the
+  // counter buffer at the LCA-block claim site. After `wait_idle()` (above), every dispatched task in the
+  // last-launched kernel has a stable observed count in its slot. Snapshot those into
+  // `last_observed_rows_per_task_` keyed by task name so the next launch's heap-bind path can size each task's
+  // float / int heap from `last_observed * 1.5` instead of the dispatched-threads worst case. The map is sticky
+  // across launches: tasks not in the last-launched kernel keep their previous observation.
+  if (adstack_row_counter_buffer_ && !last_kernel_task_names_.empty() && !finalizing_) {
+    void *mapped = nullptr;
+    QD_ASSERT(device_->map(*adstack_row_counter_buffer_, &mapped) == RhiResult::success);
+    const uint32_t *slots = reinterpret_cast<const uint32_t *>(mapped);
+    for (size_t i = 0; i < last_kernel_task_names_.size(); ++i) {
+      last_observed_rows_per_task_[last_kernel_task_names_[i]] = slots[i];
+    }
+    device_->unmap(*adstack_row_counter_buffer_);
   }
   fflush(stdout);
 }
