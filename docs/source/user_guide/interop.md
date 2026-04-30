@@ -149,7 +149,7 @@ assert v1.data_ptr() == v2.data_ptr()   # same underlying memory
 
 ### Apple Metal: synchronisation
 
-On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Every `to_torch()` / `to_numpy()` call runs `qd.sync()` internally to flush the Quadrants queue. Additionally, `copy=True` (the default) calls `torch.mps.synchronize()` after the kernel copy so the returned tensor is immediately safe to use in torch ops. `copy=False` does **not** call `torch.mps.synchronize()`:
+On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Every `to_torch()` / `to_numpy()` call runs `qd.sync()` internally to flush the Quadrants queue. Additionally, `copy=True` (the default) calls `torch.mps.synchronize()` after the kernel copy. This is necessary because, on Metal, Quadrants and Torch do not share the same compute streams. `copy=False` does **not** call `torch.mps.synchronize()`:
 
 ```python
 qd.init(arch=qd.metal)
