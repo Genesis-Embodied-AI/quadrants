@@ -214,6 +214,155 @@ TaskCodegen::Result TaskCodegen::run() {
     }
   }
 
+  // Stage 1 of the static-IR-bound sparse-adstack-heap path: walk the LCA dominator chain back
+  // through `parent_stmt() / parent_block()` collecting every IfStmt gate; capture the gating
+  // condition iff exactly one gate is on the chain and the condition matches the recognized
+  // grammar `BinaryOp(cmp, GlobalLoadStmt(field[I]), ConstStmt(literal))`. The captured
+  // `StaticBoundExpr` is later consumed at runtime: a generic SPIR-V reducer kernel is dispatched
+  // before the main task, evaluates the predicate over the bound iteration range, and the
+  // resulting count is used to size the AdStackHeapFloat / AdStackHeapInt buffers exactly. When no
+  // gate is captured (root-LCA, multi-gate chain, unrecognized condition shape), the runtime
+  // falls back to the dispatched-threads worst-case sizing - no behavior change versus a kernel
+  // without this metadata. RangeForStmt-owned blocks on the chain are skipped, not counted: the
+  // for-loop iterates threads, it does not gate them; only IfStmt gates filter LCA reachability.
+  if (ad_stack_lca_block_ != nullptr) {
+    auto match_field_source = [](Stmt *load_src, TaskAttributes::StaticBoundExpr &out) -> bool {
+      if (auto *ext = load_src->cast<ExternalPtrStmt>()) {
+        if (auto *base_arg = ext->base_ptr->cast<ArgLoadStmt>()) {
+          out.field_source_kind = TaskAttributes::StaticBoundExpr::FieldSourceKind::NdArray;
+          out.ndarray_arg_id = base_arg->arg_id;
+          return true;
+        }
+        return false;
+      }
+      // SNode-backed: lower_access leaves the load source as `GetChStmt -> SNodeLookupStmt -> ...`,
+      // ending at the leaf SNode whose id is stable across launches and round-trips through the
+      // offline cache via the kernel's `compiled_structs`. Match the `GetChStmt` chain by walking
+      // its `output_snode` until we reach the field's leaf snode (the one carrying the dtype).
+      if (auto *getch = load_src->cast<GetChStmt>()) {
+        if (getch->output_snode != nullptr) {
+          out.field_source_kind = TaskAttributes::StaticBoundExpr::FieldSourceKind::SNode;
+          out.snode_id = getch->output_snode->id;
+          return true;
+        }
+      }
+      return false;
+    };
+    auto try_match_gate_cond = [&](Stmt *cond, bool polarity, TaskAttributes::StaticBoundExpr &out) -> bool {
+      auto *bin = cond->cast<BinaryOpStmt>();
+      if (bin == nullptr) {
+        return false;
+      }
+      const auto op = bin->op_type;
+      const bool is_cmp = (op == BinaryOpType::cmp_lt || op == BinaryOpType::cmp_le || op == BinaryOpType::cmp_gt ||
+                           op == BinaryOpType::cmp_ge || op == BinaryOpType::cmp_eq || op == BinaryOpType::cmp_ne);
+      if (!is_cmp) {
+        return false;
+      }
+      // Accept either `field cmp literal` (the typical `if mass[I] > eps`) or the symmetric
+      // `literal cmp field` (e.g. `if eps < mass[I]`). The symmetric form gets the comparison
+      // op flipped so the runtime reducer always evaluates `field cmp literal` against the
+      // captured `literal_*`.
+      Stmt *lhs = bin->lhs;
+      Stmt *rhs = bin->rhs;
+      auto *lhs_load = lhs->cast<GlobalLoadStmt>();
+      auto *rhs_const = rhs->cast<ConstStmt>();
+      auto *rhs_load = rhs->cast<GlobalLoadStmt>();
+      auto *lhs_const = lhs->cast<ConstStmt>();
+      GlobalLoadStmt *load = nullptr;
+      ConstStmt *cst = nullptr;
+      BinaryOpType captured_op = op;
+      if (lhs_load != nullptr && rhs_const != nullptr) {
+        load = lhs_load;
+        cst = rhs_const;
+      } else if (rhs_load != nullptr && lhs_const != nullptr) {
+        load = rhs_load;
+        cst = lhs_const;
+        // Flip cmp so post-flip the LHS is the field load.
+        switch (op) {
+          case BinaryOpType::cmp_lt:
+            captured_op = BinaryOpType::cmp_gt;
+            break;
+          case BinaryOpType::cmp_le:
+            captured_op = BinaryOpType::cmp_ge;
+            break;
+          case BinaryOpType::cmp_gt:
+            captured_op = BinaryOpType::cmp_lt;
+            break;
+          case BinaryOpType::cmp_ge:
+            captured_op = BinaryOpType::cmp_le;
+            break;
+          case BinaryOpType::cmp_eq:
+          case BinaryOpType::cmp_ne:
+            // Symmetric.
+            break;
+          default:
+            return false;
+        }
+      } else {
+        return false;
+      }
+      if (!match_field_source(load->src, out)) {
+        return false;
+      }
+      out.cmp_op = static_cast<int>(captured_op);
+      out.polarity = polarity;
+      // Encode the literal threshold as either f32 or i32 based on the constant's primitive type.
+      // Other types (f64, i64, etc.) fall through to "no match" so the reducer kernel never has
+      // to dispatch on a heterogeneous literal kind.
+      if (cst->val.dt->is_primitive(PrimitiveTypeID::f32)) {
+        out.field_dtype_is_float = true;
+        out.literal_f32 = cst->val.val_f32;
+        return true;
+      }
+      if (cst->val.dt->is_primitive(PrimitiveTypeID::i32)) {
+        out.field_dtype_is_float = false;
+        out.literal_i32 = cst->val.val_i32;
+        return true;
+      }
+      return false;
+    };
+
+    // Collect IfStmt gates on the chain from LCA up to the task body root. RangeForStmt /
+    // WhileStmt parents are skipped (they own their body block via parent_stmt but they are
+    // iterators, not gates). If we land on a parent_stmt that is anything other than nullptr
+    // (root), an IfStmt, a RangeForStmt, or a WhileStmt, we bail - unfamiliar control-flow
+    // structures might gate threads in ways the reducer cannot mirror, and falling through to
+    // worst-case sizing is the safe choice.
+    int gate_count = 0;
+    bool chain_ok = true;
+    TaskAttributes::StaticBoundExpr captured;
+    for (Block *cur = ad_stack_lca_block_; cur != nullptr; cur = cur->parent_block()) {
+      Stmt *parent = cur->parent_stmt();
+      if (parent == nullptr) {
+        break;  // task body root reached
+      }
+      if (auto *if_stmt = parent->cast<IfStmt>()) {
+        const bool polarity = (cur == if_stmt->true_statements.get());
+        ++gate_count;
+        if (gate_count > 1) {
+          chain_ok = false;
+          break;  // Stage 2 territory; fall back.
+        }
+        if (!try_match_gate_cond(if_stmt->cond, polarity, captured)) {
+          chain_ok = false;
+          break;
+        }
+      } else if (parent->is<RangeForStmt>() || parent->is<StructForStmt>() || parent->is<MeshForStmt>() ||
+                 parent->is<WhileStmt>() || parent->is<OffloadedStmt>()) {
+        // Iterator and offload-task parents do not gate threads (offload is the kernel boundary itself,
+        // for-style iterators sweep threads rather than filtering them). Skip and keep walking the chain.
+        continue;
+      } else {
+        chain_ok = false;
+        break;
+      }
+    }
+    if (chain_ok && gate_count == 1) {
+      task_attribs_.ad_stack.bound_expr = captured;
+    }
+  }
+
   if (task_ir_->task_type == OffloadedTaskType::serial) {
     generate_serial_kernel(task_ir_);
   } else if (task_ir_->task_type == OffloadedTaskType::range_for) {

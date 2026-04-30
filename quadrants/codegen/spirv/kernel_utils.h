@@ -177,6 +177,59 @@ struct TaskAttributes {
     SerializedSizeExpr size_expr{};
     QD_IO_DEF(heap_kind, offset_in_elems_compile_time, max_size_compile_time, size_expr);
   };
+  // Captured upper bound on the per-task LCA-block-reaching thread count, derived at codegen time
+  // by walking the LCA dominator chain and pattern-matching the gating condition. When set, the
+  // runtime dispatches a generic reducer kernel before the main task to evaluate the captured
+  // predicate over the bound iteration range; the resulting count is then used to size the
+  // AdStackHeapFloat / AdStackHeapInt allocations exactly. When `nullopt` (the gate did not match
+  // a recognized grammar, or the LCA pre-pass placed the LCA at the task body root with no gate
+  // above it), the runtime falls back to the dispatched-threads worst-case sizing - no behavior
+  // change versus a kernel without this metadata.
+  //
+  // Stage 1 grammar (recognized by `find_adstack_bound_expr`): exactly one `IfStmt` gate above the
+  // LCA, condition shaped as `BinaryOp(cmp, GlobalLoadStmt(field[I]), ConstStmt(literal))` where
+  // `cmp` is in `{<, <=, >, >=, ==, !=}` and `I` is a loop index of the dispatch range. Stage 2
+  // extends to compound predicates over `BinaryOp(land, ...)` / `BinaryOp(lor, ...)` trees of the
+  // Stage 1 leaf shape; that path leaves the leaf-only fields below empty and uses the post-order
+  // node tree instead.
+  struct StaticBoundExpr {
+    // Comparison op (stored as int instead of `BinaryOpType` to keep this header dependency-light;
+    // the IR pass and the runtime reducer kernel agree on the encoding via cast through
+    // `BinaryOpType`).
+    int cmp_op{0};
+
+    // Literal threshold from the gate's right-hand `ConstStmt`. The active union member is
+    // selected by the GlobalLoad result's primitive type the IR pass observed; the reducer kernel
+    // bitcasts the right one based on `field_dtype_is_float` at dispatch time.
+    bool field_dtype_is_float{true};
+    float literal_f32{0.0f};
+    int32_t literal_i32{0};
+
+    // True when the LCA enters on the gate condition holding (typical `if cmp:` shape); false when
+    // the LCA sits inside the `else` branch (`if cmp: else: <gate>`). The reducer flips the
+    // predicate accordingly so the captured count always matches threads that reach LCA.
+    bool polarity{true};
+
+    // Field source: SNode-backed (`qd.field(...)` with `qd.root.dense(...)`) selects the snode by
+    // its global id; NdArray-backed (`qd.ndarray(...)` kernel argument) selects via the
+    // `arg_id` list pointing into the kernel arg buffer. Stage 1 supports both because the
+    // Genesis MPM grid-op kernel uses SNode-backed `mass`, but smaller test repros tend to use
+    // ndarray-backed fields.
+    enum class FieldSourceKind : int32_t { SNode = 0, NdArray = 1 };
+    FieldSourceKind field_source_kind{FieldSourceKind::SNode};
+    int snode_id{-1};
+    std::vector<int> ndarray_arg_id;
+
+    QD_IO_DEF(cmp_op,
+              field_dtype_is_float,
+              literal_f32,
+              literal_i32,
+              polarity,
+              field_source_kind,
+              snode_id,
+              ndarray_arg_id);
+  };
+
   struct AdStackSizingAttribs {
     // Compile-time-derived per-thread strides in elements of each heap's element type. The runtime
     // recomputes these when any alloca's `size_expr` evaluates dynamically; the compile-time values
@@ -187,7 +240,8 @@ struct TaskAttributes {
     uint32_t per_thread_stride_float_compile_time{0};
     uint32_t per_thread_stride_int_compile_time{0};
     std::vector<AdStackAllocaAttribs> allocas;
-    QD_IO_DEF(per_thread_stride_float_compile_time, per_thread_stride_int_compile_time, allocas);
+    std::optional<StaticBoundExpr> bound_expr;
+    QD_IO_DEF(per_thread_stride_float_compile_time, per_thread_stride_int_compile_time, allocas, bound_expr);
   };
   AdStackSizingAttribs ad_stack;
 
