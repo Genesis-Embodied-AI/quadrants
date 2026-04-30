@@ -149,15 +149,15 @@ assert v1.data_ptr() == v2.data_ptr()   # same underlying memory
 
 ### Apple Metal: synchronisation
 
-On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Quadrants kernel writes are made visible via an automatic `qd.sync()` on every `to_torch()` / `to_numpy()` call (both `copy=True` and `copy=False`). For `copy=False`, `qd.sync()` flushes the Quadrants queue so the zero-copy view sees the latest writes:
+On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Every `to_torch()` / `to_numpy()` call runs `qd.sync()` internally to flush the Quadrants queue. Additionally, `copy=True` (the default) calls `torch.mps.synchronize()` after the kernel copy so the returned tensor is immediately safe to use in torch ops. `copy=False` does **not** call `torch.mps.synchronize()` -- the zero-copy view shares memory with the field, so no cross-queue data movement is needed:
 
 ```python
 qd.init(arch=qd.metal)
 f = qd.field(qd.f32, shape=(64,))
 
 run_kernel(f)                       # queues writes on the Quadrants Metal stream
-view = f.to_torch(copy=False)       # qd.sync() runs internally; view sees the writes
-copy = f.to_torch(copy=True)        # kernel copy via qd.sync()
+view = f.to_torch(copy=False)       # qd.sync() only
+copy = f.to_torch(copy=True)        # qd.sync() + torch.mps.synchronize()
 ```
 
 The reverse direction (PyTorch writes to a zero-copy view, then a Quadrants kernel reads from the same field) is **not** automatically synchronised. Because Quadrants and PyTorch MPS submit work to separate Metal command queues, a kernel launched immediately after a torch write may execute before the torch write has actually committed to memory:

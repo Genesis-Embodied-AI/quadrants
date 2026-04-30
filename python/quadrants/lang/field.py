@@ -175,15 +175,14 @@ def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False) -> bool:
 
 
 def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = False):
-    """Try to return a zero-copy (or cloned) torch tensor via DLPack.
+    """Try to return a zero-copy torch tensor via DLPack.
 
-    Returns the tensor on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``.
-    Raises ``ValueError`` when ``copy=False`` but zero-copy is not available.
+    Only called when ``copy is False``. Returns the tensor on success. Raises ``ValueError`` when zero-copy is not
+    available. Does NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the
+    copy=True (kernel-copy) path instead.
     """
     if not _can_zerocopy_field(field, is_scalar=is_scalar):
-        if copy is False:
-            raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
-        return None
+        raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
 
     import torch  # pylint: disable=C0415
 
@@ -191,23 +190,18 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
     if impl.current_cfg().arch == _ARCH_METAL:
         impl.get_runtime().sync()
 
-    needs_device_transfer = device is not None and tc.device != torch.device(device)
-    if needs_device_transfer:
-        if copy is False:
-            raise ValueError(
-                f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})"
-            )
-        tc = tc.to(device)
-        if impl.current_cfg().arch == _ARCH_METAL:
-            torch.mps.synchronize()
-        return tc
-
-    if copy is True:
-        tc = tc.clone()
-        if impl.current_cfg().arch == _ARCH_METAL:
-            torch.mps.synchronize()
+    if device is not None and tc.device != torch.device(device):
+        raise ValueError(f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})")
 
     return tc
+
+
+def _mps_sync_if_metal():
+    """Call ``torch.mps.synchronize()`` when running on the Metal backend, no-op otherwise."""
+    if impl.current_cfg().arch == _ARCH_METAL:
+        import torch  # pylint: disable=C0415
+
+        torch.mps.synchronize()
 
 
 class _DLPackV1Adapter:
@@ -573,9 +567,7 @@ class ScalarField(Field):
             copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
         if copy is False:
-            tc = _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
-            if tc is not None:
-                return tc
+            return _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
 
         import torch  # pylint: disable=C0415
 
@@ -584,6 +576,7 @@ class ScalarField(Field):
 
         tensor_to_ext_arr(self, arr)
         quadrants.lang.runtime_ops.sync()  # type: ignore
+        _mps_sync_if_metal()
         return arr
 
     @python_scope

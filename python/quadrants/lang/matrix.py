@@ -23,6 +23,7 @@ from quadrants.lang.field import (
     Field,
     ScalarField,
     SNodeHostAccess,
+    _mps_sync_if_metal,
     _try_zerocopy_numpy,
     _try_zerocopy_torch,
 )
@@ -1462,12 +1463,11 @@ class MatrixField(Field):
         """
         if copy is False:
             tc = _try_zerocopy_torch(self, copy=copy, device=device)
-            if tc is not None:
-                as_vector = self.m == 1 and not keep_dims
-                expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
-                if tc.shape != expected:
-                    tc = tc.reshape(expected)
-                return tc
+            as_vector = self.m == 1 and not keep_dims
+            expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
+            if tc.shape != expected:
+                tc = tc.reshape(expected)
+            return tc
 
         import torch  # pylint: disable=C0415
 
@@ -1479,6 +1479,7 @@ class MatrixField(Field):
 
         matrix_to_ext_arr(self, arr, as_vector)
         runtime_ops.sync()
+        _mps_sync_if_metal()
         return arr
 
     @python_scope
@@ -1892,9 +1893,7 @@ class MatrixNdarray(Ndarray):
             copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
         if copy is False:
-            tc = _try_zerocopy_torch(self, copy=copy, device=device)
-            if tc is not None:
-                return tc
+            return _try_zerocopy_torch(self, copy=copy, device=device)
         return self._ndarray_matrix_to_torch(as_vector=0, device=device)
 
     @python_scope
@@ -2038,9 +2037,7 @@ class VectorNdarray(Ndarray):
             copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
         if copy is False:
-            tc = _try_zerocopy_torch(self, copy=copy, device=device)
-            if tc is not None:
-                return tc
+            return _try_zerocopy_torch(self, copy=copy, device=device)
         return self._ndarray_matrix_to_torch(as_vector=1, device=device)
 
     @python_scope

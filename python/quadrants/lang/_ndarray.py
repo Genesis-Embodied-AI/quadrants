@@ -285,6 +285,9 @@ class Ndarray:
         layout_is_aos = 1
         ndarray_matrix_to_ext_arr(self, out, layout_is_aos, as_vector)
         impl.get_runtime().sync()
+        from quadrants.lang.field import _mps_sync_if_metal  # pylint: disable=C0415
+
+        _mps_sync_if_metal()
         return out
 
     @python_scope
@@ -490,9 +493,7 @@ class ScalarNdarray(Ndarray):
                 _try_zerocopy_torch,
             )
 
-            tc = _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
-            if tc is not None:
-                return tc
+            return _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
 
         import torch  # pylint: disable=C0415
 
@@ -504,6 +505,9 @@ class ScalarNdarray(Ndarray):
 
         ndarray_to_ext_arr(self, out)
         impl.get_runtime().sync()
+        from quadrants.lang.field import _mps_sync_if_metal  # pylint: disable=C0415
+
+        _mps_sync_if_metal()
         return out
 
     @python_scope
