@@ -111,7 +111,7 @@ Sub-functions called by the kernel are also checked — they must not capture ex
 | Allowed capture | Why |
 |---|---|
 | `enum.Enum` values (e.g. `MyEnum.VALUE`) | Immutable named constants that are assumed not to vary between process runs. |
-| `math` / `numpy` constants (e.g. `math.pi`) | Assumed stable across process runs; never change between compilations. |
+| `math` / `numpy` constants (e.g. `math.pi`) | Assumed stable across process runs. |
 | Quadrants module attributes (e.g. `qd.f32`) | Part of the compiler's own API; always consistent with the Quadrants version hash. |
 
 Other named constants (non-enum, non-module) captured from scope will raise a `QuadrantsCompilationError`, except for `UPPERCASE` names which emit a warning instead.
