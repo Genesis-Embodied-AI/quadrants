@@ -12,7 +12,7 @@ On a Genesis simulator benchmark (`single_franka_envs.py`, Ubuntu 24.04, NVIDIA 
 
 | Configuration | Process-start kernel load time |
 |---|---|
-| Other caches (no fastcache) | 7.2 s |
+| Other caches (no fastcache) | 4.6 s |
 | + fastcache | 0.3 s |
 
 ## How to use it
