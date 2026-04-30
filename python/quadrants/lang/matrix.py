@@ -1430,8 +1430,9 @@ class MatrixField(Field):
             arr = _try_zerocopy_numpy(self, copy=False)
             if arr is not None:
                 as_vector = self.m == 1 and not keep_dims
-                if as_vector:
-                    arr = arr.reshape(self.shape + (self.n,))
+                expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
+                if arr.shape != expected:
+                    arr = arr.reshape(expected)
                 if dtype is not None and arr.dtype != dtype:
                     raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
                 return arr
@@ -1463,8 +1464,9 @@ class MatrixField(Field):
             tc = _try_zerocopy_torch(self, copy=copy, device=device)
             if tc is not None:
                 as_vector = self.m == 1 and not keep_dims
-                if as_vector:
-                    tc = tc.reshape(self.shape + (self.n,))
+                expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
+                if tc.shape != expected:
+                    tc = tc.reshape(expected)
                 return tc
 
         import torch  # pylint: disable=C0415

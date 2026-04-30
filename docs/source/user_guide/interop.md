@@ -149,18 +149,16 @@ assert v1.data_ptr() == v2.data_ptr()   # same underlying memory
 
 ### Apple Metal: synchronisation
 
-On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Quadrants kernel writes are made visible to the MPS-backed view via an automatic `qd.sync()` on every `to_torch()` / `to_numpy()` call. When you ask Quadrants for an independent buffer with `copy=True`, Quadrants additionally calls `torch.mps.synchronize()` after cloning so the returned tensor reflects the latest device writes:
+On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Quadrants kernel writes are made visible via an automatic `qd.sync()` on every `to_torch()` / `to_numpy()` call (both `copy=True` and `copy=False`). For `copy=False`, `qd.sync()` flushes the Quadrants queue so the zero-copy view sees the latest writes:
 
 ```python
 qd.init(arch=qd.metal)
 f = qd.field(qd.f32, shape=(64,))
 
 run_kernel(f)                       # queues writes on the Quadrants Metal stream
-view = f.to_torch()                 # qd.sync() runs internally; view sees the writes
-copy = f.to_torch(copy=True)        # qd.sync() + torch.mps.synchronize() run internally
+view = f.to_torch(copy=False)       # qd.sync() runs internally; view sees the writes
+copy = f.to_torch(copy=True)        # kernel copy via qd.sync()
 ```
-
-`view.clone()`, called by you on a tensor you already hold, is a plain PyTorch op and does **not** go through Quadrants -- it neither calls `qd.sync()` nor `torch.mps.synchronize()`. If you need that, either go through `f.to_torch(copy=True)` (which does both internally) or call `torch.mps.synchronize()` yourself before / after the clone.
 
 The reverse direction (PyTorch writes to a zero-copy view, then a Quadrants kernel reads from the same field) is **not** automatically synchronised. Because Quadrants and PyTorch MPS submit work to separate Metal command queues, a kernel launched immediately after a torch write may execute before the torch write has actually committed to memory:
 
