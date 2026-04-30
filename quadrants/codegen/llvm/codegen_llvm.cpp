@@ -1809,11 +1809,17 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     // Find which `snode_tree_id` this root belongs to. `program->get_snode_root(id)` returns the SNode for tree
     // `id`; iterate until we find a match. Tree counts are small (single digits in every observed kernel) so the
     // linear scan is cheap and avoids needing a public reverse-lookup API on `Program`.
+    // Bound the scan with `prog->get_snode_tree_size()` (program.h:112) - `Program::get_snode_root` is a raw
+    // `snode_trees_[tree_id]->root()` with no bounds check, so an unbounded loop would be `std::vector::operator[]`
+    // OOB undefined behaviour on programs whose tree-id space is smaller than the captured chain expects (stale
+    // SNode references, recycled tree slots, offline-cache restore mismatches). The SPIR-V analog uses a bounded
+    // `snode_to_root_` map; mirror that safety here. Continue (rather than break) past nullptr slots to handle
+    // recycled-tree-id holes from `free_snode_tree_ids_`.
     int matched_tree_id = -1;
-    for (int id = SNodeTree::kFirstID;; ++id) {
+    for (int id = SNodeTree::kFirstID; id < prog->get_snode_tree_size(); ++id) {
       SNode *root_for_id = prog->get_snode_root(id);
       if (root_for_id == nullptr) {
-        break;
+        continue;
       }
       if (root_for_id == root_snode) {
         matched_tree_id = id;
