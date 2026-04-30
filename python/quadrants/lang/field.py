@@ -137,14 +137,14 @@ _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET = _compute_torch_mps_supports_dlpack_byt
 def _is_aos_struct_member(field: "Field") -> bool:
     """True when *field* is a member of a multi-member StructField with AOS layout.
 
-    AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous
-    strides at the member dtype size, so a zero-copy view would silently read neighbouring members' bytes as garbage.
+    AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous strides
+    at the member dtype size, so a zero-copy view would silently read neighbouring members' bytes as garbage.
 
-    SNode.place flattens vec/mat field components directly under the struct cell (no intermediate matrix SNode), so
-    both ScalarField and MatrixField members sit as direct children of the struct cell dense SNode. For a ScalarField,
-    num_ch != 1 means it's not a standalone field. For a MatrixField with n*m components, num_ch != n*m means either
-    SOA layout (num_ch == 1, each component in its own subtree -- DLPack strides are wrong) or AOS struct member
-    (num_ch > n*m, interleaved with other struct members). Only num_ch == n*m (standalone AOS) is safe for zero-copy.
+    SNode.place flattens vec/mat field components directly under the struct cell (no intermediate matrix SNode), so both
+    ScalarField and MatrixField members sit as direct children of the struct cell dense SNode. For a ScalarField, num_ch
+    != 1 means it's not a standalone field. For a MatrixField with n*m components, num_ch != n*m means either SOA layout
+    (num_ch == 1, each component in its own subtree -- DLPack strides are wrong) or AOS struct member (num_ch > n*m,
+    interleaved with other struct members). Only num_ch == n*m (standalone AOS) is safe for zero-copy.
     """
     try:
         from quadrants.lang.matrix import MatrixField  # pylint: disable=C0415
@@ -178,8 +178,8 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
     """Try to return a zero-copy torch tensor via DLPack.
 
     Only called when ``copy is False``. Returns the tensor on success. Raises ``ValueError`` when zero-copy is not
-    available. Does NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the
-    copy=True (kernel-copy) path instead.
+    available. Does NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the copy=True
+    (kernel-copy) path instead.
     """
     if not _can_zerocopy_field(field, is_scalar=is_scalar):
         raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
@@ -241,8 +241,8 @@ class _DLPackV1Adapter:
 def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False):
     """Try to return a zero-copy numpy array via DLPack.
 
-    Returns the array on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``.
-    Raises ``ValueError`` when ``copy=False`` but zero-copy is not available.
+    Returns the array on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``. Raises
+    ``ValueError`` when ``copy=False`` but zero-copy is not available.
     """
     if impl.current_cfg().arch not in _ARCH_CPU:
         if copy is False:

@@ -1417,10 +1417,10 @@ class MatrixField(Field):
         """Converts the field instance to a NumPy array.
 
         Args:
-            keep_dims (bool, optional): Whether to keep the dimension after conversion. When keep_dims=True, on an
-                n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields. When
-                keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a
-                4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
+            keep_dims (bool, optional): Whether to keep the dimension after conversion. When keep_dims=True, on an n-D
+                matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields. When
+                keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a 4x1
+                or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
             dtype (DataType, optional): The desired data type of returned numpy array.
             copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
