@@ -1766,11 +1766,18 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   ad_stack_bootstrap_pushes_.clear();
   ad_stack_static_bound_expr_.reset();
 
-  // The shared static-adstack analysis (LCA + bootstrap-push detection + bound_expr capture) is wired up but
-  // intentionally not called yet on the LLVM path: the codegen-side consumers (lazy LCA-block row claim,
-  // const-init slot store skip, split float / int heap routing, host reducer dispatch) are not yet implemented,
-  // so running the analysis here would only consume cycles for no behaviour change. The fields remain reset to
-  // their default values; the SPIR-V backend already calls the analysis on its own pre-pass.
+  // Run the shared static-adstack analysis. Returns the LCA of every f32 push/load-top site, the autodiff-bootstrap
+  // const-init push set, and an optional captured `StaticBoundExpr` when a single recognized gate sits on the
+  // LCA-to-root chain. SNode descriptor resolution returns nullopt: LLVM walks the SNode tree at runtime via the
+  // accessor bank rather than precomputed compile-time descriptors, so SNode-backed gates are not captured here.
+  // ndarray-backed gates are still captured for the host-side reducer.
+  auto null_snode_resolver = [](const SNode *, const SNode *) -> std::optional<SNodeFieldDescriptor> {
+    return std::nullopt;
+  };
+  auto adstack_analysis = analyze_adstack_static_bounds(stmt, null_snode_resolver);
+  ad_stack_bootstrap_pushes_ = std::move(adstack_analysis.bootstrap_pushes);
+  ad_stack_lca_block_float_ir_ = adstack_analysis.lca_block_float;
+  ad_stack_static_bound_expr_ = adstack_analysis.bound_expr;
 
   // Pre-scan the task body for every `AdStackAllocaStmt` before any codegen runs. Each alloca claims a fixed slot
   // inside the COMBINED per-thread slice (legacy single-heap layout, addressed by `linear_tid * combined_stride +
@@ -2391,6 +2398,21 @@ void TaskCodeGenLLVM::visit(AdStackPopStmt *stmt) {
 
 void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
+  // Autodiff-bootstrap const-init pushes (identified by the shared static-adstack analysis): keep the count_var
+  // increment so the matching reverse pop balances, but skip the slot store. These pushes execute on every
+  // dispatched thread regardless of any later gating; the bootstrap value is dead memory because no `load_top`
+  // ever reads it back. Skipping the store is what lets the future split-heap layout place the float row claim
+  // inside the gating branch without dragging the LCA up to the offload root through these unconditional pushes.
+  // On the current combined-heap layout the skip is a no-op for correctness (the slot is the thread's own
+  // address, harmless to leave uninitialised), but it cuts a memset and a store per bootstrap push.
+  if (ad_stack_bootstrap_pushes_.count(stmt) != 0 && !compile_config.debug && !is_compile_time_single_slot(stack)) {
+    auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+    llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stack);
+    llvm::Value *old_count = builder->CreateLoad(i64ty, count_alloca);
+    llvm::Value *new_count = builder->CreateAdd(old_count, llvm::ConstantInt::get(i64ty, 1));
+    builder->CreateStore(new_count, count_alloca);
+    return;
+  }
   if (compile_config.debug) {
     // Debug build: route through the bounds-checking helper so any sizer bug surfaces as an overflow flag at sync.
     // The `max_size` load is only needed on this path.
