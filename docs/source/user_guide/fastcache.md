@@ -94,7 +94,7 @@ Fastcache supports the following parameter types:
 
 If any parameter is of an unsupported type, fastcache is silently disabled for that call and the kernel falls back to normal compilation. A warning is logged at the `warn` level identifying the offending parameter.
 
-### 3. Source code must be readable
+### 3. Source code must be available
 
 Fastcache hashes the source code of the kernel and all sub-functions it calls. If the source file cannot be read at runtime (e.g. the kernel is defined in a frozen/compiled module, or the file has been deleted), fastcache cannot validate the cache and will fall back to normal compilation.
 
