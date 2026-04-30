@@ -3006,3 +3006,75 @@ def test_adstack_min_loop_carried_serial_range_for(n_inner):
     assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
     for i in range(n):
         assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-4)
+
+
+@pytest.mark.parametrize("active_fraction", [0.05, 0.5, 1.0])
+@test_utils.test(arch=[qd.metal, qd.vulkan], require=qd.extension.adstack, ad_stack_size=32)
+def test_adstack_static_bound_expr_ndarray_gate_grad_correct(active_fraction):
+    # Pins the static-IR-bound sparse-adstack-heap path (Stage 1) end to end on the SPIR-V backend: kernel
+    # shape `for I in range(N): if mass[I] > eps: <adstack-using gradient work>` with `mass` as an ndarray
+    # argument. The codegen pattern matcher captures the gating predicate as a `StaticBoundExpr` carrying
+    # the ndarray's `arg_id` and the comparison `> 1e-9`; the runtime dispatches the generic bound-reducer
+    # compute shader which counts threads with `mass[I] > 1e-9`, and the float adstack heap is sized to
+    # exactly that count instead of the dispatched-threads worst case. The lazy LCA-block atomic claim
+    # (Phases A+B+C) maps each gated thread to a unique row in `[0, count)` of the smaller heap.
+    #
+    # The test parametrises the active-mass fraction so it covers three regimes the runtime path treats
+    # differently: (a) sparse (5%) - the heap is much smaller than dispatched_threads and most threads
+    # never reach the LCA block, exercising the savings path; (b) half (50%) - the heap is half of
+    # dispatched and the per-row claim still has to map cleanly; (c) full (100%) - every thread passes
+    # the gate, the reducer's count equals dispatched_threads, and the resulting heap layout matches what
+    # the eager fallback path would have produced. All three should yield gradients that match a
+    # finite-difference oracle within f32 accumulation roundoff; a wrong-but-non-NaN gradient (the failure
+    # mode when row-claim and heap-sizing disagree) trips the assertion.
+    #
+    # Internal details: `ad_stack_size=32` overrides the default so the per-stack max_size stays small and
+    # the worst-case heap allocation (without Stage 1) is much larger than what the active-mass set
+    # actually consumes - amplifying the savings ratio so a regression that breaks the reducer dispatch
+    # and silently falls back to worst-case sizing still produces a passing test, while a regression that
+    # corrupts the row mapping fails on the gradient oracle. The kernel is structured with the gate
+    # immediately above the inner range-for so the LCA pre-pass places the float-LCA inside the gate
+    # (Stage 1.5 split-LCA mechanism), which is the precondition for the bound_expr capture to succeed.
+    n = 256
+    n_iter = 8
+    eps = 1e-9
+    threshold = 0.5
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    mass = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, mass: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if mass[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[0] += v
+
+    np.random.seed(0)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    n_active = max(1, int(round(active_fraction * n)))
+    mass_np = np.zeros(n, dtype=np.float32)
+    active_indices = np.sort(np.random.choice(n, size=n_active, replace=False))
+    mass_np[active_indices] = threshold + 0.1
+    x.from_numpy(x_np)
+    mass.from_numpy(mass_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, mass, out)
+    compute.grad(x, mass, out)
+    qd.sync()
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"static-bound-expr grad returned NaN: {got_grad}"
+
+    # Analytic oracle. For active i, the inner recurrence `v = v*c + d` over `n_iter` steps is linear in v
+    # with slope `c^n_iter`, where `c = 1.05`. So `d(out[0])/d(x[i]) = c^n_iter` for active i, 0 otherwise.
+    coeff = 1.05
+    expected_per_active = coeff**n_iter
+    expected = np.where(mass_np > eps, np.float32(expected_per_active), np.float32(0.0))
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
