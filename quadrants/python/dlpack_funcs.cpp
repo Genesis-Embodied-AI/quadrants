@@ -326,8 +326,6 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
   dl_tensor.strides = strides;
   dl_tensor.byte_offset = byte_offset;
 
-  auto capsule_deleter = [](PyObject *) {};
-
   if (versioned) {
     auto *vt = new DLManagedTensorVersioned();
     vt->version = {DLPACK_MAJOR_VERSION, DLPACK_MINOR_VERSION};
@@ -341,6 +339,13 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
       }
       delete self;
     };
+    auto capsule_deleter = [](PyObject *capsule) {
+      if (PyCapsule_IsValid(capsule, "dltensor_versioned")) {
+        auto *vt = reinterpret_cast<DLManagedTensorVersioned *>(
+            PyCapsule_GetPointer(capsule, "dltensor_versioned"));
+        if (vt && vt->deleter) vt->deleter(vt);
+      }
+    };
     return pybind11::capsule(vt, "dltensor_versioned", capsule_deleter);
   }
 
@@ -353,6 +358,13 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
       delete[] self->dl_tensor.strides;
     }
     delete self;
+  };
+  auto capsule_deleter = [](PyObject *capsule) {
+    if (PyCapsule_IsValid(capsule, "dltensor")) {
+      auto *mt = reinterpret_cast<DLManagedTensor *>(
+          PyCapsule_GetPointer(capsule, "dltensor"));
+      if (mt && mt->deleter) mt->deleter(mt);
+    }
   };
   return pybind11::capsule(mt, "dltensor", capsule_deleter);
 }
@@ -438,8 +450,6 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
   dl_tensor.strides = strides;
   dl_tensor.byte_offset = 0;
 
-  auto capsule_deleter = [](PyObject *) {};
-
   if (versioned) {
     auto *vt = new DLManagedTensorVersioned();
     vt->version = {DLPACK_MAJOR_VERSION, DLPACK_MINOR_VERSION};
@@ -449,12 +459,19 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
     vt->deleter = [](DLManagedTensorVersioned *self) {
       auto *owner = reinterpret_cast<pybind11::object *>(self->manager_ctx);
       pybind11::gil_scoped_acquire gil;
-      delete owner;  // DECREFs the Python object
+      delete owner;
       if (self->dl_tensor.shape != nullptr) {
         delete[] self->dl_tensor.shape;
         delete[] self->dl_tensor.strides;
       }
       delete self;
+    };
+    auto capsule_deleter = [](PyObject *capsule) {
+      if (PyCapsule_IsValid(capsule, "dltensor_versioned")) {
+        auto *vt = reinterpret_cast<DLManagedTensorVersioned *>(
+            PyCapsule_GetPointer(capsule, "dltensor_versioned"));
+        if (vt && vt->deleter) vt->deleter(vt);
+      }
     };
     return pybind11::capsule(vt, "dltensor_versioned", capsule_deleter);
   }
@@ -465,12 +482,19 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
   mt->deleter = [](DLManagedTensor *self) {
     auto *owner = reinterpret_cast<pybind11::object *>(self->manager_ctx);
     pybind11::gil_scoped_acquire gil;
-    delete owner;  // DECREFs the Python object
+    delete owner;
     if (self->dl_tensor.shape != nullptr) {
       delete[] self->dl_tensor.shape;
       delete[] self->dl_tensor.strides;
     }
     delete self;
+  };
+  auto capsule_deleter = [](PyObject *capsule) {
+    if (PyCapsule_IsValid(capsule, "dltensor")) {
+      auto *mt = reinterpret_cast<DLManagedTensor *>(
+          PyCapsule_GetPointer(capsule, "dltensor"));
+      if (mt && mt->deleter) mt->deleter(mt);
+    }
   };
   return pybind11::capsule(mt, "dltensor", capsule_deleter);
 }

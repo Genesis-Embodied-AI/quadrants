@@ -135,7 +135,7 @@ a = qd.ndarray(qd.i32, shape=(8,))
 a.from_numpy(np.arange(8, dtype=np.int32))
 
 view = a.to_numpy(copy=False)
-view[0] = 100
+view[0] = 100  # Requires NumPy >= 2.1 for the assignment to succeed
 print(a.to_numpy()[0])   # 100
 ```
 
