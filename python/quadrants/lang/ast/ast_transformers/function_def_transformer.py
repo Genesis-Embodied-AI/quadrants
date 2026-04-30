@@ -67,8 +67,8 @@ class FunctionDefTransformer:
                 BoundaryMode(boundary),
             )
             offset = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_offset")
-            count = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_count")
-            return True, BufferView(arr, offset, count)  # count passed as positional `size` arg
+            size = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_size")
+            return True, BufferView(arr, offset, size)
         if isinstance(annotation, ndarray_type.NdarrayType):
             assert this_arg_features is not None
             raw_element_type: DataTypeCxx

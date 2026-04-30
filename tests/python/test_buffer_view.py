@@ -104,6 +104,59 @@ def test_vector_ndarray_slice():
 
 
 @test_utils.test(arch=get_host_arch_list())
+def test_matrix_ndarray_slice():
+    """MatrixNdarray[:N] produces a BufferView over matrix elements."""
+    m_arr = qd.Matrix.ndarray(3, 3, qd.f32, (N,))
+    view = m_arr[:16]
+    assert isinstance(view, BufferView)
+    assert view.offset == 0
+    assert view.size == 16
+    assert view.get_ndarray() is m_arr
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_matrix_ndarray_kernel():
+    """BufferView over MatrixNdarray can be passed to a kernel and written."""
+    m_arr = qd.Matrix.ndarray(3, 3, qd.f32, (N,))
+    m_arr.from_numpy(np.zeros((N, 3, 3), dtype=np.float32))
+
+    @qd.kernel
+    def fill_diag(v: BufferView):
+        for i in range(v.size):
+            for k in range(3):
+                v[i][k, k] = 1.0
+
+    fill_diag(m_arr[8:16])
+    result = m_arr.to_numpy()
+    for i in range(N):
+        if 8 <= i < 16:
+            assert np.allclose(result[i], np.eye(3, dtype=np.float32))
+        else:
+            assert np.allclose(result[i], np.zeros((3, 3), dtype=np.float32))
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_vector_ndarray_kernel():
+    """BufferView over VectorNdarray can be passed to a kernel and written."""
+    v_arr = qd.Vector.ndarray(3, qd.f32, (N,))
+    v_arr.from_numpy(np.zeros((N, 3), dtype=np.float32))
+
+    @qd.kernel
+    def fill_ones(v: BufferView):
+        for i in range(v.size):
+            for k in range(3):
+                v[i][k] = 1.0
+
+    fill_ones(v_arr[4:12])
+    result = v_arr.to_numpy()
+    for i in range(N):
+        if 4 <= i < 12:
+            assert np.allclose(result[i], np.ones(3, dtype=np.float32))
+        else:
+            assert np.allclose(result[i], np.zeros(3, dtype=np.float32))
+
+
+@test_utils.test(arch=get_host_arch_list())
 def test_host_subview():
     """subview() creates a narrower view with accumulated offset."""
     data = qd.ndarray(qd.f32, shape=(N,))
