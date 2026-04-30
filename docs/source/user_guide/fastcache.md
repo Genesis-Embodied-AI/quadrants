@@ -61,7 +61,7 @@ for i in qd.static(range(config.num_layers)):
     ...
 ```
 
-Here the value of `num_layers` is compiled into the kernel. Concretely the loop will be unrolled, at compile time. If that value changes, a different kernel must be compiled. Mark these fields with `add_value_to_cache_key` so their values are included in the cache key:
+Here the value of `num_layers` is compiled into the kernel. Concretely the loop will be unrolled, at compile time. If `num_layers` changes, a different kernel must be compiled. Mark these fields with `add_value_to_cache_key` so their values are included in the cache key:
 
 ```python
 import dataclasses
