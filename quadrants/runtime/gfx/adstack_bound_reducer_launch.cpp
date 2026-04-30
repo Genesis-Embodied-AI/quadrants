@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <unordered_map>
 #include <vector>
 
@@ -111,8 +112,8 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
     return result;
   }
 
-  // Filter to the tasks whose bound_expr is consumable by the Stage 1 reducer (NdArray-backed source).
-  // SNode-backed bound_exprs are captured by the IR pattern matcher but the Stage 1 shader does not yet
+  // Filter to the tasks whose bound_expr is consumable by the reducer (NdArray-backed source).
+  // SNode-backed bound_exprs are captured by the IR pattern matcher but the reducer shader does not yet
   // implement the SNode-tree access path; those tasks fall through to worst-case sizing in the caller.
   std::vector<int> matched_task_indices;
   matched_task_indices.reserve(task_attribs.size());
@@ -126,6 +127,40 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
     }
     matched_task_indices.push_back(static_cast<int>(ti));
   }
+
+  // Even when no task in this kernel needs the reducer dispatched, the codegen-emitted defense-in-depth bounds
+  // check at the float Lowest Common Ancestor (LCA) block still loads `AdStackBoundRowCapacity[task_id]`; binding
+  // a null allocation there reads zero, the bounds check `claimed_row >= 0` always fires, and every kernel raises
+  // the divergence error spuriously. Always populate the capacity buffer with the UINT32_MAX default so the bounds
+  // check is inert by construction on every task that does not have a captured `bound_expr`. The buffer follows
+  // the same grow-on-demand amortised-doubling policy as the row counter; sized from `task_attribs.size()`.
+  const size_t needed_capacity_bytes = std::max<size_t>(task_attribs.size(), 1) * sizeof(uint32_t);
+  if (!adstack_bound_row_capacity_buffer_ || adstack_bound_row_capacity_buffer_size_ < needed_capacity_bytes) {
+    size_t new_size = std::max(needed_capacity_bytes, 2 * adstack_bound_row_capacity_buffer_size_);
+    auto [buf, res] = device_->allocate_memory_unique({new_size,
+                                                       /*host_write=*/true,
+                                                       /*host_read=*/false,
+                                                       /*export_sharing=*/false, AllocUsage::Storage});
+    QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack bound row capacity buffer (size={})",
+                   new_size);
+    if (adstack_bound_row_capacity_buffer_) {
+      ctx_buffers_.push_back(std::move(adstack_bound_row_capacity_buffer_));
+    }
+    adstack_bound_row_capacity_buffer_ = std::move(buf);
+    adstack_bound_row_capacity_buffer_size_ = new_size;
+  }
+  {
+    void *mapped = nullptr;
+    RhiResult map_res =
+        device_->map_range(adstack_bound_row_capacity_buffer_->get_ptr(0), needed_capacity_bytes, &mapped);
+    QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack bound row capacity buffer for default fill");
+    uint32_t *slots = reinterpret_cast<uint32_t *>(mapped);
+    for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
+      slots[ti] = std::numeric_limits<uint32_t>::max();
+    }
+    device_->unmap(*adstack_bound_row_capacity_buffer_);
+  }
+
   if (matched_task_indices.empty()) {
     return result;
   }
@@ -323,6 +358,23 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
   post_clear_cmdlist->buffer_fill(adstack_row_counter_buffer_->get_ptr(0), needed_counter_bytes, /*data=*/0);
   post_clear_cmdlist->buffer_barrier(*adstack_row_counter_buffer_);
   device_->get_compute_stream()->submit_synced(post_clear_cmdlist.get());
+
+  // Overwrite the matched tasks' capacity slots with their resolved reducer counts. The default fill earlier
+  // in this function set every slot to UINT32_MAX; matched tasks now get their exact count so the bounds check
+  // at the float LCA-block claim site fires only on a reducer / main divergence. Non-matched tasks keep the
+  // UINT32_MAX default and the bounds check stays inert for them.
+  {
+    void *mapped = nullptr;
+    RhiResult map_res =
+        device_->map_range(adstack_bound_row_capacity_buffer_->get_ptr(0), needed_capacity_bytes, &mapped);
+    QD_ASSERT_INFO(map_res == RhiResult::success,
+                   "Failed to map adstack bound row capacity buffer to publish per-task counts");
+    uint32_t *slots = reinterpret_cast<uint32_t *>(mapped);
+    for (const auto &kv : result) {
+      slots[kv.first] = kv.second;
+    }
+    device_->unmap(*adstack_bound_row_capacity_buffer_);
+  }
 
   return result;
 }

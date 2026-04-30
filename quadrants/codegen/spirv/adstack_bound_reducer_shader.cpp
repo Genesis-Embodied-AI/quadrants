@@ -165,7 +165,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
   {
     // Read the ndarray PSB pointer from the kernel arg buffer at the encoder-precomputed word offset, then
     // PSB-load the gating field's element at `gid`. The element width is fixed at 4 bytes for both f32 and
-    // i32 in Stage 1, so a single `psb_load_u32` covers both cases; the bitcast to f32 happens after the
+    // i32 here, so a single `psb_load_u32` covers both cases; the bitcast to f32 happens after the
     // load on the float path.
     Value ndarray_ptr_u64 = load_arg_buf_u64_ptr(ir, args_buf, arg_word_offset);
     Value field_word = psb_load_u32(ir, ndarray_ptr_u64, gid_u32);

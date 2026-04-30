@@ -166,7 +166,7 @@ class QD_DLL_EXPORT GfxRuntime {
   // `bound_expr`, dispatches the generic reducer compute shader (see
   // `quadrants/codegen/spirv/adstack_bound_reducer_shader.{h,cpp}`) over the task's iteration range and
   // reads back the count of threads matching the predicate. Returns a map keyed by `task_id_in_kernel`;
-  // entries are absent for tasks without `bound_expr`, with SNode-backed bound_expr (Stage 1 follow-up),
+  // entries are absent for tasks without `bound_expr`, with SNode-backed bound_expr (future work),
   // or on devices missing PSB+Int64 caps. The caller consumes the map at the AdStackHeapFloat bind site
   // to size each matched task's float heap allocation to `count[task_id] * stride_float * sizeof(f32)`,
   // falling through to the dispatched-threads worst-case sizing for tasks not in the map. Implementation
@@ -279,6 +279,15 @@ class QD_DLL_EXPORT GfxRuntime {
   std::unique_ptr<Pipeline> adstack_bound_reducer_pipeline_{nullptr};
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_params_buffer_;
   size_t adstack_bound_reducer_params_buffer_size_{0};
+
+  // Per-kernel `BufferType::AdStackBoundRowCapacity` (`uint[num_tasks_in_kernel]`). Populated by the host after
+  // the bound-reducer dispatch with each task's exact reducer count (UINT32_MAX for tasks without a captured
+  // captured `bound_expr`, so the codegen-emitted defense-in-depth bounds check is inert on those). Bound to the
+  // main task on every adstack-bearing dispatch; the SPIR-V reads it at the float LCA-block claim site to detect
+  // a reducer / main divergence and signal UINT32_MAX into AdStackOverflow on mismatch. Grown on demand using the
+  // same amortised-doubling policy as the float / int heaps.
+  std::unique_ptr<DeviceAllocationGuard> adstack_bound_row_capacity_buffer_;
+  size_t adstack_bound_row_capacity_buffer_size_{0};
 
   // Owning `ProgramImpl` back-reference; propagated from `Params::program_impl`. See the comment on
   // `Params::program_impl` for the contract.

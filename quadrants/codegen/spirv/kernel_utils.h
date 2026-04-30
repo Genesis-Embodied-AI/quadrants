@@ -48,6 +48,17 @@ struct TaskAttributes {
     // when the codegen falls back to the eager invoc-id-based row layout (e.g. when the LCA-of-
     // pushes pre-pass cannot place a single dominator claim site).
     AdStackRowCounter,
+    // Per-kernel StorageBuffer holding the static-IR-bound row capacity per task (`uint[num_tasks_in_kernel]`).
+    // Populated by the host after the bound-reducer dispatch (see `runtime/gfx/adstack_bound_reducer_launch.cpp`):
+    // for each task with a captured `bound_expr`, slot `task_id_in_kernel` carries the exact count of
+    // threads the reducer observed passing the gate; for every other task the host writes UINT32_MAX so the
+    // bounds check below is inert. The main-task SPIR-V loads this slot at the Lowest Common Ancestor (LCA) block
+    // claim site immediately after the OpAtomicIAdd that produces `claimed_row` and OpAtomicUMax-signals
+    // UINT32_MAX into AdStackOverflow when `claimed_row >= capacity`. The expected behaviour is "this signal
+    // never fires on legitimate workloads" because the reducer count is exact by construction; if it does fire,
+    // it indicates a reducer / main divergence (an internal bug, not user-recoverable), and `synchronize()`
+    // surfaces it as a clear actionable error rather than letting it silently corrupt gradients via OOB writes.
+    AdStackBoundRowCapacity,
   };
 
   struct BufferInfo {
@@ -186,11 +197,11 @@ struct TaskAttributes {
   // above it), the runtime falls back to the dispatched-threads worst-case sizing - no behavior
   // change versus a kernel without this metadata.
   //
-  // Stage 1 grammar (recognized by `find_adstack_bound_expr`): exactly one `IfStmt` gate above the
+  // The grammar (recognized by `find_adstack_bound_expr`): exactly one `IfStmt` gate above the
   // LCA, condition shaped as `BinaryOp(cmp, GlobalLoadStmt(field[I]), ConstStmt(literal))` where
-  // `cmp` is in `{<, <=, >, >=, ==, !=}` and `I` is a loop index of the dispatch range. Stage 2
+  // `cmp` is in `{<, <=, >, >=, ==, !=}` and `I` is a loop index of the dispatch range. the compound-predicate path
   // extends to compound predicates over `BinaryOp(land, ...)` / `BinaryOp(lor, ...)` trees of the
-  // Stage 1 leaf shape; that path leaves the leaf-only fields below empty and uses the post-order
+  // leaf shape; that path leaves the leaf-only fields below empty and uses the post-order
   // node tree instead.
   struct StaticBoundExpr {
     // Comparison op (stored as int instead of `BinaryOpType` to keep this header dependency-light;
@@ -212,7 +223,7 @@ struct TaskAttributes {
 
     // Field source. SNode-backed fields (`qd.field(...)` placed under `qd.root.dense(...)`) are identified
     // by the leaf snode's global id; ndarray-backed kernel arguments (`qd.ndarray(...)`) are identified by
-    // the `arg_id` list pointing into the kernel arg buffer. Stage 1 accepts both because sparse-grid
+    // the `arg_id` list pointing into the kernel arg buffer. The IR pass accepts both because sparse-grid
     // workloads tend to gate on SNode-backed scalar fields while smaller test repros tend to use ndarrays.
     enum class FieldSourceKind : int32_t { SNode = 0, NdArray = 1 };
     FieldSourceKind field_source_kind{FieldSourceKind::SNode};

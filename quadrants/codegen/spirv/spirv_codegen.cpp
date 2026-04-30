@@ -35,6 +35,7 @@ constexpr char kListgenBufferName[] = "listgen_buffer";
 constexpr char kExtArrBufferName[] = "ext_arr_buffer";
 constexpr char kAdStackOverflowBufferName[] = "adstack_overflow_buffer";
 constexpr char kAdStackRowCounterBufferName[] = "adstack_row_counter_buffer";
+constexpr char kAdStackBoundRowCapacityBufferName[] = "adstack_bound_row_capacity_buffer";
 constexpr char kAdStackHeapFloatBufferName[] = "adstack_heap_float_buffer";
 constexpr char kAdStackHeapIntBufferName[] = "adstack_heap_int_buffer";
 constexpr char kAdStackMetadataBufferName[] = "adstack_metadata_buffer";
@@ -63,6 +64,8 @@ std::string buffer_instance_name(BufferInfo b) {
       return kAdStackOverflowBufferName;
     case BufferType::AdStackRowCounter:
       return kAdStackRowCounterBufferName;
+    case BufferType::AdStackBoundRowCapacity:
+      return kAdStackBoundRowCapacityBufferName;
     case BufferType::AdStackHeapFloat:
       return kAdStackHeapFloatBufferName;
     case BufferType::AdStackHeapInt:
@@ -237,7 +240,7 @@ TaskCodegen::Result TaskCodegen::run() {
     }
   }
 
-  // Stage 1 of the static-IR-bound sparse-adstack-heap path: walk the LCA dominator chain back
+  // Static-IR-bound sparse-adstack-heap path: walk the LCA dominator chain back
   // through `parent_stmt() / parent_block()` collecting every IfStmt gate; capture the gating
   // condition iff exactly one gate is on the chain and the condition matches the recognized
   // grammar `BinaryOp(cmp, GlobalLoadStmt(field[I]), ConstStmt(literal))`. The captured
@@ -365,7 +368,7 @@ TaskCodegen::Result TaskCodegen::run() {
         ++gate_count;
         if (gate_count > 1) {
           chain_ok = false;
-          break;  // Stage 2 territory; fall back.
+          break;  // compound predicate territory; fall back.
         }
         if (!try_match_gate_cond(if_stmt->cond, polarity, captured)) {
           chain_ok = false;
@@ -453,6 +456,37 @@ void TaskCodegen::visit(Block *stmt) {
                         /*scope=*/ir_->const_i32_one_,
                         /*semantics=*/ir_->const_i32_zero_, ir_->uint_immediate_number(ir_->u32_type(), 1));
     ir_->store_variable(ad_stack_row_id_var_float_, claimed_row);
+
+    // Defense-in-depth bounds check. The host writes the per-task row capacity into
+    // `BufferType::AdStackBoundRowCapacity[task_id]` before this dispatch starts: for tasks with a captured
+    // `bound_expr` captured `bound_expr`, the value is the exact reducer count; for every other task the value is
+    // UINT32_MAX so this check is inert. When `claimed_row >= capacity` we OpAtomicUMax UINT32_MAX into the existing
+    // AdStackOverflow buffer; the synchronize() readback recognises that sentinel and raises a clear actionable
+    // error rather than letting the kernel silently OOB-write the heap. UINT32_MAX cannot collide with the
+    // existing per-stack `stack_id+1` overflow signal because `stack_id+1 <= num_ad_stacks << UINT32_MAX` in
+    // every realistic kernel. Expected behaviour on legitimate workloads: this branch is taken zero times. If
+    // it fires, the reducer's count diverged from the main pass's actual LCA-block-reaching thread count, which
+    // means an internal-consistency bug (non-determinism between reducer and main), not a user-recoverable
+    // condition. The clamp via OpSelect keeps the stored row id in-bounds at `capacity-1` when the over-claim
+    // happens, so downstream push / load-top sites in this overshooting thread do not write past the heap end.
+    if (ad_stack_bound_row_capacity_buffer_.id == 0) {
+      ad_stack_bound_row_capacity_buffer_ = get_buffer_value({BufferType::AdStackBoundRowCapacity}, PrimitiveType::u32);
+    }
+    spirv::Value capacity_ptr =
+        ir_->struct_array_access(ir_->u32_type(), ad_stack_bound_row_capacity_buffer_,
+                                 ir_->uint_immediate_number(ir_->i32_type(), task_id_in_kernel_));
+    spirv::Value capacity = ir_->load_variable(capacity_ptr, ir_->u32_type());
+    spirv::Value capacity_minus_one = ir_->sub(capacity, ir_->uint_immediate_number(ir_->u32_type(), 1));
+    spirv::Value clamped_row = ir_->call_glsl450(ir_->u32_type(), GLSLstd450UMin, claimed_row, capacity_minus_one);
+    ir_->store_variable(ad_stack_row_id_var_float_, clamped_row);
+    spirv::Value overflow_signal =
+        ir_->select(ir_->ge(claimed_row, capacity), ir_->uint_immediate_number(ir_->u32_type(), UINT32_MAX),
+                    ir_->uint_immediate_number(ir_->u32_type(), 0));
+    spirv::Value overflow_buf = get_buffer_value(BufferType::AdStackOverflow, PrimitiveType::u32);
+    spirv::Value overflow_ptr =
+        ir_->struct_array_access(ir_->u32_type(), overflow_buf, ir_->uint_immediate_number(ir_->i32_type(), 0));
+    ir_->make_value(spv::OpAtomicUMax, ir_->u32_type(), overflow_ptr, /*scope=*/ir_->const_i32_one_,
+                    /*semantics=*/ir_->const_i32_zero_, overflow_signal);
   }
   for (auto &s : stmt->statements) {
     if (offload_loop_motion_.find(s.get()) == offload_loop_motion_.end()) {

@@ -538,7 +538,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   std::vector<PerTaskAdStackRuntime> per_task_ad_stack = publish_adstack_metadata_spirv(
       host_ctx, args_buffer.get(), any_arrays, task_attribs, ti_kernel->ti_kernel_attribs().name);
 
-  // Static-IR-bound sparse-adstack-heap reducer dispatch. For each task with a Stage 1 captured bound_expr
+  // Static-IR-bound sparse-adstack-heap reducer dispatch. For each task with a captured `bound_expr`
   // (ndarray-backed gating predicate above the Lowest Common Ancestor (LCA) block), dispatch a generic
   // reducer compute shader that counts threads passing the predicate; the count then sizes the float
   // adstack heap allocation exactly in the bind path below, instead of the dispatched-threads worst case.
@@ -644,9 +644,23 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           current_cmdlist_->buffer_barrier(*adstack_row_counter_buffer_);
         }
         bindings->rw_buffer(bind.binding, *adstack_row_counter_buffer_);
+      } else if (bind.buffer.type == BufferType::AdStackBoundRowCapacity) {
+        // Per-task row capacity array populated by `dispatch_adstack_bound_reducers` before the main task bind
+        // loop opens (slot `ti` carries the reducer count for tasks with a captured `bound_expr`,
+        // UINT32_MAX otherwise). The codegen-emitted defense-in-depth bounds check at the float Lowest Common
+        // Ancestor (LCA) block reads this slot to detect a reducer / main divergence and signal UINT32_MAX into
+        // AdStackOverflow on mismatch; bindings here just route the existing buffer onto the descriptor without
+        // clearing or growing (those happen in the reducer launcher). Forward-only kernels never see an
+        // `AdStackBoundRowCapacity` binding because no float adstack push exists; defensive null bind keeps the
+        // RHI happy if the codegen ever requests this buffer without the launcher having populated it.
+        if (adstack_bound_row_capacity_buffer_) {
+          bindings->rw_buffer(bind.binding, *adstack_bound_row_capacity_buffer_);
+        } else {
+          bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
+        }
       } else if (bind.buffer.type == BufferType::AdStackHeapFloat) {
         // SPIR-V adstack primal/adjoint storage for f32 adstacks. Sized for `effective_rows`: the count of threads
-        // the static-IR-bound reducer pre-counted as passing the captured gate, when the task has a Stage 1
+        // the static-IR-bound reducer pre-counted as passing the captured gate, when the task has a captured
         // `bound_expr` consumable by the reducer; otherwise the dispatched-threads worst case (which is
         // `group_x * block_dim`, the advisory rounded up to a workgroup multiple, so threads past the advisory -
         // which still own an `invoc_id * stride` slice on the eager fallback path - stay in-bounds even if they
@@ -873,6 +887,20 @@ void GfxRuntime::synchronize() {
       *reinterpret_cast<uint32_t *>(mapped) = 0;
     }
     device_->unmap(*adstack_overflow_buffer_);
+    // UINT32_MAX is the dedicated sentinel the codegen-emitted defense-in-depth bounds check at the float Lowest
+    // Common Ancestor (LCA) block writes via OpAtomicUMax when `claimed_row >= bound_row_capacity` for a captured
+    // `bound_expr` captured `bound_expr`. The bound is the exact reducer count (see
+    // `adstack_bound_reducer_launch.cpp`), so on a correct codegen this branch is never taken; reaching it indicates
+    // the reducer's count diverged from the main pass's actual LCA-block-reaching thread count - an
+    // internal-consistency bug, not a user-recoverable condition. Surface a distinct actionable diagnostic so the
+    // failure is attributable to this exact mechanism rather than getting confused with the per-stack `stack_id+1`
+    // overflow signal below (whose sentinel range tops out at `num_ad_stacks` and cannot collide with UINT32_MAX in any
+    // realistic kernel).
+    QD_ERROR_IF(flag_val == std::numeric_limits<uint32_t>::max(),
+                "Internal: static-IR-bound sparse-adstack-heap reducer count diverged from main pass's actual "
+                "LCA-block claim count. The bound is supposed to be exact by construction; reaching this signal "
+                "means the reducer and the main pass observed different threads passing the captured gating "
+                "predicate. File a bug with the kernel IR via `QD_DUMP_IR=1` and a minimal repro.");
     QD_ERROR_IF(flag_val != 0,
                 "Adstack overflow (offending stack_id={}): a reverse-mode autodiff kernel pushed more elements "
                 "than the adstack capacity allows. Raised at the next qd.sync() rather than at the offending "
