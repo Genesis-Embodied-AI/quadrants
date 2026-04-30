@@ -195,6 +195,14 @@ class QD_DLL_EXPORT GfxRuntime {
   // zeros it for the next window.
   std::unique_ptr<DeviceAllocationGuard> adstack_overflow_buffer_;
 
+  // Single u32 SSBO that the SPIR-V codegen `OpAtomicIAdd`s into at the LCA-block claim site to lazily allocate
+  // per-thread heap rows. Allocated lazily on the first launch that binds `BufferType::AdStackRowCounter`, zeroed
+  // before each dispatch (the per-launch row claim sequence has to start at 0 every time), and reused across
+  // launches. Read back in the heap-binding path to clamp `effective_advisory_threads` against the prior
+  // launch's observed claim count and trigger the grow-and-retry path if the next launch's heap allocation is
+  // undersized for the row count.
+  std::unique_ptr<DeviceAllocationGuard> adstack_row_counter_buffer_;
+
   // Per-dispatch heaps for SPIR-V adstack primal/adjoint storage. The float heap backs f32-valued adstacks; the
   // int heap backs i32 and u1 adstacks (u1 stored as i32 to match the historical Function-scope path's bool->int
   // remap). Other primitive types (f64, i64, ...) are hard-errored in the shader codegen (no fallback). Each heap

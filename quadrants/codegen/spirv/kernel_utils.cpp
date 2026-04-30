@@ -33,6 +33,9 @@ std::string TaskAttributes::buffers_name(BufferInfo b) {
   if (b.type == BufferType::AdStackOverflow) {
     return "AdStackOverflow";
   }
+  if (b.type == BufferType::AdStackRowCounter) {
+    return "AdStackRowCounter";
+  }
   if (b.type == BufferType::AdStackHeapFloat) {
     return "AdStackHeapFloat";
   }

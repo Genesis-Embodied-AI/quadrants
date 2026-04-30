@@ -271,20 +271,42 @@ class TaskCodegen : public IRVisitor {
   // task so the `OpLoad` falls inside the dispatch body rather than the function header.
   spirv::Value ad_stack_heap_buffer_float_;
   spirv::Value ad_stack_heap_buffer_int_;
-  // `invoc_id * stride` thread-base values. Despite being cached like the buffers, these are NOT lazy: they are
-  // emitted eagerly from `visit(AdStackAllocaStmt)` so the `OpIMul` lives in the alloca's enclosing block, which
-  // strictly dominates every sibling inner loop that later references the cached SSA id. Emitting them lazily
-  // from the first `AdStackPush/LoadTop` visitor would place the multiply in the first loop's body, and the
-  // second sibling loop would reuse an SSA id defined in a non-dominating block (SPIR-V spec section 2.16).
-  // Do NOT move these to a lazy path; the corresponding getters enforce eager emission.
-  spirv::Value ad_stack_heap_thread_base_float_;
-  spirv::Value ad_stack_heap_thread_base_int_;
+  // The previous `ad_stack_heap_thread_base_float_` / `_int` SSA caches were removed in
+  // `duburcqa/sparse_adstack_heap`: the heap base is now `row_id_var * stride`, where `row_id_var` is a
+  // Function-scope OpVariable load. Per-call-site OpLoad yields a fresh SSA in the call site's basic block,
+  // so a single cached SSA cannot be reused across sibling blocks of the LCA without violating SPIR-V section
+  // 2.16 dominance. `get_ad_stack_heap_thread_base_float()` / `_int()` therefore re-emit the load + multiply
+  // at every push / load-top / load-top-adj. spirv-opt and spirv-cross still CSE redundant loads inside a
+  // single basic block, so the only added cost is one OpIMul per push site that lives in a different block.
   // Cached handle to the AdStackMetadata StorageBuffer and the per-task stride values loaded from
   // its header slots. Same dominance rule as the heap thread bases - eager emission at the first
   // alloca site of its heap kind, reused at every downstream push/load-top/load-top-adj.
   spirv::Value ad_stack_metadata_buffer_;
   spirv::Value ad_stack_metadata_stride_float_;
   spirv::Value ad_stack_metadata_stride_int_;
+  // Lowest common dominator (LCA) block of every AdStackPushStmt / AdStackLoadTopStmt / AdStackLoadTopAdjStmt
+  // in the task body, populated by the same pre-pass scan in `run()` that builds the heap strides. Computed via
+  // pairwise ancestor-chain intersection over each statement's `parent_block()`. The LCA is where `visit(Block
+  // *)` emits the one-shot row-claim: when codegen enters this block the kernel atomically increments the
+  // `BufferType::AdStackRowCounter` slot 0, stores the returned index into `ad_stack_row_id_var_`, and reuses
+  // that index for every `AdStackPushStmt` / `LoadTopStmt` / `LoadTopAdjStmt` inside the LCA's dominator
+  // subtree. Threads that never enter the LCA never claim a row and consume zero heap. `nullptr` when the task
+  // has no adstack push/load-top statements (the heap is unbound) or when the LCA reduces to the task body's
+  // root - in the latter case the claim still runs from the root, equivalent in row-occupancy to the prior
+  // `invoc_id`-keyed eager layout.
+  Block *ad_stack_lca_block_{nullptr};
+  // Function-scope OpVariable<u32> initialized to UINT32_MAX at task entry; overwritten with the atomically
+  // claimed row index when codegen visits `ad_stack_lca_block_`. `get_ad_stack_heap_thread_base_float()` /
+  // `_int()` load this variable and multiply against the runtime stride to produce the per-thread heap base,
+  // replacing the prior `invoc_id * stride` formula. The variable is per-invocation (Function storage class) so
+  // the load yields a fresh SSA at each push site without violating SPIR-V section 2.16 dominance even when push
+  // sites live in sibling blocks of the LCA.
+  spirv::Value ad_stack_row_id_var_;
+  // Cached SSA handle to the per-dispatch StorageBuffer holding the single u32 atomic counter
+  // (`BufferType::AdStackRowCounter`). Lazily populated on first use inside the LCA-block claim emission so the
+  // `OpAtomicIAdd` lives in the dispatch body rather than the function header. Zero (default-constructed) when
+  // the task has no adstack push sites and the buffer is not bound.
+  spirv::Value ad_stack_row_counter_buffer_;
   // Return (lazily) the StorageBuffer of `Array<f32>` that backs f32 adstacks for this dispatch, and the
   // per-thread base index inside it.
   spirv::Value get_ad_stack_heap_buffer_float();

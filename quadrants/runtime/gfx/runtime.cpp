@@ -601,6 +601,23 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           current_cmdlist_->buffer_barrier(*adstack_overflow_buffer_);
         }
         bindings->rw_buffer(bind.binding, *adstack_overflow_buffer_);
+      } else if (bind.buffer.type == BufferType::AdStackRowCounter) {
+        // Single-u32 atomic counter that the SPIR-V codegen OpAtomicIAdds into at the LCA-block claim site
+        // (`spirv_codegen.cpp:visit(Block *)`) to lazily allocate per-thread heap rows. Cleared to 0 before
+        // every dispatch so each launch starts the row claim sequence at index 0. Allocated lazily on first
+        // bind and reused across launches. The host-readable + host-writable allocation flags let the host
+        // both read the post-launch value (driving the grow-and-retry path on the float / int heap allocations
+        // when the observed claim count exceeds the row capacity the heap was sized for) and zero the counter
+        // before the next dispatch via `buffer_fill`.
+        if (!adstack_row_counter_buffer_) {
+          auto [buf, res] = device_->allocate_memory_unique({sizeof(uint32_t), /*host_write=*/true, /*host_read=*/true,
+                                                             /*export_sharing=*/false, AllocUsage::Storage});
+          QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack row counter buffer");
+          adstack_row_counter_buffer_ = std::move(buf);
+        }
+        current_cmdlist_->buffer_fill(adstack_row_counter_buffer_->get_ptr(0), kBufferSizeEntireSize, /*data=*/0);
+        current_cmdlist_->buffer_barrier(*adstack_row_counter_buffer_);
+        bindings->rw_buffer(bind.binding, *adstack_row_counter_buffer_);
       } else if (bind.buffer.type == BufferType::AdStackHeapFloat) {
         // SPIR-V adstack primal/adjoint storage for f32 adstacks. Sized for the actual dispatched thread count
         // (`group_x * block_dim`, which rounds `advisory_total_num_threads` up to a workgroup multiple) rather

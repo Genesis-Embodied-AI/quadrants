@@ -39,6 +39,15 @@ struct TaskAttributes {
     // layout tightens to the actual field state at each launch. Zero-sized and unbound when a
     // task declares no adstacks.
     AdStackMetadata,
+    // Per-dispatch StorageBuffer holding a single u32 atomic counter used to lazily claim
+    // per-thread heap rows. Threads that reach an AdStackPushStmt (or LoadTop / LoadTopAdj)
+    // atomicAdd this counter and use the returned index as their row id; threads that never enter
+    // a push site never increment the counter and consume zero heap rows. Host clears the slot to
+    // 0 before each dispatch and reads it back after to drive the grow-and-retry path on the
+    // float / int heap allocations. Zero-sized and unbound when the task declares no adstacks or
+    // when the codegen falls back to the eager invoc-id-based row layout (e.g. when the LCA-of-
+    // pushes pre-pass cannot place a single dominator claim site).
+    AdStackRowCounter,
   };
 
   struct BufferInfo {
