@@ -675,6 +675,20 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         auto bound_count_it = per_task_bound_count.find(i);
         if (bound_count_it != per_task_bound_count.end()) {
           effective_rows = bound_count_it->second;
+        } else {
+          // Tertiary fallback for tasks the reducer did not pre-count (no captured `bound_expr`, compound
+          // gate predicate, capability-missing device): if a prior synchronize() snapshot recorded the LCA
+          // claim count for the same task name into `last_observed_rows_per_task_`, size from
+          // `ceil(last_observed * 1.5)` instead of the full `dispatched_threads` worst case. The 1.5x cushion
+          // absorbs run-to-run variance in how many threads reach the LCA without forcing an amortized-
+          // doubling reallocation on every modest workload uplift; the cap at `dispatched_threads` keeps the
+          // total upper-bound consistent with the eager fallback row layout. First-launch / never-observed
+          // tasks retain the dispatched-threads worst case.
+          auto observed_it = last_observed_rows_per_task_.find(attribs.name);
+          if (observed_it != last_observed_rows_per_task_.end()) {
+            const uint64_t scaled = (uint64_t(observed_it->second) * 3 + 1) / 2;  // ceil(observed * 1.5)
+            effective_rows = std::min<size_t>(static_cast<size_t>(scaled), dispatched_threads);
+          }
         }
         // The shader uses u64 index arithmetic for `row_id * stride + offset + count` when the device has Int64;
         // without Int64 the shader falls back to u32 OpIMul, which silently wraps past 2^32 and aliases threads
@@ -923,8 +937,9 @@ void GfxRuntime::synchronize() {
   // counter buffer at the LCA-block claim site. After `wait_idle()` (above), every dispatched task in the
   // last-launched kernel has a stable observed count in its slot. Snapshot those into
   // `last_observed_rows_per_task_` keyed by task name so the next launch's heap-bind path can size each task's
-  // float / int heap from `last_observed * 1.5` instead of the dispatched-threads worst case. The map is sticky
-  // across launches: tasks not in the last-launched kernel keep their previous observation.
+  // float heap from `ceil(last_observed * 1.5)` instead of the dispatched-threads worst case (the int heap stays
+  // at the dispatched-threads worst case because int allocas use the eager `linear_tid * stride_int` mapping).
+  // The map is sticky across launches: tasks not in the last-launched kernel keep their previous observation.
   if (adstack_row_counter_buffer_ && !last_kernel_task_names_.empty() && !finalizing_) {
     void *mapped = nullptr;
     QD_ASSERT(device_->map(*adstack_row_counter_buffer_, &mapped) == RhiResult::success);

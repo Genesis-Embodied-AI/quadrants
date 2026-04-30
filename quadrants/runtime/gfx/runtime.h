@@ -214,8 +214,11 @@ class QD_DLL_EXPORT GfxRuntime {
   // kernel with more tasks than the current allocation lands, and zeroed exactly once per kernel-launch (gated
   // on `i == 0` in the task loop in `launch_kernel`). Read back at `synchronize()` to update
   // `last_observed_rows_per_task_` keyed by task name; the heap-bind path consults that map on subsequent
-  // launches to size each task's float / int heap from `last_observed * 1.5` rather than the dispatched-threads
-  // worst case, realising the actual per-thread-row sparsity.
+  // launches as a tertiary fallback (after the reducer-published `per_task_bound_count`) to size each task's
+  // float heap from `ceil(last_observed * 1.5)` rather than the dispatched-threads worst case. The int heap
+  // stays at the dispatched-threads worst case because int allocas use the eager `linear_tid * stride_int`
+  // mapping (loop-counter / branch-flag scratch indexed by thread id, not by LCA-claim row), so reducing its
+  // backing below `dispatched_threads * stride_int` would cause threads with `linear_tid > capacity` to OOB.
   std::unique_ptr<DeviceAllocationGuard> adstack_row_counter_buffer_;
   size_t adstack_row_counter_buffer_size_{0};
 
