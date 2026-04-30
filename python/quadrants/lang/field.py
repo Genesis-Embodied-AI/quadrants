@@ -255,7 +255,15 @@ def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False):
 
     import numpy as np  # pylint: disable=C0415
 
-    arr = np.from_dlpack(_DLPackV1Adapter(field.to_dlpack()))
+    try:
+        arr = np.from_dlpack(_DLPackV1Adapter(field.to_dlpack()))
+    except ModuleNotFoundError:
+        if copy is False:
+            raise ValueError(
+                "Zero-copy numpy for fields requires torch (the C++ DLPack export checks torch version). "
+                "Install torch or use copy=True."
+            ) from None
+        return None
     if copy is True:
         arr = arr.copy()
     return arr
