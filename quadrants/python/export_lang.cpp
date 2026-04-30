@@ -17,6 +17,7 @@
 #include "quadrants/ir/statements.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/extension.h"
+#include "quadrants/program/fn_attrs_registry.h"
 #include "quadrants/program/ndarray.h"
 #include "quadrants/rhi/device_capability.h"
 #include "quadrants/program/matrix.h"
@@ -80,6 +81,11 @@ void export_lang(nb::module_ &m) {
 
   m.def("arch_name", arch_name);
   m.def("arch_from_name", arch_from_name);
+  m.def("get_fn_attrs_registry", []() {
+    // Returns {backend_name: {allowed_attr_names...}} for validating
+    // @qd.kernel(fn_attrs=...) at decoration time.
+    return get_fn_attrs_registry();
+  });
 
   nb::enum_<SNodeType>(m, "SNodeType", nb::is_arithmetic())
 #define PER_SNODE(x) .value(#x, SNodeType::x)
@@ -553,6 +559,31 @@ void export_lang(nb::module_ &m) {
              self->no_activate.push_back(snode);
            })
       .def("to_string", &Kernel::to_string)
+      .def("set_fn_attrs",
+           [](Kernel *self,
+              const std::unordered_map<
+                  std::string,
+                  std::unordered_map<std::string, std::string>> &fn_attrs) {
+             const auto &registry = get_fn_attrs_registry();
+             for (const auto &backend_kv : fn_attrs) {
+               const auto reg_it = registry.find(backend_kv.first);
+               if (reg_it == registry.end()) {
+                 throw std::invalid_argument(
+                     "Unknown fn_attrs backend: '" + backend_kv.first +
+                     "'. See quadrants/program/fn_attrs_registry.h.");
+               }
+               const auto &allowed = reg_it->second;
+               for (const auto &attr_kv : backend_kv.second) {
+                 if (!allowed.count(attr_kv.first)) {
+                   throw std::invalid_argument(
+                       "Unknown " + backend_kv.first + " fn_attr: '" +
+                       attr_kv.first +
+                       "'. See quadrants/program/fn_attrs_registry.h.");
+                 }
+               }
+             }
+             self->fn_attrs = fn_attrs;
+           })
       .def("insert_scalar_param", &Kernel::insert_scalar_param)
       .def("insert_arr_param", &Kernel::insert_arr_param)
       .def("insert_ndarray_param", &Kernel::insert_ndarray_param)

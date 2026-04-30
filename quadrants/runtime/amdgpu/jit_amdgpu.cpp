@@ -31,6 +31,90 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
     function_pass_manager_addrcast.run(*func);
   function_pass_manager_addrcast.doFinalization();
 
+  for (auto &F : *llvm_module) {
+    // Match CUDA parity: jit_cuda.cpp:332-335 unconditionally applies
+    // unsafe-fp-math to ALL functions via hardcoded kFTZDenorms=1.
+    // Enables FMA contraction, reciprocal for division, and operation
+    // reordering. Applied to all functions (not just kernels) because
+    // internal body functions contain the actual FP compute.
+    F.addFnAttr("unsafe-fp-math", "true");
+    F.addFnAttr("no-signed-zeros-fp-math", "true");
+
+    if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL) {
+      const std::string kernel_name = F.getName().str();
+      const bool is_lightweight_cg_subkernel =
+          kernel_name.find("_kernel_cg_only_save_prev_grad") !=
+              std::string::npos ||
+          kernel_name.find("_kernel_update_constraint_forces") !=
+              std::string::npos ||
+          kernel_name.find("_kernel_update_constraint_qfrc") !=
+              std::string::npos ||
+          kernel_name.find("_kernel_update_constraint_cost") !=
+              std::string::npos ||
+          kernel_name.find("_kernel_update_search_direction") !=
+              std::string::npos;
+
+      // Each default below is skipped if the kernel already carries that
+      // attribute (set upstream in codegen_llvm.cpp from user-supplied
+      // @qd.kernel(fn_attrs={...})). User values win.
+      if (!is_lightweight_cg_subkernel &&
+          !F.hasFnAttribute("amdgpu-waves-per-eu")) {
+        F.addFnAttr("amdgpu-waves-per-eu", "1,2");
+      }
+      if (!F.hasFnAttribute("uniform-work-group-size")) {
+        F.addFnAttr("uniform-work-group-size", "true");
+      }
+      if (!F.hasFnAttribute("amdgpu-ieee")) {
+        F.addFnAttr("amdgpu-ieee", "false");
+      }
+      if (!F.hasFnAttribute("amdgpu-dx10-clamp")) {
+        F.addFnAttr("amdgpu-dx10-clamp", "false");
+      }
+    }
+  }
+
+  for (auto &F : *llvm_module) {
+    if (F.isDeclaration() || F.empty())
+      continue;
+    if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL)
+      continue;
+    if (F.hasFnAttribute("amdgpu-flat-work-group-size"))
+      continue;  // already set (e.g., on runtime kernels via
+                 // mark_function_as_amdgpu_kernel-equivalent paths)
+    llvm::StringRef inherited;
+    for (auto *U : F.users()) {
+      auto *CB = llvm::dyn_cast<llvm::CallBase>(U);
+      if (!CB)
+        continue;
+      // Direct call only — function-pointer args (e.g., body fn passed
+      // as `RangeForTaskFunc *func` to gpu_parallel_range_for) are
+      // skipped because the use is the function pointer itself, not a
+      // call to it. `alwaysinline` on gpu_parallel_range_for
+      // collapses the function-pointer indirection so the body fn ends
+      // up with direct callers in the kernel entry.
+      if (CB->getCalledOperand() != &F)
+        continue;
+      auto *Caller = CB->getFunction();
+      if (Caller && Caller->getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL &&
+          Caller->hasFnAttribute("amdgpu-flat-work-group-size")) {
+        inherited =
+            Caller->getFnAttribute("amdgpu-flat-work-group-size").getValueAsString();
+        break;
+      }
+    }
+    if (inherited.empty())
+      inherited = "1,128";  // conservative fallback
+    F.addFnAttr("amdgpu-flat-work-group-size", inherited);
+  }
+
+  auto *daz_type = llvm::Type::getInt8Ty(llvm_module->getContext());
+  auto *daz_init = llvm::ConstantInt::get(daz_type, 1);
+  auto *daz_var = new llvm::GlobalVariable(
+      *llvm_module, daz_type, true, llvm::GlobalValue::LinkOnceODRLinkage,
+      daz_init, "__oclc_daz_opt");
+  daz_var->setVisibility(llvm::GlobalValue::HiddenVisibility);
+
+
   if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
     llvm_module->print(llvm::errs(), nullptr);
     QD_WARN("Module broken");

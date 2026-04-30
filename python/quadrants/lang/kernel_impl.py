@@ -5,6 +5,7 @@ import typing
 from functools import update_wrapper, wraps
 from typing import Any, Callable, TypeVar, cast, overload
 
+from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.exception import (
     QuadrantsCompilationError,
@@ -153,13 +154,35 @@ def _inside_class(level_of_class_stackframe: int) -> bool:
     return False
 
 
+def _validate_fn_attrs(fn_attrs: dict[str, dict[str, str]], func_name: str) -> None:
+    registry = _qd_core.get_fn_attrs_registry()
+    for backend, attrs in fn_attrs.items():
+        if backend not in registry:
+            raise QuadrantsSyntaxError(
+                f"@qd.kernel(fn_attrs=...) on {func_name!r}: unknown backend "
+                f"{backend!r}. Registered backends: {sorted(registry)}."
+            )
+        allowed = registry[backend]
+        for key in attrs:
+            if key not in allowed:
+                raise QuadrantsSyntaxError(
+                    f"@qd.kernel(fn_attrs=...) on {func_name!r}: unknown "
+                    f"{backend} attribute {key!r}. Registered attributes: "
+                    f"{sorted(allowed)}."
+                )
+
+
 def _kernel_impl(
     _func: Callable,
     level_of_class_stackframe: int,
     verbose: bool = False,
     graph: bool = False,
     checkpoints: bool = False,
+    cuda_graph: bool = False,
+    fn_attrs: dict[str, dict[str, str]] | None = None,
 ) -> QuadrantsCallable:
+    if fn_attrs:
+        _validate_fn_attrs(fn_attrs, _func.__name__)
     # Can decorators determine if a function is being defined inside a class?
     # https://stackoverflow.com/a/8793684/12003165
     is_classkernel = _inside_class(level_of_class_stackframe + 1)
@@ -171,6 +194,9 @@ def _kernel_impl(
     primal.use_graph = graph
     primal.use_checkpoints = checkpoints
     adjoint.use_checkpoints = checkpoints
+    primal.use_cuda_graph = cuda_graph
+    primal.fn_attrs = fn_attrs
+    adjoint.fn_attrs = fn_attrs
     # Having |primal| contains |grad| makes the tape work.
     primal.grad = adjoint
 
@@ -213,7 +239,13 @@ def _kernel_impl(
 # TODO: This callable should be Callable[[F], F].
 # See comments below.
 def kernel(
-    _fn: None = None, *, pure: bool = False, graph: bool = False, checkpoints: bool = False
+    _fn: None = None,
+    *,
+    pure: bool = False,
+    graph: bool = False,
+    checkpoints: bool = False,
+    cuda_graph: bool = False,
+    fn_attrs: dict[str, dict[str, str]] | None = None,
 ) -> Callable[[Any], Any]: ...
 
 
@@ -224,7 +256,15 @@ def kernel(
 # However, by making it return Any, we can make the pure parameter
 # change now, without breaking pyright.
 @overload
-def kernel(_fn: Any, *, pure: bool = False, graph: bool = False, checkpoints: bool = False) -> Any: ...
+def kernel(
+    _fn: Any,
+    *,
+    pure: bool = False,
+    graph: bool = False,
+    checkpoints: bool = False,
+    cuda_graph: bool = False,
+    fn_attrs: dict[str, dict[str, str]] | None = None,
+) -> Any: ...
 
 
 def kernel(
@@ -234,6 +274,8 @@ def kernel(
     fastcache: bool = False,
     graph: bool = False,
     checkpoints: bool = False,
+    cuda_graph: bool = False,
+    fn_attrs: dict[str, dict[str, str]] | None = None,
 ):
     """
     Marks a function as a Quadrants kernel.
@@ -278,7 +320,14 @@ def kernel(
                 f"@qd.kernel({fn.__name__!r}, checkpoints=True) requires graph=True; "
                 "the checkpoint resume model is only meaningful for graph kernels."
             )
-        wrapped = _kernel_impl(fn, level_of_class_stackframe=level, graph=graph, checkpoints=checkpoints)
+        wrapped = _kernel_impl(
+            fn,
+            level_of_class_stackframe=level,
+            graph=graph,
+            checkpoints=checkpoints,
+            cuda_graph=cuda_graph,
+            fn_attrs=fn_attrs,
+        )
         wrapped.is_pure = pure is not None and pure or fastcache
         if pure is not None:
             warnings_helper.warn_once(

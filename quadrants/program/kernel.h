@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <unordered_map>
+
 #include "quadrants/util/lang_util.h"
 #include "quadrants/ir/snode.h"
 #include "quadrants/ir/ir.h"
@@ -15,6 +18,15 @@ class Program;
 class QD_DLL_EXPORT Kernel : public Callable {
  public:
   std::vector<SNode *> no_activate;
+
+  // User-supplied per-backend LLVM function attributes, set via
+  // `@qd.kernel(fn_attrs=...)`. Outer key is the backend short name
+  // ("amdgpu", ...); inner map is attr_name -> attr_value. Allowed keys
+  // are validated against fn_attrs_registry.h. Each backend's codegen is
+  // responsible for picking up its own entry; entries for inactive
+  // backends are stored but unused.
+  std::unordered_map<std::string, std::unordered_map<std::string, std::string>>
+      fn_attrs;
 
   bool is_accessor{false};
 
