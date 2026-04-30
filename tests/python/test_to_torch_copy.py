@@ -46,16 +46,21 @@ def test_scalar_field_copy_false(dtype):
     np.testing.assert_allclose(t.cpu().numpy(), expected)
 
 
+_TORCH_DEVICE_NAME = {qd.cuda: "cuda", qd.amdgpu: "cuda", qd.metal: "mps"}
+
+
 @test_utils.test(exclude=[qd.cpu])
 def test_scalar_field_copy_false_device_no_index():
-    """copy=False with device='cuda' (no index) should not raise when data is already on that device."""
+    """copy=False with device='<type>' (no index) should not raise when data is already on that device."""
     _skip_if_no_zerocopy()
+    torch_device = _TORCH_DEVICE_NAME.get(qd.cfg.arch)
+    if torch_device is None:
+        pytest.skip(f"No torch device mapping for {qd.cfg.arch.name}")
     f = qd.field(qd.f32, shape=(4,))
     f.from_numpy(np.array([1, 2, 3, 4], dtype=np.float32))
     qd.sync()
 
-    device_type = "cuda" if qd.cfg.arch == qd.cuda else qd.cfg.arch.name
-    t = f.to_torch(device=device_type, copy=False)
+    t = f.to_torch(device=torch_device, copy=False)
     np.testing.assert_allclose(t.cpu().numpy(), [1, 2, 3, 4])
 
 
