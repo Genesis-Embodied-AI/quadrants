@@ -59,10 +59,13 @@ struct StaticAdStackBoundExpr {
   // at use site.
   int cmp_op{0};
 
-  // Literal threshold. The active union member is selected by the GlobalLoad result's primitive type the IR pass
-  // observed; the reducer kernel bitcasts the right one based on `field_dtype_is_float` at dispatch time.
+  // Literal threshold. The active variant is selected by the GlobalLoad result's primitive type the IR pass observed;
+  // the reducer kernel bitcasts / reads the right one based on `field_dtype` at dispatch time. f64 gates store the
+  // literal in `literal_f64` so the reducer can read the source ndarray as `double*` without narrowing precision.
   bool field_dtype_is_float{true};
+  bool field_dtype_is_double{false};
   float literal_f32{0.0f};
+  double literal_f64{0.0};
   int32_t literal_i32{0};
 
   // True when the LCA enters on the gate condition holding (typical `if cmp:` shape); false when the LCA sits
@@ -95,7 +98,9 @@ struct StaticAdStackBoundExpr {
 
   QD_IO_DEF(cmp_op,
             field_dtype_is_float,
+            field_dtype_is_double,
             literal_f32,
+            literal_f64,
             literal_i32,
             polarity,
             field_source_kind,

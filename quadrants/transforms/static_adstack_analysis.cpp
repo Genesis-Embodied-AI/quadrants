@@ -82,8 +82,8 @@ bool is_autodiff_bootstrap_push(AdStackPushStmt *p) {
 }
 
 // The float-stack predicate folded into the LCA computation: push/load-top/load-top-adj sites where the underlying
-// alloca's `ret_type` is `f32`. Pop sites are deliberately NOT included - they only mutate `count_var` and impose
-// no dominance requirement on the row claim.
+// alloca's `ret_type` is real (f32 or f64). Pop sites are deliberately NOT included - they only mutate `count_var`
+// and impose no dominance requirement on the row claim.
 bool stack_is_float(Stmt *push_or_load) {
   AdStackAllocaStmt *alloca = nullptr;
   if (auto *p = push_or_load->cast<AdStackPushStmt>()) {
@@ -93,7 +93,7 @@ bool stack_is_float(Stmt *push_or_load) {
   } else if (auto *l = push_or_load->cast<AdStackLoadTopAdjStmt>()) {
     alloca = l->stack ? l->stack->cast<AdStackAllocaStmt>() : nullptr;
   }
-  return alloca != nullptr && alloca->ret_type == PrimitiveType::f32;
+  return alloca != nullptr && (alloca->ret_type == PrimitiveType::f32 || alloca->ret_type == PrimitiveType::f64);
 }
 
 // Generic IR walker that descends into block / control-flow children. The analysis uses this for the alloca + push
@@ -148,7 +148,12 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
   std::vector<Block *> push_side_blocks;
   walk_ir(task_ir->body.get(), [&](Stmt *s) {
     if (auto *alloca = s->cast<AdStackAllocaStmt>()) {
-      if (alloca->ret_type == PrimitiveType::f32) {
+      if (alloca->ret_type == PrimitiveType::f32 || alloca->ret_type == PrimitiveType::f64) {
+        // Both f32 and f64 reverse-mode adstacks share the float heap on LLVM. The analyser tracks stride in
+        // entry-count units (each entry = primal + adjoint = 2 elements) so the heap footprint scales naturally
+        // with `entry_size_bytes` at sizing time. f64 carries 4 bytes/element more than f32; the launcher's
+        // `align_up_8(sizeof(int64_t) + entry_size_bytes * max_size)` step in `publish_adstack_metadata` picks
+        // up the larger element size automatically.
         result.per_thread_stride_float += 2u * uint32_t(alloca->max_size);
         result.num_ad_stacks++;
       } else if (alloca->ret_type == PrimitiveType::i32 || alloca->ret_type == PrimitiveType::u1) {
@@ -365,16 +370,23 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
     out.polarity = polarity;
     if (cst->val.dt->is_primitive(PrimitiveTypeID::f32)) {
       out.field_dtype_is_float = true;
+      out.field_dtype_is_double = false;
       out.literal_f32 = cst->val.val_f32;
+      return true;
+    }
+    if (cst->val.dt->is_primitive(PrimitiveTypeID::f64)) {
+      out.field_dtype_is_float = true;
+      out.field_dtype_is_double = true;
+      out.literal_f64 = cst->val.val_f64;
       return true;
     }
     if (cst->val.dt->is_primitive(PrimitiveTypeID::i32)) {
       out.field_dtype_is_float = false;
+      out.field_dtype_is_double = false;
       out.literal_i32 = cst->val.val_i32;
       return true;
     }
-    // Other types (f64 / i64 / etc.) fall through; the reducer kernel never has to dispatch on heterogeneous
-    // literal kinds.
+    // Other types (i64 / etc.) fall through; the reducer kernel never has to dispatch on heterogeneous literal kinds.
     return false;
   };
 

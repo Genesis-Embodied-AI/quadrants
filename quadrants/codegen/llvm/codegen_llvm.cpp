@@ -1869,7 +1869,7 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
         alloca->stack_id = static_cast<int>(ad_stack_offsets_.size());
         ad_stack_offsets_.push_back(ad_stack_per_thread_stride_);
         ad_stack_per_thread_stride_ += align_up_8(alloca->size_in_bytes());
-        const bool is_float = alloca->ret_type == PrimitiveType::f32;
+        const bool is_float = alloca->ret_type == PrimitiveType::f32 || alloca->ret_type == PrimitiveType::f64;
         if (is_float) {
           ad_stack_per_thread_stride_float_ += align_up_8(alloca->size_in_bytes());
         } else {
@@ -2551,7 +2551,7 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   // `heap_float + row_id_var * stride_float + float_offset` at use time. Threads that never reach the LCA never
   // claim a row and never reach a push / load-top by definition of the LCA, so the unclaimed UINT32_MAX
   // `row_id_var` is observed only at sites that do not execute.
-  const bool is_float = stmt->ret_type == PrimitiveType::f32;
+  const bool is_float = stmt->ret_type == PrimitiveType::f32 || stmt->ret_type == PrimitiveType::f64;
   if (is_float && ad_stack_static_bound_expr_.has_value()) {
     ad_stack_lazy_float_allocas_.insert(stmt);
     if (compile_config.debug) {

@@ -1133,7 +1133,7 @@ uint32_t LlvmRuntimeExecutor::publish_per_task_bound_count_cpu(std::size_t task_
       return std::numeric_limits<uint32_t>::max();
     }
     field_base = static_cast<const char *>(data_ptr);
-    field_stride_bytes = sizeof(int32_t);  // f32 / i32 element step within a 1-D dense ndarray.
+    field_stride_bytes = be.field_dtype_is_double ? sizeof(double) : sizeof(int32_t);  // f32 / i32 = 4 B, f64 = 8 B.
   } else {
     // SNode-backed source: query the host-resident `runtime->roots[snode_root_id]` pointer through the
     // STRUCT_FIELD_ARRAY getter; on CPU this is an in-process call (no DtoH stage) and returns the dense
@@ -1158,14 +1158,27 @@ uint32_t LlvmRuntimeExecutor::publish_per_task_bound_count_cpu(std::size_t task_
 
   // Walk `[0, length)` evaluating the captured predicate on each thread's `field[i]`. The polarity bit selects
   // enter-on-true vs enter-on-false at the LCA's IfStmt; the count we publish is always the number of threads
-  // that REACH the LCA, regardless of the gate orientation.
+  // that REACH the LCA, regardless of the gate orientation. f64 gates dispatch through the same float-source
+  // arm but read the source as `double*` and compare against `literal_f64` so the f64 precision the user
+  // declared is preserved end-to-end (narrowing the literal to f32 here would risk false-positive / negative
+  // counts on gates whose threshold sits within the f32 representable gap).
   uint32_t count = 0;
   if (be.field_dtype_is_float) {
-    for (std::size_t i = 0; i < length; ++i) {
-      const float v = *reinterpret_cast<const float *>(field_base + i * field_stride_bytes);
-      const bool match = eval_cmp<float>(be.cmp_op, v, be.literal_f32);
-      if (be.polarity ? match : !match) {
-        ++count;
+    if (be.field_dtype_is_double) {
+      for (std::size_t i = 0; i < length; ++i) {
+        const double v = *reinterpret_cast<const double *>(field_base + i * field_stride_bytes);
+        const bool match = eval_cmp<double>(be.cmp_op, v, be.literal_f64);
+        if (be.polarity ? match : !match) {
+          ++count;
+        }
+      }
+    } else {
+      for (std::size_t i = 0; i < length; ++i) {
+        const float v = *reinterpret_cast<const float *>(field_base + i * field_stride_bytes);
+        const bool match = eval_cmp<float>(be.cmp_op, v, be.literal_f32);
+        if (be.polarity ? match : !match) {
+          ++count;
+        }
       }
     }
   } else {
@@ -1251,8 +1264,15 @@ void LlvmRuntimeExecutor::publish_per_task_bound_count_device(std::size_t task_i
   params.length = static_cast<uint32_t>(is_snode_source ? be.snode_iter_count : length);
   params.cmp_op = cmp_op_encoded;
   params.field_dtype_is_float = be.field_dtype_is_float ? 1u : 0u;
+  params.field_dtype_is_double = be.field_dtype_is_double ? 1u : 0u;
   params.polarity = be.polarity ? 1u : 0u;
-  if (be.field_dtype_is_float) {
+  if (be.field_dtype_is_double) {
+    // Pack the f64 threshold's 64-bit pattern into the (lo, hi) u32 pair the reducer reassembles.
+    uint64_t bits64 = 0;
+    std::memcpy(&bits64, &be.literal_f64, sizeof(uint64_t));
+    params.threshold_bits = static_cast<uint32_t>(bits64 & 0xFFFFFFFFu);
+    params.threshold_bits_high = static_cast<uint32_t>(bits64 >> 32);
+  } else if (be.field_dtype_is_float) {
     std::memcpy(&params.threshold_bits, &be.literal_f32, sizeof(uint32_t));
   } else {
     params.threshold_bits = static_cast<uint32_t>(be.literal_i32);
@@ -1277,7 +1297,6 @@ void LlvmRuntimeExecutor::publish_per_task_bound_count_device(std::size_t task_i
     params.snode_byte_base_offset = 0;
     params.snode_byte_cell_stride = 0;
   }
-  params.padding = 0;
 
   // Lazy-allocate the device-side params scratch buffer the first time a bound_expr task fires; reuse for
   // subsequent tasks across kernels. Sized for one struct (the reducer is single-task per call); a future

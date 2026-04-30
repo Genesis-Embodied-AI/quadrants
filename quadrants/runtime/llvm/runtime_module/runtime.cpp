@@ -1034,11 +1034,51 @@ void runtime_eval_static_bound_count(LLVMRuntime *runtime, RuntimeContext *ctx, 
     const u64 lo = static_cast<u64>(arg_buffer_u32[params->arg_word_offset]);
     const u64 hi = static_cast<u64>(arg_buffer_u32[params->arg_word_offset + 1]);
     field_base = reinterpret_cast<const char *>(lo | (hi << 32));
-    element_stride_bytes = static_cast<u32>(sizeof(u32));  // f32 and i32 share the same 4-byte ndarray stride
+    // f32 / i32 share the 4-byte ndarray stride; f64 needs 8 bytes per cell.
+    element_stride_bytes = (params->field_dtype_is_float != 0u && params->field_dtype_is_double != 0u)
+                               ? 8u
+                               : static_cast<u32>(sizeof(u32));
   }
 
   u32 count = 0;
-  if (params->field_dtype_is_float != 0u) {
+  if (params->field_dtype_is_float != 0u && params->field_dtype_is_double != 0u) {
+    // f64 path: reassemble the 64-bit threshold from the two u32 halves the host packed into the params blob, bitcast
+    // to double, then walk the source ndarray as `double *`. f64 thresholds keep the user's full f64 precision;
+    // narrowing to f32 here would risk a wrong count on gates whose threshold sits within an f32 representable gap.
+    double threshold;
+    u64 bits64 = static_cast<u64>(params->threshold_bits) | (static_cast<u64>(params->threshold_bits_high) << 32);
+    __builtin_memcpy(&threshold, &bits64, sizeof(double));
+    for (u32 i = 0; i < params->length; ++i) {
+      const double v = *reinterpret_cast<const double *>(field_base + (u64)i * element_stride_bytes);
+      bool match;
+      switch (params->cmp_op) {
+        case kLlvmReducerCmpLt:
+          match = v < threshold;
+          break;
+        case kLlvmReducerCmpLe:
+          match = v <= threshold;
+          break;
+        case kLlvmReducerCmpGt:
+          match = v > threshold;
+          break;
+        case kLlvmReducerCmpGe:
+          match = v >= threshold;
+          break;
+        case kLlvmReducerCmpEq:
+          match = v == threshold;
+          break;
+        case kLlvmReducerCmpNe:
+          match = v != threshold;
+          break;
+        default:
+          match = false;
+          break;
+      }
+      if ((params->polarity != 0u) ? match : !match) {
+        ++count;
+      }
+    }
+  } else if (params->field_dtype_is_float != 0u) {
     float threshold;
     {
       // Bitcast the threshold's u32 storage back to f32. memcpy keeps the LLVM IR semantics-clean (no aliasing)

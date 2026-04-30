@@ -37,15 +37,22 @@ struct LlvmAdStackBoundReducerDeviceParams {
   uint32_t length;
   // Encoded comparison op: one of `kLlvmReducerCmp*` above (0-5).
   uint32_t cmp_op;
-  // 1 when the gating field's element type is f32; 0 when i32. The reducer uses this to pick the right load width
-  // (4 bytes either way, but the comparison semantics differ between signed-int and float).
+  // 1 when the gating field's element type is f32 / f64; 0 when i32. The reducer combines this with
+  // `field_dtype_is_double` to select element width (4 vs 8 bytes) and load-as-int-vs-float arm.
   uint32_t field_dtype_is_float;
+  // 1 when the gating field's element type is f64 (and the source ndarray's stride is 8 bytes per cell). Read only
+  // when `field_dtype_is_float == 1`.
+  uint32_t field_dtype_is_double;
   // 1 when the gate enters on the predicate holding; 0 when it sits inside the `else` branch and the predicate
   // must be inverted. Mirrors the SPIR-V reducer's `polarity` field.
   uint32_t polarity;
-  // Bit-pattern of the captured threshold literal. Reinterpreted as f32 when `field_dtype_is_float`, as i32
-  // otherwise.
+  // Bit-pattern of the captured threshold literal. Reinterpreted as f32 when `field_dtype_is_float == 1` and
+  // `field_dtype_is_double == 0`, as i32 when `field_dtype_is_float == 0`. f64 thresholds use the
+  // `(threshold_bits_high, threshold_bits)` 64-bit pair below.
   uint32_t threshold_bits;
+  // High 32 bits of an f64 threshold, valid only when `field_dtype_is_double == 1`. The reducer reassembles the
+  // 64-bit bit pattern from `(threshold_bits_high << 32) | threshold_bits` and bitcasts to `double`.
+  uint32_t threshold_bits_high;
   // 0 when the gating field comes from a kernel ndarray argument (resolved via the kernel arg buffer); 1 when it
   // comes from a SNode-backed `qd.field(...)` placed under `qd.root.dense(...)` (resolved via a direct word load
   // from `runtime->roots[snode_root_id]` at byte offset `snode_byte_base_offset + gid * snode_byte_cell_stride`).
@@ -61,11 +68,9 @@ struct LlvmAdStackBoundReducerDeviceParams {
   // pattern matcher from the snode descriptor's prefix sums). Read only when `field_source_is_snode == 1`.
   uint32_t snode_byte_base_offset;
   // SNode path: stride per `gid` step in bytes (the dense parent's `cell_stride`). The reducer walks the gating
-  // field via `byte_offset = snode_byte_base_offset + gid * snode_byte_cell_stride` and loads one u32 word from
-  // there. Read only when `field_source_is_snode == 1`.
+  // field via `byte_offset = snode_byte_base_offset + gid * snode_byte_cell_stride` and loads one u32 / u64 word
+  // from there. Read only when `field_source_is_snode == 1`.
   uint32_t snode_byte_cell_stride;
-  // Padding to keep the struct 8-byte aligned for h2d memcpy alignment.
-  uint32_t padding;
 };
 
 }  // namespace quadrants::lang
