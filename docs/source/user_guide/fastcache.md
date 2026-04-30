@@ -2,13 +2,15 @@
 
 ## What it is
 
-Fastcache is a compilation-caching mechanism that dramatically reduces kernel startup time on repeated runs. When a kernel is marked as fastcache-eligible, Quadrants computes a lightweight cache key from the kernel source code, argument types, and compiler configuration. On subsequent invocations — even across Python process restarts — this key lets Quadrants skip the entire front-end compilation pipeline (AST transformation, IR generation) and jump straight to loading a previously compiled kernel from disk.
+Fastcache reduces the time it takes to load cached kernels when a new Python process starts.
 
-Without fastcache, the standard offline cache already avoids recompilation when the full front-end IR hash matches. Fastcache sits on top of this: it shortcuts the front-end work needed to *compute* that IR hash in the first place. In practice this turns multi-second cold starts into sub-second ones.
+The standard [offline cache](init_options.md#offline_cache) already persists compiled kernels to disk so they don't need to be recompiled from scratch on the next run. However, loading a cached kernel still requires parsing the kernel's Python AST, transforming it into IR, and computing a hash — just to look up the right cache entry. For applications with many kernels this front-end overhead alone can take several seconds on every process launch.
 
-Concretely, on a Genesis simulator benchmark (`single_franka_envs.py`, Ubuntu 24.04, NVIDIA 5090):
+Fastcache bypasses that front-end work. It computes a cheap cache key from the kernel source text, argument types, and compiler config, and uses it to load the compiled artifact directly — skipping AST parsing, IR generation, and hash computation entirely.
 
-| Configuration | Kernel cache load time |
+On a Genesis simulator benchmark (`single_franka_envs.py`, Ubuntu 24.04, NVIDIA 5090):
+
+| Configuration | Process-start kernel load time |
 |---|---|
 | No caching | 7.2 s |
 | Fastcache alone | 2.9 s |
@@ -17,16 +19,7 @@ Concretely, on a Genesis simulator benchmark (`single_franka_envs.py`, Ubuntu 24
 
 ## Why you want it
 
-Every time a Quadrants kernel is called for the first time in a Python session, the runtime must:
-
-1. Parse the kernel's Python AST and all called sub-functions.
-2. Transform the AST into Quadrants IR.
-3. Compile the IR to the target backend (LLVM, SPIR-V, etc.).
-4. On CUDA, further compile to PTX and then to SASS.
-
-Steps 3-4 are already covered by the standard offline cache. Fastcache eliminates steps 1-2 by recognizing that the kernel source and argument signature haven't changed since the last run, and loading the previously compiled artifact directly.
-
-This matters most for applications with many kernels (physics simulators, RL environments) where cold-start compilation can take tens of seconds. With fastcache enabled on eligible kernels, warm startup drops to a fraction of a second.
+Applications with many kernels (physics simulators, RL environments) pay a multi-second cost every time a new Python process starts, even when all kernels are already cached on disk. Fastcache turns that into a fraction of a second.
 
 ## How to use it
 
