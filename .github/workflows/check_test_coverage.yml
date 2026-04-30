@@ -18,9 +18,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Wait for builds to finish (dead-reckoning), to save AI cost if someone pushes many commits in a row
-        run: sleep 1800
-
       - name: Collect diffs and file lists
         id: changed
         env:
