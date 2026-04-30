@@ -97,6 +97,38 @@ def test_vector_field_copy_none():
     np.testing.assert_allclose(t.cpu().numpy(), [[1, 2, 3], [4, 5, 6]])
 
 
+@test_utils.test()
+def test_vector_field_copy_false_keep_dims():
+    """copy=False with keep_dims=True should produce the same shape as copy=True with keep_dims=True."""
+    _skip_if_no_zerocopy()
+    f = qd.Vector.field(3, qd.f32, shape=(2,))
+    f.from_numpy(np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32))
+    qd.sync()
+
+    t_copy = f.to_torch(copy=True, keep_dims=True)
+    t_view = f.to_torch(copy=False, keep_dims=True)
+    assert t_copy.shape == t_view.shape, f"shape mismatch: copy=True {t_copy.shape} vs copy=False {t_view.shape}"
+    np.testing.assert_allclose(t_view.cpu().numpy(), t_copy.cpu().numpy())
+
+
+@test_utils.test()
+def test_vector_field_to_numpy_copy_false_keep_dims():
+    """to_numpy(copy=False) with keep_dims=True should produce the same shape as copy=True with keep_dims=True."""
+    _skip_if_no_zerocopy()
+    if qd.cfg.arch not in (qd.cpu, qd.arm64):
+        pytest.skip("numpy zero-copy requires CPU backend")
+    f = qd.Vector.field(3, qd.f32, shape=(2,))
+    f.from_numpy(np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32))
+    qd.sync()
+
+    arr_copy = f.to_numpy(copy=True, keep_dims=True)
+    arr_view = f.to_numpy(copy=False, keep_dims=True)
+    assert (
+        arr_copy.shape == arr_view.shape
+    ), f"shape mismatch: copy=True {arr_copy.shape} vs copy=False {arr_view.shape}"
+    np.testing.assert_allclose(arr_view, arr_copy)
+
+
 # ---------------------------------------------------------------------------
 # ScalarNdarray
 # ---------------------------------------------------------------------------
@@ -339,6 +371,42 @@ def test_no_zerocopy_copy_false_raises():
 
     with pytest.raises(Exception):
         f.to_torch(copy=False)
+
+
+# ---------------------------------------------------------------------------
+# Apple Metal: MPS synchronisation
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=[qd.metal])
+def test_metal_copy_true_syncs_mps():
+    """copy=True on Metal should call torch.mps.synchronize() so the tensor is immediately usable."""
+    f = qd.field(qd.f32, shape=(64,))
+
+    @qd.kernel
+    def fill():
+        for i in range(64):
+            f[i] = qd.f32(i)
+
+    fill()
+    t = f.to_torch(copy=True)
+    np.testing.assert_allclose(t.cpu().numpy(), np.arange(64, dtype=np.float32))
+
+
+@test_utils.test(arch=[qd.metal])
+def test_metal_copy_false_no_mps_sync():
+    """copy=False on Metal should NOT call torch.mps.synchronize() (only qd.sync())."""
+    f = qd.field(qd.f32, shape=(64,))
+
+    @qd.kernel
+    def fill():
+        for i in range(64):
+            f[i] = qd.f32(i)
+
+    fill()
+    t = f.to_torch(copy=False)
+    torch.mps.synchronize()
+    np.testing.assert_allclose(t.cpu().numpy(), np.arange(64, dtype=np.float32))
 
 
 # ---------------------------------------------------------------------------
