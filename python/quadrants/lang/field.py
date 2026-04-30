@@ -137,8 +137,8 @@ _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET = _compute_torch_mps_supports_dlpack_byt
 def _is_aos_struct_member(field: "Field") -> bool:
     """True when *field* is a member of a multi-member StructField with AOS layout.
 
-    AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous strides
-    at the member dtype size, so a zero-copy view would silently read neighbouring members' bytes as garbage.
+    AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous
+    strides at the member dtype size, so a zero-copy view would silently read neighbouring members' bytes as garbage.
 
     SNode.place flattens vec/mat field components directly under the struct cell (no intermediate matrix SNode), so both
     ScalarField and MatrixField members sit as direct children of the struct cell dense SNode. For a ScalarField, num_ch
