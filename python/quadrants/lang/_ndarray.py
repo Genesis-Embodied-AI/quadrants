@@ -87,7 +87,7 @@ class Ndarray:
                 if prog is not None:
                     prog.delete_ndarray(arr)
 
-    def to_dlpack(self):
+    def to_dlpack(self, versioned=False):
         """Export this ndarray as a DLPack capsule.
 
         The returned capsule carries the *canonical* shape and a permuted strides array on layout-tagged ndarrays, so
@@ -102,8 +102,8 @@ class Ndarray:
             impl.get_runtime().sync()
         layout = getattr(self, "_qd_layout", None)
         if _is_identity_layout(layout):
-            return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr)
-        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, list(layout))
+            return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, versioned=versioned)
+        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, list(layout), versioned=versioned)
 
     def _reset(self):
         """

@@ -1290,13 +1290,14 @@ class MatrixField(Field):
         self.ndim = ndim
         self.ptr = qd_python_core.expr_matrix_field([var.ptr for var in self.vars], [n, m][:ndim])
 
-    def to_dlpack(self):
+    def to_dlpack(self, versioned=False):
         """
         Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.
         """
         impl.get_runtime().materialize()
         try:
-            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, self.ndim, self.n, self.m)
+            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, self.ndim, self.n, self.m,
+                                                              versioned=versioned)
         except ModuleNotFoundError:
             raise ModuleNotFoundError(
                 "MatrixField.to_dlpack() requires torch to be installed "

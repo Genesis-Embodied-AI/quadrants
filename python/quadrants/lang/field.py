@@ -224,13 +224,11 @@ def _mps_sync_if_metal():
 
 
 class _DLPackV1Adapter:
-    """Wraps a DLPack v0 PyCapsule into a v1-compatible object for ``np.from_dlpack``.
+    """Wraps a DLPack PyCapsule into a v1-compatible object for ``np.from_dlpack``.
 
-    Quadrants' C++ ``to_dlpack`` returns raw PyCapsules (v0 protocol). NumPy >= 1.23 requires the v1 protocol -- an
-    object exposing ``__dlpack__`` and ``__dlpack_device__``.
-
-    FIXME: NumPy >= 2.0 marks arrays from v0 capsules as read-only. Upgrade the C++ to emit DLManagedTensorVersioned
-    (v1, capsule name "dltensor_versioned") with flags=0 so numpy views are writable. See PR #450 discussion.
+    NumPy >= 1.23 requires the v1 protocol -- an object exposing ``__dlpack__`` and ``__dlpack_device__``. The capsule
+    itself can be either v0 (``"dltensor"``) or v1 (``"dltensor_versioned"``); this adapter just satisfies the protocol
+    so ``np.from_dlpack`` can call ``__dlpack__()`` to retrieve it.
     """
 
     __slots__ = ("_capsule",)
@@ -263,7 +261,7 @@ def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False, is_nda
     import numpy as np  # pylint: disable=C0415
 
     try:
-        arr = np.from_dlpack(_DLPackV1Adapter(field.to_dlpack()))
+        arr = np.from_dlpack(_DLPackV1Adapter(field.to_dlpack(versioned=True)))
     except ModuleNotFoundError:
         if copy is False:
             raise ValueError(
@@ -527,13 +525,13 @@ class ScalarField(Field):
     def __init__(self, var):
         super().__init__([var])
 
-    def to_dlpack(self):
+    def to_dlpack(self, versioned=False):
         """
         Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.
         """
         impl.get_runtime().materialize()
         try:
-            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, 0, 0, 0)
+            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, 0, 0, 0, versioned=versioned)
         except ModuleNotFoundError:
             # The C++ ``field_to_dlpack`` calls ``torch_supports_byte_offset`` which unconditionally does ``import
             # torch``. Guard here so callers that don't need torch (e.g. raw DLPack consumers) get a clear error
