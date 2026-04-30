@@ -3418,9 +3418,11 @@ def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case()
     # reducer counts at most 4 gate-passing cells in `selector[0..n)`, and the float heap is sized for 4
     # rows while 16 gated LCA reaches happen on each of those rows - rows 1..15 of every iteration's
     # claim alias into row 0/1/2/3, the inner-loop primal pushes overwrite each other, and the per-`i`
-    # gradient (`2 * x[i] * 1.05^n_iter`) reads back a cross-iteration value. The fix rejects the gate
-    # capture so the launcher falls back to the worst-case `num_threads * stride_float` heap sizing -
-    # safe (no aliasing), at the cost of the savings the bound-reducer path would have given.
+    # gradient reads back a cross-iteration value. The fix rejects the gate capture for THIS task only
+    # (i.e. this `OffloadedStmt` / outer parallel-for); the rest of the kernel's tasks still capture
+    # their gates if their `selector[i]` index is the loop's own `LoopIndexStmt`. The rejected task
+    # falls back to the worst-case `dispatched_threads * stride_float` heap sizing - safe (no aliasing),
+    # at the cost of the savings the bound-reducer path would have given for that one task.
     n = 64
     K = 4
     n_iter = 8
@@ -3439,9 +3441,9 @@ def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case()
     def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
         for i in range(n):
             if selector[i % K] > eps:
-                v = x[i] * x[i]
+                v = x[i]
                 for _ in range(n_iter):
-                    v = v * 1.05 + 0.05
+                    v = qd.sin(v) + 0.01
                 out[0] += v
 
     x.from_numpy(x_np)
@@ -3454,10 +3456,17 @@ def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case()
     compute.grad(x, selector, out)
     qd.sync()
 
-    # `selector[i % K]` is non-zero exactly when `i % K < K` and selector[i % K] = 1.0; with selector[:K] =
-    # 1.0 every iteration is gated. d(out)/d(x[i]) = 2 * x[i] * 1.05^n_iter on every i.
-    coeff = 1.05
-    expected = np.float32(2.0 * x_np * coeff**n_iter)
+    # `v = sin(v) + c` has a primal-dependent chain rule `cos(v_{k-1})`. Each iteration's reverse pass
+    # multiplies adjoints by `cos(stored_primal)`, so a slot read corrupted by a different iteration's
+    # push produces a primal-dependent wrong factor. With selector[:K] = 1.0 every iteration is gated;
+    # numpy reference computes the chain forward then products `cos(v_k)` for k = 0..n_iter-1.
+    v_np = x_np.copy()
+    grad_np = np.ones(n, dtype=np.float64)
+    for _ in range(n_iter):
+        grad_np *= np.cos(v_np.astype(np.float64))
+        v_np = np.sin(v_np) + np.float32(0.01)
+    expected = grad_np.astype(np.float32)
+
     got_grad = x.grad.to_numpy()
     assert not np.isnan(got_grad).any(), f"non-loop-var-index grad returned NaN: {got_grad}"
     np.testing.assert_allclose(got_grad, expected, rtol=2e-4, atol=2e-6)
