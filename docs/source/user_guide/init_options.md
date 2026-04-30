@@ -45,10 +45,46 @@ Number of host threads used when compiling kernels. Default `4`. Raise on machin
 
 ## Debugging
 
+See [Debug mode](./debug.md) for runnable examples and a typical develop / benchmark workflow.
+
 ### `debug`
 
-Enables IR verification between every compiler pass plus additional runtime checks (integer-overflow guards on arithmetic, linear-index overflow guards on tensor indexing, adstack push-bounds at the runtime helper level). Default `False`. Compile time slows substantially because the verifier walks the IR after every transform and the extra runtime checks expand the emitted code; ~21s additional has been observed on adstack-heavy kernels. Turn this on while iterating on a kernel that is producing incorrect numerics or while developing a new compiler pass; turn it back off once the bug is found.
+Default `False`. Turns on every available correctness check. Use while iterating on a kernel that produces wrong numerics or while developing a new compiler pass; turn off for benchmarks and production.
+
+Enables:
+- field-bounds check on tensor indexing (out-of-range index raises `RuntimeError`);
+- adstack-overflow check on reverse-mode autodiff (overflow raises `RuntimeError` on the next `qd.sync()`);
+- kernel `assert` statements;
+- integer-overflow guards on arithmetic;
+- IR verification after every compiler pass.
+
+**Cost.** Significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
 
 ### `check_out_of_bound`
 
-Enables runtime bounds-checking for tensor indexing. Default `False`. Costs runtime performance proportional to indexing density; leave off for benchmarks. Backends that do not expose the `assertion` extension (currently Metal and Vulkan) cannot honor this flag.
+Default `False`. Enables the field-bounds check on tensor indexing - an out-of-range index raises `RuntimeError`.
+
+**Cost.** Scales with how often kernels index into tensors. Cheaper than `debug=True`. Still leave off for benchmarks.
+
+Interaction with `debug`:
+
+| Flags | Field bounds | Adstack overflow | Other `debug` checks |
+|-------|--------------|------------------|----------------------|
+| neither | off | off | off |
+| `check_out_of_bound=True` only | on | off | off |
+| `debug=True` | on | on | on |
+
+- `debug=True` always implies `check_out_of_bound=True` (the field-bounds check fires whenever debug mode is on).
+- The adstack-overflow check on reverse-mode autodiff (a push past the per-stack capacity raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`) is on its own gate, controlled by `debug` - it is not enabled by `check_out_of_bound` alone.
+
+Per-backend support:
+
+| Backend | Field bounds check | Adstack overflow check |
+|---------|--------------------|------------------------|
+| CPU | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
+| CUDA | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
+| AMDGPU | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
+| Metal | never (no in-kernel assertion mechanism) | with `debug=True` |
+| Vulkan | never (no in-kernel assertion mechanism) | with `debug=True` |
+
+Metal and Vulkan lack the assertion extension that the field-bounds check relies on; `check_out_of_bound=True` is silently reset to `False` on those backends at `qd.init` time and a warning is logged. The adstack-overflow check is gated independently of the assertion extension, so `debug=True` activates it on every backend including Metal and Vulkan.
