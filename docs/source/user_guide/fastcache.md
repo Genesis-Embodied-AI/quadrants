@@ -32,21 +32,6 @@ def my_kernel(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]) ->
 
 That's it. On the first call, the kernel compiles normally and the fastcache entry is written to disk. When the next Python process starts, the cached artifact is loaded directly.
 
-### Deprecated alternatives
-
-The `@qd.pure` decorator and `@qd.kernel(pure=True)` parameter are older spellings of the same feature. They still work but emit a deprecation warning and are scheduled for removal in v4.0.0:
-
-```python
-# Deprecated — use fastcache=True instead
-@qd.pure
-@qd.kernel
-def my_kernel(a: qd.types.NDArray[qd.f32, 1]) -> None: ...
-
-# Also deprecated
-@qd.kernel(pure=True)
-def my_kernel(a: qd.types.NDArray[qd.f32, 1]) -> None: ...
-```
-
 ### Runtime configuration
 
 Fastcache requires the offline cache to be enabled (which it is by default). Two `qd.init` options are relevant:
