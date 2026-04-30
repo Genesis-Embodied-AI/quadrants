@@ -52,6 +52,7 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
   // launcher block for rationale; on CUDA the same memcpy_host_to_device path through the cached field
   // pointers publishes the cleared counter and UINT32_MAX-defaulted capacity arrays.
   executor->publish_adstack_lazy_claim_buffers(offloaded_tasks.size());
+  std::size_t task_index = 0;
   for (const auto &task : offloaded_tasks) {
     std::size_t n = resolve_num_threads(task.ad_stack, executor);
     // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without it the sizer
@@ -59,6 +60,13 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // on GPUs whose driver + kernel cannot coherently access pageable host memory (the HMM capability gated below in
     // `launch_llvm_kernel`). `nullptr` on HMM-capable setups keeps `publish_adstack_metadata`'s host-pointer fast path.
     executor->publish_adstack_metadata(task.ad_stack, n, &ctx, device_context_ptr);
+    // Device-side reducer for tasks with a captured ndarray-backed `bound_expr`: a single-thread CUDA kernel
+    // walks the gating ndarray, counts gate-passing threads, writes the count into
+    // `runtime->adstack_bound_row_capacities[task_index]`. The codegen-emitted clamp at the float LCA-block
+    // claim site reads it back. Tasks without a captured gate keep the UINT32_MAX default and the clamp stays
+    // inert.
+    executor->publish_per_task_bound_count_device(task_index, task.ad_stack, n, &ctx, device_context_ptr);
+    ++task_index;
     QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
     cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes, {&ctx.get_context()},
                         {});

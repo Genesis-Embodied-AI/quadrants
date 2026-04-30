@@ -1,8 +1,12 @@
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 
+#include <cstring>
 #include <limits>
 #include <vector>
+
+#include "quadrants/ir/static_adstack_bound_reducer_device.h"
+#include "quadrants/ir/stmt_op_types.h"
 
 #include "quadrants/rhi/common/host_memory_pool.h"
 #include "quadrants/runtime/llvm/llvm_offline_cache.h"
@@ -1136,6 +1140,131 @@ uint32_t LlvmRuntimeExecutor::publish_per_task_bound_count_cpu(std::size_t task_
   uint32_t *slots = static_cast<uint32_t *>(bound_capacities_dev_ptr);
   slots[task_index] = count;
   return count;
+}
+
+namespace {
+
+// Encode the captured `BinaryOpType` into the 0-5 numeric range the LLVM device reducer's switch consumes.
+// Mirrors the SPIR-V reducer's `encode_cmp_op` mapping at `quadrants/runtime/gfx/adstack_bound_reducer_launch.cpp`.
+uint32_t encode_cmp_op_for_llvm_reducer(int captured_cmp_op) {
+  switch (static_cast<BinaryOpType>(captured_cmp_op)) {
+    case BinaryOpType::cmp_lt:
+      return kLlvmReducerCmpLt;
+    case BinaryOpType::cmp_le:
+      return kLlvmReducerCmpLe;
+    case BinaryOpType::cmp_gt:
+      return kLlvmReducerCmpGt;
+    case BinaryOpType::cmp_ge:
+      return kLlvmReducerCmpGe;
+    case BinaryOpType::cmp_eq:
+      return kLlvmReducerCmpEq;
+    case BinaryOpType::cmp_ne:
+      return kLlvmReducerCmpNe;
+    default:
+      return std::numeric_limits<uint32_t>::max();
+  }
+}
+
+}  // namespace
+
+void LlvmRuntimeExecutor::publish_per_task_bound_count_device(std::size_t task_index,
+                                                              const AdStackSizingInfo &ad_stack,
+                                                              std::size_t length,
+                                                              LaunchContextBuilder *ctx,
+                                                              void *device_runtime_context_ptr) {
+  // Only fires for CUDA / AMDGPU; CPU goes through `publish_per_task_bound_count_cpu`. Bail when the task did
+  // not capture a bound_expr (no clamp needed - the slot stays at the UINT32_MAX default
+  // `publish_adstack_lazy_claim_buffers` wrote) or when the field source isn't ndarray (SNode-backed gates
+  // are not captured on the LLVM analysis path so they don't reach here, but the guard is cheap).
+  if (config_.arch != Arch::cuda && config_.arch != Arch::amdgpu) {
+    return;
+  }
+  if (!ad_stack.bound_expr.has_value()) {
+    return;
+  }
+  const auto &be = ad_stack.bound_expr.value();
+  if (be.field_source_kind != StaticAdStackBoundExpr::FieldSourceKind::NdArray) {
+    return;
+  }
+  if (ctx == nullptr || ctx->args_type == nullptr) {
+    return;
+  }
+
+  // Resolve the ndarray data pointer's word offset within the kernel arg buffer. Same path the SPIR-V reducer
+  // and the CPU host-eval use; bytes -> words for the reducer's `arg_buffer_u32[arg_word_offset]` indexing.
+  std::vector<int> indices = be.ndarray_arg_id;
+  indices.push_back(TypeFactory::DATA_PTR_POS_IN_NDARRAY);
+  std::size_t data_ptr_byte_off = ctx->args_type->get_element_offset(indices);
+  if (data_ptr_byte_off % sizeof(uint32_t) != 0) {
+    return;  // misaligned offset; the reducer's u32-word indexing would lose bits.
+  }
+  const uint32_t arg_word_offset = static_cast<uint32_t>(data_ptr_byte_off / sizeof(uint32_t));
+  const uint32_t cmp_op_encoded = encode_cmp_op_for_llvm_reducer(be.cmp_op);
+  if (cmp_op_encoded == std::numeric_limits<uint32_t>::max()) {
+    return;  // unrecognised comparison op (the IR pattern matcher should have rejected it earlier)
+  }
+
+  // Fill the device-side params struct on the host. Threshold bits live as the same u32 the runtime function
+  // bitcasts back; we copy whichever underlying integer or float value the analysis captured.
+  LlvmAdStackBoundReducerDeviceParams params{};
+  params.task_index = static_cast<uint32_t>(task_index);
+  params.length = static_cast<uint32_t>(length);
+  params.cmp_op = cmp_op_encoded;
+  params.field_dtype_is_float = be.field_dtype_is_float ? 1u : 0u;
+  params.polarity = be.polarity ? 1u : 0u;
+  if (be.field_dtype_is_float) {
+    std::memcpy(&params.threshold_bits, &be.literal_f32, sizeof(uint32_t));
+  } else {
+    params.threshold_bits = static_cast<uint32_t>(be.literal_i32);
+  }
+  params.arg_word_offset = arg_word_offset;
+  params.padding = 0;
+
+  // Lazy-allocate the device-side params scratch buffer the first time a bound_expr task fires; reuse for
+  // subsequent tasks across kernels. Sized for one struct (the reducer is single-task per call); a future
+  // optimisation could pack multiple tasks' params into one buffer and dispatch them in a single launch.
+  const std::size_t needed_bytes = sizeof(LlvmAdStackBoundReducerDeviceParams);
+  if (needed_bytes > adstack_bound_reducer_params_capacity_) {
+    Device::AllocParams alloc_params{};
+    alloc_params.size = std::max<std::size_t>(needed_bytes, 2 * adstack_bound_reducer_params_capacity_);
+    alloc_params.host_read = false;
+    alloc_params.host_write = true;
+    alloc_params.export_sharing = false;
+    alloc_params.usage = AllocUsage::Storage;
+    DeviceAllocation new_alloc;
+    RhiResult res = llvm_device()->allocate_memory(alloc_params, &new_alloc);
+    QD_ERROR_IF(res != RhiResult::success,
+                "Failed to allocate {} bytes for adstack bound reducer params buffer (err: {})", alloc_params.size,
+                int(res));
+    adstack_bound_reducer_params_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+    adstack_bound_reducer_params_capacity_ = alloc_params.size;
+  }
+  void *params_dev_ptr = get_device_alloc_info_ptr(*adstack_bound_reducer_params_alloc_);
+
+  // h2d the params struct into the device buffer.
+  if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+    CUDADriver::get_instance().memcpy_host_to_device(params_dev_ptr, &params, needed_bytes);
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+    AMDGPUDriver::get_instance().memcpy_host_to_device(params_dev_ptr, &params, needed_bytes);
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  }
+
+  // Dispatch the runtime reducer function: single-threaded device-side walk that reads `ctx->arg_buffer`
+  // (the device-mirror the launcher staged) and writes the count into
+  // `runtime->adstack_bound_row_capacities[task_index]`. Pass the device-side `RuntimeContext` pointer the
+  // same way the size-expr sizer does so the function can deref `ctx->arg_buffer` on-device.
+  auto *const runtime_jit = get_runtime_jit_module();
+  void *runtime_context_ptr_for_reducer =
+      device_runtime_context_ptr != nullptr ? device_runtime_context_ptr : static_cast<void *>(&ctx->get_context());
+  runtime_jit->call<void *, void *, void *>("runtime_eval_static_bound_count", llvm_runtime_,
+                                            runtime_context_ptr_for_reducer, params_dev_ptr);
 }
 
 void LlvmRuntimeExecutor::publish_adstack_lazy_claim_buffers(std::size_t num_tasks) {

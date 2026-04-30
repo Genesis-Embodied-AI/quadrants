@@ -53,12 +53,18 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
   // launcher block for rationale; on AMDGPU the same memcpy_host_to_device path through the cached field
   // pointers publishes the cleared counter and UINT32_MAX-defaulted capacity arrays.
   executor->publish_adstack_lazy_claim_buffers(offloaded_tasks.size());
+  std::size_t task_index = 0;
   for (const auto &task : offloaded_tasks) {
     // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without this the
     // sizer launches with a host pointer and the next DtoH sync trips
     // `hipErrorIllegalAddress ... memcpy_device_to_host` because HIP has no UVA fallback for the host
     // `RuntimeContext` struct.
-    executor->publish_adstack_metadata(task.ad_stack, resolve_num_threads(task, executor), &ctx, context_pointer);
+    const std::size_t n_threads_amdgpu = resolve_num_threads(task, executor);
+    executor->publish_adstack_metadata(task.ad_stack, n_threads_amdgpu, &ctx, context_pointer);
+    // Device-side reducer for tasks with a captured ndarray-backed `bound_expr`. Mirrors the CUDA launcher
+    // block; on AMDGPU the runtime function dispatches as a single-thread HIP kernel via runtime_jit->call.
+    executor->publish_per_task_bound_count_device(task_index, task.ad_stack, n_threads_amdgpu, &ctx, context_pointer);
+    ++task_index;
     QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
     amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
                           {(void *)&context_pointer}, {arg_size});

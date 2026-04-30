@@ -144,6 +144,21 @@ class LlvmRuntimeExecutor {
                                             std::size_t length,
                                             LaunchContextBuilder *ctx);
 
+  // Per-arch device-side reducer counterpart for CUDA / AMDGPU. Packs the captured `StaticAdStackBoundExpr`
+  // into a small device-resident params buffer (h2d on-demand, reused across tasks via a grow-on-demand
+  // allocation) and invokes `runtime_eval_static_bound_count` via the runtime JIT module. The device function
+  // walks the gating ndarray on-device (single-threaded - the runtime function dispatches as a 1x1x1 kernel
+  // launch), counts gate-passing threads, and writes the count into `runtime->adstack_bound_row_capacities[
+  // task_index]`. The codegen-emitted clamp at the float LCA-block claim site reads that slot back.
+  // No-op on backends without a working ndarray-source reducer (today: only CUDA / AMDGPU - CPU goes through
+  // `publish_per_task_bound_count_cpu`; SNode-backed gates are not captured on the LLVM analysis path so they
+  // never reach here either).
+  void publish_per_task_bound_count_device(std::size_t task_index,
+                                           const AdStackSizingInfo &ad_stack,
+                                           std::size_t length,
+                                           LaunchContextBuilder *ctx,
+                                           void *device_runtime_context_ptr);
+
   // Grow `runtime->adstack_heap_buffer_float` to at least `needed_bytes` and publish the new pointer / size into
   // the runtime struct via the cached field addresses. Mirrors `ensure_adstack_heap` for the legacy combined
   // heap; same amortised-doubling growth and same release-deferred-until-next-launch semantics.
@@ -305,6 +320,15 @@ class LlvmRuntimeExecutor {
   DeviceAllocationUnique adstack_offsets_alloc_ = nullptr;
   DeviceAllocationUnique adstack_max_sizes_alloc_ = nullptr;
   std::size_t adstack_metadata_capacity_{0};
+
+  // Per-launch scratch buffer used on GPU arches (CUDA / AMDGPU) to ship the
+  // `LlvmAdStackBoundReducerDeviceParams` blob into for `runtime_eval_static_bound_count`. Allocated on
+  // demand on first bound_expr task in a kernel; reused across tasks within the same kernel and across
+  // kernels for the runtime's lifetime; grown amortised-doubling when a future struct expansion would need
+  // more bytes (the struct is currently a fixed 32-byte POD). Unused on CPU which evaluates the predicate
+  // host-side via `publish_per_task_bound_count_cpu`.
+  DeviceAllocationUnique adstack_bound_reducer_params_alloc_ = nullptr;
+  std::size_t adstack_bound_reducer_params_capacity_{0};
 
   // Per-launch scratch buffer used on GPU arches (CUDA / AMDGPU) to ship the encoded adstack SizeExpr bytecode
   // consumed by `runtime_eval_adstack_size_expr`. Amortised-doubling growth, reused across launches. Unused on

@@ -25,6 +25,7 @@
 #include "quadrants/inc/constants.h"
 #include "quadrants/inc/cuda_kernel_utils.inc.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
+#include "quadrants/ir/static_adstack_bound_reducer_device.h"
 #include "quadrants/math/arithmetic.h"
 
 struct RuntimeContext;
@@ -987,6 +988,121 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
 }
 
 }  // namespace
+
+// Per-arch reducer counterpart to the SPIR-V `adstack_bound_reducer_shader.cpp` compute kernel: a single-thread
+// serial function that walks the captured gating ndarray over `[0, length)`, evaluates the comparison +
+// polarity at each thread index, and writes the gate-passing count into
+// `runtime->adstack_bound_row_capacities[task_index]`. The codegen-emitted clamp at the float LCA-block claim
+// site reads that slot back, so on backends that have a working reducer the bounds clamp activates per task
+// and a future commit can size the float heap from the count instead of the dispatched-threads worst case.
+//
+// Single-thread execution is intentional: dispatching this as a parallel kernel would need a separate
+// JIT-compiled compute kernel with atomic-add semantics per arch (the SPIR-V path emits a parallel reducer;
+// LLVM's runtime functions go through `runtime_jit->call` which runs serially - on CUDA / AMDGPU it is a
+// 1x1x1 grid kernel launch, on CPU a regular function call). For typical iteration bounds (a few hundred
+// thousand on the largest reverse-mode kernels), a single device thread completes the count in well under
+// a millisecond per task; that cost is dominated by the actual main kernel anyway.
+//
+// SNode-backed gates are not captured on the LLVM analysis path today, so the reducer only handles the
+// ndarray-backed source kind.
+void runtime_eval_static_bound_count(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr params_blob) {
+  using quadrants::lang::kLlvmReducerCmpEq;
+  using quadrants::lang::kLlvmReducerCmpGe;
+  using quadrants::lang::kLlvmReducerCmpGt;
+  using quadrants::lang::kLlvmReducerCmpLe;
+  using quadrants::lang::kLlvmReducerCmpLt;
+  using quadrants::lang::kLlvmReducerCmpNe;
+  using quadrants::lang::LlvmAdStackBoundReducerDeviceParams;
+
+  const auto *params = reinterpret_cast<const LlvmAdStackBoundReducerDeviceParams *>(params_blob);
+
+  // Reconstruct the ndarray data pointer from `ctx->arg_buffer`. The host writes the pointer as a u64 across
+  // two adjacent u32 words at `arg_word_offset`; we reassemble it back to a typed pointer here. On CUDA /
+  // AMDGPU `arg_buffer` is the device-side mirror the launcher staged before calling us, so the load is a
+  // device memory access; on CPU it's host memory with a direct read. Either way the pointer the kernel arg
+  // would read at the same offset is the one we walk.
+  const u32 *arg_buffer_u32 = reinterpret_cast<const u32 *>(ctx->arg_buffer);
+  const u64 lo = static_cast<u64>(arg_buffer_u32[params->arg_word_offset]);
+  const u64 hi = static_cast<u64>(arg_buffer_u32[params->arg_word_offset + 1]);
+  const u64 data_ptr_u64 = lo | (hi << 32);
+
+  u32 count = 0;
+  if (params->field_dtype_is_float != 0u) {
+    const float *data = reinterpret_cast<const float *>(data_ptr_u64);
+    float threshold;
+    {
+      // Bitcast the threshold's u32 storage back to f32. `union`-cast via memcpy keeps the LLVM IR
+      // semantics-clean (no aliasing) and compiles to a single load on every supported arch.
+      u32 bits = params->threshold_bits;
+      __builtin_memcpy(&threshold, &bits, sizeof(float));
+    }
+    for (u32 i = 0; i < params->length; ++i) {
+      const float v = data[i];
+      bool match;
+      switch (params->cmp_op) {
+        case kLlvmReducerCmpLt:
+          match = v < threshold;
+          break;
+        case kLlvmReducerCmpLe:
+          match = v <= threshold;
+          break;
+        case kLlvmReducerCmpGt:
+          match = v > threshold;
+          break;
+        case kLlvmReducerCmpGe:
+          match = v >= threshold;
+          break;
+        case kLlvmReducerCmpEq:
+          match = v == threshold;
+          break;
+        case kLlvmReducerCmpNe:
+          match = v != threshold;
+          break;
+        default:
+          match = false;
+          break;
+      }
+      if ((params->polarity != 0u) ? match : !match) {
+        ++count;
+      }
+    }
+  } else {
+    const i32 *data = reinterpret_cast<const i32 *>(data_ptr_u64);
+    const i32 threshold = static_cast<i32>(params->threshold_bits);
+    for (u32 i = 0; i < params->length; ++i) {
+      const i32 v = data[i];
+      bool match;
+      switch (params->cmp_op) {
+        case kLlvmReducerCmpLt:
+          match = v < threshold;
+          break;
+        case kLlvmReducerCmpLe:
+          match = v <= threshold;
+          break;
+        case kLlvmReducerCmpGt:
+          match = v > threshold;
+          break;
+        case kLlvmReducerCmpGe:
+          match = v >= threshold;
+          break;
+        case kLlvmReducerCmpEq:
+          match = v == threshold;
+          break;
+        case kLlvmReducerCmpNe:
+          match = v != threshold;
+          break;
+        default:
+          match = false;
+          break;
+      }
+      if ((params->polarity != 0u) ? match : !match) {
+        ++count;
+      }
+    }
+  }
+
+  runtime->adstack_bound_row_capacities[params->task_index] = count;
+}
 
 void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr bytecode) {
   // Bytecode layout:
