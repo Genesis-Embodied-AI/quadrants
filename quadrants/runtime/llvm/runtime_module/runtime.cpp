@@ -1144,13 +1144,15 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
   for (i32 k = 0; k < kDeviceBoundVarCap; ++k)
     scope.values[k] = 0;
 
-  // Combined running offset for the legacy single-heap codegen path: each stack's `out_offsets[i]` is the byte
-  // offset within the combined per-thread slice, addressed by `linear_tid * combined_stride + offset`. Per-kind
-  // running offsets are also tracked for the future split-heap codegen path (where float allocas address via
-  // `row_id_var * stride_float + float_offset` and int via `linear_tid * stride_int + int_offset`); the per-kind
-  // strides are published into `runtime->adstack_per_thread_stride_{float,int}` so the host can size a separate
-  // float heap from the gate-passing thread count.
-  u64 running_offset = 0;
+  // Per-kind running offsets for the unconditional split-heap codegen path. Float allocas address via
+  // `row_id_var * stride_float + float_offset_within_float_slice`; int / u1 allocas address via `linear_tid *
+  // stride_int + int_offset_within_int_slice`. `out_offsets[i]` therefore must be the byte offset within the
+  // per-kind slice, not within a combined slice (the codegen and the host-eval branch in `publish_adstack_metadata`
+  // both pick the per-kind base + stride at the use site, so a combined offset would alias float and int slots
+  // for any kernel with mixed-kind adstacks). The combined running offset is also tracked for the legacy
+  // `runtime->adstack_per_thread_stride` field that offline-cache-loaded kernels predating the split read; on
+  // freshly-compiled kernels nothing dereferences it.
+  u64 running_offset_combined = 0;
   u64 running_offset_float = 0;
   u64 running_offset_int = 0;
   for (u32 i = 0; i < header->n_stacks; ++i) {
@@ -1169,17 +1171,18 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
       max_size = static_cast<u64>(v);
     }
     out_max_sizes[i] = max_size;
-    out_offsets[i] = running_offset;
     const u64 step = align_up_8(sizeof(i64) + (u64)sh.entry_size_bytes * max_size);
-    running_offset += step;
     if (sh.heap_kind == 0u) {
+      out_offsets[i] = running_offset_float;
       running_offset_float += step;
     } else {
+      out_offsets[i] = running_offset_int;
       running_offset_int += step;
     }
+    running_offset_combined += step;
   }
 
-  runtime->adstack_per_thread_stride = running_offset;
+  runtime->adstack_per_thread_stride = running_offset_combined;
   runtime->adstack_per_thread_stride_float = running_offset_float;
   runtime->adstack_per_thread_stride_int = running_offset_int;
 }

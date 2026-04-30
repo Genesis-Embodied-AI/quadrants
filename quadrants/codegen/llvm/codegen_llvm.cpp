@@ -121,6 +121,16 @@ void TaskCodeGenLLVM::visit(Block *stmt_list) {
   if (ad_stack_static_bound_expr_.has_value() && ad_stack_lca_block_float_ir_ != nullptr &&
       stmt_list == ad_stack_lca_block_float_ir_) {
     emit_ad_stack_row_claim_llvm();
+    if (compile_config.debug) {
+      // Debug build: route the heap-header `stack_init` (writes the u64 count word at offset 0) through the
+      // freshly-claimed row so the first `stack_push` reads count = 0. The alloca-site path skipped this call
+      // intentionally - at that IR position `row_id_var` was still its UINT32_MAX entry-block init, so
+      // `get_ad_stack_base_llvm(stack)` would have addressed off the heap. Now that the LCA-block atomic-rmw
+      // has stored the per-thread row id we can safely materialise the per-stack base and zero its header.
+      for (AdStackAllocaStmt *lazy_stmt : ad_stack_lazy_float_allocas_) {
+        call("stack_init", get_ad_stack_base_llvm(lazy_stmt));
+      }
+    }
   }
   for (auto &stmt : stmt_list->statements) {
     stmt->accept(this);
@@ -2401,9 +2411,16 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
   llvm::Value *capacities_base = call("LLVMRuntime_get_adstack_bound_row_capacities", get_runtime());
   llvm::Value *capacity_slot_ptr = builder->CreateGEP(i32ty, capacities_base, task_id_i64);
   llvm::Value *capacity = builder->CreateLoad(i32ty, capacity_slot_ptr);
-  llvm::Value *capacity_minus_one = builder->CreateSub(capacity, one_i32);
-  llvm::Value *cmp = builder->CreateICmpUGT(claimed_row, capacity_minus_one);
-  llvm::Value *clamped_row = builder->CreateSelect(cmp, capacity_minus_one, claimed_row);
+  // Guard the `capacity - 1` clamp upper bound against `capacity == 0`: a naive `capacity - 1` underflows
+  // to UINT32_MAX and the clamp degenerates to a no-op, so any overshoot indexes off the heap end. Clamp the
+  // upper bound to row 0 in that case (the launcher floors the heap allocation at one row precisely so this
+  // single-slot fallback is always backed by real storage).
+  llvm::Value *zero_i32 = llvm::ConstantInt::get(i32ty, 0);
+  llvm::Value *capacity_is_zero = builder->CreateICmpEQ(capacity, zero_i32);
+  llvm::Value *capacity_minus_one_raw = builder->CreateSub(capacity, one_i32);
+  llvm::Value *clamp_upper = builder->CreateSelect(capacity_is_zero, zero_i32, capacity_minus_one_raw);
+  llvm::Value *cmp = builder->CreateICmpUGT(claimed_row, clamp_upper);
+  llvm::Value *clamped_row = builder->CreateSelect(cmp, clamp_upper, claimed_row);
   builder->CreateStore(clamped_row, row_id_var);
 }
 
@@ -2538,7 +2555,16 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   if (is_float && ad_stack_static_bound_expr_.has_value()) {
     ad_stack_lazy_float_allocas_.insert(stmt);
     if (compile_config.debug) {
-      call("stack_init", get_ad_stack_base_llvm(stmt));
+      // Skip the `stack_init` call here: `get_ad_stack_base_llvm(stmt)` would emit `heap_float + row_id_var *
+      // stride_float + offset` while `row_id_var` is still its entry-block UINT32_MAX init at this IR position
+      // (the LCA-block atomic-rmw row claim runs strictly later, after the gate IfStmt is entered), and
+      // `stack_init`'s `*(u64*)stack = 0` would dereference that out-of-bounds address. Initialise the
+      // per-stack count alloca instead, mirroring the release path; the first `AdStackPushStmt` site under the
+      // LCA writes the `count` u64 header to its claimed row through the same `stack_push` call that
+      // dereferences the (now-valid) `row_id_var`.
+      auto *i64ty_init = llvm::Type::getInt64Ty(*llvm_context);
+      llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stmt);
+      builder->CreateStore(llvm::ConstantInt::get(i64ty_init, 0), count_alloca);
       return;
     }
     if (is_compile_time_single_slot(stmt)) {

@@ -25,7 +25,25 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // known, an over-claim (claimed_row >= count) is clamped at `count - 1` before any descendant push / load-
     // top site uses the row id. Tasks without a captured gate keep the UINT32_MAX default and the clamp stays
     // inert. SNode-backed gates are not captured on the LLVM analysis path so they also keep the default.
-    executor->publish_per_task_bound_count_cpu(i, ad_stacks[i], num_threads_per_task[i], &ctx);
+    //
+    // Length = total flat element count of the gating ndarray, derived from `ctx.array_runtime_sizes`
+    // (`bytes / sizeof(elem)`). On CPU `ad_stack.static_num_threads` is the worker-pool size (typically the
+    // number of CPU cores) and is unrelated to the gating field's length, so it cannot be the reducer's walk
+    // bound: a gate over an N-element ndarray launched on an 8-thread pool would otherwise have the reducer
+    // count gate-passing items in only `[0, 8)` and clamp every later iteration's claimed row into a single
+    // alias slot. Mirrors the SPIR-V launcher's `resolve_length` over `range_for_attribs->end_shape_product`.
+    std::size_t bound_count_length = num_threads_per_task[i];
+    if (ad_stacks[i].bound_expr.has_value() &&
+        ad_stacks[i].bound_expr->field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::NdArray &&
+        !ad_stacks[i].bound_expr->ndarray_arg_id.empty()) {
+      const int top_arg_id = ad_stacks[i].bound_expr->ndarray_arg_id.front();
+      auto runtime_size_it = ctx.array_runtime_sizes.find(top_arg_id);
+      if (runtime_size_it != ctx.array_runtime_sizes.end()) {
+        // The captured gate's `field_dtype_is_float` selects f32 vs i32; both element types are 4 bytes today.
+        bound_count_length = static_cast<std::size_t>(runtime_size_it->second / sizeof(int32_t));
+      }
+    }
+    executor->publish_per_task_bound_count_cpu(i, ad_stacks[i], bound_count_length, &ctx);
     // Size the float heap from the reducer's gate-passing count now that the capacity slot is populated. Float
     // allocas (in tasks with a captured `bound_expr`) address through `heap_float + row_id_var * stride_float +
     // float_offset`; sizing the heap at `count * stride_float` instead of the dispatched-threads worst case is

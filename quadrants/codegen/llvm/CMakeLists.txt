@@ -20,3 +20,8 @@ target_include_directories(llvm_codegen
 
 target_link_libraries(llvm_codegen PRIVATE quadrants_util)
 target_link_libraries(llvm_codegen PRIVATE llvm_runtime)
+# `codegen_llvm.cpp` calls `quadrants::lang::spirv::compile_snode_structs` to resolve the SNode descriptor for
+# captured `bound_expr` gating fields (the same descriptor the SPIR-V backend compiles). MSVC's linker requires
+# the link dep to be explicit; clang / gcc on Linux / Mac happen to satisfy it transitively via the final
+# executable / shared module link order.
+target_link_libraries(llvm_codegen PRIVATE spirv_codegen)

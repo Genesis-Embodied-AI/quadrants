@@ -79,7 +79,25 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // `runtime->adstack_bound_row_capacities[task_index]`. The codegen-emitted clamp at the float LCA-block
     // claim site reads it back. Tasks without a captured gate keep the UINT32_MAX default and the clamp stays
     // inert.
-    executor->publish_per_task_bound_count_device(task_index, task.ad_stack, n, &ctx, device_context_ptr);
+    //
+    // Reducer length is the gating ndarray's full flat element count, not `n`: the lazy row-claim atomic-rmw
+    // fires once per LCA execution, and `gpu_parallel_struct_for` / `gpu_parallel_range_for` grid-stride
+    // (`i += grid_dim()`) so a single dispatched thread can hit the LCA many times across one launch when the
+    // logical loop span exceeds the (capped) concurrent thread count. Walking the reducer over the full
+    // ndarray length keeps `bound_row_capacities[task_index]` consistent with the total claim count, which
+    // the codegen-emitted bounds clamp reads. Mirrors the CPU launcher's `bound_count_length` derivation.
+    std::size_t bound_count_length = n;
+    if (task.ad_stack.bound_expr.has_value() &&
+        task.ad_stack.bound_expr->field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::NdArray &&
+        !task.ad_stack.bound_expr->ndarray_arg_id.empty()) {
+      const int top_arg_id = task.ad_stack.bound_expr->ndarray_arg_id.front();
+      auto runtime_size_it = ctx.array_runtime_sizes.find(top_arg_id);
+      if (runtime_size_it != ctx.array_runtime_sizes.end()) {
+        bound_count_length = static_cast<std::size_t>(runtime_size_it->second / sizeof(int32_t));
+      }
+    }
+    executor->publish_per_task_bound_count_device(task_index, task.ad_stack, bound_count_length, &ctx,
+                                                  device_context_ptr);
     // Size the float heap from the published gate-passing count (DtoH'd per task). Mirrors the CPU launcher's
     // post-reducer sizing call - this is what shrinks the float slab to `count * stride_float` instead of the
     // dispatched-threads worst case on sparse-grid workloads.

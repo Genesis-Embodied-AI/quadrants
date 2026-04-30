@@ -69,7 +69,19 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     executor->publish_adstack_metadata(task.ad_stack, n_threads_amdgpu, &ctx, context_pointer);
     // Device-side reducer for tasks with a captured ndarray-backed `bound_expr`. Mirrors the CUDA launcher
     // block; on AMDGPU the runtime function dispatches as a single-thread HIP kernel via runtime_jit->call.
-    executor->publish_per_task_bound_count_device(task_index, task.ad_stack, n_threads_amdgpu, &ctx, context_pointer);
+    // Reducer length is the gating ndarray's full flat element count (not `n_threads_amdgpu`); see the
+    // matching `bound_count_length` comment in `runtime/cuda/kernel_launcher.cpp` for the rationale.
+    std::size_t bound_count_length = n_threads_amdgpu;
+    if (task.ad_stack.bound_expr.has_value() &&
+        task.ad_stack.bound_expr->field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::NdArray &&
+        !task.ad_stack.bound_expr->ndarray_arg_id.empty()) {
+      const int top_arg_id = task.ad_stack.bound_expr->ndarray_arg_id.front();
+      auto runtime_size_it = ctx.array_runtime_sizes.find(top_arg_id);
+      if (runtime_size_it != ctx.array_runtime_sizes.end()) {
+        bound_count_length = static_cast<std::size_t>(runtime_size_it->second / sizeof(int32_t));
+      }
+    }
+    executor->publish_per_task_bound_count_device(task_index, task.ad_stack, bound_count_length, &ctx, context_pointer);
     // Size the float heap from the published gate-passing count (DtoH'd per task). Mirrors the CUDA / CPU
     // launcher post-reducer sizing.
     executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n_threads_amdgpu);
