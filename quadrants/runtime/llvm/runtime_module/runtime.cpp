@@ -1016,28 +1016,38 @@ void runtime_eval_static_bound_count(LLVMRuntime *runtime, RuntimeContext *ctx, 
 
   const auto *params = reinterpret_cast<const LlvmAdStackBoundReducerDeviceParams *>(params_blob);
 
-  // Reconstruct the ndarray data pointer from `ctx->arg_buffer`. The host writes the pointer as a u64 across
-  // two adjacent u32 words at `arg_word_offset`; we reassemble it back to a typed pointer here. On CUDA /
-  // AMDGPU `arg_buffer` is the device-side mirror the launcher staged before calling us, so the load is a
-  // device memory access; on CPU it's host memory with a direct read. Either way the pointer the kernel arg
-  // would read at the same offset is the one we walk.
-  const u32 *arg_buffer_u32 = reinterpret_cast<const u32 *>(ctx->arg_buffer);
-  const u64 lo = static_cast<u64>(arg_buffer_u32[params->arg_word_offset]);
-  const u64 hi = static_cast<u64>(arg_buffer_u32[params->arg_word_offset + 1]);
-  const u64 data_ptr_u64 = lo | (hi << 32);
+  // Resolve the gating field's per-cell pointer + stride based on `field_source_is_snode`. The two source
+  // shapes share the comparison + count loop below; only the per-`gid` element load differs.
+  //   - ndarray (`field_source_is_snode == 0`): walk `data_ptr[i]` where `data_ptr` is reconstructed from the
+  //     kernel arg buffer at `arg_word_offset` (u64 stored across two adjacent u32 words). The element stride
+  //     is `sizeof(float)` / `sizeof(i32)` since ndarray data is densely packed by index.
+  //   - SNode (`field_source_is_snode == 1`): walk `runtime->roots[snode_root_id] + snode_byte_base_offset +
+  //     gid * snode_byte_cell_stride`. The base byte offset and cell stride were pre-resolved at codegen time
+  //     by walking the SNode descriptor chain. Mirrors the SPIR-V reducer's `field_source_is_snode` branch.
+  const char *field_base = nullptr;
+  u32 element_stride_bytes = 0u;
+  if (params->field_source_is_snode != 0u) {
+    field_base = reinterpret_cast<const char *>(runtime->roots[params->snode_root_id]) + params->snode_byte_base_offset;
+    element_stride_bytes = params->snode_byte_cell_stride;
+  } else {
+    const u32 *arg_buffer_u32 = reinterpret_cast<const u32 *>(ctx->arg_buffer);
+    const u64 lo = static_cast<u64>(arg_buffer_u32[params->arg_word_offset]);
+    const u64 hi = static_cast<u64>(arg_buffer_u32[params->arg_word_offset + 1]);
+    field_base = reinterpret_cast<const char *>(lo | (hi << 32));
+    element_stride_bytes = static_cast<u32>(sizeof(u32));  // f32 and i32 share the same 4-byte ndarray stride
+  }
 
   u32 count = 0;
   if (params->field_dtype_is_float != 0u) {
-    const float *data = reinterpret_cast<const float *>(data_ptr_u64);
     float threshold;
     {
-      // Bitcast the threshold's u32 storage back to f32. `union`-cast via memcpy keeps the LLVM IR
-      // semantics-clean (no aliasing) and compiles to a single load on every supported arch.
+      // Bitcast the threshold's u32 storage back to f32. memcpy keeps the LLVM IR semantics-clean (no aliasing)
+      // and compiles to a single load on every supported arch.
       u32 bits = params->threshold_bits;
       __builtin_memcpy(&threshold, &bits, sizeof(float));
     }
     for (u32 i = 0; i < params->length; ++i) {
-      const float v = data[i];
+      const float v = *reinterpret_cast<const float *>(field_base + (u64)i * element_stride_bytes);
       bool match;
       switch (params->cmp_op) {
         case kLlvmReducerCmpLt:
@@ -1067,10 +1077,9 @@ void runtime_eval_static_bound_count(LLVMRuntime *runtime, RuntimeContext *ctx, 
       }
     }
   } else {
-    const i32 *data = reinterpret_cast<const i32 *>(data_ptr_u64);
     const i32 threshold = static_cast<i32>(params->threshold_bits);
     for (u32 i = 0; i < params->length; ++i) {
-      const i32 v = data[i];
+      const i32 v = *reinterpret_cast<const i32 *>(field_base + (u64)i * element_stride_bytes);
       bool match;
       switch (params->cmp_op) {
         case kLlvmReducerCmpLt:

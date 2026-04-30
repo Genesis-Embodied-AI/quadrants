@@ -19,6 +19,7 @@
 #include "quadrants/codegen/ir_dump.h"
 #include "quadrants/util/environ_config.h"
 #include "quadrants/runtime/llvm/llvm_context_pass.h"
+#include "quadrants/codegen/spirv/snode_struct_compiler.h"
 
 namespace quadrants::lang {
 
@@ -1780,13 +1781,62 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
 
   // Run the shared static-adstack analysis. Returns the LCA of every f32 push/load-top site, the autodiff-bootstrap
   // const-init push set, and an optional captured `StaticBoundExpr` when a single recognized gate sits on the
-  // LCA-to-root chain. SNode descriptor resolution returns nullopt: LLVM walks the SNode tree at runtime via the
-  // accessor bank rather than precomputed compile-time descriptors, so SNode-backed gates are not captured here.
-  // ndarray-backed gates are still captured for the host-side reducer.
-  auto null_snode_resolver = [](const SNode *, const SNode *) -> std::optional<SNodeFieldDescriptor> {
-    return std::nullopt;
+  // LCA-to-root chain. The SNode descriptor resolver mirrors the SPIR-V codegen's `match_field_source` SNode arm:
+  // walk the leaf SNode's parent chain for the tree id, compile that tree's snode descriptors via the shared
+  // `compile_snode_structs` helper (cached per tree across allocas in this task to avoid re-walking the tree N
+  // times), look up the leaf and dense descriptors, return their byte offset / cell stride / iter count for the
+  // device reducer to walk on every launch. Trees outside the kernel's `program->snode_trees_` range or non-dense
+  // parents fall through to nullopt and the analysis rejects the gate (worst-case sizing in the runtime caller).
+  std::unordered_map<int, spirv::CompiledSNodeStructs> tree_id_to_compiled;
+  auto snode_resolver = [&](const SNode *leaf, const SNode *dense) -> std::optional<SNodeFieldDescriptor> {
+    if (leaf == nullptr || dense == nullptr || prog == nullptr) {
+      return std::nullopt;
+    }
+    const SNode *root_snode = dense->parent;
+    if (root_snode == nullptr) {
+      return std::nullopt;
+    }
+    // Find which `snode_tree_id` this root belongs to. `program->get_snode_root(id)` returns the SNode for tree
+    // `id`; iterate until we find a match. Tree counts are small (single digits in every observed kernel) so the
+    // linear scan is cheap and avoids needing a public reverse-lookup API on `Program`.
+    int matched_tree_id = -1;
+    for (int id = SNodeTree::kFirstID;; ++id) {
+      SNode *root_for_id = prog->get_snode_root(id);
+      if (root_for_id == nullptr) {
+        break;
+      }
+      if (root_for_id == root_snode) {
+        matched_tree_id = id;
+        break;
+      }
+    }
+    if (matched_tree_id < 0) {
+      return std::nullopt;
+    }
+    auto cache_it = tree_id_to_compiled.find(matched_tree_id);
+    if (cache_it == tree_id_to_compiled.end()) {
+      cache_it = tree_id_to_compiled
+                     .emplace(matched_tree_id, spirv::compile_snode_structs(*prog->get_snode_root(matched_tree_id)))
+                     .first;
+    }
+    const auto &snode_descs = cache_it->second.snode_descriptors;
+    auto leaf_desc_it = snode_descs.find(leaf->id);
+    auto dense_desc_it = snode_descs.find(dense->id);
+    if (leaf_desc_it == snode_descs.end() || dense_desc_it == snode_descs.end()) {
+      return std::nullopt;
+    }
+    SNodeFieldDescriptor desc;
+    desc.root_id = matched_tree_id;
+    // Combined byte offset: dense's offset within its single root cell plus the leaf's offset within the dense's
+    // per-cell layout. Both come from the snode descriptor's compile-time prefix-sum so the captured value is
+    // stable across launches.
+    desc.byte_base_offset = static_cast<uint32_t>(dense_desc_it->second.mem_offset_in_parent_cell +
+                                                  leaf_desc_it->second.mem_offset_in_parent_cell);
+    desc.byte_cell_stride = static_cast<uint32_t>(dense_desc_it->second.cell_stride);
+    desc.iter_count = static_cast<uint32_t>(dense_desc_it->second.total_num_cells_from_root);
+    return desc;
   };
-  auto adstack_analysis = analyze_adstack_static_bounds(stmt, null_snode_resolver);
+  auto adstack_analysis = analyze_adstack_static_bounds(stmt, snode_resolver);
   ad_stack_bootstrap_pushes_ = std::move(adstack_analysis.bootstrap_pushes);
   ad_stack_lca_block_float_ir_ = adstack_analysis.lca_block_float;
   ad_stack_static_bound_expr_ = adstack_analysis.bound_expr;

@@ -1183,32 +1183,23 @@ void LlvmRuntimeExecutor::publish_per_task_bound_count_device(std::size_t task_i
     return;
   }
   const auto &be = ad_stack.bound_expr.value();
-  if (be.field_source_kind != StaticAdStackBoundExpr::FieldSourceKind::NdArray) {
-    return;
-  }
+  const bool is_snode_source = be.field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::SNode;
   if (ctx == nullptr || ctx->args_type == nullptr) {
     return;
   }
-
-  // Resolve the ndarray data pointer's word offset within the kernel arg buffer. Same path the SPIR-V reducer
-  // and the CPU host-eval use; bytes -> words for the reducer's `arg_buffer_u32[arg_word_offset]` indexing.
-  std::vector<int> indices = be.ndarray_arg_id;
-  indices.push_back(TypeFactory::DATA_PTR_POS_IN_NDARRAY);
-  std::size_t data_ptr_byte_off = ctx->args_type->get_element_offset(indices);
-  if (data_ptr_byte_off % sizeof(uint32_t) != 0) {
-    return;  // misaligned offset; the reducer's u32-word indexing would lose bits.
-  }
-  const uint32_t arg_word_offset = static_cast<uint32_t>(data_ptr_byte_off / sizeof(uint32_t));
   const uint32_t cmp_op_encoded = encode_cmp_op_for_llvm_reducer(be.cmp_op);
   if (cmp_op_encoded == std::numeric_limits<uint32_t>::max()) {
     return;  // unrecognised comparison op (the IR pattern matcher should have rejected it earlier)
   }
 
   // Fill the device-side params struct on the host. Threshold bits live as the same u32 the runtime function
-  // bitcasts back; we copy whichever underlying integer or float value the analysis captured.
+  // bitcasts back; we copy whichever underlying integer or float value the analysis captured. The two source
+  // shapes (ndarray + SNode) share the comparison fields and differ only in which trailing fields the reducer
+  // reads (`arg_word_offset` for ndarray, `snode_root_id` + `snode_byte_*` for SNode); host-side we populate the
+  // matching pair and zero out the other.
   LlvmAdStackBoundReducerDeviceParams params{};
   params.task_index = static_cast<uint32_t>(task_index);
-  params.length = static_cast<uint32_t>(length);
+  params.length = static_cast<uint32_t>(is_snode_source ? be.snode_iter_count : length);
   params.cmp_op = cmp_op_encoded;
   params.field_dtype_is_float = be.field_dtype_is_float ? 1u : 0u;
   params.polarity = be.polarity ? 1u : 0u;
@@ -1217,7 +1208,26 @@ void LlvmRuntimeExecutor::publish_per_task_bound_count_device(std::size_t task_i
   } else {
     params.threshold_bits = static_cast<uint32_t>(be.literal_i32);
   }
-  params.arg_word_offset = arg_word_offset;
+  params.field_source_is_snode = is_snode_source ? 1u : 0u;
+  if (is_snode_source) {
+    params.arg_word_offset = 0;
+    params.snode_root_id = static_cast<uint32_t>(be.snode_root_id);
+    params.snode_byte_base_offset = be.snode_byte_base_offset;
+    params.snode_byte_cell_stride = be.snode_byte_cell_stride;
+  } else {
+    // Resolve the ndarray data pointer's word offset within the kernel arg buffer. Same path the SPIR-V reducer
+    // and the CPU host-eval use; bytes -> words for the reducer's `arg_buffer_u32[arg_word_offset]` indexing.
+    std::vector<int> indices = be.ndarray_arg_id;
+    indices.push_back(TypeFactory::DATA_PTR_POS_IN_NDARRAY);
+    std::size_t data_ptr_byte_off = ctx->args_type->get_element_offset(indices);
+    if (data_ptr_byte_off % sizeof(uint32_t) != 0) {
+      return;  // misaligned offset; the reducer's u32-word indexing would lose bits.
+    }
+    params.arg_word_offset = static_cast<uint32_t>(data_ptr_byte_off / sizeof(uint32_t));
+    params.snode_root_id = 0;
+    params.snode_byte_base_offset = 0;
+    params.snode_byte_cell_stride = 0;
+  }
   params.padding = 0;
 
   // Lazy-allocate the device-side params scratch buffer the first time a bound_expr task fires; reuse for

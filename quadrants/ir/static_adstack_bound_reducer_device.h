@@ -30,26 +30,40 @@ struct LlvmAdStackBoundReducerDeviceParams {
   // Slot index in `runtime->adstack_bound_row_capacities` that the count is written into. Matches the
   // `task_codegen_id` the codegen burned into the LCA-block claim's bounds-clamp GEP.
   uint32_t task_index;
-  // Number of iterations to walk - the iteration bound of the gating predicate (same value the SPIR-V
-  // reducer dispatches over). The reducer runs single-threaded on whatever arch it's JIT'd to (CPU is the
-  // host evaluator path; CUDA / AMDGPU is a single-thread GPU kernel via `runtime_jit->call`), so no
-  // workgroup rounding-up is needed.
+  // Number of iterations to walk - the iteration bound of the gating predicate (same value the SPIR-V reducer
+  // dispatches over). The reducer runs single-threaded on whatever arch it's JIT'd to (CPU is the host evaluator
+  // path; CUDA / AMDGPU is a single-thread GPU kernel via `runtime_jit->call`), so no workgroup rounding-up is
+  // needed.
   uint32_t length;
   // Encoded comparison op: one of `kLlvmReducerCmp*` above (0-5).
   uint32_t cmp_op;
-  // 1 when the gating field's element type is f32; 0 when i32. The reducer uses this to pick the right
-  // load width (4 bytes either way, but the comparison semantics differ between signed-int and float).
+  // 1 when the gating field's element type is f32; 0 when i32. The reducer uses this to pick the right load width
+  // (4 bytes either way, but the comparison semantics differ between signed-int and float).
   uint32_t field_dtype_is_float;
-  // 1 when the gate enters on the predicate holding; 0 when it sits inside the `else` branch and the
-  // predicate must be inverted. Mirrors the SPIR-V reducer's `polarity` field.
+  // 1 when the gate enters on the predicate holding; 0 when it sits inside the `else` branch and the predicate
+  // must be inverted. Mirrors the SPIR-V reducer's `polarity` field.
   uint32_t polarity;
-  // Bit-pattern of the captured threshold literal. Reinterpreted as f32 when `field_dtype_is_float`, as
-  // i32 otherwise.
+  // Bit-pattern of the captured threshold literal. Reinterpreted as f32 when `field_dtype_is_float`, as i32
+  // otherwise.
   uint32_t threshold_bits;
-  // u32 word offset into `ctx->arg_buffer` where the ndarray data pointer (u64, two adjacent u32 words)
-  // lives. The reducer reads `arg_buffer[arg_word_offset]` + `arg_buffer[arg_word_offset+1]` to
-  // reconstruct the device pointer, then strides through the field by element index.
+  // 0 when the gating field comes from a kernel ndarray argument (resolved via the kernel arg buffer); 1 when it
+  // comes from a SNode-backed `qd.field(...)` placed under `qd.root.dense(...)` (resolved via a direct word load
+  // from `runtime->roots[snode_root_id]` at byte offset `snode_byte_base_offset + gid * snode_byte_cell_stride`).
+  // The two paths are mutually exclusive per dispatch and pick which trailing fields the reducer reads.
+  uint32_t field_source_is_snode;
+  // ndarray path: u32 word offset into `ctx->arg_buffer` where the ndarray data pointer (u64, two adjacent u32
+  // words) lives. Read only when `field_source_is_snode == 0`.
   uint32_t arg_word_offset;
+  // SNode path: index into `runtime->roots[]` selecting the root buffer the gating field lives under. Read only
+  // when `field_source_is_snode == 1`.
+  uint32_t snode_root_id;
+  // SNode path: byte offset of the gating field's first cell within the bound root buffer (precomputed by the IR
+  // pattern matcher from the snode descriptor's prefix sums). Read only when `field_source_is_snode == 1`.
+  uint32_t snode_byte_base_offset;
+  // SNode path: stride per `gid` step in bytes (the dense parent's `cell_stride`). The reducer walks the gating
+  // field via `byte_offset = snode_byte_base_offset + gid * snode_byte_cell_stride` and loads one u32 word from
+  // there. Read only when `field_source_is_snode == 1`.
+  uint32_t snode_byte_cell_stride;
   // Padding to keep the struct 8-byte aligned for h2d memcpy alignment.
   uint32_t padding;
 };
