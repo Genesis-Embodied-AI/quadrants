@@ -3472,3 +3472,56 @@ def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case()
     got_grad = x.grad.to_numpy()
     assert not np.isnan(got_grad).any(), f"non-loop-var-index grad returned NaN: {got_grad}"
     np.testing.assert_allclose(got_grad, grad_np, rtol=1e-12, atol=1e-14)
+
+
+@test_utils.test(arch=[qd.cuda, qd.amdgpu], require=qd.extension.adstack, ad_stack_size=2048)
+def test_adstack_gpu_dispatch_cap_uses_floor_division():
+    # Pins the LLVM CUDA / AMDGPU adstack-bearing-task dispatch-cap floor-division. The launcher caps the
+    # grid for adstack-bearing tasks at `cap_blocks` blocks of `block_dim` threads each. With ceiling
+    # division (`(kAdStackMaxConcurrentThreads + block_dim - 1) / block_dim`) and a `block_dim` value
+    # that does not divide `kAdStackMaxConcurrentThreads = 65536` evenly (here 192:
+    # `ceil(65536/192) = 342`, dispatched = `342 * 192 = 65664`), the launcher dispatches `block_dim - 1`
+    # threads past the heap row count. `resolve_num_threads` floors at 65536 and the non-bound_expr float
+    # heap is sized at `n_threads * stride_float` for `n_threads = 65536`, so threads with
+    # `linear_thread_idx in [65536, 65664)` index past the float heap end. The kernel below has 65700
+    # iterations so each launched thread reaches at least one `i` past 65536; with `ad_stack_size=2048`
+    # the per-thread stride is large enough (~16 KB) that the OOB landing addresses escape the heap
+    # allocation page. On the unfixed tree the OOB write lands in unmapped device memory and `compute.grad`
+    # raises `RuntimeError: ... hipErrorIllegalAddress` (AMDGPU) / `cudaErrorIllegalAddress` (CUDA); on the
+    # fixed tree `cap_blocks = floor(65536 / 192) = 341` and dispatched = `341 * 192 = 65472` stays within
+    # the heap and the gradient matches the numpy reference.
+    n = 65700
+    block_dim = 192
+    n_inner = 6
+
+    x_np = (0.5 + 0.001 * np.arange(n)).astype(np.float32)
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        qd.loop_config(block_dim=block_dim)
+        for i in range(n):
+            v = x[i]
+            for _ in range(n_inner):
+                v = qd.sin(v) + 0.01
+            out[0] += v
+
+    x.from_numpy(x_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, out)
+    compute.grad(x, out)
+    qd.sync()
+
+    v_np = x_np.copy()
+    grad_ref = np.ones(n, dtype=np.float32)
+    for _ in range(n_inner):
+        grad_ref *= np.cos(v_np)
+        v_np = np.sin(v_np) + 0.01
+
+    got_grad = x.grad.to_numpy()
+    np.testing.assert_allclose(got_grad, grad_ref, rtol=1e-5, atol=1e-6)
