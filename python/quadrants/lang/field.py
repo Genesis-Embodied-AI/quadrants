@@ -489,6 +489,9 @@ class Field:
     def _host_access(self, key):
         return [SNodeHostAccess(e, key) for e in self.host_accessors]  # type: ignore
 
+    def to_dlpack(self):
+        raise NotImplementedError
+
     def __iter__(self):
         raise NotImplementedError("Struct for is only available in Quadrants scope.")
 
