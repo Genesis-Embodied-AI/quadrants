@@ -86,7 +86,7 @@ Fastcache supports the following parameter types:
 | `torch.Tensor` | Yes | dtype, ndim |
 | `numpy.ndarray` | Yes | dtype, ndim |
 | `dataclasses.dataclass` | Yes | field types recursively; field values if annotated with `add_value_to_cache_key` |
-| `@qd.data_oriented` objects | Yes | member types and values recursively |
+| `@qd.data_oriented` objects | Yes | member types and primitive member values recursively |
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
