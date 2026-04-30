@@ -640,6 +640,18 @@ def test_matrix_field_copy_true():
     np.testing.assert_allclose(t.cpu().numpy(), data)
 
 
+@test_utils.test(arch=[qd.cpu])
+def test_matrix_field_to_numpy_copy_false():
+    """Actual matrix field (2x3) to_numpy(copy=False) on CPU."""
+    f = qd.Matrix.field(2, 3, qd.f32, shape=(2,))
+    data = np.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], dtype=np.float32)
+    f.from_numpy(data)
+    qd.sync()
+
+    arr = f.to_numpy(copy=False)
+    np.testing.assert_allclose(arr, data)
+
+
 # ---------------------------------------------------------------------------
 # MatrixNdarray to_numpy(copy=False)
 # ---------------------------------------------------------------------------
