@@ -11,7 +11,6 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants.lang.field import _can_zerocopy_field
 
 from tests import test_utils
 
@@ -19,12 +18,13 @@ torch = pytest.importorskip("torch")
 
 pytestmark = pytest.mark.needs_torch
 
+_NO_ZEROCOPY_ARCHS = {qd.vulkan}
+
 
 def _skip_if_no_zerocopy():
     """Skip the current test if the active backend doesn't support DLPack zero-copy."""
-    probe = qd.field(qd.f32, shape=(1,))
-    if not _can_zerocopy_field(probe, is_scalar=True):
-        pytest.skip(f"DLPack zero-copy not available on {qd.cfg().arch.name}")
+    if qd.cfg().arch in _NO_ZEROCOPY_ARCHS:
+        pytest.skip(f"DLPack zero-copy not supported on {qd.cfg().arch.name}")
 
 
 # ---------------------------------------------------------------------------
@@ -308,8 +308,7 @@ def test_struct_default_layout_copy_none():
 @test_utils.test()
 def test_no_zerocopy_copy_false_raises():
     """Backends that don't support DLPack (e.g. Vulkan) should raise on copy=False."""
-    probe = qd.field(qd.f32, shape=(1,))
-    if _can_zerocopy_field(probe, is_scalar=True):
+    if qd.cfg().arch not in _NO_ZEROCOPY_ARCHS:
         pytest.skip(f"DLPack zero-copy is available on {qd.cfg().arch.name}")
 
     f = qd.field(qd.f32, shape=(4,))
