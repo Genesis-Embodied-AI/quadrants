@@ -3251,13 +3251,14 @@ def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
     # autodiff sizer documents as supported (`docs/source/user_guide/autodiff.md::Appendix A`) plays nicely
     # with the gating-predicate capture path: the codegen pattern matcher recognises `field[i] cmp literal`
     # immediately above the adstack-using inner work and the runtime sizes the float adstack heap to the
-    # gate-passing iteration count instead of `dispatched_threads * stride * sizeof(elem)`. Pre-PR, this
-    # workload sized the float heap at `n * stride * 8 = ~2 MB per loop-carried float` per dispatched thread
-    # slot, multiplied across all the pre-cap concurrent-thread counts on every backend (millions on CUDA /
-    # AMDGPU's saturating_grid_dim, low six figures on Metal / Vulkan); the cumulative allocation easily
-    # crossed the per-buffer cap on Metal and the device-memory cap on x86 / CUDA / AMDGPU when wired through
-    # Genesis MPM-class workloads. With the gate captured the heap shrinks to `gate_passing_count * stride`
-    # which is `~5%` of the worst case for the sparse fraction below.
+    # gate-passing iteration count instead of `dispatched_threads * stride * sizeof(elem)`.
+    #
+    # The kernel body is a non-linear recurrence in `x[i]` (`v = x[i] * x[i]; v = v * 1.05 + 0.05; ...`) so the
+    # analytic per-iteration gradient `2 * x[i] * 1.05^n_iter` varies with `i`. A regression that under-sizes
+    # the float heap (reducer count diverging from main-pass claim count) clamps multiple gated iterations into
+    # the same heap row; the row's stored primal then comes from whichever iteration last pushed it, and the
+    # reverse pass attributes that primal's chain-rule contribution to a different `i` than the one that wrote
+    # it. The per-`i` analytic oracle catches that aliasing as a wrong gradient on the affected indices.
     #
     # The parametrisation walks every supported bound shape so a regression that drops shape-product / scalar-
     # field / two-arg-range support from `determine_ad_stack_size` or from the `analyze_adstack_static_bounds`
@@ -3270,112 +3271,133 @@ def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
 
     np.random.seed(0)
     x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
-    n_gated = max(1, int(round(0.05 * n)))
-    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
     selector_np = np.zeros(n, dtype=np.float32)
-    selector_np[gated_indices] = 1.0
+    selector_np[: max(1, int(round(0.5 * n)))] = 1.0
+    np.random.shuffle(selector_np)
 
     x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
     out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
     selector = qd.ndarray(qd.f32, shape=(n,))
     bound_arr = qd.ndarray(qd.i32, shape=(n,))
-    bound_2d = qd.ndarray(qd.i32, shape=(2, n))
     n_field = qd.field(qd.i32, shape=())
     start_arr = qd.ndarray(qd.i32, shape=(1,))
     stop_arr = qd.ndarray(qd.i32, shape=(1,))
+    n_field[None] = n
+    bound_arr.from_numpy(np.full(n, n, dtype=np.int32))
+    start_arr.from_numpy(np.array([0], dtype=np.int32))
+    stop_arr.from_numpy(np.array([n], dtype=np.int32))
 
-    if bound_shape == "int_const":
-
-        @qd.kernel
-        def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
-            for i in range(n):
-                if selector[i] > eps:
-                    v = x[i]
-                    for _ in range(n_iter):
-                        v = v * 1.05 + 0.05
-                    out[0] += v
-
-        forward_args = (x, selector, out)
-    elif bound_shape == "scalar_field":
-        n_field[None] = n
-
-        @qd.kernel
-        def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
-            for i in range(n_field[None]):
-                if selector[i] > eps:
-                    v = x[i]
-                    for _ in range(n_iter):
-                        v = v * 1.05 + 0.05
-                    out[0] += v
-
-        forward_args = (x, selector, out)
-    elif bound_shape == "ndarray_shape":
-
-        @qd.kernel
-        def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
-            for i in range(selector.shape[0]):
-                if selector[i] > eps:
-                    v = x[i]
-                    for _ in range(n_iter):
-                        v = v * 1.05 + 0.05
-                    out[0] += v
-
-        forward_args = (x, selector, out)
-    elif bound_shape == "ndarray_read":
-        bound_arr.from_numpy(np.full(n, n, dtype=np.int32))
-
-        @qd.kernel
-        def compute(
-            x: qd.types.NDArray,
-            selector: qd.types.NDArray,
-            out: qd.types.NDArray,
-            bound_arr: qd.types.NDArray,
-        ) -> None:
-            for i in range(bound_arr[0]):
-                if selector[i] > eps:
-                    v = x[i]
-                    for _ in range(n_iter):
-                        v = v * 1.05 + 0.05
-                    out[0] += v
-
-        forward_args = (x, selector, out, bound_arr)
-    else:
-        # two_arg_range
-        start_arr.from_numpy(np.array([0], dtype=np.int32))
-        stop_arr.from_numpy(np.array([n], dtype=np.int32))
-
-        @qd.kernel
-        def compute(
-            x: qd.types.NDArray,
-            selector: qd.types.NDArray,
-            out: qd.types.NDArray,
-            start_arr: qd.types.NDArray,
-            stop_arr: qd.types.NDArray,
-        ) -> None:
-            for i in range(start_arr[0], stop_arr[0]):
-                if selector[i] > eps:
-                    v = x[i]
-                    for _ in range(n_iter):
-                        v = v * 1.05 + 0.05
-                    out[0] += v
-
-        forward_args = (x, selector, out, start_arr, stop_arr)
+    @qd.kernel
+    def compute(
+        x: qd.types.NDArray,
+        selector: qd.types.NDArray,
+        out: qd.types.NDArray,
+        bound_arr: qd.types.NDArray,
+        start_arr: qd.types.NDArray,
+        stop_arr: qd.types.NDArray,
+    ) -> None:
+        # `qd.static(bound_shape == ...)` evaluates the comparison at kernel-compile time (`bound_shape` is a
+        # Python closure constant), so the AST that reaches the codegen has only one of the five `range`
+        # forms surviving - no helper has to materialise per parametrisation.
+        for i in (
+            range(n)
+            if qd.static(bound_shape == "int_const")
+            else (
+                range(n_field[None])
+                if qd.static(bound_shape == "scalar_field")
+                else (
+                    range(selector.shape[0])
+                    if qd.static(bound_shape == "ndarray_shape")
+                    else (
+                        range(bound_arr[0])
+                        if qd.static(bound_shape == "ndarray_read")
+                        else range(start_arr[0], stop_arr[0])
+                    )
+                )
+            )
+        ):
+            if selector[i] > eps:
+                v = x[i] * x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[0] += v
 
     x.from_numpy(x_np)
     selector.from_numpy(selector_np)
     out.from_numpy(np.zeros((1,), dtype=np.float32))
     out.grad.from_numpy(np.ones((1,), dtype=np.float32))
     x.grad.from_numpy(np.zeros_like(x_np))
-    # Suppress an unused-variable warning when the parametrisation doesn't bind every bound source.
-    _ = bound_2d
 
-    compute(*forward_args)
-    compute.grad(*forward_args)
+    compute(x, selector, out, bound_arr, start_arr, stop_arr)
+    compute.grad(x, selector, out, bound_arr, start_arr, stop_arr)
     qd.sync()
 
     got_grad = x.grad.to_numpy()
     assert not np.isnan(got_grad).any(), f"sparse-adstack-heap [{bound_shape}] grad returned NaN: {got_grad}"
     coeff = 1.05
-    expected_per_gated = coeff**n_iter
-    expected = np.where(selector_np > eps, np.float32(expected_per_gated), np.float32(0.0))
+    # `v = x[i] * x[i]` then `v = v * 1.05 + 0.05` repeated n_iter times. v_final = x[i]^2 * c^n + S where
+    # S is a constant. d(v_final)/d(x[i]) = 2 * x[i] * c^n. Gated only.
+    expected = np.where(selector_np > eps, np.float32(2.0 * x_np * coeff**n_iter), np.float32(0.0))
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=64)
+def test_adstack_static_bound_expr_primal_dependent_inner_recurrence_grad_correct():
+    # Companion to `test_adstack_static_bound_expr_memory_savings_runs_clean` aimed at the slot-aliasing failure
+    # mode: pins the case where the inner recurrence is `v = qd.sin(v) + 0.01`, whose chain rule `d(sin(v))/dv =
+    # cos(v)` depends on the stored primal. If a regression under-sizes the float adstack heap (e.g. by deriving
+    # the reducer length from `array_runtime_sizes / sizeof(int32_t)` while the launcher receives an element-
+    # count-unit value from `set_args_ndarray`, undercounting by `sizeof(elem)`x for `qd.ndarray` arguments), the
+    # codegen-emitted clamp aliases multiple gated iterations into the same row; the row's pushed primal then
+    # comes from whichever iteration last wrote it, the reverse pass evaluates `cos(slot)` against the wrong
+    # iteration's `v`, and the per-`i` gradient diverges from the analytic oracle by a primal-dependent factor.
+    #
+    # `v = x[i]; for _: v = sin(v) + 0.01` then `out += v` produces a strictly nonlinear chain whose per-`i`
+    # gradient is computed offline via numpy on the same recurrence. `n=2048` makes capacity-vs-claims tight
+    # under the buggy length: a ~512-row capacity vs ~2048 claims means rows 512..2047 collapse to row 511 on
+    # every backend that under-sizes, and the corruption rate scales linearly with `n`. The test fits well
+    # under the 10 s / 500 MB budget on every supported backend (peak heap allocation `2048 * 64 * 8 ~= 1 MB`,
+    # forward-pass walk ~2048 * 8 ~= 16K f32 ops, reverse same again).
+    n = 512
+    n_iter = 4
+    eps = 1e-9
+
+    np.random.seed(0)
+    x_np = (0.05 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = np.ones(n, dtype=np.float32)
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if selector[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = qd.sin(v) + 0.01
+                out[0] += v
+
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    # numpy reference: chain rule for `v_k = sin(v_{k-1}) + 0.01` is `cos(v_{k-1})`. d(v_n)/d(x[i]) is the
+    # product of `cos(v_k)` for k = 0..n_iter-1, where the v_k sequence is generated forward from x[i].
+    v_np = x_np.copy()
+    grad_np = np.ones(n, dtype=np.float64)
+    for _ in range(n_iter):
+        grad_np *= np.cos(v_np.astype(np.float64))
+        v_np = np.sin(v_np) + np.float32(0.01)
+    expected = grad_np.astype(np.float32)
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"primal-dependent inner-recurrence grad returned NaN: {got_grad}"
+    np.testing.assert_allclose(got_grad, expected, rtol=2e-4, atol=2e-6)

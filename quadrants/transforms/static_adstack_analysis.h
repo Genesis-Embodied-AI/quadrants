@@ -77,6 +77,11 @@ struct StaticAdStackBoundExpr {
   FieldSourceKind field_source_kind{FieldSourceKind::SNode};
   int snode_id{-1};
   std::vector<int> ndarray_arg_id;
+  // Number of axes on the captured gating ndarray (1 for `qd.ndarray(qd.f32, shape=(N,))`, 2 for `shape=(R, C)`,
+  // ...). Set at capture time from `ExternalPtrStmt::indices.size()` so the host launcher can walk the right
+  // number of `SHAPE_POS_IN_NDARRAY + axis` slots when computing the reducer's flat-element walk bound. Zero for
+  // SNode-backed gates (where `snode_iter_count` carries the equivalent information).
+  int ndarray_ndim{0};
 
   // SNode-source extras populated by the resolver callback when the field is SNode-backed. Combined byte offset
   // (dense within root cell + leaf within dense's per-cell layout) and the per-`gid` stride the reducer kernel
@@ -96,6 +101,7 @@ struct StaticAdStackBoundExpr {
             field_source_kind,
             snode_id,
             ndarray_arg_id,
+            ndarray_ndim,
             snode_root_id,
             snode_byte_base_offset,
             snode_byte_cell_stride,

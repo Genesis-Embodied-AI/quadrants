@@ -89,12 +89,19 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     std::size_t bound_count_length = n;
     if (task.ad_stack.bound_expr.has_value() &&
         task.ad_stack.bound_expr->field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::NdArray &&
-        !task.ad_stack.bound_expr->ndarray_arg_id.empty()) {
-      const int top_arg_id = task.ad_stack.bound_expr->ndarray_arg_id.front();
-      auto runtime_size_it = ctx.array_runtime_sizes.find(top_arg_id);
-      if (runtime_size_it != ctx.array_runtime_sizes.end()) {
-        bound_count_length = static_cast<std::size_t>(runtime_size_it->second / sizeof(int32_t));
+        !task.ad_stack.bound_expr->ndarray_arg_id.empty() && task.ad_stack.bound_expr->ndarray_ndim > 0 &&
+        ctx.args_type != nullptr) {
+      // Length = product of shape entries via `args_type`. See `runtime/cpu/kernel_launcher.cpp` for the
+      // unit-stability rationale; `array_runtime_sizes` carries different units depending on the dispatch
+      // entry point and would undercount by `sizeof(elem)`x for `qd.ndarray` arguments.
+      int64_t flat_len = 1;
+      for (int axis = 0; axis < task.ad_stack.bound_expr->ndarray_ndim; ++axis) {
+        std::vector<int> indices = task.ad_stack.bound_expr->ndarray_arg_id;
+        indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+        indices.push_back(axis);
+        flat_len *= int64_t(ctx.get_struct_arg<int32_t>(indices));
       }
+      bound_count_length = static_cast<std::size_t>(std::max<int64_t>(0, flat_len));
     }
     executor->publish_per_task_bound_count_device(task_index, task.ad_stack, bound_count_length, &ctx,
                                                   device_context_ptr);

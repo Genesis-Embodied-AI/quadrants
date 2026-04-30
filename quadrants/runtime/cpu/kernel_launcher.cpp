@@ -36,13 +36,22 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     if (ad_stacks[i].bound_expr.has_value()) {
       using FSK = StaticAdStackBoundExpr::FieldSourceKind;
       const auto &be = *ad_stacks[i].bound_expr;
-      if (be.field_source_kind == FSK::NdArray && !be.ndarray_arg_id.empty()) {
-        const int top_arg_id = be.ndarray_arg_id.front();
-        auto runtime_size_it = ctx.array_runtime_sizes.find(top_arg_id);
-        if (runtime_size_it != ctx.array_runtime_sizes.end()) {
-          // The captured gate's `field_dtype_is_float` selects f32 vs i32; both element types are 4 bytes today.
-          bound_count_length = static_cast<std::size_t>(runtime_size_it->second / sizeof(int32_t));
+      if (be.field_source_kind == FSK::NdArray && !be.ndarray_arg_id.empty() && be.ndarray_ndim > 0 &&
+          ctx.args_type != nullptr) {
+        // Length = product of `ctx.args_type->get_element_offset(ndarray_arg_id + SHAPE_POS_IN_NDARRAY +
+        // axis)`-derived shape entries. `ctx.array_runtime_sizes` is unsuitable because the dispatch entry
+        // point determines its units: `set_arg_external_array_with_shape` stores the byte size (numpy /
+        // torch path), `set_args_ndarray` stores the element count (qd.ndarray path). Walking the shape
+        // entries through `args_type` is unit-stable and matches the SPIR-V launcher's `resolve_length`
+        // over `range_for_attribs->end_shape_product`.
+        int64_t flat_len = 1;
+        for (int axis = 0; axis < be.ndarray_ndim; ++axis) {
+          std::vector<int> indices = be.ndarray_arg_id;
+          indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+          indices.push_back(axis);
+          flat_len *= int64_t(ctx.get_struct_arg<int32_t>(indices));
         }
+        bound_count_length = static_cast<std::size_t>(std::max<int64_t>(0, flat_len));
       } else if (be.field_source_kind == FSK::SNode) {
         // SNode-backed gates carry the dense field's iteration count straight in the captured descriptor
         // (`snode_iter_count = leaf_desc.iter_count`, populated by the codegen-time SNode descriptor

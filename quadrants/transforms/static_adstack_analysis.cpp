@@ -223,6 +223,13 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       if (auto *base_arg = ext->base_ptr->cast<ArgLoadStmt>()) {
         out.field_source_kind = StaticAdStackBoundExpr::FieldSourceKind::NdArray;
         out.ndarray_arg_id = base_arg->arg_id;
+        // Capture the gating ndarray's ndim so the host launcher can walk shape[0..ndim) at dispatch time
+        // and product them into the reducer's flat-element walk bound. Without this the launcher would have
+        // to fall back to `ctx.array_runtime_sizes[arg_id]`, which carries different units depending on
+        // whether the caller used `set_arg_external_array_with_shape` (bytes) or `set_args_ndarray` (element
+        // count) - the latter would undercount by `sizeof(elem)` for `qd.ndarray` arguments and silently
+        // corrupt gradients on every kernel that goes through the gating path with a `qd.ndarray` selector.
+        out.ndarray_ndim = static_cast<int>(ext->indices.size());
         return true;
       }
       return false;
