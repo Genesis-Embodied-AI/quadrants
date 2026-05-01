@@ -377,7 +377,9 @@
             <span class="k">assert</span> <span class="n">this_arg_features</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="n">marker</span> <span class="o">=</span> <span class="n">this_arg_features</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">marker</span> <span class="o">==</span> <span class="n">_TENSOR_T_NDARRAY_MARKER</span><span class="p">:</span>
-                <span class="n">raw_element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">boundary</span><span class="p">,</span> <span class="n">layout</span> <span class="o">=</span> <span class="n">this_arg_features</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+                <span class="n">raw_element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">boundary</span><span class="p">,</span> <span class="n">layout</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">this_arg_features</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+                <span class="p">)</span>
                 <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">(</span>
                     <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_ndarray_arg</span><span class="p">,</span>
                     <span class="p">(</span>
@@ -396,7 +398,9 @@
                 <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
                 <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
             <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;unknown qd.Tensor marker: </span><span class="si">{</span><span class="n">marker</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">annotation</span> <span class="o">==</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">annotation</span> <span class="o">==</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span>
+            <span class="n">annotation</span><span class="p">,</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span>
+        <span class="p">):</span>
             <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span><span class="p">:</span>
                 <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
             <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
@@ -419,8 +423,12 @@
                 <span class="n">needs_grad</span><span class="p">,</span>
                 <span class="n">BoundaryMode</span><span class="p">(</span><span class="n">boundary</span><span class="p">),</span>
             <span class="p">)</span>
-            <span class="n">offset</span> <span class="o">=</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_scalar_arg</span><span class="p">(</span><span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">full_name</span> <span class="o">+</span> <span class="s2">&quot;_offset&quot;</span><span class="p">)</span>
-            <span class="n">size</span> <span class="o">=</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_scalar_arg</span><span class="p">(</span><span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">full_name</span> <span class="o">+</span> <span class="s2">&quot;_size&quot;</span><span class="p">)</span>
+            <span class="n">offset</span> <span class="o">=</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_scalar_arg</span><span class="p">(</span>
+                <span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">full_name</span> <span class="o">+</span> <span class="s2">&quot;_offset&quot;</span>
+            <span class="p">)</span>
+            <span class="n">size</span> <span class="o">=</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_scalar_arg</span><span class="p">(</span>
+                <span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">full_name</span> <span class="o">+</span> <span class="s2">&quot;_size&quot;</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">ndarray_type</span><span class="o">.</span><span class="n">NdarrayType</span><span class="p">):</span>
             <span class="k">assert</span> <span class="n">this_arg_features</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
@@ -460,7 +468,10 @@
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">argument_type</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">field_idx</span><span class="p">,</span> <span class="n">field</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">argument_type</span><span class="p">)):</span>
                 <span class="n">flat_name</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="n">flat_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">func_id</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span>
+                    <span class="ow">and</span> <span class="n">flat_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">func_id</span><span class="p">]</span>
+                <span class="p">):</span>
                     <span class="k">continue</span>
                 <span class="c1"># if a field is a dataclass, then feed back into process_kernel_arg recursively</span>
                 <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
@@ -498,7 +509,9 @@
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_transform_as_kernel</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">FunctionDef</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">arguments</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_transform_as_kernel</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">FunctionDef</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">arguments</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">arg_features</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">returns</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -547,7 +560,9 @@
                         <span class="n">child</span> <span class="o">=</span> <span class="n">child</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
                     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">_ndarray</span><span class="o">.</span><span class="n">Ndarray</span><span class="p">):</span>
                         <span class="n">_register_ndarray</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
-                    <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">child</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+                    <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">child</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span>
+                        <span class="n">child</span><span class="p">,</span> <span class="nb">type</span>
+                    <span class="p">):</span>
                         <span class="n">_walk_obj</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">attr_val</span> <span class="ow">in</span> <span class="nb">vars</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -571,7 +586,9 @@
                 <span class="n">element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">needs_grad</span>
             <span class="p">)</span>
             <span class="n">arr</span> <span class="o">=</span> <span class="n">any_array</span><span class="o">.</span><span class="n">AnyArray</span><span class="p">(</span>
-                <span class="n">_qd_core</span><span class="o">.</span><span class="n">make_external_tensor_expr</span><span class="p">(</span><span class="n">element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">arg_id_vec</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">BoundaryMode</span><span class="o">.</span><span class="n">UNSAFE</span><span class="p">),</span>
+                <span class="n">_qd_core</span><span class="o">.</span><span class="n">make_external_tensor_expr</span><span class="p">(</span>
+                    <span class="n">element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">arg_id_vec</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">BoundaryMode</span><span class="o">.</span><span class="n">UNSAFE</span>
+                <span class="p">),</span>
                 <span class="n">_qd_layout</span><span class="o">=</span><span class="n">layout</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="n">cache</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">arr</span>
@@ -580,7 +597,9 @@
         <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">arg_meta</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">):</span>
             <span class="n">anno</span> <span class="o">=</span> <span class="n">arg_meta</span><span class="o">.</span><span class="n">annotation</span>
-            <span class="n">is_template</span> <span class="o">=</span> <span class="n">anno</span> <span class="ow">is</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">anno</span><span class="p">,</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span><span class="p">)</span>
+            <span class="n">is_template</span> <span class="o">=</span> <span class="n">anno</span> <span class="ow">is</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span>
+                <span class="n">anno</span><span class="p">,</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span>
+            <span class="p">)</span>
             <span class="n">is_tensor_anno</span> <span class="o">=</span> <span class="n">anno</span> <span class="ow">is</span> <span class="n">_TensorClass</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_template</span> <span class="ow">or</span> <span class="n">is_tensor_anno</span><span class="p">):</span>
                 <span class="k">continue</span>
@@ -618,15 +637,21 @@
         <span class="c1"># directly — ndarray and field impls are both valid pass-by-reference arguments.</span>
         <span class="k">if</span> <span class="n">argument_type</span> <span class="ow">is</span> <span class="n">_TensorClass</span><span class="p">:</span>
             <span class="n">data</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_unwrap_tensor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-            <span class="n">_cache</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;global_context&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s2">&quot;ndarray_to_any_array&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">_cache</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;global_context&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s2">&quot;ndarray_to_any_array&quot;</span><span class="p">,</span> <span class="kc">None</span>
+            <span class="p">)</span>
             <span class="n">promoted</span> <span class="o">=</span> <span class="n">_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">data</span><span class="p">))</span> <span class="k">if</span> <span class="n">_cache</span> <span class="k">else</span> <span class="kc">None</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">promoted</span> <span class="k">if</span> <span class="n">promoted</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">data</span><span class="p">)</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span>
+                <span class="n">argument_name</span><span class="p">,</span> <span class="n">promoted</span> <span class="k">if</span> <span class="n">promoted</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">data</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
 
         <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">argument_type</span><span class="p">):</span>
             <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">argument_type</span><span class="p">):</span>
                 <span class="n">flat_name</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-                <span class="n">data_child</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_unwrap_tensor</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+                <span class="n">data_child</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_unwrap_tensor</span><span class="p">(</span>
+                    <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                <span class="p">)</span>
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span>
                     <span class="n">data_child</span><span class="p">,</span>
                     <span class="p">(</span>
@@ -638,11 +663,19 @@
                 <span class="p">):</span>
                     <span class="c1"># qd.Tensor struct fields skip check_matched (the Tensor class has no such method — it is</span>
                     <span class="c1"># polymorphic).</span>
-                    <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">_TensorClass</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="s2">&quot;check_matched&quot;</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">_TensorClass</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span>
+                        <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="s2">&quot;check_matched&quot;</span>
+                    <span class="p">):</span>
                         <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">check_matched</span><span class="p">(</span><span class="n">data_child</span><span class="o">.</span><span class="n">get_type</span><span class="p">(),</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-                    <span class="n">_cache</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;global_context&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s2">&quot;ndarray_to_any_array&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                    <span class="n">_cache</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                        <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;global_context&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+                        <span class="s2">&quot;ndarray_to_any_array&quot;</span><span class="p">,</span>
+                        <span class="kc">None</span><span class="p">,</span>
+                    <span class="p">)</span>
                     <span class="n">promoted</span> <span class="o">=</span> <span class="n">_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">data_child</span><span class="p">))</span> <span class="k">if</span> <span class="n">_cache</span> <span class="k">else</span> <span class="kc">None</span>
-                    <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">flat_name</span><span class="p">,</span> <span class="n">promoted</span> <span class="k">if</span> <span class="n">promoted</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">data_child</span><span class="p">)</span>
+                    <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span>
+                        <span class="n">flat_name</span><span class="p">,</span> <span class="n">promoted</span> <span class="k">if</span> <span class="n">promoted</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">data_child</span>
+                    <span class="p">)</span>
                 <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">data_child</span><span class="p">):</span>
                     <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_transform_func_arg</span><span class="p">(</span>
                         <span class="n">ctx</span><span class="p">,</span>
@@ -659,9 +692,17 @@
         <span class="c1"># Ndarray arguments are passed by reference.</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">argument_type</span><span class="p">,</span> <span class="p">(</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">NdarrayType</span><span class="p">)):</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span>
-                <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="n">_ndarray</span><span class="o">.</span><span class="n">ScalarNdarray</span><span class="p">,</span> <span class="n">matrix</span><span class="o">.</span><span class="n">VectorNdarray</span><span class="p">,</span> <span class="n">matrix</span><span class="o">.</span><span class="n">MatrixNdarray</span><span class="p">,</span> <span class="n">any_array</span><span class="o">.</span><span class="n">AnyArray</span><span class="p">)</span>
+                <span class="n">data</span><span class="p">,</span>
+                <span class="p">(</span>
+                    <span class="n">_ndarray</span><span class="o">.</span><span class="n">ScalarNdarray</span><span class="p">,</span>
+                    <span class="n">matrix</span><span class="o">.</span><span class="n">VectorNdarray</span><span class="p">,</span>
+                    <span class="n">matrix</span><span class="o">.</span><span class="n">MatrixNdarray</span><span class="p">,</span>
+                    <span class="n">any_array</span><span class="o">.</span><span class="n">AnyArray</span><span class="p">,</span>
+                <span class="p">),</span>
             <span class="p">):</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Argument </span><span class="si">{</span><span class="n">argument_name</span><span class="si">}</span><span class="s2"> of type </span><span class="si">{</span><span class="n">argument_type</span><span class="si">}</span><span class="s2"> is not recognized.&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Argument </span><span class="si">{</span><span class="n">argument_name</span><span class="si">}</span><span class="s2"> of type </span><span class="si">{</span><span class="n">argument_type</span><span class="si">}</span><span class="s2"> is not recognized.&quot;</span>
+                <span class="p">)</span>
             <span class="n">argument_type</span><span class="o">.</span><span class="n">check_matched</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get_type</span><span class="p">(),</span> <span class="n">argument_name</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
@@ -671,7 +712,9 @@
         <span class="c1"># not here — data.arr is an Expr node during func compilation, not a real Ndarray.</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">argument_type</span><span class="p">,</span> <span class="n">buffer_view_type</span><span class="o">.</span><span class="n">BufferViewType</span><span class="p">):</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Argument </span><span class="si">{</span><span class="n">argument_name</span><span class="si">}</span><span class="s2"> expects a BufferView, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Argument </span><span class="si">{</span><span class="n">argument_name</span><span class="si">}</span><span class="s2"> expects a BufferView, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
 
@@ -710,7 +753,9 @@
             <span class="k">return</span> <span class="kc">None</span>
 
         <span class="k">if</span> <span class="nb">id</span><span class="p">(</span><span class="n">argument_type</span><span class="p">)</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">type_ids</span><span class="p">:</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init_func</span><span class="p">(</span><span class="n">qd_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">argument_type</span><span class="p">)))</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span>
+                <span class="n">argument_name</span><span class="p">,</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init_func</span><span class="p">(</span><span class="n">qd_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">argument_type</span><span class="p">))</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="c1"># Create a copy for non-template arguments,</span>
         <span class="c1"># so that they are passed by value.</span>
@@ -719,7 +764,9 @@
         <span class="k">return</span> <span class="kc">None</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_transform_as_func</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">FunctionDef</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">arguments</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_transform_as_func</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">FunctionDef</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">arguments</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="c1"># pylint: disable=import-outside-toplevel</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">Func</span>
 
@@ -727,7 +774,9 @@
         <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="k">for</span> <span class="n">py_arg_i</span><span class="p">,</span> <span class="n">py_arg</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span><span class="p">):</span>
             <span class="n">argument</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas_expanded</span><span class="p">[</span><span class="n">py_arg_i</span><span class="p">]</span>
-            <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_transform_func_arg</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">argument</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">argument</span><span class="o">.</span><span class="n">annotation</span><span class="p">,</span> <span class="n">py_arg</span><span class="p">)</span>
+            <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_transform_func_arg</span><span class="p">(</span>
+                <span class="n">ctx</span><span class="p">,</span> <span class="n">argument</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">argument</span><span class="o">.</span><span class="n">annotation</span><span class="p">,</span> <span class="n">py_arg</span>
+            <span class="p">)</span>
 
         <span class="c1"># deal with dataclasses</span>
         <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">orig_arguments</span><span class="p">:</span>
@@ -769,7 +818,9 @@
                 <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_transform_as_func</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
-            <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_stream_parallel_exclusivity</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="p">)</span>
+            <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_stream_parallel_exclusivity</span><span class="p">(</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span>
+            <span class="p">)</span>
 
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
             <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
@@ -791,10 +842,9 @@
             <span class="k">return</span> <span class="kc">True</span>
         <span class="n">resolved</span> <span class="o">=</span> <span class="n">ASTResolver</span><span class="o">.</span><span class="n">resolve_value</span><span class="p">(</span><span class="n">func_node</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">resolved</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">(</span>
-                <span class="nb">getattr</span><span class="p">(</span><span class="n">resolved</span><span class="p">,</span> <span class="s2">&quot;__name__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;stream_parallel&quot;</span>
-                <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">resolved</span><span class="p">,</span> <span class="s2">&quot;__module__&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;quadrants&quot;</span><span class="p">)</span>
-            <span class="p">)</span>
+            <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">resolved</span><span class="p">,</span> <span class="s2">&quot;__name__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;stream_parallel&quot;</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="n">resolved</span><span class="p">,</span> <span class="s2">&quot;__module__&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;quadrants&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func_node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func_node</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;stream_parallel&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func_node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func_node</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;stream_parallel&quot;</span><span class="p">:</span>
@@ -803,11 +853,20 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_docstring</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">index</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Str</span><span class="p">))</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">index</span> <span class="o">==</span> <span class="mi">0</span>
+            <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Str</span><span class="p">))</span>
+        <span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_stream_parallel_exclusivity</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">],</span> <span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_stream_parallel_with</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">body</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_stream_parallel_exclusivity</span><span class="p">(</span>
+        <span class="n">body</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">],</span> <span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_stream_parallel_with</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">body</span>
+        <span class="p">):</span>
             <span class="k">return</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">body</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_docstring</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
@@ -816,7 +875,9 @@
                 <span class="n">stmt_desc</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="ow">and</span> <span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">:</span>
                     <span class="n">ctx_expr</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">context_expr</span>
-                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ctx_expr</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ctx_expr</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ctx_expr</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span>
+                        <span class="n">ctx_expr</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span>
+                    <span class="p">):</span>
                         <span class="n">stmt_desc</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;(with </span><span class="si">{</span><span class="n">ast</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">ctx_expr</span><span class="o">.</span><span class="n">func</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
                     <span class="s2">&quot;When using qd.stream_parallel(), all top-level statements &quot;</span>
