@@ -3,6 +3,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <thread>
+#include <vector>
 
 #include "quadrants/program/kernel_profiler.h"
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
