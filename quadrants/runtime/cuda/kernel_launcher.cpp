@@ -71,8 +71,9 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
     launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
     counter_val = 0;
     auto *stream = CUDAContext::get_instance().get_stream();
+    CUDADriver::get_instance().memcpy_device_to_host_async(&counter_val, ctx.graph_do_while_flag_dev_ptr,
+                                                           sizeof(int32_t), stream);
     CUDADriver::get_instance().stream_synchronize(stream);
-    CUDADriver::get_instance().memcpy_device_to_host(&counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
   } while (counter_val != 0);
 }
 
