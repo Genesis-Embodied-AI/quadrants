@@ -3739,13 +3739,12 @@ def test_adstack_static_bound_expr_device_sizer_per_kind_offsets_grad_correct():
     # byte offset within `heap_float`'s slice for `v1`. With `stride_float = step_v0 + step_v1` and `step_v0 + step_j >
     # step_v0`, `v1`'s tape for thread `t` lands inside thread `(t+1)`'s float slice; thread `t`'s reverse pass then
     # reads `v1`'s saved primal that thread `(t+1)` wrote, which is x[(t+1)]'s tape. Restricted to LLVM CUDA / AMDGPU
-    # because (a) CPU goes through `use_host_eval=true` and uses the host-eval branch in
-    # `llvm_runtime_executor.cpp:792-801` whose per-kind write is correct, (b) Metal / Vulkan use the SPIR-V sizer
-    # compute shader (`codegen/spirv/adstack_sizer_shader.cpp`) which already does per-kind offsets correctly.
-    # `ad_stack_size=0` lets the SizeExpr's launch-time evaluator pick the per-launch bound; `debug=False` keeps the
-    # release-build inline push / pop emit path so the tape addressing math goes through `get_ad_stack_base_llvm` rather
-    # than the runtime helper-call path which would also exercise the bug but takes a different code path through
-    # `stack_init`.
+    # because (a) CPU goes through `use_host_eval=true` and uses the host-eval branch of `publish_adstack_metadata`
+    # whose per-kind write is correct, (b) Metal / Vulkan use the SPIR-V sizer compute shader
+    # (`codegen/spirv/adstack_sizer_shader.cpp`) which already does per-kind offsets correctly. `ad_stack_size=0` lets
+    # the SizeExpr's launch-time evaluator pick the per-launch bound; `debug=False` keeps the release-build inline push
+    # / pop emit path so the tape addressing math goes through `get_ad_stack_base_llvm` rather than the runtime
+    # helper-call path which would also exercise the bug but takes a different code path through `stack_init`.
     n_outer = 8
     a_np = np.array([2, 3, 1, 2, 3, 1, 2, 3], dtype=np.int32)
 

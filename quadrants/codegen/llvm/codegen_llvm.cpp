@@ -1812,12 +1812,11 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     // Find which `snode_tree_id` this root belongs to. `program->get_snode_root(id)` returns the SNode for tree `id`;
     // iterate until we find a match. Tree counts are small (single digits in every observed kernel) so the linear scan
     // is cheap and avoids needing a public reverse-lookup API on `Program`. Bound the scan with
-    // `prog->get_snode_tree_size()` (program.h:112) - `Program::get_snode_root` is a raw
-    // `snode_trees_[tree_id]->root()` with no bounds check, so an unbounded loop would be `std::vector::operator[]` OOB
-    // undefined behaviour on programs whose tree-id space is smaller than the captured chain expects (stale SNode
-    // references, recycled tree slots, offline-cache restore mismatches). The SPIR-V analog uses a bounded
-    // `snode_to_root_` map; mirror that safety here. Continue (rather than break) past nullptr slots to handle
-    // recycled-tree-id holes from `free_snode_tree_ids_`.
+    // `prog->get_snode_tree_size()` - `Program::get_snode_root` is a raw `snode_trees_[tree_id]->root()` with no bounds
+    // check, so an unbounded loop would be `std::vector::operator[]` OOB undefined behaviour on programs whose tree-id
+    // space is smaller than the captured chain expects (stale SNode references, recycled tree slots, offline-cache
+    // restore mismatches). The SPIR-V analog uses a bounded `snode_to_root_` map; mirror that safety here. Continue
+    // (rather than break) past nullptr slots to handle recycled-tree-id holes from `free_snode_tree_ids_`.
     int matched_tree_id = -1;
     for (int id = SNodeTree::kFirstID; id < prog->get_snode_tree_size(); ++id) {
       SNode *root_for_id = prog->get_snode_root(id);
@@ -1835,17 +1834,17 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     SNodeFieldDescriptor desc;
     desc.root_id = matched_tree_id;
     // Combined byte offset: dense's offset within its single root cell plus the leaf's offset within the dense's
-    // per-cell layout. Both fields are populated by `StructCompilerLLVM::generate_types` (struct_llvm.cpp:56,60) before
-    // any kernel codegen runs, in declaration order matching the LLVM accessors the main kernel emits.
+    // per-cell layout. Both fields are populated by `StructCompilerLLVM::generate_types` before any kernel codegen
+    // runs, in declaration order matching the LLVM accessors the main kernel emits.
     desc.byte_base_offset =
         static_cast<uint32_t>(dense->offset_bytes_in_parent_cell + leaf->offset_bytes_in_parent_cell);
     // Per-cell stride for the dense parent. `cell_size_bytes` is the size of one element of the dense's child struct
     // (set on the dense by `StructCompilerLLVM::generate_types`).
     desc.byte_cell_stride = static_cast<uint32_t>(dense->cell_size_bytes);
     // Iteration count: product of `num_elements_from_root` over the dense's extractors. Mirrors the SPIR-V compiler's
-    // `total_num_cells_from_root` formula at `snode_struct_compiler.cpp:107-114` but reads the extractor metadata from
-    // the live SNode tree (`SNode::extractors[i].num_elements_from_root`, populated by
-    // `StructCompiler::infer_snode_properties`) instead of going through the SPIR-V descriptor cache.
+    // `total_num_cells_from_root` formula in `snode_struct_compiler.cpp` but reads the extractor metadata from the live
+    // SNode tree (`SNode::extractors[i].num_elements_from_root`, populated by `StructCompiler::infer_snode_properties`)
+    // instead of going through the SPIR-V descriptor cache.
     uint64_t iter_count = 1;
     for (const auto &e : dense->extractors) {
       iter_count *= static_cast<uint64_t>(e.num_elements_from_root);
@@ -1866,9 +1865,8 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   // that requires updating `visit(AdStackAllocaStmt)` to route base computation per kind. The shared analysis output
   // (LCA, bootstrap pushes, captured `bound_expr`) propagates to `current_task->ad_stack` so the host launcher can
   // dispatch the per-arch reducer; the heap addressing change comes after. Sizes are rounded up to 8 bytes so
-  // `stack_top_primal`'s `stack + sizeof(u64) + idx * 2 * element_size` math stays naturally aligned for every
-  // element type the IR may emit (i8 / u1 pack especially, on which the raw `size_in_bytes()` is otherwise
-  // unaligned).
+  // `stack_top_primal`'s `stack + sizeof(u64) + idx * 2 * element_size` math stays naturally aligned for every element
+  // type the IR may emit (i8 / u1 pack especially, on which the raw `size_in_bytes()` is otherwise unaligned).
   {
     auto align_up_8 = [](std::size_t n) -> std::size_t { return (n + 7u) & ~std::size_t{7u}; };
     std::function<void(IRNode *)> scan = [&](IRNode *node) {
@@ -2356,8 +2354,8 @@ void TaskCodeGenLLVM::ensure_ad_stack_heap_base_split_llvm() {
 }
 
 // Cache the per-launch adstack metadata SSA values at `entry_block` on first need. Mirrors
-// `ensure_ad_stack_heap_base_llvm`: one getter call per task, hoisted to the entry block so every downstream
-// `AdStack*` visit (which may live in nested blocks) reuses a dominating SSA value and `verifyFunction` stays happy.
+// `ensure_ad_stack_heap_base_llvm`: one getter call per task, hoisted to the entry block so every downstream `AdStack*`
+// visit (which may live in nested blocks) reuses a dominating SSA value and `verifyFunction` stays happy.
 void TaskCodeGenLLVM::ensure_ad_stack_metadata_llvm() {
   if (ad_stack_stride_llvm_ != nullptr) {
     return;
