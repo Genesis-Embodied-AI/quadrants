@@ -40,7 +40,7 @@ from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
-from quadrants.lang.stream import stream_parallel
+
 from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import (
     is_from_quadrants_module as _is_from_quadrants_module,
@@ -1539,7 +1539,7 @@ class ASTTransformer(Builder):
             raise QuadrantsSyntaxError("'with ... as ...' is not supported in Quadrants kernels")
         if not isinstance(item.context_expr, ast.Call):
             raise QuadrantsSyntaxError("'with' in Quadrants kernels requires a call expression")
-        if not ASTResolver.resolve_to(item.context_expr.func, stream_parallel, ctx.global_vars):
+        if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
             raise QuadrantsSyntaxError("'with' in Quadrants kernels only supports qd.stream_parallel()")
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")
