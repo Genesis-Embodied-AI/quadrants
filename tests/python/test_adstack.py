@@ -3798,3 +3798,68 @@ def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
             f"gated index {i} (past advisory_total_num_threads={advisory_cap}) gradient diverged: "
             f"got={got[i]} expected={expected[i]}"
         )
+
+
+@test_utils.test(arch=[qd.metal, qd.vulkan], require=qd.extension.adstack, ad_stack_size=0)
+def test_adstack_static_bound_expr_eager_task_last_observed_skipped():
+    # Pins the SPIR-V synchronize() row-counter readback gating: eager-path tasks (no captured `bound_expr`)
+    # never atomic-add into their counter slot, so the post-clear zero must NOT be cached into
+    # last_observed_rows_per_task_. Pre-fix the readback wrote 0 under the eager task's name, the next
+    # launch's heap-bind tertiary fallback then sized the float heap from `ceil(0 * 1.5) = 0` rows
+    # (floored to 1), and the eager codegen pushed `gl_GlobalInvocationID * stride_float` past the floored
+    # 1-row allocation. The never-shrink invariant on adstack_heap_buffer_float_ masks the OOB on
+    # monotonically-growing dispatches, but a small first launch followed by a large second launch
+    # surfaces it as wrong gradients on every thread past the first launch's dispatched count.
+    #
+    # Internal details: the kernel mixes (a) an EAGER for-i loop without a gate above its f32 adstack
+    # pushes - codegen emits no AdStackRowCounter bind for this task; (b) a LAZY for-i loop with a gate
+    # above the pushes - codegen binds the counter and the reducer dispatches. Launch 1 sizes both at
+    # n_e_small / n_g_small; sync() readback caches the eager task's slot[i] = 0 (post-clear, never
+    # atomic-added) under its name. Launch 2 dispatches the eager task at n_e_large; pre-fix the heap-bind
+    # tertiary fallback shrinks the request to 1 row, the never-shrink leaves the buffer at launch-1 size,
+    # and threads past launch-1 dispatch OOB-write past the heap end. arch=[qd.metal, qd.vulkan] because
+    # the heap-bind tertiary fallback wiring is on the SPIR-V GfxRuntime path; LLVM CPU/CUDA/AMDGPU never
+    # consult last_observed_rows_per_task_.
+    n_iter = 32
+    eps = 1e-9
+
+    @qd.kernel
+    def compute(x_e: qd.types.NDArray, x_g: qd.types.NDArray, sel: qd.types.NDArray, o: qd.types.NDArray) -> None:
+        for i in range(x_e.shape[0]):
+            v = x_e[i]
+            for _ in range(n_iter):
+                v = v * 1.05 + 0.05
+            o[0] += v
+        for i in range(x_g.shape[0]):
+            if sel[i] > eps:
+                v = x_g[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                o[0] += v
+
+    def one_pass(n_e, n_g):
+        x_e = qd.ndarray(qd.f32, shape=(n_e,), needs_grad=True)
+        x_g = qd.ndarray(qd.f32, shape=(n_g,), needs_grad=True)
+        sel = qd.ndarray(qd.f32, shape=(n_g,))
+        o = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+        x_e.from_numpy(np.full(n_e, np.float32(0.1), dtype=np.float32))
+        x_g.from_numpy(np.full(n_g, np.float32(0.1), dtype=np.float32))
+        sel.from_numpy(np.zeros(n_g, dtype=np.float32))
+        o.from_numpy(np.zeros((1,), dtype=np.float32))
+        o.grad.from_numpy(np.ones((1,), dtype=np.float32))
+        x_e.grad.from_numpy(np.zeros(n_e, dtype=np.float32))
+        x_g.grad.from_numpy(np.zeros(n_g, dtype=np.float32))
+        compute(x_e, x_g, sel, o)
+        compute.grad(x_e, x_g, sel, o)
+        qd.sync()
+        return x_e.grad.to_numpy()
+
+    # Launch 1 small so the buffer never_shrink baseline is small; launch 2 large to trip the OOB.
+    one_pass(n_e=4, n_g=4)
+    grad_large = one_pass(n_e=8192, n_g=4)
+
+    expected = np.float32(1.05**n_iter)
+    for idx in range(grad_large.size):
+        assert grad_large[idx] == pytest.approx(
+            expected, rel=1e-4, abs=1e-6
+        ), f"eager task gradient at i={idx} diverged on the second launch: got={grad_large[idx]} expected={expected}"
