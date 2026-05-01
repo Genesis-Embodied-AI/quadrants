@@ -397,6 +397,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       llvm_val[stmt] = emit_amdgpu_shuffle_down(
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type, offset);
+    } else if (stmt->func_name == "subgroupBallot") {
+      llvm_val[stmt] = call("amdgpu_ballot_i32", llvm_val[stmt->args[0]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
     } else {

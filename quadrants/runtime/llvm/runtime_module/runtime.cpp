@@ -1387,6 +1387,15 @@ i32 amdgpu_mbcnt_hi(i32 mask, i32 base) {
   return 0;
 }
 
+i32 amdgpu_ballot_w32(bool bit) {
+  __builtin_trap();
+  return 0;
+}
+
+i32 amdgpu_ballot_i32(i32 predicate) {
+  return amdgpu_ballot_w32((bool)predicate);
+}
+
 i32 amdgpu_lane_id() {
   return amdgpu_mbcnt_hi(-1, amdgpu_mbcnt_lo(-1, 0));
 }

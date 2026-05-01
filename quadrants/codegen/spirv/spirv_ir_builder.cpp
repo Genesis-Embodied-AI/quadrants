@@ -207,6 +207,9 @@ void IRBuilder::init_pre_defs() {
   t_v3_uint_.id = id_counter_++;
   ib_.begin(spv::OpTypeVector).add(t_v3_uint_).add_seq(t_uint32_, 3).commit(&global_);
 
+  t_v4_uint_.id = id_counter_++;
+  ib_.begin(spv::OpTypeVector).add(t_v4_uint_).add_seq(t_uint32_, 4).commit(&global_);
+
   t_v4_fp32_.id = id_counter_++;
   ib_.begin(spv::OpTypeVector).add(t_v4_fp32_).add_seq(t_fp32_, 4).commit(&global_);
 
