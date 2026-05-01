@@ -298,11 +298,14 @@ std::unordered_map<int, uint32_t> GfxRuntime::dispatch_adstack_bound_reducers(
       // across the low / high u32 pair so the shader can reassemble it without hardcoding a 64-bit OpConstant; f32 /
       // i32 keep the high half at zero.
       if (be.field_dtype_is_float && be.field_dtype_is_double) {
-        const uint64_t bits64 = *reinterpret_cast<const uint64_t *>(&be.literal_f64);
+        uint64_t bits64 = 0;
+        std::memcpy(&bits64, &be.literal_f64, sizeof(bits64));
         params.threshold_bits = static_cast<uint32_t>(bits64 & 0xFFFFFFFFu);
         params.threshold_bits_high = static_cast<uint32_t>(bits64 >> 32);
       } else if (be.field_dtype_is_float) {
-        params.threshold_bits = *reinterpret_cast<const uint32_t *>(&be.literal_f32);
+        uint32_t bits32 = 0;
+        std::memcpy(&bits32, &be.literal_f32, sizeof(bits32));
+        params.threshold_bits = bits32;
         params.threshold_bits_high = 0u;
       } else {
         params.threshold_bits = static_cast<uint32_t>(be.literal_i32);

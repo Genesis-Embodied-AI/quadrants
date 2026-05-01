@@ -687,33 +687,47 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           effective_rows = bound_count_it->second;
         } else if (attribs.ad_stack.bound_expr.has_value()) {
           // Reaching here means the bound reducer skipped this `bound_expr`-captured task and `per_task_bound_count`
-          // has no entry for slot `i`. The reducer's only skip paths in `dispatch_adstack_bound_reducers` are: PSB
-          // capability missing, Int64 capability missing, or every captured `bound_expr` got filtered out (only the
-          // f64-on-no-f64 arm currently does that, which itself requires a cap-missing device). Continuing past this
-          // point with a heuristic heap size (`ceil(last_observed * 1.5)`, possibly capped at `dispatched_threads` or
-          // at `lazy_claim_iter_count_upper_bound`) leaves a workload-uplift OOB hole: any launch whose actual
-          // LCA-block claim count exceeds the heuristic silently writes past the heap end, and the divergence overflow
-          // signal in `spirv_codegen.cpp`'s LCA-block claim emission cannot help (it reads the inert UINT32_MAX-default
-          // capacity slot, never trips). Hard-error here instead - every backend Quadrants targets advertises both PSB
-          // and Int64 today, so reaching this branch on a real device is either an internal-consistency bug in the
-          // reducer's filter or running on a hypothetical legacy device that this code does not support. The diagnostic
-          // prints which cap is missing so the failure mode is unambiguous.
+          // has no entry for slot `i`. The reducer's skip paths in `dispatch_adstack_bound_reducers` are: PSB
+          // capability missing, Int64 capability missing, or the per-task f64-on-no-f64 filter at
+          // `adstack_bound_reducer_launch.cpp:165-170` dropping an f64-captured gate on a device without
+          // `spirv_has_float64`. Continuing past this point with a heuristic heap size (`ceil(last_observed * 1.5)`,
+          // possibly capped at `dispatched_threads` or at `lazy_claim_iter_count_upper_bound`) leaves a
+          // workload-uplift OOB hole: any launch whose actual LCA-block claim count exceeds the heuristic silently
+          // writes past the heap end, and the divergence overflow signal in `spirv_codegen.cpp`'s LCA-block claim
+          // emission cannot help (it reads the inert UINT32_MAX-default capacity slot, never trips). Hard-error here
+          // instead - every backend Quadrants targets advertises PSB, Int64, and Float64 today, so reaching this
+          // branch on a real device is either an internal-consistency bug in the reducer's filter or running on a
+          // hypothetical legacy device that this code does not support. The diagnostic prints which cap is missing
+          // so the failure mode is unambiguous.
           QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer),
                          "adstack heap-bind tertiary fallback for task '{}' on a device without "
                          "spirv_has_physical_storage_buffer: the static-bound reducer skipped its dispatch and there "
                          "is no safe heap-sizing path on this device. Adstack-bearing reverse-mode kernels require "
-                         "both PSB and Int64; this device is not supported.",
+                         "PSB, Int64, and (for f64-captured gates) Float64; this device is not supported.",
                          attribs.name);
           QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_int64),
                          "adstack heap-bind tertiary fallback for task '{}' on a device without spirv_has_int64: "
                          "the static-bound reducer skipped its dispatch and there is no safe heap-sizing path on "
-                         "this device. Adstack-bearing reverse-mode kernels require both PSB and Int64; this device "
-                         "is not supported.",
+                         "this device. Adstack-bearing reverse-mode kernels require PSB, Int64, and (for "
+                         "f64-captured gates) Float64; this device is not supported.",
                          attribs.name);
+          // f64 gate captured but the device lacks `spirv_has_float64` - the per-task filter at
+          // `adstack_bound_reducer_launch.cpp:165-170` drops these so the reducer never publishes a count, and
+          // there is no safe heap-sizing path. Codegen at `spirv_ir_builder.cpp` hard-errors when emitting an
+          // f64 type without the cap, so a kernel reaching this point on a no-f64 device implies an
+          // internal-consistency bug in the codegen/cap negotiation; surface it cleanly.
+          if (attribs.ad_stack.bound_expr->field_dtype_is_float && attribs.ad_stack.bound_expr->field_dtype_is_double) {
+            QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_float64),
+                           "adstack heap-bind tertiary fallback for task '{}' with an f64-captured gate on a "
+                           "device without spirv_has_float64: the static-bound reducer filtered out the f64 arm "
+                           "and there is no safe heap-sizing path. Adstack-bearing reverse-mode kernels with f64 "
+                           "gates require Float64; this device is not supported.",
+                           attribs.name);
+          }
           QD_ERROR(
-              "adstack heap-bind tertiary fallback fired for task '{}' on a device that has both PSB and Int64. The "
-              "bound reducer should have matched this task; reaching here is an internal-consistency bug. File an "
-              "issue with `QD_DUMP_IR=1 QD_OFFLINE_CACHE=0 ...` output attached.",
+              "adstack heap-bind tertiary fallback fired for task '{}' on a device that has PSB, Int64, and Float64. "
+              "The bound reducer should have matched this task; reaching here is an internal-consistency bug. File "
+              "an issue with `QD_DUMP_IR=1 ...` output attached.",
               attribs.name);
         }
         // The shader uses u64 index arithmetic for `row_id * stride + offset + count` when the device has Int64;

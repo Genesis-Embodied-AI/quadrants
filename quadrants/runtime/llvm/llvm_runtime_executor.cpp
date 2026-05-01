@@ -489,11 +489,7 @@ void LlvmRuntimeExecutor::finalize() {
   // Release the host-owned adstack heap before the device teardown below so its `DeviceAllocationGuard` destructor
   // runs while the RHI device is still valid. The destructor drops the allocation back to the driver memory pool
   // (or to the host allocator on CPU); deferring past `llvm_device()->clear()` would leak it.
-  adstack_heap_alloc_.reset();
-  adstack_heap_size_ = 0;
   runtime_temporaries_cache_ = nullptr;
-  runtime_adstack_heap_buffer_field_ptr_ = nullptr;
-  runtime_adstack_heap_size_field_ptr_ = nullptr;
   runtime_adstack_heap_buffer_float_field_ptr_ = nullptr;
   runtime_adstack_heap_size_float_field_ptr_ = nullptr;
   runtime_adstack_heap_buffer_int_field_ptr_ = nullptr;

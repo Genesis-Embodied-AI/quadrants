@@ -289,7 +289,6 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       // `LinearizeStmt` is preserved (or a different bijection-witness is identified), this gap is documented
       // rather than gated. Working assumption: production kernels don't use `field[i % K]` as a gate.
       out.field_source_kind = StaticAdStackBoundExpr::FieldSourceKind::SNode;
-      out.snode_id = leaf->id;
       out.snode_root_id = desc_opt->root_id;
       out.snode_byte_base_offset = desc_opt->byte_base_offset;
       out.snode_byte_cell_stride = desc_opt->byte_cell_stride;

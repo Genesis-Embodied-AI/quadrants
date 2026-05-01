@@ -264,7 +264,7 @@ void TaskCodegen::visit(Block *stmt) {
 
     // Defense-in-depth bounds check. The host writes the per-task row capacity into
     // `BufferType::AdStackBoundRowCapacity[task_id]` before this dispatch starts: for tasks with a captured
-    // `bound_expr` captured `bound_expr`, the value is the exact reducer count; for every other task the value is
+    // `bound_expr`, the value is the exact reducer count; for every other task the value is
     // UINT32_MAX so this check is inert. When `claimed_row >= capacity` we OpAtomicUMax UINT32_MAX into the existing
     // AdStackOverflow buffer; the synchronize() readback recognises that sentinel and raises a clear actionable error
     // rather than letting the kernel silently OOB-write the heap. UINT32_MAX cannot collide with the existing per-stack

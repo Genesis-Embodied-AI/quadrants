@@ -68,14 +68,12 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // Per-task heap-backed adstack state. Replaces the function-scope `create_entry_block_alloca` that used to
   // bound the cumulative adstack size by the worker-thread stack limit (~512 KB on macOS secondary threads).
   // `ad_stack_per_thread_stride_` is the sum of `AdStackAllocaStmt::size_in_bytes()` (aligned up to 8) for every
-  // adstack in the current offloaded task - each thread owns exactly this many bytes inside
-  // `runtime->adstack_heap_buffer`. `ad_stack_offsets_` is indexed by each alloca's `stack_id` (assigned during the
-  // pre-scan in declaration order) and stores the offset within the per-thread slice (i.e. the sum of sizes of
-  // siblings visited earlier in the pre-scan). Both are populated by a pre-scan of the task body in
+  // adstack in the current offloaded task. `ad_stack_offsets_` is indexed by each alloca's `stack_id` (assigned
+  // during the pre-scan in declaration order) and stores the offset within the per-thread slice (i.e. the sum of
+  // sizes of siblings visited earlier in the pre-scan). Both are populated by a pre-scan of the task body in
   // `init_offloaded_task_function` before any codegen runs, so later sibling allocas do not shift an earlier
-  // alloca's offset out from under a cached SSA pointer. `ad_stack_heap_base_llvm_` caches the SSA value returned by
-  // `LLVMRuntime_get_adstack_heap_buffer(runtime)` at the top of the task body - emitted once and reused at every
-  // AdStack* visit to avoid redundant runtime calls. All three reset to empty / nullptr per task.
+  // alloca's offset out from under a cached SSA pointer. The split-heap helpers below cache the per-kind base SSA
+  // values; tasks address through `_float` / `_int` exclusively.
   std::size_t ad_stack_per_thread_stride_{0};
   // Per-thread strides per heap kind. Float allocas live on the lazy float heap (sized by the launcher to the count of
   // threads passing the captured `bound_expr` gate, when one is recognized); int allocas live on the eager int heap
@@ -88,7 +86,6 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // as class state so the scan (which runs before `current_task` is constructed) can still push entries in order.
   std::vector<AdStackAllocaInfo> ad_stack_allocas_info_;
   std::vector<SerializedSizeExpr> ad_stack_size_exprs_;
-  llvm::Value *ad_stack_heap_base_llvm_{nullptr};
   // Cached SSA bases for the split float / int heaps, loaded once at the top of the task body via
   // `LLVMRuntime_get_adstack_heap_buffer_float` / `_int` and reused at every per-alloca base computation.
   llvm::Value *ad_stack_heap_base_float_llvm_{nullptr};
@@ -105,14 +102,13 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   llvm::Value *ad_stack_offsets_ptr_llvm_{nullptr};
   llvm::Value *ad_stack_max_sizes_ptr_llvm_{nullptr};
   // Float-heap lazy claim state. `ad_stack_lca_block_float_ir_` is the IR-level Block at which the codegen emits the
-  // one-shot atomic-rmw row claim into `LLVMRuntime.adstack_row_counters[task_id]`; `ad_stack_lca_block_float_ llvm_`
-  // is the matching LLVM basic block (cached at the IR-level Block visit so the claim emit lands in the right LLVM-side
-  // block). `ad_stack_row_id_var_float_llvm_` is a Function-scope `alloca i32` initialised to UINT32_MAX at task entry;
-  // the claim site writes the atomic-add result, and every per-alloca base computation for a float-typed alloca reads
-  // it back. Threads that never reach the LCA never claim a row and never touch the float heap, which is exactly the
+  // one-shot atomic-rmw row claim into `LLVMRuntime.adstack_row_counters[task_id]`; the LLVM-side claim emit uses the
+  // current builder insertion point at the matching IR-block visit, so no separate LLVM-block cache is needed.
+  // `ad_stack_row_id_var_float_llvm_` is a Function-scope `alloca i32` initialised to UINT32_MAX at task entry; the
+  // claim site writes the atomic-add result, and every per-alloca base computation for a float-typed alloca reads it
+  // back. Threads that never reach the LCA never claim a row and never touch the float heap, which is exactly the
   // property the captured `bound_expr` reducer relies on to size the heap.
   Block *ad_stack_lca_block_float_ir_{nullptr};
-  llvm::BasicBlock *ad_stack_lca_block_float_llvm_{nullptr};
   llvm::Value *ad_stack_row_id_var_float_llvm_{nullptr};
   // Set of autodiff-bootstrap const-init pushes identified by the shared analysis: `push(stack, ConstStmt)` whose
   // parent block is the offload body and whose previous sibling is the matching alloca. The `visit(AdStackPushStmt)`
@@ -433,14 +429,6 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   // Stack statements
 
-  // Emits a single `LLVMRuntime_get_adstack_heap_buffer(runtime)` load into `entry_block` on first use for the current
-  // task, caching the returned base pointer in `ad_stack_heap_base_llvm_`. Subsequent AdStack* visit sites reuse the
-  // cached SSA value. Emitting into `entry_block` (rather than at the first visit site) guarantees the base pointer
-  // dominates every AdStack* in the task - two sibling adstacks in separate branches of an `if` statement would
-  // otherwise bind to the first branch's SSA value and fail `verifyFunction`. The heap itself is sized and grown
-  // host-side by `LlvmRuntimeExecutor::ensure_adstack_heap` before each dispatch; the kernel just reads the published
-  // pointer.
-  void ensure_ad_stack_heap_base_llvm();
   void ensure_ad_stack_metadata_llvm();
   llvm::Value *ensure_ad_stack_count_alloca_llvm(const AdStackAllocaStmt *stack);
   llvm::Value *emit_ad_stack_top_slot_ptr(const AdStackAllocaStmt *stack,

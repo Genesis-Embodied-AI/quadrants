@@ -72,12 +72,11 @@ struct StaticAdStackBoundExpr {
   // always matches the count of threads that reach the LCA.
   bool polarity{true};
 
-  // Field source. SNode-backed fields (`qd.field(...)` placed under `qd.root.dense(...)`) are identified by the leaf
-  // SNode's global id; ndarray-backed kernel arguments (`qd.ndarray(...)`) are identified by the `arg_id` path pointing
-  // into the kernel arg buffer.
+  // Field source. SNode-backed fields (`qd.field(...)` placed under `qd.root.dense(...)`) are identified at dispatch
+  // time by the descriptor triple below (`snode_root_id` + byte base / cell stride + iter count); ndarray-backed
+  // kernel arguments (`qd.ndarray(...)`) are identified by the `arg_id` path pointing into the kernel arg buffer.
   enum class FieldSourceKind : int32_t { SNode = 0, NdArray = 1 };
   FieldSourceKind field_source_kind{FieldSourceKind::SNode};
-  int snode_id{-1};
   std::vector<int> ndarray_arg_id;
   // Number of axes on the captured gating ndarray (1 for `qd.ndarray(qd.f32, shape=(N,))`, 2 for `shape=(R, C)`, ...).
   // Set at capture time from `ExternalPtrStmt::indices.size()` so the host launcher can walk the right number of
@@ -103,7 +102,6 @@ struct StaticAdStackBoundExpr {
             literal_i32,
             polarity,
             field_source_kind,
-            snode_id,
             ndarray_arg_id,
             ndarray_ndim,
             snode_root_id,

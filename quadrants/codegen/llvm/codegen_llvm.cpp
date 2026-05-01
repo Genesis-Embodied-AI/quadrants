@@ -1773,7 +1773,6 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   ad_stack_offsets_.clear();
   ad_stack_allocas_info_.clear();
   ad_stack_size_exprs_.clear();
-  ad_stack_heap_base_llvm_ = nullptr;
   ad_stack_heap_base_float_llvm_ = nullptr;
   ad_stack_heap_base_int_llvm_ = nullptr;
   ad_stack_stride_llvm_ = nullptr;
@@ -1782,7 +1781,6 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   ad_stack_offsets_ptr_llvm_ = nullptr;
   ad_stack_max_sizes_ptr_llvm_ = nullptr;
   ad_stack_count_alloca_llvm_.clear();
-  ad_stack_lca_block_float_llvm_ = nullptr;
   ad_stack_row_id_var_float_llvm_ = nullptr;
   ad_stack_bootstrap_pushes_.clear();
   ad_stack_lazy_float_allocas_.clear();
@@ -2311,37 +2309,12 @@ void TaskCodeGenLLVM::visit(InternalFuncStmt *stmt) {
   llvm_val[stmt] = call(stmt->func_name, std::move(args));
 }
 
-// Cache the adstack heap base pointer at `entry_block` the first time an AdStack* visit site fires. The buffer is
-// host-owned (`LlvmRuntimeExecutor::adstack_heap_alloc_`) and grown by the kernel launcher via
-// `ensure_adstack_heap(task.ad_stack.per_thread_stride * num_threads)` before each dispatch. The new pointer is
-// published into `runtime->adstack_heap_buffer` from the host via a one-shot `runtime_get_adstack_heap_field_ptrs`
-// query (cached on the first grow) plus `memcpy_host_to_device` on subsequent grows - no device-side setter is
-// involved. The device-side code path has no grow logic - it just reads the field via
-// `LLVMRuntime_get_adstack_heap_buffer`. Emitting the load into `entry_block` (not the first visit site) keeps the base
-// pointer dominating every AdStack* in the task; otherwise two sibling adstacks under different branches of an `if`
-// would trip `verifyFunction` with a non-dominating use.
-void TaskCodeGenLLVM::ensure_ad_stack_heap_base_llvm() {
-  if (ad_stack_heap_base_llvm_ != nullptr) {
-    return;
-  }
-  QD_ASSERT(ad_stack_per_thread_stride_ > 0);
-
-  llvm::IRBuilderBase::InsertPointGuard guard(*builder);
-  builder->SetInsertPoint(entry_block);
-
-  // The STRUCT_FIELD-generated `LLVMRuntime_get_adstack_heap_buffer` getter is the right callee here: it survives
-  // `eliminate_unused_functions` (prefix `LLVMRuntime_`) and is NOT marked as a CUDA `.entry` kernel, so the
-  // offloaded task function can call it as a regular device function.
-  ad_stack_heap_base_llvm_ = call("LLVMRuntime_get_adstack_heap_buffer", get_runtime());
-}
-
-// Split-heap counterpart of `ensure_ad_stack_heap_base_llvm`. Loads the per-kind heap base pointers from the runtime
-// fields the launcher publishes alongside the legacy combined buffer. Cached at `entry_block` so each downstream
-// `AdStack*` visit reuses a dominating SSA value and `verifyFunction` stays happy regardless of which branch first
-// triggered the load. Float allocas address through `_float`; int / u1 allocas through `_int`. Tasks where the analysis
-// did not capture a `bound_expr` continue to hit the combined-heap path above; tasks with a captured gate route here so
-// the launcher can size the float heap from the reducer's gate-passing thread count instead of the dispatched-threads
-// worst case.
+// Loads the per-kind split-heap base pointers from the runtime fields the launcher publishes (`_float` for f32 / f64
+// allocas, `_int` for i32 / u1 allocas). Cached at `entry_block` so each downstream `AdStack*` visit reuses a
+// dominating SSA value and `verifyFunction` stays happy regardless of which branch first triggered the load. Tasks
+// with a captured `bound_expr` get the float heap sized to the reducer's gate-passing thread count; tasks without a
+// captured gate fall back to the dispatched-threads worst case for the float heap. The int heap is always
+// `num_threads * stride_int`.
 void TaskCodeGenLLVM::ensure_ad_stack_heap_base_split_llvm() {
   if (ad_stack_heap_base_float_llvm_ != nullptr) {
     return;

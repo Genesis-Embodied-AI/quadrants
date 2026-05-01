@@ -85,16 +85,6 @@ class LlvmRuntimeExecutor {
     return use_device_memory_pool_;
   }
 
-  // Host-managed per-runtime adstack heap. Each kernel launcher calls this before dispatching a task whose
-  // `OffloadedTask::ad_stack.per_thread_stride > 0`; `needed_bytes` is `per_thread_stride * num_threads` computed
-  // per the resolution rule in `AdStackSizingInfo`. Growth is amortized via `max(needed, 2 * current)` doubling,
-  // old slabs are returned to the driver memory pool (no leak), and the new pointer/size are published into the
-  // runtime struct at `runtime->{adstack_heap_buffer, adstack_heap_size}` without a per-grow kernel launch: a
-  // one-shot `runtime_get_adstack_heap_field_ptrs` kernel caches the device addresses of the two fields on the
-  // first grow, and subsequent publishes are `memcpy_host_to_device` (CUDA / AMDGPU) or plain pointer stores
-  // (CPU) against those cached addresses.
-  void ensure_adstack_heap(std::size_t needed_bytes);
-
   // Publish the per-task adstack metadata into `LLVMRuntime.adstack_{per_thread_stride,offsets,max_sizes}` and size
   // the heap for the launch. Returns the `per_thread_stride * num_threads` byte size the heap was grown to (zero if
   // the task has no adstacks). When `ad_stack.size_exprs` is populated (cache miss after the `determine_ad_stack_size`
@@ -159,8 +149,11 @@ class LlvmRuntimeExecutor {
                                            void *device_runtime_context_ptr);
 
   // Grow `runtime->adstack_heap_buffer_float` to at least `needed_bytes` and publish the new pointer / size into the
-  // runtime struct via the cached field addresses. Mirrors `ensure_adstack_heap` for the legacy combined heap; same
-  // amortised-doubling growth and same release-deferred-until-next-launch semantics.
+  // runtime struct via the cached field addresses. Amortised-doubling growth + release-deferred-until-next-launch
+  // semantics: the previous `DeviceAllocationGuard` is dropped only after the new pointer has been published, so any
+  // in-flight kernel still holding the old base on AMDGPU (where `dealloc_memory` does not synchronise) keeps reading
+  // valid storage; the cross-launch invariant comes from `amdgpu::KernelLauncher::launch_llvm_kernel`'s tail
+  // `hipFree(context_pointer)` synchronising with all kernels launched during that call.
   void ensure_adstack_heap_float(std::size_t needed_bytes);
 
   // Mirror of `ensure_adstack_heap_float` for the int / u1 heap. Sized at `num_threads * stride_int` worst case (every
@@ -255,20 +248,6 @@ class LlvmRuntimeExecutor {
   DeviceAllocationUnique preallocated_runtime_memory_allocs_ = nullptr;
   std::unordered_map<DeviceAllocationId, DeviceAllocation> allocated_runtime_memory_allocs_;
 
-  // Per-runtime adstack heap slab, owned here. `ensure_adstack_heap` grows via the driver allocator and
-  // publishes the new pointer/size into the LLVMRuntime struct; replacing `adstack_heap_alloc_` releases the
-  // previous allocation via `DeviceAllocationGuard`, which calls `llvm_device()->dealloc_memory`. Safety of
-  // releasing the old slab while a prior-launch kernel may still hold its base pointer depends on the backend:
-  // on CPU the release is a host `std::free` (trivially safe); on CUDA `cuMemFree_v2` synchronizes with
-  // pending device work before returning; on AMDGPU `dealloc_memory` routes through
-  // `DeviceMemoryPool::release(release_raw=false)` -> `CachingAllocator::release`, which pools the allocation
-  // *without* calling `hipFree` and *without* synchronizing - so on AMDGPU the cross-launch invariant instead
-  // comes from `amdgpu::KernelLauncher::launch_llvm_kernel` ending with a synchronous `hipFree(context_pointer)`
-  // before the next launch reaches `ensure_adstack_heap`. See the detailed block comment in
-  // `LlvmRuntimeExecutor::ensure_adstack_heap` for the full derivation; do not remove the launcher-tail
-  // `hipFree(context_pointer)` without simultaneously fixing the AMDGPU release path.
-  DeviceAllocationUnique adstack_heap_alloc_ = nullptr;
-  std::size_t adstack_heap_size_{0};
   // Split-layout float heap: dedicated slab holding only the f32 adstack rows for tasks that captured a `bound_expr`.
   // Sized by the launcher at `min(num_threads, max_bound_capacity) * max_stride_float` instead of the
   // dispatched-threads worst case, so workloads where the gating predicate matches few threads (sparse-grid MPM, masked
@@ -289,16 +268,11 @@ class LlvmRuntimeExecutor {
   // Cached device pointer to `runtime->temporaries`, populated lazily by `get_runtime_temporaries_device_ptr()`.
   void *runtime_temporaries_cache_{nullptr};
 
-  // Cached device pointers to `runtime->adstack_heap_buffer` and `runtime->adstack_heap_size`, populated by a
-  // single one-shot `runtime_get_adstack_heap_field_ptrs` kernel the first time `ensure_adstack_heap` needs to
-  // publish a new buffer. Subsequent publishes are plain host->device memcpys onto these addresses, so no kernel
-  // launch is required per grow.
-  void *runtime_adstack_heap_buffer_field_ptr_{nullptr};
-  void *runtime_adstack_heap_size_field_ptr_{nullptr};
-  // Cached field-of-LLVMRuntime addresses for the split float / int heap layout. Resolved alongside the legacy combined
-  // `adstack_heap_buffer` / `_size` fields by `runtime_get_adstack_heap_field_ptrs` (which now returns the
-  // float-buffer-ptr, float-size, int-buffer-ptr, int-size in fixed slot order). Used by `ensure_adstack_heap` to
-  // publish the two grown heap allocations independently.
+  // Cached field-of-LLVMRuntime addresses for the split float / int heap layout. Resolved by a single one-shot
+  // `runtime_get_adstack_split_heap_field_ptrs` kernel the first time `ensure_adstack_heap_float` /
+  // `ensure_adstack_heap_int` needs to publish a new buffer (returns float-buffer-ptr, float-size, int-buffer-ptr,
+  // int-size in fixed slot order). Subsequent publishes are plain host->device memcpys onto these addresses, so no
+  // kernel launch is required per grow.
   void *runtime_adstack_heap_buffer_float_field_ptr_{nullptr};
   void *runtime_adstack_heap_size_float_field_ptr_{nullptr};
   void *runtime_adstack_heap_buffer_int_field_ptr_{nullptr};
