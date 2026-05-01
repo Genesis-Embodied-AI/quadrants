@@ -85,8 +85,8 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         const auto &t = offloaded_tasks[j];
         executor->publish_adstack_metadata(t.ad_stack, resolve_num_threads(t, executor), &ctx, context_pointer);
         AMDGPUContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
-        amdgpu_module->launch(t.name, t.grid_dim, t.block_dim, t.dynamic_shared_array_bytes,
-                              {(void *)&context_pointer}, {arg_size});
+        amdgpu_module->launch(t.name, t.grid_dim, t.block_dim, t.dynamic_shared_array_bytes, {(void *)&context_pointer},
+                              {arg_size});
       }
 
       for (auto &[sid, s] : stream_by_id) {
