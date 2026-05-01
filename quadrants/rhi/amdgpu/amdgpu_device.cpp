@@ -125,7 +125,7 @@ void AmdgpuDevice::dealloc_memory(DeviceAllocation handle) {
   }
   QD_ASSERT(!info.is_imported);
   if (info.use_memory_pool) {
-    AMDGPUDriver::get_instance().mem_free_async(info.ptr, nullptr);
+    AMDGPUDriver::get_instance().mem_free(info.ptr);
   } else if (info.use_cached) {
     DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/)
         .release(info.size, (uint64_t *)info.ptr, false);
