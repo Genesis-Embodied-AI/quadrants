@@ -1,8 +1,8 @@
 // Implementation of the static-IR-bound sparse-adstack-heap analysis. Walks the OffloadedStmt body once to compute
-// per-thread strides, the LCA of float push/load-top sites, the autodiff-bootstrap push set, and (if a recognized
-// gate sits on the LCA-to-root chain) a captured `StaticAdStackBoundExpr`. The analysis is shared between SPIR-V
-// and LLVM codegens so the gate-recognition grammar stays single-source; backend-specific SNode descriptor lookup
-// is parameterized via the resolver callback in the header.
+// per-thread strides, the LCA of float push/load-top sites, the autodiff-bootstrap push set, and (if a recognized gate
+// sits on the LCA-to-root chain) a captured `StaticAdStackBoundExpr`. The analysis is shared between SPIR-V and LLVM
+// codegens so the gate-recognition grammar stays single-source; backend-specific SNode descriptor lookup is
+// parameterized via the resolver callback in the header.
 #include "quadrants/transforms/static_adstack_analysis.h"
 
 #include <functional>
@@ -15,13 +15,12 @@ namespace quadrants::lang {
 
 namespace {
 
-// True iff the push is an autodiff-bootstrap shape: parent block belongs to an `OffloadedStmt`, the pushed value
-// is a `ConstStmt`, and the matching `AdStackAllocaStmt` lies just before the push - either as the immediately
-// previous sibling (SPIR-V IR shape, the const literal is folded into the push's `v` field as a `ConstStmt` that
-// is itself the previous sibling), or with the const's `ConstStmt` sitting between them (LLVM IR shape, the
-// const is materialised as its own statement between the alloca and the push). The autodiff transform emits these
-// pushes immediately after the alloca so the matching reverse pop has a value to consume on every dispatched
-// thread regardless of any later gating.
+// True iff the push is an autodiff-bootstrap shape: parent block belongs to an `OffloadedStmt`, the pushed value is a
+// `ConstStmt`, and the matching `AdStackAllocaStmt` lies just before the push - either as the immediately previous
+// sibling (SPIR-V IR shape, the const literal is folded into the push's `v` field as a `ConstStmt` that is itself the
+// previous sibling), or with the const's `ConstStmt` sitting between them (LLVM IR shape, the const is materialised as
+// its own statement between the alloca and the push). The autodiff transform emits these pushes immediately after the
+// alloca so the matching reverse pop has a value to consume on every dispatched thread regardless of any later gating.
 bool is_autodiff_bootstrap_push(AdStackPushStmt *p) {
   if (p->v == nullptr || !p->v->is<ConstStmt>()) {
     return false;
@@ -30,12 +29,12 @@ bool is_autodiff_bootstrap_push(AdStackPushStmt *p) {
   if (parent == nullptr) {
     return false;
   }
-  // Accept a parent block whose owning statement is either the `OffloadedStmt` directly (the SPIR-V codegen IR
-  // shape) or a `RangeForStmt` / `StructForStmt` / `MeshForStmt` that is itself a direct child of an
-  // `OffloadedStmt` (the LLVM codegen IR shape, where the offload's body contains a single for-stmt that wraps
-  // the user's loop body). In both shapes the push runs unconditionally on every dispatched thread - the inner
-  // for body iterates once per logical loop iteration, but each iteration's bootstrap push is balanced by its
-  // matching pop, so the "always executes" property `is_autodiff_bootstrap_push` is checking still holds.
+  // Accept a parent block whose owning statement is either the `OffloadedStmt` directly (the SPIR-V codegen IR shape)
+  // or a `RangeForStmt` / `StructForStmt` / `MeshForStmt` that is itself a direct child of an `OffloadedStmt` (the LLVM
+  // codegen IR shape, where the offload's body contains a single for-stmt that wraps the user's loop body). In both
+  // shapes the push runs unconditionally on every dispatched thread - the inner for body iterates once per logical loop
+  // iteration, but each iteration's bootstrap push is balanced by its matching pop, so the "always executes" property
+  // `is_autodiff_bootstrap_push` is checking still holds.
   Stmt *parent_stmt = parent->parent_stmt();
   if (parent_stmt == nullptr) {
     return false;
@@ -69,12 +68,12 @@ bool is_autodiff_bootstrap_push(AdStackPushStmt *p) {
   if (prev == target) {
     return true;
   }
-  // Allow a single intermediary `ConstStmt` between the alloca and the push - this is the LLVM IR shape, where
-  // the const value the push consumes is materialised as its own statement (`ConstStmt` -> `AdStackPushStmt(v =
-  // const)`) rather than being inlined as the push's `v` operand from the alloca's previous sibling. The const
-  // sitting between them is by construction the same `ConstStmt` `p->v` points to (no other statement is emitted
-  // between an autodiff-emitted alloca and its bootstrap push in either pipeline), so we identity-check it to
-  // keep the predicate as tight as the SPIR-V-shape variant above.
+  // Allow a single intermediary `ConstStmt` between the alloca and the push - this is the LLVM IR shape, where the
+  // const value the push consumes is materialised as its own statement (`ConstStmt` -> `AdStackPushStmt(v = const)`)
+  // rather than being inlined as the push's `v` operand from the alloca's previous sibling. The const sitting between
+  // them is by construction the same `ConstStmt` `p->v` points to (no other statement is emitted between an
+  // autodiff-emitted alloca and its bootstrap push in either pipeline), so we identity-check it to keep the predicate
+  // as tight as the SPIR-V-shape variant above.
   if (prev == p->v && idx >= 2 && parent->statements[idx - 2].get() == target) {
     return true;
   }
@@ -82,8 +81,8 @@ bool is_autodiff_bootstrap_push(AdStackPushStmt *p) {
 }
 
 // The float-stack predicate folded into the LCA computation: push/load-top/load-top-adj sites where the underlying
-// alloca's `ret_type` is real (f32 or f64). Pop sites are deliberately NOT included - they only mutate `count_var`
-// and impose no dominance requirement on the row claim.
+// alloca's `ret_type` is real (f32 or f64). Pop sites are deliberately NOT included - they only mutate `count_var` and
+// impose no dominance requirement on the row claim.
 bool stack_is_float(Stmt *push_or_load) {
   AdStackAllocaStmt *alloca = nullptr;
   if (auto *p = push_or_load->cast<AdStackPushStmt>()) {
@@ -143,17 +142,17 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
     return result;
   }
 
-  // First scan: collect alloca strides, classify each push as bootstrap or not, gather f32 push/load-top blocks for
-  // the LCA reduce.
+  // First scan: collect alloca strides, classify each push as bootstrap or not, gather f32 push/load-top blocks for the
+  // LCA reduce.
   std::vector<Block *> push_side_blocks;
   walk_ir(task_ir->body.get(), [&](Stmt *s) {
     if (auto *alloca = s->cast<AdStackAllocaStmt>()) {
       if (alloca->ret_type == PrimitiveType::f32 || alloca->ret_type == PrimitiveType::f64) {
         // Both f32 and f64 reverse-mode adstacks share the float heap on LLVM. The analyser tracks stride in
-        // entry-count units (each entry = primal + adjoint = 2 elements) so the heap footprint scales naturally
-        // with `entry_size_bytes` at sizing time. f64 carries 4 bytes/element more than f32; the launcher's
-        // `align_up_8(sizeof(int64_t) + entry_size_bytes * max_size)` step in `publish_adstack_metadata` picks
-        // up the larger element size automatically.
+        // entry-count units (each entry = primal + adjoint = 2 elements) so the heap footprint scales naturally with
+        // `entry_size_bytes` at sizing time. f64 carries 4 bytes/element more than f32; the launcher's
+        // `align_up_8(sizeof(int64_t) + entry_size_bytes * max_size)` step in `publish_adstack_metadata` picks up the
+        // larger element size automatically.
         result.per_thread_stride_float += 2u * uint32_t(alloca->max_size);
         result.num_ad_stacks++;
       } else if (alloca->ret_type == PrimitiveType::i32 || alloca->ret_type == PrimitiveType::u1) {
@@ -177,8 +176,8 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
     }
   });
 
-  // Pairwise LCA reduce. Empty `push_side_blocks` means the task has no f32 adstack push sites and the LCA stays
-  // null (the float heap is unbound and no row claim is emitted by the codegen). A single block is its own LCA.
+  // Pairwise LCA reduce. Empty `push_side_blocks` means the task has no f32 adstack push sites and the LCA stays null
+  // (the float heap is unbound and no row claim is emitted by the codegen). A single block is its own LCA.
   if (!push_side_blocks.empty()) {
     auto lca_of = [](Block *a, Block *b) -> Block * {
       if (a == b) {
@@ -193,9 +192,9 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
           return cur;
         }
       }
-      // Both blocks live under the same task-body root, so their ancestor chains converge at that root at the
-      // latest. Falling through to nullptr would degrade to the eager (root-block) claim path which is still
-      // correct, just non-optimal.
+      // Both blocks live under the same task-body root, so their ancestor chains converge at that root at the latest.
+      // Falling through to nullptr would degrade to the eager (root-block) claim path which is still correct, just
+      // non-optimal.
       return nullptr;
     };
     Block *lca = push_side_blocks[0];
@@ -209,9 +208,9 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
     return result;
   }
 
-  // Second scan: per-stack pushed values, used by the gate matcher to resolve autodiff-spilled gate predicates of
-  // shape `IfStmt(cond = AdStackLoadTopStmt(stack=S))` (the gate predicate's bool is spilled onto a u1 adstack in
-  // the forward direction and replayed via load_top in the reverse direction).
+  // Second scan: per-stack pushed values, used by the gate matcher to resolve autodiff-spilled gate predicates of shape
+  // `IfStmt(cond = AdStackLoadTopStmt(stack=S))` (the gate predicate's bool is spilled onto a u1 adstack in the forward
+  // direction and replayed via load_top in the reverse direction).
   std::unordered_map<AdStackAllocaStmt *, std::vector<Stmt *>> per_stack_pushed_values;
   walk_ir(task_ir->body.get(), [&](Stmt *s) {
     if (auto *push = s->cast<AdStackPushStmt>()) {
@@ -228,11 +227,10 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       if (auto *base_arg = ext->base_ptr->cast<ArgLoadStmt>()) {
         // Validate the gate's index expression: every axis must be a `LoopIndexStmt`. Anything more complex
         // (`selector[i % 5]`, `selector[42]`, `selector[2 * i]`, `selector[i + 1]`, `selector[other_field[i]]`) would
-        // have the reducer walk `selector[0..length)` and count gate-passing cells on a different index basis than
-        // the main pass's LCA-block atomic-rmw, causing the reducer count to diverge from the actual claim count and
-        // either undersize the heap (silent gradient corruption on LLVM, hard overflow on SPIR-V) or oversize it.
-        // Plain `selector[i]` (one axis = one `LoopIndexStmt`) is the only shape the reducer's flat-walk semantics
-        // matches.
+        // have the reducer walk `selector[0..length)` and count gate-passing cells on a different index basis than the
+        // main pass's LCA-block atomic-rmw, causing the reducer count to diverge from the actual claim count and either
+        // undersize the heap (silent gradient corruption on LLVM, hard overflow on SPIR-V) or oversize it. Plain
+        // `selector[i]` (one axis = one `LoopIndexStmt`) is the only shape the reducer's flat-walk semantics matches.
         for (Stmt *idx : ext->indices) {
           if (idx == nullptr || !idx->is<LoopIndexStmt>()) {
             return false;
@@ -240,12 +238,12 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
         }
         out.field_source_kind = StaticAdStackBoundExpr::FieldSourceKind::NdArray;
         out.ndarray_arg_id = base_arg->arg_id;
-        // Capture the gating ndarray's ndim so the host launcher can walk shape[0..ndim) at dispatch time
-        // and product them into the reducer's flat-element walk bound. Without this the launcher would have
-        // to fall back to `ctx.array_runtime_sizes[arg_id]`, which carries different units depending on
-        // whether the caller used `set_arg_external_array_with_shape` (bytes) or `set_args_ndarray` (element
-        // count) - the latter would undercount by `sizeof(elem)` for `qd.ndarray` arguments and silently
-        // corrupt gradients on every kernel that goes through the gating path with a `qd.ndarray` selector.
+        // Capture the gating ndarray's ndim so the host launcher can walk shape[0..ndim) at dispatch time and product
+        // them into the reducer's flat-element walk bound. Without this the launcher would have to fall back to
+        // `ctx.array_runtime_sizes[arg_id]`, which carries different units depending on whether the caller used
+        // `set_arg_external_array_with_shape` (bytes) or `set_args_ndarray` (element count) - the latter would
+        // undercount by `sizeof(elem)` for `qd.ndarray` arguments and silently corrupt gradients on every kernel that
+        // goes through the gating path with a `qd.ndarray` selector.
         out.ndarray_ndim = static_cast<int>(ext->indices.size());
         return true;
       }
@@ -301,8 +299,8 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
           continue;
         }
         if (real_pushed_value != nullptr) {
-          // More than one non-const push - the gate's logical value depends on which path executed, and the
-          // reducer cannot mirror that without re-emitting the full forward IR. Fall through to worst-case sizing.
+          // More than one non-const push - the gate's logical value depends on which path executed, and the reducer
+          // cannot mirror that without re-emitting the full forward IR. Fall through to worst-case sizing.
           return false;
         }
         real_pushed_value = pushed;
@@ -323,8 +321,8 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       return false;
     }
     // Accept either `field cmp literal` (the typical `if field[i] > literal`) or the symmetric `literal cmp field`
-    // (e.g. `if literal < field[i]`). The symmetric form gets the comparison op flipped so the runtime reducer
-    // always evaluates `field cmp literal` against the captured `literal_*`.
+    // (e.g. `if literal < field[i]`). The symmetric form gets the comparison op flipped so the runtime reducer always
+    // evaluates `field cmp literal` against the captured `literal_*`.
     Stmt *lhs = bin->lhs;
     Stmt *rhs = bin->rhs;
     auto *lhs_load = lhs->cast<GlobalLoadStmt>();
@@ -391,9 +389,9 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
   };
 
   // Walk the chain from LCA up to the task body root, collecting IfStmt gates. RangeForStmt / StructForStmt /
-  // MeshForStmt / WhileStmt / OffloadedStmt parents are skipped (iterators sweep threads rather than gating
-  // them; the offload boundary is the kernel entry). Anything else aborts the chain - unfamiliar control-flow
-  // structures might gate threads in ways the reducer cannot mirror.
+  // MeshForStmt / WhileStmt / OffloadedStmt parents are skipped (iterators sweep threads rather than gating them; the
+  // offload boundary is the kernel entry). Anything else aborts the chain - unfamiliar control-flow structures might
+  // gate threads in ways the reducer cannot mirror.
   int gate_count = 0;
   bool chain_ok = true;
   StaticAdStackBoundExpr captured;
@@ -415,14 +413,20 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
         chain_ok = false;
         break;
       }
-      // Find the gate index's owning loop. The gate condition has the shape `field[i] cmp lit` where `i` is a
-      // `LoopIndexStmt` (validated by `match_field_source` and the SNode arm). Pull the first index off the
-      // matched source so the chain check below can verify the gate is sweeping the FIRST iter-loop above
-      // the LCA, not a nested-deeper one.
+      // Find the gate index's owning loop. The gate condition has the shape `field[i] cmp lit` (or the symmetric form
+      // `lit cmp field[i]`) where `i` is a `LoopIndexStmt` (validated by `match_field_source` and the SNode arm). Pull
+      // the first index off the matched source so the chain check below can verify the gate is sweeping the FIRST
+      // iter-loop above the LCA, not a nested-deeper one.
       if (auto *bin = if_stmt->cond->cast<BinaryOpStmt>()) {
-        Stmt *load = bin->lhs;
-        Stmt *cmp_other = bin->rhs;
-        if (auto *gl = load->cast<GlobalLoadStmt>()) {
+        // Probe both operands: the matcher above accepts both `load cmp const` and `const cmp load`, so the load can
+        // sit on either side. Picking only `bin->lhs` would bypass the validation on the symmetric form
+        // (`gate_index_owning_loop` stays null, the inequality check below short-circuits, and a nested-loop gate slips
+        // through).
+        GlobalLoadStmt *gl = bin->lhs->cast<GlobalLoadStmt>();
+        if (gl == nullptr) {
+          gl = bin->rhs->cast<GlobalLoadStmt>();
+        }
+        if (gl != nullptr) {
           if (auto *ext = gl->src->cast<ExternalPtrStmt>()) {
             if (!ext->indices.empty()) {
               if (auto *li = ext->indices[0]->cast<LoopIndexStmt>()) {
@@ -430,14 +434,34 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
               }
             }
           } else if (auto *getch = gl->src->cast<GetChStmt>()) {
-            (void)getch;
-            // SNode-backed gates use `for i in field` where `i` is a `LoopIndexStmt` of the enclosing
-            // for-loop. The struct-for / range-for above the LCA owns it; the validation below treats the
-            // SNode arm by inferring `gate_index_owning_loop` from the gate's enclosing for-loop, which
-            // equals `first_iter_loop_above_lca` by construction.
+            // SNode-backed gates use `for i in field` where `i` is a `LoopIndexStmt` of the enclosing for-loop, and the
+            // access lowers to a `GetChStmt` chained off the loop index. Walk up to the original `LoopIndexStmt`
+            // operand so the validation below has the same gate-index-owning-loop signal as the ndarray arm. The
+            // `getch->input_snode` field would name the parent SNode but does not carry the loop binding; the load
+            // chain's input statement does.
+            for (Stmt *cur = getch->input_ptr; cur != nullptr;) {
+              if (auto *li = cur->cast<LoopIndexStmt>()) {
+                gate_index_owning_loop = li->loop;
+                break;
+              }
+              if (auto *child = cur->cast<GetChStmt>()) {
+                cur = child->input_ptr;
+                continue;
+              }
+              if (auto *lookup = cur->cast<SNodeLookupStmt>()) {
+                cur = lookup->input_index;
+                continue;
+              }
+              if (auto *lin = cur->cast<LinearizeStmt>()) {
+                if (!lin->inputs.empty()) {
+                  cur = lin->inputs[0];
+                  continue;
+                }
+              }
+              break;
+            }
           }
         }
-        (void)cmp_other;
       }
     } else if (parent->is<RangeForStmt>() || parent->is<StructForStmt>() || parent->is<MeshForStmt>() ||
                parent->is<WhileStmt>() || parent->is<OffloadedStmt>()) {
@@ -450,17 +474,26 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       break;
     }
   }
-  // Defensive validation: when a gate is captured, the gate-index `LoopIndexStmt`'s owning loop must be the
-  // FIRST iter-loop encountered when walking from the LCA toward the root. Nested-loop patterns of the form
-  // `for t in range(M): for i in range(N): if active[i] > 0:` would otherwise have the reducer count
-  // gate-passing cells in `active` once (= K), but the LCA-block atomic-rmw fires `M * K` times across the
-  // outer-iter dispatched threads; rows past K alias onto row K-1 and reverse-mode gradients silently
-  // diverge. Today the float LCA gets pulled OUT of the gate by `i32` / `u1` pushes that the autodiff
-  // transform emits at the inner-for body level (loop-counter recovery, branch-flag spill), so the gate
-  // never reaches the capture path on Python kernel patterns; this validation is defense-in-depth for any
-  // future refactor that pulls the LCA back inside the gate, plus it documents the required invariant.
-  // Reject and fall through to the dispatched-threads worst case rather than silently mis-sizing.
-  if (chain_ok && gate_count == 1 && captured.field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::NdArray) {
+  // Defensive validation: when a gate is captured, the gate-index `LoopIndexStmt`'s owning loop must be the FIRST
+  // iter-loop encountered when walking from the LCA toward the root. Nested-loop patterns of the form `for t in
+  // range(M): for i in range(N): if active[i] > 0:` would otherwise have the reducer count gate-passing cells in
+  // `active` once (= K), but the LCA-block atomic-rmw fires `M * K` times across the outer-iter dispatched threads;
+  // rows past K alias onto row K-1 and reverse-mode gradients silently diverge. Reject and fall through to the
+  // dispatched-threads worst case rather than silently mis-sizing.
+  //
+  // Reachability: on every Python kernel pattern observed today, this branch is unreachable - the autodiff transform
+  // emits the forward-pass float pushes inside the forward IfStmt's `true_statements` block and the reverse-pass float
+  // load_top / load_top_adj / pop sites inside a SEPARATE reverse IfStmt's `true_statements` block, so the LCA reduce
+  // collapses up to the offload body (the common ancestor of two distinct `if_true` blocks) for any kernel where the
+  // gate sits inside an inner for-loop that is NOT the offload itself. With the LCA at the offload body, the chain walk
+  // above terminates at the OffloadedStmt without ever incrementing `gate_count`, so `bound_expr` is not captured and
+  // this validation does not run. Single-loop kernels where the offload IS the gating for-loop combine forward and
+  // reverse under a single shared IfStmt instead, so the LCA stays inside the gate and the capture succeeds; in that
+  // shape `gate_index_owning_loop` equals the offload's RangeForStmt which is also `first_iter_loop_above_lca`, so the
+  // inequality below is false and the validation again does not reject. The branch is therefore live only on a
+  // hypothetical autodiff refactor that combines fwd / rev under one IfStmt for nested-loop kernels too, plus it
+  // documents the required invariant for that future shape.
+  if (chain_ok && gate_count == 1) {
     if (gate_index_owning_loop != nullptr && first_iter_loop_above_lca != nullptr &&
         gate_index_owning_loop != first_iter_loop_above_lca) {
       chain_ok = false;
