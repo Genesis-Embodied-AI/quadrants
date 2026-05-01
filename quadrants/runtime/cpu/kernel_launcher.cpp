@@ -11,39 +11,38 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             const std::vector<std::size_t> &num_threads_per_task) {
   auto *executor = get_runtime_executor();
   ctx.get_context().cpu_assert_failed = 0;
-  // Allocate / reset the per-kernel lazy-claim arrays once before the first task. The codegen-emitted LCA-block
-  // row claim atomic-rmws into `runtime->adstack_row_counters[task_codegen_id]`; clearing the slots ensures each
-  // task counts its own LCA-block-reaching threads from zero, and writing UINT32_MAX into
+  // Allocate / reset the per-kernel lazy-claim arrays once before the first task. The codegen-emitted LCA-block row
+  // claim atomic-rmws into `runtime->adstack_row_counters[task_codegen_id]`; clearing the slots ensures each task
+  // counts its own LCA-block-reaching threads from zero, and writing UINT32_MAX into
   // `bound_row_capacities[task_codegen_id]` keeps the codegen-emitted bounds clamp inert until the per-task host
   // reducer below tightens specific slots.
   executor->publish_adstack_lazy_claim_buffers(task_funcs.size());
   for (size_t i = 0; i < task_funcs.size(); ++i) {
     executor->publish_adstack_metadata(ad_stacks[i], num_threads_per_task[i], &ctx);
-    // Host-side reducer for tasks with a captured ndarray-backed `bound_expr`: walks the gating ndarray, counts
-    // the threads that pass the predicate, writes the count into `runtime->adstack_bound_row_capacities[i]`.
-    // The codegen-emitted bounds clamp at the float LCA-block claim site reads this slot back; with the count
-    // known, an over-claim (claimed_row >= count) is clamped at `count - 1` before any descendant push / load-
-    // top site uses the row id. Tasks without a captured gate keep the UINT32_MAX default and the clamp stays
-    // inert. SNode-backed gates are not captured on the LLVM analysis path so they also keep the default.
+    // Host-side reducer for tasks with a captured ndarray-backed `bound_expr`: walks the gating ndarray, counts the
+    // threads that pass the predicate, writes the count into `runtime->adstack_bound_row_capacities[i]`. The
+    // codegen-emitted bounds clamp at the float LCA-block claim site reads this slot back; with the count known, an
+    // over-claim (claimed_row >= count) is clamped at `count - 1` before any descendant push / load-top site uses the
+    // row id. Tasks without a captured gate keep the UINT32_MAX default and the clamp stays inert. SNode-backed gates
+    // are not captured on the LLVM analysis path so they also keep the default.
     //
-    // Length = total flat element count of the gating ndarray, derived from `ctx.array_runtime_sizes`
-    // (`bytes / sizeof(elem)`). On CPU `ad_stack.static_num_threads` is the worker-pool size (typically the
-    // number of CPU cores) and is unrelated to the gating field's length, so it cannot be the reducer's walk
-    // bound: a gate over an N-element ndarray launched on an 8-thread pool would otherwise have the reducer
-    // count gate-passing items in only `[0, 8)` and clamp every later iteration's claimed row into a single
-    // alias slot. Mirrors the SPIR-V launcher's `resolve_length` over `range_for_attribs->end_shape_product`.
+    // Length = total flat element count of the gating ndarray, derived from `ctx.array_runtime_sizes` (`bytes /
+    // sizeof(elem)`). On CPU `ad_stack.static_num_threads` is the worker-pool size (typically the number of CPU cores)
+    // and is unrelated to the gating field's length, so it cannot be the reducer's walk bound: a gate over an N-element
+    // ndarray launched on an 8-thread pool would otherwise have the reducer count gate-passing items in only `[0, 8)`
+    // and clamp every later iteration's claimed row into a single alias slot. Mirrors the SPIR-V launcher's
+    // `resolve_length` over `range_for_attribs->end_shape_product`.
     std::size_t bound_count_length = num_threads_per_task[i];
     if (ad_stacks[i].bound_expr.has_value()) {
       using FSK = StaticAdStackBoundExpr::FieldSourceKind;
       const auto &be = *ad_stacks[i].bound_expr;
       if (be.field_source_kind == FSK::NdArray && !be.ndarray_arg_id.empty() && be.ndarray_ndim > 0 &&
           ctx.args_type != nullptr) {
-        // Length = product of `ctx.args_type->get_element_offset(ndarray_arg_id + SHAPE_POS_IN_NDARRAY +
-        // axis)`-derived shape entries. `ctx.array_runtime_sizes` is unsuitable because the dispatch entry
-        // point determines its units: `set_arg_external_array_with_shape` stores the byte size (numpy /
-        // torch path), `set_args_ndarray` stores the element count (qd.ndarray path). Walking the shape
-        // entries through `args_type` is unit-stable and matches the SPIR-V launcher's `resolve_length`
-        // over `range_for_attribs->end_shape_product`.
+        // Length = product of `ctx.args_type->get_element_offset(ndarray_arg_id + SHAPE_POS_IN_NDARRAY + axis)`-derived
+        // shape entries. `ctx.array_runtime_sizes` is unsuitable because the dispatch entry point determines its units:
+        // `set_arg_external_array_with_shape` stores the byte size (numpy / torch path), `set_args_ndarray` stores the
+        // element count (qd.ndarray path). Walking the shape entries through `args_type` is unit-stable and matches the
+        // SPIR-V launcher's `resolve_length` over `range_for_attribs->end_shape_product`.
         int64_t flat_len = 1;
         for (int axis = 0; axis < be.ndarray_ndim; ++axis) {
           std::vector<int> indices = be.ndarray_arg_id;
@@ -54,18 +53,18 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         bound_count_length = static_cast<std::size_t>(std::max<int64_t>(0, flat_len));
       } else if (be.field_source_kind == FSK::SNode) {
         // SNode-backed gates carry the dense field's iteration count straight in the captured descriptor
-        // (`snode_iter_count = leaf_desc.iter_count`, populated by the codegen-time SNode descriptor
-        // resolver). Use it as the reducer walk bound so the host evaluator sees the same per-iteration
-        // count the device-side reducer sees on CUDA / AMDGPU.
+        // (`snode_iter_count = leaf_desc.iter_count`, populated by the codegen-time SNode descriptor resolver). Use it
+        // as the reducer walk bound so the host evaluator sees the same per-iteration count the device-side reducer
+        // sees on CUDA / AMDGPU.
         bound_count_length = static_cast<std::size_t>(be.snode_iter_count);
       }
     }
     executor->publish_per_task_bound_count_cpu(i, ad_stacks[i], bound_count_length, &ctx);
-    // Size the float heap from the reducer's gate-passing count now that the capacity slot is populated. Float
-    // allocas (in tasks with a captured `bound_expr`) address through `heap_float + row_id_var * stride_float +
-    // float_offset`; sizing the heap at `count * stride_float` instead of the dispatched-threads worst case is
-    // where the actual memory savings on sparse-grid workloads come from. Tasks without a captured gate keep
-    // num_threads worst case via the UINT32_MAX fallback inside the helper.
+    // Size the float heap from the reducer's gate-passing count now that the capacity slot is populated. Float allocas
+    // (in tasks with a captured `bound_expr`) address through `heap_float + row_id_var * stride_float + float_offset`;
+    // sizing the heap at `count * stride_float` instead of the dispatched-threads worst case is where the actual memory
+    // savings on sparse-grid workloads come from. Tasks without a captured gate keep num_threads worst case via the
+    // UINT32_MAX fallback inside the helper.
     executor->ensure_per_task_float_heap_post_reducer(i, ad_stacks[i], num_threads_per_task[i]);
     task_funcs[i](&ctx.get_context());
     if (ctx.get_context().cpu_assert_failed)

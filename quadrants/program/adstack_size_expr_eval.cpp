@@ -772,8 +772,8 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizin
   for (std::size_t i = 0; i < n_stacks; ++i) {
     stack_headers[i].entry_size_bytes = static_cast<uint32_t>(ad_stack.allocas[i].entry_size_bytes);
     stack_headers[i].max_size_compile_time = static_cast<uint32_t>(ad_stack.allocas[i].max_size_compile_time);
-    // Float allocas land on the lazy float heap, int allocas on the eager int heap. The encoding (`0` = float,
-    // `1` = int) matches the SPIR-V `AdStackHeapKind` so the offline-cache bytecode survives a backend swap.
+    // Float allocas land on the lazy float heap, int allocas on the eager int heap. The encoding (`0` = float, `1` =
+    // int) matches the SPIR-V `AdStackHeapKind` so the offline-cache bytecode survives a backend swap.
     stack_headers[i].heap_kind = (ad_stack.allocas[i].heap_kind == AdStackAllocaInfo::HeapKind::Float) ? 0u : 1u;
     if (i < ad_stack.size_exprs.size())
       exprs[i] = &ad_stack.size_exprs[i];

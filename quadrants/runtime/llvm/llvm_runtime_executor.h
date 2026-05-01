@@ -129,10 +129,10 @@ class LlvmRuntimeExecutor {
   // `adstack_bound_row_capacities` via the cached field addresses on first call (and after every grow).
   void publish_adstack_lazy_claim_buffers(std::size_t num_tasks);
 
-  // Per-task host-side evaluation of the captured `StaticAdStackBoundExpr` (ndarray-backed; SNode-backed gates are
-  // not captured on the LLVM analysis path so this never sees them). Walks `[0, length)` reading the gating ndarray
-  // on the host (pointer is in `ctx->array_ptrs[arg_id, DATA_PTR_POS_IN_NDARRAY]` populated by the launcher),
-  // evaluates the captured comparison + polarity, returns the count of gate-passing threads. Writes that count into
+  // Per-task host-side evaluation of the captured `StaticAdStackBoundExpr` (ndarray-backed; SNode-backed gates are not
+  // captured on the LLVM analysis path so this never sees them). Walks `[0, length)` reading the gating ndarray on the
+  // host (pointer is in `ctx->array_ptrs[arg_id, DATA_PTR_POS_IN_NDARRAY]` populated by the launcher), evaluates the
+  // captured comparison + polarity, returns the count of gate-passing threads. Writes that count into
   // `runtime->adstack_bound_row_capacities[task_index]` so the codegen-emitted bounds clamp at the float LCA-block
   // claim site activates for legitimate over-claim, and so a future split-heap allocator can size the float heap at
   // `count * stride_float` instead of the dispatched-threads worst case. Returns `UINT32_MAX` (meaning "no capacity
@@ -145,12 +145,12 @@ class LlvmRuntimeExecutor {
 
   // Per-arch device-side reducer counterpart for CUDA / AMDGPU. Packs the captured `StaticAdStackBoundExpr` into a
   // small device-resident params buffer (h2d on-demand, reused across tasks via a grow-on-demand allocation) and
-  // invokes `runtime_eval_static_bound_count` via the runtime JIT module. The device function walks the gating
-  // ndarray on-device (single-threaded; the runtime function dispatches as a 1x1x1 kernel launch), counts
-  // gate-passing threads, and writes the count into `runtime->adstack_bound_row_capacities[task_index]`. The
-  // codegen-emitted clamp at the float LCA-block claim site reads that slot back. No-op on backends without a
-  // working ndarray-source reducer (today: only CUDA / AMDGPU - CPU goes through `publish_per_task_bound_count_cpu`,
-  // and SNode-backed gates are not captured on the LLVM analysis path so they never reach here either).
+  // invokes `runtime_eval_static_bound_count` via the runtime JIT module. The device function walks the gating ndarray
+  // on-device (single-threaded; the runtime function dispatches as a 1x1x1 kernel launch), counts gate-passing threads,
+  // and writes the count into `runtime->adstack_bound_row_capacities[task_index]`. The codegen-emitted clamp at the
+  // float LCA-block claim site reads that slot back. No-op on backends without a working ndarray-source reducer (today:
+  // only CUDA / AMDGPU - CPU goes through `publish_per_task_bound_count_cpu`, and SNode-backed gates are not captured
+  // on the LLVM analysis path so they never reach here either).
   void publish_per_task_bound_count_device(std::size_t task_index,
                                            const AdStackSizingInfo &ad_stack,
                                            std::size_t length,
@@ -162,27 +162,26 @@ class LlvmRuntimeExecutor {
   // amortised-doubling growth and same release-deferred-until-next-launch semantics.
   void ensure_adstack_heap_float(std::size_t needed_bytes);
 
-  // Mirror of `ensure_adstack_heap_float` for the int / u1 heap. Sized at `num_threads * stride_int` worst case
-  // (every dispatched thread's int allocas - loop counters, branch flags - fit in the eager `linear_tid *
-  // stride_int + offset` layout). Independent grow-on-demand from the float heap.
+  // Mirror of `ensure_adstack_heap_float` for the int / u1 heap. Sized at `num_threads * stride_int` worst case (every
+  // dispatched thread's int allocas - loop counters, branch flags - fit in the eager `linear_tid * stride_int + offset`
+  // layout). Independent grow-on-demand from the float heap.
   void ensure_adstack_heap_int(std::size_t needed_bytes);
 
   // Read back the per-task gate-passing count the reducer wrote into `runtime->adstack_bound_row_capacities[
   // task_index]` and size `runtime->adstack_heap_buffer_float` to `count * per_thread_stride_float`. On CPU the
-  // capacity slot is host memory so the readback is a direct load; on CUDA / AMDGPU it's a small DtoH per task.
-  // Falls back to `num_threads * per_thread_stride_float` (the codegen worst case) when the slot still holds
-  // UINT32_MAX (no reducer ran for this task) or the task did not capture a `bound_expr`. Called by every kernel
-  // launcher (CPU / CUDA / AMDGPU) per task between `publish_per_task_bound_count_{cpu,device}` and the main task
-  // dispatch so the float heap is sized exactly to the reducer's count instead of the dispatched-threads worst
-  // case.
+  // capacity slot is host memory so the readback is a direct load; on CUDA / AMDGPU it's a small DtoH per task. Falls
+  // back to `num_threads * per_thread_stride_float` (the codegen worst case) when the slot still holds UINT32_MAX (no
+  // reducer ran for this task) or the task did not capture a `bound_expr`. Called by every kernel launcher (CPU / CUDA
+  // / AMDGPU) per task between `publish_per_task_bound_count_{cpu,device}` and the main task dispatch so the float heap
+  // is sized exactly to the reducer's count instead of the dispatched-threads worst case.
   void ensure_per_task_float_heap_post_reducer(std::size_t task_index,
                                                const AdStackSizingInfo &ad_stack,
                                                std::size_t num_threads);
 
   // Return (and lazily cache) the device pointer to `runtime->temporaries`, the global temporary buffer backing
-  // `GlobalTemporaryStmt` loads and stores. GPU kernel launchers use this to read back dynamic range_for bounds
-  // (begin / end i32 values at known byte offsets) via a host-side DtoH memcpy when sizing the adstack heap.
-  // Cached because `runtime->temporaries` is assigned once during `runtime_initialize` and never rebound.
+  // `GlobalTemporaryStmt` loads and stores. GPU kernel launchers use this to read back dynamic range_for bounds (begin
+  // / end i32 values at known byte offsets) via a host-side DtoH memcpy when sizing the adstack heap. Cached because
+  // `runtime->temporaries` is assigned once during `runtime_initialize` and never rebound.
   void *get_runtime_temporaries_device_ptr();
 
  private:
@@ -269,20 +268,20 @@ class LlvmRuntimeExecutor {
   // `hipFree(context_pointer)` without simultaneously fixing the AMDGPU release path.
   DeviceAllocationUnique adstack_heap_alloc_ = nullptr;
   std::size_t adstack_heap_size_{0};
-  // Split-layout float heap: dedicated slab holding only the f32 adstack rows for tasks that captured a
-  // `bound_expr`. Sized by the launcher at `min(num_threads, max_bound_capacity) * max_stride_float` instead of
-  // the dispatched-threads worst case, so workloads where the gating predicate matches few threads (sparse-grid
-  // MPM, masked update kernels) shrink the float storage proportionally. Independent grow-on-demand from the
-  // combined heap; the codegen-emitted `heap_float + row_id_var * stride_float + offset` formula reads from
-  // `runtime->adstack_heap_buffer_float` (and `_size_float`) which the host writes via the cached field
-  // addresses below.
+  // Split-layout float heap: dedicated slab holding only the f32 adstack rows for tasks that captured a `bound_expr`.
+  // Sized by the launcher at `min(num_threads, max_bound_capacity) * max_stride_float` instead of the
+  // dispatched-threads worst case, so workloads where the gating predicate matches few threads (sparse-grid MPM, masked
+  // update kernels) shrink the float storage proportionally. Independent grow-on-demand from the combined heap; the
+  // codegen-emitted `heap_float + row_id_var * stride_float + offset` formula reads from
+  // `runtime->adstack_heap_buffer_float` (and `_size_float`) which the host writes via the cached field addresses
+  // below.
   DeviceAllocationUnique adstack_heap_alloc_float_ = nullptr;
   std::size_t adstack_heap_size_float_{0};
 
-  // Mirror of `adstack_heap_alloc_float_` for the int / u1 heap. Sized at `num_threads * stride_int` worst case.
-  // All int allocas address through `runtime->adstack_heap_buffer_int + linear_tid * stride_int + int_offset`
-  // regardless of whether the task captured a `bound_expr`; the int allocas are autodiff-emitted unconditionally
-  // at the offload root (loop-index recovery, branch flags) so the lazy float row claim does not apply to them.
+  // Mirror of `adstack_heap_alloc_float_` for the int / u1 heap. Sized at `num_threads * stride_int` worst case. All
+  // int allocas address through `runtime->adstack_heap_buffer_int + linear_tid * stride_int + int_offset` regardless of
+  // whether the task captured a `bound_expr`; the int allocas are autodiff-emitted unconditionally at the offload root
+  // (loop-index recovery, branch flags) so the lazy float row claim does not apply to them.
   DeviceAllocationUnique adstack_heap_alloc_int_ = nullptr;
   std::size_t adstack_heap_size_int_{0};
 
@@ -295,8 +294,8 @@ class LlvmRuntimeExecutor {
   // launch is required per grow.
   void *runtime_adstack_heap_buffer_field_ptr_{nullptr};
   void *runtime_adstack_heap_size_field_ptr_{nullptr};
-  // Cached field-of-LLVMRuntime addresses for the split float / int heap layout. Resolved alongside the legacy
-  // combined `adstack_heap_buffer` / `_size` fields by `runtime_get_adstack_heap_field_ptrs` (which now returns the
+  // Cached field-of-LLVMRuntime addresses for the split float / int heap layout. Resolved alongside the legacy combined
+  // `adstack_heap_buffer` / `_size` fields by `runtime_get_adstack_heap_field_ptrs` (which now returns the
   // float-buffer-ptr, float-size, int-buffer-ptr, int-size in fixed slot order). Used by `ensure_adstack_heap` to
   // publish the two grown heap allocations independently.
   void *runtime_adstack_heap_buffer_float_field_ptr_{nullptr};
@@ -310,8 +309,8 @@ class LlvmRuntimeExecutor {
   void *runtime_adstack_stride_field_ptr_{nullptr};
   // Cached field-of-LLVMRuntime addresses for the split per-thread strides (`adstack_per_thread_stride_float` /
   // `_int`). Returned by `runtime_get_adstack_metadata_field_ptrs` in slots 0 and 1; the legacy combined
-  // `adstack_per_thread_stride` field is no longer present (the combined value is computed host-side as
-  // `float + int` and written into the legacy cache for code paths that have not yet migrated to the split layout).
+  // `adstack_per_thread_stride` field is no longer present (the combined value is computed host-side as `float + int`
+  // and written into the legacy cache for code paths that have not yet migrated to the split layout).
   void *runtime_adstack_stride_float_field_ptr_{nullptr};
   void *runtime_adstack_stride_int_field_ptr_{nullptr};
   void *runtime_adstack_offsets_field_ptr_{nullptr};
@@ -323,13 +322,13 @@ class LlvmRuntimeExecutor {
   void *runtime_adstack_row_counters_field_ptr_{nullptr};
   void *runtime_adstack_bound_row_capacities_field_ptr_{nullptr};
 
-  // Host-owned storage for the per-kernel lazy-claim arrays:
-  // `adstack_row_counters_alloc_`: u32[num_tasks] atomic counter the codegen-emitted LCA-block row claim atomic-rmws
+  // Host-owned storage for the per-kernel lazy-claim arrays: `adstack_row_counters_alloc_`: u32[num_tasks] atomic
+  // counter the codegen-emitted LCA-block row claim atomic-rmws
   //                                into; cleared host-side at the start of each kernel-launch so each task's claims
   //                                accumulate in its own slot from zero.
   // `adstack_bound_row_capacities_alloc_`: u32[num_tasks] capacity each task's claim is clamped against; the host
-  //                                        writes UINT32_MAX into every slot by default so the clamp is inert when
-  //                                        no reducer count is published.
+  //                                        writes UINT32_MAX into every slot by default so the clamp is inert when no
+  //                                        reducer count is published.
   // Both buffers are sized at `max(num_tasks_observed)` and grown on demand; the pointers we publish into the runtime
   // stay stable across launches unless we actually grow.
   DeviceAllocationUnique adstack_row_counters_alloc_ = nullptr;
@@ -342,18 +341,18 @@ class LlvmRuntimeExecutor {
   DeviceAllocationUnique adstack_max_sizes_alloc_ = nullptr;
   std::size_t adstack_metadata_capacity_{0};
 
-  // Per-launch scratch buffer used on GPU arches (CUDA / AMDGPU) to ship the `LlvmAdStackBoundReducerDeviceParams`
-  // blob into for `runtime_eval_static_bound_count`. Allocated on demand on the first bound_expr task in a kernel,
-  // reused across tasks within the same kernel and across kernels for the runtime's lifetime, grown
-  // amortised-doubling when a future struct expansion would need more bytes (the struct is currently a fixed
-  // 32-byte POD). Unused on CPU, which evaluates the predicate host-side via `publish_per_task_bound_count_cpu`.
+  // Per-launch scratch buffer used on GPU arches (CUDA / AMDGPU) to ship the `LlvmAdStackBoundReducerDeviceParams` blob
+  // into for `runtime_eval_static_bound_count`. Allocated on demand on the first bound_expr task in a kernel, reused
+  // across tasks within the same kernel and across kernels for the runtime's lifetime, grown amortised-doubling when a
+  // future struct expansion would need more bytes (the struct is currently a fixed 32-byte POD). Unused on CPU, which
+  // evaluates the predicate host-side via `publish_per_task_bound_count_cpu`.
   DeviceAllocationUnique adstack_bound_reducer_params_alloc_ = nullptr;
   std::size_t adstack_bound_reducer_params_capacity_{0};
 
-  // Per-launch scratch buffer used on GPU arches (CUDA / AMDGPU) to ship the encoded adstack SizeExpr bytecode
-  // consumed by `runtime_eval_adstack_size_expr`. Amortised-doubling growth, reused across launches. Unused on
-  // CPU where the host evaluator runs directly without a device round-trip. See
-  // `encode_adstack_size_expr_device_bytecode` for the byte layout.
+  // Per-launch scratch buffer used on GPU arches (CUDA / AMDGPU) to ship the encoded adstack SizeExpr bytecode consumed
+  // by `runtime_eval_adstack_size_expr`. Amortised-doubling growth, reused across launches. Unused on CPU where the
+  // host evaluator runs directly without a device round-trip. See `encode_adstack_size_expr_device_bytecode` for the
+  // byte layout.
   DeviceAllocationUnique adstack_sizer_bytecode_alloc_ = nullptr;
   std::size_t adstack_sizer_bytecode_capacity_{0};
 

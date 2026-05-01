@@ -182,10 +182,10 @@ class HostDeviceContextBlitter {
             readback_host_ptrs.push_back(host_ctx_.array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}]);
             readback_sizes.push_back(ext_arr_size.at(arg_id));
             require_sync = true;
-            // Grad readback is gated on the grad-slot WRITE bit from `grad_arr_access`, mirroring the
-            // host_to_device path's READ gate. A forward-only kernel with `arr_access.WRITE=1` but no grad
-            // touch would otherwise blit an uninitialised device grad buffer back over the user's host
-            // `.grad`, silently corrupting previously-initialised gradients.
+            // Grad readback is gated on the grad-slot WRITE bit from `grad_arr_access`, mirroring the host_to_device
+            // path's READ gate. A forward-only kernel with `arr_access.WRITE=1` but no grad touch would otherwise blit
+            // an uninitialised device grad buffer back over the user's host `.grad`, silently corrupting initialised
+            // gradients.
             auto grad_access_it =
                 std::find_if(ctx_attribs_->grad_arr_access.begin(), ctx_attribs_->grad_arr_access.end(),
                              [indices](const auto &pair) -> bool { return pair.first == indices; });

@@ -1862,7 +1862,7 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   // inside the COMBINED per-thread slice (legacy single-heap layout, addressed by `linear_tid * combined_stride +
   // offset`); the kind classification (`HeapKind::Float` / `HeapKind::Int`) is recorded into `info.heap_kind` so the
   // host launcher knows which kind each alloca belongs to, but the codegen-side addressing stays single-heap for now.
-  // Splitting the layout into separate float / int heaps with `row_id_var * stride_float + float_offset` is a follow-up
+  // Splitting the layout into separate float / int heaps with `row_id_var * stride_float + float_offset` is future work
   // that requires updating `visit(AdStackAllocaStmt)` to route base computation per kind. The shared analysis output
   // (LCA, bootstrap pushes, captured `bound_expr`) propagates to `current_task->ad_stack` so the host launcher can
   // dispatch the per-arch reducer; the heap addressing change comes after.
@@ -2430,7 +2430,7 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
   // so the clamp is inert. The divergence-overflow signal that the SPIR-V codegen emits via OpAtomicUMax is not yet
   // wired on the LLVM side - it requires a `__atomic_or_n` against `runtime->adstack_overflow_flag` and a matching
   // runtime-side getter; in its absence we still get the in-bounds clamp, so the kernel cannot silently corrupt the
-  // heap end. Surface the divergence as a separate follow-up.
+  // heap end. Surfacing the divergence is future work.
   llvm::Value *capacities_base = call("LLVMRuntime_get_adstack_bound_row_capacities", get_runtime());
   llvm::Value *capacity_slot_ptr = builder->CreateGEP(i32ty, capacities_base, task_id_i64);
   llvm::Value *capacity = builder->CreateLoad(i32ty, capacity_slot_ptr);
@@ -2494,7 +2494,7 @@ llvm::Value *TaskCodeGenLLVM::emit_ad_stack_single_slot_ptr(const AdStackAllocaS
 // The current implementation routes the lazy path through the existing combined heap (`adstack_heap_buffer` /
 // `adstack_per_thread_stride` / `adstack_offsets`) rather than the split float heap because the runtime still allocates
 // a single combined slab. The savings from sizing the float slab at the reducer's count of gate-passing threads
-// (instead of the dispatched-threads worst case) require a follow-up that allocates a dedicated
+// (instead of the dispatched-threads worst case) require future work that allocates a dedicated
 // `adstack_heap_buffer_float` and grows it on observed claim count; the codegen split routing through
 // `ad_stack_heap_base_float_llvm_` / `ad_stack_stride_float_llvm_` already exists in the ensure-helpers and flips on
 // once the runtime side ships.
