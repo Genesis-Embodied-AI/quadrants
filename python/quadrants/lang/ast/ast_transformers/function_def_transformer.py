@@ -495,9 +495,7 @@ class FunctionDefTransformer:
                 FunctionDefTransformer._transform_as_func(ctx, node, args)
 
         if ctx.is_kernel:
-            FunctionDefTransformer._validate_stream_parallel_exclusivity(
-                node.body, ctx.global_vars
-            )
+            FunctionDefTransformer._validate_stream_parallel_exclusivity(node.body, ctx.global_vars)
 
         with ctx.variable_scope_guard():
             build_stmts(ctx, node.body)
@@ -529,20 +527,11 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _is_docstring(stmt: ast.stmt, index: int) -> bool:
-        return (
-            index == 0
-            and isinstance(stmt, ast.Expr)
-            and isinstance(stmt.value, (ast.Constant, ast.Str))
-        )
+        return index == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, (ast.Constant, ast.Str))
 
     @staticmethod
-    def _validate_stream_parallel_exclusivity(
-        body: list[ast.stmt], global_vars: dict[str, Any]
-    ) -> None:
-        if not any(
-            FunctionDefTransformer._is_stream_parallel_with(s, global_vars)
-            for s in body
-        ):
+    def _validate_stream_parallel_exclusivity(body: list[ast.stmt], global_vars: dict[str, Any]) -> None:
+        if not any(FunctionDefTransformer._is_stream_parallel_with(s, global_vars) for s in body):
             return
         for i, stmt in enumerate(body):
             if FunctionDefTransformer._is_docstring(stmt, i):
@@ -551,9 +540,7 @@ class FunctionDefTransformer:
                 stmt_desc = f"{type(stmt).__name__}"
                 if isinstance(stmt, ast.With) and stmt.items:
                     ctx_expr = stmt.items[0].context_expr
-                    if isinstance(ctx_expr, ast.Call) and isinstance(
-                        ctx_expr.func, ast.Attribute
-                    ):
+                    if isinstance(ctx_expr, ast.Call) and isinstance(ctx_expr.func, ast.Attribute):
                         stmt_desc += f"(with {ast.dump(ctx_expr.func)})"
                 raise QuadrantsSyntaxError(
                     "When using qd.stream_parallel(), all top-level statements "
