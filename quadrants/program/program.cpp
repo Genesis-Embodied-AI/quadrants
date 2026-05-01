@@ -498,7 +498,7 @@ uint64 Program::stream_create() {
 #ifdef QD_WITH_CUDA
   if (compile_config().arch == Arch::cuda) {
     void *stream = nullptr;
-    CUDADriver::get_instance().stream_create(&stream, 0 /*flags*/);
+    CUDADriver::get_instance().stream_create(&stream, 0x1 /*CU_STREAM_NON_BLOCKING*/);
     return reinterpret_cast<uint64>(stream);
   }
 #endif
