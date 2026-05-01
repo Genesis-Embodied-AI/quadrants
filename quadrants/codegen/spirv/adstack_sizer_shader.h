@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/rhi/arch.h"
 #include "quadrants/rhi/public_device.h"
 
@@ -38,14 +39,32 @@ namespace quadrants::lang::spirv {
 std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilityConfig *caps);
 
 // Maximum number of `SerializedSizeExpr` nodes a single adstack's tree may contribute to the device bytecode.
-// The sizer shader's `values_arr` private i64 scratch is sized to this, indexed by the per-stack local offset.
-// Exceeding it on the shader would silently truncate; the host-side encoder must hard-error before emitting
-// bytecode past this cap so the failure is attributable to a specific alloca at compile time.
-constexpr int kAdStackSizerMaxNodesPerStack = 4096;
+// The sizer shader's `values_arr` slice of the i64 scratch SSBO is sized to this, indexed by the per-stack
+// local offset. Exceeding it on the shader would silently truncate; the host-side encoder must hard-error
+// before emitting bytecode past this cap so the failure is attributable to a specific alloca at compile time.
+// The cap maps directly into device-memory bytes via `kAdStackSizerScratchI64Elems` (allocated once per
+// `GfxRuntime` as a `StorageBuffer` SSBO bound to the sizer dispatch on slot 3): at 65536 i64 entries the
+// per-runtime allocation is 512 KiB plus the i32 buffer, negligible against any modern GPU's VRAM budget.
+// The previous 4096-cap was chosen to fit the cumulative per-thread private memory budget Blackwell-class
+// NVIDIA Vulkan drivers enforce on Function-storage `OpVariable`s; with the scratch state in an SSBO that
+// constraint is gone and the cap exists only to keep the encoder's hard-error attached to a fixed compile-
+// time ceiling so an unexpectedly deep symbolic tree surfaces as an attributable diagnostic at encode time
+// rather than as an out-of-bounds shader access at dispatch time.
+constexpr int kAdStackSizerMaxNodesPerStack = 65536;
 
 // Maximum `MaxOverRange` nesting depth the sizer shader can hold on its per-invocation pending-frame stack
 // (`pending_*_arr`). The host-side encoder hard-errors when a tree's MOR nesting exceeds this so the shader's
 // fixed-size access-chain stays in bounds without a runtime guard. 16 covers every observed real kernel.
 constexpr int kAdStackSizerMaxPendingFrames = 16;
+
+// Per-invocation interpreter state element counts in each scratch SSBO. Layout in the i64 buffer is
+// `[values_arr | scope_arr | pending_cur_i | pending_end | pending_max_accum]`; layout in the i32 buffer is
+// `[pending_mor_idx | pending_body_start | pending_body_end | pending_var_id | pending_saved_max_k]`. The
+// host launcher uses these to size the two scratch buffers it binds on every sizer dispatch (binding 3 = i64
+// scratch, binding 4 = i32 scratch). Mirrors the in-shader `kI64Base*` / `kI32Base*` constants in
+// `adstack_sizer_shader.cpp`.
+constexpr int kAdStackSizerScratchI64Elems =
+    kAdStackSizerMaxNodesPerStack + kAdStackSizeExprDeviceMaxBoundVars + 3 * kAdStackSizerMaxPendingFrames;
+constexpr int kAdStackSizerScratchI32Elems = 5 * kAdStackSizerMaxPendingFrames;
 
 }  // namespace quadrants::lang::spirv

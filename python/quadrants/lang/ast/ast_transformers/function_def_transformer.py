@@ -27,6 +27,7 @@ from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
 from quadrants.lang.ast.symbol_resolver import ASTResolver
+from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import (
     QuadrantsSyntaxError,
 )
@@ -34,7 +35,7 @@ from quadrants.lang.matrix import MatrixType
 from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import StructType
 from quadrants.lang.util import to_quadrants_type
-from quadrants.types import annotations, ndarray_type, primitive_types
+from quadrants.types import annotations, buffer_view_type, ndarray_type, primitive_types
 
 
 class FunctionDefTransformer:
@@ -87,6 +88,19 @@ class FunctionDefTransformer:
                     full_name,
                 ),
             )
+        if isinstance(annotation, buffer_view_type.BufferViewType):
+            assert this_arg_features is not None
+            raw_element_type, ndim, needs_grad, boundary = this_arg_features
+            arr = kernel_arguments.decl_ndarray_arg(
+                to_quadrants_type(raw_element_type),
+                ndim,
+                full_name + "_buf",
+                needs_grad,
+                BoundaryMode(boundary),
+            )
+            offset = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_offset")
+            size = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_size")
+            return True, BufferView(arr, offset, size)
         if isinstance(annotation, ndarray_type.NdarrayType):
             assert this_arg_features is not None
             raw_element_type: DataTypeCxx
@@ -328,6 +342,15 @@ class FunctionDefTransformer:
             ):
                 raise QuadrantsSyntaxError(f"Argument {argument_name} of type {argument_type} is not recognized.")
             argument_type.check_matched(data.get_type(), argument_name)
+            ctx.create_variable(argument_name, data)
+            return None
+
+        # BufferView arguments are passed by reference.
+        # Dtype validation happens at the kernel boundary (_template_mapper_hotpath._extract_arg),
+        # not here — data.arr is an Expr node during func compilation, not a real Ndarray.
+        if isinstance(argument_type, buffer_view_type.BufferViewType):
+            if not isinstance(data, BufferView):
+                raise QuadrantsSyntaxError(f"Argument {argument_name} expects a BufferView, got {type(data).__name__}")
             ctx.create_variable(argument_name, data)
             return None
 

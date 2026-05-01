@@ -206,6 +206,7 @@ void AMDGPUContext::launch(void *func,
 }
 
 AMDGPUContext::~AMDGPUContext() {
+  // Currently unreachable: singleton is heap-allocated via `new` in get_instance() and never deleted.
   for (auto *s : stream_pool_) {
     driver_.stream_destroy(s);
   }

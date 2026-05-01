@@ -29,8 +29,11 @@ class Stream:
         prog.stream_synchronize(self._handle)
 
     def destroy(self):
-        """Explicitly destroy the stream. Safe to call multiple times."""
-        if self._handle != 0:
+        """Explicitly destroy the stream. Safe to call multiple times.
+
+        No-op for streams wrapping external handles (created via Stream(ptr) without a prog_ref).
+        """
+        if self._handle != 0 and self._prog_ref is not None:
             prog = impl.get_runtime().prog
             prog.stream_destroy(self._handle)
             self._handle = 0
@@ -85,8 +88,11 @@ class Event:
         prog.event_synchronize(self._handle)
 
     def destroy(self):
-        """Explicitly destroy the event. Safe to call multiple times."""
-        if self._handle != 0:
+        """Explicitly destroy the event. Safe to call multiple times.
+
+        No-op for events wrapping external handles (created via Event(ptr) without a prog_ref).
+        """
+        if self._handle != 0 and self._prog_ref is not None:
             prog = impl.get_runtime().prog
             prog.event_destroy(self._handle)
             self._handle = 0
@@ -126,9 +132,8 @@ def create_event() -> Event:
 def stream_parallel():
     """Run top-level for loops in this block on separate GPU streams.
 
-    Used inside @qd.kernel. At Python runtime (outside kernels), this is a
-    no-op. During kernel compilation, the AST transformer calls into the C++
-    ASTBuilder to tag loops with a stream-parallel group ID.
+    Used inside @qd.kernel. At Python runtime (outside kernels), this is a no-op. During kernel compilation, the AST
+    transformer calls into the C++ ASTBuilder to tag loops with a stream-parallel group ID.
     """
     yield
 

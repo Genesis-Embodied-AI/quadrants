@@ -55,8 +55,12 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
   auto *active_stream = AMDGPUContext::get_instance().get_stream();
   for (size_t i = 0; i < offloaded_tasks.size();) {
     const auto &task = offloaded_tasks[i];
-    executor->publish_adstack_metadata(task.ad_stack, resolve_num_threads(task, executor), &ctx, context_pointer);
     if (task.stream_parallel_group_id == 0) {
+      // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without this the
+      // sizer launches with a host pointer and the next DtoH sync trips
+      // `hipErrorIllegalAddress ... memcpy_device_to_host` because HIP has no UVA fallback for the host
+      // `RuntimeContext` struct.
+      executor->publish_adstack_metadata(task.ad_stack, resolve_num_threads(task, executor), &ctx, context_pointer);
       QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
       amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
                             {(void *)&context_pointer}, {arg_size});
@@ -77,6 +81,7 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
 
       for (size_t j = group_start; j < i; j++) {
         const auto &t = offloaded_tasks[j];
+        executor->publish_adstack_metadata(t.ad_stack, resolve_num_threads(t, executor), &ctx, context_pointer);
         AMDGPUContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
         amdgpu_module->launch(t.name, t.grid_dim, t.block_dim, t.dynamic_shared_array_bytes, {(void *)&context_pointer},
                               {arg_size});
@@ -103,7 +108,8 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
   do {
     launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
     counter_val = 0;
-    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+    auto *stream = AMDGPUContext::get_instance().get_stream();
+    AMDGPUDriver::get_instance().stream_synchronize(stream);
     AMDGPUDriver::get_instance().memcpy_device_to_host(&counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
   } while (counter_val != 0);
 }

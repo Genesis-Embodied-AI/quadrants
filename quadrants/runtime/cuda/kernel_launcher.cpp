@@ -54,9 +54,14 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
   auto *active_stream = CUDAContext::get_instance().get_stream();
   for (size_t i = 0; i < offloaded_tasks.size();) {
     const auto &task = offloaded_tasks[i];
-    std::size_t n = resolve_num_threads(task.ad_stack, executor);
-    executor->publish_adstack_metadata(task.ad_stack, n, &ctx, device_context_ptr);
     if (task.stream_parallel_group_id == 0) {
+      std::size_t n = resolve_num_threads(task.ad_stack, executor);
+      // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without it the sizer
+      // launches with a host pointer and the next DtoH sync trips `CUDA_ERROR_ILLEGAL_ADDRESS ...
+      // memcpy_device_to_host` on GPUs whose driver + kernel cannot coherently access pageable host memory (the HMM
+      // capability gated below in `launch_llvm_kernel`). `nullptr` on HMM-capable setups keeps
+      // `publish_adstack_metadata`'s host-pointer fast path.
+      executor->publish_adstack_metadata(task.ad_stack, n, &ctx, device_context_ptr);
       QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
       cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
                           {&ctx.get_context()}, {});
@@ -77,6 +82,8 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
 
       for (size_t j = group_start; j < i; j++) {
         const auto &t = offloaded_tasks[j];
+        std::size_t n_t = resolve_num_threads(t.ad_stack, executor);
+        executor->publish_adstack_metadata(t.ad_stack, n_t, &ctx, device_context_ptr);
         CUDAContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
         cuda_module->launch(t.name, t.grid_dim, t.block_dim, t.dynamic_shared_array_bytes, {&ctx.get_context()}, {});
       }
@@ -102,8 +109,9 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
     launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
     counter_val = 0;
     auto *stream = CUDAContext::get_instance().get_stream();
+    CUDADriver::get_instance().memcpy_device_to_host_async(&counter_val, ctx.graph_do_while_flag_dev_ptr,
+                                                           sizeof(int32_t), stream);
     CUDADriver::get_instance().stream_synchronize(stream);
-    CUDADriver::get_instance().memcpy_device_to_host(&counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
   } while (counter_val != 0);
 }
 
@@ -257,9 +265,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().supports_pageable_memory_access();
   void *device_context_ptr = nullptr;
   if (needs_sizer_device_ctx) {
-    CUDADriver::get_instance().malloc_async(&device_context_ptr, sizeof(RuntimeContext), nullptr);
+    CUDADriver::get_instance().malloc_async(&device_context_ptr, sizeof(RuntimeContext), active_stream);
     CUDADriver::get_instance().memcpy_host_to_device_async(device_context_ptr, &ctx.get_context(),
-                                                           sizeof(RuntimeContext), nullptr);
+                                                           sizeof(RuntimeContext), active_stream);
   }
 
   if (ctx.graph_do_while_arg_id >= 0) {
@@ -269,7 +277,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
   }
   if (needs_sizer_device_ctx) {
-    CUDADriver::get_instance().mem_free_async(device_context_ptr, nullptr);
+    CUDADriver::get_instance().mem_free_async(device_context_ptr, active_stream);
   }
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().mem_free_async(device_arg_buffer, active_stream);
@@ -284,8 +292,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     CUDADriver::get_instance().stream_synchronize(active_stream);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       auto &idx = itr->first;
-      CUDADriver::get_instance().memcpy_device_to_host(itr->second.first, (void *)device_ptrs[idx],
-                                                       ctx.array_runtime_sizes[idx.arg_id]);
+      CUDADriver::get_instance().memcpy_device_to_host_async(itr->second.first, (void *)device_ptrs[idx],
+                                                             ctx.array_runtime_sizes[idx.arg_id], active_stream);
+    }
+    CUDADriver::get_instance().stream_synchronize(active_stream);
+    for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       executor->deallocate_memory_on_device(itr->second.second);
     }
   }

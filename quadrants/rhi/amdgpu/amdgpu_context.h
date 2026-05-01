@@ -26,7 +26,6 @@ class AMDGPUContext {
   bool supports_mem_pool_{false};
   static thread_local void *stream_;
   std::vector<void *> stream_pool_;
-  std::vector<void *> kernel_arg_pointer_;
 
  public:
   AMDGPUContext();
