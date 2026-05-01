@@ -335,6 +335,11 @@ class IRBuilder {
   // Get the pointer type that points to value_type
   SType get_pointer_type(const SType &value_type, spv::StorageClass storage_class);
   SType get_array_type(const SType &value_type, uint32_t num_elems);
+  // Same as `get_array_type` but emits no `ArrayStride` decoration on the resulting `OpTypeArray`. Use this
+  // whenever the resulting type is fed straight to `alloca_variable`: Vulkan rejects layout decorations on
+  // `Function` / `Private` variable types under `VUID-StandaloneSpirv-None-10684`, and Blackwell-class NVIDIA
+  // drivers fail pipeline creation when the validator catches it.
+  SType get_function_array_type(const SType &value_type, uint32_t num_elems);
   // Get a struct{ value_type[num_elems] } type
   SType get_struct_array_type(const SType &value_type, uint32_t num_elems);
   // Construct a struct type

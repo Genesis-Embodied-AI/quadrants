@@ -167,13 +167,42 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
                                                            error:&err];
 
     if (mtl_compute_pipeline_state == nil) {
+      std::array<char, 4096> msgbuf;
       if (err != nil) {
-        std::array<char, 4096> msgbuf;
         snprintf(msgbuf.data(), msgbuf.size(),
-                 "cannot create compute pipeline state: %s (code=%d)",
-                 err.localizedDescription.UTF8String, (int)err.code);
-        RHI_LOG_ERROR(msgbuf.data());
+                 "cannot create compute pipeline state for kernel '%s' "
+                 "(msl_bytes=%zu): %s (code=%d)",
+                 name.c_str(), msl.size(), err.localizedDescription.UTF8String,
+                 (int)err.code);
+      } else {
+        // Apple's `com.apple.MTLCompilerService` returned nil pipeline + nil
+        // NSError, meaning the XPC service dropped its connection mid-compile.
+        // One known trigger is the kernel hitting a per-process memory cap on
+        // the XPC service while compiling the AIR; large reverse-grad kernels
+        // are the typical offender. Surface the kernel name and MSL byte size
+        // so the offending kernel can be targeted without bisecting.
+        snprintf(msgbuf.data(), msgbuf.size(),
+                 "Apple's Metal compiler service dropped its XPC connection "
+                 "while compiling the compute pipeline "
+                 "for kernel '%s' (cross-compiled MSL size: %zu bytes), "
+                 "returning nil with no NSError. This can "
+                 "happen when the cross-compiled kernel is large enough that "
+                 "the compiler service exceeds a "
+                 "per-process memory budget mid-compile. Reducing the "
+                 "cross-compiled MSL / AIR working set for this "
+                 "kernel is the most reliable workaround.",
+                 name.c_str(), msl.size());
       }
+      // Use QD_WARN (log + no-throw) rather than QD_ERROR (log + `throw
+      // std::string`). `QD_ERROR` here would unwind through
+      // `MetalDevice::create_pipeline`, which is `noexcept` and only catches
+      // `std::exception`; `std::string` is not derived from it, so the throw
+      // would cross the `noexcept` boundary and trip `std::terminate`,
+      // replacing the existing clean `RhiResult::error -> Python RuntimeError`
+      // translation path with a fatal process abort. The detailed message above
+      // is logged at warn level; the caller's `runtime.cpp:298 QD_ERROR_IF(res
+      // != success, ...)` then raises the kernel-name-bearing Python error.
+      QD_WARN("[metal_device.mm] {}", msgbuf.data());
       return nullptr;
     }
   }
@@ -1533,13 +1562,34 @@ MTLLibrary_id MetalDevice::get_mtl_library(const std::string &source) const {
   [msl_ns release];
 
   if (mtl_library == nil) {
+    std::array<char, 4096> msgbuf;
     if (err != nil) {
-      std::array<char, 4096> msgbuf;
       snprintf(msgbuf.data(), msgbuf.size(),
-               "cannot compile metal library from source: %s (code=%d)",
-               err.localizedDescription.UTF8String, (int)err.code);
-      RHI_LOG_ERROR(msgbuf.data());
+               "cannot compile metal library from source (msl_bytes=%zu): %s "
+               "(code=%d)",
+               source.size(), err.localizedDescription.UTF8String,
+               (int)err.code);
+    } else {
+      // Apple's `com.apple.MTLCompilerService` returned nil library + nil
+      // NSError - the XPC service dropped its connection during MSL -> AIR
+      // compile. One known trigger is the compiler service exceeding a
+      // per-process memory budget on a large source. Surface the MSL byte size
+      // so the offending input is easy to spot.
+      snprintf(msgbuf.data(), msgbuf.size(),
+               "Apple's Metal compiler service dropped its XPC connection "
+               "while compiling MSL -> AIR "
+               "(cross-compiled MSL size: %zu bytes), returning nil with no "
+               "NSError. This can happen when the "
+               "cross-compiled source is large enough that the compiler "
+               "service exceeds a per-process memory "
+               "budget mid-compile. Reducing the cross-compiled MSL working "
+               "set is the most reliable workaround.",
+               source.size());
     }
+    // QD_WARN rather than QD_ERROR: see `create_compute_pipeline` for the
+    // noexcept-boundary rationale. Caller converts the nullptr return to a
+    // `RhiResult::error` which then surfaces as a Python `RuntimeError`.
+    QD_WARN("[metal_device.mm] {}", msgbuf.data());
     return nil;
   }
   return mtl_library;

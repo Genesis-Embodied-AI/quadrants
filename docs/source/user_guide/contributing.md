@@ -140,3 +140,7 @@ The check runs only on lines changed in the PR and reports up to 3 violations. T
 ### Deleted comments check (`check_deleted_comments.yml`)
 
 Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted. Reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
+### Test coverage check (`check_test_coverage.yml`)
+
+Uses an AI agent to verify that new or modified source code in a PR has corresponding test coverage. The agent examines the diff of non-test source files and cross-references them against test files in the repo (existing or added in the PR). It flags up to 5 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
