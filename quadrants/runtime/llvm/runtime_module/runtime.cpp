@@ -1206,6 +1206,10 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
       // Floor at 1 to match the host evaluator (`evaluate_adstack_size_expr`); a tree that evaluates to 0 or negative
       // leaves one slot reserved so the heap base address is still valid and any spurious push surfaces as an overflow
       // rather than a zero-slice alias.
+      // Do NOT clamp upward against `max_size_compile_time`: the compile-time seed is a conservative placeholder for
+      // offline-cache fallback, NOT a proven upper bound. Clamping `v` against it would silently truncate correct
+      // per-launch values and trigger overflow at the next sync; the SizeExpr evaluator is the authoritative source
+      // for the per-launch capacity, and any push past `v` is the real overflow.
       if (v < 1)
         v = 1;
       max_size = static_cast<u64>(v);
