@@ -3395,6 +3395,93 @@ def test_adstack_static_bound_expr_snode_gate_cpu_grad_correct():
         assert got_grad[i] == pytest.approx(expected[i], rel=1e-5, abs=1e-7)
 
 
+@test_utils.test(
+    arch=[qd.cpu, qd.cuda, qd.amdgpu],
+    require=[qd.extension.adstack, qd.extension.data64],
+    ad_stack_size=0,
+    debug=False,
+)
+def test_adstack_static_bound_expr_snode_gate_multileaf_dense_grad_correct():
+    # Pins the LLVM snode_resolver against multi-leaf dense parents with mixed-size children. The dense parent
+    # `qd.root.dense(qd.i, n).place(field_f64, field_f32)` has two leaves of sizes 8 and 4 bytes; the LLVM struct
+    # compiler lays them out in declaration order (f64 at offset 0, f32 at offset 8) while a size-sorted layout
+    # would place the f32 leaf at offset 0 and the f64 leaf at offset 8. The captured gating predicate
+    # `field_f32[i] > eps` rides through the LLVM static-bound-expr resolver: when the resolver reads the f32
+    # leaf's offset from a size-sorted source, the runtime reducer walks the field at offset 0 (the f64 leaf's
+    # bytes, low half) every cell-stride bytes. With the f64 leaf seeded to a constant > eps in every cell, the
+    # bug-time reducer reports `n` gate-passing cells while the main kernel's actual gated pass count is
+    # `n_gated`, the float adstack heap is mis-sized and the codegen-emitted clamp aliases legitimate gated
+    # iterations onto wrong rows - the resulting gradient is wrong-but-not-NaN on every gated index.
+    #
+    # Internal details: the f32 selector layout puts non-gated cells at 0.0 and gated cells at 1.0 with
+    # `eps = 1e-9`; the f64 companion field is seeded to `1.0` everywhere so a misread at the f64 leaf's offset
+    # comparison-passes for every cell (the bit pattern of the f64 1.0 low half is non-zero and greater than the
+    # f32 eps when reinterpreted). The non-linear recurrence `v = v * v + 0.05` makes the per-iteration gradient
+    # primal-dependent so any cross-row aliasing surfaces as a wrong gradient. `arch=[qd.cpu, qd.cuda, qd.amdgpu]`
+    # because this test pins the LLVM snode_resolver specifically; SPIR-V backends use the SPIR-V struct compiler
+    # natively for both the reducer and the main kernel so they agree on the size-sorted offsets and are unaffected.
+    n = 256
+    n_iter = 6
+    eps = 1e-9
+
+    field_f64 = qd.field(qd.f64)
+    field_f32 = qd.field(qd.f32)
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+    qd.root.dense(qd.i, n).place(field_f64, field_f32)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in field_f32:
+            if field_f32[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * v + 0.05
+                out[None] += v
+
+    np.random.seed(1)
+    # `x` varies with `i` so any cross-row aliasing under a mis-sized adstack heap surfaces as a gradient
+    # mismatch (the reverse pop reads back a different thread's primal). A constant `x` would mask aliasing
+    # because every gated thread pushes the same primal sequence and the pop comes back identical.
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    n_gated = max(1, n // 2)
+    selector_np = np.zeros(n, dtype=np.float32)
+    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+    selector_np[gated_indices] = 1.0
+    for i in range(n):
+        x[i] = float(x_np[i])
+        field_f32[i] = float(selector_np[i])
+        field_f64[i] = 1.0
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+
+    compute()
+    compute.grad()
+    qd.sync()
+
+    expected = np.zeros(n, dtype=np.float32)
+    for i in range(n):
+        if selector_np[i] <= eps:
+            continue
+        v = float(x_np[i])
+        primals = [v]
+        for _ in range(n_iter):
+            v = v * v + 0.05
+            primals.append(v)
+        d = 1.0
+        for k in range(n_iter):
+            d = d * (2.0 * primals[n_iter - 1 - k])
+        expected[i] = np.float32(d)
+
+    got_grad = np.array([x.grad[i] for i in range(n)], dtype=np.float32)
+    assert not np.isnan(got_grad).any()
+    assert not np.isinf(got_grad).any()
+    for i in range(n):
+        assert got_grad[i] == pytest.approx(expected[i], rel=1e-5, abs=1e-7)
+
+
 @pytest.mark.parametrize("bound_shape", ["int_const", "scalar_field", "ndarray_shape", "ndarray_read", "two_arg_range"])
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=128)
 def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
