@@ -491,6 +491,8 @@ class Kernel(FuncBase):
                     template_num += 1
                     i_out += 1
                     continue
+                if getattr(val, "_qd_all_field", False):
+                    continue
                 if self.graph_do_while_arg is not None and self.arg_metas[i_in].name == self.graph_do_while_arg:
                     self._graph_do_while_cpp_arg_id = i_out - template_num
                 num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
