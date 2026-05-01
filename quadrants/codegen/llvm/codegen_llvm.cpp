@@ -19,7 +19,6 @@
 #include "quadrants/codegen/ir_dump.h"
 #include "quadrants/util/environ_config.h"
 #include "quadrants/runtime/llvm/llvm_context_pass.h"
-#include "quadrants/codegen/spirv/snode_struct_compiler.h"
 
 namespace quadrants::lang {
 
@@ -1791,13 +1790,17 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
 
   // Run the shared static-adstack analysis. Returns the LCA of every f32 push/load-top site, the autodiff-bootstrap
   // const-init push set, and an optional captured `StaticBoundExpr` when a single recognized gate sits on the
-  // LCA-to-root chain. The SNode descriptor resolver mirrors the SPIR-V codegen's `match_field_source` SNode arm:
-  // walk the leaf SNode's parent chain for the tree id, compile that tree's snode descriptors via the shared
-  // `compile_snode_structs` helper (cached per tree across allocas in this task to avoid re-walking the tree N
-  // times), look up the leaf and dense descriptors, return their byte offset / cell stride / iter count for the
-  // device reducer to walk on every launch. Trees outside the kernel's `program->snode_trees_` range or non-dense
-  // parents fall through to nullopt and the analysis rejects the gate (worst-case sizing in the runtime caller).
-  std::unordered_map<int, spirv::CompiledSNodeStructs> tree_id_to_compiled;
+  // LCA-to-root chain. The SNode descriptor resolver walks the leaf SNode's parent chain to identify the owning
+  // tree, then reads the LLVM declaration-order offsets the runtime struct compiler already populated on the live
+  // SNode tree (`SNode::offset_bytes_in_parent_cell` set by `StructCompilerLLVM::generate_types`, mirrored by the
+  // host-side reader `LlvmProgramImpl::get_field_in_tree_offset`). Reading those fields directly keeps the captured
+  // base offset / cell stride byte-correct against the LLVM runtime layout, including the multi-leaf dense case
+  // where `qd.root.dense(qd.i, n).place(field_f64, field_f32)` has children of mixed sizes. The SPIR-V struct
+  // compiler `compile_snode_structs` sorts dense children by ascending size and would land on the wrong offset
+  // here, plus it mutates `offset_bytes_in_parent_cell` and `cell_size_bytes` on the shared SNode tree as a side
+  // effect (corrupting later readers in `dlpack_funcs.cpp` and `field_info.cpp`). Trees outside the kernel's
+  // `program->snode_trees_` range or non-dense parents fall through to nullopt and the analysis rejects the gate
+  // (worst-case sizing in the runtime caller).
   auto snode_resolver = [&](const SNode *leaf, const SNode *dense) -> std::optional<SNodeFieldDescriptor> {
     if (leaf == nullptr || dense == nullptr || prog == nullptr) {
       return std::nullopt;
@@ -1829,27 +1832,25 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     if (matched_tree_id < 0) {
       return std::nullopt;
     }
-    auto cache_it = tree_id_to_compiled.find(matched_tree_id);
-    if (cache_it == tree_id_to_compiled.end()) {
-      cache_it = tree_id_to_compiled
-                     .emplace(matched_tree_id, spirv::compile_snode_structs(*prog->get_snode_root(matched_tree_id)))
-                     .first;
-    }
-    const auto &snode_descs = cache_it->second.snode_descriptors;
-    auto leaf_desc_it = snode_descs.find(leaf->id);
-    auto dense_desc_it = snode_descs.find(dense->id);
-    if (leaf_desc_it == snode_descs.end() || dense_desc_it == snode_descs.end()) {
-      return std::nullopt;
-    }
     SNodeFieldDescriptor desc;
     desc.root_id = matched_tree_id;
     // Combined byte offset: dense's offset within its single root cell plus the leaf's offset within the dense's
-    // per-cell layout. Both come from the snode descriptor's compile-time prefix-sum so the captured value is
-    // stable across launches.
-    desc.byte_base_offset = static_cast<uint32_t>(dense_desc_it->second.mem_offset_in_parent_cell +
-                                                  leaf_desc_it->second.mem_offset_in_parent_cell);
-    desc.byte_cell_stride = static_cast<uint32_t>(dense_desc_it->second.cell_stride);
-    desc.iter_count = static_cast<uint32_t>(dense_desc_it->second.total_num_cells_from_root);
+    // per-cell layout. Both fields are populated by `StructCompilerLLVM::generate_types` (struct_llvm.cpp:56,60)
+    // before any kernel codegen runs, in declaration order matching the LLVM accessors the main kernel emits.
+    desc.byte_base_offset =
+        static_cast<uint32_t>(dense->offset_bytes_in_parent_cell + leaf->offset_bytes_in_parent_cell);
+    // Per-cell stride for the dense parent. `cell_size_bytes` is the size of one element of the dense's child
+    // struct (set on the dense by `StructCompilerLLVM::generate_types`).
+    desc.byte_cell_stride = static_cast<uint32_t>(dense->cell_size_bytes);
+    // Iteration count: product of `num_elements_from_root` over the dense's extractors. Mirrors the SPIR-V
+    // compiler's `total_num_cells_from_root` formula at `snode_struct_compiler.cpp:107-114` but reads the
+    // extractor metadata from the live SNode tree (`SNode::extractors[i].num_elements_from_root`, populated by
+    // `StructCompiler::infer_snode_properties`) instead of going through the SPIR-V descriptor cache.
+    uint64_t iter_count = 1;
+    for (const auto &e : dense->extractors) {
+      iter_count *= static_cast<uint64_t>(e.num_elements_from_root);
+    }
+    desc.iter_count = static_cast<uint32_t>(iter_count);
     return desc;
   };
   auto adstack_analysis = analyze_adstack_static_bounds(stmt, snode_resolver);
