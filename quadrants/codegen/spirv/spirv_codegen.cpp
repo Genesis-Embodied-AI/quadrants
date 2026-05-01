@@ -138,12 +138,11 @@ TaskCodegen::Result TaskCodegen::run() {
   ir_->debug_name(spv::OpName, kernel_function_, "main");
   scan_shared_atomic_allocs(task_ir_->body.get(), shared_float_allocas_with_atomic_rmw_);
 
-  // Run the shared static-adstack analysis over the task body. Returns the LCA of every f32 push/load-top site,
-  // the set of autodiff-bootstrap const-init pushes the codegen must skip the slot store for, the per-thread
-  // strides, and an optional `StaticBoundExpr` capturing the gating predicate when the LCA-to-root chain has a
-  // single recognized gate. The SNode descriptor resolver below turns the SPIR-V backend's
-  // `compiled_structs_` / `snode_to_root_` state into the generic `SNodeFieldDescriptor` the analysis consumes;
-  // ndarray-backed gates are recognized without the resolver.
+  // Run the shared static-adstack analysis over the task body. Returns the LCA of every f32 push/load-top site, the set
+  // of autodiff-bootstrap const-init pushes the codegen must skip the slot store for, the per-thread strides, and an
+  // optional `StaticBoundExpr` capturing the gating predicate when the LCA-to-root chain has a single recognized gate.
+  // The SNode descriptor resolver below turns the SPIR-V backend's `compiled_structs_` / `snode_to_root_` state into
+  // the generic `SNodeFieldDescriptor` the analysis consumes; ndarray-backed gates are recognized without the resolver.
   auto snode_descriptor_resolver = [this](const SNode *leaf,
                                           const SNode *dense) -> std::optional<SNodeFieldDescriptor> {
     if (leaf == nullptr || dense == nullptr || dense->parent == nullptr) {
@@ -163,8 +162,8 @@ TaskCodegen::Result TaskCodegen::run() {
     SNodeFieldDescriptor desc;
     desc.root_id = root_id;
     // Combined byte offset: dense's offset within its single root cell plus the leaf's offset within the dense's
-    // per-cell layout. Both come from the snode descriptor's compile-time prefix-sum so the captured value is
-    // stable across launches.
+    // per-cell layout. Both come from the snode descriptor's compile-time prefix-sum so the captured value is stable
+    // across launches.
     desc.byte_base_offset = static_cast<uint32_t>(dense_desc_it->second.mem_offset_in_parent_cell +
                                                   leaf_desc_it->second.mem_offset_in_parent_cell);
     desc.byte_cell_stride = static_cast<uint32_t>(dense_desc_it->second.cell_stride);
@@ -213,35 +212,33 @@ void TaskCodegen::visit(OffloadedStmt *) {
 
 void TaskCodegen::visit(Block *stmt) {
   // Sparse adstack heap: when codegen enters the float Lowest Common Ancestor (LCA) block of every f32-typed
-  // AdStackPushStmt / AdStackLoadTopStmt / AdStackLoadTopAdjStmt in this task, atomically claim a heap row id
-  // for this thread and store it into the Function-scope `ad_stack_row_id_var_float_`. The claim runs exactly
-  // once per thread per task: every thread that reaches a float push / load-top must first pass through this
-  // block (by definition of LCA), and a thread that does not pass through this block also never reaches a
-  // float push or load-top, so the unclaimed row_id_var (UINT32_MAX) is observable only at sites that are
-  // guaranteed not to execute. The store happens BEFORE any of this block's statements are codegen'd so all
-  // descendant push / load-top sites observe the claimed value. Both the `row_id_var` allocation and its
-  // UINT32_MAX-initialisation live on the same block-entry hook so that when the float LCA is the task body
-  // root (typical for kernels without a predicate gating all f32 pushes), the init store dominates the atomic
-  // claim. `alloca_variable` hoists the OpVariable to the SPIR-V function entry block regardless of where it
-  // is called from, but the OpStore lands here in the LCA block and reaches all descendant sites by SPIR-V
-  // dominance. The int heap path is intentionally NOT routed through this row claim: int adstacks back loop-
-  // index recovery and if-branch flags that the autodiff pass emits unconditionally at the offload body root,
-  // and `get_ad_stack_heap_thread_base_int()` keeps the eager `gl_GlobalInvocationID * stride_int` per-thread
-  // layout instead of consulting any row_id_var.
+  // AdStackPushStmt / AdStackLoadTopStmt / AdStackLoadTopAdjStmt in this task, atomically claim a heap row id for this
+  // thread and store it into the Function-scope `ad_stack_row_id_var_float_`. The claim runs exactly once per thread
+  // per task: every thread that reaches a float push / load-top must first pass through this block (by definition of
+  // LCA), and a thread that does not pass through this block also never reaches a float push or load-top, so the
+  // unclaimed row_id_var (UINT32_MAX) is observable only at sites that are guaranteed not to execute. The store happens
+  // BEFORE any of this block's statements are codegen'd so all descendant push / load-top sites observe the claimed
+  // value. Both the `row_id_var` allocation and its UINT32_MAX-initialisation live on the same block-entry hook so that
+  // when the float LCA is the task body root (typical for kernels without a predicate gating all f32 pushes), the init
+  // store dominates the atomic claim. `alloca_variable` hoists the OpVariable to the SPIR-V function entry block
+  // regardless of where it is called from, but the OpStore lands here in the LCA block and reaches all descendant sites
+  // by SPIR-V dominance. The int heap path is intentionally NOT routed through this row claim: int adstacks back
+  // loop-index recovery and if-branch flags that the autodiff pass emits unconditionally at the offload body root, and
+  // `get_ad_stack_heap_thread_base_int()` keeps the eager `gl_GlobalInvocationID * stride_int` per-thread layout
+  // instead of consulting any row_id_var.
   if (stmt == ad_stack_lca_block_float_ && ad_stack_lca_block_float_ != nullptr) {
     QD_ASSERT(ad_stack_row_id_var_float_.id == 0);
     ad_stack_row_id_var_float_ = ir_->alloca_variable(ir_->u32_type());
     ir_->store_variable(ad_stack_row_id_var_float_, ir_->uint_immediate_number(ir_->u32_type(), UINT32_MAX));
   }
-  // Tasks without a captured `bound_expr` do not have a host-published row capacity and the float heap is
-  // sized at `dispatched_threads * stride_float` worst case. Emitting the LCA-block atomic-rmw claim in
-  // that case lets `claimed_row` exceed `dispatched_threads` whenever the kernel's iteration count exceeds
-  // the SPIR-V advisory cap (`advisory_total_num_threads = 65536` for struct_for, `<= 131072` for range_for)
-  // and the kernel grid-strides via `loop_var += total_invocs`, because every iteration that reaches the LCA
-  // increments the counter and the inert UINT32_MAX-capacity clamp does not bring the row back in-bounds.
-  // Fall back to the eager `gl_GlobalInvocationID * stride_float` mapping by storing the invocation id into
-  // `row_id_var_float` directly; downstream `get_ad_stack_heap_thread_base_float()` reads it and produces
-  // the same per-thread addressing the int heap uses.
+  // Tasks without a captured `bound_expr` do not have a host-published row capacity and the float heap is sized at
+  // `dispatched_threads * stride_float` worst case. Emitting the LCA-block atomic-rmw claim in that case lets
+  // `claimed_row` exceed `dispatched_threads` whenever the kernel's iteration count exceeds the SPIR-V advisory cap
+  // (`advisory_total_num_threads = 65536` for struct_for, `<= 131072` for range_for) and the kernel grid-strides via
+  // `loop_var += total_invocs`, because every iteration that reaches the LCA increments the counter and the inert
+  // UINT32_MAX-capacity clamp does not bring the row back in-bounds. Fall back to the eager `gl_GlobalInvocationID *
+  // stride_float` mapping by storing the invocation id into `row_id_var_float` directly; downstream
+  // `get_ad_stack_heap_thread_base_float()` reads it and produces the same per-thread addressing the int heap uses.
   if (stmt == ad_stack_lca_block_float_ && ad_stack_lca_block_float_ != nullptr &&
       !task_attribs_.ad_stack.bound_expr.has_value()) {
     spirv::Value invoc_id = ir_->get_global_invocation_id(0);
@@ -250,12 +247,12 @@ void TaskCodegen::visit(Block *stmt) {
     if (ad_stack_row_counter_buffer_.id == 0) {
       ad_stack_row_counter_buffer_ = get_buffer_value({BufferType::AdStackRowCounter}, PrimitiveType::u32);
     }
-    // Per-task slot: the host allocates the counter buffer as `uint[num_tasks_in_kernel]`, clears it once at the
-    // start of each kernel-launch (not between tasks), so each task's atomic claims accumulate in its own slot
-    // and survive until the post-launch host readback at `synchronize()`. Without per-task slots a single shared
-    // slot would have the next task's bind-time clear destroy this task's count before the host can observe it,
-    // and the heap-sizing path would only ever see the LAST task's claim count - useless for tasks that come
-    // earlier in a multi-task kernel and have wildly different work patterns.
+    // Per-task slot: the host allocates the counter buffer as `uint[num_tasks_in_kernel]`, clears it once at the start
+    // of each kernel-launch (not between tasks), so each task's atomic claims accumulate in its own slot and survive
+    // until the post-launch host readback at `synchronize()`. Without per-task slots a single shared slot would have
+    // the next task's bind-time clear destroy this task's count before the host can observe it, and the heap-sizing
+    // path would only ever see the LAST task's claim count - useless for tasks that come earlier in a multi-task kernel
+    // and have wildly different work patterns.
     spirv::Value counter_ptr = ir_->struct_array_access(
         ir_->u32_type(), ad_stack_row_counter_buffer_, ir_->uint_immediate_number(ir_->i32_type(), task_id_in_kernel_));
     spirv::Value claimed_row =
@@ -268,14 +265,14 @@ void TaskCodegen::visit(Block *stmt) {
     // `BufferType::AdStackBoundRowCapacity[task_id]` before this dispatch starts: for tasks with a captured
     // `bound_expr` captured `bound_expr`, the value is the exact reducer count; for every other task the value is
     // UINT32_MAX so this check is inert. When `claimed_row >= capacity` we OpAtomicUMax UINT32_MAX into the existing
-    // AdStackOverflow buffer; the synchronize() readback recognises that sentinel and raises a clear actionable
-    // error rather than letting the kernel silently OOB-write the heap. UINT32_MAX cannot collide with the
-    // existing per-stack `stack_id+1` overflow signal because `stack_id+1 <= num_ad_stacks << UINT32_MAX` in
-    // every realistic kernel. Expected behaviour on legitimate workloads: this branch is taken zero times. If
-    // it fires, the reducer's count diverged from the main pass's actual LCA-block-reaching thread count, which
-    // means an internal-consistency bug (non-determinism between reducer and main), not a user-recoverable
-    // condition. The clamp via OpSelect keeps the stored row id in-bounds at `capacity-1` when the over-claim
-    // happens, so downstream push / load-top sites in this overshooting thread do not write past the heap end.
+    // AdStackOverflow buffer; the synchronize() readback recognises that sentinel and raises a clear actionable error
+    // rather than letting the kernel silently OOB-write the heap. UINT32_MAX cannot collide with the existing per-stack
+    // `stack_id+1` overflow signal because `stack_id+1 <= num_ad_stacks << UINT32_MAX` in every realistic kernel.
+    // Expected behaviour on legitimate workloads: this branch is taken zero times. If it fires, the reducer's count
+    // diverged from the main pass's actual LCA-block-reaching thread count, which means an internal-consistency bug
+    // (non-determinism between reducer and main), not a user-recoverable condition. The clamp via OpSelect keeps the
+    // stored row id in-bounds at `capacity-1` when the over-claim happens, so downstream push / load-top sites in this
+    // overshooting thread do not write past the heap end.
     if (ad_stack_bound_row_capacity_buffer_.id == 0) {
       ad_stack_bound_row_capacity_buffer_ = get_buffer_value({BufferType::AdStackBoundRowCapacity}, PrimitiveType::u32);
     }
@@ -283,11 +280,11 @@ void TaskCodegen::visit(Block *stmt) {
         ir_->struct_array_access(ir_->u32_type(), ad_stack_bound_row_capacity_buffer_,
                                  ir_->uint_immediate_number(ir_->i32_type(), task_id_in_kernel_));
     spirv::Value capacity = ir_->load_variable(capacity_ptr, ir_->u32_type());
-    // Guard the `capacity - 1` clamp upper bound against `capacity == 0`: a naive `sub(capacity, 1)`
-    // wraps in u32 to UINT32_MAX, the `UMin(claimed_row, UINT32_MAX)` returns `claimed_row` unchanged
-    // for any realistic value, and the clamp goes inert. Clamp the upper bound to row 0 in that case
-    // (the launcher floors the heap allocation at one row precisely so the single-slot fallback is
-    // always backed by real storage). Mirrors the LLVM-side `select(capacity == 0, 0, capacity - 1)`.
+    // Guard the `capacity - 1` clamp upper bound against `capacity == 0`: a naive `sub(capacity, 1)` wraps in u32 to
+    // UINT32_MAX, the `UMin(claimed_row, UINT32_MAX)` returns `claimed_row` unchanged for any realistic value, and the
+    // clamp goes inert. Clamp the upper bound to row 0 in that case (the launcher floors the heap allocation at one row
+    // precisely so the single-slot fallback is always backed by real storage). Mirrors the LLVM-side `select(capacity
+    // == 0, 0, capacity - 1)`.
     spirv::Value zero_u32 = ir_->uint_immediate_number(ir_->u32_type(), 0);
     spirv::Value one_u32 = ir_->uint_immediate_number(ir_->u32_type(), 1);
     spirv::Value capacity_is_zero = ir_->eq(capacity, zero_u32);
@@ -2251,11 +2248,10 @@ static DataType pick_buffer_access_type(DataType dt, const spirv::Value &ptr_val
   if (ptr_val.stype.dt == PrimitiveType::u64) {
     return dt;
   }
-  // Explicit whitelist of the real primitives we route natively, replacing the prior
-  // open-ended `is_real(dt)` predicate. Any future real-like primitive (e.g. a bfloat16, or an
-  // fp8 variant) would not have an audited SPIR-V storage-capability story yet -- rather than
-  // silently fall into the native-view branch, it must be added here deliberately after the
-  // storage-capability plumbing for its bit width is confirmed (see the
+  // Explicit whitelist of the real primitives we route natively, replacing the prior open-ended `is_real(dt)`
+  // predicate. Any future real-like primitive (e.g. a bfloat16, or an fp8 variant) would not have an audited SPIR-V
+  // storage-capability story yet - rather than silently fall into the native-view branch, it must be added here
+  // deliberately after the storage-capability plumbing for its bit width is confirmed (see the
   // `CapabilityStorageBuffer{8,16}BitAccess` emissions in `spirv_ir_builder.cpp`).
   if (dt->is_primitive(PrimitiveTypeID::f16) || dt->is_primitive(PrimitiveTypeID::f32) ||
       dt->is_primitive(PrimitiveTypeID::f64)) {
@@ -2290,16 +2286,14 @@ void TaskCodegen::store_buffer(const Stmt *ptr, spirv::Value val) {
   if (val.stype.dt == ti_buffer_type) {
     val_bits = val;
   } else if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
-    // SPIR-V `OpBitcast` rejects bool operands (spec: operand must be numerical scalar / vector or
-    // pointer). Before this fix, a `u1` field / ndarray store emitted
-    // `OpBitcast %char %bool_val` and validated as
-    // `Expected input to be a pointer or int or float vector or scalar: Bitcast`. Most drivers
-    // ignore that and crash inside the pipeline compiler (observed on Mesa RADV: a hard SIGSEGV
-    // inside `libvulkan_radeon.so::create_compute_pipeline` the moment the offending kernel is
-    // registered). Route through `IRBuilder::cast`, which lowers `bool -> int` to `OpSelect`
-    // picking `1` or `0` of the target type -- that's the canonical spec-compliant way to widen a
-    // bool, matches what `load_buffer` already does on the reverse path, and keeps the
-    // "bool serialises as 0 / 1" behaviour every user of `to_numpy()` / `from_numpy()` depends on.
+    // SPIR-V `OpBitcast` rejects bool operands (spec: operand must be numerical scalar / vector or pointer). A direct
+    // `OpBitcast %char %bool_val` for a `u1` field / ndarray store would validate as `Expected input to be a pointer or
+    // int or float vector or scalar: Bitcast`; most drivers ignore that and crash inside the pipeline compiler
+    // (observed on Mesa RADV: a hard SIGSEGV inside `libvulkan_radeon.so::create_compute_pipeline` the moment the
+    // offending kernel is registered). Route through `IRBuilder::cast`, which lowers `bool -> int` to `OpSelect`
+    // picking `1` or `0` of the target type - the canonical spec-compliant way to widen a bool, matching what
+    // `load_buffer` already does on the reverse path and keeping the "bool serialises as 0 / 1" behaviour every user of
+    // `to_numpy()` / `from_numpy()` depends on.
     val_bits = ir_->cast(ir_->get_primitive_type(ti_buffer_type), val);
   } else {
     val_bits = ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(ti_buffer_type), val);
@@ -2554,26 +2548,21 @@ spirv::Value TaskCodegen::get_ad_stack_metadata_stride_int() {
 
 spirv::Value TaskCodegen::get_ad_stack_heap_thread_base_float() {
   // `row_id * per_thread_stride`. `row_id` is loaded fresh at every call from the Function-scope
-  // `ad_stack_row_id_var_float_` (declared at the first alloca visit, written at the float Lowest Common
-  // Ancestor (LCA) block claim site), and the resulting OpIMul lives in the call-site's basic block. The pre-
-  // `duburcqa/sparse_adstack_heap` layout cached a single `invoc_id * stride` SSA at the alloca site and reused
-  // it at every push / load-top; that worked because `invoc_id` and `stride` were both definitions in the
-  // alloca-site block which dominates every push descendant. The new layout cannot use the same single-cache
-  // trick: `row_id` is a Function-scope variable load, so every load yields a fresh SSA whose definition lives
-  // in the loading block; reusing one SSA across sibling blocks of the LCA would violate SPIR-V section 2.16
-  // dominance the same way invoc_id-cached SSA would have. Re-emitting per call site is cheap (one OpLoad +
-  // one OpIMul per push / load-top) and spirv-opt / spirv-cross can still hoist or CSE redundant loads within
-  // a single basic block. Widened to u64 when the device has Int64 for the same reason as before: `row_id *
-  // stride` can wrap u32 on deeply-allocated kernels and silent wrap aliases threads into one another's heap
-  // slice.
+  // `ad_stack_row_id_var_float_` (declared at the first alloca visit, written at the float Lowest Common Ancestor (LCA)
+  // block claim site), and the resulting OpIMul lives in the call-site's basic block. Re-emitting per call site (rather
+  // than caching one `row_id * stride` SSA at the alloca site and reusing it at every push / load-top) is mandatory:
+  // `row_id` is a Function-scope variable load, so every load yields a fresh SSA whose definition lives in the loading
+  // block; reusing one SSA across sibling blocks of the LCA would violate SPIR-V section 2.16 dominance. The cost is
+  // cheap (one OpLoad + one OpIMul per push / load-top) and spirv-opt / spirv-cross can still hoist or CSE redundant
+  // loads within a single basic block. Widened to u64 when the device has Int64 because `row_id * stride` can wrap u32
+  // on deeply-allocated kernels and a silent wrap aliases threads into one another's heap slice.
   spirv::Value row_id = ir_->load_variable(ad_stack_row_id_var_float_, ir_->u32_type());
   spirv::Value stride_u32 = get_ad_stack_metadata_stride_float();
   if (caps_->get(DeviceCapability::spirv_has_int64)) {
-    // `make_value(OpUConvert, ...)` directly rather than `ir_->cast()`: `cast()` between two unsigned integer
-    // types of different widths emits `OpUConvert` followed by `OpBitcast` to `dst_type`, and with widening
-    // u32->u64 both sides are already unsigned, so the trailing `OpBitcast(u64, u64)` has identical operand
-    // and result types - which SPIR-V section 3.42.16 forbids; `spirv-val` rejects the shader and MoltenVK
-    // may silently refuse to compile it.
+    // `make_value(OpUConvert, ...)` directly rather than `ir_->cast()`: `cast()` between two unsigned integer types of
+    // different widths emits `OpUConvert` followed by `OpBitcast` to `dst_type`, and with widening u32->u64 both sides
+    // are already unsigned, so the trailing `OpBitcast(u64, u64)` has identical operand and result types - which SPIR-V
+    // section 3.42.16 forbids; `spirv-val` rejects the shader and MoltenVK may silently refuse to compile it.
     spirv::Value row_id_u64 = ir_->make_value(spv::OpUConvert, ir_->u64_type(), row_id);
     spirv::Value stride_u64 = ir_->make_value(spv::OpUConvert, ir_->u64_type(), stride_u32);
     return ir_->mul(row_id_u64, stride_u64);
@@ -2584,8 +2573,8 @@ spirv::Value TaskCodegen::get_ad_stack_heap_thread_base_float() {
 spirv::Value TaskCodegen::ad_stack_heap_float_ptr(spirv::Value slot_offset, spirv::Value count) {
   spirv::Value base = get_ad_stack_heap_thread_base_float();
   spirv::SType idx_type = caps_->get(DeviceCapability::spirv_has_int64) ? ir_->u64_type() : ir_->u32_type();
-  // `slot_offset` is a u32 load from the metadata buffer; widen it to the index type alongside `count`.
-  // See `get_ad_stack_heap_thread_base_float` for why we widen via `OpUConvert` directly.
+  // `slot_offset` is a u32 load from the metadata buffer; widen it to the index type alongside `count`. See
+  // `get_ad_stack_heap_thread_base_float` for why we widen via `OpUConvert` directly.
   spirv::Value offset_idx = caps_->get(DeviceCapability::spirv_has_int64)
                                 ? ir_->make_value(spv::OpUConvert, idx_type, slot_offset)
                                 : slot_offset;
@@ -2778,32 +2767,31 @@ void TaskCodegen::visit(AdStackPushStmt *stmt) {
   }
   spirv::Value one = ir_->uint_immediate_number(ir_->u32_type(), 1);
 
-  // Autodiff-bootstrap const-init pushes on the float heap: keep `count_var` balanced with the matching reverse
-  // pop, but skip the slot store. These pushes execute on every thread regardless of any later gating, while the
-  // float heap row claim only fires on threads that reach the LCA (inside the gate); skipping the LCA contribution
-  // (handled in the pre-pass above) is what shrinks the heap, but it leaves `row_id_var` as UINT32_MAX for
-  // never-gated threads, so a slot store here would write the bootstrap value into row UINT32_MAX (out of bounds,
-  // arbitrary heap corruption). Dropping the store is safe because the matching reverse pop never reads the slot
-  // back via `load_top` - it only mutates `count_var`. Limited to the pre-pass-recognized bootstrap set so non-
-  // bootstrap const pushes (e.g. const-folded payloads at deeper sites) keep their slot stores.
+  // Autodiff-bootstrap const-init pushes on the float heap: keep `count_var` balanced with the matching reverse pop,
+  // but skip the slot store. These pushes execute on every thread regardless of any later gating, while the float heap
+  // row claim only fires on threads that reach the LCA (inside the gate); skipping the LCA contribution (handled in the
+  // pre-pass above) is what shrinks the heap, but it leaves `row_id_var` as UINT32_MAX for never-gated threads, so a
+  // slot store here would write the bootstrap value into row UINT32_MAX (out of bounds, arbitrary heap corruption).
+  // Dropping the store is safe because the matching reverse pop never reads the slot back via `load_top` - it only
+  // mutates `count_var`. Limited to the pre-pass-recognized bootstrap set so non-bootstrap const pushes (e.g.
+  // const-folded payloads at deeper sites) keep their slot stores.
   if (info.heap_kind != AdStackHeapKind::heap_int && ad_stack_bootstrap_pushes_.count(stmt) != 0) {
     ir_->store_variable(info.count_var, ir_->add(count, one));
     return;
   }
 
   if (compile_config_ && compile_config_->debug) {
-    // Debug build: map an OOB push to the last valid slot via a `GLSLstd450UMin` clamp, issue the primal/adjoint
-    // store, and publish `signal = (count >= max_size) ? stack_id + 1 : 0` to the host-visible AdStackOverflow
-    // buffer via `OpAtomicUMax`. The atomic-max with 0 cannot raise the host-visible value, so the runtime only
-    // sees the flag set on an actual overflow; concurrent threads that all witness the same overflow on the same
-    // stack publish the same value deterministically. The clamp + OpSelect formulation collapses what would
-    // otherwise be a per-push structured if-then-else region into straight-line code, which spirv-cross emits as
-    // straight-line MSL - critical for reverse-grad kernels with hundreds of adstacks pushed inside an inner loop
-    // on Apple's MSL-compiler-service shader-size threshold. `max_val` is the runtime-published AdStackMetadata
-    // bound cached on `info.max_size_val` by `ensure_ad_stack_metadata_loaded`, not a compile-time immediate.
-    // The gate is `debug` (not `check_out_of_bound`) so the field bounds check and the adstack overflow check stay
-    // on independent flags - Metal / Vulkan force-disable `check_out_of_bound` because they lack
-    // `Extension::assertion`, but `debug` reaches this codepath unaffected.
+    // Debug build: map an OOB push to the last valid slot via a `GLSLstd450UMin` clamp, issue the primal/adjoint store,
+    // and publish `signal = (count >= max_size) ? stack_id + 1 : 0` to the host-visible AdStackOverflow buffer via
+    // `OpAtomicUMax`. The atomic-max with 0 cannot raise the host-visible value, so the runtime only sees the flag set
+    // on an actual overflow; concurrent threads that all witness the same overflow on the same stack publish the same
+    // value deterministically. The clamp + OpSelect formulation collapses what would otherwise be a per-push structured
+    // if-then-else region into straight-line code, which spirv-cross emits as straight-line MSL - critical for
+    // reverse-grad kernels with hundreds of adstacks pushed inside an inner loop on Apple's MSL-compiler-service
+    // shader-size threshold. `max_val` is the runtime-published AdStackMetadata bound cached on `info.max_size_val` by
+    // `ensure_ad_stack_metadata_loaded`, not a compile-time immediate. The gate is `debug` (not `check_out_of_bound`)
+    // so the field bounds check and the adstack overflow check stay on independent flags - Metal / Vulkan force-disable
+    // `check_out_of_bound` because they lack `Extension::assertion`, but `debug` reaches this codepath unaffected.
     spirv::Value max_val = info.max_size_val;
     spirv::Value max_minus_one = ir_->sub(max_val, one);
     spirv::Value clamped_idx = ir_->call_glsl450(ir_->u32_type(), GLSLstd450UMin, count, max_minus_one);

@@ -40,25 +40,24 @@ struct TaskAttributes {
     // layout tightens to the actual field state at each launch. Zero-sized and unbound when a
     // task declares no adstacks.
     AdStackMetadata,
-    // Per-dispatch StorageBuffer holding a single u32 atomic counter used to lazily claim
-    // per-thread heap rows. Threads that reach an AdStackPushStmt (or LoadTop / LoadTopAdj)
-    // atomicAdd this counter and use the returned index as their row id; threads that never enter
-    // a push site never increment the counter and consume zero heap rows. Host clears the slot to
-    // 0 before each dispatch and reads it back after to drive the grow-and-retry path on the
-    // float / int heap allocations. Zero-sized and unbound when the task declares no adstacks or
-    // when the codegen falls back to the eager invoc-id-based row layout (e.g. when the LCA-of-
-    // pushes pre-pass cannot place a single dominator claim site).
+    // Per-dispatch StorageBuffer holding a single u32 atomic counter used to lazily claim per-thread heap rows. Threads
+    // that reach an AdStackPushStmt (or LoadTop / LoadTopAdj) atomicAdd this counter and use the returned index as
+    // their row id; threads that never enter a push site never increment the counter and consume zero heap rows. Host
+    // clears the slot to 0 before each dispatch and reads it back after to drive the grow-and-retry path on the float /
+    // int heap allocations. Zero-sized and unbound when the task declares no adstacks or when the codegen falls back to
+    // the eager invoc-id-based row layout (e.g. when the LCA-of-pushes pre-pass cannot place a single dominator claim
+    // site).
     AdStackRowCounter,
     // Per-kernel StorageBuffer holding the static-IR-bound row capacity per task (`uint[num_tasks_in_kernel]`).
-    // Populated by the host after the bound-reducer dispatch (see `runtime/gfx/adstack_bound_reducer_launch.cpp`):
-    // for each task with a captured `bound_expr`, slot `task_id_in_kernel` carries the exact count of
-    // threads the reducer observed passing the gate; for every other task the host writes UINT32_MAX so the
-    // bounds check below is inert. The main-task SPIR-V loads this slot at the Lowest Common Ancestor (LCA) block
-    // claim site immediately after the OpAtomicIAdd that produces `claimed_row` and OpAtomicUMax-signals
-    // UINT32_MAX into AdStackOverflow when `claimed_row >= capacity`. The expected behaviour is "this signal
-    // never fires on legitimate workloads" because the reducer count is exact by construction; if it does fire,
-    // it indicates a reducer / main divergence (an internal bug, not user-recoverable), and `synchronize()`
-    // surfaces it as a clear actionable error rather than letting it silently corrupt gradients via OOB writes.
+    // Populated by the host after the bound-reducer dispatch (see `runtime/gfx/adstack_bound_reducer_launch.cpp`): for
+    // each task with a captured `bound_expr`, slot `task_id_in_kernel` carries the exact count of threads the reducer
+    // observed passing the gate; for every other task the host writes UINT32_MAX so the bounds check below is inert.
+    // The main-task SPIR-V loads this slot at the Lowest Common Ancestor (LCA) block claim site immediately after the
+    // OpAtomicIAdd that produces `claimed_row` and OpAtomicUMax-signals UINT32_MAX into AdStackOverflow when
+    // `claimed_row >= capacity`. The expected behaviour is "this signal never fires on legitimate workloads" because
+    // the reducer count is exact by construction; if it does fire, it indicates a reducer / main divergence (an
+    // internal bug, not user-recoverable), and `synchronize()` surfaces it as a clear actionable error rather than
+    // letting it silently corrupt gradients via OOB writes.
     AdStackBoundRowCapacity,
   };
 
@@ -189,24 +188,22 @@ struct TaskAttributes {
     SerializedSizeExpr size_expr{};
     QD_IO_DEF(heap_kind, offset_in_elems_compile_time, max_size_compile_time, size_expr);
   };
-  // Captured upper bound on the per-task LCA-block-reaching thread count, derived at codegen time by walking the
-  // LCA dominator chain and pattern-matching the gating condition. When set, the runtime dispatches a generic
-  // reducer kernel before the main task to evaluate the captured predicate over the bound iteration range; the
-  // resulting count is then used to size the AdStackHeapFloat / AdStackHeapInt allocations exactly. When `nullopt`
-  // (the gate did not match a recognized grammar, or the LCA pre-pass placed the LCA at the task body root with
-  // no gate above it), the runtime falls back to the dispatched-threads worst-case sizing - no behavior change
-  // versus a kernel without this metadata. Aliased to the shared cross-backend struct in
-  // `quadrants/transforms/static_adstack_analysis.h`; the SPIR-V codegen and the LLVM codegen consume the same
-  // captured representation through that header.
+  // Captured upper bound on the per-task LCA-block-reaching thread count, derived at codegen time by walking the LCA
+  // dominator chain and pattern-matching the gating condition. When set, the runtime dispatches a generic reducer
+  // kernel before the main task to evaluate the captured predicate over the bound iteration range; the resulting count
+  // is then used to size the AdStackHeapFloat / AdStackHeapInt allocations exactly. When `nullopt` (the gate did not
+  // match a recognized grammar, or the LCA pre-pass placed the LCA at the task body root with no gate above it), the
+  // runtime falls back to the dispatched-threads worst-case sizing - no behavior change versus a kernel without this
+  // metadata. Aliased to the shared cross-backend struct in `quadrants/transforms/static_adstack_analysis.h`; the
+  // SPIR-V codegen and the LLVM codegen consume the same captured representation through that header.
   using StaticBoundExpr = ::quadrants::lang::StaticAdStackBoundExpr;
 
   struct AdStackSizingAttribs {
-    // Compile-time-derived per-thread strides in elements of each heap's element type. The runtime
-    // recomputes these when any alloca's `size_expr` evaluates dynamically; the compile-time values
-    // serve both as the offline-cache-serialised fallback (empty `size_expr` on every alloca) and as
-    // the upper bound for heap-buffer growth when no adstacks are declared (kept at zero). Writing
-    // the final per-launch strides into the metadata buffer slots (0 and 1) is done by the host
-    // launcher regardless of whether any alloca's bound was dynamic.
+    // Compile-time-derived per-thread strides in elements of each heap's element type. The runtime recomputes these
+    // when any alloca's `size_expr` evaluates dynamically; the compile-time values serve both as the
+    // offline-cache-serialised fallback (empty `size_expr` on every alloca) and as the upper bound for heap-buffer
+    // growth when no adstacks are declared (kept at zero). Writing the final per-launch strides into the metadata
+    // buffer slots (0 and 1) is done by the host launcher regardless of whether any alloca's bound was dynamic.
     uint32_t per_thread_stride_float_compile_time{0};
     uint32_t per_thread_stride_int_compile_time{0};
     std::vector<AdStackAllocaAttribs> allocas;

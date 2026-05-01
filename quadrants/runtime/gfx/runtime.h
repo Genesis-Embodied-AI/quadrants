@@ -218,11 +218,11 @@ class QD_DLL_EXPORT GfxRuntime {
   size_t adstack_row_counter_buffer_size_{0};
 
   // Per-dispatch heaps for SPIR-V adstack primal/adjoint storage. The float heap backs f32-valued adstacks; the int
-  // heap backs i32 and u1 adstacks (u1 stored as i32 to match the historical Function-scope path's bool->int remap).
-  // Other primitive types (f64, i64, ...) are hard-errored in the shader codegen (no fallback). Each heap is sized at
-  // `stride * (group_x * block_dim) * sizeof(element)` and grown lazily; reused across launches whenever the current
-  // allocation is already big enough. On grow, the previous buffer is moved into `ctx_buffers_` rather than freed
-  // synchronously, so any in-flight cmdlist still referencing it stays valid until the stream drains.
+  // heap backs i32 and u1 adstacks (u1 stored as i32 to match the Function-scope path's bool->int remap). Other
+  // primitive types (f64, i64, ...) are hard-errored in the shader codegen (no fallback). Each heap is sized at `stride
+  // * (group_x * block_dim) * sizeof(element)` and grown lazily; reused across launches whenever the current allocation
+  // is already big enough. On grow, the previous buffer is moved into `ctx_buffers_` rather than freed synchronously,
+  // so any in-flight cmdlist still referencing it stays valid until the stream drains.
   std::unique_ptr<DeviceAllocationGuard> adstack_heap_buffer_float_;
   size_t adstack_heap_buffer_float_size_{0};
   std::unique_ptr<DeviceAllocationGuard> adstack_heap_buffer_int_;

@@ -35,8 +35,8 @@ namespace quadrants::lang {
 struct AdStackAllocaInfo {
   // Heap kind for the dual-heap layout. Float allocas (f32) live on the lazy float heap addressed by `row_id_var
   // * stride_float + offset`; int allocas (i32 / u1) live on the eager int heap addressed by `linear_thread_idx
-  // * stride_int + offset`. `offset` is interpreted within the slice of the appropriate kind. `0` = float, `1` =
-  // int, matching the SPIR-V `AdStackHeapKind` encoding so the offline cache survives a backend swap.
+  // * stride_int + offset`. `offset` is interpreted within the slice of the appropriate kind. `0` = float, `1` = int,
+  // matching the SPIR-V `AdStackHeapKind` encoding so the offline cache survives a backend swap.
   enum class HeapKind : int32_t { Float = 0, Int = 1 };
   std::size_t offset{0};
   std::size_t max_size_compile_time{0};
@@ -46,14 +46,14 @@ struct AdStackAllocaInfo {
 };
 
 struct AdStackSizingInfo {
-  // Combined per-thread stride across all allocas. Equals `per_thread_stride_float + per_thread_stride_int`;
-  // kept for backward compatibility with code paths that have not yet been migrated to the split layout.
+  // Combined per-thread stride across all allocas. Equals `per_thread_stride_float + per_thread_stride_int`; kept for
+  // backward compatibility with code paths that have not yet been migrated to the split layout.
   std::size_t per_thread_stride{0};
   // Per-thread stride per heap kind. Float stride drives the lazy float heap (addressed by `row_id_var * stride
-  // + offset`); int stride drives the eager int heap (addressed by `linear_thread_idx * stride + offset`).
-  // Splitting is what lets the host shrink the float heap to `effective_rows * stride_float` (where
-  // `effective_rows` is the count of threads passing the captured `bound_expr` gate, when one is recognized)
-  // instead of `num_threads * (stride_float + stride_int)`.
+  // + offset`); int stride drives the eager int heap (addressed by `linear_thread_idx * stride + offset`). Splitting is
+  // what lets the host shrink the float heap to `effective_rows * stride_float` (where `effective_rows` is the count of
+  // threads passing the captured `bound_expr` gate, when one is recognized) instead of `num_threads * (stride_float +
+  // stride_int)`.
   std::size_t per_thread_stride_float{0};
   std::size_t per_thread_stride_int{0};
   std::size_t static_num_threads{0};
@@ -68,10 +68,10 @@ struct AdStackSizingInfo {
   // order form survives the offline cache (an empty `nodes` vector means "no symbolic bound captured", same
   // behaviour as a kernel that Bellman-Ford fully resolved and the launcher only needs `max_size_compile_time`).
   std::vector<SerializedSizeExpr> size_exprs;
-  // Captured static gate predicate when the analysis recognized a single recognized `IfStmt` on the LCA-to-root
-  // chain. The launcher's per-arch reducer evaluates the predicate over the bound iteration range to shrink the
-  // float heap to the actual gate-passing thread count; `nullopt` falls through to dispatched-threads worst-case
-  // sizing (no behavior change versus a kernel without this metadata).
+  // Captured static gate predicate when the analysis recognized a single recognized `IfStmt` on the LCA-to-root chain.
+  // The launcher's per-arch reducer evaluates the predicate over the bound iteration range to shrink the float heap to
+  // the actual gate-passing thread count; `nullopt` falls through to dispatched-threads worst-case sizing (no behavior
+  // change versus a kernel without this metadata).
   std::optional<StaticAdStackBoundExpr> bound_expr;
   QD_IO_DEF(per_thread_stride,
             per_thread_stride_float,
