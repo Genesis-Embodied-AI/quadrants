@@ -978,7 +978,7 @@ class RangeForStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  QD_STMT_DEF_FIELDS(begin, end, reversed, is_bit_vectorized, num_cpu_threads, block_dim, strictly_serialized);
+  QD_STMT_DEF_FIELDS(begin, end, reversed, is_bit_vectorized, num_cpu_threads, block_dim, strictly_serialized, stream_parallel_group_id);
   QD_DEFINE_ACCEPT
 };
 
@@ -1012,7 +1012,7 @@ class StructForStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  QD_STMT_DEF_FIELDS(snode, index_offsets, is_bit_vectorized, num_cpu_threads, block_dim, mem_access_opt);
+  QD_STMT_DEF_FIELDS(snode, index_offsets, is_bit_vectorized, num_cpu_threads, block_dim, mem_access_opt, stream_parallel_group_id);
   QD_DEFINE_ACCEPT
 };
 
@@ -1393,7 +1393,8 @@ class OffloadedStmt : public Stmt {
                      reversed,
                      num_cpu_threads,
                      index_offsets,
-                     mem_access_opt);
+                     mem_access_opt,
+                     stream_parallel_group_id);
   QD_DEFINE_ACCEPT
 };
 
