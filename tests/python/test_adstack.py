@@ -3735,3 +3735,66 @@ def test_adstack_static_bound_expr_device_sizer_per_kind_offsets_grad_correct():
         # d(v0_n + v1_n) / dx[i] = 1.0 * 0.95**a[i] + 2.0 * 0.9**a[i].
         expected = 1.0 * (0.95 ** int(a_np[i])) + 2.0 * (0.9 ** int(a_np[i]))
         assert x.grad[i] == pytest.approx(expected, rel=1e-5)
+
+
+@test_utils.test(arch=[qd.metal, qd.vulkan], require=qd.extension.adstack, ad_stack_size=0)
+def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
+    # Pins the SPIR-V launcher's resolve_length walking the full ndarray flat product instead of capping at
+    # advisory_total_num_threads. range_for kernels with a captured ndarray-backed gating predicate over a
+    # selector larger than `kMaxNumThreadsGridStrideLoop = 131072` previously counted only `selector[0..131072)`
+    # in the reducer; gate-passing cells past that index never contributed to the heap-sizing count, so the
+    # float adstack heap was sized to the truncated count and the codegen-emitted clamp at the LCA-block claim
+    # site aliased every later gated iteration into a smaller-than-real row range.
+    #
+    # Internal details: the kernel below puts all gated cells at indices [131072, 131072+n_gated_past_cap),
+    # past the pre-fix cap, and runs an inner recurrence `v = v * 1.05 + 0.05` so the autodiff transform
+    # actually pushes loop-carried primals onto the float adstack (a single `qd.sin(x[i])` would not - sin's
+    # adjoint reloads `x[i]` directly without consulting the adstack). Pre-fix the reducer counts 0 gate-
+    # passing cells in [0, 131072), the float heap is floored at 1 row, and every gated iteration's
+    # `OpAtomicIAdd` on the row counter clamps back to row 0 via the codegen-emitted `select(capacity == 0,
+    # 0, capacity - 1)` upper-bound. All n_gated_past_cap forward push streams alias onto row 0 and the
+    # reverse pop reads back whichever iteration's primal landed last, producing one common gradient value
+    # for every previously-gated index instead of the per-i `1.05 ** n_iter` the analytic oracle expects.
+    # arch = [qd.metal, qd.vulkan] because CPU and CUDA / AMDGPU launchers have their own bound_count_length
+    # derivation paths whose advisory-cap shape was already addressed in 7ff93bd87 (Bug G, Bug H) and is
+    # exercised by separate tests.
+    n_gated_past_cap = 64  # enough to alias multiple iterations into the floor-1-row heap pre-fix
+    advisory_cap = 131072  # SPIR-V kMaxNumThreadsGridStrideLoop
+    n = advisory_cap + n_gated_past_cap
+    n_iter = 4
+
+    selector = qd.ndarray(qd.f32, shape=(n,))
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if selector[i] > 1e-9:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[0] += v
+
+    x_np = (0.001 * np.arange(n) + 0.1).astype(np.float32)
+    selector_np = np.zeros(n, dtype=np.float32)
+    selector_np[advisory_cap : advisory_cap + n_gated_past_cap] = 1.0  # all gated cells past the pre-fix cap
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    got = x.grad.to_numpy()
+    expected_per_gated = np.float32(1.05**n_iter)
+    expected = np.where(selector_np > 1e-9, expected_per_gated, np.float32(0.0)).astype(np.float32)
+    assert not np.isnan(got).any(), f"resolve_length grad returned NaN: {got[advisory_cap:advisory_cap + 8]}"
+    for i in range(advisory_cap, advisory_cap + n_gated_past_cap):
+        assert got[i] == pytest.approx(expected[i], rel=1e-5, abs=1e-7), (
+            f"gated index {i} (past advisory_total_num_threads={advisory_cap}) gradient diverged: "
+            f"got={got[i]} expected={expected[i]}"
+        )
