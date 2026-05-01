@@ -110,13 +110,13 @@ CodeGenStmtGuard make_while_after_loop_guard(TaskCodeGenLLVM *cg) {
 
 // TaskCodeGenLLVM
 void TaskCodeGenLLVM::visit(Block *stmt_list) {
-  // Float-heap lazy row claim at the IR-level Lowest Common Ancestor (LCA) of every f32 push / load-top site.
-  // Mirrors the SPIR-V codegen's `visit(Block *)` pivot. Active only when the shared static analysis captured a
-  // gating `bound_expr` for this task and resolved a non-trivial LCA: tasks without a captured gate keep the
-  // legacy combined-heap eager addressing and never enter this branch. The runtime-side counter
+  // Float-heap lazy row claim at the IR-level Lowest Common Ancestor (LCA) of every f32 push / load-top site. Mirrors
+  // the SPIR-V codegen's `visit(Block *)` pivot. Active only when the shared static analysis captured a gating
+  // `bound_expr` for this task and resolved a non-trivial LCA: tasks without a captured gate keep the legacy
+  // combined-heap eager addressing and never enter this branch. The runtime-side counter
   // (`runtime->adstack_row_counters[task_codegen_id]`) and capacity (`adstack_bound_row_capacities`) arrays the
-  // atomicrmw and clamp read against are allocated and reset by every launcher (CPU / CUDA / AMDGPU) before the
-  // first task in a kernel via `publish_adstack_lazy_claim_buffers`, so the claim is safe to fire.
+  // atomicrmw and clamp read against are allocated and reset by every launcher (CPU / CUDA / AMDGPU) before the first
+  // task in a kernel via `publish_adstack_lazy_claim_buffers`, so the claim is safe to fire.
   if (ad_stack_static_bound_expr_.has_value() && ad_stack_lca_block_float_ir_ != nullptr &&
       stmt_list == ad_stack_lca_block_float_ir_) {
     emit_ad_stack_row_claim_llvm();
@@ -124,8 +124,8 @@ void TaskCodeGenLLVM::visit(Block *stmt_list) {
       // Debug build: route the heap-header `stack_init` (writes the u64 count word at offset 0) through the
       // freshly-claimed row so the first `stack_push` reads count = 0. The alloca-site path skipped this call
       // intentionally - at that IR position `row_id_var` was still its UINT32_MAX entry-block init, so
-      // `get_ad_stack_base_llvm(stack)` would have addressed off the heap. Now that the LCA-block atomic-rmw
-      // has stored the per-thread row id we can safely materialise the per-stack base and zero its header.
+      // `get_ad_stack_base_llvm(stack)` would have addressed off the heap. Now that the LCA-block atomic-rmw has stored
+      // the per-thread row id we can safely materialise the per-stack base and zero its header.
       for (AdStackAllocaStmt *lazy_stmt : ad_stack_lazy_float_allocas_) {
         call("stack_init", get_ad_stack_base_llvm(lazy_stmt));
       }
@@ -1762,11 +1762,11 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   current_loop_reentry = nullptr;
   current_while_after_loop = nullptr;
 
-  // Reset per-task heap-adstack state. `ad_stack_per_thread_stride_*` and `ad_stack_offsets_` are (re)populated by
-  // the pre-scan below; `ad_stack_heap_base_*_llvm_` is emitted lazily when the first AdStack* stmt of this task
-  // fires. Clearing is important because a kernel with multiple offloaded tasks shares this visitor instance and a
-  // stale map/base from the previous task would either grow stride unboundedly or (worse) reuse an SSA value from
-  // a different function, tripping `verifyFunction` inside `finalize_offloaded_task_function`.
+  // Reset per-task heap-adstack state. `ad_stack_per_thread_stride_*` and `ad_stack_offsets_` are (re)populated by the
+  // pre-scan below; `ad_stack_heap_base_*_llvm_` is emitted lazily when the first AdStack* stmt of this task fires.
+  // Clearing is important because a kernel with multiple offloaded tasks shares this visitor instance and a stale
+  // map/base from the previous task would either grow stride unboundedly or (worse) reuse an SSA value from a different
+  // function, tripping `verifyFunction` inside `finalize_offloaded_task_function`.
   ad_stack_per_thread_stride_ = 0;
   ad_stack_per_thread_stride_float_ = 0;
   ad_stack_per_thread_stride_int_ = 0;
@@ -1790,17 +1790,17 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
 
   // Run the shared static-adstack analysis. Returns the LCA of every f32 push/load-top site, the autodiff-bootstrap
   // const-init push set, and an optional captured `StaticBoundExpr` when a single recognized gate sits on the
-  // LCA-to-root chain. The SNode descriptor resolver walks the leaf SNode's parent chain to identify the owning
-  // tree, then reads the LLVM declaration-order offsets the runtime struct compiler already populated on the live
-  // SNode tree (`SNode::offset_bytes_in_parent_cell` set by `StructCompilerLLVM::generate_types`, mirrored by the
-  // host-side reader `LlvmProgramImpl::get_field_in_tree_offset`). Reading those fields directly keeps the captured
-  // base offset / cell stride byte-correct against the LLVM runtime layout, including the multi-leaf dense case
-  // where `qd.root.dense(qd.i, n).place(field_f64, field_f32)` has children of mixed sizes. The SPIR-V struct
-  // compiler `compile_snode_structs` sorts dense children by ascending size and would land on the wrong offset
-  // here, plus it mutates `offset_bytes_in_parent_cell` and `cell_size_bytes` on the shared SNode tree as a side
-  // effect (corrupting later readers in `dlpack_funcs.cpp` and `field_info.cpp`). Trees outside the kernel's
-  // `program->snode_trees_` range or non-dense parents fall through to nullopt and the analysis rejects the gate
-  // (worst-case sizing in the runtime caller).
+  // LCA-to-root chain. The SNode descriptor resolver walks the leaf SNode's parent chain to identify the owning tree,
+  // then reads the LLVM declaration-order offsets the runtime struct compiler already populated on the live SNode tree
+  // (`SNode::offset_bytes_in_parent_cell` set by `StructCompilerLLVM::generate_types`, mirrored by the host-side reader
+  // `LlvmProgramImpl::get_field_in_tree_offset`). Reading those fields directly keeps the captured base offset / cell
+  // stride byte-correct against the LLVM runtime layout, including the multi-leaf dense case where `qd.root.dense(qd.i,
+  // n).place(field_f64, field_f32)` has children of mixed sizes. The SPIR-V struct compiler `compile_snode_structs`
+  // sorts dense children by ascending size and would land on the wrong offset here, plus it mutates
+  // `offset_bytes_in_parent_cell` and `cell_size_bytes` on the shared SNode tree as a side effect (corrupting later
+  // readers in `dlpack_funcs.cpp` and `field_info.cpp`). Trees outside the kernel's `program->snode_trees_` range or
+  // non-dense parents fall through to nullopt and the analysis rejects the gate (worst-case sizing in the runtime
+  // caller).
   auto snode_resolver = [&](const SNode *leaf, const SNode *dense) -> std::optional<SNodeFieldDescriptor> {
     if (leaf == nullptr || dense == nullptr || prog == nullptr) {
       return std::nullopt;
@@ -1809,13 +1809,13 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     if (root_snode == nullptr) {
       return std::nullopt;
     }
-    // Find which `snode_tree_id` this root belongs to. `program->get_snode_root(id)` returns the SNode for tree
-    // `id`; iterate until we find a match. Tree counts are small (single digits in every observed kernel) so the
-    // linear scan is cheap and avoids needing a public reverse-lookup API on `Program`.
-    // Bound the scan with `prog->get_snode_tree_size()` (program.h:112) - `Program::get_snode_root` is a raw
-    // `snode_trees_[tree_id]->root()` with no bounds check, so an unbounded loop would be `std::vector::operator[]`
-    // OOB undefined behaviour on programs whose tree-id space is smaller than the captured chain expects (stale
-    // SNode references, recycled tree slots, offline-cache restore mismatches). The SPIR-V analog uses a bounded
+    // Find which `snode_tree_id` this root belongs to. `program->get_snode_root(id)` returns the SNode for tree `id`;
+    // iterate until we find a match. Tree counts are small (single digits in every observed kernel) so the linear scan
+    // is cheap and avoids needing a public reverse-lookup API on `Program`. Bound the scan with
+    // `prog->get_snode_tree_size()` (program.h:112) - `Program::get_snode_root` is a raw
+    // `snode_trees_[tree_id]->root()` with no bounds check, so an unbounded loop would be `std::vector::operator[]` OOB
+    // undefined behaviour on programs whose tree-id space is smaller than the captured chain expects (stale SNode
+    // references, recycled tree slots, offline-cache restore mismatches). The SPIR-V analog uses a bounded
     // `snode_to_root_` map; mirror that safety here. Continue (rather than break) past nullptr slots to handle
     // recycled-tree-id holes from `free_snode_tree_ids_`.
     int matched_tree_id = -1;
@@ -1835,16 +1835,16 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     SNodeFieldDescriptor desc;
     desc.root_id = matched_tree_id;
     // Combined byte offset: dense's offset within its single root cell plus the leaf's offset within the dense's
-    // per-cell layout. Both fields are populated by `StructCompilerLLVM::generate_types` (struct_llvm.cpp:56,60)
-    // before any kernel codegen runs, in declaration order matching the LLVM accessors the main kernel emits.
+    // per-cell layout. Both fields are populated by `StructCompilerLLVM::generate_types` (struct_llvm.cpp:56,60) before
+    // any kernel codegen runs, in declaration order matching the LLVM accessors the main kernel emits.
     desc.byte_base_offset =
         static_cast<uint32_t>(dense->offset_bytes_in_parent_cell + leaf->offset_bytes_in_parent_cell);
-    // Per-cell stride for the dense parent. `cell_size_bytes` is the size of one element of the dense's child
-    // struct (set on the dense by `StructCompilerLLVM::generate_types`).
+    // Per-cell stride for the dense parent. `cell_size_bytes` is the size of one element of the dense's child struct
+    // (set on the dense by `StructCompilerLLVM::generate_types`).
     desc.byte_cell_stride = static_cast<uint32_t>(dense->cell_size_bytes);
-    // Iteration count: product of `num_elements_from_root` over the dense's extractors. Mirrors the SPIR-V
-    // compiler's `total_num_cells_from_root` formula at `snode_struct_compiler.cpp:107-114` but reads the
-    // extractor metadata from the live SNode tree (`SNode::extractors[i].num_elements_from_root`, populated by
+    // Iteration count: product of `num_elements_from_root` over the dense's extractors. Mirrors the SPIR-V compiler's
+    // `total_num_cells_from_root` formula at `snode_struct_compiler.cpp:107-114` but reads the extractor metadata from
+    // the live SNode tree (`SNode::extractors[i].num_elements_from_root`, populated by
     // `StructCompiler::infer_snode_properties`) instead of going through the SPIR-V descriptor cache.
     uint64_t iter_count = 1;
     for (const auto &e : dense->extractors) {
@@ -1860,12 +1860,12 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
 
   // Pre-scan the task body for every `AdStackAllocaStmt` before any codegen runs. Each alloca claims a fixed slot
   // inside the COMBINED per-thread slice (legacy single-heap layout, addressed by `linear_tid * combined_stride +
-  // offset`); the kind classification (`HeapKind::Float` / `HeapKind::Int`) is recorded into `info.heap_kind` so
-  // the host launcher knows which kind each alloca belongs to, but the codegen-side addressing stays single-heap
-  // for now. Splitting the layout into separate float / int heaps with `row_id_var * stride_float + float_offset`
-  // is a follow-up that requires updating `visit(AdStackAllocaStmt)` to route base computation per kind. The
-  // shared analysis output (LCA, bootstrap pushes, captured `bound_expr`) propagates to `current_task->ad_stack`
-  // so the host launcher can dispatch the per-arch reducer; the heap addressing change comes after.
+  // offset`); the kind classification (`HeapKind::Float` / `HeapKind::Int`) is recorded into `info.heap_kind` so the
+  // host launcher knows which kind each alloca belongs to, but the codegen-side addressing stays single-heap for now.
+  // Splitting the layout into separate float / int heaps with `row_id_var * stride_float + float_offset` is a follow-up
+  // that requires updating `visit(AdStackAllocaStmt)` to route base computation per kind. The shared analysis output
+  // (LCA, bootstrap pushes, captured `bound_expr`) propagates to `current_task->ad_stack` so the host launcher can
+  // dispatch the per-arch reducer; the heap addressing change comes after.
   {
     auto align_up_8 = [](std::size_t n) -> std::size_t { return (n + 7u) & ~std::size_t{7u}; };
     std::function<void(IRNode *)> scan = [&](IRNode *node) {
@@ -1901,6 +1901,18 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
           scan(if_stmt->false_statements.get());
       } else if (auto *range_for = dynamic_cast<RangeForStmt *>(node)) {
         scan(range_for->body.get());
+      } else if (auto *struct_for = dynamic_cast<StructForStmt *>(node)) {
+        // Defensive: struct_for offloads encode the loop in the OffloadedStmt's `task_type` rather than as a nested
+        // `StructForStmt` in the body, so walking the offload body never lands on a `StructForStmt` from production
+        // Python kernels today. Recurse anyway to keep this pre-scan symmetric with `analyze_adstack_static_bounds`'s
+        // `walk_ir` helper - if a future IR refactor introduces a `StructForStmt` between the offload root and an
+        // `AdStackAllocaStmt`, the alloca's `stack_id` would otherwise stay unassigned and the codegen-emitted base
+        // computation would index `ad_stack_offsets_` out of bounds.
+        scan(struct_for->body.get());
+      } else if (auto *mesh_for = dynamic_cast<MeshForStmt *>(node)) {
+        // Same rationale as the `StructForStmt` branch above: mesh_for offloads encode the loop in `task_type`. Recurse
+        // for symmetry with `analyze_adstack_static_bounds::walk_ir`.
+        scan(mesh_for->body.get());
       } else if (auto *while_stmt = dynamic_cast<WhileStmt *>(node)) {
         scan(while_stmt->body.get());
       }
@@ -2323,13 +2335,13 @@ void TaskCodeGenLLVM::ensure_ad_stack_heap_base_llvm() {
   ad_stack_heap_base_llvm_ = call("LLVMRuntime_get_adstack_heap_buffer", get_runtime());
 }
 
-// Split-heap counterpart of `ensure_ad_stack_heap_base_llvm`. Loads the per-kind heap base pointers from the
-// runtime fields the launcher publishes alongside the legacy combined buffer. Cached at `entry_block` so each
-// downstream `AdStack*` visit reuses a dominating SSA value and `verifyFunction` stays happy regardless of
-// which branch first triggered the load. Float allocas address through `_float`; int / u1 allocas through
-// `_int`. Tasks where the analysis did not capture a `bound_expr` continue to hit the combined-heap path
-// above; tasks with a captured gate route here so the launcher can size the float heap from the reducer's
-// gate-passing thread count instead of the dispatched-threads worst case.
+// Split-heap counterpart of `ensure_ad_stack_heap_base_llvm`. Loads the per-kind heap base pointers from the runtime
+// fields the launcher publishes alongside the legacy combined buffer. Cached at `entry_block` so each downstream
+// `AdStack*` visit reuses a dominating SSA value and `verifyFunction` stays happy regardless of which branch first
+// triggered the load. Float allocas address through `_float`; int / u1 allocas through `_int`. Tasks where the analysis
+// did not capture a `bound_expr` continue to hit the combined-heap path above; tasks with a captured gate route here so
+// the launcher can size the float heap from the reducer's gate-passing thread count instead of the dispatched-threads
+// worst case.
 void TaskCodeGenLLVM::ensure_ad_stack_heap_base_split_llvm() {
   if (ad_stack_heap_base_float_llvm_ != nullptr) {
     return;
@@ -2356,8 +2368,8 @@ void TaskCodeGenLLVM::ensure_ad_stack_metadata_llvm() {
 
 // Split-heap counterpart that also loads the per-kind strides. `_float` drives the lazy float heap addressed by
 // `row_id_var * stride_float + float_offset`; `_int` drives the eager int heap addressed by `linear_thread_idx *
-// stride_int + int_offset`. Cached at `entry_block` like `ensure_ad_stack_metadata_llvm`. The legacy combined
-// stride / offsets / max_sizes loads remain valid for tasks that have not migrated to the split layout.
+// stride_int + int_offset`. Cached at `entry_block` like `ensure_ad_stack_metadata_llvm`. The legacy combined stride /
+// offsets / max_sizes loads remain valid for tasks that have not migrated to the split layout.
 void TaskCodeGenLLVM::ensure_ad_stack_metadata_split_llvm() {
   if (ad_stack_stride_float_llvm_ != nullptr) {
     return;
@@ -2369,13 +2381,12 @@ void TaskCodeGenLLVM::ensure_ad_stack_metadata_split_llvm() {
   ad_stack_stride_int_llvm_ = call("LLVMRuntime_get_adstack_per_thread_stride_int", get_runtime());
 }
 
-// Function-scope `alloca i32` holding the lazily-claimed float-heap row id for this task. Initialised to
-// UINT32_MAX at task entry so any pre-LCA observation (none should reach a real read on a correct codegen)
-// surfaces as an obviously-out-of-range index rather than aliasing row 0. The atomic-rmw claim at the float
-// LCA block overwrites this with the per-thread row, after which every descendant float push / load-top reads
-// the claimed value. The alloca is hoisted to the entry block (via the IRBuilder InsertPointGuard) regardless
-// of where this helper is first called from, so `mem2reg` promotes it to SSA and the row id flows through
-// downstream visits without per-site reloads.
+// Function-scope `alloca i32` holding the lazily-claimed float-heap row id for this task. Initialised to UINT32_MAX at
+// task entry so any pre-LCA observation (none should reach a real read on a correct codegen) surfaces as an
+// obviously-out-of-range index rather than aliasing row 0. The atomic-rmw claim at the float LCA block overwrites this
+// with the per-thread row, after which every descendant float push / load-top reads the claimed value. The alloca is
+// hoisted to the entry block (via the IRBuilder InsertPointGuard) regardless of where this helper is first called from,
+// so `mem2reg` promotes it to SSA and the row id flows through downstream visits without per-site reloads.
 llvm::Value *TaskCodeGenLLVM::ensure_ad_stack_row_id_var_float_llvm() {
   if (ad_stack_row_id_var_float_llvm_ != nullptr) {
     return ad_stack_row_id_var_float_llvm_;
@@ -2389,17 +2400,17 @@ llvm::Value *TaskCodeGenLLVM::ensure_ad_stack_row_id_var_float_llvm() {
   return ad_stack_row_id_var_float_llvm_;
 }
 
-// Emit the float-heap lazy row claim at the current insertion point. Called from `visit(Block *)` exactly once
-// per task at the IR-level Lowest Common Ancestor (LCA) of every f32 push / load-top site (the same block the
-// SPIR-V codegen pivots on at `spirv_codegen.cpp:visit(Block *)`):
+// Emit the float-heap lazy row claim at the current insertion point. Called from `visit(Block *)` exactly once per task
+// at the IR-level Lowest Common Ancestor (LCA) of every f32 push / load-top site (the same block the SPIR-V codegen
+// pivots on at `spirv_codegen.cpp:visit(Block *)`):
 //   - atomic-add 1 into `runtime->adstack_row_counters[task_codegen_id]` and read back the previous value
 //   - clamp the claimed row against `runtime->adstack_bound_row_capacities[task_codegen_id]` so a reducer / main
-//     divergence cannot OOB-write the heap; for tasks where the launcher did not publish a real capacity the slot
-//     holds UINT32_MAX and the clamp is inert
+//     divergence cannot OOB-write the heap; for tasks where the launcher did not publish a real capacity the slot holds
+//     UINT32_MAX and the clamp is inert
 //   - store the (possibly-clamped) row id into `ad_stack_row_id_var_float_llvm_` so every descendant float push /
 //     load-top site reads it back
-// Threads that never reach this block never claim a row and never touch the float heap, which is exactly the
-// property the captured `bound_expr` reducer relies on to size the heap to gate-passing thread count.
+// Threads that never reach this block never claim a row and never touch the float heap, which is exactly the property
+// the captured `bound_expr` reducer relies on to size the heap to gate-passing thread count.
 void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
   llvm::Value *row_id_var = ensure_ad_stack_row_id_var_float_llvm();
 
@@ -2415,18 +2426,18 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
                                                       llvm::MaybeAlign(), llvm::AtomicOrdering::SequentiallyConsistent);
 
   // Per-task capacity slot for the defense-in-depth bounds check: clamp the claimed row at `capacity - 1` so any
-  // overshoot stays in-bounds. For tasks without a captured `bound_expr` the launcher writes UINT32_MAX into this
-  // slot so the clamp is inert. The divergence-overflow signal that the SPIR-V codegen emits via OpAtomicUMax is
-  // not yet wired on the LLVM side - it requires a `__atomic_or_n` against `runtime->adstack_overflow_flag` and
-  // a matching runtime-side getter; in its absence we still get the in-bounds clamp, so the kernel cannot
-  // silently corrupt the heap end. Surface the divergence as a separate follow-up.
+  // overshoot stays in-bounds. For tasks without a captured `bound_expr` the launcher writes UINT32_MAX into this slot
+  // so the clamp is inert. The divergence-overflow signal that the SPIR-V codegen emits via OpAtomicUMax is not yet
+  // wired on the LLVM side - it requires a `__atomic_or_n` against `runtime->adstack_overflow_flag` and a matching
+  // runtime-side getter; in its absence we still get the in-bounds clamp, so the kernel cannot silently corrupt the
+  // heap end. Surface the divergence as a separate follow-up.
   llvm::Value *capacities_base = call("LLVMRuntime_get_adstack_bound_row_capacities", get_runtime());
   llvm::Value *capacity_slot_ptr = builder->CreateGEP(i32ty, capacities_base, task_id_i64);
   llvm::Value *capacity = builder->CreateLoad(i32ty, capacity_slot_ptr);
-  // Guard the `capacity - 1` clamp upper bound against `capacity == 0`: a naive `capacity - 1` underflows
-  // to UINT32_MAX and the clamp degenerates to a no-op, so any overshoot indexes off the heap end. Clamp the
-  // upper bound to row 0 in that case (the launcher floors the heap allocation at one row precisely so this
-  // single-slot fallback is always backed by real storage).
+  // Guard the `capacity - 1` clamp upper bound against `capacity == 0`: a naive `capacity - 1` underflows to UINT32_MAX
+  // and the clamp degenerates to a no-op, so any overshoot indexes off the heap end. Clamp the upper bound to row 0 in
+  // that case (the launcher floors the heap allocation at one row precisely so this single-slot fallback is always
+  // backed by real storage).
   llvm::Value *zero_i32 = llvm::ConstantInt::get(i32ty, 0);
   llvm::Value *capacity_is_zero = builder->CreateICmpEQ(capacity, zero_i32);
   llvm::Value *capacity_minus_one_raw = builder->CreateSub(capacity, one_i32);
@@ -2439,8 +2450,8 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
 // Return (creating on first call) the per-stack `alloca i64` that holds the live push count for this stack on the
 // release-build path. The alloca is emitted in the entry block so `mem2reg` can promote it to an SSA register; the
 // init-store of zero happens at the AdStackAllocaStmt visit site (which may sit inside a loop body, so each loop
-// iteration that re-enters the AdStackAllocaStmt restarts the count - matching the `stack_init` semantics on the
-// debug path).
+// iteration that re-enters the AdStackAllocaStmt restarts the count - matching the `stack_init` semantics on the debug
+// path).
 llvm::Value *TaskCodeGenLLVM::ensure_ad_stack_count_alloca_llvm(const AdStackAllocaStmt *stack) {
   auto it = ad_stack_count_alloca_llvm_.find(stack);
   if (it != ad_stack_count_alloca_llvm_.end()) {
@@ -2474,19 +2485,19 @@ llvm::Value *TaskCodeGenLLVM::emit_ad_stack_single_slot_ptr(const AdStackAllocaS
   return builder->CreateGEP(i8ty, get_ad_stack_base_llvm(const_cast<AdStackAllocaStmt *>(stack)), slot_offset);
 }
 
-// Per-thread base pointer for the given alloca. Lazy float allocas (in tasks with a captured `bound_expr`) emit
-// `heap + row_id_var * stride + offset` at the call site so the row claim from the LCA-block atomic-rmw is
-// observed at every push / load-top site rather than baked in at the alloca visit (which sees `row_id_var =
-// UINT32_MAX` because it runs at the offload root, before the LCA). Every other alloca returns the cached
-// base pointer set by `visit(AdStackAllocaStmt)`.
+// Per-thread base pointer for the given alloca. Lazy float allocas (in tasks with a captured `bound_expr`) emit `heap
+// + row_id_var * stride + offset` at the call site so the row claim from the LCA-block atomic-rmw is observed at every
+// push / load-top site rather than baked in at the alloca visit (which sees `row_id_var = UINT32_MAX` because it runs
+// at the offload root, before the LCA). Every other alloca returns the cached base pointer set by
+// `visit(AdStackAllocaStmt)`.
 //
 // The current implementation routes the lazy path through the existing combined heap (`adstack_heap_buffer` /
-// `adstack_per_thread_stride` / `adstack_offsets`) rather than the split float heap because the runtime still
-// allocates a single combined slab. The savings from sizing the float slab at the reducer's count of
-// gate-passing threads (instead of the dispatched-threads worst case) require a follow-up that allocates a
-// dedicated `adstack_heap_buffer_float` and grows it on observed claim count; the codegen split routing through
-// `ad_stack_heap_base_float_llvm_` / `ad_stack_stride_float_llvm_` already exists in the ensure-helpers and
-// flips on once the runtime side ships.
+// `adstack_per_thread_stride` / `adstack_offsets`) rather than the split float heap because the runtime still allocates
+// a single combined slab. The savings from sizing the float slab at the reducer's count of gate-passing threads
+// (instead of the dispatched-threads worst case) require a follow-up that allocates a dedicated
+// `adstack_heap_buffer_float` and grows it on observed claim count; the codegen split routing through
+// `ad_stack_heap_base_float_llvm_` / `ad_stack_stride_float_llvm_` already exists in the ensure-helpers and flips on
+// once the runtime side ships.
 llvm::Value *TaskCodeGenLLVM::get_ad_stack_base_llvm(AdStackAllocaStmt *stack) {
   if (ad_stack_lazy_float_allocas_.count(stack) == 0) {
     return llvm_val[stack];
@@ -2550,30 +2561,27 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   ensure_ad_stack_metadata_split_llvm();
 
   // Unconditional split routing: float allocas address through `heap_float`, int / u1 allocas through `heap_int`,
-  // regardless of whether the task captured a `bound_expr`. The two heaps are sized independently by the host
-  // launcher (`ensure_adstack_heap_float` / `ensure_adstack_heap_int`); float can shrink to the reducer's count
-  // for bound_expr tasks via `ensure_per_task_float_heap_post_reducer`, while int stays at `num_threads *
-  // stride_int`. Mirrors the SPIR-V backend's unconditional `BufferType::AdStackHeapFloat` /
-  // `AdStackHeapInt` split.
+  // regardless of whether the task captured a `bound_expr`. The two heaps are sized independently by the host launcher
+  // (`ensure_adstack_heap_float` / `ensure_adstack_heap_int`); float can shrink to the reducer's count for bound_expr
+  // tasks via `ensure_per_task_float_heap_post_reducer`, while int stays at `num_threads * stride_int`. Mirrors the
+  // SPIR-V backend's unconditional `BufferType::AdStackHeapFloat` / `AdStackHeapInt` split.
   //
   // Float allocas in tasks with a captured `bound_expr` use the lazy claim path: do not bake a static base into
-  // `llvm_val[stmt]` here because `linear_tid * stride` is the wrong index after the LCA-block atomic-rmw stores
-  // the per-thread claimed row id into `ad_stack_row_id_var_float_llvm_`. Mark the alloca for
-  // `get_ad_stack_base_llvm` so every push / load-top / load-top-adj / pop site recomputes the base as
-  // `heap_float + row_id_var * stride_float + float_offset` at use time. Threads that never reach the LCA never
-  // claim a row and never reach a push / load-top by definition of the LCA, so the unclaimed UINT32_MAX
-  // `row_id_var` is observed only at sites that do not execute.
+  // `llvm_val[stmt]` here because `linear_tid * stride` is the wrong index after the LCA-block atomic-rmw stores the
+  // per-thread claimed row id into `ad_stack_row_id_var_float_llvm_`. Mark the alloca for `get_ad_stack_base_llvm` so
+  // every push / load-top / load-top-adj / pop site recomputes the base as `heap_float + row_id_var * stride_float +
+  // float_offset` at use time. Threads that never reach the LCA never claim a row and never reach a push / load-top by
+  // definition of the LCA, so the unclaimed UINT32_MAX `row_id_var` is observed only at sites that do not execute.
   const bool is_float = stmt->ret_type == PrimitiveType::f32 || stmt->ret_type == PrimitiveType::f64;
   if (is_float && ad_stack_static_bound_expr_.has_value()) {
     ad_stack_lazy_float_allocas_.insert(stmt);
     if (compile_config.debug) {
       // Skip the `stack_init` call here: `get_ad_stack_base_llvm(stmt)` would emit `heap_float + row_id_var *
-      // stride_float + offset` while `row_id_var` is still its entry-block UINT32_MAX init at this IR position
-      // (the LCA-block atomic-rmw row claim runs strictly later, after the gate IfStmt is entered), and
-      // `stack_init`'s `*(u64*)stack = 0` would dereference that out-of-bounds address. Initialise the
-      // per-stack count alloca instead, mirroring the release path; the first `AdStackPushStmt` site under the
-      // LCA writes the `count` u64 header to its claimed row through the same `stack_push` call that
-      // dereferences the (now-valid) `row_id_var`.
+      // stride_float + offset` while `row_id_var` is still its entry-block UINT32_MAX init at this IR position (the
+      // LCA-block atomic-rmw row claim runs strictly later, after the gate IfStmt is entered), and `stack_init`'s
+      // `*(u64*)stack = 0` would dereference that out-of-bounds address. Initialise the per-stack count alloca instead,
+      // mirroring the release path; the first `AdStackPushStmt` site under the LCA writes the `count` u64 header to its
+      // claimed row through the same `stack_push` call that dereferences the (now-valid) `row_id_var`.
       auto *i64ty_init = llvm::Type::getInt64Ty(*llvm_context);
       llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stmt);
       builder->CreateStore(llvm::ConstantInt::get(i64ty_init, 0), count_alloca);
@@ -2590,9 +2598,9 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
 
   // Eager path for everything else: float allocas in non-bound_expr tasks address `heap_float + linear_tid *
   // stride_float + offset`; int allocas always address `heap_int + linear_tid * stride_int + offset`. Each alloca's
-  // `host_offsets[stack_id]` is already an offset within its slice of the appropriate kind (float-only or
-  // int-only) thanks to the host-side split publication in `publish_adstack_metadata`; we just pick the right
-  // base + stride pair here.
+  // `host_offsets[stack_id]` is already an offset within its slice of the appropriate kind (float-only or int-only)
+  // thanks to the host-side split publication in `publish_adstack_metadata`; we just pick the right base + stride pair
+  // here.
   auto *i8ty = llvm::Type::getInt8Ty(*llvm_context);
   auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
   // Thread slot: on CPU it's `RuntimeContext::cpu_thread_id` (range [0, num_cpu_threads)); on CUDA / AMDGPU it's
@@ -2607,8 +2615,8 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   llvm::Value *stack_id_i64 = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(stmt->stack_id));
   // `stride` and `offset` come from the per-launch metadata the host publishes via
   // `runtime_get_adstack_metadata_field_ptrs` rather than from codegen-time immediates. The old immediate path baked
-  // the sum of compile-time `max_size` values into the kernel, which could not scale when a `SizeExpr` leaf resolved
-  // to a different value at launch.
+  // the sum of compile-time `max_size` values into the kernel, which could not scale when a `SizeExpr` leaf resolved to
+  // a different value at launch.
   llvm::Value *offset_addr = builder->CreateGEP(i64ty, ad_stack_offsets_ptr_llvm_, stack_id_i64);
   llvm::Value *offset = builder->CreateLoad(i64ty, offset_addr);
   llvm::Value *slice_offset = builder->CreateMul(linear_tid_i64, stride);
@@ -2659,24 +2667,23 @@ void TaskCodeGenLLVM::visit(AdStackPopStmt *stmt) {
 void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
   // Autodiff-bootstrap const-init pushes (identified by the shared static-adstack analysis): keep the count_var
-  // increment so the matching reverse pop balances, but skip the slot store. These pushes execute on every
-  // dispatched thread regardless of any later gating; the bootstrap value is dead memory because no `load_top`
-  // ever reads it back. Skipping the store is what lets the split-heap layout place the float row claim inside
-  // the gating branch without dragging the LCA up to the offload root through these unconditional pushes; on
-  // the lazy float path the runtime-helper `stack_push` (debug build) would otherwise dereference
-  // `heap_float + row_id_var * stride_float + offset` while `row_id_var` is still its UINT32_MAX entry-block
-  // init at the bootstrap site (which sits ABOVE the LCA where the atomic-rmw row claim writes the per-thread
-  // row id), and the count u64 store would land ~ TB past the heap base. Same skip on debug as on release: the
-  // count_alloca increment alone keeps push and pop balanced, and the bounds-check helper has nothing to do
-  // for an autodiff-emitted const-init that never reads back its slot anyway.
+  // increment so the matching reverse pop balances, but skip the slot store. These pushes execute on every dispatched
+  // thread regardless of any later gating; the bootstrap value is dead memory because no `load_top` ever reads it back.
+  // Skipping the store is what lets the split-heap layout place the float row claim inside the gating branch without
+  // dragging the LCA up to the offload root through these unconditional pushes; on the lazy float path the
+  // runtime-helper `stack_push` (debug build) would otherwise dereference `heap_float + row_id_var * stride_float +
+  // offset` while `row_id_var` is still its UINT32_MAX entry-block init at the bootstrap site (which sits ABOVE the LCA
+  // where the atomic-rmw row claim writes the per-thread row id), and the count u64 store would land ~ TB past the heap
+  // base. Same skip on debug as on release: the count_alloca increment alone keeps push and pop balanced, and the
+  // bounds-check helper has nothing to do for an autodiff-emitted const-init that never reads back its slot anyway.
   if (ad_stack_bootstrap_pushes_.count(stmt) != 0) {
     // Single-slot adstacks have no `count_alloca` (the slot index is fixed at 0), so there is nothing to increment.
     // Multi-slot stacks bump `count_alloca` so the matching reverse pop balances. Either way we skip the slot store:
     // the bootstrap value is dead memory (no `load_top` ever reads it back) and the single-slot store would otherwise
     // route through `emit_ad_stack_single_slot_ptr -> get_ad_stack_base_llvm`, which on the lazy float path returns
     // `heap_float + row_id_var * stride_float + offset` while `row_id_var` is still its UINT32_MAX entry-block init at
-    // the bootstrap site (the LCA-block atomic-rmw row claim runs strictly later) - the store would land ~ TB past
-    // the heap base.
+    // the bootstrap site (the LCA-block atomic-rmw row claim runs strictly later) - the store would land ~ TB past the
+    // heap base.
     if (!is_compile_time_single_slot(stack)) {
       auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
       llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stack);
@@ -2687,8 +2694,8 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
     return;
   }
   if (compile_config.debug) {
-    // Debug build: route through the bounds-checking helper so any sizer bug surfaces as an overflow flag at sync.
-    // The `max_size` load is only needed on this path.
+    // Debug build: route through the bounds-checking helper so any sizer bug surfaces as an overflow flag at sync. The
+    // `max_size` load is only needed on this path.
     ensure_ad_stack_metadata_llvm();
     auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
     llvm::Value *stack_id_i64 = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(stack->stack_id));
@@ -2701,13 +2708,12 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
     builder->CreateStore(llvm_val[stmt->v], primal_ptr);
     return;
   }
-  // Release build, multi-slot: emit the push as inline IR against the per-stack count alloca. After `mem2reg`
-  // promotes the alloca to SSA, `GVN` folds the chain of `count++` across consecutive unrolled pushes; the only
-  // surviving memory traffic in the unrolled body is the slot stores themselves. The runtime overflow check is
-  // dropped on this path because `determine_ad_stack_size` produces a valid upper bound on per-thread push count
-  // along every execution path (any unresolved stack is a hard compile error), so the `n + 1 > max_num_elements`
-  // guard inside `stack_push` is dead in correct compilations. Single-slot stacks below skip the count alloca
-  // entirely - slot is fixed at offset 8.
+  // Release build, multi-slot: emit the push as inline IR against the per-stack count alloca. After `mem2reg` promotes
+  // the alloca to SSA, `GVN` folds the chain of `count++` across consecutive unrolled pushes; the only surviving memory
+  // traffic in the unrolled body is the slot stores themselves. The runtime overflow check is dropped on this path
+  // because `determine_ad_stack_size` produces a valid upper bound on per-thread push count along every execution path
+  // (any unresolved stack is a hard compile error), so the `n + 1 > max_num_elements` guard inside `stack_push` is dead
+  // in correct compilations. Single-slot stacks below skip the count alloca entirely - slot is fixed at offset 8.
   llvm::Value *primal_ptr;
   if (is_compile_time_single_slot(stack)) {
     primal_ptr = emit_ad_stack_single_slot_ptr(stack, /*adjoint_offset_bytes=*/0);
@@ -2726,12 +2732,12 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
                            builder->CreateMul(old_count, llvm::ConstantInt::get(i64ty, entry_size)));
     primal_ptr = builder->CreateGEP(i8ty, get_ad_stack_base_llvm(stack), slot_offset);
   }
-  // Zero the primal+adjoint slot pair to match `stack_push`'s `memset(top_primal, 0, 2 * element_size)`. Without
-  // this, a previous use of this slot's adjoint would persist into the new push's accumulator. Slot pointer is
-  // `stack + 8 + count * 2 * element_size` so the destination is `2 * element_size`-aligned (the slot stride),
-  // capped at 8 because the per-thread slab base is 8-aligned. For `element_size in {1, 2}` (i8 / u1 packs, fp16)
-  // this is 2 or 4 bytes; an over-stated alignment would let LLVM lower the memset to wider stores than the
-  // pointer can satisfy on stricter backends.
+  // Zero the primal+adjoint slot pair to match `stack_push`'s `memset(top_primal, 0, 2 * element_size)`. Without this,
+  // a previous use of this slot's adjoint would persist into the new push's accumulator. Slot pointer is `stack + 8 +
+  // count * 2 * element_size` so the destination is `2 * element_size`-aligned (the slot stride), capped at 8 because
+  // the per-thread slab base is 8-aligned. For `element_size in {1, 2}` (i8 / u1 packs, fp16) this is 2 or 4 bytes; an
+  // over-stated alignment would let LLVM lower the memset to wider stores than the pointer can satisfy on stricter
+  // backends.
   std::size_t slot_align = std::min<std::size_t>(8u, 2u * stack->element_size_in_bytes());
   builder->CreateMemSet(primal_ptr, llvm::ConstantInt::get(llvm::Type::getInt8Ty(*llvm_context), 0),
                         llvm::ConstantInt::get(llvm::Type::getInt64Ty(*llvm_context), stack->entry_size_in_bytes()),
