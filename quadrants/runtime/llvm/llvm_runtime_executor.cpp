@@ -943,7 +943,12 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     runtime_jit->call<void *, void *, void *>("runtime_eval_adstack_size_expr", llvm_runtime_,
                                               runtime_context_ptr_for_sizer, bytecode_dev_ptr);
 
-    // Read back the computed per-thread stride so we can size the heap on host. One 8-byte `DtoH` per launch.
+    // The sizer kernel runs on active_stream; drain it before reading the stride on the host.
+#if defined(QD_WITH_CUDA)
+    if (config_.arch == Arch::cuda) {
+      CUDADriver::get_instance().stream_synchronize(CUDAContext::get_instance().get_stream());
+    }
+#endif
     uint64_t stride_u64 = 0;
     copy_d2h(&stride_u64, runtime_adstack_stride_field_ptr_, sizeof(uint64_t));
     stride = static_cast<std::size_t>(stride_u64);
