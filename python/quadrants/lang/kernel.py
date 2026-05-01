@@ -4,6 +4,7 @@ import os
 import pathlib
 import time
 from collections import defaultdict
+from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
 # Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.
 from functools import partial
@@ -491,7 +492,7 @@ class Kernel(FuncBase):
                     template_num += 1
                     i_out += 1
                     continue
-                if getattr(val, "_qd_all_field", False) and getattr(needed_, "__dataclass_fields__", None) is not None:
+                if getattr(val, "_qd_all_field", False) and getattr(needed_, _FIELDS, None) is not None:
                     continue
                 if self.graph_do_while_arg is not None and self.arg_metas[i_in].name == self.graph_do_while_arg:
                     self._graph_do_while_cpp_arg_id = i_out - template_num
