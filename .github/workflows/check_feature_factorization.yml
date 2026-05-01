@@ -63,9 +63,13 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_KEY_HUGH }}
         run: |
           RESULT=$(agent -p "$(cat <<'PROMPT'
-          You are reviewing a PR for *file-level factorization* problems: cases where the PR adds
-          feature-specific code to an *existing* file whose primary concern is something else, when
-          that new code would be better placed in its own feature-specific file (existing or new).
+          You are reviewing a PR for one specific factorization smell: *feature-specific code being
+          piled into a heavily-tracked core file* when it could instead live in its own
+          feature-specific file (new or existing). The concern is NOT that the new code is in the
+          "wrong" place semantically — it is usually topically related to the host file. The concern
+          is that the host file is already a hot, central, frequently-edited file, and adding more
+          self-contained feature code to it makes review, merge conflicts, and future churn worse.
+          The fix is almost always: extract the feature-specific block into its own module/file.
 
           Inputs:
           - /tmp/source_diff.patch — unified diff of NON-TEST source files MODIFIED (not added,
@@ -73,54 +77,58 @@ jobs:
             benchmarks/, docs/, scripts/, misc/)
           - /tmp/modified_source_files.txt — list of those modified source files
 
-          You may inspect any file in the repo to understand existing structure, naming conventions,
-          and what each file's responsibility is.
+          You may inspect any file in the repo and run shell commands to gather signal. Useful ones:
+          - git log --oneline -- <path> | wc -l      # total commit count for the file
+          - git log --since=1.year.ago --oneline -- <path> | wc -l   # recent churn
+          - git shortlog -sn -- <path> | wc -l       # distinct authors
+          - wc -l <path>                             # current size
 
           Repo layout:
           - Python source: python/quadrants/
           - C++ source: quadrants/ (subdirs: codegen, ir, runtime, transforms, rhi, python, etc.)
-          The repo generally factorizes per-backend / per-pass / per-feature (e.g., separate files
-          per RHI backend under quadrants/rhi/, separate files per IR transform under
-          quadrants/transforms/, separate Python modules per concept under python/quadrants/lang/).
+          The repo factorizes per-backend / per-pass / per-feature (separate files per RHI backend
+          under quadrants/rhi/, separate files per IR transform under quadrants/transforms/,
+          separate Python modules per concept under python/quadrants/lang/).
 
-          Your task:
-          1. For each existing source file modified in this PR, examine the substantial added code
-             (new top-level functions, new classes, new methods, large new self-contained blocks).
-          2. Decide whether each addition is well-placed, or whether it is feature-specific code
-             grafted onto an unrelated host file. Signs of bad placement:
-             - The added function/class is named after a feature, subsystem, backend, op, or device
-               that is not the host file's concern (e.g., adding metal-specific logic to a generic
-               file, or adding feature-X helpers to a file about feature-Y).
-             - The host file's existing contents are about concern A, but the new code is about an
-               unrelated concern B.
-             - The PR adds a large new self-contained block that would naturally form its own module.
-             - The repo already has a per-feature factorization pattern that the new code violates
-               (e.g., a sibling file already exists where the new code obviously belongs).
-          3. For each violation, suggest a better location: an *existing* feature-specific file in
-             the repo, or a plausible new file path that follows the repo's naming conventions.
+          Procedure (apply to each modified existing file):
+          1. Is the host file *heavily tracked / core*? Treat it as such if any of these hold:
+             - High lifetime commit count (e.g. >= 100 commits).
+             - High recent churn (e.g. >= 20 commits in the last year).
+             - Many distinct authors (e.g. >= 8).
+             - It is large (e.g. >= 800 lines) AND clearly central (frequently imported, sits in a
+               core subdir like codegen/, ir/, runtime/, transforms/, lang/, lang/ast/).
+             If NONE of these hold, do not flag anything in this file — the host is not hot enough
+             to warrant carving things out.
+          2. If the host IS hot, examine the substantial added code (new top-level functions, new
+             classes, large new self-contained blocks — NOT new methods on an existing class, NOT
+             small edits to existing functions).
+          3. Flag a block only if it is plausibly extractable: it has a clear feature/subsystem
+             name, it is mostly self-contained (limited entanglement with the host file's existing
+             internals), and a reasonable file path can be named for it.
+          4. For each violation, suggest a better location: an *existing* feature-specific file or
+             a plausible new file path that matches the repo's naming conventions. Briefly note the
+             host's hotness numbers (commits / authors / size) so the reviewer can sanity-check.
 
           What NOT to flag:
-          - Small tweaks, bug fixes, or extensions of functions/classes that already live in the
-            host file.
-          - Adding a method to a class that already lives in the host file (the class is the right
-            unit of locality, not the file).
-          - Generic utilities legitimately added to a utilities file.
+          - Anything in a file that is not heavily-tracked / core (most files).
+          - Small tweaks, bug fixes, or extensions of functions that already live in the host file.
+          - New methods added to a class that already lives in the host file (the class is the unit
+            of locality, not the file).
+          - Code that is tightly coupled to the host file's internals and would not cleanly extract.
           - Refactors / renames / moves that just relocate existing code.
           - Newly added files (out of scope for this check).
           - Trivial changes (imports, type hints, comments, docstrings, logging).
-          - Cases where the host file already mixes concerns to a similar degree — don't make it
-            worse, but don't fight existing convention either.
           - Cases where there is no clear better home and inventing a new file would be overkill.
 
-          Be conservative. Only flag clear cases where moving the code would meaningfully improve
-          organization. Borderline cases are FINE.
+          Be conservative. The bar is: "this PR is making a hot file hotter for no good reason, and
+          the new block obviously wants to be its own file." Borderline cases are FINE.
           Do NOT modify any files.
           Stop after finding 5 violations.
 
           If there are NO violations, your final output must start with the word PASS.
           If there ARE violations, your final output must start with the word FAIL, followed by a
           list of violations (up to 5) in the format:
-          <host_filepath>:<symbol_or_block>: <why feature-specific> -> suggested: <filepath>
+          <host_filepath> [commits=N, authors=M, lines=L]:<symbol_or_block>: <why extractable> -> suggested: <filepath>
           PROMPT
           )" --model claude-4.6-opus-high-thinking --mode ask --output-format text --trust)
 
