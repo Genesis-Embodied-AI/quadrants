@@ -3003,7 +3003,7 @@ def test_adstack_min_loop_carried_serial_range_for(n_inner):
 
 
 @pytest.mark.parametrize("gated_fraction", [0.0, 0.05, 0.5, 1.0])
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
 def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
     # Asserts gradient correctness for reverse-mode kernels of shape `for i in range(n): if selector[i] > eps:
     # <adstack-using gradient work>` where `selector` is an ndarray argument. Parametrised over the gate-pass fraction
@@ -3075,7 +3075,9 @@ def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
-@test_utils.test(require=[qd.extension.adstack, qd.extension.data64], ad_stack_size=32)
+@test_utils.test(
+    require=[qd.extension.adstack, qd.extension.data64], ad_stack_size=32, ad_stack_sparse_threshold_bytes=0
+)
 def test_adstack_static_bound_expr_f64_gate_grad_correct():
     # Asserts gradient correctness for reverse-mode kernels with an f64-typed gating ndarray (`if selector_f64[i] >
     # 0.5`) above f32 adstack pushes. The reducer must dispatch through the f64 comparison arm; routing f64-captured
@@ -3138,7 +3140,7 @@ def test_adstack_static_bound_expr_f64_gate_grad_correct():
 
 
 @pytest.mark.parametrize("alloca_outside_gate", [False, True])
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True, ad_stack_sparse_threshold_bytes=0)
 def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct(alloca_outside_gate):
     # Asserts gradient correctness for reverse-mode kernels with a captured ndarray-backed gate under `debug=True`. The
     # debug build routes every adstack push / pop / load-top through the runtime helpers (`stack_push`,
@@ -3221,7 +3223,7 @@ def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct(alloca_
 
 
 @pytest.mark.parametrize("gated_fraction", [0.05, 0.5, 1.0])
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
 def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
     # Asserts gradient correctness for reverse-mode kernels of shape `for i in selector: if selector[i] > eps:
     # <adstack-using gradient work>` where `selector` is a `qd.field(...)` placed under `qd.root.dense(...)` -the layout
@@ -3277,7 +3279,7 @@ def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=0, debug=False)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=0, debug=False, ad_stack_sparse_threshold_bytes=0)
 def test_adstack_static_bound_expr_snode_gate_primal_dependent_grad_correct():
     # Asserts gradient correctness on the LLVM CPU host reducer for SNode-backed gates with a primal-dependent inner
     # recurrence. The CPU host reducer must walk the SNode field and publish the gate-passing count so the float adstack
@@ -3350,7 +3352,9 @@ def test_adstack_static_bound_expr_snode_gate_primal_dependent_grad_correct():
         assert got_grad[i] == pytest.approx(expected[i], rel=1e-5, abs=1e-7)
 
 
-@test_utils.test(require=[qd.extension.adstack, qd.extension.data64], ad_stack_size=0, debug=False)
+@test_utils.test(
+    require=[qd.extension.adstack, qd.extension.data64], ad_stack_size=0, debug=False, ad_stack_sparse_threshold_bytes=0
+)
 def test_adstack_static_bound_expr_snode_gate_multileaf_dense_grad_correct():
     # Asserts gradient correctness on the LLVM static-bound-expr SNode resolver for dense parents with multiple
     # mixed-size leaves. The resolver must read each leaf's byte offset in declaration order (matching the LLVM struct
@@ -3527,7 +3531,7 @@ def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=64)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=64, ad_stack_sparse_threshold_bytes=0)
 def test_adstack_static_bound_expr_primal_dependent_inner_recurrence_grad_correct():
     # Asserts gradient correctness for reverse-mode kernels with a captured ndarray-backed gate above a primal-dependent
     # inner recurrence (`v = qd.sin(v) + 0.01`, whose chain rule `d(sin(v))/dv = cos(v)` depends on the stored primal).
@@ -3780,7 +3784,7 @@ def test_adstack_static_bound_expr_device_sizer_per_kind_offsets_grad_correct():
         assert x.grad[i] == pytest.approx(expected, rel=1e-5)
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=0)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=0, ad_stack_sparse_threshold_bytes=0)
 def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
     # Asserts gradient correctness on Metal / Vulkan when an adstack-bearing kernel's gating ndarray is larger than the
     # SPIR-V grid-stride advisory cap (`kMaxNumThreadsGridStrideLoop = 131072`) and all gated cells live past the cap.

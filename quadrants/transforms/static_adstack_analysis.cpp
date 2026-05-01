@@ -136,7 +136,8 @@ void walk_ir(IRNode *node, Fn &&visit) {
 }  // namespace
 
 StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir,
-                                                          const SNodeDescriptorResolver &snode_descriptor_resolver) {
+                                                          const SNodeDescriptorResolver &snode_descriptor_resolver,
+                                                          std::size_t sparse_heap_threshold_bytes) {
   StaticAdStackAnalysisResult result;
   if (task_ir == nullptr || task_ir->body == nullptr) {
     return result;
@@ -500,7 +501,26 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
     }
   }
   if (chain_ok && gate_count == 1) {
-    result.bound_expr = captured;
+    // Latency-vs-memory threshold: capturing `bound_expr` routes the task through the lazy LCA-block atomic-rmw row
+    // claim, which costs a runtime reducer compute-shader dispatch + per-task device-to-host capacity readback at
+    // every kernel launch. The savings are proportional to the `dispatched_threads * stride_float * sizeof(float)`
+    // worst-case heap allocation the lazy path replaces; below the configured threshold the conservative eager
+    // allocation is cheap enough that the reducer's per-launch overhead dominates and the backward pass slows down.
+    // Skip the capture in that regime so the codegen falls back to the eager `linear_thread_idx * stride` mapping
+    // (no LCA-block atomic, no reducer dispatch, no host-side per-task DtoH per launch). Threads bound at the
+    // SPIR-V grid-stride advisory cap (`kMaxNumThreadsGridStrideLoop = 131072`) - the larger of the two backend
+    // ceilings (LLVM CUDA / AMDGPU floor at 65536 via `kAdStackMaxConcurrentThreads` in the launchers); using the
+    // SPIR-V ceiling keeps the test tight on both. `per_thread_stride_float` is in entry-count units (`2 *
+    // max_size` per alloca, summed across every f32 / f64 alloca in the task), so the byte conversion is `*
+    // sizeof(float)`. Threshold default lives in `CompileConfig::ad_stack_sparse_threshold_bytes` (100 MiB); set to
+    // 0 to always capture (tests that pin the reducer-backed sizing path) or to a very large value to always
+    // disable.
+    constexpr size_t kAdvisoryThreadsCeiling = 131072;
+    const size_t conservative_heap_bytes_upper =
+        size_t(result.per_thread_stride_float) * sizeof(float) * kAdvisoryThreadsCeiling;
+    if (conservative_heap_bytes_upper >= sparse_heap_threshold_bytes) {
+      result.bound_expr = captured;
+    }
   }
   return result;
 }

@@ -170,7 +170,8 @@ TaskCodegen::Result TaskCodegen::run() {
     desc.iter_count = static_cast<uint32_t>(dense_desc_it->second.total_num_cells_from_root);
     return desc;
   };
-  auto adstack_analysis = analyze_adstack_static_bounds(task_ir_, snode_descriptor_resolver);
+  auto adstack_analysis = analyze_adstack_static_bounds(task_ir_, snode_descriptor_resolver,
+                                                        compile_config_->ad_stack_sparse_threshold_bytes);
   ad_stack_heap_per_thread_stride_float_ = adstack_analysis.per_thread_stride_float;
   ad_stack_heap_per_thread_stride_int_ = adstack_analysis.per_thread_stride_int;
   num_ad_stacks_ = adstack_analysis.num_ad_stacks;

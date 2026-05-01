@@ -43,6 +43,22 @@ Whether to enable IEEE-relaxed floating-point optimizations (FMA fusion, no NaN 
 
 Number of host threads used when compiling kernels. Default `4`. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to `1`) on memory-pressure-bound systems where concurrent LLVM compilations thrash.
 
+## Reverse-mode autodiff
+
+See [Autodiff](./autodiff.md) for the reverse-mode pipeline overview.
+
+### `ad_stack_experimental_enabled`
+
+Enables the dynamic-loop reverse-mode pipeline (the *adstack*). Default `False`. Required when a reverse-mode kernel has a runtime-bounded loop carrying a non-linear primal; without it, such kernels either compile-error or produce silently-wrong gradients depending on the loop shape. See [Autodiff with dynamic loops](./autodiff.md#autodiff-with-dynamic-loops) for the rules. Adstack-on is safe even when not strictly needed.
+
+### `ad_stack_size`
+
+Forces every adstack in the program to exactly `N` slots and bypasses the launch-time sizer. Default `0`, meaning "let the sizer decide" (the recommended setting for day-to-day use). Setting a positive `N` is meant for stress tests or working around a suspected sizer bug; it defeats the per-launch-exact sizing so every dispatch allocates the full `N` slots whether or not the kernel actually needs them. Has no effect when `ad_stack_experimental_enabled=False`.
+
+### `ad_stack_sparse_threshold_bytes`
+
+Cutoff (in bytes) below which the gate-passing-count sizing path described in [Memory footprint](./autodiff.md#memory-footprint) is skipped in favour of the eager `dispatched_threads * stride` heap. Default `100 MiB`. The sparse path saves memory on kernels of the shape `for i in range(...): if field[i] cmp literal: <adstack work>` but pays a per-launch reducer dispatch; below the threshold that overhead outweighs the savings. Set to `0` to always use the sparse path; raise it if the default still skips kernels you want shrunk. No effect when `ad_stack_experimental_enabled=False` or when the kernel has no such gate.
+
 ## Debugging
 
 See [Debug mode](./debug.md) for runnable examples and a typical develop / benchmark workflow.

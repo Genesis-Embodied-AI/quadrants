@@ -1852,7 +1852,8 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     desc.iter_count = static_cast<uint32_t>(iter_count);
     return desc;
   };
-  auto adstack_analysis = analyze_adstack_static_bounds(stmt, snode_resolver);
+  auto adstack_analysis =
+      analyze_adstack_static_bounds(stmt, snode_resolver, compile_config.ad_stack_sparse_threshold_bytes);
   ad_stack_bootstrap_pushes_ = std::move(adstack_analysis.bootstrap_pushes);
   ad_stack_lca_block_float_ir_ = adstack_analysis.lca_block_float;
   ad_stack_static_bound_expr_ = adstack_analysis.bound_expr;

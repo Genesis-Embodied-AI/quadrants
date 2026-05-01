@@ -146,8 +146,13 @@ struct StaticAdStackAnalysisResult {
 
 // Run the analysis on `task_ir`. `snode_descriptor_resolver` is consulted only on SNode-backed gates; pass an
 // always-empty resolver to disable SNode capture (the analysis still captures ndarray-backed gates and emits the LCA +
-// bootstrap set for both backends).
+// bootstrap set for both backends). `sparse_heap_threshold_bytes` is the conservative-heap cutoff below which a
+// matched gate is NOT captured into `bound_expr`, so the codegen falls back to the eager `linear_thread_idx * stride`
+// addressing and the launchers skip the per-launch reducer dispatch + DtoH; see `CompileConfig::
+// ad_stack_sparse_threshold_bytes` for the user-facing knob (default 100 MiB; 0 forces capture, useful for tests
+// that pin the reducer-backed sizing path).
 StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir,
-                                                          const SNodeDescriptorResolver &snode_descriptor_resolver);
+                                                          const SNodeDescriptorResolver &snode_descriptor_resolver,
+                                                          std::size_t sparse_heap_threshold_bytes);
 
 }  // namespace quadrants::lang
