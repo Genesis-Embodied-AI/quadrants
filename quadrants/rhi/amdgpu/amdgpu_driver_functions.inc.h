@@ -15,6 +15,9 @@ PER_AMDGPU_FUNCTION(context_create, hipCtxCreate, void *, int, void *);
 PER_AMDGPU_FUNCTION(context_set_current, hipCtxSetCurrent, void *);
 PER_AMDGPU_FUNCTION(context_get_current, hipCtxGetCurrent, void **);
 
+// Device synchronization
+PER_AMDGPU_FUNCTION(device_synchronize, hipDeviceSynchronize);
+
 // Stream management
 PER_AMDGPU_FUNCTION(stream_create, hipStreamCreateWithFlags, void **, uint32);
 PER_AMDGPU_FUNCTION(stream_destroy, hipStreamDestroy, void *);
