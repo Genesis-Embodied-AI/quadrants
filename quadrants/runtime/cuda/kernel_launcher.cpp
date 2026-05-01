@@ -71,8 +71,9 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
     launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
     counter_val = 0;
     auto *stream = CUDAContext::get_instance().get_stream();
+    CUDADriver::get_instance().memcpy_device_to_host_async(&counter_val, ctx.graph_do_while_flag_dev_ptr,
+                                                           sizeof(int32_t), stream);
     CUDADriver::get_instance().stream_synchronize(stream);
-    CUDADriver::get_instance().memcpy_device_to_host(&counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
   } while (counter_val != 0);
 }
 
@@ -226,9 +227,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().supports_pageable_memory_access();
   void *device_context_ptr = nullptr;
   if (needs_sizer_device_ctx) {
-    CUDADriver::get_instance().malloc_async(&device_context_ptr, sizeof(RuntimeContext), nullptr);
+    CUDADriver::get_instance().malloc_async(&device_context_ptr, sizeof(RuntimeContext), active_stream);
     CUDADriver::get_instance().memcpy_host_to_device_async(device_context_ptr, &ctx.get_context(),
-                                                           sizeof(RuntimeContext), nullptr);
+                                                           sizeof(RuntimeContext), active_stream);
   }
 
   if (ctx.graph_do_while_arg_id >= 0) {
@@ -238,7 +239,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
   }
   if (needs_sizer_device_ctx) {
-    CUDADriver::get_instance().mem_free_async(device_context_ptr, nullptr);
+    CUDADriver::get_instance().mem_free_async(device_context_ptr, active_stream);
   }
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().mem_free_async(device_arg_buffer, active_stream);
