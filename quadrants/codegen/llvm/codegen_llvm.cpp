@@ -1865,7 +1865,10 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   // Splitting the layout into separate float / int heaps with `row_id_var * stride_float + float_offset` is future work
   // that requires updating `visit(AdStackAllocaStmt)` to route base computation per kind. The shared analysis output
   // (LCA, bootstrap pushes, captured `bound_expr`) propagates to `current_task->ad_stack` so the host launcher can
-  // dispatch the per-arch reducer; the heap addressing change comes after.
+  // dispatch the per-arch reducer; the heap addressing change comes after. Sizes are rounded up to 8 bytes so
+  // `stack_top_primal`'s `stack + sizeof(u64) + idx * 2 * element_size` math stays naturally aligned for every
+  // element type the IR may emit (i8 / u1 pack especially, on which the raw `size_in_bytes()` is otherwise
+  // unaligned).
   {
     auto align_up_8 = [](std::size_t n) -> std::size_t { return (n + 7u) & ~std::size_t{7u}; };
     std::function<void(IRNode *)> scan = [&](IRNode *node) {
