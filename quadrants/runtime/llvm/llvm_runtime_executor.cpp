@@ -851,11 +851,10 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
       std::memcpy(pinned + 1 + n_stacks, host_max_sizes.data(), array_bytes);
 
       // Queue the metadata copies on the same stream the subsequent main-kernel dispatch will run on, so the
-      // GPU stream-orders the copies before the kernel reads `adstack_max_sizes` etc. On CUDA the active
-      // stream is `CUDAContext::get_instance().get_stream()` - configurable via `set_stream`, defaults to the
-      // null stream - and `CUDAContext::launch` dispatches kernels on the same handle. AMDGPU has no
-      // public stream-selection API: `AMDGPUContext::launch` always passes `nullptr` to `hipLaunchKernel`
-      // (i.e. the default stream), so the copies match that.
+      // GPU stream-orders the copies before the kernel reads `adstack_max_sizes` etc. Both CUDA and AMDGPU
+      // fetch the active stream from their respective context singletons (configurable via `set_stream`,
+      // defaults to the null stream), matching the stream used by `CUDAContext::launch` /
+      // `AMDGPUContext::launch`.
 #if defined(QD_WITH_CUDA)
       if (config_.arch == Arch::cuda) {
         void *active_stream = CUDAContext::get_instance().get_stream();
@@ -869,7 +868,7 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
 #endif
 #if defined(QD_WITH_AMDGPU)
       if (config_.arch == Arch::amdgpu) {
-        void *active_stream = nullptr;  // AMDGPUContext::launch always uses the default stream.
+        void *active_stream = AMDGPUContext::get_instance().get_stream();
         AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned,
                                                                  header_bytes, active_stream);
         AMDGPUDriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 1, array_bytes,
