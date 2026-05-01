@@ -62,6 +62,7 @@ static std::vector<std::uint8_t> get_offline_cache_key_of_compile_config(const C
     serializer(config.cpu_max_num_threads);
   }
   serializer(config.ad_stack_size);
+  serializer(config.ad_stack_sparse_threshold_bytes);
   serializer(config.random_seed);
   serializer(config.make_mesh_block_local);
   serializer(config.optimize_mesh_reordered_mapping);
