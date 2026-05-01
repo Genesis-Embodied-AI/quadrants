@@ -1,6 +1,7 @@
 """Tests for GPU stream and event support."""
 
 import numpy as np
+import pytest
 
 import quadrants as qd
 from quadrants.lang.stream import Event, Stream
@@ -274,3 +275,80 @@ def test_concurrent_streams_with_events():
     s2.destroy()
     e1.destroy()
     e2.destroy()
+
+
+@test_utils.test()
+def test_stream_context_manager():
+    N = 64
+    x = qd.field(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def fill():
+        for i in range(N):
+            x[i] = 11.0
+
+    with qd.create_stream() as s:
+        fill(qd_stream=s)
+        s.synchronize()
+    assert s.handle == 0
+    assert np.allclose(x.to_numpy(), 11.0)
+
+
+@test_utils.test()
+def test_event_context_manager():
+    with qd.create_event() as e:
+        assert isinstance(e, Event)
+    assert e.handle == 0
+
+
+@test_utils.test()
+def test_event_synchronize():
+    N = 64
+    x = qd.field(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def fill():
+        for i in range(N):
+            x[i] = 13.0
+
+    s = qd.create_stream()
+    fill(qd_stream=s)
+    e = qd.create_event()
+    e.record(s)
+    e.synchronize()
+    assert np.allclose(x.to_numpy(), 13.0)
+    e.destroy()
+    s.destroy()
+
+
+@test_utils.test(arch=[qd.cuda])
+def test_stream_with_tape_raises():
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        loss[None] = x[None] ** 2
+
+    s = qd.create_stream()
+    with pytest.raises(RuntimeError, match="not compatible with autograd Tape"):
+        with qd.ad.Tape(loss):
+            compute(qd_stream=s)
+    s.destroy()
+
+
+@test_utils.test(arch=[qd.cuda])
+def test_stream_with_graph_raises():
+    N = 64
+    x = qd.field(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def fill():
+        for i in range(N):
+            x[i] = 1.0
+
+    fill.use_graph = True
+    s = qd.create_stream()
+    with pytest.raises(RuntimeError, match="not compatible with graph=True"):
+        fill(qd_stream=s)
+    s.destroy()
