@@ -54,7 +54,7 @@ Enables the dynamic-loop reverse-mode pipeline (the *adstack*). Default `False`.
 - **Memory.** The reverse pass replays each iteration of the dynamic loop, so the adstack stores per-iteration intermediate values for every thread. See [Memory footprint](./autodiff.md#memory-footprint) for the exact formula and the knobs that shrink it (`ad_stack_size`, `ad_stack_sparse_threshold_bytes`).
 - **Per-launch overhead.** Every backward kernel launch incurs a small fixed CPU-to-GPU data transfer. Kernels whose dynamic loop is gated by a sparse predicate (e.g. `for i in range(n): if active[i] > 0: ...`) additionally run a fast GPU pre-step that counts how many threads pass the gate so that the adstack can be tightly sized instead of upper-bounded by worst case.
 
-*Note.* These drawbacks affect only reverse-mode kernels that actually use the adstack; forward-only kernels and reverse-mode kernels without a dynamic non-linear inner loop pay nothing extra.
+*Note.* These drawbacks affect only reverse-mode kernels that actually use the adstack; forward-only kernels and reverse-mode kernels without a dynamic non-linear inner loop pay nothing extra. In other words, enabling adstack globally is effectively free except for kernels that need it anyway!
 
 ### `ad_stack_size`
 
