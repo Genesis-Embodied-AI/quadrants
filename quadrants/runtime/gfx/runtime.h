@@ -162,15 +162,14 @@ class QD_DLL_EXPORT GfxRuntime {
       const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
       const std::string &kernel_name);
 
-  // Static-IR-bound sparse-adstack-heap reducer dispatch. For each task with a captured ndarray-backed
-  // `bound_expr`, dispatches the generic reducer compute shader (see
-  // `quadrants/codegen/spirv/adstack_bound_reducer_shader.{h,cpp}`) over the task's iteration range and
-  // reads back the count of threads matching the predicate. Returns a map keyed by `task_id_in_kernel`;
-  // entries are absent for tasks without `bound_expr`, with SNode-backed bound_expr (future work),
-  // or on devices missing PSB+Int64 caps. The caller consumes the map at the AdStackHeapFloat bind site
-  // to size each matched task's float heap allocation to `count[task_id] * stride_float * sizeof(f32)`,
-  // falling through to the dispatched-threads worst-case sizing for tasks not in the map. Implementation
-  // lives in `runtime/gfx/adstack_bound_reducer_launch.cpp`.
+  // Static-IR-bound sparse-adstack-heap reducer dispatch. For each task with a captured ndarray-backed `bound_expr`,
+  // dispatches the generic reducer compute shader (see `quadrants/codegen/spirv/adstack_bound_reducer_shader.{h,cpp}`)
+  // over the task's iteration range and reads back the count of threads matching the predicate. Returns a map keyed by
+  // `task_id_in_kernel`; entries are absent for tasks without `bound_expr`, with SNode-backed bound_expr (future work),
+  // or on devices missing PSB+Int64 caps. The caller consumes the map at the AdStackHeapFloat bind site to size each
+  // matched task's float heap allocation to `count[task_id] * stride_float * sizeof(f32)`, falling through to the
+  // dispatched-threads worst-case sizing for tasks not in the map. Implementation lives in
+  // `runtime/gfx/adstack_bound_reducer_launch.cpp`.
   std::unordered_map<int, uint32_t> dispatch_adstack_bound_reducers(
       LaunchContextBuilder &host_ctx,
       DeviceAllocationGuard *args_buffer,
@@ -209,65 +208,41 @@ class QD_DLL_EXPORT GfxRuntime {
   // zeros it for the next window.
   std::unique_ptr<DeviceAllocationGuard> adstack_overflow_buffer_;
 
-  // Per-task atomic-counter array (`uint[num_tasks_in_kernel]`) that the SPIR-V codegen `OpAtomicIAdd`s into at
-  // the LCA-block claim site, slot `task_id_in_kernel`. Allocated lazily on first bind, grown lazily when a
-  // kernel with more tasks than the current allocation lands, and zeroed exactly once per kernel-launch (gated
-  // on `i == 0` in the task loop in `launch_kernel`). Read back at `synchronize()` to update
-  // `last_observed_rows_per_task_` keyed by task name; the heap-bind path consults that map on subsequent
-  // launches as a tertiary fallback (after the reducer-published `per_task_bound_count`) to size each task's
-  // float heap from `ceil(last_observed * 1.5)` rather than the dispatched-threads worst case. The int heap
-  // stays at the dispatched-threads worst case because int allocas use the eager `linear_tid * stride_int`
-  // mapping (loop-counter / branch-flag scratch indexed by thread id, not by LCA-claim row), so reducing its
-  // backing below `dispatched_threads * stride_int` would cause threads with `linear_tid > capacity` to OOB.
+  // Per-task atomic-counter array (`uint[num_tasks_in_kernel]`) that the SPIR-V codegen `OpAtomicIAdd`s into at the
+  // LCA-block claim site, slot `task_id_in_kernel`. Allocated lazily on first bind, grown lazily when a kernel with
+  // more tasks than the current allocation lands, and zeroed exactly once per kernel-launch (gated on `i == 0` in the
+  // task loop in `launch_kernel`). The shader's clamp-then-OpAtomicUMax(UINT32_MAX) divergence-overflow signal at line
+  // 304-306 of spirv_codegen.cpp reads this counter alongside `AdStackBoundRowCapacity[task_id]`; the runtime does not
+  // consume the counter past the on-device clamp.
   std::unique_ptr<DeviceAllocationGuard> adstack_row_counter_buffer_;
   size_t adstack_row_counter_buffer_size_{0};
 
-  // Cached task names of the kernel most recently submitted via `launch_kernel`. Populated alongside the
-  // per-task counter buffer bind so the post-launch `synchronize()` readback can map each slot of the counter
-  // buffer back to its task name in `last_observed_rows_per_task_`. Multi-launch sequences without an
-  // intervening sync overwrite this on every launch, so only the LAST kernel's per-task observations land in
-  // the map per sync window - same temporal-resolution limitation the existing `adstack_overflow_buffer_`
-  // readback has, acceptable for the heap-sizing use case where the same kernel is typically dispatched
-  // repeatedly between syncs (forward + backward + step in a training loop).
-  std::vector<std::string> last_kernel_task_names_;
-
-  // Per-task observed row claim count, keyed by task name (`task_attribs.name`, of the form
-  // `<kernel>_<id>_t<NN>...`). Updated at `synchronize()` from the row-counter buffer readback. Consulted by
-  // the heap-bind path on subsequent launches to size the float / int heaps from this observation rather than
-  // the dispatched-threads worst case. Tasks that have never been observed (first-ever launch) are absent from
-  // the map; the heap-bind path falls back to the worst case in that case for correctness.
-  std::unordered_map<std::string, uint32_t> last_observed_rows_per_task_;
-
-  // Per-dispatch heaps for SPIR-V adstack primal/adjoint storage. The float heap backs f32-valued adstacks; the
-  // int heap backs i32 and u1 adstacks (u1 stored as i32 to match the historical Function-scope path's bool->int
-  // remap). Other primitive types (f64, i64, ...) are hard-errored in the shader codegen (no fallback). Each heap
-  // is sized at `stride * (group_x * block_dim) * sizeof(element)` and grown lazily; reused across launches
-  // whenever the current allocation is already big enough. On grow, the previous buffer is moved into
-  // `ctx_buffers_` rather than freed synchronously, so any in-flight cmdlist still referencing it stays valid
-  // until the stream drains.
+  // Per-dispatch heaps for SPIR-V adstack primal/adjoint storage. The float heap backs f32-valued adstacks; the int
+  // heap backs i32 and u1 adstacks (u1 stored as i32 to match the historical Function-scope path's bool->int remap).
+  // Other primitive types (f64, i64, ...) are hard-errored in the shader codegen (no fallback). Each heap is sized at
+  // `stride * (group_x * block_dim) * sizeof(element)` and grown lazily; reused across launches whenever the current
+  // allocation is already big enough. On grow, the previous buffer is moved into `ctx_buffers_` rather than freed
+  // synchronously, so any in-flight cmdlist still referencing it stays valid until the stream drains.
   std::unique_ptr<DeviceAllocationGuard> adstack_heap_buffer_float_;
   size_t adstack_heap_buffer_float_size_{0};
   std::unique_ptr<DeviceAllocationGuard> adstack_heap_buffer_int_;
   size_t adstack_heap_buffer_int_size_{0};
-  // Per-`GfxRuntime` compiled sizer pipeline and bytecode scratch buffer for the on-device adstack
-  // SizeExpr interpreter (see `quadrants/codegen/spirv/adstack_sizer_shader.{h,cpp}`). The pipeline is
-  // built once lazily on the first reverse-mode kernel launch that has adstack allocas and reused across
-  // every such launch afterwards; the bytecode buffer is grown on demand with the same
-  // amortised-doubling policy as the float / int heaps. Both are null on backends that don't advertise
-  // both `spirv_has_physical_storage_buffer` and `spirv_has_int64`, in which case the adstack-allocating
-  // kernel is hard-errored at launch time rather than routed to a broken host-eval fallback.
+  // Per-`GfxRuntime` compiled sizer pipeline and bytecode scratch buffer for the on-device adstack SizeExpr interpreter
+  // (see `quadrants/codegen/spirv/adstack_sizer_shader.{h,cpp}`). The pipeline is built once lazily on the first
+  // reverse-mode kernel launch that has adstack allocas and reused across every such launch afterwards; the bytecode
+  // buffer is grown on demand with the same amortised-doubling policy as the float / int heaps. Both are null on
+  // backends that don't advertise both `spirv_has_physical_storage_buffer` and `spirv_has_int64`, in which case the
+  // adstack-allocating kernel is hard-errored at launch time rather than routed to a broken host-eval fallback.
   std::unique_ptr<Pipeline> adstack_sizer_pipeline_{nullptr};
   std::unique_ptr<DeviceAllocationGuard> adstack_sizer_bytecode_buffer_;
   size_t adstack_sizer_bytecode_buffer_size_{0};
-  // Per-invocation interpreter scratch buffers for the on-device adstack sizer. The shader hosts its
-  // `values_arr` / `scope_arr` / `pending_*_arr` state in these SSBOs (binding 3 = i64-typed, binding 4 =
-  // i32-typed) rather than in `Function`-storage `OpVariable`s because Blackwell-class NVIDIA Vulkan
-  // drivers fail `vkCreateComputePipelines` with `VK_ERROR_UNKNOWN` once the cumulative per-thread private
-  // memory crosses ~32 KiB. Sizes are fixed at compile time
-  // (`kAdStackSizerScratchI64Elems` * `sizeof(int64_t)` and `kAdStackSizerScratchI32Elems` *
-  // `sizeof(int32_t)`); both are allocated lazily on the first sizer dispatch and reused across every
-  // subsequent dispatch in the runtime's lifetime - the sizer is `1x1x1` so there is no cross-thread
-  // contention to size around.
+  // Per-invocation interpreter scratch buffers for the on-device adstack sizer. The shader hosts its `values_arr` /
+  // `scope_arr` / `pending_*_arr` state in these SSBOs (binding 3 = i64-typed, binding 4 = i32-typed) rather than in
+  // `Function`-storage `OpVariable`s because Blackwell-class NVIDIA Vulkan drivers fail `vkCreateComputePipelines` with
+  // `VK_ERROR_UNKNOWN` once the cumulative per-thread private memory crosses ~32 KiB. Sizes are fixed at compile time
+  // (`kAdStackSizerScratchI64Elems` * `sizeof(int64_t)` and `kAdStackSizerScratchI32Elems` * `sizeof(int32_t)`); both
+  // are allocated lazily on the first sizer dispatch and reused across every subsequent dispatch in the runtime's
+  // lifetime - the sizer is `1x1x1` so there is no cross-thread contention to size around.
   std::unique_ptr<DeviceAllocationGuard> adstack_sizer_scratch_i64_buffer_;
   std::unique_ptr<DeviceAllocationGuard> adstack_sizer_scratch_i32_buffer_;
 
@@ -275,32 +250,32 @@ class QD_DLL_EXPORT GfxRuntime {
   // (`quadrants/codegen/spirv/adstack_bound_reducer_shader.{h,cpp}`). Built once on the first launch that contains a
   // task with a captured `TaskAttributes::AdStackSizingAttribs::bound_expr`, reused across every such launch
   // afterwards. Null on backends without `spirv_has_physical_storage_buffer + spirv_has_int64`; in that case the
-  // runtime falls back to dispatched-threads worst-case heap sizing for every task (safe but no savings). The grow-
-  // on-demand parameter buffer below holds the per-task `AdStackBoundReducerParams` blobs the shader reads on slot 2;
-  // one blob per matched task per launch, packed at descriptor-alignment boundaries so each task's bind range starts
+  // runtime falls back to dispatched-threads worst-case heap sizing for every task (safe but no savings). The
+  // grow-on-demand parameter buffer below holds the per-task `AdStackBoundReducerParams` blobs the shader reads on slot
+  // 2; one blob per matched task per launch, packed at descriptor-alignment boundaries so each task's bind range starts
   // on a Vulkan-legal offset.
   std::unique_ptr<Pipeline> adstack_bound_reducer_pipeline_{nullptr};
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_params_buffer_;
   size_t adstack_bound_reducer_params_buffer_size_{0};
 
-  // Tiny one-word scratch buffer dedicated to the bound-reducer's slot-3 (root buffer) placeholder when the
-  // captured `bound_expr` is ndarray-backed and no real root buffer is needed. Some RHI backends (Metal /
-  // MoltenVK) reject the same DeviceAllocation appearing on two slots of one descriptor set, so we cannot
-  // reuse the params / counter / overflow buffers as the placeholder. Lazy-allocated on first ndarray-only
-  // dispatch, lives for the runtime's lifetime, never read by the shader.
+  // Tiny one-word scratch buffer dedicated to the bound-reducer's slot-3 (root buffer) placeholder when the captured
+  // `bound_expr` is ndarray-backed and no real root buffer is needed. Some RHI backends (Metal / MoltenVK) reject the
+  // same DeviceAllocation appearing on two slots of one descriptor set, so we cannot reuse the params / counter /
+  // overflow buffers as the placeholder. Lazy-allocated on first ndarray-only dispatch, lives for the runtime's
+  // lifetime, never read by the shader.
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_root_placeholder_buffer_;
   // Mirror placeholder for slot 0 (`args_buffer`): SNode-only kernels (e.g. `def compute() -> None` with only
-  // `qd.field` globals) have `get_args_buffer_size() == 0` and the launcher's `args_buffer` is nullptr. Slot 0
-  // requires a non-null binding for the descriptor layout, but reusing the params buffer would alias slot 2 and
-  // get rejected on Metal / MoltenVK by the same RHI rule the slot-3 placeholder above guards against.
+  // `qd.field` globals) have `get_args_buffer_size() == 0` and the launcher's `args_buffer` is nullptr. Slot 0 requires
+  // a non-null binding for the descriptor layout, but reusing the params buffer would alias slot 2 and get rejected on
+  // Metal / MoltenVK by the same RHI rule the slot-3 placeholder above guards against.
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_args_placeholder_buffer_;
 
-  // Per-kernel `BufferType::AdStackBoundRowCapacity` (`uint[num_tasks_in_kernel]`). Populated by the host after
-  // the bound-reducer dispatch with each task's exact reducer count (UINT32_MAX for tasks without a captured
-  // captured `bound_expr`, so the codegen-emitted defense-in-depth bounds check is inert on those). Bound to the
-  // main task on every adstack-bearing dispatch; the SPIR-V reads it at the float LCA-block claim site to detect
-  // a reducer / main divergence and signal UINT32_MAX into AdStackOverflow on mismatch. Grown on demand using the
-  // same amortised-doubling policy as the float / int heaps.
+  // Per-kernel `BufferType::AdStackBoundRowCapacity` (`uint[num_tasks_in_kernel]`). Populated by the host after the
+  // bound-reducer dispatch with each task's exact reducer count (UINT32_MAX for tasks without a captured captured
+  // `bound_expr`, so the codegen-emitted defense-in-depth bounds check is inert on those). Bound to the main task on
+  // every adstack-bearing dispatch; the SPIR-V reads it at the float LCA-block claim site to detect a reducer / main
+  // divergence and signal UINT32_MAX into AdStackOverflow on mismatch. Grown on demand using the same
+  // amortised-doubling policy as the float / int heaps.
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_row_capacity_buffer_;
   size_t adstack_bound_row_capacity_buffer_size_{0};
 
@@ -309,20 +284,19 @@ class QD_DLL_EXPORT GfxRuntime {
   ProgramImpl *program_impl_{nullptr};
 
   // Set by the destructor before its own `synchronize()` call so the adstack-overflow poll in `synchronize()`
-  // short-circuits instead of raising from an implicitly-noexcept `~GfxRuntime()` unwinding path (a throw
-  // there would call `std::terminate()` and crash the process; the user-visible raise should happen at the
-  // user's own `qd.sync()` site, not during teardown). Mirrors LlvmProgramImpl's `finalizing_` flag.
+  // short-circuits instead of raising from an implicitly-noexcept `~GfxRuntime()` unwinding path (a throw there would
+  // call `std::terminate()` and crash the process; the user-visible raise should happen at the user's own `qd.sync()`
+  // site, not during teardown). Mirrors LlvmProgramImpl's `finalizing_` flag.
   bool finalizing_{false};
 
   std::unique_ptr<CommandList> current_cmdlist_{nullptr};
   high_res_clock::time_point current_cmdlist_pending_since_;
 
-  // Counts kernel launches since the last `synchronize()`. `submit_current_cmdlist_if_timeout` forces a
-  // drain once this crosses a threshold, bounding the growth of `VulkanStream::submitted_cmdbuffers_` (and
-  // the fences, semaphores and descriptor sets those entries keep alive) on tight kernel-launch loops that
-  // never touch a Python-side observable - workloads like MPM88 where every substep is a pure GPU update
-  // and the host only reads state once at the end. See the assignment site for the MoltenVK SIGSEGV this
-  // guards against.
+  // Counts kernel launches since the last `synchronize()`. `submit_current_cmdlist_if_timeout` forces a drain once this
+  // crosses a threshold, bounding the growth of `VulkanStream::submitted_cmdbuffers_` (and the fences, semaphores and
+  // descriptor sets those entries keep alive) on tight kernel-launch loops that never touch a Python-side observable
+  // -workloads like MPM88 where every substep is a pure GPU update and the host only reads state once at the end. See
+  // the assignment site for the MoltenVK SIGSEGV this guards against.
   size_t pending_launches_since_sync_{0};
 
   std::vector<std::unique_ptr<CompiledQuadrantsKernel>> ti_kernels_;
