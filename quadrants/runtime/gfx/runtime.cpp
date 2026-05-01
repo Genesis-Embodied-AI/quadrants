@@ -620,10 +620,12 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         bindings->rw_buffer(bind.binding, *adstack_overflow_buffer_);
       } else if (bind.buffer.type == BufferType::AdStackRowCounter) {
         // Per-task atomic-counter array (`uint[num_tasks_in_kernel]`) that the SPIR-V codegen `OpAtomicIAdd`s into at
-        // the LCA-block claim site, slot `task_id_in_kernel`. The host needs each task's claim count to survive until
-        // the post-launch readback at `synchronize()`, so the buffer is cleared exactly once per kernel-launch (gated
-        // on `i == 0`, the first task in this kernel's task loop). Sized to fit `task_attribs.size()` slots and grown
-        // lazily on launches that exceed the prior allocation.
+        // the LCA-block claim site, slot `task_id_in_kernel`. Read back by the codegen-emitted defense-in-depth bounds
+        // clamp at the same LCA-block - never by the host - so each task's claim count must persist across all tasks in
+        // this kernel's task loop (i.e. across the inner `i in 0..task_attribs.size()` binds below). The buffer is
+        // cleared exactly once per kernel-launch (gated on `i == 0`, the first task) so the next kernel-launch starts
+        // from zero on every slot. Sized to fit `task_attribs.size()` slots and grown lazily on launches that exceed
+        // the prior allocation.
         const size_t needed_size = std::max<size_t>(task_attribs.size(), 1) * sizeof(uint32_t);
         if (!adstack_row_counter_buffer_ || adstack_row_counter_buffer_size_ < needed_size) {
           auto [buf, res] = device_->allocate_memory_unique({needed_size, /*host_write=*/true, /*host_read=*/true,
@@ -724,8 +726,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         const size_t effective_rows_floored = std::max<size_t>(effective_rows, ad_stack_stride_float > 0 ? 1 : 0);
         size_t required = size_t(ad_stack_stride_float) * effective_rows_floored * sizeof(float);
         // `QD_DEBUG_ADSTACK=1` opt-in diagnostic. One line per task per launch describing the float heap-bind sizing
-        // decision: which fallback fired (reducer / iter_count_bound / last_observed / dispatched_threads worst case)
-        // and the resulting required bytes. Persistent so memory regressions can be debugged without re-instrumenting.
+        // decision: which sizing source fired (`reducer_count` for tasks with a captured `bound_expr` whose reducer
+        // populated `per_task_bound_count`, `worst_case_dispatched` otherwise) and the resulting required bytes.
+        // Persistent so memory regressions can be debugged without re-instrumenting.
         if (std::getenv("QD_DEBUG_ADSTACK")) {
           const char *src = "worst_case_dispatched";
           if (bound_count_it != per_task_bound_count.end()) {
@@ -945,14 +948,14 @@ void GfxRuntime::synchronize() {
       *reinterpret_cast<uint32_t *>(mapped) = 0;
     }
     device_->unmap(*adstack_overflow_buffer_);
-    // UINT32_MAX is the dedicated sentinel the codegen-emitted defense-in-depth bounds check at the float Lowest Common
-    // Ancestor (LCA) block writes via OpAtomicUMax when `claimed_row >= bound_row_capacity` for a captured `bound_expr`
-    // captured `bound_expr`. The bound is the exact reducer count (see `adstack_bound_reducer_launch.cpp`), so on a
-    // correct codegen this branch is never taken; reaching it indicates the reducer's count diverged from the main
-    // pass's actual LCA-block-reaching thread count - an internal-consistency bug, not a user-recoverable condition.
-    // Surface a distinct actionable diagnostic so the failure is attributable to this exact mechanism rather than
-    // getting confused with the per-stack `stack_id+1` overflow signal below (whose sentinel range tops out at
-    // `num_ad_stacks` and cannot collide with UINT32_MAX in any realistic kernel).
+    // UINT32_MAX is the dedicated sentinel the codegen-emitted defense-in-depth bounds check at the float Lowest
+    // Common Ancestor (LCA) block writes via OpAtomicUMax when `claimed_row >= bound_row_capacity` for a captured
+    // `bound_expr`. The bound is the exact reducer count (see `adstack_bound_reducer_launch.cpp`), so on a correct
+    // codegen this branch is never taken; reaching it indicates the reducer's count diverged from the main pass's
+    // actual LCA-block-reaching thread count - an internal-consistency bug, not a user-recoverable condition. Surface
+    // a distinct actionable diagnostic so the failure is attributable to this exact mechanism rather than getting
+    // confused with the per-stack `stack_id+1` overflow signal below (whose sentinel range tops out at `num_ad_stacks`
+    // and cannot collide with UINT32_MAX in any realistic kernel).
     QD_ERROR_IF(flag_val == std::numeric_limits<uint32_t>::max(),
                 "Internal: static-IR-bound sparse-adstack-heap reducer count diverged from main pass's actual "
                 "LCA-block claim count. The bound is supposed to be exact by construction; reaching this signal "

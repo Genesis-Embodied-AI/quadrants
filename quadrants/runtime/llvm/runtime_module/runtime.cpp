@@ -1001,8 +1001,9 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
 // single device thread completes the count in well under a millisecond per task; that cost is dominated by the actual
 // main kernel anyway.
 //
-// SNode-backed gates are not captured on the LLVM analysis path today, so the reducer only handles the ndarray-backed
-// source kind.
+// Both ndarray-backed and SNode-backed sources are dispatched through this function: the params blob's
+// `field_source_is_snode` flag selects between reading the gating field through the kernel arg buffer (ndarray) or
+// through `runtime->roots[snode_root_id]` (SNode), and the comparison + count loop is shared.
 void runtime_eval_static_bound_count(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr params_blob) {
   using quadrants::lang::kLlvmReducerCmpEq;
   using quadrants::lang::kLlvmReducerCmpGe;

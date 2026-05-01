@@ -2,13 +2,14 @@
 // struct on each launch with the captured `StaticAdStackBoundExpr` and an iteration `length`, memcpys it into a small
 // device buffer, and calls `runtime_eval_static_bound_count(runtime, ctx, blob_ptr)` as a single-thread serial function
 // via the LLVM runtime JIT module. The runtime function (defined in `runtime.cpp`) walks `[0, length)`, evaluates the
-// captured comparison + polarity against the gating ndarray's elements (read through `ctx->arg_buffer` at
-// `arg_word_offset`), counts the matches, and writes the count into
-// `runtime->adstack_bound_row_capacities[task_index]`. The codegen-emitted clamp at the float LCA-block claim site
-// reads that slot back as the per-task capacity.
+// captured comparison + polarity against the gating field's elements (read through `ctx->arg_buffer` at
+// `arg_word_offset` for ndarray sources, or through `runtime->roots[snode_root_id]` at
+// `snode_byte_base_offset + gid * snode_byte_cell_stride` for SNode-backed sources), counts the matches, and writes
+// the count into `runtime->adstack_bound_row_capacities[task_index]`. The codegen-emitted clamp at the float LCA-block
+// claim site reads that slot back as the per-task capacity.
 //
-// SNode-backed gates are not captured on the LLVM analysis path today; this struct only encodes the ndarray-backed
-// shape. SNode capture (and a matching device read path) is a future extension.
+// `field_source_is_snode` selects between the two source shapes per dispatch; the ndarray and SNode trailing fields
+// below are mutually exclusive (only the matching set is read by the reducer).
 #pragma once
 
 #include <cstdint>
