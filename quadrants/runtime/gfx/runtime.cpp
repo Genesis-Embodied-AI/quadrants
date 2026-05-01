@@ -586,6 +586,18 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       effective_advisory_threads =
           int(std::min<int64_t>(int64_t(effective_advisory_threads), std::max<int64_t>(1, iter_count)));
     }
+    // Adstack-bearing tasks additionally cap at `kAdStackMaxConcurrentThreads`, matching the LLVM CUDA / AMDGPU
+    // launchers' `kAdStackMaxConcurrentThreads = 65536` advisory cap. The per-thread int / float adstack heap rows
+    // scale linearly with the dispatched thread count, so an uncapped 600k-thread MPM grid kernel would request
+    // ~2.5 GB just for the int heap (`linear_thread_idx * stride_int_bytes`) on every reverse-mode launch - the same
+    // kernel sizes to ~70 MB on LLVM thanks to that cap. SPIR-V's in-shader grid-stride loop handles the smaller
+    // dispatch correctly: each launched invocation walks `i += grid_dim() * block_dim()` until it has covered the
+    // full logical iteration count. Skip the cap on tasks without adstack allocas to keep forward-only and
+    // adstack-free kernels at saturating throughput.
+    constexpr int kAdStackMaxConcurrentThreads = 65536;
+    if (!attribs.ad_stack.allocas.empty() && effective_advisory_threads > kAdStackMaxConcurrentThreads) {
+      effective_advisory_threads = kAdStackMaxConcurrentThreads;
+    }
     const int group_x = (effective_advisory_threads + attribs.advisory_num_threads_per_group - 1) /
                         attribs.advisory_num_threads_per_group;
     // Adstack metadata (runtime-evaluated stride and per-alloca `(offset, max_size)` u32 table) precomputed

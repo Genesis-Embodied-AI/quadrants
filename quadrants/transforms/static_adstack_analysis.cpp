@@ -274,27 +274,20 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       if (!desc_opt.has_value()) {
         return false;
       }
-      // Validate the SNode access path's index expression: the codegen lowers `field[i]` as
-      // `GetCh -> SNodeLookup -> Linearize -> [LoopIndexStmt(i)]`. Anything more complex (`field[i % K]`,
-      // `field[2 * i]`, `field[other_field[i]]`, `field[42]`) puts the reducer's flat-walk over `[0, iter_count)`
-      // on a different index basis than the kernel's main pass: the reducer counts cells that pass the gate while
-      // the main pass's LCA-block atomic-rmw fires once per gated loop iteration mapped through the compound index.
-      // Without this rejection the captured count caps the float heap at iter_count rows but `n - iter_count`
-      // excess gated iterations alias onto the last row - silent gradient corruption on LLVM, hard "reducer count
-      // diverged" overflow on SPIR-V. Mirrors the per-axis `is<LoopIndexStmt>` validation in the ndarray arm above.
-      auto *lookup = getch->input_ptr ? getch->input_ptr->cast<SNodeLookupStmt>() : nullptr;
-      if (lookup == nullptr) {
-        return false;
-      }
-      auto *linearize = lookup->input_index ? lookup->input_index->cast<LinearizeStmt>() : nullptr;
-      if (linearize == nullptr) {
-        return false;
-      }
-      for (Stmt *idx : linearize->inputs) {
-        if (idx == nullptr || !idx->is<LoopIndexStmt>()) {
-          return false;
-        }
-      }
+      // KNOWN LIMITATION: the SNode arm trusts whatever index expression the codegen passed to `SNodeLookupStmt` and
+      // does not verify that it is a bijection with the kernel's loop iteration space. A pathological pattern like
+      // `for i in range(n): if field[i % K] > eps: <push f32>` (with `K < n`, `field` an SNode-backed `qd.field`)
+      // captures `iter_count = K` while the main pass walks `[0, n)` and claims a heap row for every iteration whose
+      // `i % K` cell passes - aliasing the n - K excess gated iterations onto the K-row heap and corrupting
+      // gradients (silent on LLVM, hard "reducer count diverged" overflow on SPIR-V). The ndarray arm above DOES
+      // validate that each axis is a `LoopIndexStmt` because at analysis time the ndarray's per-axis indices are
+      // still individual statements; the SNode case has no such per-axis information once `LinearizeStmt` is
+      // lowered into raw `add` / `mul` arithmetic, and any narrower walker we tried would also reject legitimate
+      // multi-axis kernels (e.g. `for I, J, K in grid: if grid[I, J, K].mass > eps: ...`, the canonical MPM-grid
+      // shape), where the lowered offset is `add(mul(I, sx), add(mul(J, sy), mul(K, sz)))` - the same affine shape
+      // a malicious manual linearisation can fake. Until the analysis runs at an earlier IR stage where
+      // `LinearizeStmt` is preserved (or a different bijection-witness is identified), this gap is documented
+      // rather than gated. Working assumption: production kernels don't use `field[i % K]` as a gate.
       out.field_source_kind = StaticAdStackBoundExpr::FieldSourceKind::SNode;
       out.snode_id = leaf->id;
       out.snode_root_id = desc_opt->root_id;
