@@ -1,5 +1,8 @@
+#include <map>
+
 #include "quadrants/runtime/amdgpu/kernel_launcher.h"
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
+#include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #include "quadrants/program/launch_context_builder.h"
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 
@@ -49,15 +52,50 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             void *context_pointer,
                                             int arg_size) {
   auto *executor = get_runtime_executor();
-  for (const auto &task : offloaded_tasks) {
-    // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without this the
-    // sizer launches with a host pointer and the next DtoH sync trips
-    // `hipErrorIllegalAddress ... memcpy_device_to_host` because HIP has no UVA fallback for the host
-    // `RuntimeContext` struct.
-    executor->publish_adstack_metadata(task.ad_stack, resolve_num_threads(task, executor), &ctx, context_pointer);
-    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
-    amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
-                          {(void *)&context_pointer}, {arg_size});
+  auto *active_stream = AMDGPUContext::get_instance().get_stream();
+  for (size_t i = 0; i < offloaded_tasks.size();) {
+    const auto &task = offloaded_tasks[i];
+    if (task.stream_parallel_group_id == 0) {
+      // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without this the
+      // sizer launches with a host pointer and the next DtoH sync trips
+      // `hipErrorIllegalAddress ... memcpy_device_to_host` because HIP has no UVA fallback for the host
+      // `RuntimeContext` struct.
+      executor->publish_adstack_metadata(task.ad_stack, resolve_num_threads(task, executor), &ctx, context_pointer);
+      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
+      amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
+                            {(void *)&context_pointer}, {arg_size});
+      i++;
+    } else {
+      size_t group_start = i;
+      while (i < offloaded_tasks.size() && offloaded_tasks[i].stream_parallel_group_id != 0) {
+        i++;
+      }
+
+      std::map<int, void *> stream_by_id;
+      for (size_t j = group_start; j < i; j++) {
+        int sid = offloaded_tasks[j].stream_parallel_group_id;
+        if (stream_by_id.find(sid) == stream_by_id.end()) {
+          stream_by_id[sid] = AMDGPUContext::get_instance().acquire_stream();
+        }
+      }
+
+      for (size_t j = group_start; j < i; j++) {
+        const auto &t = offloaded_tasks[j];
+        executor->publish_adstack_metadata(t.ad_stack, resolve_num_threads(t, executor), &ctx, context_pointer);
+        AMDGPUContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
+        amdgpu_module->launch(t.name, t.grid_dim, t.block_dim, t.dynamic_shared_array_bytes, {(void *)&context_pointer},
+                              {arg_size});
+      }
+
+      for (auto &[sid, s] : stream_by_id) {
+        AMDGPUDriver::get_instance().stream_synchronize(s);
+      }
+      for (auto &[sid, s] : stream_by_id) {
+        AMDGPUContext::get_instance().release_stream(s);
+      }
+
+      AMDGPUContext::get_instance().set_stream(active_stream);
+    }
   }
 }
 
@@ -70,7 +108,8 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
   do {
     launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
     counter_val = 0;
-    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+    auto *stream = AMDGPUContext::get_instance().get_stream();
+    AMDGPUDriver::get_instance().stream_synchronize(stream);
     AMDGPUDriver::get_instance().memcpy_device_to_host(&counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
   } while (counter_val != 0);
 }
@@ -98,16 +137,13 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   std::unordered_map<ArgArrayPtrKey, std::pair<void *, DeviceAllocation>, ArgArrayPtrKeyHasher> transfers;
   std::unordered_map<ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher> device_ptrs;
 
+  auto *active_stream = AMDGPUContext::get_instance().get_stream();
+
   char *device_result_buffer{nullptr};
-  // Here we have to guarantee the result_result_buffer isn't nullptr
-  // It is interesting - The code following
-  // L60:           DeviceAllocation devalloc =
-  // executor->allocate_memory_on_device( call another kernel and it will result
-  // in
-  //   Memory access fault by GPU node-1 (Agent handle: 0xeda5ca0) on address
-  //   (nil). Reason: Page not present or supervisor privilege.
-  // if you don't allocate it.
-  AMDGPUDriver::get_instance().malloc((void **)&device_result_buffer, std::max(ctx.result_buffer_size, sizeof(uint64)));
+  // Must always allocate device_result_buffer (even when result_buffer_size
+  // is 0) to avoid memory access faults from allocate_memory_on_device below.
+  AMDGPUDriver::get_instance().malloc_async((void **)&device_result_buffer,
+                                            std::max(ctx.result_buffer_size, sizeof(uint64)), active_stream);
 
   for (int i = 0; i < (int)parameters.size(); i++) {
     const auto &kv = parameters[i];
@@ -133,14 +169,16 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
           device_ptrs[data_ptr_idx] = executor->get_device_alloc_info_ptr(devalloc);
           transfers[data_ptr_idx] = {data_ptr, devalloc};
 
-          AMDGPUDriver::get_instance().memcpy_host_to_device((void *)device_ptrs[data_ptr_idx], data_ptr, arr_sz);
+          AMDGPUDriver::get_instance().memcpy_host_to_device_async((void *)device_ptrs[data_ptr_idx], data_ptr, arr_sz,
+                                                                   active_stream);
           if (grad_ptr != nullptr) {
             DeviceAllocation grad_devalloc =
                 executor->allocate_memory_on_device(arr_sz, (uint64 *)device_result_buffer);
             device_ptrs[grad_ptr_idx] = executor->get_device_alloc_info_ptr(grad_devalloc);
             transfers[grad_ptr_idx] = {grad_ptr, grad_devalloc};
 
-            AMDGPUDriver::get_instance().memcpy_host_to_device((void *)device_ptrs[grad_ptr_idx], grad_ptr, arr_sz);
+            AMDGPUDriver::get_instance().memcpy_host_to_device_async((void *)device_ptrs[grad_ptr_idx], grad_ptr,
+                                                                     arr_sz, active_stream);
           } else {
             device_ptrs[grad_ptr_idx] = nullptr;
           }
@@ -170,24 +208,24 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     }
   }
   if (transfers.size() > 0) {
-    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+    AMDGPUDriver::get_instance().stream_synchronize(active_stream);
   }
   char *host_result_buffer = (char *)ctx.get_context().result_buffer;
   if (ctx.result_buffer_size > 0) {
-    // Malloc_Async and Free_Async are available after ROCm 5.4
     ctx.get_context().result_buffer = (uint64 *)device_result_buffer;
   }
   char *device_arg_buffer = nullptr;
   if (ctx.arg_buffer_size > 0) {
-    AMDGPUDriver::get_instance().malloc((void **)&device_arg_buffer, ctx.arg_buffer_size);
-    AMDGPUDriver::get_instance().memcpy_host_to_device(device_arg_buffer, ctx.get_context().arg_buffer,
-                                                       ctx.arg_buffer_size);
+    AMDGPUDriver::get_instance().malloc_async((void **)&device_arg_buffer, ctx.arg_buffer_size, active_stream);
+    AMDGPUDriver::get_instance().memcpy_host_to_device_async(device_arg_buffer, ctx.get_context().arg_buffer,
+                                                             ctx.arg_buffer_size, active_stream);
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
   void *context_pointer;
   int arg_size = sizeof(RuntimeContext *);
-  AMDGPUDriver::get_instance().malloc((void **)&context_pointer, sizeof(RuntimeContext));
-  AMDGPUDriver::get_instance().memcpy_host_to_device(context_pointer, &ctx.get_context(), sizeof(RuntimeContext));
+  AMDGPUDriver::get_instance().malloc_async((void **)&context_pointer, sizeof(RuntimeContext), active_stream);
+  AMDGPUDriver::get_instance().memcpy_host_to_device_async(context_pointer, &ctx.get_context(), sizeof(RuntimeContext),
+                                                           active_stream);
 
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
@@ -197,13 +235,15 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   }
   QD_TRACE("Launching kernel");
   if (ctx.arg_buffer_size > 0) {
-    AMDGPUDriver::get_instance().mem_free(device_arg_buffer);
+    AMDGPUDriver::get_instance().mem_free_async(device_arg_buffer, active_stream);
   }
   if (ctx.result_buffer_size > 0) {
-    AMDGPUDriver::get_instance().memcpy_device_to_host(host_result_buffer, device_result_buffer,
-                                                       ctx.result_buffer_size);
+    AMDGPUDriver::get_instance().memcpy_device_to_host_async(host_result_buffer, device_result_buffer,
+                                                             ctx.result_buffer_size, active_stream);
   }
+  AMDGPUDriver::get_instance().mem_free_async(device_result_buffer, active_stream);
   if (transfers.size()) {
+    AMDGPUDriver::get_instance().stream_synchronize(active_stream);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       auto &idx = itr->first;
       auto arg_id = idx.arg_id;
@@ -212,16 +252,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       executor->deallocate_memory_on_device(itr->second.second);
     }
   }
-  // Since we always allocating above then we should always free
-  AMDGPUDriver::get_instance().mem_free(device_result_buffer);
-  // Free the per-launch `RuntimeContext` device allocation. `hipFree` synchronizes implicitly with pending
-  // kernels on the device, so this is safe even when the launches above were asynchronous. Done here rather
-  // than through `AMDGPUContext`'s deferred free list because that list used to be drained by
-  // `LlvmRuntimeExecutor::synchronize`, which is also called from `fetch_result_uint64` during
-  // `ensure_adstack_heap`'s field-pointer query -- that path would hipFree `context_pointer` mid-launch, and
-  // HIP could recycle the freed address for the adstack heap allocated right after, clobbering the
-  // `RuntimeContext` the next task still reads from.
-  AMDGPUDriver::get_instance().mem_free(context_pointer);
+  AMDGPUDriver::get_instance().mem_free_async(context_pointer, active_stream);
 }
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::CompiledKernelData &compiled) {
