@@ -535,21 +535,26 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   // Device-side adstack SizeExpr evaluation: every task with adstack allocas has its per-alloca `max_size` /
   // `offset` metadata resolved by a dedicated compute shader (see `quadrants/runtime/gfx/adstack_sizer_launch.cpp`
-  // for the full mechanism). The shader reads the ndarray data pointer straight out of the kernel arg buffer via
-  // Physical Storage Buffer addressing and dereferences where the memory lives, which is the only way to resolve
-  // an `ExternalTensorRead` against a GPU-private `qd.ndarray` without round-tripping the entire ndarray through
-  // host memory.
+  // for the full mechanism). The helper internally early-returns (after seeding the per-task vector with
+  // compile-time strides) when no task has adstack allocas, so forward-only kernels pay only the cheap pre-populate
+  // pass; the actual sizer dispatch + `wait_idle()` only fires for reverse-mode kernels.
   std::vector<PerTaskAdStackRuntime> per_task_ad_stack = publish_adstack_metadata_spirv(
       host_ctx, args_buffer.get(), any_arrays, task_attribs, ti_kernel->ti_kernel_attribs().name);
 
-  // Static-IR-bound sparse-adstack-heap reducer dispatch. For each task with a captured `bound_expr` (ndarray-backed
-  // gating predicate above the Lowest Common Ancestor (LCA) block), dispatch a generic reducer compute shader that
-  // counts threads passing the predicate; the count then sizes the float adstack heap allocation exactly in the bind
-  // path below, instead of the dispatched-threads worst case. Tasks without a bound_expr (or with SNode-backed sources,
-  // or on capability-missing devices) keep the worst-case sizing. The reducer dispatch is fully serialised against any
-  // in-flight reader kernels via the helper's internal flush + wait_idle, mirroring `publish_adstack_metadata_spirv`.
-  std::unordered_map<int, uint32_t> per_task_bound_count =
-      dispatch_adstack_bound_reducers(host_ctx, args_buffer.get(), task_attribs);
+  // Static-IR-bound sparse-adstack-heap reducer dispatch. Gated on whether any task in this kernel has a captured
+  // `bound_expr` - the codegen routes such tasks through the lazy LCA-block atomic-rmw row claim that reads
+  // `AdStackBoundRowCapacity[task_id]`; without any such task the reducer would unconditionally `flush() +
+  // wait_idle()` an empty stream just to early-return. Forward-only and reverse-mode-without-bound-expr kernels
+  // therefore pay zero overhead here. Tasks with a captured `bound_expr` get a generic reducer compute shader
+  // dispatch that counts gate-passing threads; the count sizes the float adstack heap allocation exactly in the
+  // bind path below, instead of the dispatched-threads worst case.
+  const bool any_lazy_task = std::any_of(task_attribs.begin(), task_attribs.end(), [](const spirv::TaskAttributes &t) {
+    return t.ad_stack.bound_expr.has_value();
+  });
+  std::unordered_map<int, uint32_t> per_task_bound_count;
+  if (any_lazy_task) {
+    per_task_bound_count = dispatch_adstack_bound_reducers(host_ctx, args_buffer.get(), task_attribs);
+  }
 
   ensure_current_cmdlist();
 
@@ -568,8 +573,8 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     if (attribs.range_for_attribs && !attribs.range_for_attribs->end_shape_product.empty()) {
       const auto &range = *attribs.range_for_attribs;
       // `const_begin` is asserted true at codegen whenever `end_stmt` is populated (see the
-      // `QD_ASSERT(stmt->const_begin)` in the `if (stmt->end_stmt)` branch of spirv_codegen.cpp, near line 1833 at time
-      // of writing), so `range.begin` is the literal begin value, not a gtmp offset.
+      // `QD_ASSERT(stmt->const_begin)` in the `if (stmt->end_stmt)` branch of `spirv_codegen.cpp`), so `range.begin` is
+      // the literal begin value, not a gtmp offset.
       int64_t iter_end = 1;
       for (const auto &ref : range.end_shape_product) {
         std::vector<int> indices = ref.arg_id;
@@ -674,11 +679,11 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           // point with a heuristic heap size (`ceil(last_observed * 1.5)`, possibly capped at `dispatched_threads` or
           // at `lazy_claim_iter_count_upper_bound`) leaves a workload-uplift OOB hole: any launch whose actual
           // LCA-block claim count exceeds the heuristic silently writes past the heap end, and the divergence overflow
-          // signal at spirv_codegen.cpp line 304-306 cannot help (it reads the inert UINT32_MAX-default capacity slot,
-          // never trips). Hard-error here instead - every backend Quadrants targets advertises both PSB and Int64
-          // today, so reaching this branch on a real device is either an internal-consistency bug in the reducer's
-          // filter or running on a hypothetical legacy device that this code does not support. The diagnostic prints
-          // which cap is missing so the failure mode is unambiguous.
+          // signal in `spirv_codegen.cpp`'s LCA-block claim emission cannot help (it reads the inert UINT32_MAX-default
+          // capacity slot, never trips). Hard-error here instead - every backend Quadrants targets advertises both PSB
+          // and Int64 today, so reaching this branch on a real device is either an internal-consistency bug in the
+          // reducer's filter or running on a hypothetical legacy device that this code does not support. The diagnostic
+          // prints which cap is missing so the failure mode is unambiguous.
           QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer),
                          "adstack heap-bind tertiary fallback for task '{}' on a device without "
                          "spirv_has_physical_storage_buffer: the static-bound reducer skipped its dispatch and there "

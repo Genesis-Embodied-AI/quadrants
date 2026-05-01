@@ -76,7 +76,7 @@ spirv::AdStackBoundReducerOpCode encode_cmp_op(int captured_cmp_op) {
 
 // Resolve the byte offset within the kernel arg buffer where the ndarray's `data_ptr` (u64) lives. Mirrors the
 // `kNodeOffArgBufferOffset` precomputation the SizeExpr device-bytecode encoder does for its own `ExternalTensorRead`
-// nodes (see `adstack_size_expr_eval.cpp` near line 497) - the layout knowledge is centralised in
+// nodes (see `adstack_size_expr_eval.cpp`) - the layout knowledge is centralised in
 // `LaunchContextBuilder::args_type->get_element_offset`, so any update to the args-struct layout flows through both
 // call sites uniformly. Returned offset is in BYTES; the shader divides by 4 (because the params blob slot stores a u32
 // word offset into the arg buffer's u32[] view).

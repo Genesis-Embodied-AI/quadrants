@@ -211,9 +211,9 @@ class QD_DLL_EXPORT GfxRuntime {
   // Per-task atomic-counter array (`uint[num_tasks_in_kernel]`) that the SPIR-V codegen `OpAtomicIAdd`s into at the
   // LCA-block claim site, slot `task_id_in_kernel`. Allocated lazily on first bind, grown lazily when a kernel with
   // more tasks than the current allocation lands, and zeroed exactly once per kernel-launch (gated on `i == 0` in the
-  // task loop in `launch_kernel`). The shader's clamp-then-OpAtomicUMax(UINT32_MAX) divergence-overflow signal at line
-  // 304-306 of spirv_codegen.cpp reads this counter alongside `AdStackBoundRowCapacity[task_id]`; the runtime does not
-  // consume the counter past the on-device clamp.
+  // task loop in `launch_kernel`). The shader's clamp-then-OpAtomicUMax(UINT32_MAX) divergence-overflow signal in the
+  // LCA-block claim emission at `spirv_codegen.cpp` reads this counter alongside `AdStackBoundRowCapacity[task_id]`;
+  // the runtime does not consume the counter past the on-device clamp.
   std::unique_ptr<DeviceAllocationGuard> adstack_row_counter_buffer_;
   size_t adstack_row_counter_buffer_size_{0};
 
