@@ -56,7 +56,9 @@ class FunctionDefTransformer:
             assert this_arg_features is not None
             marker = this_arg_features[0]
             if marker == _TENSOR_T_NDARRAY_MARKER:
-                raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features[1:]
+                raw_element_type, ndim, needs_grad, boundary, layout = (
+                    this_arg_features[1:]
+                )
                 return False, (
                     kernel_arguments.decl_ndarray_arg,
                     (
@@ -75,7 +77,9 @@ class FunctionDefTransformer:
                 assert ctx.global_vars is not None
                 return True, ctx.global_vars.get(name)
             raise AssertionError(f"unknown qd.Tensor marker: {marker!r}")
-        if annotation == annotations.template or isinstance(annotation, annotations.template):
+        if annotation == annotations.template or isinstance(
+            annotation, annotations.template
+        ):
             if name in ctx.template_vars:
                 return True, ctx.template_vars[name]
             assert ctx.global_vars is not None
@@ -98,8 +102,12 @@ class FunctionDefTransformer:
                 needs_grad,
                 BoundaryMode(boundary),
             )
-            offset = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_offset")
-            size = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_size")
+            offset = kernel_arguments.decl_scalar_arg(
+                primitive_types.i32, full_name + "_offset"
+            )
+            size = kernel_arguments.decl_scalar_arg(
+                primitive_types.i32, full_name + "_size"
+            )
             return True, BufferView(arr, offset, size)
         if isinstance(annotation, ndarray_type.NdarrayType):
             assert this_arg_features is not None
@@ -139,7 +147,10 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, argument_type)
             for field_idx, field in enumerate(dataclasses.fields(argument_type)):
                 flat_name = create_flat_name(argument_name, field.name)
-                if pruning.enforcing and flat_name not in pruning.used_vars_by_func_id[func_id]:
+                if (
+                    pruning.enforcing
+                    and flat_name not in pruning.used_vars_by_func_id[func_id]
+                ):
                     continue
                 # if a field is a dataclass, then feed back into process_kernel_arg recursively
                 if dataclasses.is_dataclass(field.type):
@@ -177,7 +188,9 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, obj)
 
     @staticmethod
-    def _transform_as_kernel(ctx: ASTTransformerFuncContext, node: ast.FunctionDef, args: ast.arguments) -> None:
+    def _transform_as_kernel(
+        ctx: ASTTransformerFuncContext, node: ast.FunctionDef, args: ast.arguments
+    ) -> None:
         assert ctx.func is not None
         assert ctx.arg_features is not None
         if node.returns is not None:
@@ -226,7 +239,9 @@ class FunctionDefTransformer:
                         child = child._unwrap()
                     if isinstance(child, _ndarray.Ndarray):
                         _register_ndarray(child, arg_idx, (*path, field.name))
-                    elif dataclasses.is_dataclass(child) and not isinstance(child, type):
+                    elif dataclasses.is_dataclass(child) and not isinstance(
+                        child, type
+                    ):
                         _walk_obj(child, arg_idx, (*path, field.name))
             else:
                 for attr_name, attr_val in vars(obj).items():
@@ -250,7 +265,9 @@ class FunctionDefTransformer:
                 element_type, ndim, name, needs_grad
             )
             arr = any_array.AnyArray(
-                _qd_core.make_external_tensor_expr(element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE),
+                _qd_core.make_external_tensor_expr(
+                    element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE
+                ),
                 _qd_layout=layout,
             )
             cache[key] = arr
@@ -259,7 +276,9 @@ class FunctionDefTransformer:
         assert ctx.py_args is not None
         for i, arg_meta in enumerate(ctx.func.arg_metas):
             anno = arg_meta.annotation
-            is_template = anno is annotations.template or isinstance(anno, annotations.template)
+            is_template = anno is annotations.template or isinstance(
+                anno, annotations.template
+            )
             is_tensor_anno = anno is _TensorClass
             if not (is_template or is_tensor_anno):
                 continue
@@ -297,15 +316,21 @@ class FunctionDefTransformer:
         # directly — ndarray and field impls are both valid pass-by-reference arguments.
         if argument_type is _TensorClass:
             data = FunctionDefTransformer._unwrap_tensor(data)
-            _cache = getattr(getattr(ctx, "global_context", None), "ndarray_to_any_array", None)
+            _cache = getattr(
+                getattr(ctx, "global_context", None), "ndarray_to_any_array", None
+            )
             promoted = _cache.get(id(data)) if _cache else None
-            ctx.create_variable(argument_name, promoted if promoted is not None else data)
+            ctx.create_variable(
+                argument_name, promoted if promoted is not None else data
+            )
             return None
 
         if dataclasses.is_dataclass(argument_type):
             for field in dataclasses.fields(argument_type):
                 flat_name = create_flat_name(argument_name, field.name)
-                data_child = FunctionDefTransformer._unwrap_tensor(getattr(data, field.name))
+                data_child = FunctionDefTransformer._unwrap_tensor(
+                    getattr(data, field.name)
+                )
                 if isinstance(
                     data_child,
                     (
@@ -317,11 +342,19 @@ class FunctionDefTransformer:
                 ):
                     # qd.Tensor struct fields skip check_matched (the Tensor class has no such method — it is
                     # polymorphic).
-                    if field.type is not _TensorClass and hasattr(field.type, "check_matched"):
+                    if field.type is not _TensorClass and hasattr(
+                        field.type, "check_matched"
+                    ):
                         field.type.check_matched(data_child.get_type(), field.name)
-                    _cache = getattr(getattr(ctx, "global_context", None), "ndarray_to_any_array", None)
+                    _cache = getattr(
+                        getattr(ctx, "global_context", None),
+                        "ndarray_to_any_array",
+                        None,
+                    )
                     promoted = _cache.get(id(data_child)) if _cache else None
-                    ctx.create_variable(flat_name, promoted if promoted is not None else data_child)
+                    ctx.create_variable(
+                        flat_name, promoted if promoted is not None else data_child
+                    )
                 elif dataclasses.is_dataclass(data_child):
                     FunctionDefTransformer._transform_func_arg(
                         ctx,
@@ -338,9 +371,17 @@ class FunctionDefTransformer:
         # Ndarray arguments are passed by reference.
         if isinstance(argument_type, (ndarray_type.NdarrayType)):
             if not isinstance(
-                data, (_ndarray.ScalarNdarray, matrix.VectorNdarray, matrix.MatrixNdarray, any_array.AnyArray)
+                data,
+                (
+                    _ndarray.ScalarNdarray,
+                    matrix.VectorNdarray,
+                    matrix.MatrixNdarray,
+                    any_array.AnyArray,
+                ),
             ):
-                raise QuadrantsSyntaxError(f"Argument {argument_name} of type {argument_type} is not recognized.")
+                raise QuadrantsSyntaxError(
+                    f"Argument {argument_name} of type {argument_type} is not recognized."
+                )
             argument_type.check_matched(data.get_type(), argument_name)
             ctx.create_variable(argument_name, data)
             return None
@@ -350,7 +391,9 @@ class FunctionDefTransformer:
         # not here — data.arr is an Expr node during func compilation, not a real Ndarray.
         if isinstance(argument_type, buffer_view_type.BufferViewType):
             if not isinstance(data, BufferView):
-                raise QuadrantsSyntaxError(f"Argument {argument_name} expects a BufferView, got {type(data).__name__}")
+                raise QuadrantsSyntaxError(
+                    f"Argument {argument_name} expects a BufferView, got {type(data).__name__}"
+                )
             ctx.create_variable(argument_name, data)
             return None
 
@@ -389,7 +432,9 @@ class FunctionDefTransformer:
             return None
 
         if id(argument_type) in primitive_types.type_ids:
-            ctx.create_variable(argument_name, impl.expr_init_func(qd_ops.cast(data, argument_type)))
+            ctx.create_variable(
+                argument_name, impl.expr_init_func(qd_ops.cast(data, argument_type))
+            )
             return None
         # Create a copy for non-template arguments,
         # so that they are passed by value.
@@ -398,7 +443,9 @@ class FunctionDefTransformer:
         return None
 
     @staticmethod
-    def _transform_as_func(ctx: ASTTransformerFuncContext, node: ast.FunctionDef, args: ast.arguments) -> None:
+    def _transform_as_func(
+        ctx: ASTTransformerFuncContext, node: ast.FunctionDef, args: ast.arguments
+    ) -> None:
         # pylint: disable=import-outside-toplevel
         from quadrants.lang.kernel_impl import Func
 
@@ -406,7 +453,9 @@ class FunctionDefTransformer:
         assert ctx.py_args is not None
         for py_arg_i, py_arg in enumerate(ctx.py_args):
             argument = ctx.func.arg_metas_expanded[py_arg_i]
-            FunctionDefTransformer._transform_func_arg(ctx, argument.name, argument.annotation, py_arg)
+            FunctionDefTransformer._transform_func_arg(
+                ctx, argument.name, argument.annotation, py_arg
+            )
 
         # deal with dataclasses
         for v in ctx.func.orig_arguments:
@@ -446,7 +495,9 @@ class FunctionDefTransformer:
                 FunctionDefTransformer._transform_as_func(ctx, node, args)
 
         if ctx.is_kernel:
-            FunctionDefTransformer._validate_stream_parallel_exclusivity(node.body, ctx.global_vars)
+            FunctionDefTransformer._validate_stream_parallel_exclusivity(
+                node.body, ctx.global_vars
+            )
 
         with ctx.variable_scope_guard():
             build_stmts(ctx, node.body)
@@ -478,11 +529,20 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _is_docstring(stmt: ast.stmt, index: int) -> bool:
-        return index == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, (ast.Constant, ast.Str))
+        return (
+            index == 0
+            and isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, (ast.Constant, ast.Str))
+        )
 
     @staticmethod
-    def _validate_stream_parallel_exclusivity(body: list[ast.stmt], global_vars: dict[str, Any]) -> None:
-        if not any(FunctionDefTransformer._is_stream_parallel_with(s, global_vars) for s in body):
+    def _validate_stream_parallel_exclusivity(
+        body: list[ast.stmt], global_vars: dict[str, Any]
+    ) -> None:
+        if not any(
+            FunctionDefTransformer._is_stream_parallel_with(s, global_vars)
+            for s in body
+        ):
             return
         for i, stmt in enumerate(body):
             if FunctionDefTransformer._is_docstring(stmt, i):
@@ -491,7 +551,9 @@ class FunctionDefTransformer:
                 stmt_desc = f"{type(stmt).__name__}"
                 if isinstance(stmt, ast.With) and stmt.items:
                     ctx_expr = stmt.items[0].context_expr
-                    if isinstance(ctx_expr, ast.Call) and isinstance(ctx_expr.func, ast.Attribute):
+                    if isinstance(ctx_expr, ast.Call) and isinstance(
+                        ctx_expr.func, ast.Attribute
+                    ):
                         stmt_desc += f"(with {ast.dump(ctx_expr.func)})"
                 raise QuadrantsSyntaxError(
                     "When using qd.stream_parallel(), all top-level statements "
