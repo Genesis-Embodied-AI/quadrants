@@ -1859,15 +1859,13 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   ad_stack_static_bound_expr_ = adstack_analysis.bound_expr;
 
   // Pre-scan the task body for every `AdStackAllocaStmt` before any codegen runs. Each alloca claims a fixed slot
-  // inside the COMBINED per-thread slice (legacy single-heap layout, addressed by `linear_tid * combined_stride +
-  // offset`); the kind classification (`HeapKind::Float` / `HeapKind::Int`) is recorded into `info.heap_kind` so the
-  // host launcher knows which kind each alloca belongs to, but the codegen-side addressing stays single-heap for now.
-  // Splitting the layout into separate float / int heaps with `row_id_var * stride_float + float_offset` is future work
-  // that requires updating `visit(AdStackAllocaStmt)` to route base computation per kind. The shared analysis output
-  // (LCA, bootstrap pushes, captured `bound_expr`) propagates to `current_task->ad_stack` so the host launcher can
-  // dispatch the per-arch reducer; the heap addressing change comes after. Sizes are rounded up to 8 bytes so
-  // `stack_top_primal`'s `stack + sizeof(u64) + idx * 2 * element_size` math stays naturally aligned for every element
-  // type the IR may emit (i8 / u1 pack especially, on which the raw `size_in_bytes()` is otherwise unaligned).
+  // inside its kind's per-thread slice (`HeapKind::Float` slot in the float heap, `HeapKind::Int` slot in the int
+  // heap); the kind classification is recorded into `info.heap_kind` and `visit(AdStackAllocaStmt)` routes the base
+  // computation per kind via `ad_stack_heap_base_float_llvm_` / `ad_stack_heap_base_int_llvm_` and the matching
+  // strides. The shared analysis output (LCA, bootstrap pushes, captured `bound_expr`) propagates to
+  // `current_task->ad_stack` so the host launcher can dispatch the per-arch reducer. Sizes are rounded up to 8 bytes
+  // so `stack_top_primal`'s `stack + sizeof(u64) + idx * 2 * element_size` math stays naturally aligned for every
+  // element type the IR may emit (i8 / u1 pack especially, on which the raw `size_in_bytes()` is otherwise unaligned).
   {
     auto align_up_8 = [](std::size_t n) -> std::size_t { return (n + 7u) & ~std::size_t{7u}; };
     std::function<void(IRNode *)> scan = [&](IRNode *node) {
@@ -2487,19 +2485,11 @@ llvm::Value *TaskCodeGenLLVM::emit_ad_stack_single_slot_ptr(const AdStackAllocaS
   return builder->CreateGEP(i8ty, get_ad_stack_base_llvm(const_cast<AdStackAllocaStmt *>(stack)), slot_offset);
 }
 
-// Per-thread base pointer for the given alloca. Lazy float allocas (in tasks with a captured `bound_expr`) emit `heap
-// + row_id_var * stride + offset` at the call site so the row claim from the LCA-block atomic-rmw is observed at every
-// push / load-top site rather than baked in at the alloca visit (which sees `row_id_var = UINT32_MAX` because it runs
-// at the offload root, before the LCA). Every other alloca returns the cached base pointer set by
+// Per-thread base pointer for the given alloca. Lazy float allocas (in tasks with a captured `bound_expr`) emit
+// `heap_float + row_id_var * stride_float + offset` at every call site so the row claim from the LCA-block atomic-rmw
+// is observed at each push / load-top rather than baked in at the alloca visit (which sees `row_id_var = UINT32_MAX`
+// because it runs at the offload root, before the LCA). Every other alloca returns the cached base pointer set by
 // `visit(AdStackAllocaStmt)`.
-//
-// The current implementation routes the lazy path through the existing combined heap (`adstack_heap_buffer` /
-// `adstack_per_thread_stride` / `adstack_offsets`) rather than the split float heap because the runtime still allocates
-// a single combined slab. The savings from sizing the float slab at the reducer's count of gate-passing threads
-// (instead of the dispatched-threads worst case) require future work that allocates a dedicated
-// `adstack_heap_buffer_float` and grows it on observed claim count; the codegen split routing through
-// `ad_stack_heap_base_float_llvm_` / `ad_stack_stride_float_llvm_` already exists in the ensure-helpers and flips on
-// once the runtime side ships.
 llvm::Value *TaskCodeGenLLVM::get_ad_stack_base_llvm(AdStackAllocaStmt *stack) {
   if (ad_stack_lazy_float_allocas_.count(stack) == 0) {
     return llvm_val[stack];
