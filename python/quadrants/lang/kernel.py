@@ -649,6 +649,11 @@ class Kernel(FuncBase):
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
         qd_stream = kwargs.pop("qd_stream", None)
+        if qd_stream is not None and self.runtime.target_tape:
+            raise RuntimeError(
+                "qd_stream is not compatible with autograd Tape. Launch the kernel outside the Tape "
+                "context, or omit qd_stream."
+            )
         if impl.get_runtime()._arch == _ARCH_PYTHON:
             return self.func(*py_args, **kwargs)
         config = impl.current_cfg()
