@@ -142,8 +142,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   auto *active_stream = AMDGPUContext::get_instance().get_stream();
 
   char *device_result_buffer{nullptr};
-  // Must always allocate device_result_buffer (even when result_buffer_size
-  // is 0) to avoid memory access faults from allocate_memory_on_device below.
+  // Must always allocate device_result_buffer (even when result_buffer_size is 0) to avoid memory access faults
+  // from allocate_memory_on_device below.
   AMDGPUDriver::get_instance().malloc_async((void **)&device_result_buffer,
                                             std::max(ctx.result_buffer_size, sizeof(uint64)), active_stream);
 
