@@ -557,10 +557,20 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   // Cache the kernel's per-task names so the post-launch `synchronize()` readback can map each slot of the
   // adstack row counter buffer back to its task name in `last_observed_rows_per_task_`. The vector is cleared
   // and refilled on every launch - last-launch-wins for sync windows that contain multiple launches.
+  // ONLY tasks whose codegen emitted the lazy-claim path (`bound_expr.has_value()` in spirv_codegen at the
+  // float LCA-block atomic-rmw) actually atomic-add into the counter slot. Eager-path tasks (no captured
+  // gate) leave their slot at the post-clear zero. Push an empty-string sentinel for those slots so the
+  // synchronize() readback skips them - writing the post-clear zero into `last_observed_rows_per_task_`
+  // under an eager task name would later drive the heap-bind tertiary fallback to size the float heap at
+  // `ceil(0 * 1.5) = 0` rows (floored to 1), while the eager codegen stores `gl_GlobalInvocationID`
+  // unclamped into `row_id_var_float_` and pushes `invoc_id * stride_float` bytes past the floored 1-row
+  // allocation. The never-shrink invariant on `adstack_heap_buffer_float_` masks this on monotonically-
+  // growing dispatches, but a small first launch followed by a large second launch surfaces it as wrong
+  // gradients on every thread past the first launch's dispatched count.
   last_kernel_task_names_.clear();
   last_kernel_task_names_.reserve(task_attribs.size());
   for (const auto &t : task_attribs) {
-    last_kernel_task_names_.push_back(t.name);
+    last_kernel_task_names_.push_back(t.ad_stack.bound_expr.has_value() ? t.name : std::string());
   }
 
   for (int i = 0; i < task_attribs.size(); ++i) {
@@ -679,15 +689,18 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         auto bound_count_it = per_task_bound_count.find(i);
         if (bound_count_it != per_task_bound_count.end()) {
           effective_rows = bound_count_it->second;
-        } else {
-          // Tertiary fallback for tasks the reducer did not pre-count (no captured `bound_expr`, compound
-          // gate predicate, capability-missing device): if a prior synchronize() snapshot recorded the LCA
-          // claim count for the same task name into `last_observed_rows_per_task_`, size from
-          // `ceil(last_observed * 1.5)` instead of the full `dispatched_threads` worst case. The 1.5x cushion
-          // absorbs run-to-run variance in how many threads reach the LCA without forcing an amortized-
-          // doubling reallocation on every modest workload uplift; the cap at `dispatched_threads` keeps the
-          // total upper-bound consistent with the eager fallback row layout. First-launch / never-observed
-          // tasks retain the dispatched-threads worst case.
+        } else if (attribs.ad_stack.bound_expr.has_value()) {
+          // Tertiary fallback for lazy-claim tasks (`bound_expr` captured but the reducer skipped the
+          // dispatch - capability-missing device, or the reducer matched zero tasks): if a prior
+          // synchronize() snapshot recorded the LCA claim count for this task name into
+          // `last_observed_rows_per_task_`, size from `ceil(last_observed * 1.5)` instead of the full
+          // `dispatched_threads` worst case. The 1.5x cushion absorbs run-to-run variance in how many
+          // threads reach the LCA without forcing an amortized-doubling reallocation on every modest
+          // workload uplift; the cap at `dispatched_threads` keeps the total upper-bound consistent with
+          // the eager fallback row layout. First-launch / never-observed tasks retain the dispatched-
+          // threads worst case. Eager-path tasks (no `bound_expr`) skip this branch entirely - their
+          // counter slot stayed at the post-clear zero, so any cached observation is meaningless and
+          // would undersize the heap below their `gl_GlobalInvocationID`-indexed write range.
           auto observed_it = last_observed_rows_per_task_.find(attribs.name);
           if (observed_it != last_observed_rows_per_task_.end()) {
             const uint64_t scaled = (uint64_t(observed_it->second) * 3 + 1) / 2;  // ceil(observed * 1.5)
@@ -973,8 +986,20 @@ void GfxRuntime::synchronize() {
     void *mapped = nullptr;
     QD_ASSERT(device_->map(*adstack_row_counter_buffer_, &mapped) == RhiResult::success);
     const uint32_t *slots = reinterpret_cast<const uint32_t *>(mapped);
-    for (size_t i = 0; i < last_kernel_task_names_.size(); ++i) {
-      last_observed_rows_per_task_[last_kernel_task_names_[i]] = slots[i];
+    // Bound the per-slot iteration by `min(task_names_size, counter_buffer_slots)` so a kernel whose task
+    // count exceeds the prior-grown counter buffer's slot count (e.g. reducer dispatch matched fewer tasks
+    // than `task_attribs.size()` because some tasks were eager-path or filtered) does not OOB-read past the
+    // host-mapped buffer. Skip empty-string sentinels (eager-path tasks set them in `launch_kernel`); their
+    // slot[i] is the post-clear zero rather than an atomic-added count, so caching it under any name would
+    // later mislead the heap-bind tertiary fallback.
+    const size_t buffer_slot_count = adstack_row_counter_buffer_size_ / sizeof(uint32_t);
+    const size_t readback_count = std::min(last_kernel_task_names_.size(), buffer_slot_count);
+    for (size_t i = 0; i < readback_count; ++i) {
+      const auto &name = last_kernel_task_names_[i];
+      if (name.empty()) {
+        continue;
+      }
+      last_observed_rows_per_task_[name] = slots[i];
     }
     device_->unmap(*adstack_row_counter_buffer_);
   }
