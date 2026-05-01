@@ -99,12 +99,18 @@ jobs:
                core subdir like codegen/, ir/, runtime/, transforms/, lang/, lang/ast/).
              If NONE of these hold, do not flag anything in this file — the host is not hot enough
              to warrant carving things out.
-          2. If the host IS hot, examine the substantial added code (new top-level functions, new
-             classes, large new self-contained blocks — NOT new methods on an existing class, NOT
-             small edits to existing functions).
+          2. If the host IS hot, examine the substantial added code. In scope:
+             - New top-level functions or classes.
+             - Large new self-contained blocks.
+             - New methods added to an *existing* class. This is one of the most common shapes of
+               this smell: a feature accretes methods on a central class living in a hot file.
+               Suggested fixes are typically: extract the feature logic into free functions in a
+               new feature module that the class delegates to (one-line forwarding methods are
+               fine), or split the class via a mixin / partial / sibling helper class living in
+               its own file.
           3. Flag a block only if it is plausibly extractable: it has a clear feature/subsystem
              name, it is mostly self-contained (limited entanglement with the host file's existing
-             internals), and a reasonable file path can be named for it.
+             internals beyond a small interface), and a reasonable file path can be named for it.
           4. For each violation, suggest a better location: an *existing* feature-specific file or
              a plausible new file path that matches the repo's naming conventions. Briefly note the
              host's hotness numbers (commits / authors / size) so the reviewer can sanity-check.
@@ -112,8 +118,6 @@ jobs:
           What NOT to flag:
           - Anything in a file that is not heavily-tracked / core (most files).
           - Small tweaks, bug fixes, or extensions of functions that already live in the host file.
-          - New methods added to a class that already lives in the host file (the class is the unit
-            of locality, not the file).
           - Code that is tightly coupled to the host file's internals and would not cleanly extract.
           - Refactors / renames / moves that just relocate existing code.
           - Newly added files (out of scope for this check).
