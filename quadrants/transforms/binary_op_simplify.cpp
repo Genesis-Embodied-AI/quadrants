@@ -23,6 +23,11 @@ class BinaryOpSimp : public BasicStmtVisitor {
     if (!binary_lhs || !const_rhs) {
       return false;
     }
+    // Don't rewrite across a precise boundary: the rearrangement synthesizes fresh BinaryOpStmts with `precise=false`,
+    // which would silently discard the inner op's IEEE-strict tag.
+    if (binary_lhs->precise) {
+      return false;
+    }
     auto const_lhs_rhs = binary_lhs->rhs->cast<ConstStmt>();
     if (!const_lhs_rhs || binary_lhs->lhs->is<ConstStmt>()) {
       return false;
@@ -82,9 +87,8 @@ class BinaryOpSimp : public BasicStmtVisitor {
       stmt->rhs = const_lhs;
       operand_swapped = true;
     }
-    // Disable other optimizations if fast_math=True and the data type is not
-    // integral.
-    if (!fast_math && !is_integral(stmt->ret_type)) {
+    // Disable other optimizations if fast_math=False (or this op is `precise`) and the data type is not integral.
+    if ((!fast_math || stmt->precise) && !is_integral(stmt->ret_type)) {
       return;
     }
 

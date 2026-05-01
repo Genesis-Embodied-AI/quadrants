@@ -222,17 +222,18 @@ class IRPrinter : public IRVisitor {
   void visit(UnaryOpStmt *stmt) override {
     if (stmt->is_cast()) {
       std::string reint = stmt->op_type == UnaryOpType::cast_value ? "" : "reinterpret_";
-      print("{}{} = {}{}<{}> {}", stmt->type_hint(), stmt->name(), reint, unary_op_type_name(stmt->op_type),
-            data_type_name(stmt->cast_type), stmt->operand->name());
+      print("{}{} = {}{}<{}> {}{}", stmt->type_hint(), stmt->name(), reint, unary_op_type_name(stmt->op_type),
+            data_type_name(stmt->cast_type), stmt->operand->name(), stmt->precise ? " [precise]" : "");
     } else {
-      print("{}{} = {} {}", stmt->type_hint(), stmt->name(), unary_op_type_name(stmt->op_type), stmt->operand->name());
+      print("{}{} = {} {}{}", stmt->type_hint(), stmt->name(), unary_op_type_name(stmt->op_type), stmt->operand->name(),
+            stmt->precise ? " [precise]" : "");
     }
     dbg_info_printer_(stmt);
   }
 
   void visit(BinaryOpStmt *bin) override {
-    print("{}{} = {} {} {}", bin->type_hint(), bin->name(), binary_op_type_name(bin->op_type), bin->lhs->name(),
-          bin->rhs->name());
+    print("{}{} = {} {} {}{}", bin->type_hint(), bin->name(), binary_op_type_name(bin->op_type), bin->lhs->name(),
+          bin->rhs->name(), bin->precise ? " [precise]" : "");
     dbg_info_printer_(bin);
   }
 

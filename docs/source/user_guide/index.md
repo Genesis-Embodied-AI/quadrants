@@ -21,6 +21,7 @@ tensor
 compound_types
 buffer_view
 static
+precise
 sub_functions
 parallelization
 ```
