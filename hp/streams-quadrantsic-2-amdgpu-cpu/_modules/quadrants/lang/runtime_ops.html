@@ -325,8 +325,12 @@
 <div class="viewcode-block" id="sync">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/runtime_ops/index.html#quadrants.lang.runtime_ops.sync">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">sync</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Blocks the calling thread until all the previously</span>
-<span class="sd">    launched Quadrants kernels have completed.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Synchronizes the default stream.</span>
+
+<span class="sd">    Blocks the calling thread until all work on the default GPU stream</span>
+<span class="sd">    has completed.  Kernels launched on explicit streams created via</span>
+<span class="sd">    :func:`quadrants.create_stream` are **not** waited on — call</span>
+<span class="sd">    ``stream.synchronize()`` for those.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span></div>
 
