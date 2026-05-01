@@ -561,6 +561,11 @@ class Kernel(FuncBase):
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
             launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
+            if launch_ctx.use_graph and qd_stream is not None:
+                raise RuntimeError(
+                    "qd_stream is not compatible with graph=True kernels. "
+                    "See docs/source/user_guide/streams.md for details."
+                )
             if self.graph_do_while_arg is not None and hasattr(self, "_graph_do_while_cpp_arg_id"):
                 launch_ctx.graph_do_while_arg_id = self._graph_do_while_cpp_arg_id
             stream_handle = qd_stream.handle if qd_stream is not None else 0
@@ -582,6 +587,8 @@ class Kernel(FuncBase):
 
         return_type = self.return_type
         if return_type or self.has_print:
+            if qd_stream is not None and self.has_print and not return_type:
+                qd_stream.synchronize()
             runtime_ops.sync()
 
         if not return_type:
@@ -650,8 +657,10 @@ class Kernel(FuncBase):
     def __call__(self, *py_args, **kwargs) -> Any:
         qd_stream = kwargs.pop("qd_stream", None)
         if qd_stream is not None and self.runtime.target_tape:
-            raise RuntimeError("qd_stream is not compatible with autograd Tape. Launch the kernel outside the Tape "
-                               "context, or omit qd_stream.")
+            raise RuntimeError(
+                "qd_stream is not compatible with autograd Tape. Launch the kernel outside the Tape "
+                "context, or omit qd_stream."
+            )
         if impl.get_runtime()._arch == _ARCH_PYTHON:
             return self.func(*py_args, **kwargs)
         config = impl.current_cfg()
