@@ -76,7 +76,7 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         int sid = offloaded_tasks[j].stream_parallel_group_id;
         if (stream_by_id.find(sid) == stream_by_id.end()) {
           void *s = nullptr;
-          AMDGPUDriver::get_instance().stream_create(&s, 0);
+          AMDGPUDriver::get_instance().stream_create(&s, 0x1 /*CU_STREAM_NON_BLOCKING*/);
           stream_by_id[sid] = s;
         }
       }
