@@ -57,7 +57,7 @@ Forces every adstack in the program to exactly `N` slots and bypasses the launch
 
 ### `ad_stack_sparse_threshold_bytes`
 
-Cutoff (in bytes) below which the gate-passing-count sizing path described in [Memory footprint](./autodiff.md#memory-footprint) is skipped in favour of the eager `dispatched_threads * stride` heap. Default `100 MiB`. The sparse path saves memory on kernels of the shape `for i in range(...): if field[i] cmp literal: <adstack work>` but pays a per-launch reducer dispatch; below the threshold that overhead outweighs the savings. Set to `0` to always use the sparse path; raise it if the default still skips kernels you want shrunk. No effect when `ad_stack_experimental_enabled=False` or when the kernel has no such gate.
+Cutoff (in bytes) below which the gate-passing-count sizing path described in [Memory footprint](./autodiff.md#memory-footprint) is skipped in favour of the eager `dispatched_threads * stride` heap. Default `100 MiB`. The sparse path saves memory on kernels of the shape `for i in range(...): if field[i] cmp literal: <adstack work>` but pays a per-launch reducer dispatch; below the threshold that overhead outweighs the savings. Set to `0` to always use the sparse path; lower it if the default still skips kernels you want shrunk. No effect when `ad_stack_experimental_enabled=False` or when the kernel has no such gate.
 
 ## Debugging
 
