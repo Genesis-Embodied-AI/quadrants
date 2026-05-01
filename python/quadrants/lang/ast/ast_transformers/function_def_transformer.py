@@ -27,6 +27,7 @@ from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
 from quadrants.lang.exception import (
+    QuadrantsCompilationError,
     QuadrantsSyntaxError,
 )
 from quadrants.lang.matrix import MatrixType
@@ -220,6 +221,16 @@ class FunctionDefTransformer:
                         _register_ndarray(attr_val, arg_idx, (*path, attr_name))
 
         def _register_ndarray(nd, arg_idx, attr_chain):
+            param_name = ctx.func.arg_metas[arg_idx].name
+            attr_path = ".".join(attr_chain)
+            raise QuadrantsCompilationError(
+                f"Kernel parameter '{param_name}' is annotated as qd.template(), but "
+                f"'{param_name}.{attr_path}' is a qd.ndarray. Passing ndarrays through "
+                f"template structs is not supported because it bypasses argument pruning "
+                f"and degrades launch performance. Use a concrete struct annotation "
+                f"(e.g. a @dataclass type hint) instead of qd.template() for struct "
+                f"parameters that contain ndarrays."
+            )
             key = id(nd)
             if key in cache:
                 return
