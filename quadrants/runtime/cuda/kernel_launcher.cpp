@@ -253,9 +253,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     CUDADriver::get_instance().stream_synchronize(active_stream);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       auto &idx = itr->first;
-      CUDADriver::get_instance().memcpy_device_to_host_async(
-          itr->second.first, (void *)device_ptrs[idx],
-          ctx.array_runtime_sizes[idx.arg_id], active_stream);
+      CUDADriver::get_instance().memcpy_device_to_host_async(itr->second.first, (void *)device_ptrs[idx],
+                                                             ctx.array_runtime_sizes[idx.arg_id], active_stream);
     }
     CUDADriver::get_instance().stream_synchronize(active_stream);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
