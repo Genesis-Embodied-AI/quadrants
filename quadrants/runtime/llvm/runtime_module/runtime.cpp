@@ -1226,7 +1226,13 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
     running_offset_combined += step;
   }
 
-  runtime->adstack_per_thread_stride = running_offset_combined;
+  // Mirror the host-eval branch's contract (`llvm_runtime_executor.cpp::publish_adstack_metadata`): the
+  // legacy `adstack_per_thread_stride` field publishes `stride_int_bytes` on both paths so any offline-
+  // cache-loaded kernel that still reads it observes a consistent value. Earlier drafts published the
+  // combined `stride_float + stride_int` here, which diverged from the host-eval branch on any kernel
+  // with at least one ExternalTensorRead-leaf SizeExpr (the `use_host_eval=false` gate).
+  (void)running_offset_combined;
+  runtime->adstack_per_thread_stride = running_offset_int;
   runtime->adstack_per_thread_stride_float = running_offset_float;
   runtime->adstack_per_thread_stride_int = running_offset_int;
 }
