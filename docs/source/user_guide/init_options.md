@@ -49,7 +49,12 @@ See [Autodiff](./autodiff.md) for the reverse-mode pipeline overview.
 
 ### `ad_stack_experimental_enabled`
 
-Enables the dynamic-loop reverse-mode pipeline (the *adstack*). Default `False`. Required when a reverse-mode kernel has a runtime-bounded loop carrying a non-linear primal; without it, such kernels either compile-error or produce silently-wrong gradients depending on the loop shape. See [Autodiff with dynamic loops](./autodiff.md#autodiff-with-dynamic-loops) for the rules. Adstack-on is safe even when not strictly needed.
+Enables the dynamic-loop reverse-mode pipeline (the *adstack*). Default `False`. Required when a reverse-mode kernel has a runtime-bounded loop carrying a non-linear primal; without it, such kernels either compile-error or produce silently-wrong gradients depending on the loop shape. See [Autodiff with dynamic loops](./autodiff.md#autodiff-with-dynamic-loops) for the rules. Adstack-on is safe even when not strictly needed, but it does come with a few drawbacks:
+
+- **Memory.** The reverse pass replays each iteration of the dynamic loop, so the adstack stores per-iteration intermediate values for every thread. See [Memory footprint](./autodiff.md#memory-footprint) for the exact formula and the knobs that shrink it (`ad_stack_size`, `ad_stack_sparse_threshold_bytes`).
+- **Per-launch overhead.** Every backward kernel launch incurs a small fixed CPU-to-GPU data transfer. Kernels whose dynamic loop is gated by a sparse predicate (e.g. `for i in range(n): if active[i] > 0: ...`) additionally run a fast GPU pre-step that counts how many threads pass the gate so that the adstack can be tightly sized instead of upper-bounded by worst case.
+
+*Note.* These drawbacks affect only reverse-mode kernels that actually use the adstack; forward-only kernels and reverse-mode kernels without a dynamic non-linear inner loop pay nothing extra.
 
 ### `ad_stack_size`
 
