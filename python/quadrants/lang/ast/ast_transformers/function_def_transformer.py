@@ -489,8 +489,14 @@ class FunctionDefTransformer:
             if FunctionDefTransformer._is_docstring(stmt, i):
                 continue
             if not FunctionDefTransformer._is_stream_parallel_with(stmt, global_vars):
+                stmt_desc = f"{type(stmt).__name__}"
+                if isinstance(stmt, ast.With) and stmt.items:
+                    ctx_expr = stmt.items[0].context_expr
+                    if isinstance(ctx_expr, ast.Call) and isinstance(ctx_expr.func, ast.Attribute):
+                        stmt_desc += f"(with {ast.dump(ctx_expr.func)})"
                 raise QuadrantsSyntaxError(
                     "When using qd.stream_parallel(), all top-level statements "
                     "in the kernel must be 'with qd.stream_parallel():' blocks. "
-                    "Move non-parallel code to a separate kernel."
+                    f"Move non-parallel code to a separate kernel. "
+                    f"[stmt {i}: {stmt_desc}, body_len={len(body)}]"
                 )
