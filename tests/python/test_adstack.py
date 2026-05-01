@@ -3279,6 +3279,64 @@ def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_compound_index_grad_correct():
+    # Asserts gradient correctness for SNode-backed reverse-mode kernels whose gating field is indexed by a non-trivial
+    # expression like `selector[i % K]` rather than the plain `selector[i]` shape. Sparse-grid workloads commonly
+    # access a small lookup table via such compound indices; the gradient must come out the same as a hand-written
+    # numpy oracle regardless of how the gating cell is addressed.
+    #
+    # Internal details: the analysis pre-pass that recognizes a static gate around the LCA only captures the gate's
+    # row-count when the gating field is indexed by a single `LoopIndexStmt` per axis. For `selector[i % K]` the
+    # access lowers to `Linearize([BinaryOp(mod, LoopIndex, ConstStmt(K))])`, which fails that validation, so the
+    # capture is rejected and the runtime falls back to the dispatched-threads worst-case heap sizing. Without the
+    # rejection the captured `iter_count = K` undersizes the float adstack heap to K rows, but the kernel's main pass
+    # walks `[0, n)` claiming a heap row for every gated iteration - the LCA-block atomic-rmw clamp aliases the
+    # `n - K` excess gated iterations onto row K-1, corrupting the per-thread primal slice and either silently
+    # returning wrong gradients (LLVM) or tripping the codegen-emitted "reducer count diverged" overflow (SPIR-V).
+    n = 256
+    K = 64  # selector field has only K cells; loop body indexes it as `selector[i % K]` so K < n triggers the alias.
+    n_iter = 8
+    eps = 1e-9
+
+    selector = qd.field(qd.f32, shape=(K,))
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in range(n):
+            if selector[i % K] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(2)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = (np.random.rand(K) < 0.3).astype(np.float32)
+    for i in range(K):
+        selector[i] = float(selector_np[i])
+    for i in range(n):
+        x[i] = float(x_np[i])
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+
+    compute()
+    compute.grad()
+    qd.sync()
+
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    gated_per_iter = selector_np[np.arange(n) % K] > eps
+    expected = np.where(gated_per_iter, np.float32(expected_per_gated), np.float32(0.0))
+    got_grad = np.array([x.grad[i] for i in range(n)], dtype=np.float32)
+    assert not np.isnan(got_grad).any(), f"compound-index snode grad returned NaN: {got_grad}"
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=0, debug=False, ad_stack_sparse_threshold_bytes=0)
 def test_adstack_static_bound_expr_snode_gate_primal_dependent_grad_correct():
     # Asserts gradient correctness on the LLVM CPU host reducer for SNode-backed gates with a primal-dependent inner

@@ -153,8 +153,12 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
         // entry-count units (each entry = primal + adjoint = 2 elements) so the heap footprint scales naturally with
         // `entry_size_bytes` at sizing time. f64 carries 4 bytes/element more than f32; the launcher's
         // `align_up_8(sizeof(int64_t) + entry_size_bytes * max_size)` step in `publish_adstack_metadata` picks up the
-        // larger element size automatically.
+        // larger element size automatically. The per-kind byte stride is tracked alongside so the sparse-heap
+        // threshold check below stays accurate on f64 allocas (where the entries-unit-times-`sizeof(float)` estimate
+        // would underestimate the real heap by 2x).
         result.per_thread_stride_float += 2u * uint32_t(alloca->max_size);
+        result.per_thread_stride_float_bytes +=
+            2ull * static_cast<uint64_t>(data_type_size(alloca->ret_type)) * static_cast<uint64_t>(alloca->max_size);
         result.num_ad_stacks++;
       } else if (alloca->ret_type == PrimitiveType::i32 || alloca->ret_type == PrimitiveType::u1) {
         // i32 / u1 adstacks have no adjoint; auto_diff.cpp only emits AdStackAccAdjoint / LoadTopAdj on real-typed
@@ -269,6 +273,27 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       auto desc_opt = snode_descriptor_resolver(leaf, dense);
       if (!desc_opt.has_value()) {
         return false;
+      }
+      // Validate the SNode access path's index expression: the codegen lowers `field[i]` as
+      // `GetCh -> SNodeLookup -> Linearize -> [LoopIndexStmt(i)]`. Anything more complex (`field[i % K]`,
+      // `field[2 * i]`, `field[other_field[i]]`, `field[42]`) puts the reducer's flat-walk over `[0, iter_count)`
+      // on a different index basis than the kernel's main pass: the reducer counts cells that pass the gate while
+      // the main pass's LCA-block atomic-rmw fires once per gated loop iteration mapped through the compound index.
+      // Without this rejection the captured count caps the float heap at iter_count rows but `n - iter_count`
+      // excess gated iterations alias onto the last row - silent gradient corruption on LLVM, hard "reducer count
+      // diverged" overflow on SPIR-V. Mirrors the per-axis `is<LoopIndexStmt>` validation in the ndarray arm above.
+      auto *lookup = getch->input_ptr ? getch->input_ptr->cast<SNodeLookupStmt>() : nullptr;
+      if (lookup == nullptr) {
+        return false;
+      }
+      auto *linearize = lookup->input_index ? lookup->input_index->cast<LinearizeStmt>() : nullptr;
+      if (linearize == nullptr) {
+        return false;
+      }
+      for (Stmt *idx : linearize->inputs) {
+        if (idx == nullptr || !idx->is<LoopIndexStmt>()) {
+          return false;
+        }
       }
       out.field_source_kind = StaticAdStackBoundExpr::FieldSourceKind::SNode;
       out.snode_id = leaf->id;
@@ -510,14 +535,15 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
     // (no LCA-block atomic, no reducer dispatch, no host-side per-task DtoH per launch). Threads bound at the
     // SPIR-V grid-stride advisory cap (`kMaxNumThreadsGridStrideLoop = 131072`) - the larger of the two backend
     // ceilings (LLVM CUDA / AMDGPU floor at 65536 via `kAdStackMaxConcurrentThreads` in the launchers); using the
-    // SPIR-V ceiling keeps the test tight on both. `per_thread_stride_float` is in entry-count units (`2 *
-    // max_size` per alloca, summed across every f32 / f64 alloca in the task), so the byte conversion is `*
-    // sizeof(float)`. Threshold default lives in `CompileConfig::ad_stack_sparse_threshold_bytes` (100 MiB); set to
-    // 0 to always capture (tests that pin the reducer-backed sizing path) or to a very large value to always
-    // disable.
+    // SPIR-V ceiling keeps the test tight on both. `per_thread_stride_float_bytes` is the real per-thread byte cost
+    // (`2 * sizeof(dtype) * max_size` per alloca, summed across every f32 / f64 alloca in the task) - tracking
+    // bytes directly rather than scaling the entries-unit `per_thread_stride_float` by `sizeof(float)` keeps the
+    // threshold check accurate on f64 allocas, where the entries-unit estimate would undersize by 2x.
+    // Threshold default lives in `CompileConfig::ad_stack_sparse_threshold_bytes` (100 MiB); set to 0 to always
+    // capture (tests that pin the reducer-backed sizing path) or to a very large value to always disable.
     constexpr size_t kAdvisoryThreadsCeiling = 131072;
     const size_t conservative_heap_bytes_upper =
-        size_t(result.per_thread_stride_float) * sizeof(float) * kAdvisoryThreadsCeiling;
+        static_cast<size_t>(result.per_thread_stride_float_bytes) * kAdvisoryThreadsCeiling;
     if (conservative_heap_bytes_upper >= sparse_heap_threshold_bytes) {
       result.bound_expr = captured;
     }
