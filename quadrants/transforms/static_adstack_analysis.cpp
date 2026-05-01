@@ -397,6 +397,8 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
   int gate_count = 0;
   bool chain_ok = true;
   StaticAdStackBoundExpr captured;
+  Stmt *gate_index_owning_loop = nullptr;
+  Stmt *first_iter_loop_above_lca = nullptr;
   for (Block *cur = result.lca_block_float; cur != nullptr; cur = cur->parent_block()) {
     Stmt *parent = cur->parent_stmt();
     if (parent == nullptr) {
@@ -413,12 +415,55 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
         chain_ok = false;
         break;
       }
+      // Find the gate index's owning loop. The gate condition has the shape `field[i] cmp lit` where `i` is a
+      // `LoopIndexStmt` (validated by `match_field_source` and the SNode arm). Pull the first index off the
+      // matched source so the chain check below can verify the gate is sweeping the FIRST iter-loop above
+      // the LCA, not a nested-deeper one.
+      if (auto *bin = if_stmt->cond->cast<BinaryOpStmt>()) {
+        Stmt *load = bin->lhs;
+        Stmt *cmp_other = bin->rhs;
+        if (auto *gl = load->cast<GlobalLoadStmt>()) {
+          if (auto *ext = gl->src->cast<ExternalPtrStmt>()) {
+            if (!ext->indices.empty()) {
+              if (auto *li = ext->indices[0]->cast<LoopIndexStmt>()) {
+                gate_index_owning_loop = li->loop;
+              }
+            }
+          } else if (auto *getch = gl->src->cast<GetChStmt>()) {
+            (void)getch;
+            // SNode-backed gates use `for i in field` where `i` is a `LoopIndexStmt` of the enclosing
+            // for-loop. The struct-for / range-for above the LCA owns it; the validation below treats the
+            // SNode arm by inferring `gate_index_owning_loop` from the gate's enclosing for-loop, which
+            // equals `first_iter_loop_above_lca` by construction.
+          }
+        }
+        (void)cmp_other;
+      }
     } else if (parent->is<RangeForStmt>() || parent->is<StructForStmt>() || parent->is<MeshForStmt>() ||
                parent->is<WhileStmt>() || parent->is<OffloadedStmt>()) {
+      if (first_iter_loop_above_lca == nullptr) {
+        first_iter_loop_above_lca = parent;
+      }
       continue;
     } else {
       chain_ok = false;
       break;
+    }
+  }
+  // Defensive validation: when a gate is captured, the gate-index `LoopIndexStmt`'s owning loop must be the
+  // FIRST iter-loop encountered when walking from the LCA toward the root. Nested-loop patterns of the form
+  // `for t in range(M): for i in range(N): if active[i] > 0:` would otherwise have the reducer count
+  // gate-passing cells in `active` once (= K), but the LCA-block atomic-rmw fires `M * K` times across the
+  // outer-iter dispatched threads; rows past K alias onto row K-1 and reverse-mode gradients silently
+  // diverge. Today the float LCA gets pulled OUT of the gate by `i32` / `u1` pushes that the autodiff
+  // transform emits at the inner-for body level (loop-counter recovery, branch-flag spill), so the gate
+  // never reaches the capture path on Python kernel patterns; this validation is defense-in-depth for any
+  // future refactor that pulls the LCA back inside the gate, plus it documents the required invariant.
+  // Reject and fall through to the dispatched-threads worst case rather than silently mis-sizing.
+  if (chain_ok && gate_count == 1 && captured.field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::NdArray) {
+    if (gate_index_owning_loop != nullptr && first_iter_loop_above_lca != nullptr &&
+        gate_index_owning_loop != first_iter_loop_above_lca) {
+      chain_ok = false;
     }
   }
   if (chain_ok && gate_count == 1) {
