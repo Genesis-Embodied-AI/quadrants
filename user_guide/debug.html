@@ -516,6 +516,13 @@
 </div>
 <p>Compiled kernels will be written to <code class="docutils literal notranslate"><span class="pre">/tmp/ir</span></code> by default. Use <code class="docutils literal notranslate"><span class="pre">QD_DEBUG_DUMP_PATH=</span></code> to redirect to a custom directory.</p>
 </section>
+<section id="tracing-adstack-heap-allocations">
+<h3>Tracing adstack heap allocations<a class="headerlink" href="#tracing-adstack-heap-allocations" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_DEBUG_ADSTACK</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>python<span class="w"> </span>my_script.py
+</pre></div>
+</div>
+<p>Prints one line per task per kernel launch describing each adstack heap binding: task name, heap kind (float or int), sizing source (per-task reducer count or dispatched-threads worst case), per-thread stride, and resulting allocation in bytes. Useful for pinning which task drives the peak when an adstack-bearing kernel hits an OOM and the remedies in <a class="reference internal" href="autodiff.html#avoiding-oom-on-gpu"><span class="std std-ref">Avoiding OOM on GPU</span></a> do not point at an obvious culprit.</p>
+</section>
 </section>
 </section>
 
@@ -580,6 +587,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#disabling-the-cache">Disabling the cache</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#printing-from-kernels">Printing from kernels</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dumping-compiled-ir">Dumping compiled IR</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#tracing-adstack-heap-allocations">Tracing adstack heap allocations</a></li>
 </ul>
 </li>
 </ul>
