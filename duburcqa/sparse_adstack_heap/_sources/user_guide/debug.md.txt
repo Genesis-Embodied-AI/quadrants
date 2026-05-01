@@ -119,3 +119,11 @@ QD_DUMP_IR=1 QD_OFFLINE_CACHE=0 python my_script.py
 ```
 
 Compiled kernels will be written to `/tmp/ir` by default. Use `QD_DEBUG_DUMP_PATH=` to redirect to a custom directory.
+
+### Tracing adstack heap allocations
+
+```bash
+QD_DEBUG_ADSTACK=1 QD_OFFLINE_CACHE=0 python my_script.py
+```
+
+Prints one line per task per kernel launch describing each adstack heap binding: task name, heap kind (float or int), sizing source (per-task reducer count, last-observed snapshot, or dispatched-threads worst case), per-thread stride, and resulting allocation in bytes. Useful for pinning which task drives the peak when an adstack-bearing kernel hits an OOM and the remedies in [Avoiding OOM on GPU](./autodiff.md#avoiding-oom-on-gpu) do not point at an obvious culprit.
