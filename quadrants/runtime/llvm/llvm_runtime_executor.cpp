@@ -922,9 +922,9 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     void *bytecode_dev_ptr = get_device_alloc_info_ptr(*adstack_sizer_bytecode_alloc_);
     copy_h2d(bytecode_dev_ptr, bytecode.data(), bytecode_bytes);
 
-    // Invoke the device interpreter. On CUDA / AMDGPU `JITModule::call` launches this as a single-thread kernel
-    // on the default stream and stream-orders it before the subsequent main-kernel dispatch, so the writes we
-    // do here are visible by the time the user's kernel reads `adstack_max_sizes` etc.
+    // Invoke the device interpreter. `JITModule::call` launches this as a single-thread kernel on the active
+    // stream (CUDA/AMDGPU both dispatch through `{CUDA,AMDGPU}Context::launch` which uses `stream_`), so the
+    // writes are stream-ordered before the subsequent main-kernel dispatch.
     //
     // The sizer kernel dereferences `ctx->arg_buffer` on device (that's how it resolves `ExternalTensorRead` leaves
     // against ndarray pointers the caller packed into the arg buffer). AMDGPU always stages a device-side copy of
@@ -943,8 +943,27 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
                                               runtime_context_ptr_for_sizer, bytecode_dev_ptr);
 
     // Read back the computed per-thread stride so we can size the heap on host. One 8-byte `DtoH` per launch.
+    // Use async DtoH on active_stream + sync so the readback is ordered after the sizer kernel.
     uint64_t stride_u64 = 0;
-    copy_d2h(&stride_u64, runtime_adstack_stride_field_ptr_, sizeof(uint64_t));
+#if defined(QD_WITH_AMDGPU)
+    if (config_.arch == Arch::amdgpu) {
+      void *active_stream = AMDGPUContext::get_instance().get_stream();
+      AMDGPUDriver::get_instance().memcpy_device_to_host_async(&stride_u64, runtime_adstack_stride_field_ptr_,
+                                                               sizeof(uint64_t), active_stream);
+      AMDGPUDriver::get_instance().stream_synchronize(active_stream);
+    } else
+#endif
+#if defined(QD_WITH_CUDA)
+        if (config_.arch == Arch::cuda) {
+      void *active_stream = CUDAContext::get_instance().get_stream();
+      CUDADriver::get_instance().memcpy_device_to_host_async(&stride_u64, runtime_adstack_stride_field_ptr_,
+                                                             sizeof(uint64_t), active_stream);
+      CUDADriver::get_instance().stream_synchronize(active_stream);
+    } else
+#endif
+    {
+      copy_d2h(&stride_u64, runtime_adstack_stride_field_ptr_, sizeof(uint64_t));
+    }
     stride = static_cast<std::size_t>(stride_u64);
   }
 
