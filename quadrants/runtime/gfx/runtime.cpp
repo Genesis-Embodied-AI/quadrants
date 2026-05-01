@@ -1,4 +1,8 @@
 #include "quadrants/runtime/gfx/runtime.h"
+
+#include <cstdio>
+#include <cstdlib>
+
 #include "quadrants/codegen/spirv/adstack_sizer_shader.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
@@ -711,6 +715,23 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         // heap binding (`stride_float == 0`), the codegen does not emit this branch and we never get here.
         const size_t effective_rows_floored = std::max<size_t>(effective_rows, ad_stack_stride_float > 0 ? 1 : 0);
         size_t required = size_t(ad_stack_stride_float) * effective_rows_floored * sizeof(float);
+        // `QD_DEBUG_ADSTACK=1` opt-in diagnostic. One line per task per launch describing the float heap-bind
+        // sizing decision: which fallback fired (reducer / last_observed / dispatched_threads worst case) and
+        // the resulting required bytes. Persistent so memory regressions can be debugged without re-instrumenting.
+        if (std::getenv("QD_DEBUG_ADSTACK")) {
+          const char *src = "worst_case_dispatched";
+          if (bound_count_it != per_task_bound_count.end()) {
+            src = "reducer_count";
+          } else if (last_observed_rows_per_task_.find(attribs.name) != last_observed_rows_per_task_.end()) {
+            src = "last_observed_x1.5";
+          }
+          std::fprintf(stderr,
+                       "[adstack_heap] task='%s' kind=F src=%s effective_rows=%zu stride=%u required_bytes=%zu "
+                       "(%.2f MB)\n",
+                       attribs.name.c_str(), src, effective_rows, ad_stack_stride_float, required,
+                       double(required) / (1024.0 * 1024.0));
+          std::fflush(stderr);
+        }
         if (required == 0) {
           bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
         } else {
@@ -758,6 +779,14 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
                        "stride={} dispatched_threads={}",
                        ad_stack_stride_int, dispatched_threads);
         size_t required = size_t(ad_stack_stride_int) * dispatched_threads * sizeof(int32_t);
+        if (std::getenv("QD_DEBUG_ADSTACK")) {
+          std::fprintf(stderr,
+                       "[adstack_heap] task='%s' kind=I src=worst_case_dispatched dispatched_threads=%zu "
+                       "stride=%u required_bytes=%zu (%.2f MB)\n",
+                       attribs.name.c_str(), dispatched_threads, ad_stack_stride_int, required,
+                       double(required) / (1024.0 * 1024.0));
+          std::fflush(stderr);
+        }
         if (required == 0) {
           bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
         } else {
