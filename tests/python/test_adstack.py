@@ -1050,10 +1050,9 @@ def test_adstack_heap_backed_exceeds_old_threadstack_budget():
     # Now both arches allocate the slice inside `runtime->adstack_heap_buffer` (LLVM) or the per-dispatch
     # SSBO (SPIR-V) and the kernel runs to completion with a correct gradient on every arch.
     #
-    # `offline_cache=False` is load-bearing for the unfixed-tree check: with the cache on, a run that previously
-    # succeeded against a heap-backed runtime would still produce the right gradient via the cached bitcode even
-    # after the codegen changes are reverted. The test must force a fresh compile every run so the `QD_ERROR_IF`
-    # on the unfixed tree actually fires and terminates the process.
+    # `offline_cache=False` is load-bearing: a cached compile from one run could mask a regression that flipped the
+    # codegen back to the function-scope path; the test must force a fresh compile every run so the `QD_ERROR_IF` on a
+    # regressed tree actually fires and terminates the process.
     #
     # Internal details: each outer element `i` drives eight independent recurrences `a_k = a_k * 0.9 + x[i]` at
     # the same trip count (`n_iter`). The reverse pass pushes once for the initial value plus once per iteration,
@@ -1473,14 +1472,13 @@ def test_adstack_sibling_for_loops_reverse_order():
     #
     # Internal details: MakeAdjoint runs per-IB, and for this shape both sibling fors' bodies are their own IBs
     # (innermost loops with global ops). The reverse-mode transform therefore never visits the container block that
-    # holds them, so nothing flips their order. ReverseOuterLoops flips each loop's `reversed` iteration direction but
-    # historically left sibling order alone; the fix adds a pairwise swap of sibling for-loops inside every non-IB
-    # container block the pass walks through. Non-loop statements (range-bound loads, alloca, etc.) stay at their
-    # original positions so SSA operands still dominate both swapped fors. The outer `for _ in range(1)` dummy is the
-    # smallest shape that places the two siblings inside a non-IB container (the frontend rejects a bare sequence of
-    # top-level for-loops as "mixed usage of for-loops and statements without looping"); `n[None]` from a field forces
-    # the inner ranges to be dynamic so the bug manifests (static-unrolled ranges go through a different path that
-    # already works).
+    # holds them, so nothing flips their order. ReverseOuterLoops flips each loop's `reversed` iteration direction and
+    # also pairwise-swaps sibling for-loops inside every non-IB container block the pass walks through. Non-loop
+    # statements (range-bound loads, alloca, etc.) stay at their original positions so SSA operands still dominate both
+    # swapped fors. The outer `for _ in range(1)` dummy is the smallest shape that places the two siblings inside a
+    # non-IB container (the frontend rejects a bare sequence of top-level for-loops as "mixed usage of for-loops and
+    # statements without looping"); `n[None]` from a field forces the inner ranges to be dynamic so the bug manifests
+    # (static-unrolled ranges go through a different path that already works).
     size = 3
     n = qd.field(qd.i32, shape=())
 
@@ -1640,28 +1638,25 @@ def test_adstack_vector_subscript_selfop_no_warnings(tmp_path):
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=4096)
 def test_adstack_ndrange_over_ndarray_shape_does_not_oversize_heap():
-    # Regression test: a grad kernel whose range is derived at launch time from an ndarray shape (e.g.
-    # `qd.ndrange(arr.shape[0], arr.shape[1])`) used to inherit `advisory_total_num_threads =
-    # kMaxNumThreadsGridStrideLoop = 131072` from the SPIR-V codegen fallback, and the runtime sized the
-    # per-dispatch adstack heap as `131072 * per_thread_stride * sizeof(float)`. For this kernel's ten
-    # loop-carried f32 variables at `ad_stack_size=4096`, that is `131072 * 10 * 2 * 4096 * 4 bytes = 40
-    # GiB`. Apple Silicon's `MTLDevice.maxBufferLength` is ~75% of unified memory (e.g. ~28 GiB on an M4 Max
-    # with 48 GiB unified, smaller on lower-end configs), so the allocation failed. Before the RHI layer
-    # checked for nil, that failure was silently wrapped as `RhiResult::success` with a nil MTLBuffer; every
-    # downstream `setBuffer:atIndex:2` bound nil, writes dropped and reads returned 0, and the backward
-    # produced NaN gradients without any error. With the fix, the codegen records the shape-lookup product
-    # backing the runtime-resolved `end_stmt` into `RangeForAttributes::end_shape_product`, the runtime
-    # `launch_kernel` reads each shape from the `LaunchContextBuilder` args buffer and tightens
-    # `advisory_total_num_threads` to `actual_iter_count = rows * cols = 6`, so only ~240 KB of adstack heap
-    # is allocated and the gradient is correct.
+    # Asserts that a grad kernel whose range is derived at launch time from an ndarray shape (e.g.
+    # `qd.ndrange(arr.shape[0], arr.shape[1])`) sizes the per-dispatch adstack heap from the actual launch-time iter
+    # count rather than from the SPIR-V codegen's grid-stride advisory cap (`kMaxNumThreadsGridStrideLoop = 131072`).
+    # Sizing from the cap on a small workload would request `131072 * per_thread_stride * sizeof(float)` (e.g. ~40 GiB
+    # at 10 f32 vars and `ad_stack_size=4096`), exceeding Apple Silicon's `MTLDevice.maxBufferLength` (~28 GiB on a 48
+    # GiB-unified M4 Max), and the Metal RHI's nil-buffer fallback would silently bind nil at `setBuffer:atIndex:2` so
+    # writes drop, reads return 0, and the backward NaNs. The codegen records the shape-lookup product backing the
+    # runtime-resolved `end_stmt` into `RangeForAttributes::end_shape_product`; the runtime `launch_kernel` reads each
+    # shape from the `LaunchContextBuilder` args buffer and tightens `advisory_total_num_threads` to `actual_iter_count
+    # = rows
+    # * cols = 6`, so only ~240 KB of adstack heap is allocated.
     #
-    # Internal details: `ad_stack_size=4096` + ten loop-carried f32 variables is tuned so that the pre-fix
-    # 131072-thread allocation request crosses the smallest plausible Apple Silicon `maxBufferLength` - the
-    # test would otherwise silently pass on hardware with large unified memory. The original oversize symptom
-    # only surfaced on the SPIR-V heap-backed adstack path whose per-dispatch sizing depends on the advisory
-    # thread count; the LLVM path sizes the adstack slab once per runtime against `num_cpu_threads` and cannot
-    # exhibit the same nil-buffer regression. The test still runs on every backend so the finite-difference
-    # cross-check catches a future regression in the grad computation regardless of which path it lives in.
+    # Internal details: `ad_stack_size=4096` + ten loop-carried f32 variables is tuned so that the cap-fallback
+    # 131072-thread allocation request crosses the smallest plausible Apple Silicon `maxBufferLength` - the test would
+    # otherwise silently pass on hardware with large unified memory. The oversize symptom only surfaces on the SPIR-V
+    # heap-backed adstack path whose per-dispatch sizing depends on the advisory thread count; the LLVM path sizes the
+    # adstack slab once per runtime against `num_cpu_threads` and cannot exhibit the same nil-buffer regression. The
+    # test still runs on every backend so the finite-difference cross-check catches a regression in the grad computation
+    # regardless of which path it lives in.
     rows, cols = 2, 3
 
     @qd.kernel
@@ -2238,10 +2233,10 @@ def test_adstack_field_ptr_indexed_by_stashed_outer_loop_var():
     # quadrants fields `link_start[i_outer]` / `link_end[i_outer]` as the bounds of an inner range-for, where `i_outer`
     # is an outer parallel-for index that `ad_stack_experimental_enabled=True` stashes onto a dedicated adstack for the
     # reverse pass. Every downstream `link_start[i_outer]` then lowers to `GlobalPtrStmt(<field>,
-    # [AdStackLoadTopStmt])`. Before the fix, the pre-pass's `GlobalPtrStmt` branch rejected any non-const index and the
-    # reverse-mode adstack bound would hard-error as "unresolved after Bellman-Ford + structural pre-pass"; the fix
-    # walks the index through the same stash chase the `ExternalPtrStmt` branch uses and falls back to the snode's
-    # `shape_along_axis(axis)` as a safe upper bound when the stash has no single loop-index push.
+    # [AdStackLoadTopStmt])`. The pre-pass's `GlobalPtrStmt` branch must walk the index through the same stash chase the
+    # `ExternalPtrStmt` branch uses and fall back to the snode's `shape_along_axis(axis)` as a safe upper bound when the
+    # stash has no single loop-index push, otherwise the reverse-mode adstack bound hard-errors as "unresolved after
+    # Bellman-Ford + structural pre-pass".
     #
     # Internal details: runs on every backend - LLVM evaluates the stash-backed `SizeExpr` through
     # `publish_adstack_metadata`, SPIR-V through `GfxRuntime::launch_kernel`'s `AdStackMetadata` upload. The inner
@@ -2372,9 +2367,9 @@ def test_adstack_triangular_ndrange_self_referential_push_idempotency():
     src_offset[0] = 0
     dst_offset[0] = 0
 
-    # Pre-fix the grad compile raises RuntimeError("stash data-flow cycle ..."); post-fix it must compile cleanly and
-    # run to completion. The assertion is the absence of that RuntimeError - no gradient value is checked because the
-    # minimal-shape fields have a single element and the bug is purely a compile-time cycle-detection regression.
+    # The grad compile must complete without raising RuntimeError("stash data-flow cycle ..."). The assertion is the
+    # absence of that RuntimeError - no gradient value is checked because the minimal-shape fields have a single element
+    # and the regression is purely compile-time cycle detection.
     compute.grad(
         batch_probe,
         dst_vec_buf,
@@ -2607,11 +2602,10 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
     # `x[0..7]` is reached by the kernel under correct sizing, so `x_unused_val` does not affect the expected loss /
     # gradient at all and the assertions are identical across parametrizations. The `amplified_unused_x` variant
     # (`x_unused_val=100.0`) exists so that any regression that mis-routes a stack push / pop to a slot outside the
-    # intended index range surfaces as a multi-order-of-magnitude gradient delta (e.g. a single spurious visit to
-    # `x[8]` produces `x.grad[8]=200.0` instead of the `0.2` an `x_unused_val=0.1` setup would produce), so the
-    # failure cannot be misread as a tolerance issue. The original `uniform_x` (`x_unused_val=0.1`) parametrization
-    # preserves the historical loss / gradient magnitudes for direct continuity with the prior fixed-fixture form of
-    # this test.
+    # intended index range surfaces as a multi-order-of-magnitude gradient delta (e.g. a single spurious visit to `x[8]`
+    # produces `x.grad[8]=200.0` instead of the `0.2` an `x_unused_val=0.1` setup would produce), so the failure cannot
+    # be misread as a tolerance issue. The `uniform_x` (`x_unused_val=0.1`) parametrization keeps the baseline loss /
+    # gradient magnitudes that the rest of the kernel was originally tuned against.
     N = 4
     N_X = 16
 
@@ -2655,15 +2649,15 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_spirv_metadata_per_task_buffer():
-    # SPIR-V launcher used to share a single grow-on-demand `AdStackMetadata` device buffer across every task in a
-    # kernel. Per-task `(stride_float, stride_int, offset_i, max_size_i, ...)` tables were host-memcpy'd into that
-    # buffer inside the cmdlist record loop, and the `bindings` descriptor for each task's dispatch captured the same
-    # buffer handle. Record is host-synchronous but execute is deferred, so by submit time the buffer holds only the
-    # LAST task's metadata and every dispatch in the cmdlist reads those bytes. Earlier tasks then see shorter sibling
-    # stacks' `max_size` where their own should be - e.g. a stack whose sizer wrote `max_size=9` observes a runtime
-    # `max_size=3`, its first guarded push trips the `count < max_size` check at `count=3`, the overflow flag flips, and
-    # `qd.sync()` raises even though the kernel's actual per-thread push count fits the per-stack bound the sizer
-    # computed.
+    # The SPIR-V launcher must allocate a fresh `AdStackMetadata` device buffer per task inside the cmdlist record loop,
+    # not share a single grow-on-demand buffer across every task in a kernel. With a shared buffer, per-task
+    # `(stride_float, stride_int, offset_i, max_size_i, ...)` tables host-memcpy'd into it would be overwritten by later
+    # tasks' metadata before the deferred dispatch executes (record is host-synchronous, execute is deferred), so by
+    # submit time the buffer holds only the LAST task's metadata and every dispatch in the cmdlist reads those bytes.
+    # Earlier tasks then see shorter sibling stacks' `max_size` where their own should be - e.g. a stack whose sizer
+    # wrote `max_size=9` observes a runtime `max_size=3`, its first guarded push trips the `count < max_size` check at
+    # `count=3`, the overflow flag flips, and `qd.sync()` raises even though the kernel's actual per-thread push count
+    # fits the per-stack bound the sizer computed.
     #
     # Internal details: `cfg_optimization=False` is load-bearing - with it enabled, the CFG pass sinks / merges the
     # bind-and-dispatch pair in a way that masks the cross-task buffer reuse on this kernel shape; with it disabled the
@@ -2700,10 +2694,10 @@ def test_adstack_spirv_metadata_per_task_buffer():
                         acc = acc + (tri_mat[1, i_pr, k_pr, i_b] * tri_mat[1, j_pr, k_pr, i_b])
                     tri_mat[1, i_pr, j_pr, i_b] = acc
 
-    # Pre-fix: raises `Adstack overflow (offending stack_id=0)` at `qd.sync()` because the first offload's
-    # metadata buffer was overwritten by the second offload's host memcpy before the cmdlist ran, so the
-    # first offload's f32 stack 0 saw `max_size=3` (the second offload's int stack 0 value) instead of its
-    # own sizer-computed 9. Post-fix: finishes cleanly because each task gets its own metadata buffer.
+    # The grad call must finish cleanly: a regression that shares one metadata buffer across tasks would have the first
+    # offload's metadata overwritten by the second offload's host memcpy before the cmdlist ran, so the first offload's
+    # f32 stack 0 would see `max_size=3` (the second offload's int stack 0 value) instead of its own sizer-computed 9,
+    # and `qd.sync()` would raise `Adstack overflow (offending stack_id=0)`.
     kernel_two_offloads_with_tri_reduce.grad()
     qd.sync()
 
@@ -3011,40 +3005,27 @@ def test_adstack_min_loop_carried_serial_range_for(n_inner):
 @pytest.mark.parametrize("gated_fraction", [0.0, 0.05, 0.5, 1.0])
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
 def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
-    # Pins the static-IR-bound sparse-adstack-heap path end to end across every backend that ships the
-    # lazy-row claim (CPU LLVM, CUDA / AMDGPU LLVM, Metal / Vulkan SPIR-V). Kernel shape:
-    # `for i in range(n): if selector[i] > eps: <adstack-using gradient work>` with `selector` as an ndarray
-    # argument. The codegen pattern matcher captures the gating predicate as a `StaticBoundExpr` carrying
-    # the ndarray's `arg_id` and the comparison `> eps`; the runtime walks the gating ndarray (host-side on
-    # CPU, single-thread reducer kernel on CUDA / AMDGPU, compute-shader reducer on SPIR-V) which counts
-    # threads with `selector[i] > eps`, and the float adstack heap is sized to exactly that count instead
-    # of the dispatched-threads worst case. The lazy LCA-block atomic claim then maps each gated thread
-    # to a unique row in `[0, count)` of the smaller heap.
+    # Asserts gradient correctness for reverse-mode kernels of shape `for i in range(n): if selector[i] > eps:
+    # <adstack-using gradient work>` where `selector` is an ndarray argument. Parametrised over the gate-pass fraction
+    # (0%, 5%, 50%, 100%) so the savings path (sparse), the half-claim row mapping, the dispatch-equivalent fallback
+    # (full), and the empty-reducer-count edge case are all exercised against an analytic gradient oracle; a
+    # wrong-but-non-NaN gradient (the failure mode when row-claim and heap-sizing disagree) trips the assertion.
     #
-    # The test parametrises the gated-element fraction so it covers three regimes the runtime path treats
-    # differently: (a) sparse (5%) - the heap is much smaller than dispatched_threads and most threads
-    # never reach the LCA block, exercising the savings path; (b) half (50%) - the heap is half of
-    # dispatched and the per-row claim still has to map cleanly; (c) full (100%) - every thread passes
-    # the gate, the reducer's count equals dispatched_threads, and the resulting heap layout matches what
-    # the eager fallback path would have produced. All three should yield gradients that match an
-    # analytic oracle within f32 accumulation roundoff; a wrong-but-non-NaN gradient (the failure mode
-    # when row-claim and heap-sizing disagree) trips the assertion.
-    #
-    # Internal details: `ad_stack_size=32` overrides the default so the per-stack max_size stays small and
-    # the worst-case heap allocation (without the bound-reducer path) is much larger than what the gated
-    # subset actually consumes - amplifying the savings ratio so a regression that breaks the reducer
-    # dispatch and silently falls back to worst-case sizing still produces a passing test, while a
-    # regression that corrupts the row mapping fails on the gradient oracle. The kernel is structured
-    # with the gate immediately above the inner range-for so the LCA pre-pass places the float-LCA inside
-    # the gate, which is the precondition for the bound_expr capture to succeed.
-    #
-    # `n=256` is deliberately larger than a typical CPU worker pool (~8 threads) so the CPU host reducer
-    # has to walk the full ndarray to count gate-passing iterations, not just the worker-pool prefix; a
-    # regression that walks `[0, num_cpu_threads)` undercounts in the sparse case and ends up clamping
-    # every later iteration's claimed row into a single alias slot - silently corrupting gradients. The
-    # `gated_fraction=0.5` parametrisation is the tightest catch for that class of bug because the count
-    # mismatch then aliases ~128 iterations into a handful of rows, overwhelming the per-row stack's
-    # `max_size=32` headroom and tripping the bounds-checked overflow on the debug build.
+    # Internal details: the codegen pattern matcher captures the gating predicate as a `StaticBoundExpr` carrying the
+    # ndarray's `arg_id` and the comparison `> eps`; the runtime walks the gating ndarray (host-side on CPU,
+    # single-thread reducer kernel on CUDA / AMDGPU, compute-shader reducer on SPIR-V), counts threads with `selector[i]
+    # > eps`, and sizes the float adstack heap to that count. The lazy LCA-block atomic claim then maps each gated
+    # thread to a unique row in `[0, count)`. `ad_stack_size=32` keeps per-stack max_size small so the worst-case heap
+    # allocation is much larger than the gated subset actually consumes - amplifying the savings ratio so a regression
+    # that breaks the reducer dispatch and silently falls back to worst-case sizing still produces a passing test, while
+    # a regression that corrupts the row mapping fails on the gradient oracle. The kernel places the gate immediately
+    # above the inner range-for so the LCA pre-pass places the float-LCA inside the gate, the precondition for the
+    # bound_expr capture. `n=256` is deliberately larger than a typical CPU worker pool (~8 threads) so the CPU host
+    # reducer must walk the full ndarray to count gate-passing iterations, not just the worker-pool prefix; a reducer
+    # that walks `[0, num_cpu_threads)` undercounts in the sparse case and aliases every later iteration's claimed row
+    # into a single slot. `gated_fraction=0.5` is the tightest catch for that class of bug because the count mismatch
+    # then aliases ~128 iterations into a handful of rows, overwhelming the per-row stack's `max_size=32` headroom and
+    # tripping the bounds-checked overflow on the debug build.
     n = 256
     n_iter = 8
     eps = 1e-9
@@ -3082,13 +3063,12 @@ def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
     got_grad = x.grad.to_numpy()
     assert not np.isnan(got_grad).any(), f"static-bound-expr grad returned NaN: {got_grad}"
 
-    # Analytic oracle. For gated i, the inner recurrence `v = v*c + d` over `n_iter` steps is linear in v
-    # with slope `c^n_iter`, where `c = 1.05`. So `d(out[0])/d(x[i]) = c^n_iter` for gated i, 0 otherwise.
-    # `gated_fraction == 0` is the per-task-reducer-count-zero edge case: every dispatched thread misses
-    # the gate, the reducer publishes capacity = 0, the codegen-emitted clamp at the LCA-block claim site
-    # has to keep the row id at 0 (a naive `capacity - 1` underflow to UINT32_MAX leaves the clamp inert
-    # and a divergent over-claim writes past the float-heap end). Float-heap allocation is floored at one
-    # row precisely so the single-row fallback is always backed by real storage.
+    # Analytic oracle. For gated i, the inner recurrence `v = v*c + d` over `n_iter` steps is linear in v with slope
+    # `c^n_iter`, where `c = 1.05`. So `d(out[0])/d(x[i]) = c^n_iter` for gated i, 0 otherwise. `gated_fraction == 0` is
+    # the per-task-reducer-count-zero edge case: every dispatched thread misses the gate, the reducer publishes capacity
+    # = 0, the codegen-emitted clamp at the LCA-block claim site has to keep the row id at 0 (a naive `capacity - 1`
+    # underflow to UINT32_MAX leaves the clamp inert and a divergent over-claim writes past the float-heap end).
+    # Float-heap allocation is floored at one row precisely so the single-row fallback is always backed by real storage.
     coeff = 1.05
     expected_per_gated = coeff**n_iter
     expected = np.where(selector_np > eps, np.float32(expected_per_gated), np.float32(0.0))
@@ -3097,37 +3077,23 @@ def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
 
 @test_utils.test(require=[qd.extension.adstack, qd.extension.data64], ad_stack_size=32)
 def test_adstack_static_bound_expr_f64_gate_grad_correct():
-    # Pins the f64-typed gating-predicate arm of the static-IR-bound sparse-adstack-heap reducer dispatch.
-    # Kernel shape mirrors test_adstack_static_bound_expr_ndarray_gate_grad_correct but the gating ndarray's
-    # element type is f64 while the loop-carried adstack push stays f32 (SPIR-V's adstack heap is a typed
-    # Array<f32> SSBO and rejects f64 AdStackAllocaStmts; LLVM accepts both, but for backend parity the
-    # test stays on f32 push + f64 gate). The captured `StaticAdStackBoundExpr` carries
-    # `field_dtype_is_float = True` AND `field_dtype_is_double = True` plus the threshold in `literal_f64`.
+    # Asserts gradient correctness for reverse-mode kernels with an f64-typed gating ndarray (`if selector_f64[i] >
+    # 0.5`) above f32 adstack pushes. The reducer must dispatch through the f64 comparison arm; routing f64-captured
+    # gates through the f32 arm misreads the source ndarray and produces wrong-but-non-NaN gradients on every gated
+    # index where the bit pattern flips the bitcast comparison's outcome against the misdecoded threshold.
     #
-    # On the SPIR-V reducer the bug surfaces as a missing f64 arm: the launcher reads `literal_f32`
-    # (struct-default 0.0f for f64-captured gates) and the shader walks the source ndarray with a 4-byte
-    # u32 stride and bitcasts to f32. The threshold therefore decodes as 0u and the source ndarray is
-    # misread (the second f64 cell aliases on top of the high half of the first). The reducer's per-task
-    # count diverges from the main kernel's actual gate-passing count, the float heap is sized too small
-    # for some kernels and over-sized for others, and the codegen-emitted clamp at the LCA-block claim
-    # site aliases multiple gated iterations onto the same row. Resulting gradients are wrong on every
-    # gated index where the f64 cell's top-32-bits bit pattern flips the bitcast comparison's outcome
-    # against the misdecoded threshold.
-    #
-    # Internal details: the fix extends `AdStackBoundReducerParams` with `field_dtype_is_double` and
-    # `threshold_bits_high`, adds a `psb_load_u64_pair` helper to the shader (two 4-byte u32 PSB loads at
-    # offsets 0 and 4 from `elem_idx * 8`, reassembled into a u64 in registers because PSB requires
-    # Aligned 8 for a single 8-byte load), and routes f64 captures through an f64 OpFOrd* comparison arm.
-    # `require=qd.extension.data64` skips on backends without f64 (e.g. Metal: Apple silicon does not
-    # advertise SPIR-V `Float64`, and the kernel codegen would reject the f64 ndarray at the IR pre-pass).
-    # The test runs on CPU LLVM, CUDA / AMDGPU LLVM (where the f64 reducer arm already lives in
-    # `runtime_eval_static_bound_count`) and Vulkan SPIR-V (the arm this fix adds).
-    #
-    # The selector layout puts non-gated cells at 0.25 and gated cells at 1.0, with `threshold = 0.5`.
-    # A misdecoded threshold of 0.0 (the bug's signature on SPIR-V) would spuriously include the 0.25
-    # cells, doubling the gate-passing count - the analytic per-i oracle then fails on every previously
-    # non-gated cell because the codegen clamps the over-claimed rows onto valid heap slots and the
-    # adjoint's reverse pop reads back zeros (the bootstrap-init slot) instead of the primal value.
+    # Internal details: the captured `StaticAdStackBoundExpr` carries `field_dtype_is_float = True` AND
+    # `field_dtype_is_double = True` plus the threshold in `literal_f64`. The SPIR-V reducer reads
+    # `field_dtype_is_double` to select the 8-byte u64 PSB load (two 4-byte u32 loads at offsets 0 and 4 from `elem_idx
+    # * 8`, reassembled into a u64 in registers because PSB requires Aligned 8 for a single 8-byte load), then
+    # OpFOrd*-compares against the high+low threshold pair. `require=qd.extension.data64` skips on backends without f64
+    # (e.g. Metal: Apple silicon does not advertise SPIR-V `Float64`, and the kernel codegen rejects the f64 ndarray at
+    # the IR pre-pass). f32-push-only on the adstack heap because SPIR-V's adstack heap is a typed Array<f32> SSBO and
+    # rejects f64 AdStackAllocaStmts; LLVM accepts both but the test stays on f32 push + f64 gate for backend parity.
+    # Selector layout: non-gated cells at 0.25, gated cells at 1.0, threshold = 0.5. A misdecoded threshold of 0.0 would
+    # spuriously include the 0.25 cells, doubling the gate-passing count - the per-i oracle fails on every non-gated
+    # cell because the codegen clamps the over-claimed rows onto valid heap slots and the adjoint's reverse pop reads
+    # back zeros (bootstrap-init slot) instead of the primal value.
     n = 256
     n_iter = 8
     threshold = 0.5
@@ -3174,37 +3140,29 @@ def test_adstack_static_bound_expr_f64_gate_grad_correct():
 @pytest.mark.parametrize("alloca_outside_gate", [False, True])
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True)
 def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct(alloca_outside_gate):
-    # Pins the lazy-row claim path under `debug=True`. The release-build codegen tracks the per-stack push
-    # count in a function-scope alloca and never dereferences the heap header for `count`, so the alloca-site
-    # init can be a plain `count = 0` store; the debug-build codegen routes every push / pop / load-top
-    # through the runtime helpers (`stack_push`, `stack_top_primal`, ...) which read the count u64 prefix
-    # word from the heap row itself. That means each lazy float alloca needs its row's count header
-    # initialised to 0 BEFORE the first push - and crucially, AFTER the LCA-block atomic-rmw stores the
-    # per-thread claimed row id into `row_id_var`. A naive "init at the alloca visit site" mirrors the
-    # eager path's `stack_init` call on `linear_thread_idx * stride + offset`, but for the lazy path that
-    # alloca site sits at the offload root, where `row_id_var` is still its entry-block UINT32_MAX init -
-    # the dereference would write the count u64 to address `heap_float + UINT32_MAX * stride_float +
-    # offset` (~64 GB past the heap base) and segfault before the test asserts anything. The fix is to
-    # emit the `stack_init` at the LCA block, right after the atomic-rmw row claim, so `row_id_var`
-    # points at the thread's actual row.
+    # Asserts gradient correctness for reverse-mode kernels with a captured ndarray-backed gate under `debug=True`. The
+    # debug build routes every adstack push / pop / load-top through the runtime helpers (`stack_push`,
+    # `stack_top_primal`, ...) instead of the release build's inline emission, and those helpers read the count u64
+    # prefix word from the heap row itself, so the lazy-row codegen has to keep the per-row count header consistent
+    # across both alloca placements (inside vs above the gate). Parametrised over `alloca_outside_gate` to cover both
+    # placements; either should produce gradients that match the analytic oracle.
     #
-    # The `alloca_outside_gate` parametrisation pins both shapes the codegen has to handle:
-    # - `False` (alloca inside the gate's true branch): the `AdStackAllocaStmt` and any autodiff-emitted
-    #   bootstrap push live in the if-true block, BELOW the LCA, so the bootstrap push's `stack_push` runs
-    #   AFTER the row claim and `row_id_var` is already valid.
-    # - `True` (alloca above the gate at the offload root): the `AdStackAllocaStmt` and the autodiff
-    #   bootstrap push (`is_autodiff_bootstrap_push`-classified, parent block is the OffloadedStmt body)
-    #   sit ABOVE the LCA. The bootstrap-skip guard at the push site has to fire on the debug build too,
-    #   otherwise the runtime-helper `stack_push` runs at the offload root with `row_id_var = UINT32_MAX`
-    #   and writes the count u64 ~ TB past the heap base. Without that fix, this case crashes the worker
-    #   with SIGSEGV / CUDA_ERROR_ILLEGAL_ADDRESS / hipErrorIllegalAddress at the first `compute.grad()`.
-    #
-    # Internal details: kernel shape mirrors `test_adstack_static_bound_expr_ndarray_gate_grad_correct`
-    # otherwise; the only delta is the `debug=True` qd.init option which flips both the bounds-check
-    # codepath and the runtime-helper push / pop emission. `gated_fraction=0.5` is picked because (a) it
-    # places ~half the LCA reaches on a non-trivial row in `[0, count)` so the row mapping has to be
-    # correct (a regression that always claims row 0 would still pass the 100% case), and (b) it keeps
-    # the test fast enough to run on every backend without a parametrize sweep on the fraction axis.
+    # Internal details: each lazy float alloca needs its row's count header initialised to 0 BEFORE the first push and
+    # AFTER the LCA-block atomic-rmw stores the per-thread claimed row id into `row_id_var`; emitting `stack_init` at
+    # the alloca visit site (mirroring the eager path's `linear_thread_idx * stride + offset`) would dereference
+    # `row_id_var` while it still holds its entry-block UINT32_MAX sentinel, writing the count u64 to `heap_float +
+    # UINT32_MAX * stride_float + offset` (~64 GB past the heap base). The fix emits `stack_init` at the LCA block. The
+    # `alloca_outside_gate` parametrisation covers both codegen shapes: `False` puts the `AdStackAllocaStmt` and the
+    # autodiff bootstrap push in the if-true block (below the LCA) so the bootstrap push's `stack_push` runs after the
+    # row claim and `row_id_var` is already valid; `True` puts them at the offload root (above the LCA) and requires the
+    # bootstrap-skip guard at the push site to fire on the debug build, otherwise the runtime-helper `stack_push` runs
+    # at the offload root with `row_id_var = UINT32_MAX` and writes the count u64 ~TB past the heap base, crashing the
+    # worker with SIGSEGV / CUDA_ERROR_ILLEGAL_ADDRESS / hipErrorIllegalAddress at the first `compute.grad()`. Kernel
+    # shape otherwise mirrors `test_adstack_static_bound_expr_ndarray_gate_grad_correct`; only delta is `debug=True`
+    # flipping both the bounds-check codepath and the runtime-helper push / pop emission. `gated_fraction=0.5` places
+    # ~half the LCA reaches on non-trivial rows in `[0, count)` so the row mapping must be correct (a regression that
+    # always claims row 0 would still pass the 100% case) while keeping the test fast enough to run on every backend
+    # without a parametrize sweep on the fraction axis.
     n = 256
     n_iter = 8
     eps = 1e-9
@@ -3265,18 +3223,17 @@ def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct(alloca_
 @pytest.mark.parametrize("gated_fraction", [0.05, 0.5, 1.0])
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
 def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
-    # Pins the static-IR-bound sparse-adstack-heap path on SNode-backed gating predicates. Kernel shape
-    # `for i in selector: if selector[i] > eps: <adstack-using gradient work>` with `selector` declared via
-    # `qd.field(...)` placed under `qd.root.dense(...)` - the layout most sparse-grid workloads use for the
-    # value the gate reads. The codegen pattern matcher captures the gating predicate as a `StaticBoundExpr`
-    # carrying the leaf snode id plus the precomputed `(byte_base_offset, byte_cell_stride, iter_count)` triple
-    # the runtime needs to walk the field at dispatch time without re-emitting the SNode lookup chain. The
-    # runtime then dispatches the bound-reducer compute shader against the bound root buffer, counts threads
-    # whose `selector[i] > eps`, and sizes the float adstack heap to exactly that count.
+    # Asserts gradient correctness for reverse-mode kernels of shape `for i in selector: if selector[i] > eps:
+    # <adstack-using gradient work>` where `selector` is a `qd.field(...)` placed under `qd.root.dense(...)` -the layout
+    # most sparse-grid workloads use. SNode counterpart to `test_adstack_static_bound_expr_ndarray_gate_grad_correct`;
+    # parametrised over the gate-pass fraction (5%, 50%, 100%) so a regression in the SNode root-buffer load path or the
+    # byte-offset precomputation surfaces as a wrong gradient.
     #
-    # The test is the SNode counterpart to the ndarray-backed test above and exercises the same three regimes
-    # (sparse 5%, half 50%, full 100%) so a regression in the SNode root-buffer load path or the byte-offset
-    # precomputation surfaces as a wrong gradient.
+    # Internal details: the codegen pattern matcher captures the gating predicate as a `StaticBoundExpr` carrying the
+    # leaf snode id plus the precomputed `(byte_base_offset, byte_cell_stride, iter_count)` triple the runtime needs to
+    # walk the field at dispatch time without re-emitting the SNode lookup chain. The runtime then dispatches the
+    # bound-reducer compute shader against the bound root buffer, counts threads whose `selector[i] > eps`, and sizes
+    # the float adstack heap to that count.
     n = 256
     n_iter = 8
     eps = 1e-9
@@ -3322,24 +3279,22 @@ def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=0, debug=False)
 def test_adstack_static_bound_expr_snode_gate_primal_dependent_grad_correct():
-    # Pins the SNode-backed bound_expr arm of `publish_per_task_bound_count_cpu` (the LLVM CPU host reducer in
-    # `runtime/llvm/llvm_runtime_executor.cpp`). The CPU launcher passes `bound_count_length = snode_iter_count`
-    # for SNode source kinds, but without the host-side SNode walk the reducer leaves the per-task capacity
-    # slot at the `publish_adstack_lazy_claim_buffers` UINT32_MAX default; `ensure_per_task_float_heap_post_reducer`
-    # then falls back to sizing the float adstack heap at `num_cpu_threads * stride_float`, while the codegen-
-    # emitted LCA-block atomic-rmw fires once per gated iteration and produces row ids 0..n_gated-1. With the
-    # bounds clamp inert (UINT32_MAX), the over-claimed rows index off the heap end and either SIGBUS / SIGSEGV
-    # (the row's slot lands on an unmapped page) or alias to whatever follows the float-heap allocation.
+    # Asserts gradient correctness on the LLVM CPU host reducer for SNode-backed gates with a primal-dependent inner
+    # recurrence. The CPU host reducer must walk the SNode field and publish the gate-passing count so the float adstack
+    # heap can be sized to that count; without the walk, the heap falls back to `num_cpu_threads * stride_float` while
+    # the codegen-emitted LCA-block atomic-rmw produces row ids `0..n_gated-1`, and the over-claimed rows OOB into
+    # unmapped memory or alias adjacent buffers.
     #
-    # Internal details: the kernel uses a SNode-backed `selector` field placed under `qd.root.dense(...)` so
-    # the analysis pass captures the gating predicate as a `StaticBoundExpr` carrying the SNode descriptor
-    # triple (`byte_base_offset`, `byte_cell_stride`, `iter_count`). The inner recurrence `v = v * v + 0.05`
-    # is primal-dependent so any cross-row aliasing would re-read a different thread's pushed primal and
-    # surface as a wrong gradient even when the OOB write happens to land within the heap allocation's
-    # over-allocated tail. `ad_stack_size = 0` lets the sizer pick the per-thread stride; with 8 cpu threads
-    # and `n_gated = 2048` gated iterations the row counter advances well past the eight-row fallback so the
-    # OOB write reliably escapes the page mapped by the heap allocation guard. `arch = [qd.cpu]` because this
-    # test pins the host-side reducer specifically; CUDA / AMDGPU run the device-side reducer
+    # Internal details: the SNode-backed `selector` field (placed under `qd.root.dense(...)`) makes the analysis pass
+    # capture the gating predicate as a `StaticBoundExpr` carrying the SNode descriptor triple (`byte_base_offset`,
+    # `byte_cell_stride`, `iter_count`). The host reducer in `publish_per_task_bound_count_cpu`
+    # (`runtime/llvm/llvm_runtime_executor.cpp`) walks the SNode at `bound_count_length = snode_iter_count` and writes
+    # the count into the per-task capacity slot. The inner recurrence `v = v * v + 0.05` is primal-dependent so any
+    # cross-row aliasing would re-read a different thread's pushed primal and surface as a wrong gradient even when the
+    # OOB write happens to land within the heap allocation's over-allocated tail. `ad_stack_size = 0` lets the sizer
+    # pick the per-thread stride; with 8 cpu threads and `n_gated = 2048` the row counter advances well past the
+    # eight-row fallback so the OOB write reliably escapes the page mapped by the heap allocation guard. `arch=[qd.cpu]`
+    # because this test targets the host-side reducer specifically; CUDA / AMDGPU run the device-side reducer
     # (`runtime_eval_static_bound_count`) and SPIR-V the compute-shader reducer.
     n = 4096
     n_iter = 8
@@ -3397,24 +3352,25 @@ def test_adstack_static_bound_expr_snode_gate_primal_dependent_grad_correct():
 
 @test_utils.test(require=[qd.extension.adstack, qd.extension.data64], ad_stack_size=0, debug=False)
 def test_adstack_static_bound_expr_snode_gate_multileaf_dense_grad_correct():
-    # Pins the LLVM snode_resolver against multi-leaf dense parents with mixed-size children. The dense parent
-    # `qd.root.dense(qd.i, n).place(field_f64, field_f32)` has two leaves of sizes 8 and 4 bytes; the LLVM struct
-    # compiler lays them out in declaration order (f64 at offset 0, f32 at offset 8) while a size-sorted layout
-    # would place the f32 leaf at offset 0 and the f64 leaf at offset 8. The captured gating predicate
-    # `field_f32[i] > eps` rides through the LLVM static-bound-expr resolver: when the resolver reads the f32
-    # leaf's offset from a size-sorted source, the runtime reducer walks the field at offset 0 (the f64 leaf's
-    # bytes, low half) every cell-stride bytes. With the f64 leaf seeded to a constant > eps in every cell, the
-    # bug-time reducer reports `n` gate-passing cells while the main kernel's actual gated pass count is
-    # `n_gated`, the float adstack heap is mis-sized and the codegen-emitted clamp aliases legitimate gated
-    # iterations onto wrong rows - the resulting gradient is wrong-but-not-NaN on every gated index.
+    # Asserts gradient correctness on the LLVM static-bound-expr SNode resolver for dense parents with multiple
+    # mixed-size leaves. The resolver must read each leaf's byte offset in declaration order (matching the LLVM struct
+    # compiler's layout); reading from a size-sorted source would walk the wrong leaf's bytes during the reducer
+    # dispatch and over-count gate-passing cells.
     #
-    # Internal details: the f32 selector layout puts non-gated cells at 0.0 and gated cells at 1.0 with
-    # `eps = 1e-9`; the f64 companion field is seeded to `1.0` everywhere so a misread at the f64 leaf's offset
-    # comparison-passes for every cell (the bit pattern of the f64 1.0 low half is non-zero and greater than the
-    # f32 eps when reinterpreted). The non-linear recurrence `v = v * v + 0.05` makes the per-iteration gradient
-    # primal-dependent so any cross-row aliasing surfaces as a wrong gradient. `arch=[qd.cpu, qd.cuda, qd.amdgpu]`
-    # because this test pins the LLVM snode_resolver specifically; SPIR-V backends use the SPIR-V struct compiler
-    # natively for both the reducer and the main kernel so they agree on the size-sorted offsets and are unaffected.
+    # Internal details: the dense parent `qd.root.dense(qd.i, n).place(field_f64, field_f32)` has two leaves of sizes 8
+    # and 4 bytes; the LLVM struct compiler lays them out in declaration order (f64 at offset 0, f32 at offset 8) while
+    # a size-sorted layout would place the f32 leaf at offset 0 and the f64 leaf at offset 8. The captured gating
+    # predicate `field_f32[i] > eps` rides through the LLVM static-bound-expr resolver: a size-sorted resolver makes the
+    # runtime reducer walk the field at offset 0 (the f64 leaf's low-half bytes) every cell-stride bytes. With the f64
+    # leaf seeded to `1.0` everywhere, a misread at the f64 leaf's offset comparison-passes for every cell (the bit
+    # pattern of the f64 1.0 low half is non-zero and greater than the f32 eps when reinterpreted), the reducer reports
+    # `n` gate-passing cells while the main kernel's actual gated pass count is `n_gated`, the float adstack heap is
+    # mis-sized and the codegen-emitted clamp aliases legitimate gated iterations onto wrong rows. The non-linear
+    # recurrence `v = v * v + 0.05` makes the per-iteration gradient primal-dependent so any cross-row aliasing surfaces
+    # as a wrong gradient. The f32 selector layout puts non-gated cells at 0.0 and gated cells at 1.0 with `eps = 1e-9`.
+    # `arch=[qd.cpu, qd.cuda, qd.amdgpu]` because this test targets the LLVM snode_resolver specifically; SPIR-V
+    # backends use the SPIR-V struct compiler natively for both the reducer and the main kernel so they agree on the
+    # size-sorted offsets and are unaffected.
     n = 256
     n_iter = 6
     eps = 1e-9
@@ -3435,9 +3391,9 @@ def test_adstack_static_bound_expr_snode_gate_multileaf_dense_grad_correct():
                 out[None] += v
 
     np.random.seed(1)
-    # `x` varies with `i` so any cross-row aliasing under a mis-sized adstack heap surfaces as a gradient
-    # mismatch (the reverse pop reads back a different thread's primal). A constant `x` would mask aliasing
-    # because every gated thread pushes the same primal sequence and the pop comes back identical.
+    # `x` varies with `i` so any cross-row aliasing under a mis-sized adstack heap surfaces as a gradient mismatch (the
+    # reverse pop reads back a different thread's primal). A constant `x` would mask aliasing because every gated thread
+    # pushes the same primal sequence and the pop comes back identical.
     x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
     n_gated = max(1, n // 2)
     selector_np = np.zeros(n, dtype=np.float32)
@@ -3480,24 +3436,21 @@ def test_adstack_static_bound_expr_snode_gate_multileaf_dense_grad_correct():
 @pytest.mark.parametrize("bound_shape", ["int_const", "scalar_field", "ndarray_shape", "ndarray_read", "two_arg_range"])
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=128)
 def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
-    # End-to-end memory-footprint test for the sparse-adstack-heap path. Pins that every loop-bound shape the
-    # autodiff sizer documents as supported (`docs/source/user_guide/autodiff.md::Appendix A`) plays nicely
-    # with the gating-predicate capture path: the codegen pattern matcher recognises `field[i] cmp literal`
-    # immediately above the adstack-using inner work and the runtime sizes the float adstack heap to the
-    # gate-passing iteration count instead of `dispatched_threads * stride * sizeof(elem)`.
+    # Asserts gradient correctness across every loop-bound shape the autodiff sizer documents as supported
+    # (`docs/source/user_guide/autodiff.md::Appendix A`) when the kernel uses a captured gating predicate above
+    # adstack-using inner work. Each shape resolves to the same `n` iteration count at launch time so the analytic
+    # oracle is identical across cases; a regression that drops shape-product / scalar-field / two-arg-range support
+    # from `determine_ad_stack_size` or from the `analyze_adstack_static_bounds` pre-pass surfaces as a wrong gradient
+    # on exactly the shape that broke.
     #
-    # The kernel body is a non-linear recurrence in `x[i]` (`v = x[i] * x[i]; v = v * 1.05 + 0.05; ...`) so the
-    # analytic per-iteration gradient `2 * x[i] * 1.05^n_iter` varies with `i`. A regression that under-sizes
-    # the float heap (reducer count diverging from main-pass claim count) clamps multiple gated iterations into
-    # the same heap row; the row's stored primal then comes from whichever iteration last pushed it, and the
-    # reverse pass attributes that primal's chain-rule contribution to a different `i` than the one that wrote
-    # it. The per-`i` analytic oracle catches that aliasing as a wrong gradient on the affected indices.
-    #
-    # The parametrisation walks every supported bound shape so a regression that drops shape-product / scalar-
-    # field / two-arg-range support from `determine_ad_stack_size` or from the `analyze_adstack_static_bounds`
-    # pre-pass surfaces as a wrong gradient on exactly the shape that broke. Each shape resolves to the same
-    # `n` iteration count at launch time so the analytic oracle is identical across cases - the only delta is
-    # how the loop bound is expressed in Quadrants Python and how the IR pre-pass resolves it.
+    # Internal details: the codegen pattern matcher must recognise `field[i] cmp literal` immediately above the
+    # adstack-using inner work; the runtime then sizes the float adstack heap to the gate-passing iteration count
+    # instead of `dispatched_threads * stride * sizeof(elem)`. The kernel body is a non-linear recurrence in `x[i]` (`v
+    # = x[i] * x[i]; v = v * 1.05 + 0.05; ...`) so the analytic per-iteration gradient `2 * x[i] * 1.05^n_iter` varies
+    # with `i`; a regression that under-sizes the float heap (reducer count diverging from main-pass claim count) clamps
+    # multiple gated iterations into the same heap row, the row's stored primal comes from whichever iteration last
+    # pushed it, and the reverse pass attributes that primal's chain-rule contribution to a different `i` than the one
+    # that wrote it. The per-`i` analytic oracle catches that aliasing as a wrong gradient on the affected indices.
     n = 256
     n_iter = 16
     eps = 1e-9
@@ -3529,9 +3482,9 @@ def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
         start_arr: qd.types.NDArray,
         stop_arr: qd.types.NDArray,
     ) -> None:
-        # `qd.static(bound_shape == ...)` evaluates the comparison at kernel-compile time (`bound_shape` is a
-        # Python closure constant), so the AST that reaches the codegen has only one of the five `range`
-        # forms surviving - no helper has to materialise per parametrisation.
+        # `qd.static(bound_shape == ...)` evaluates the comparison at kernel-compile time (`bound_shape` is a Python
+        # closure constant), so the AST that reaches the codegen has only one of the five `range` forms surviving - no
+        # helper has to materialise per parametrisation.
         for i in (
             range(n)
             if qd.static(bound_shape == "int_const")
@@ -3568,28 +3521,28 @@ def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
     got_grad = x.grad.to_numpy()
     assert not np.isnan(got_grad).any(), f"sparse-adstack-heap [{bound_shape}] grad returned NaN: {got_grad}"
     coeff = 1.05
-    # `v = x[i] * x[i]` then `v = v * 1.05 + 0.05` repeated n_iter times. v_final = x[i]^2 * c^n + S where
-    # S is a constant. d(v_final)/d(x[i]) = 2 * x[i] * c^n. Gated only.
+    # `v = x[i] * x[i]` then `v = v * 1.05 + 0.05` repeated n_iter times. v_final = x[i]^2 * c^n + S where S is a
+    # constant. d(v_final)/d(x[i]) = 2 * x[i] * c^n. Gated only.
     expected = np.where(selector_np > eps, np.float32(2.0 * x_np * coeff**n_iter), np.float32(0.0))
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=64)
 def test_adstack_static_bound_expr_primal_dependent_inner_recurrence_grad_correct():
-    # Companion to `test_adstack_static_bound_expr_memory_savings_runs_clean` aimed at the slot-aliasing failure
-    # mode: pins the case where the inner recurrence is `v = qd.sin(v) + 0.01`, whose chain rule `d(sin(v))/dv =
-    # cos(v)` depends on the stored primal. If a regression under-sizes the float adstack heap (e.g. by deriving
-    # the reducer length from `array_runtime_sizes / sizeof(int32_t)` while the launcher receives an element-
-    # count-unit value from `set_args_ndarray`, undercounting by `sizeof(elem)`x for `qd.ndarray` arguments), the
-    # codegen-emitted clamp aliases multiple gated iterations into the same row; the row's pushed primal then
-    # comes from whichever iteration last wrote it, the reverse pass evaluates `cos(slot)` against the wrong
-    # iteration's `v`, and the per-`i` gradient diverges from the analytic oracle by a primal-dependent factor.
+    # Asserts gradient correctness for reverse-mode kernels with a captured ndarray-backed gate above a primal-dependent
+    # inner recurrence (`v = qd.sin(v) + 0.01`, whose chain rule `d(sin(v))/dv = cos(v)` depends on the stored primal).
+    # Slot-aliasing companion to `test_adstack_static_bound_expr_memory_savings_runs_clean`: any regression that
+    # under-sizes the float adstack heap aliases multiple gated iterations onto the same row, the reverse pass evaluates
+    # `cos(slot)` against the wrong iteration's `v`, and the per-`i` gradient diverges from the analytic oracle by a
+    # primal-dependent factor.
     #
-    # `v = x[i]; for _: v = sin(v) + 0.01` then `out += v` produces a strictly nonlinear chain whose per-`i`
-    # gradient is computed offline via numpy on the same recurrence. `n` is chosen so that capacity-vs-claims
-    # under any under-sized reducer length aliases multiple gated iterations into the last reachable row;
-    # the divergence between the codegen output and the numpy reference scales linearly with the number of
-    # aliased iterations, so the assertion catches the regression on every backend that under-sizes.
+    # Internal details: a regression that derives the reducer length from `array_runtime_sizes / sizeof(int32_t)` while
+    # the launcher receives an element-count-unit value from `set_args_ndarray` undercounts by `sizeof(elem)`x for
+    # `qd.ndarray` arguments and triggers exactly this aliasing. The `v = x[i]; for _: v = sin(v) + 0.01; out += v`
+    # recurrence is strictly nonlinear so the per-`i` gradient is computed offline via numpy on the same recurrence. `n`
+    # is chosen so that capacity-vs-claims under any under-sized reducer length aliases multiple gated iterations into
+    # the last reachable row; the divergence between the codegen output and the numpy reference scales linearly with the
+    # number of aliased iterations, so the assertion catches the regression on every backend that under-sizes.
     n = 512
     n_iter = 4
     eps = 1e-9
@@ -3621,8 +3574,8 @@ def test_adstack_static_bound_expr_primal_dependent_inner_recurrence_grad_correc
     compute.grad(x, selector, out)
     qd.sync()
 
-    # numpy reference: chain rule for `v_k = sin(v_{k-1}) + 0.01` is `cos(v_{k-1})`. d(v_n)/d(x[i]) is the
-    # product of `cos(v_k)` for k = 0..n_iter-1, where the v_k sequence is generated forward from x[i].
+    # numpy reference: chain rule for `v_k = sin(v_{k-1}) + 0.01` is `cos(v_{k-1})`. d(v_n)/d(x[i]) is the product of
+    # `cos(v_k)` for k = 0..n_iter-1, where the v_k sequence is generated forward from x[i].
     v_np = x_np.copy()
     grad_np = np.ones(n, dtype=np.float64)
     for _ in range(n_iter):
@@ -3637,34 +3590,33 @@ def test_adstack_static_bound_expr_primal_dependent_inner_recurrence_grad_correc
 
 @test_utils.test(require=[qd.extension.adstack, qd.extension.data64], default_fp=qd.f64, ad_stack_size=32)
 def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case():
-    # Pins the `match_field_source` rejection of non-`LoopIndexStmt` index expressions in the captured
-    # `bound_expr`. The reducer walks the gating ndarray as `selector[0..length)` and counts gate-passing
-    # cells; the main-kernel LCA-block atomic-rmw fires once per gated iteration of the actual index. If
-    # the captured gate's index is anything other than the loop's own `LoopIndexStmt` (e.g. `selector[i %
-    # K]`, `selector[const]`, `selector[i + 1]`, `selector[other_field[i]]`), the reducer's flat-walk
-    # count diverges from the claim count and the codegen-emitted clamp aliases multiple gated iterations
-    # into the last reachable row - silent gradient corruption on LLVM, hard overflow on SPIR-V.
+    # Asserts gradient correctness for reverse-mode kernels whose gating predicate uses a non-`LoopIndexStmt` index
+    # expression (e.g. `selector[i % K]`, `selector[const]`, `selector[i + 1]`, `selector[other_field[i]]`). The
+    # static-bound-expr capture must reject such gates so the heap-sizing path falls back to the dispatched-threads
+    # worst case for that task, rather than walking `selector[0..length)` against a divergent claim-count basis and
+    # aliasing iterations into the last reachable row.
     #
-    # The kernel below uses `selector[i % K]` so the SAME 4 selector cells (selector[0..4]) are read
-    # `n / K = 16` times each, but only `n_gated = 4` of those reads pass the gate (the cells where
-    # `selector[i % K] = 1.0`). On the unfixed analyser the gate is captured with the bogus index, the
-    # reducer counts at most 4 gate-passing cells in `selector[0..n)`, and the float heap is sized for 4
-    # rows while 16 gated LCA reaches happen on each of those rows - rows 1..15 of every iteration's
-    # claim alias into row 0/1/2/3, the inner-loop primal pushes overwrite each other, and the per-`i`
-    # gradient reads back a cross-iteration value. The fix rejects the gate capture for THIS task only
-    # (i.e. this `OffloadedStmt` / outer parallel-for); the rest of the kernel's tasks still capture
-    # their gates if their `selector[i]` index is the loop's own `LoopIndexStmt`. The rejected task
-    # falls back to the worst-case `dispatched_threads * stride_float` heap sizing - safe (no aliasing),
-    # at the cost of the savings the bound-reducer path would have given for that one task.
+    # Internal details: the reducer walks the gating ndarray as `selector[0..length)` and counts gate-passing cells; the
+    # main-kernel LCA-block atomic-rmw fires once per gated iteration of the actual index. A captured gate with a
+    # non-loop-index index makes the two counts diverge, the codegen-emitted clamp aliases multiple gated iterations
+    # into the last reachable row, and the result is silent gradient corruption on LLVM / hard overflow on SPIR-V. The
+    # kernel below uses `selector[i % K]` so the same 4 selector cells are read `n / K = 16` times each but only
+    # `n_gated = 4` of those reads pass the gate; without the rejection the reducer counts at most 4 gate-passing cells
+    # in `selector[0..n)`, the float heap is sized for 4 rows while 16 gated LCA reaches happen on each row, and rows
+    # 1..15 of every iteration's claim alias into row 0/1/2/3. `match_field_source`'s `LoopIndexStmt`-only check rejects
+    # the gate capture for this task only (this `OffloadedStmt` / outer parallel-for); the rest of the kernel's tasks
+    # still capture their gates if their index is the loop's own `LoopIndexStmt`. The rejected task falls back to the
+    # worst-case `dispatched_threads * stride_float` heap sizing - safe (no aliasing), at the cost of the savings the
+    # bound-reducer path would have given for that one task.
     n = 64
     K = 4
     n_iter = 8
     eps = 1e-12
 
     np.random.seed(0)
-    # Spread `x` widely across the f64 representable range so per-`i` `cos(x[i])` differs by O(0.1) between
-    # adjacent indices; under f64 precision the multi-thread CPU race produces a clearly observable drift in
-    # the per-`i` chain-rule product when the gate-capture pretends `selector[i % K]` is loop-index-shaped.
+    # Spread `x` widely across the f64 representable range so per-`i` `cos(x[i])` differs by O(0.1) between adjacent
+    # indices; under f64 precision the multi-thread CPU race produces a clearly observable drift in the per-`i`
+    # chain-rule product when the gate-capture pretends `selector[i % K]` is loop-index-shaped.
     x_np = (0.5 + 0.05 * np.arange(n)).astype(np.float64)
     selector_np = np.zeros(n, dtype=np.float64)
     selector_np[:K] = 1.0  # first K cells gated; rest zero
@@ -3692,10 +3644,10 @@ def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case()
     compute.grad(x, selector, out)
     qd.sync()
 
-    # `v = sin(v) + c` has a primal-dependent chain rule `cos(v_{k-1})`. Each iteration's reverse pass
-    # multiplies adjoints by `cos(stored_primal)`, so a slot read corrupted by a different iteration's
-    # push produces a primal-dependent wrong factor. With selector[:K] = 1.0 every iteration is gated;
-    # numpy reference computes the chain forward then products `cos(v_k)` for k = 0..n_iter-1.
+    # `v = sin(v) + c` has a primal-dependent chain rule `cos(v_{k-1})`. Each iteration's reverse pass multiplies
+    # adjoints by `cos(stored_primal)`, so a slot read corrupted by a different iteration's push produces a
+    # primal-dependent wrong factor. With selector[:K] = 1.0 every iteration is gated; numpy reference computes the
+    # chain forward then products `cos(v_k)` for k = 0..n_iter-1.
     v_np = x_np.copy()
     grad_np = np.ones(n, dtype=np.float64)
     for _ in range(n_iter):
@@ -3707,32 +3659,40 @@ def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case()
     np.testing.assert_allclose(got_grad, grad_np, rtol=1e-12, atol=1e-14)
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu], require=qd.extension.adstack, ad_stack_size=2048)
+@test_utils.test(
+    arch=[qd.cuda, qd.amdgpu],
+    require=[qd.extension.adstack, qd.extension.data64],
+    default_fp=qd.f64,
+    ad_stack_size=2048,
+)
 def test_adstack_gpu_dispatch_cap_uses_floor_division():
-    # Pins the LLVM CUDA / AMDGPU adstack-bearing-task dispatch-cap floor-division. The launcher caps the
-    # grid for adstack-bearing tasks at `cap_blocks` blocks of `block_dim` threads each. With ceiling
-    # division (`(kAdStackMaxConcurrentThreads + block_dim - 1) / block_dim`) and a `block_dim` value
-    # that does not divide `kAdStackMaxConcurrentThreads = 65536` evenly (here 192:
-    # `ceil(65536/192) = 342`, dispatched = `342 * 192 = 65664`), the launcher dispatches `block_dim - 1`
-    # threads past the heap row count. `resolve_num_threads` floors at 65536 and the non-bound_expr float
-    # heap is sized at `n_threads * stride_float` for `n_threads = 65536`, so threads with
-    # `linear_thread_idx in [65536, 65664)` index past the float heap end. The kernel below has 65700
-    # iterations so each launched thread reaches at least one `i` past 65536; with `ad_stack_size=2048`
-    # the per-thread stride is large enough (~16 KB) that the OOB landing addresses escape the heap
-    # allocation page. On the unfixed tree the OOB write lands in unmapped device memory and `compute.grad`
-    # raises `RuntimeError: ... hipErrorIllegalAddress` (AMDGPU) / `cudaErrorIllegalAddress` (CUDA); on the
-    # fixed tree `cap_blocks = floor(65536 / 192) = 341` and dispatched = `341 * 192 = 65472` stays within
-    # the heap and the gradient matches the numpy reference.
+    # Asserts gradient correctness for CUDA / AMDGPU adstack-bearing kernels whose `block_dim` does not divide
+    # `kAdStackMaxConcurrentThreads = 65536` evenly. The launcher must cap such kernels' grid using floor division so
+    # the dispatched thread count stays within the float heap row count; ceiling division would over-dispatch the last
+    # block and OOB-write past the heap end, manifesting as `cudaErrorIllegalAddress` (CUDA) / `hipErrorIllegalAddress`
+    # (AMDGPU) at sync.
     #
-    # arch=[qd.cuda, qd.amdgpu] only because Metal requires `block_dim` to be a power of two.
+    # Internal details: the launcher caps adstack-bearing tasks at `cap_blocks * block_dim` threads. With `block_dim =
+    # 192` floor division gives `cap_blocks = floor(65536/192) = 341`, dispatched = `341 * 192 = 65472`; ceiling
+    # division gives `342`, dispatched = `342 * 192 = 65664` - 128 threads past the heap row count.
+    # `resolve_num_threads` floors at 65536 and the non-bound_expr float heap is sized at `n_threads * stride_float` for
+    # `n_threads = 65536`, so any thread with `linear_thread_idx in [65536, 65664)` would index past the heap end. The
+    # kernel has 65700 iterations so each dispatched thread reaches at least one `i` past 65536; with
+    # `ad_stack_size=2048` the per-thread stride is ~16 KB at f64 so a misdispatch's OOB write lands in unmapped device
+    # memory rather than aliasing into another adjacent buffer. arch=[qd.cuda, qd.amdgpu] only because Metal requires
+    # `block_dim` to be a power of two. default_fp=qd.f64 because CUDA's libdevice `__nv_sinf` / `__nv_cosf` carry ~3
+    # ULP error in f32 and a 6-deep sin/cos composition compounds to ~1.5e-5 relative drift against numpy's libm
+    # reference, right at the rtol boundary; f64 transcendentals are ~1 ULP on both libdevice and rocm libm so the drift
+    # drops to ~6e-15 relative and the tolerance can stay tight, and the f64 stride (8 B vs 4 B) doubles the per-thread
+    # heap footprint, making OOB bugs strictly easier to detect.
     n = 65700
     block_dim = 192
     n_inner = 6
 
-    x_np = (0.5 + 0.001 * np.arange(n)).astype(np.float32)
+    x_np = (0.5 + 0.001 * np.arange(n)).astype(np.float64)
 
-    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
-    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    x = qd.ndarray(qd.f64, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f64, shape=(1,), needs_grad=True)
 
     @qd.kernel
     def compute(x: qd.types.NDArray, out: qd.types.NDArray) -> None:
@@ -3744,8 +3704,8 @@ def test_adstack_gpu_dispatch_cap_uses_floor_division():
             out[0] += v
 
     x.from_numpy(x_np)
-    out.from_numpy(np.zeros((1,), dtype=np.float32))
-    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    out.from_numpy(np.zeros((1,), dtype=np.float64))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float64))
     x.grad.from_numpy(np.zeros_like(x_np))
 
     compute(x, out)
@@ -3753,39 +3713,39 @@ def test_adstack_gpu_dispatch_cap_uses_floor_division():
     qd.sync()
 
     v_np = x_np.copy()
-    grad_ref = np.ones(n, dtype=np.float32)
+    grad_ref = np.ones(n, dtype=np.float64)
     for _ in range(n_inner):
         grad_ref *= np.cos(v_np)
         v_np = np.sin(v_np) + 0.01
 
     got_grad = x.grad.to_numpy()
-    np.testing.assert_allclose(got_grad, grad_ref, rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(got_grad, grad_ref, rtol=1e-12, atol=1e-14)
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=0, debug=False)
 def test_adstack_static_bound_expr_device_sizer_per_kind_offsets_grad_correct():
-    # Pins the per-kind out_offsets[i] write in the LLVM device sizer (`runtime_eval_adstack_size_expr` in
-    # `runtime/llvm/runtime_module/runtime.cpp`). The sizer runs on CUDA / AMDGPU when at least one captured
-    # SizeExpr contains an ExternalTensorRead leaf, defeating `use_host_eval` in `publish_adstack_metadata`
-    # so the host-side per-kind offset publication is skipped and the device-side write is the authoritative
-    # source. The codegen reads `adstack_offsets[stack_id]` as an offset within the per-kind slice (float
-    # allocas: `heap_float + linear_tid * stride_float + offsets[i]`; int / u1 allocas: `heap_int + linear_tid
-    # * stride_int + offsets[i]`), so the device sizer must write per-kind running offsets, not the combined
-    # prefix sum across all stacks.
+    # Asserts gradient correctness on CUDA / AMDGPU for kernels that interleave float and int adstack allocas in source
+    # order, when the SizeExpr contains an ExternalTensorRead leaf (so the device sizer runs instead of the host-eval
+    # path). The device sizer must write per-kind running offsets into `adstack_offsets[stack_id]`, not the combined
+    # prefix sum across all stacks; a combined prefix sum makes the codegen address each alloca's tape using a byte
+    # offset that includes the other kind's strides, landing the tape inside an adjacent thread's slice and producing
+    # wrong gradients on the cross-thread primal reload.
     #
-    # Internal details: the kernel below interleaves two f32 allocas (`v0`, `v1`) and one i32 alloca (`j`) in
-    # source order so the IR pre-scan in `init_offloaded_task_function` assigns stack ids 0 (float), 1 (int),
-    # 2 (float). Under a combined prefix sum, `out_offsets[2] = step_v0 + step_j` - non-zero - which the
-    # codegen interprets as a byte offset within `heap_float`'s slice for `v1`. With `stride_float = step_v0
-    # + step_v1` and `step_v0 + step_j > step_v0`, `v1`'s tape for thread `t` lands inside thread `(t+1)`'s
-    # float slice; thread `t`'s reverse pass then reads `v1`'s saved primal that thread `(t+1)` wrote, which
-    # is x[(t+1)]'s tape. Restricted to LLVM CUDA / AMDGPU because (a) CPU goes through `use_host_eval=true`
-    # and uses the host-eval branch in `llvm_runtime_executor.cpp:792-801` whose per-kind write is correct,
-    # (b) Metal / Vulkan use the SPIR-V sizer compute shader (`codegen/spirv/adstack_sizer_shader.cpp`) which
-    # already does per-kind offsets correctly. `ad_stack_size=0` lets the SizeExpr's launch-time evaluator
-    # pick the per-launch bound; `debug=False` keeps the release-build inline push / pop emit path so the
-    # tape addressing math goes through `get_ad_stack_base_llvm` rather than the runtime helper-call path
-    # which would also exercise the bug but takes a different code path through `stack_init`.
+    # Internal details: the codegen reads `adstack_offsets[stack_id]` as an offset within the per-kind slice (float
+    # allocas: `heap_float + linear_tid * stride_float + offsets[i]`; int / u1 allocas: `heap_int + linear_tid *
+    # stride_int + offsets[i]`). The kernel below interleaves two f32 allocas (`v0`, `v1`) and one i32 alloca (`j`) in
+    # source order so the IR pre-scan in `init_offloaded_task_function` assigns stack ids 0 (float), 1 (int), 2 (float).
+    # Under a combined prefix sum, `out_offsets[2] = step_v0 + step_j` - non-zero - which the codegen interprets as a
+    # byte offset within `heap_float`'s slice for `v1`. With `stride_float = step_v0 + step_v1` and `step_v0 + step_j >
+    # step_v0`, `v1`'s tape for thread `t` lands inside thread `(t+1)`'s float slice; thread `t`'s reverse pass then
+    # reads `v1`'s saved primal that thread `(t+1)` wrote, which is x[(t+1)]'s tape. Restricted to LLVM CUDA / AMDGPU
+    # because (a) CPU goes through `use_host_eval=true` and uses the host-eval branch in
+    # `llvm_runtime_executor.cpp:792-801` whose per-kind write is correct, (b) Metal / Vulkan use the SPIR-V sizer
+    # compute shader (`codegen/spirv/adstack_sizer_shader.cpp`) which already does per-kind offsets correctly.
+    # `ad_stack_size=0` lets the SizeExpr's launch-time evaluator pick the per-launch bound; `debug=False` keeps the
+    # release-build inline push / pop emit path so the tape addressing math goes through `get_ad_stack_base_llvm` rather
+    # than the runtime helper-call path which would also exercise the bug but takes a different code path through
+    # `stack_init`.
     n_outer = 8
     a_np = np.array([2, 3, 1, 2, 3, 1, 2, 3], dtype=np.int32)
 
@@ -3823,26 +3783,24 @@ def test_adstack_static_bound_expr_device_sizer_per_kind_offsets_grad_correct():
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=0)
 def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
-    # Pins the SPIR-V launcher's resolve_length walking the full ndarray flat product instead of capping at
-    # advisory_total_num_threads. range_for kernels with a captured ndarray-backed gating predicate over a
-    # selector larger than `kMaxNumThreadsGridStrideLoop = 131072` previously counted only `selector[0..131072)`
-    # in the reducer; gate-passing cells past that index never contributed to the heap-sizing count, so the
-    # float adstack heap was sized to the truncated count and the codegen-emitted clamp at the LCA-block claim
-    # site aliased every later gated iteration into a smaller-than-real row range.
+    # Asserts gradient correctness on Metal / Vulkan when an adstack-bearing kernel's gating ndarray is larger than the
+    # SPIR-V grid-stride advisory cap (`kMaxNumThreadsGridStrideLoop = 131072`) and all gated cells live past the cap.
+    # The launcher's reducer must walk the full flat element product of the gating ndarray (not just the first 131072
+    # cells) so the float adstack heap is sized for every gated iteration; capping the walk at the advisory would size
+    # the heap to zero rows on workloads whose gates only fire past index 131072 and silently corrupt gradients on every
+    # gated index.
     #
-    # Internal details: the kernel below puts all gated cells at indices [131072, 131072+n_gated_past_cap),
-    # past the pre-fix cap, and runs an inner recurrence `v = v * 1.05 + 0.05` so the autodiff transform
-    # actually pushes loop-carried primals onto the float adstack (a single `qd.sin(x[i])` would not - sin's
-    # adjoint reloads `x[i]` directly without consulting the adstack). Pre-fix the reducer counts 0 gate-
-    # passing cells in [0, 131072), the float heap is floored at 1 row, and every gated iteration's
-    # `OpAtomicIAdd` on the row counter clamps back to row 0 via the codegen-emitted `select(capacity == 0,
-    # 0, capacity - 1)` upper-bound. All n_gated_past_cap forward push streams alias onto row 0 and the
-    # reverse pop reads back whichever iteration's primal landed last, producing one common gradient value
-    # for every previously-gated index instead of the per-i `1.05 ** n_iter` the analytic oracle expects.
-    # arch = [qd.metal, qd.vulkan] because CPU and CUDA / AMDGPU launchers have their own bound_count_length
-    # derivation paths whose advisory-cap shape was already addressed in 7ff93bd87 (Bug G, Bug H) and is
-    # exercised by separate tests.
-    n_gated_past_cap = 64  # enough to alias multiple iterations into the floor-1-row heap pre-fix
+    # Internal details: the kernel places all gated cells at indices [131072, 131072+n_gated_past_cap) and runs the
+    # inner recurrence `v = v * 1.05 + 0.05` so the autodiff transform actually pushes loop-carried primals onto the
+    # float adstack (a single `qd.sin(x[i])` would not - sin's adjoint reloads `x[i]` directly without consulting the
+    # adstack). A reducer that walks only `selector[0..131072)` counts 0 gate-passing cells, the float heap is floored
+    # at 1 row, and every gated iteration's `OpAtomicIAdd` on the row counter clamps back to row 0 via the
+    # codegen-emitted `select(capacity == 0, 0, capacity - 1)` upper-bound; all n_gated_past_cap forward push streams
+    # alias onto row 0 and the reverse pop reads back whichever iteration's primal landed last, producing one common
+    # gradient value for every gated index instead of the per-i `1.05 ** n_iter` the analytic oracle expects.
+    # arch=[qd.metal, qd.vulkan] because CPU and CUDA / AMDGPU launchers have their own `bound_count_length` derivation
+    # paths whose advisory-cap shape is exercised by separate tests.
+    n_gated_past_cap = 64  # enough to alias multiple iterations into a single row if the heap mis-sizes to one row
     advisory_cap = 131072  # SPIR-V kMaxNumThreadsGridStrideLoop
     n = advisory_cap + n_gated_past_cap
     n_iter = 4
@@ -3862,7 +3820,7 @@ def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
 
     x_np = (0.001 * np.arange(n) + 0.1).astype(np.float32)
     selector_np = np.zeros(n, dtype=np.float32)
-    selector_np[advisory_cap : advisory_cap + n_gated_past_cap] = 1.0  # all gated cells past the pre-fix cap
+    selector_np[advisory_cap : advisory_cap + n_gated_past_cap] = 1.0  # all gated cells past the advisory cap
     x.from_numpy(x_np)
     selector.from_numpy(selector_np)
     out.from_numpy(np.zeros((1,), dtype=np.float32))
@@ -3882,68 +3840,3 @@ def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
             f"gated index {i} (past advisory_total_num_threads={advisory_cap}) gradient diverged: "
             f"got={got[i]} expected={expected[i]}"
         )
-
-
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=0)
-def test_adstack_static_bound_expr_eager_task_last_observed_skipped():
-    # Pins the SPIR-V synchronize() row-counter readback gating: eager-path tasks (no captured `bound_expr`)
-    # never atomic-add into their counter slot, so the post-clear zero must NOT be cached into
-    # last_observed_rows_per_task_. Pre-fix the readback wrote 0 under the eager task's name, the next
-    # launch's heap-bind tertiary fallback then sized the float heap from `ceil(0 * 1.5) = 0` rows
-    # (floored to 1), and the eager codegen pushed `gl_GlobalInvocationID * stride_float` past the floored
-    # 1-row allocation. The never-shrink invariant on adstack_heap_buffer_float_ masks the OOB on
-    # monotonically-growing dispatches, but a small first launch followed by a large second launch
-    # surfaces it as wrong gradients on every thread past the first launch's dispatched count.
-    #
-    # Internal details: the kernel mixes (a) an EAGER for-i loop without a gate above its f32 adstack
-    # pushes - codegen emits no AdStackRowCounter bind for this task; (b) a LAZY for-i loop with a gate
-    # above the pushes - codegen binds the counter and the reducer dispatches. Launch 1 sizes both at
-    # n_e_small / n_g_small; sync() readback caches the eager task's slot[i] = 0 (post-clear, never
-    # atomic-added) under its name. Launch 2 dispatches the eager task at n_e_large; pre-fix the heap-bind
-    # tertiary fallback shrinks the request to 1 row, the never-shrink leaves the buffer at launch-1 size,
-    # and threads past launch-1 dispatch OOB-write past the heap end. arch=[qd.metal, qd.vulkan] because
-    # the heap-bind tertiary fallback wiring is on the SPIR-V GfxRuntime path; LLVM CPU/CUDA/AMDGPU never
-    # consult last_observed_rows_per_task_.
-    n_iter = 32
-    eps = 1e-9
-
-    @qd.kernel
-    def compute(x_e: qd.types.NDArray, x_g: qd.types.NDArray, sel: qd.types.NDArray, o: qd.types.NDArray) -> None:
-        for i in range(x_e.shape[0]):
-            v = x_e[i]
-            for _ in range(n_iter):
-                v = v * 1.05 + 0.05
-            o[0] += v
-        for i in range(x_g.shape[0]):
-            if sel[i] > eps:
-                v = x_g[i]
-                for _ in range(n_iter):
-                    v = v * 1.05 + 0.05
-                o[0] += v
-
-    def one_pass(n_e, n_g):
-        x_e = qd.ndarray(qd.f32, shape=(n_e,), needs_grad=True)
-        x_g = qd.ndarray(qd.f32, shape=(n_g,), needs_grad=True)
-        sel = qd.ndarray(qd.f32, shape=(n_g,))
-        o = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
-        x_e.from_numpy(np.full(n_e, np.float32(0.1), dtype=np.float32))
-        x_g.from_numpy(np.full(n_g, np.float32(0.1), dtype=np.float32))
-        sel.from_numpy(np.zeros(n_g, dtype=np.float32))
-        o.from_numpy(np.zeros((1,), dtype=np.float32))
-        o.grad.from_numpy(np.ones((1,), dtype=np.float32))
-        x_e.grad.from_numpy(np.zeros(n_e, dtype=np.float32))
-        x_g.grad.from_numpy(np.zeros(n_g, dtype=np.float32))
-        compute(x_e, x_g, sel, o)
-        compute.grad(x_e, x_g, sel, o)
-        qd.sync()
-        return x_e.grad.to_numpy()
-
-    # Launch 1 small so the buffer never_shrink baseline is small; launch 2 large to trip the OOB.
-    one_pass(n_e=4, n_g=4)
-    grad_large = one_pass(n_e=8192, n_g=4)
-
-    expected = np.float32(1.05**n_iter)
-    for idx in range(grad_large.size):
-        assert grad_large[idx] == pytest.approx(
-            expected, rel=1e-4, abs=1e-6
-        ), f"eager task gradient at i={idx} diverged on the second launch: got={grad_large[idx]} expected={expected}"
