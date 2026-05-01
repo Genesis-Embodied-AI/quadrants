@@ -466,11 +466,16 @@ class FunctionDefTransformer:
         if ASTResolver.resolve_to(func_node, stream_parallel, global_vars):
             return True
         resolved = ASTResolver.resolve_value(func_node, global_vars)
-        return (
-            resolved is not None
-            and getattr(resolved, "__name__", None) == "stream_parallel"
-            and getattr(resolved, "__module__", None) == "quadrants.lang.stream"
-        )
+        if resolved is not None:
+            return (
+                getattr(resolved, "__name__", None) == "stream_parallel"
+                and getattr(resolved, "__module__", "").startswith("quadrants")
+            )
+        if isinstance(func_node, ast.Attribute) and func_node.attr == "stream_parallel":
+            return True
+        if isinstance(func_node, ast.Name) and func_node.id == "stream_parallel":
+            return True
+        return False
 
     @staticmethod
     def _is_docstring(stmt: ast.stmt, index: int) -> bool:
@@ -484,8 +489,14 @@ class FunctionDefTransformer:
             if FunctionDefTransformer._is_docstring(stmt, i):
                 continue
             if not FunctionDefTransformer._is_stream_parallel_with(stmt, global_vars):
+                stmt_desc = f"{type(stmt).__name__}"
+                if isinstance(stmt, ast.With) and stmt.items:
+                    ctx_expr = stmt.items[0].context_expr
+                    if isinstance(ctx_expr, ast.Call) and isinstance(ctx_expr.func, ast.Attribute):
+                        stmt_desc += f"(with {ast.dump(ctx_expr.func)})"
                 raise QuadrantsSyntaxError(
                     "When using qd.stream_parallel(), all top-level statements "
                     "in the kernel must be 'with qd.stream_parallel():' blocks. "
-                    "Move non-parallel code to a separate kernel."
+                    f"Move non-parallel code to a separate kernel. "
+                    f"[stmt {i}: {stmt_desc}, body_len={len(body)}]"
                 )
