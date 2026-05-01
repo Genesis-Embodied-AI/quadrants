@@ -561,7 +561,7 @@ class Kernel(FuncBase):
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
             launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
-            if launch_ctx.use_graph and qd_stream is not None:
+            if self.use_graph and qd_stream is not None:
                 raise RuntimeError(
                     "qd_stream is not compatible with graph=True kernels. "
                     "See docs/source/user_guide/streams.md for details."
