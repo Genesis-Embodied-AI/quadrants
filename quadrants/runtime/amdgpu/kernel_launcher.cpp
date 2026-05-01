@@ -105,7 +105,8 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
   do {
     launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
     counter_val = 0;
-    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+    auto *stream = AMDGPUContext::get_instance().get_stream();
+    AMDGPUDriver::get_instance().stream_synchronize(stream);
     AMDGPUDriver::get_instance().memcpy_device_to_host(&counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
   } while (counter_val != 0);
 }

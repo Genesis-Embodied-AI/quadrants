@@ -2337,7 +2337,7 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   }
   // Release build, multi-slot: store 0 into the per-stack count alloca instead of zeroing the heap u64 header.
   // Doing this at the AdStackAllocaStmt visit site (rather than once at task entry) restarts the count whenever
-  // an outer loop re-enters the alloca, matching `stack_init`'s semantics on the debug path.
+  // an outer loop re-enters the alloca, matching `stack_init`'s semantics on the bounds-checked path.
   auto *i64ty_init = llvm::Type::getInt64Ty(*llvm_context);
   llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stmt);
   builder->CreateStore(llvm::ConstantInt::get(i64ty_init, 0), count_alloca);

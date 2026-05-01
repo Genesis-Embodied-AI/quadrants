@@ -427,7 +427,7 @@ SType IRBuilder::get_storage_pointer_type(const SType &value_type) {
   return get_pointer_type(value_type, storage_class);
 }
 
-SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
+SType IRBuilder::get_function_array_type(const SType &_value_type, uint32_t num_elems) {
   auto value_type = _value_type;
   if (value_type.dt->is_primitive(PrimitiveTypeID::u1)) {
     value_type = i32_type();
@@ -442,6 +442,23 @@ SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
     ib_.begin(spv::OpTypeArray).add_seq(arr_type, value_type, length).commit(&global_);
   } else {
     ib_.begin(spv::OpTypeRuntimeArray).add_seq(arr_type, value_type).commit(&global_);
+  }
+
+  return arr_type;
+}
+
+SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
+  // Identical bookkeeping to `get_function_array_type` plus the `ArrayStride` decoration the storage-buffer
+  // / PSB / Uniform interface requires. Delegate the `OpTypeArray` emission to keep the two in sync, then
+  // add the decoration on top.
+  SType arr_type = get_function_array_type(_value_type, num_elems);
+
+  // Mirror `get_function_array_type`'s `u1 -> i32` rewrite so the stride below matches the `OpTypeArray`
+  // element type (`bool` is 1-byte on every host but the array is emitted with `i32` elements; without this
+  // rewrite the stride would land on `1` and `spirv-val` rejects `ArrayStride < element_size`).
+  auto value_type = _value_type;
+  if (value_type.dt->is_primitive(PrimitiveTypeID::u1)) {
+    value_type = i32_type();
   }
 
   uint32_t nbytes;

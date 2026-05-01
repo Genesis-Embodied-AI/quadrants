@@ -205,8 +205,8 @@ class Tensor:
     def from_torch(self, arr: typing.Any) -> None:
         self._impl.from_torch(arr)
 
-    def to_dlpack(self) -> typing.Any:
-        return self._impl.to_dlpack()
+    def to_dlpack(self, versioned: bool = False) -> typing.Any:
+        return self._impl.to_dlpack(versioned=versioned)
 
     def fill(self, value: typing.Any) -> None:
         self._impl.fill(value)
