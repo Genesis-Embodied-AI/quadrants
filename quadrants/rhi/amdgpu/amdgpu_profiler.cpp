@@ -59,8 +59,9 @@ void KernelProfilerAMDGPU::trace(KernelProfilerBase::TaskHandle &task_handle,
 }
 
 void KernelProfilerAMDGPU::stop(KernelProfilerBase::TaskHandle handle) {
-  AMDGPUDriver::get_instance().event_record(handle, 0);
-  AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+  void *active_stream = AMDGPUContext::get_instance().get_stream();
+  AMDGPUDriver::get_instance().event_record(handle, active_stream);
+  AMDGPUDriver::get_instance().stream_synchronize(active_stream);
 
   // get elapsed time and destroy events
   auto record = event_toolkit_->get_current_event_record();
@@ -154,7 +155,8 @@ KernelProfilerBase::TaskHandle EventToolkitAMDGPU::start_with_handle(const std::
 
   AMDGPUDriver::get_instance().event_create(&(record.start_event), HIP_EVENT_DEFAULT);
   AMDGPUDriver::get_instance().event_create(&(record.stop_event), HIP_EVENT_DEFAULT);
-  AMDGPUDriver::get_instance().event_record((record.start_event), 0);
+  void *active_stream = AMDGPUContext::get_instance().get_stream();
+  AMDGPUDriver::get_instance().event_record((record.start_event), active_stream);
   event_records_.push_back(record);
 
   if (!base_event_) {
@@ -163,7 +165,7 @@ KernelProfilerBase::TaskHandle EventToolkitAMDGPU::start_with_handle(const std::
     for (int i = 0; i < n_iters; i++) {
       void *e;
       AMDGPUDriver::get_instance().event_create(&e, HIP_EVENT_DEFAULT);
-      AMDGPUDriver::get_instance().event_record(e, 0);
+      AMDGPUDriver::get_instance().event_record(e, active_stream);
       AMDGPUDriver::get_instance().event_synchronize(e);
       auto final_t = Time::get_time();
       if (i == n_iters - 1) {

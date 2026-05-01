@@ -53,6 +53,9 @@ PER_CUDA_FUNCTION(kernel_get_occupancy, cuOccupancyMaxActiveBlocksPerMultiproces
 PER_CUDA_FUNCTION(kernel_set_attribute, cuFuncSetAttribute, void *, CUfunction_attribute_enum, int);
 
 
+// Context management
+PER_CUDA_FUNCTION(context_synchronize, cuCtxSynchronize);
+
 // Stream management
 PER_CUDA_FUNCTION(stream_synchronize, cuStreamSynchronize, void *);
 PER_CUDA_FUNCTION(stream_wait_event, cuStreamWaitEvent, void *, void *, uint32);
