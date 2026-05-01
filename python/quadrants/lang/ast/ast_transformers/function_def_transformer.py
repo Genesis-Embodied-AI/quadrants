@@ -466,11 +466,16 @@ class FunctionDefTransformer:
         if ASTResolver.resolve_to(func_node, stream_parallel, global_vars):
             return True
         resolved = ASTResolver.resolve_value(func_node, global_vars)
-        return (
-            resolved is not None
-            and getattr(resolved, "__name__", None) == "stream_parallel"
-            and getattr(resolved, "__module__", None) == "quadrants.lang.stream"
-        )
+        if resolved is not None:
+            return (
+                getattr(resolved, "__name__", None) == "stream_parallel"
+                and getattr(resolved, "__module__", "").startswith("quadrants")
+            )
+        if isinstance(func_node, ast.Attribute) and func_node.attr == "stream_parallel":
+            return True
+        if isinstance(func_node, ast.Name) and func_node.id == "stream_parallel":
+            return True
+        return False
 
     @staticmethod
     def _is_docstring(stmt: ast.stmt, index: int) -> bool:
