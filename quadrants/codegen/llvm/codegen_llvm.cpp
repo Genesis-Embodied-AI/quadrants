@@ -2568,15 +2568,26 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   if (is_float && ad_stack_static_bound_expr_.has_value()) {
     ad_stack_lazy_float_allocas_.insert(stmt);
     if (compile_config.debug) {
-      // Skip the `stack_init` call here: `get_ad_stack_base_llvm(stmt)` would emit `heap_float + row_id_var *
-      // stride_float + offset` while `row_id_var` is still its entry-block UINT32_MAX init at this IR position (the
-      // LCA-block atomic-rmw row claim runs strictly later, after the gate IfStmt is entered), and `stack_init`'s
-      // `*(u64*)stack = 0` would dereference that out-of-bounds address. Initialise the per-stack count alloca instead,
-      // mirroring the release path; the first `AdStackPushStmt` site under the LCA writes the `count` u64 header to its
-      // claimed row through the same `stack_push` call that dereferences the (now-valid) `row_id_var`.
+      // Skip the `stack_init` call here when the alloca lives ABOVE the LCA block: `get_ad_stack_base_llvm(stmt)` would
+      // emit `heap_float + row_id_var * stride_float + offset` while `row_id_var` is still its entry-block UINT32_MAX
+      // init at this IR position (the LCA-block atomic-rmw row claim runs strictly later, after the gate IfStmt is
+      // entered), and `stack_init`'s `*(u64*)stack = 0` would dereference that out-of-bounds address. The alloca's
+      // matching stack_init is then emitted by the `visit(Block *)` LCA-block handler once the row claim has run.
+      // When the alloca lives INSIDE the LCA block, by contrast, `visit(Block *)` has already emitted the row claim by
+      // the time we get here - so `row_id_var` is valid and we can emit stack_init directly. Without this branch the
+      // LCA-block handler would miss this alloca (its `for lazy_stmt : ad_stack_lazy_float_allocas_` iterates BEFORE
+      // walking the block's statements, so the in-block alloca's insert above has not happened yet) and the heap u64
+      // count header would never be explicitly zeroed - currently masked end-to-end by every backend's allocator
+      // returning zeroed pages, but the contract "every lazy float alloca's stack_init runs before its first push"
+      // should hold without relying on that. Initialise the per-stack count alloca either way, mirroring the release
+      // path; the first `AdStackPushStmt` site under the LCA writes the `count` u64 header to its claimed row through
+      // the same `stack_push` call that dereferences `row_id_var`.
       auto *i64ty_init = llvm::Type::getInt64Ty(*llvm_context);
       llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stmt);
       builder->CreateStore(llvm::ConstantInt::get(i64ty_init, 0), count_alloca);
+      if (stmt->parent != nullptr && stmt->parent == ad_stack_lca_block_float_ir_) {
+        call("stack_init", get_ad_stack_base_llvm(stmt));
+      }
       return;
     }
     if (is_compile_time_single_slot(stmt)) {
