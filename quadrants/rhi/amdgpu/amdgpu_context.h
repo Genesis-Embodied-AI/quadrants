@@ -131,7 +131,7 @@ class AMDGPUContext {
       return s;
     }
     void *s = nullptr;
-    AMDGPUDriver::get_instance().stream_create(&s, 0);
+    AMDGPUDriver::get_instance().stream_create(&s, 0x1 /*HIP_STREAM_NON_BLOCKING*/);
     return s;
   }
 

@@ -1541,6 +1541,8 @@ class ASTTransformer(Builder):
             raise QuadrantsSyntaxError("'with' in Quadrants kernels requires a call expression")
         if not ASTResolver.resolve_to(item.context_expr.func, stream_parallel, ctx.global_vars):
             raise QuadrantsSyntaxError("'with' in Quadrants kernels only supports qd.stream_parallel()")
+        if not ctx.is_kernel:
+            raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")
         ctx.ast_builder.begin_stream_parallel()
         build_stmts(ctx, node.body)
         ctx.ast_builder.end_stream_parallel()

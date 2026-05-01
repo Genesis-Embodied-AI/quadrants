@@ -144,7 +144,7 @@ class CUDAContext {
       return s;
     }
     void *s = nullptr;
-    CUDADriver::get_instance().stream_create(&s, 0);
+    CUDADriver::get_instance().stream_create(&s, 0x1 /*CU_STREAM_NON_BLOCKING*/);
     return s;
   }
 
