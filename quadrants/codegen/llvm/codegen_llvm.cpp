@@ -1881,6 +1881,11 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
         } else {
           ad_stack_per_thread_stride_int_ += align_up_8(alloca->size_in_bytes());
         }
+        // Mirror the compile-time sizing into the per-task metadata: the launcher uses `allocas[stack_id]` to publish
+        // stride / offset / max_size values into the per-launch runtime buffers regardless of whether the symbolic
+        // `size_expr` survived the offline-cache round-trip. When a cached kernel is loaded with its `size_exprs`
+        // dropped (the SerializedSizeExpr blob is keyed off the IR shape and is not part of the cache schema), the
+        // device-side sizer falls back to `max_size_compile_time` published here as the conservative ceiling.
         AdStackAllocaInfo info;
         info.offset = ad_stack_offsets_.back();
         info.max_size_compile_time = alloca->max_size;
@@ -2589,11 +2594,20 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   // base + stride pair here.
   auto *i8ty = llvm::Type::getInt8Ty(*llvm_context);
   auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+  // Thread slot: on CPU it's `RuntimeContext::cpu_thread_id` (range [0, num_cpu_threads)); on CUDA / AMDGPU it's
+  // `block_idx() * block_dim() + thread_idx()`. `linear_thread_idx(context)` is the runtime helper that returns the
+  // arch-appropriate value, matching how `rand_states` is indexed and how the SPIR-V heap-backing indexes with
+  // `gl_GlobalInvocationID`. Widen to u64 before the mul because a deep-AD kernel can easily cross `i32_max / stride`
+  // on GPU grids (~65K threads x ~32K stride overflows i32).
   llvm::Value *linear_tid_i32 = call("linear_thread_idx", get_context());
   llvm::Value *linear_tid_i64 = builder->CreateZExt(linear_tid_i32, i64ty);
   llvm::Value *stride = is_float ? ad_stack_stride_float_llvm_ : ad_stack_stride_int_llvm_;
   llvm::Value *heap_base = is_float ? ad_stack_heap_base_float_llvm_ : ad_stack_heap_base_int_llvm_;
   llvm::Value *stack_id_i64 = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(stmt->stack_id));
+  // `stride` and `offset` come from the per-launch metadata the host publishes via
+  // `runtime_get_adstack_metadata_field_ptrs` rather than from codegen-time immediates. The old immediate path baked
+  // the sum of compile-time `max_size` values into the kernel, which could not scale when a `SizeExpr` leaf resolved
+  // to a different value at launch.
   llvm::Value *offset_addr = builder->CreateGEP(i64ty, ad_stack_offsets_ptr_llvm_, stack_id_i64);
   llvm::Value *offset = builder->CreateLoad(i64ty, offset_addr);
   llvm::Value *slice_offset = builder->CreateMul(linear_tid_i64, stride);
