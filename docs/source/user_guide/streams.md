@@ -159,4 +159,5 @@ qd_stream.destroy()
 ## Limitations
 
 - **Not compatible with graphs.** Do not pass `qd_stream` to a kernel decorated with `graph=True`.
+- **Not compatible with autograd Tape.** Do not pass `qd_stream` to a kernel inside a `qd.ad.Tape` context. The backward replay does not preserve the stream, so gradient kernels would run on the default stream with no ordering guarantee.
 - **No automatic synchronization with explicit streams.** When using explicit streams, you are responsible for inserting events or `synchronize()` calls when one stream's output is another stream's input. `stream_parallel` handles this automatically.

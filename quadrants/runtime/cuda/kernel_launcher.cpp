@@ -25,15 +25,17 @@ std::size_t resolve_num_threads(const AdStackSizingInfo &info, LlvmRuntimeExecut
   std::int32_t begin = info.begin_const_value;
   std::int32_t end = info.end_const_value;
   if (info.begin_offset_bytes >= 0 || info.end_offset_bytes >= 0) {
+    auto *active_stream = CUDAContext::get_instance().get_stream();
     auto *temp_dev_ptr = reinterpret_cast<uint8_t *>(executor->get_runtime_temporaries_device_ptr());
     if (info.begin_offset_bytes >= 0) {
-      CUDADriver::get_instance().memcpy_device_to_host(&begin, temp_dev_ptr + info.begin_offset_bytes,
-                                                       sizeof(std::int32_t));
+      CUDADriver::get_instance().memcpy_device_to_host_async(&begin, temp_dev_ptr + info.begin_offset_bytes,
+                                                             sizeof(std::int32_t), active_stream);
     }
     if (info.end_offset_bytes >= 0) {
-      CUDADriver::get_instance().memcpy_device_to_host(&end, temp_dev_ptr + info.end_offset_bytes,
-                                                       sizeof(std::int32_t));
+      CUDADriver::get_instance().memcpy_device_to_host_async(&end, temp_dev_ptr + info.end_offset_bytes,
+                                                             sizeof(std::int32_t), active_stream);
     }
+    CUDADriver::get_instance().stream_synchronize(active_stream);
   }
   // Clamp the logical iteration count to the launched thread count: adstack slices are indexed by
   // `linear_thread_idx()` (`block_idx * block_dim + thread_idx`), so only `static_num_threads = grid_dim *
@@ -299,6 +301,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       executor->deallocate_memory_on_device(itr->second.second);
     }
+  } else if (ctx.result_buffer_size > 0) {
+    CUDADriver::get_instance().stream_synchronize(active_stream);
   }
 }
 

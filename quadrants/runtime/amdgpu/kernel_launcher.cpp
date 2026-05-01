@@ -27,15 +27,17 @@ std::size_t resolve_num_threads(const OffloadedTask &task, LlvmRuntimeExecutor *
   std::int32_t begin = info.begin_const_value;
   std::int32_t end = info.end_const_value;
   if (info.begin_offset_bytes >= 0 || info.end_offset_bytes >= 0) {
+    auto *active_stream = AMDGPUContext::get_instance().get_stream();
     auto *temp_dev_ptr = reinterpret_cast<uint8_t *>(executor->get_runtime_temporaries_device_ptr());
     if (info.begin_offset_bytes >= 0) {
-      AMDGPUDriver::get_instance().memcpy_device_to_host(&begin, temp_dev_ptr + info.begin_offset_bytes,
-                                                         sizeof(std::int32_t));
+      AMDGPUDriver::get_instance().memcpy_device_to_host_async(&begin, temp_dev_ptr + info.begin_offset_bytes,
+                                                               sizeof(std::int32_t), active_stream);
     }
     if (info.end_offset_bytes >= 0) {
-      AMDGPUDriver::get_instance().memcpy_device_to_host(&end, temp_dev_ptr + info.end_offset_bytes,
-                                                         sizeof(std::int32_t));
+      AMDGPUDriver::get_instance().memcpy_device_to_host_async(&end, temp_dev_ptr + info.end_offset_bytes,
+                                                               sizeof(std::int32_t), active_stream);
     }
+    AMDGPUDriver::get_instance().stream_synchronize(active_stream);
   }
   // Clamp the logical iteration count to the launched thread count: adstack slices are indexed by
   // `linear_thread_idx()`, so only `static_num_threads = grid_dim * block_dim` slices can be touched
@@ -246,11 +248,15 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     AMDGPUDriver::get_instance().stream_synchronize(active_stream);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       auto &idx = itr->first;
-      auto arg_id = idx.arg_id;
-      AMDGPUDriver::get_instance().memcpy_device_to_host(itr->second.first, (void *)device_ptrs[idx],
-                                                         ctx.array_runtime_sizes[arg_id]);
+      AMDGPUDriver::get_instance().memcpy_device_to_host_async(itr->second.first, (void *)device_ptrs[idx],
+                                                               ctx.array_runtime_sizes[idx.arg_id], active_stream);
+    }
+    AMDGPUDriver::get_instance().stream_synchronize(active_stream);
+    for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       executor->deallocate_memory_on_device(itr->second.second);
     }
+  } else if (ctx.result_buffer_size > 0) {
+    AMDGPUDriver::get_instance().stream_synchronize(active_stream);
   }
   AMDGPUDriver::get_instance().mem_free_async(context_pointer, active_stream);
 }
