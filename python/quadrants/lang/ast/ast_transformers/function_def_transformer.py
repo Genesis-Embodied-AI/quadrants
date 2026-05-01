@@ -467,10 +467,9 @@ class FunctionDefTransformer:
             return True
         resolved = ASTResolver.resolve_value(func_node, global_vars)
         if resolved is not None:
-            return (
-                getattr(resolved, "__name__", None) == "stream_parallel"
-                and getattr(resolved, "__module__", "").startswith("quadrants")
-            )
+            return getattr(resolved, "__name__", None) == "stream_parallel" and getattr(
+                resolved, "__module__", ""
+            ).startswith("quadrants")
         if isinstance(func_node, ast.Attribute) and func_node.attr == "stream_parallel":
             return True
         if isinstance(func_node, ast.Name) and func_node.id == "stream_parallel":
