@@ -465,11 +465,16 @@ class FunctionDefTransformer:
         return ASTResolver.resolve_to(item.context_expr.func, stream_parallel, global_vars)
 
     @staticmethod
+    def _is_docstring(stmt: ast.stmt, index: int) -> bool:
+        return index == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, (ast.Constant, ast.Str))
+
+    @staticmethod
     def _validate_stream_parallel_exclusivity(body: list[ast.stmt], global_vars: dict[str, Any]) -> None:
-        has_sp = any(FunctionDefTransformer._is_stream_parallel_with(s, global_vars) for s in body)
-        if not has_sp:
+        if not any(FunctionDefTransformer._is_stream_parallel_with(s, global_vars) for s in body):
             return
-        for stmt in body:
+        for i, stmt in enumerate(body):
+            if FunctionDefTransformer._is_docstring(stmt, i):
+                continue
             if not FunctionDefTransformer._is_stream_parallel_with(stmt, global_vars):
                 raise QuadrantsSyntaxError(
                     "When using qd.stream_parallel(), all top-level statements "
