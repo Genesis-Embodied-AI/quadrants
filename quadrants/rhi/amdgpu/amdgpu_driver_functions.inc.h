@@ -16,7 +16,7 @@ PER_AMDGPU_FUNCTION(context_set_current, hipCtxSetCurrent, void *);
 PER_AMDGPU_FUNCTION(context_get_current, hipCtxGetCurrent, void **);
 
 // Stream management
-PER_AMDGPU_FUNCTION(stream_create, hipStreamCreate, void **, uint32);
+PER_AMDGPU_FUNCTION(stream_create, hipStreamCreateWithFlags, void **, uint32);
 PER_AMDGPU_FUNCTION(stream_destroy, hipStreamDestroy, void *);
 
 // Memory management
@@ -29,7 +29,7 @@ PER_AMDGPU_FUNCTION(memcpy_host_to_device_async, hipMemcpyHtoDAsync, void *, voi
 PER_AMDGPU_FUNCTION(memcpy_device_to_host_async, hipMemcpyDtoHAsync, void *, void *, std::size_t, void *);
 PER_AMDGPU_FUNCTION(malloc, hipMalloc, void **, std::size_t);
 // hipMallocAsync/hipFreeAsync require ROCm >= 5.4; the AMDGPUDriver wrappers
-// transparently fall back to the synchronous variants when unsupported.
+// fall back to the synchronous variants on devices without memory-pool support.
 PER_AMDGPU_FUNCTION(malloc_async_impl, hipMallocAsync, void **, std::size_t, void *);
 PER_AMDGPU_FUNCTION(malloc_managed, hipMallocManaged, void **, std::size_t, uint32);
 PER_AMDGPU_FUNCTION(memset, hipMemset, void *, uint8, std::size_t);
