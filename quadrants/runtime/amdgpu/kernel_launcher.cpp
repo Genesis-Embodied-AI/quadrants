@@ -211,13 +211,15 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     AMDGPUDriver::get_instance().stream_synchronize(active_stream);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       auto &idx = itr->first;
-      auto arg_id = idx.arg_id;
-      AMDGPUDriver::get_instance().memcpy_device_to_host(itr->second.first, (void *)device_ptrs[idx],
-                                                         ctx.array_runtime_sizes[arg_id]);
+      AMDGPUDriver::get_instance().memcpy_device_to_host_async(itr->second.first, (void *)device_ptrs[idx],
+                                                               ctx.array_runtime_sizes[idx.arg_id], active_stream);
+    }
+    for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       executor->deallocate_memory_on_device(itr->second.second);
     }
   }
   AMDGPUDriver::get_instance().mem_free_async(context_pointer, active_stream);
+  AMDGPUDriver::get_instance().stream_synchronize(active_stream);
 }
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::CompiledKernelData &compiled) {
