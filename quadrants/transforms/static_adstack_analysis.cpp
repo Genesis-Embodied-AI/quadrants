@@ -274,20 +274,134 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       if (!desc_opt.has_value()) {
         return false;
       }
-      // KNOWN LIMITATION: the SNode arm trusts whatever index expression the codegen passed to `SNodeLookupStmt` and
-      // does not verify that it is a bijection with the kernel's loop iteration space. A pathological pattern like
-      // `for i in range(n): if field[i % K] > eps: <push f32>` (with `K < n`, `field` an SNode-backed `qd.field`)
-      // captures `iter_count = K` while the main pass walks `[0, n)` and claims a heap row for every iteration whose
-      // `i % K` cell passes - aliasing the n - K excess gated iterations onto the K-row heap and corrupting
-      // gradients (silent on LLVM, hard "reducer count diverged" overflow on SPIR-V). The ndarray arm above DOES
-      // validate that each axis is a `LoopIndexStmt` because at analysis time the ndarray's per-axis indices are
-      // still individual statements; the SNode case has no such per-axis information once `LinearizeStmt` is
-      // lowered into raw `add` / `mul` arithmetic, and any narrower walker we tried would also reject legitimate
-      // multi-axis kernels (e.g. `for I, J, K in grid: if grid[I, J, K].mass > eps: ...`, the canonical MPM-grid
-      // shape), where the lowered offset is `add(mul(I, sx), add(mul(J, sy), mul(K, sz)))` - the same affine shape
-      // a malicious manual linearisation can fake. Until the analysis runs at an earlier IR stage where
-      // `LinearizeStmt` is preserved (or a different bijection-witness is identified), this gap is documented
-      // rather than gated. Working assumption: production kernels don't use `field[i % K]` as a gate.
+      // Iteration-count check (statically-bounded loops only): reject when the task's loop iterates more times
+      // than the SNode has cells. The reducer walks `desc_opt->iter_count` cells and counts gate-passing ones,
+      // the main pass claims a heap row per gated iteration, so a mismatch under-allocates the heap and aliases
+      // excess iterations onto a shared row. Structural signature of `for i in range(n): if field[i % K] > eps:
+      // <push f32>` (K < n, field on a K-cell SNode): `loop_iter = n > K = snode_iter_count`. Legitimate
+      // multi-axis kernels of the shape `for ii, jj, kk, ib in qd.ndrange(...): if grid[f, ii, jj, kk, ib] >
+      // eps:` keep `loop_iter <= snode_iter_count` (slice axes like the kernel-arg `f` make the reducer
+      // over-count by the slice factor, which is benign over-allocation).
+      const bool static_bound = task_ir->const_begin && task_ir->const_end && task_ir->end_stmt == nullptr;
+      if (static_bound) {
+        const int64_t loop_iter = static_cast<int64_t>(task_ir->end_value) - static_cast<int64_t>(task_ir->begin_value);
+        if (loop_iter <= 0 || static_cast<uint64_t>(loop_iter) > static_cast<uint64_t>(desc_opt->iter_count)) {
+          return false;
+        }
+      }
+      // Per-axis classification on the gate's `LinearizeStmt::inputs`. After `lower_access` the input_index is
+      // either a `LinearizeStmt` (StructFor path preserves it) or an `add`/`mul` arithmetic tree (ndrange path
+      // expanded form); a recursive collector recovers per-axis components from either shape. For each axis,
+      // walk through `BinaryOpStmt` / `UnaryOpStmt` looking for a `LoopIndexStmt` to classify as iterating; pure
+      // `ConstStmt` / `ArgLoadStmt` axes are slices. Reject when:
+      //   * `n_iterating == 0`: every axis is loop-invariant (`field[42]`, `field[arg]`, `field[other_field[i]]`).
+      //   * `n_iterating == 1 && n_bare_iterating == 0`: single non-bare iterating axis (`field[i / 2]`,
+      //     `field[i % K]`, `field[i + 5]`). Conservatively rejects bijective shifts too; the worst-case heap
+      //     stays correct, just larger.
+      // Multi-axis cases with `n_iterating >= 2` are accepted: the canonical `qd.ndrange(*shape)` decomposes a
+      // single linear loop index into multiple axes via floordiv / mod chains whose joint mapping is bijective.
+      auto *lookup = getch->input_ptr ? getch->input_ptr->cast<SNodeLookupStmt>() : nullptr;
+      if (lookup == nullptr || lookup->input_index == nullptr) {
+        return false;
+      }
+      std::vector<Stmt *> axes;
+      if (auto *lin = lookup->input_index->cast<LinearizeStmt>()) {
+        axes.assign(lin->inputs.begin(), lin->inputs.end());
+      } else {
+        std::function<void(Stmt *)> collect_axes = [&](Stmt *s) {
+          if (auto *bin = s->cast<BinaryOpStmt>()) {
+            if (bin->op_type == BinaryOpType::add) {
+              collect_axes(bin->lhs);
+              collect_axes(bin->rhs);
+              return;
+            }
+            if (bin->op_type == BinaryOpType::mul) {
+              if (bin->rhs && bin->rhs->is<ConstStmt>()) {
+                axes.push_back(bin->lhs);
+                return;
+              }
+              if (bin->lhs && bin->lhs->is<ConstStmt>()) {
+                axes.push_back(bin->rhs);
+                return;
+              }
+            }
+          }
+          axes.push_back(s);
+        };
+        collect_axes(lookup->input_index);
+      }
+      std::function<bool(Stmt *, int)> contains_loop_index = [&](Stmt *s, int depth) -> bool {
+        if (s == nullptr || depth > 8) {
+          return false;
+        }
+        if (s->is<LoopIndexStmt>()) {
+          return true;
+        }
+        if (auto *bin = s->cast<BinaryOpStmt>()) {
+          return contains_loop_index(bin->lhs, depth + 1) || contains_loop_index(bin->rhs, depth + 1);
+        }
+        if (auto *un = s->cast<UnaryOpStmt>()) {
+          return contains_loop_index(un->operand, depth + 1);
+        }
+        // The reverse task replays multi-axis loop indices by spilling them onto per-axis adstacks during the forward
+        // pass and loading via `AdStackLoadTopStmt` in the reverse pass. The push (in the forward `OffloadedStmt`) and
+        // the load (in the reverse `OffloadedStmt`) sit in different tasks, so the per-task `per_stack_pushed_values`
+        // map cannot trace from this load back to the `LoopIndexStmt` source. Treat the load as iterating directly:
+        // autodiff only spills runtime-varying values onto adstacks, and per-axis adstacks - the only ones reaching a
+        // `LinearizeStmt::input` - carry replayed loop indices by construction.
+        if (s->is<AdStackLoadTopStmt>()) {
+          return true;
+        }
+        return false;
+      };
+      // For each iterating axis, walk back to its root source: the underlying `LoopIndexStmt` (StructFor case)
+      // or the `AdStackAllocaStmt` whose `AdStackLoadTopStmt` replays it (autodiff reverse task). Multi-axis
+      // gates whose iterating axes all derive from the SAME source (`field[i % 2, i % 2]`) are non-injective
+      // even though they have multiple iterating axes; requiring `distinct_iterating_sources == n_iterating`
+      // rejects those while admitting the canonical sparse-grid shape where each ndrange axis is replayed via
+      // a distinct per-axis adstack. `BinaryOpStmt` / `UnaryOpStmt` operands are walked recursively to find the
+      // leaf source.
+      std::function<Stmt *(Stmt *, int)> root_source = [&](Stmt *s, int depth) -> Stmt * {
+        if (s == nullptr || depth > 8)
+          return nullptr;
+        if (s->is<LoopIndexStmt>())
+          return s;
+        if (auto *load_top = s->cast<AdStackLoadTopStmt>()) {
+          return load_top->stack;
+        }
+        if (auto *bin = s->cast<BinaryOpStmt>()) {
+          if (Stmt *r = root_source(bin->lhs, depth + 1))
+            return r;
+          return root_source(bin->rhs, depth + 1);
+        }
+        if (auto *un = s->cast<UnaryOpStmt>()) {
+          return root_source(un->operand, depth + 1);
+        }
+        return nullptr;
+      };
+      int n_iterating = 0;
+      int n_bare_iterating = 0;
+      std::unordered_set<Stmt *> distinct_iterating_sources;
+      for (Stmt *axis : axes) {
+        if (contains_loop_index(axis, 0)) {
+          n_iterating++;
+          if (axis->is<LoopIndexStmt>()) {
+            n_bare_iterating++;
+          }
+          if (Stmt *src = root_source(axis, 0)) {
+            distinct_iterating_sources.insert(src);
+          }
+        }
+      }
+      if (n_iterating == 0) {
+        return false;
+      }
+      if (n_iterating == 1 && n_bare_iterating == 0) {
+        return false;
+      }
+      if (static_cast<int>(distinct_iterating_sources.size()) < n_iterating) {
+        return false;
+      }
       out.field_source_kind = StaticAdStackBoundExpr::FieldSourceKind::SNode;
       out.snode_root_id = desc_opt->root_id;
       out.snode_byte_base_offset = desc_opt->byte_base_offset;
