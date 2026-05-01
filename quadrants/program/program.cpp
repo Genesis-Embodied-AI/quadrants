@@ -510,7 +510,7 @@ uint64 Program::stream_create() {
 #ifdef QD_WITH_AMDGPU
   if (compile_config().arch == Arch::amdgpu) {
     void *stream = nullptr;
-    AMDGPUDriver::get_instance().stream_create(&stream, 0 /*flags*/);
+    AMDGPUDriver::get_instance().stream_create(&stream, 0x1 /*HIP_STREAM_NON_BLOCKING*/);
     return reinterpret_cast<uint64>(stream);
   }
 #endif
