@@ -143,6 +143,17 @@ def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
         object.__setattr__(v, "_qd_dc_unwrapped", unwrapped)
     except AttributeError:
         pass
+    # Cache whether ALL unwrapped values are Fields (zero launch-context slots).  This is a property of the instance
+    # alone — independent of which kernel or field-subset is active — so a simple boolean suffices and survives
+    # qd.reset() harmlessly (the boolean remains valid as long as the instance is alive).
+    if getattr(v, "_qd_all_field", None) is None:
+        from quadrants.lang.field import Field as _Field  # pylint: disable=C0415
+
+        _all_field = all(isinstance(fv, _Field) for fv in unwrapped.values())
+        try:
+            object.__setattr__(v, "_qd_all_field", _all_field)
+        except (AttributeError, TypeError):
+            pass
     return unwrapped
 
 
