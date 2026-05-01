@@ -141,9 +141,9 @@ struct StaticAdStackAnalysisResult {
   uint32_t per_thread_stride_float{0};
   uint32_t per_thread_stride_int{0};
   // Per-thread float-heap byte stride, summed across every f32 / f64 alloca in the task as
-  // `2 * sizeof(alloca->ret_type) * max_size` (primal + adjoint slots). Tracks the actual byte cost so
-  // the sparse-heap threshold check stays accurate on f64 allocas (where `entry_size_bytes = 8` doubles the
-  // per-row footprint vs. the entries-unit `per_thread_stride_float * sizeof(float)` estimate).
+  // `2 * sizeof(alloca->ret_type) * max_size` (primal + adjoint slots). Tracks the actual byte cost so the sparse-heap
+  // threshold check stays accurate on f64 allocas (where `entry_size_bytes = 8` doubles the per-row footprint vs. the
+  // entries-unit `per_thread_stride_float * sizeof(float)` estimate).
   uint64_t per_thread_stride_float_bytes{0};
   // Total adstack count, useful for sizing per-task metadata buffers downstream.
   int num_ad_stacks{0};

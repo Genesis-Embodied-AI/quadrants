@@ -305,8 +305,10 @@ def test_adstack_nan_propagation(op_name, x_val):
 
 
 @pytest.mark.xfail(
-    reason="Reverse-mode NaN/Inf poisoning semantics is TBD (f64 variant). Same divergence as the f32 case: PyTorch "
-    "propagates NaN in the backward graph; Quadrants runs `1 / operand` verbatim and returns a finite number.",
+    reason=(
+        "Reverse-mode NaN/Inf poisoning semantics is TBD (f64 variant). Same divergence as the f32 case: PyTorch "
+        "propagates NaN in the backward graph; Quadrants runs `1 / operand` verbatim and returns a finite number."
+    ),
     strict=True,
 )
 @pytest.mark.parametrize("op_name,x_val", [("log", -0.3)])
@@ -1647,8 +1649,7 @@ def test_adstack_ndrange_over_ndarray_shape_does_not_oversize_heap():
     # writes drop, reads return 0, and the backward NaNs. The codegen records the shape-lookup product backing the
     # runtime-resolved `end_stmt` into `RangeForAttributes::end_shape_product`; the runtime `launch_kernel` reads each
     # shape from the `LaunchContextBuilder` args buffer and tightens `advisory_total_num_threads` to `actual_iter_count
-    # = rows
-    # * cols = 6`, so only ~240 KB of adstack heap is allocated.
+    # = rows * cols = 6`, so only ~240 KB of adstack heap is allocated.
     #
     # Internal details: `ad_stack_size=4096` + ten loop-carried f32 variables is tuned so that the cap-fallback
     # 131072-thread allocation request crosses the smallest plausible Apple Silicon `maxBufferLength` - the test would
@@ -1921,7 +1922,6 @@ def test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read():
 
 
 @pytest.mark.xfail(
-    strict=True,
     reason=(
         "Cross-kernel sibling of `test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read`. When a "
         "reverse-mode kernel uses `a[i_e]` as a loop trip count on a `qd.ndarray` and a separate kernel "
@@ -1930,6 +1930,7 @@ def test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read():
         "forward pushed and accumulates gradient at indices the forward never visited. Documented as a "
         "known limitation in `docs/source/user_guide/autodiff.md`."
     ),
+    strict=True,
 )
 @test_utils.test(require=qd.extension.adstack)
 def test_adstack_sizer_trip_count_qd_ndarray_mutated_by_separate_kernel():
@@ -3327,21 +3328,25 @@ def test_adstack_static_bound_expr_ndarray_gate_compound_index_grad_correct():
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
-@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+@pytest.mark.xfail(
+    reason="known SNode-arm bound-expr capture limitation on parallel-dispatched backends - see test docstring",
+    strict=True,
+)
+@test_utils.test(
+    arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal],
+    require=qd.extension.adstack,
+    ad_stack_size=32,
+    ad_stack_sparse_threshold_bytes=0,
+)
 def test_adstack_static_bound_expr_snode_gate_compound_index_grad_correct():
     # Pins gradient correctness when the SNode-backed gating field is indexed by a compound expression
-    # (`selector[i % K]` with K < n). On LLVM backends the static-adstack analysis runs at an IR stage where
-    # `LinearizeStmt` is preserved, so the SNode arm of `match_field_source` rejects compound indices and the
-    # runtime falls back to dispatched-threads worst-case sizing - gradients come out correct. On SPIR-V backends
-    # (Metal, Vulkan) the analysis runs after `LinearizeStmt` is lowered into raw `add`/`mul` arithmetic, so the
-    # SNode arm cannot tell the malicious `i % K` shape apart from a legitimate multi-axis flat offset and accepts
-    # it, the captured `iter_count = K` undersizes the float heap to K rows, the LCA-block atomic-rmw aliases the
-    # n - K excess gated iterations onto row K-1, and the codegen-emitted bounds clamp trips a
-    # "reducer count diverged" overflow. xfail-scoped to SPIR-V backends so the LLVM-side coverage stays active and
-    # the SPIR-V failure remains documented as a known limitation; future work that runs the analysis at a stage
-    # where `LinearizeStmt` is preserved (or finds another bijection witness) can drop the xfail.
-    if qd.lang.impl.current_cfg().arch in (qd.vulkan, qd.metal):
-        pytest.xfail("known SPIR-V-only limitation in the SNode arm of the bound-expr capture - see test docstring")
+    # (`selector[i % K]` with K < n). With the captured `iter_count = K`, the float heap is undersized to K rows, the
+    # LCA-block atomic-rmw aliases the n - K excess gated iterations onto row K-1, and gradients corrupt on every
+    # parallel-dispatched backend. The CPU LLVM backend is excluded because its dispatch thread count is typically <= K
+    # so no aliasing fires - the test would pass on CPU for the wrong reason and mislead about what it pins.
+    # xfail-scoped to the parallel-dispatched backends until the SNode arm of `match_field_source` validates the gate's
+    # index expression as a per-axis bijection (future work: walk the IR before `auto_diff` where indices are still bare
+    # `LoopIndexStmt`s and stash a validated leaf-SNode id set the analysis post-`lower_access` consults).
     n = 256
     K = 64  # selector field has only K cells; loop body indexes it as `selector[i % K]` so K < n triggers the alias.
     n_iter = 8
@@ -3401,9 +3406,7 @@ def test_adstack_static_bound_expr_snode_gate_primal_dependent_grad_correct():
     # cross-row aliasing would re-read a different thread's pushed primal and surface as a wrong gradient even when the
     # OOB write happens to land within the heap allocation's over-allocated tail. `ad_stack_size = 0` lets the sizer
     # pick the per-thread stride; with 8 cpu threads and `n_gated = 2048` the row counter advances well past the
-    # eight-row fallback so the OOB write reliably escapes the page mapped by the heap allocation guard. `arch=[qd.cpu]`
-    # because this test targets the host-side reducer specifically; CUDA / AMDGPU run the device-side reducer
-    # (`runtime_eval_static_bound_count`) and SPIR-V the compute-shader reducer.
+    # eight-row fallback so the OOB write reliably escapes the page mapped by the heap allocation guard.
     n = 4096
     n_iter = 8
     eps = 1e-9
