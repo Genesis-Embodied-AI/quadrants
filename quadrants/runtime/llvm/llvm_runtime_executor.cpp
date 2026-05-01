@@ -1,6 +1,8 @@
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <vector>
@@ -1045,14 +1047,30 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
   // at the offload root unconditionally (loop-counter recovery, branch flags), so every dispatched thread reaches
   // them and the eager `linear_tid * stride_int + int_offset` layout demands a row per thread.
   if (stride_int_bytes > 0) {
-    ensure_adstack_heap_int(stride_int_bytes * num_threads);
+    const std::size_t int_bytes = stride_int_bytes * num_threads;
+    if (std::getenv("QD_DEBUG_ADSTACK")) {
+      std::fprintf(stderr,
+                   "[adstack_heap] arch=llvm kind=I src=worst_case_num_threads num_threads=%zu stride=%zu "
+                   "required_bytes=%zu (%.2f MB)\n",
+                   num_threads, stride_int_bytes, int_bytes, double(int_bytes) / (1024.0 * 1024.0));
+      std::fflush(stderr);
+    }
+    ensure_adstack_heap_int(int_bytes);
   }
   // Float heap: deferred to `ensure_per_task_float_heap_post_reducer` for tasks with a captured `bound_expr`
   // (the reducer-published count drives the sizing); for non-bound_expr tasks size at `num_threads *
   // stride_float_bytes` worst case here. The eager float path uses `linear_tid` as the row index so every
   // dispatched thread needs backing storage; only the bound_expr path can shrink to `count * stride_float_bytes`.
   if (stride_float_bytes > 0 && !ad_stack.bound_expr.has_value()) {
-    ensure_adstack_heap_float(stride_float_bytes * num_threads);
+    const std::size_t float_bytes = stride_float_bytes * num_threads;
+    if (std::getenv("QD_DEBUG_ADSTACK")) {
+      std::fprintf(stderr,
+                   "[adstack_heap] arch=llvm kind=F src=worst_case_num_threads_no_bound_expr num_threads=%zu "
+                   "stride=%zu required_bytes=%zu (%.2f MB)\n",
+                   num_threads, stride_float_bytes, float_bytes, double(float_bytes) / (1024.0 * 1024.0));
+      std::fflush(stderr);
+    }
+    ensure_adstack_heap_float(float_bytes);
   }
   return needed_bytes;
 }
@@ -1472,6 +1490,18 @@ void LlvmRuntimeExecutor::ensure_per_task_float_heap_post_reducer(std::size_t ta
     }
   }
   const std::size_t needed_bytes = effective_rows * static_cast<std::size_t>(stride_float_bytes_u64);
+  // `QD_DEBUG_ADSTACK=1` opt-in diagnostic. Persistent so memory regressions can be debugged without re-instrumenting.
+  if (std::getenv("QD_DEBUG_ADSTACK")) {
+    const char *src = (count == std::numeric_limits<uint32_t>::max())
+                          ? "worst_case_num_threads"
+                          : (count == 0 ? "reducer_zero_floored" : "reducer_count");
+    std::fprintf(stderr,
+                 "[adstack_heap] arch=llvm task_idx=%zu kind=F src=%s effective_rows=%zu stride=%llu "
+                 "required_bytes=%zu (%.2f MB)\n",
+                 task_index, src, effective_rows, static_cast<unsigned long long>(stride_float_bytes_u64), needed_bytes,
+                 double(needed_bytes) / (1024.0 * 1024.0));
+    std::fflush(stderr);
+  }
   ensure_adstack_heap_float(needed_bytes);
 }
 
