@@ -263,12 +263,11 @@ def test_stream_with_graph_raises():
     N = 64
     x = qd.field(qd.f32, shape=(N,))
 
-    @qd.kernel
+    @qd.kernel(graph=True)
     def fill():
         for i in range(N):
             x[i] = 1.0
 
-    fill.use_graph = True
     s = qd.create_stream()
     with pytest.raises(RuntimeError, match="not compatible with graph=True"):
         fill(qd_stream=s)
