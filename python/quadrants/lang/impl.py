@@ -18,6 +18,7 @@ from quadrants._snode import fields_builder
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang._ndrange import GroupedNDRange, _Ndrange
 from quadrants.lang.any_array import AnyArray
+from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import (
     QuadrantsCompilationError,
     QuadrantsRuntimeError,
@@ -97,6 +98,8 @@ def expr_init(rhs):
     if isinstance(rhs, Matrix):
         return make_matrix(rhs.to_list())
     if isinstance(rhs, SharedArray):
+        return rhs
+    if isinstance(rhs, BufferView):
         return rhs
     if isinstance(rhs, Struct):
         return Struct(rhs.to_dict(include_methods=True, include_ndim=True))
@@ -225,6 +228,7 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
             Expr,
             Field,
             AnyArray,
+            BufferView,
             SparseMatrixProxy,
             MeshElementFieldProxy,
             MeshRelationAccessProxy,
@@ -262,6 +266,15 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
 
     indices_expr_group = None
     if has_slice:
+        if isinstance(value, BufferView):
+            if len(indices) != 1 or not isinstance(indices[0], slice):
+                raise QuadrantsSyntaxError("BufferView only supports 1D slicing in kernels")
+            s = indices[0]
+            if s.step is not None:
+                raise QuadrantsSyntaxError("BufferView slice does not support an explicit step in kernels")
+            start = s.start if s.start is not None else Expr(0)
+            stop = s.stop if s.stop is not None else Expr(value.size)
+            return value.subview(start, Expr(stop) - Expr(start))
         if isinstance(value, (Field, AnyArray, SharedArray)):
             matched, proxy = try_tile_slice(value, indices)
             if matched:
@@ -272,6 +285,8 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
         indices_expr_group = make_expr_group(*indices)
 
     if isinstance(value, SharedArray):
+        return value.subscript(*indices)
+    if isinstance(value, BufferView):
         return value.subscript(*indices)
     if isinstance(value, MeshElementFieldProxy):
         return value.subscript(*indices)  # type: ignore

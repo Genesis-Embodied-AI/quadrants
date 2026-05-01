@@ -87,8 +87,12 @@ class Ndarray:
                 if prog is not None:
                     prog.delete_ndarray(arr)
 
-    def to_dlpack(self):
+    def to_dlpack(self, versioned=False):
         """Export this ndarray as a DLPack capsule.
+
+        Args:
+            versioned: If True, emit a DLPack v1 capsule (writable numpy arrays). If False (default), emit v0
+                (required by ``torch.utils.dlpack.from_dlpack``). See :meth:`ScalarField.to_dlpack`.
 
         The returned capsule carries the *canonical* shape and a permuted strides array on layout-tagged ndarrays, so
         consumers (`torch.utils.dlpack.from_dlpack`, etc.) see a transposed view of the physical buffer with no data
@@ -102,8 +106,8 @@ class Ndarray:
             impl.get_runtime().sync()
         layout = getattr(self, "_qd_layout", None)
         if _is_identity_layout(layout):
-            return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr)
-        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, list(layout))
+            return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, versioned=versioned)
+        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, list(layout), versioned=versioned)
 
     def _reset(self):
         """
@@ -285,6 +289,9 @@ class Ndarray:
         layout_is_aos = 1
         ndarray_matrix_to_ext_arr(self, out, layout_is_aos, as_vector)
         impl.get_runtime().sync()
+        from quadrants.lang.field import _mps_sync_if_metal  # pylint: disable=C0415
+
+        _mps_sync_if_metal()
         return out
 
     @python_scope
@@ -388,6 +395,22 @@ class Ndarray:
         """
         raise NotImplementedError()
 
+    def _slice_to_buffer_view(self, key: slice):
+        """Convert a slice key into a BufferView over this 1D ndarray.
+
+        Called from ``__getitem__`` when the key is a ``slice``.
+        Supports start/stop with negative indices; step must be 1.
+        """
+        from quadrants.lang.buffer_view import BufferView  # pylint: disable=C0415  # noqa: I001
+
+        if len(self.shape) != 1:
+            raise TypeError(f"ndarray slice to BufferView requires a 1D array, got shape {self.shape}")
+        start, stop, step = key.indices(self.shape[0])
+        if step != 1:
+            raise ValueError(f"BufferView slice requires step=1, got step={step}")
+        size = max(stop - start, 0)
+        return BufferView(self, start, size)
+
     @python_scope
     def _pad_key(self, key):
         if key is None:
@@ -443,16 +466,30 @@ class ScalarNdarray(Ndarray):
 
     @python_scope
     def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self._slice_to_buffer_view(key)
         self._initialize_host_accessor()
         return self.host_accessor.getter(*self._pad_key(key))
 
     @python_scope
-    def to_numpy(self, dtype=None):
+    def to_numpy(self, dtype=None, *, copy=True):
         """Return a canonical-view NumPy array.
 
-        ``dtype``: optional numpy dtype to cast the result to (matches :meth:`Field.to_numpy`'s signature). ``None``
-        keeps the native ndarray dtype.
+        Args:
+            dtype: Optional numpy dtype to cast the result to. ``None`` keeps the native ndarray dtype.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
+        if copy is False:
+            from quadrants.lang.field import (  # pylint: disable=C0415
+                _try_zerocopy_numpy,
+            )
+
+            arr = _try_zerocopy_numpy(self, copy=False, is_ndarray=True)
+            if arr is not None:
+                if dtype is not None and arr.dtype != dtype:
+                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                return arr
+
         arr = self._ndarray_to_numpy()
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
@@ -463,13 +500,23 @@ class ScalarNdarray(Ndarray):
         self._ndarray_from_numpy(arr)
 
     @python_scope
-    def to_torch(self, device=None):
+    def to_torch(self, device=None, *, copy=True):
         """Return a canonical-view torch tensor.
 
         Mirrors :meth:`Field.to_torch`. The destination is a ``torch.zeros(self.shape, ...)`` allocation that the
         bridge kernel writes into via the canonical iteration path, so layout-tagged ndarrays produce a canonical
         view just like ``to_numpy()`` does.
+
+        Args:
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
         """
+        if copy is False:
+            from quadrants.lang.field import (  # pylint: disable=C0415
+                _try_zerocopy_torch,
+            )
+
+            return _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
+
         import torch  # pylint: disable=C0415
 
         from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
@@ -480,6 +527,9 @@ class ScalarNdarray(Ndarray):
 
         ndarray_to_ext_arr(self, out)
         impl.get_runtime().sync()
+        from quadrants.lang.field import _mps_sync_if_metal  # pylint: disable=C0415
+
+        _mps_sync_if_metal()
         return out
 
     @python_scope

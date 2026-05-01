@@ -325,3 +325,43 @@ def test_frozen_dc_kernel_correct_after_reset():
     a2 = qd.ndarray(qd.i32, shape=(4,))
     fill(State(a=a2), 20)
     np.testing.assert_array_equal(a2.to_numpy(), [20, 20, 20, 20])
+
+
+# ---------------------------------------------------------------------------
+# Regression: qd.grouped() on flattened struct ndarray field after field→ndarray switch.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_grouped_on_struct_ndarray_after_field_to_ndarray_switch():
+    """Frozen-dataclass struct fields resolved via the flattened-name path (build_Name) must be promoted to AnyArray
+    just like the build_Attribute path does.  Without the fix in build_Name, qd.grouped() on a struct ndarray field
+    raises TypeError after a field→ndarray backend switch because the raw ScalarNdarray is not recognized by
+    begin_frontend_struct_for.
+    """
+
+    @dataclasses.dataclass(frozen=True)
+    class Info:
+        weights: qd.Tensor
+
+    @qd.kernel
+    def sum_via_grouped(info: qd.template(), out: qd.types.ndarray()):
+        for I in qd.grouped(info.weights):
+            out[0] += info.weights[I]
+
+    # Cycle 1: field backend
+    w1 = qd.field(qd.f32, shape=(4,))
+    w1.fill(1.0)
+    o1 = qd.ndarray(qd.f32, shape=(1,))
+    sum_via_grouped(Info(weights=qd.Tensor(w1)), o1)
+    np.testing.assert_allclose(o1.to_numpy(), [4.0])
+
+    qd.reset()
+    qd.init(arch=qd.cpu)
+
+    # Cycle 2: ndarray backend — this is the case that failed before the fix.
+    w2 = qd.ndarray(qd.f32, shape=(4,))
+    w2.fill(2.0)
+    o2 = qd.ndarray(qd.f32, shape=(1,))
+    sum_via_grouped(Info(weights=qd.Tensor(w2)), o2)
+    np.testing.assert_allclose(o2.to_numpy(), [8.0])

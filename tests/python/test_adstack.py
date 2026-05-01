@@ -412,24 +412,48 @@ def test_adstack_basic_gradient_f64(n_iter):
 
 
 @pytest.mark.parametrize("n_iter", [1, 3, 10])
+@pytest.mark.parametrize("wrap_inner_in_func", [False, True])
 @test_utils.test(ad_stack_experimental_enabled=False)
-def test_adstack_basic_gradient_negative(n_iter):
+def test_adstack_basic_gradient_negative(wrap_inner_in_func, n_iter):
     # Negative counterpart of `test_adstack_basic_gradient`: with the adstack disabled the backward compiler
     # cannot reverse a dynamic `range(n_iter)`, so `compute.grad()` raises `QuadrantsCompilationError("Cannot use
     # non static range in Backwards mode")` deterministically for every `n_iter`. Inlined rather than reusing
     # `_run_basic_gradient` because the shall-not-pass path never reaches the gradient assertion, so a shared
     # helper would carry a dead `rel_tol` argument down this branch.
+    #
+    # Internal details: the `wrap_inner_in_func` axis covers both shapes that should produce the same diagnostic.
+    # When False, the dynamic-range loop sits directly inside the outer struct-for, so `ctx.loop_depth > 0` at the
+    # range-for visit and the AST transformer raises. When True, the same dynamic-range loop body lives inside a
+    # nested `@qd.func` and is invoked from the outer struct-for; the func body must inherit the caller's
+    # `loop_depth` so the nested-range check still fires - if the func compile path resets `loop_depth` back to 0
+    # the kernel compiles silently and the backward pass produces a wrong gradient with no diagnostic.
     n = 4
     x = qd.field(qd.f32, shape=n, needs_grad=True)
     y = qd.field(qd.f32, shape=(), needs_grad=True)
 
-    @qd.kernel
-    def compute():
-        for i in x:
-            v = x[i]
-            for _ in range(n_iter):
-                v = v * 0.95 + 0.01
-            y[None] += v
+    @qd.func
+    def inner(v_in: qd.f32) -> qd.f32:
+        v = v_in
+        for _ in range(n_iter):
+            v = v * 0.95 + 0.01
+        return v
+
+    if wrap_inner_in_func:
+
+        @qd.kernel
+        def compute():
+            for i in x:
+                y[None] += inner(x[i])
+
+    else:
+
+        @qd.kernel
+        def compute():
+            for i in x:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 0.95 + 0.01
+                y[None] += v
 
     x_vals = [0.1, 0.3, 0.5, 0.8]
     for i, v in enumerate(x_vals):
@@ -439,6 +463,277 @@ def test_adstack_basic_gradient_negative(n_iter):
 
     with pytest.raises(qd.QuadrantsCompilationError, match=r"non static range"):
         compute.grad()
+
+
+_REVERSE_GLOBAL_CROSS_ITER_PATTERNS = [
+    # `(has_outer_for, in_func, load_kind)` toggles for `_run_reverse_global_cross_iter`. `load_kind` selects which
+    # `out[...]` index expression the inner range loads from: `cross_iter` is the canonical `out[i-1]` shape with a
+    # genuine cross-iteration RAW; `constant_outside_iter_range` reads from a slot of `out` that the loop never
+    # writes to, so the load and store live on disjoint iteration slices and the diagnostic must not fire.
+    pytest.param(False, False, "cross_iter", id="kernel_top_inline_cross_iter"),
+    pytest.param(False, True, "cross_iter", id="kernel_top_in_func_cross_iter"),
+    pytest.param(True, False, "cross_iter", id="outer_for_inline_cross_iter"),
+    pytest.param(True, True, "cross_iter", id="outer_for_in_func_cross_iter"),
+    pytest.param(False, False, "constant_outside_iter_range", id="kernel_top_inline_constant_outside"),
+    pytest.param(False, True, "constant_outside_iter_range", id="kernel_top_in_func_constant_outside"),
+    pytest.param(True, False, "constant_outside_iter_range", id="outer_for_inline_constant_outside"),
+    pytest.param(True, True, "constant_outside_iter_range", id="outer_for_in_func_constant_outside"),
+]
+
+
+def _run_reverse_global_cross_iter(has_outer_for, in_func, load_kind, expect_raise):
+    # Single factory covering the reverse-mode shapes that read and write the same `needs_grad` global field
+    # `out` from inside an inner non-static range, parametrised on three orthogonal axes:
+    #   - `has_outer_for`: when True the inner range is nested under a `range(1)`, so it is AST-nested at
+    #     `loop_depth == 1`; when False the inner range becomes the offload-level loop after inlining. The
+    #     toggle is materialised via the `range(1) if qd.static(...) else qd.static(range(1))` inline-if pattern
+    #     (already used by `_run_unary_loop_carried` in this file) so a single kernel template covers both.
+    #   - `in_func`: when True the inner range body lives inside a `@qd.func` invoked from the kernel; when
+    #     False the same body is written directly inside the kernel.
+    #   - `load_kind`: `cross_iter` puts the canonical `out[i-1]` cross-iteration RAW shape in the body;
+    #     `constant_outside_iter_range` replaces the load with `out[n]` (a slot strictly outside the iteration
+    #     range `[0, n)`), so the load and store live on disjoint iteration slices and there is no real
+    #     cross-iter dependency. Pins the offload-level guard's `references_loop_index` gate.
+    n = 4
+    out_shape = 2 * n if load_kind == "constant_outside_iter_range" else n
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    out = qd.field(qd.f32, shape=out_shape, needs_grad=True)
+
+    @qd.func
+    def func_body_cross_iter():
+        for i in range(n):
+            if i == 0:
+                out[i] = x[None]
+            else:
+                out[i] = out[i - 1] + x[None]
+
+    @qd.func
+    def func_body_constant_outside():
+        for i in range(n):
+            out[i] = out[n] + x[None]
+
+    @qd.kernel
+    def compute():
+        for _ in range(1) if qd.static(has_outer_for) else qd.static(range(1)):
+            if qd.static(in_func):
+                if qd.static(load_kind == "cross_iter"):
+                    func_body_cross_iter()
+                else:
+                    func_body_constant_outside()
+            else:
+                if qd.static(load_kind == "cross_iter"):
+                    for i in range(n):
+                        if i == 0:
+                            out[i] = x[None]
+                        else:
+                            out[i] = out[i - 1] + x[None]
+                else:
+                    for i in range(n):
+                        out[i] = out[n] + x[None]
+
+    x[None] = 1.0
+    if load_kind == "constant_outside_iter_range":
+        out[n] = 0.5
+    compute()
+    for i in range(out_shape):
+        out.grad[i] = 0.0
+    if load_kind == "cross_iter":
+        out.grad[n - 1] = 1.0
+        expected_x_grad = float(n)
+    else:
+        for i in range(n):
+            out.grad[i] = 1.0
+        expected_x_grad = float(n)
+    x.grad[None] = 0.0
+    if expect_raise:
+        with pytest.raises(
+            (qd.QuadrantsCompilationError, RuntimeError),
+            match=r"non static range|Cross-iteration read-after-write",
+        ):
+            compute.grad()
+    else:
+        compute.grad()
+        assert float(x.grad[None]) == pytest.approx(expected_x_grad, rel=1e-6)
+
+
+@pytest.mark.parametrize("has_outer_for, in_func, load_kind", _REVERSE_GLOBAL_CROSS_ITER_PATTERNS)
+@test_utils.test(require=qd.extension.adstack)
+def test_reverse_global_cross_iter_with_adstack(has_outer_for, in_func, load_kind):
+    # Reverse-mode AD on a kernel that reads and writes the same `needs_grad` global field from inside a non-static
+    # range must either produce the analytical gradient or raise a clear diagnostic. With adstack on, only the
+    # kernel-top shapes with a genuine cross-iteration RAW raise; the outer-for shapes and the
+    # constant-outside-iter-range shapes produce the analytical gradient.
+    #
+    # Internal details: `AdStackAllocaJudger` only promotes cross-iter dependencies on local `AllocaStmt`s, never
+    # through global field stores; cross-iter through a global needs_grad field at the offload level is therefore
+    # not handled in either adstack setting and must raise. The offload-level guard in `auto_diff.cpp` pairs same-
+    # SNode `(GlobalStore, GlobalLoad)` and raises on structurally-different index `Stmt*`s, but only when both
+    # indices transitively reference a `LoopIndexStmt` - which suppresses the false positive on the
+    # constant-outside-iter-range shape where the load reads a slot the loop never writes to. The outer-for shapes
+    # route the cross-iter chain through an AST-nested range whose backward the AD pass handles correctly via the
+    # IB analysis when adstack is on.
+    expect_raise = (not has_outer_for) and load_kind == "cross_iter"
+    _run_reverse_global_cross_iter(has_outer_for, in_func, load_kind, expect_raise)
+
+
+@pytest.mark.parametrize("has_outer_for, in_func, load_kind", _REVERSE_GLOBAL_CROSS_ITER_PATTERNS)
+@test_utils.test()
+def test_reverse_global_cross_iter_without_adstack(has_outer_for, in_func, load_kind):
+    # Same eight shapes as the with-adstack companion. With adstack off, every outer-for shape raises via the
+    # AST-level `loop_depth > 0` check (purely on nesting, regardless of body content), and the kernel-top
+    # cross-iter shapes raise via the offload-level guard in `auto_diff.cpp`. The kernel-top
+    # constant-outside-iter-range shape is the only combination that compiles cleanly: nesting is zero so the
+    # AST guard does not fire, and the load index is iteration-independent so the offload-level guard's
+    # `references_loop_index` gate also does not fire.
+    #
+    # Internal details: the caller-loop-depth propagation in `_func_base.py` is what makes the @qd.func variant
+    # of the outer-for shape behave identically to the inline variant - without it, the func context would
+    # start at `loop_depth = 0` and the AST guard would never fire for the func-routed nested shape.
+    expect_raise = has_outer_for or load_kind == "cross_iter"
+    _run_reverse_global_cross_iter(has_outer_for, in_func, load_kind, expect_raise)
+
+
+_REVERSE_SIBLING_COMPONENT_PATTERNS = [
+    # `(has_outer_for, in_func)` toggles for `_run_reverse_sibling_component_correct_gradient`. Same axes as the
+    # cross-iter matrix, minus the `load_kind` dimension (the body shape here is fixed: same loop index on
+    # axis 0 of `out`, differing constants on axis 1).
+    pytest.param(False, False, id="kernel_top_inline"),
+    pytest.param(False, True, id="kernel_top_in_func"),
+    pytest.param(True, False, id="outer_for_inline"),
+    pytest.param(True, True, id="outer_for_in_func"),
+]
+
+
+def _run_reverse_sibling_component_correct_gradient(has_outer_for, in_func):
+    # Drives a kernel that writes `out[i, 0]` and reads `out[i, 1]` on a 2-axis `needs_grad` field. The store
+    # and load both reference `LoopIndexStmt(i)` on axis 0 (same `Stmt*`) and have differing `ConstStmt`s on
+    # axis 1. The offload-level guard's per-axis rule treats the differing constant axis as iter-independent
+    # sibling access, so the kernel must compile and produce the analytical gradient.
+    n = 4
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    out = qd.field(qd.f32, shape=(n, 2), needs_grad=True)
+
+    @qd.func
+    def func_body():
+        for i in range(n):
+            out[i, 1] = x[None]
+            out[i, 0] = out[i, 1] * 2.0
+
+    @qd.kernel
+    def compute():
+        for _ in range(1) if qd.static(has_outer_for) else qd.static(range(1)):
+            if qd.static(in_func):
+                func_body()
+            else:
+                for i in range(n):
+                    out[i, 1] = x[None]
+                    out[i, 0] = out[i, 1] * 2.0
+
+    x[None] = 1.0
+    compute()
+    for i in range(n):
+        out.grad[i, 0] = 1.0
+        out.grad[i, 1] = 0.0
+    x.grad[None] = 0.0
+    compute.grad()
+    # `out[i, 0] = (out[i, 1] = x) * 2.0 = 2x` per iter; seed `out.grad[i, 0] = 1` for every i.
+    # `d(out[i, 0]) / d(x) = 2` per iter -> `x.grad = 2 * n`.
+    assert float(x.grad[None]) == pytest.approx(2.0 * n, rel=1e-6)
+
+
+@pytest.mark.parametrize("has_outer_for, in_func", _REVERSE_SIBLING_COMPONENT_PATTERNS)
+@test_utils.test(require=qd.extension.adstack)
+def test_reverse_sibling_component_correct_gradient_with_adstack(has_outer_for, in_func):
+    # Sibling-component access on a multi-axis `needs_grad` field must compile and produce the analytical
+    # gradient. The store and load share the same `LoopIndexStmt` on axis 0 and differ only on a constant
+    # axis, which is sibling access in the same iteration, not cross-iter RAW.
+    #
+    # Internal details: the offload-level guard's per-axis `indices_have_no_cross_iter_dependency` rule
+    # treats axes where neither index references `LoopIndexStmt` as iter-independent and ignores their
+    # difference, so `out[i, 0]` vs `out[i, 1]` is not flagged.
+    _run_reverse_sibling_component_correct_gradient(has_outer_for, in_func)
+
+
+def _run_reverse_kernel_top_indep_iters_correct_gradient():
+    # Independent-iteration kernel-top range-for (no cross-iteration RAW). Both adstack settings must
+    # produce the analytical gradient `2 * n` for the per-iteration store `out[i] = x[None] * 2`.
+    n = 4
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    out = qd.field(qd.f32, shape=n, needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in range(n):
+            out[i] = x[None] * 2.0
+
+    x[None] = 1.0
+    compute()
+    for i in range(n):
+        out.grad[i] = 1.0
+    x.grad[None] = 0.0
+    compute.grad()
+    assert float(x.grad[None]) == pytest.approx(2.0 * n, rel=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_reverse_kernel_top_indep_iters_with_adstack():
+    # Kernel-top non-static range whose body has no cross-iter RAW on a `needs_grad` field must
+    # produce the analytical gradient with adstack on.
+    #
+    # Internal details: the offload-level guard pairs only same-SNode `(store, load)`, so a body
+    # that only stores `out[i] = x[None] * 2` (no load on `out`) compiles cleanly. Adstack itself has
+    # nothing to do here either - each iteration is independent.
+    _run_reverse_kernel_top_indep_iters_correct_gradient()
+
+
+@test_utils.test()
+def test_reverse_kernel_top_indep_iters_without_adstack():
+    # Same independent-iteration shape as the with-adstack companion, must produce the analytical
+    # gradient with adstack off.
+    #
+    # Internal details: the AST-level `loop_depth > 0` check does not fire (range-for is at
+    # `loop_depth == 0`) and there is no cross-iter chain to drop, so the gradient comes out correct
+    # without the adstack.
+    _run_reverse_kernel_top_indep_iters_correct_gradient()
+
+
+def _run_reverse_kernel_top_in_place_accum_correct_gradient():
+    # In-place accumulation `out[i] = out[i] + x[None]` at the kernel-top range-for. Sanity check that
+    # the offload-level guard's pointer-equality on index `Stmt*`s allows this shape - store and
+    # load on `out` share the same `LoopIndexStmt` so `indices_pointer_match` returns true and the
+    # guard does not fire.
+    n = 4
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    out = qd.field(qd.f32, shape=n, needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in range(n):
+            out[i] = out[i] + x[None]
+
+    x[None] = 1.0
+    for i in range(n):
+        out[i] = 0.0
+    compute()
+    for i in range(n):
+        out.grad[i] = 1.0
+    x.grad[None] = 0.0
+    compute.grad()
+    # `out[i] = out[i] + x` reduces to `out[i] += x`; with `out[i]` initialised to 0, the per-iteration
+    # adjoint accumulates 1 into `x.grad` for each of n elements when `out.grad[i] = 1`.
+    assert float(x.grad[None]) == pytest.approx(float(n), rel=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_reverse_kernel_top_in_place_accum_with_adstack():
+    # In-place accumulation `out[i] = out[i] + x[None]` at the offload-level loop must compile and
+    # produce the analytical gradient: the offload-level guard intentionally exempts this shape.
+    #
+    # Internal details: the store dest `out[i]` and the load src `out[i]` reference the same
+    # `LoopIndexStmt`, so `OffloadLevelGlobalCrossIterRAWChecker::indices_pointer_match` returns true
+    # and the guard does not fire. The per-iteration adjoint already handles in-place accumulation
+    # correctly: `x.grad` accumulates 1 per element.
+    _run_reverse_kernel_top_in_place_accum_correct_gradient()
 
 
 @test_utils.test(
@@ -702,10 +997,10 @@ def test_adstack_overflow_raises():
     # Internal detail: both LLVM and SPIR-V defer the error to the next `qd.sync()` (same pattern as CUDA async
     # errors) so we do not pay a sync-per-launch. LLVM polls `runtime->adstack_overflow_flag` from
     # `LlvmProgramImpl::synchronize()` via `check_adstack_overflow()`; SPIR-V's gfx runtime raises via `QD_ERROR`
-    # on sync. `debug=True` is required because release-build LLVM codegen elides the per-push bounds check on the
-    # premise that `determine_ad_stack_size` produces a tight upper bound; this test deliberately misconfigures
+    # on sync. The bounds-check codepath in both backends is gated on `debug`; release builds elide it on the
+    # premise that `determine_ad_stack_size` produces a tight upper bound. This test deliberately misconfigures
     # the capacity below the kernel's actual peak push count, which the sizer cannot foresee, so the runtime
-    # check has to be live for the deferred raise to fire.
+    # check has to be live for the deferred raise to fire - `debug=True` keeps it live.
     compute, _, _ = _overflowing_compute()
     # On LLVM the runtime raises QuadrantsAssertionError (subclass of AssertionError) from
     # check_adstack_overflow; on SPIR-V the gfx runtime raises RuntimeError via QD_ERROR. We accept either,
@@ -720,8 +1015,7 @@ def test_adstack_overflow_flag_resets_after_catch():
     # Once `check_adstack_overflow()` raises, the runtime must clear its overflow flag so a subsequent `qd.sync()`
     # (with no new overflowing grad launch in between) returns normally. Without the reset the user would see a
     # stale overflow exception every time they sync after the first one, which makes diagnosis and recovery
-    # impossible. `debug=True` keeps the per-push bounds check live (release-build codegen elides it - see
-    # `test_adstack_overflow_raises` for the rationale).
+    # impossible. `debug=True` keeps the per-push bounds check live.
     compute, _, _ = _overflowing_compute()
     with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
         compute.grad()
@@ -1469,7 +1763,7 @@ def test_adstack_bounded_inner_loop_sized_by_structural_prepass():
     assert x.grad[0] == pytest.approx(dv_dx, rel=1e-6)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.metal, qd.vulkan], default_ip=qd.i64)
+@test_utils.test(require=qd.extension.adstack, default_ip=qd.i64)
 def test_adstack_bounded_inner_loop_pre_pass_handles_i64_bounds():
     # Pins that the structural pre-pass in `irpass::determine_ad_stack_size` accepts integer
     # `ConstStmt` loop bounds of any signed or unsigned width (not just i32). A kernel compiled
@@ -1740,7 +2034,7 @@ def test_adstack_field_load_bounded_loop_evaluated_per_launch():
 
 
 @pytest.mark.parametrize("ndarray_kind", ["numpy", "qd_ndarray"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_inner_range_bounded_by_ndarray_read_at_outer_index(ndarray_kind):
     # Pins the `ExternalTensorRead`-over-`LoopIndex` `MaxOverRange` wrap in the `SizeExpr` pre-pass: a reverse-mode
     # adstack whose inner range `range(a[i])` is bounded by a scalar ndarray read at the enclosing outer loop index. The
@@ -1866,7 +2160,7 @@ def test_adstack_inner_range_bounded_by_multidim_ndarray_read():
 
 
 @pytest.mark.parametrize("outer_bound", ["const", "dynamic"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_ext_tensor_read_indexed_by_stashed_outer_loop_var(outer_bound):
     # Pins the `ExternalPtrStmt` indexed by `AdStackLoadTopStmt` grammar gap. The kernel walks a parent/child
     # hierarchical-array layout: an outer parallel-for whose body casts its loop variable (`i_l = qd.cast(i_l_,
@@ -2100,7 +2394,7 @@ def test_adstack_triangular_ndrange_self_referential_push_idempotency():
 
 
 @pytest.mark.parametrize("inner_loop_shape", ["begin_end", "sub_then_range"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_shape_ends(inner_loop_shape):
     # Covers the two user-facing surface forms of a reverse-mode kernel whose inner range-for trip count is the
     # difference between two reads of parallel ndarrays indexed by the SAME outer loop. Both lower to a
@@ -2164,7 +2458,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_s
         assert x.grad[j] == pytest.approx(0.0, abs=1e-7)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched_shape_ends():
     # Pins the `expr_sub` fusion for the Sub-of-two-MaxOverRange shape that the walker builds when an inner range-for's
     # trip count is computed as the difference between two ndarray reads whose indices come from two DIFFERENT enclosing
@@ -2287,8 +2581,13 @@ def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe(arr
             assert x.grad[k] == pytest.approx(2 * expected_visits[k] * 0.1, rel=1e-5)
 
 
+@pytest.mark.parametrize(
+    "x_unused_val",
+    [0.1, 100.0],
+    ids=["uniform_x", "amplified_unused_x"],
+)
 @test_utils.test(require=qd.extension.adstack)
-def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread():
+def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread(x_unused_val):
     # Pins that a reverse-mode kernel whose inner trip count is `fld[i] - arr[i]` - a scalar field minus an ndarray
     # element, both indexed by the outer loop variable - compiles and produces the correct gradient on every supported
     # backend.
@@ -2303,6 +2602,16 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
     # synthesised body would pair a bound-var-indexed `FieldLoad` with an `ExternalTensorRead`; the unfused
     # `Sub(MaxOverRange(i, 0, shape, FieldLoad), MaxOverRange(i, 0, shape, ExternalTensorRead))` keeps each operand
     # closed and host-foldable on both encoders.
+    #
+    # The `x_unused_val` parametrization sets `x[8..15]` to `x_unused_val` while keeping `x[0..7]` at `0.1`. Only
+    # `x[0..7]` is reached by the kernel under correct sizing, so `x_unused_val` does not affect the expected loss /
+    # gradient at all and the assertions are identical across parametrizations. The `amplified_unused_x` variant
+    # (`x_unused_val=100.0`) exists so that any regression that mis-routes a stack push / pop to a slot outside the
+    # intended index range surfaces as a multi-order-of-magnitude gradient delta (e.g. a single spurious visit to
+    # `x[8]` produces `x.grad[8]=200.0` instead of the `0.2` an `x_unused_val=0.1` setup would produce), so the
+    # failure cannot be misread as a tolerance issue. The original `uniform_x` (`x_unused_val=0.1`) parametrization
+    # preserves the historical loss / gradient magnitudes for direct continuity with the prior fixed-fixture form of
+    # this test.
     N = 4
     N_X = 16
 
@@ -2322,7 +2631,7 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
             loss[None] += accum
 
     for i in range(N_X):
-        x[i] = 0.1
+        x[i] = 0.1 if i < 8 else x_unused_val
     for i in range(N):
         fld[i] = 10
     arr_np = np.array([2, 2, 2, 2], dtype=np.int32)
@@ -2335,7 +2644,8 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
     qd.sync()
 
     # Each of the 4 outer iterations runs `fld[i] - arr[i] = 10 - 2 = 8` inner iters. Total pushes = 32.
-    # x[0..7] is visited 4 times (once per outer iter); x[8..] is never visited.
+    # x[0..7] is visited 4 times (once per outer iter); x[8..] is never visited, so the loss and gradients
+    # are independent of `x_unused_val`.
     assert loss[None] == pytest.approx(4 * 8 * 0.01, rel=1e-5)
     for k in range(8):
         assert x.grad[k] == pytest.approx(4 * 2 * 0.1, rel=1e-5)
@@ -2343,7 +2653,7 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
         assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal], cfg_optimization=False)
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_spirv_metadata_per_task_buffer():
     # SPIR-V launcher used to share a single grow-on-demand `AdStackMetadata` device buffer across every task in a
     # kernel. Per-task `(stride_float, stride_int, offset_i, max_size_i, ...)` tables were host-memcpy'd into that
@@ -2534,7 +2844,12 @@ def test_adstack_f16_unrolled_pushes_alignment(n_iter):
     # backends or silently corrupts adjoint state on tolerant ones - either way producing wrong
     # gradients. `n_iter=16` ensures multiple non-zero slot offsets get exercised, including odd
     # slot indices where the alignment claim matters most. Tolerance `rel=4e-3` is the f16 precision
-    # floor for sums of ~16 `sin` values.
+    # floor for sums of ~16 `sin` values. SPIR-V backends (Metal / MoltenVK / Vulkan) are excluded
+    # from the arch list because their MSL / Vulkan shader compilation fails on the reverse-mode
+    # `y[None] += acc` adstack shape with `qd.f16` fields - the host-side type-check warns
+    # `Atomic add may lose precision: f16 <- f32` and the underlying compute pipeline build then
+    # rejects the shader, so the alignment regression this test pins on the LLVM CUDA / AMDGPU
+    # backends cannot run on the SPIR-V backends regardless of slot alignment correctness.
     import torch
 
     n = 4
@@ -2637,3 +2952,57 @@ def test_adstack_unrolled_many_pushes_across_multiple_stacks(n_iter, n_stacks):
     assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
     for i in range(n):
         assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("n_inner", [4, 32])
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=64)
+def test_adstack_min_loop_carried_serial_range_for(n_inner):
+    # Cross-check `d/dx sum_i acc_n` where `acc` is initialized to 1.0 and updated per iteration of a serial
+    # `for j in range(n_inner)` body via `acc = qd.min(acc * 0.5 + 0.05, x[i] + j*0.05)`. The min winner flips
+    # between the lhs and rhs across iterations (rhs wins on iter 0 because acc starts at 1.0 vs x[i]=~0.3,
+    # then lhs wins on later iterations as acc shrinks). The reverse pass must use the per-iteration forward
+    # lhs/rhs to route the gradient correctly.
+    #
+    # Internal details: pins the snap-stack fix in `MakeAdjoint::visit(BinaryOpStmt)`'s min/max branch. The
+    # forward cmp `lhs < rhs` (min) / `rhs < lhs` (max) is computed at forward time and pushed onto a
+    # dedicated 1-push-per-bin-execution adstack, then read back in reverse with a matching pop. Without the
+    # snap-stack, BackupSSA spills `bin->lhs` / `bin->rhs` to single overwrite-each-iteration allocas and
+    # every reverse iteration reads the last forward iteration's values, so the cmp flips on iterations where
+    # the actual winner changed and the gradient routes through the wrong branch (visible as `x.grad=0`
+    # instead of the analytical `0.125` for `x[i]=0.31`, `n_inner=4`).
+    import torch
+
+    n = 4
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            acc = 1.0
+            for j in range(n_inner):
+                acc = qd.min(acc * 0.5 + 0.05, x[i] + qd.cast(j, qd.f32) * 0.05)
+            y[None] += acc
+
+    for i in range(n):
+        x[i] = 0.31 + i * 0.07
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    x_t = torch.tensor([0.31 + i * 0.07 for i in range(n)], dtype=torch.float32, requires_grad=True)
+    y_t = torch.zeros((), dtype=torch.float32)
+    for i in range(n):
+        acc_t = torch.tensor(1.0, dtype=torch.float32)
+        for j in range(n_inner):
+            acc_t = torch.minimum(acc_t * 0.5 + 0.05, x_t[i] + float(j) * 0.05)
+        y_t = y_t + acc_t
+    y_t.backward()
+
+    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    for i in range(n):
+        assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-4)
