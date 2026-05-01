@@ -1,0 +1,130 @@
+name: Check feature factorization
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  check-feature-factorization:
+    name: Check feature factorization
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait using dead-reckoning for builds to finish, before running, to save AI cost, if someone pushes many commits in a row
+        run: sleep 1800
+
+      - name: Collect diffs and file lists
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          MERGE_BASE=$(git merge-base "origin/$BASE_REF" HEAD)
+
+          # Diff restricted to MODIFIED (not added/deleted/renamed) source files. Newly added files
+          # are out of scope for this check — we only care about feature-specific code being grafted
+          # onto pre-existing files.
+          git diff --diff-filter=M "$MERGE_BASE...HEAD" \
+            -- '*.py' '*.cpp' '*.h' '*.hpp' '*.c' '*.cc' '*.cu' \
+            ':!tests/' ':!benchmarks/' ':!docs/' ':!scripts/' ':!misc/' \
+            > /tmp/source_diff.patch
+
+          # List of source files MODIFIED in this PR (the universe being examined).
+          git diff --name-only --diff-filter=M "$MERGE_BASE...HEAD" \
+            -- '*.py' '*.cpp' '*.h' '*.hpp' '*.c' '*.cc' '*.cu' \
+            ':!tests/' ':!benchmarks/' ':!docs/' ':!scripts/' ':!misc/' \
+            > /tmp/modified_source_files.txt
+
+          if [ ! -s /tmp/source_diff.patch ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No modifications to existing source files."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Source diff: $(wc -l < /tmp/source_diff.patch) lines"
+            echo "Modified source files: $(wc -l < /tmp/modified_source_files.txt)"
+          fi
+
+      - name: Install Cursor CLI
+        if: steps.changed.outputs.skip != 'true'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+
+      - name: Check feature factorization with Cursor agent
+        if: steps.changed.outputs.skip != 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_KEY_HUGH }}
+        run: |
+          RESULT=$(agent -p "$(cat <<'PROMPT'
+          You are reviewing a PR for *file-level factorization* problems: cases where the PR adds
+          feature-specific code to an *existing* file whose primary concern is something else, when
+          that new code would be better placed in its own feature-specific file (existing or new).
+
+          Inputs:
+          - /tmp/source_diff.patch — unified diff of NON-TEST source files MODIFIED (not added,
+            deleted, or renamed) in this PR (.py, .cpp, .h, .hpp, .c, .cc, .cu, excluding tests/,
+            benchmarks/, docs/, scripts/, misc/)
+          - /tmp/modified_source_files.txt — list of those modified source files
+
+          You may inspect any file in the repo to understand existing structure, naming conventions,
+          and what each file's responsibility is.
+
+          Repo layout:
+          - Python source: python/quadrants/
+          - C++ source: quadrants/ (subdirs: codegen, ir, runtime, transforms, rhi, python, etc.)
+          The repo generally factorizes per-backend / per-pass / per-feature (e.g., separate files
+          per RHI backend under quadrants/rhi/, separate files per IR transform under
+          quadrants/transforms/, separate Python modules per concept under python/quadrants/lang/).
+
+          Your task:
+          1. For each existing source file modified in this PR, examine the substantial added code
+             (new top-level functions, new classes, new methods, large new self-contained blocks).
+          2. Decide whether each addition is well-placed, or whether it is feature-specific code
+             grafted onto an unrelated host file. Signs of bad placement:
+             - The added function/class is named after a feature, subsystem, backend, op, or device
+               that is not the host file's concern (e.g., adding metal-specific logic to a generic
+               file, or adding feature-X helpers to a file about feature-Y).
+             - The host file's existing contents are about concern A, but the new code is about an
+               unrelated concern B.
+             - The PR adds a large new self-contained block that would naturally form its own module.
+             - The repo already has a per-feature factorization pattern that the new code violates
+               (e.g., a sibling file already exists where the new code obviously belongs).
+          3. For each violation, suggest a better location: an *existing* feature-specific file in
+             the repo, or a plausible new file path that follows the repo's naming conventions.
+
+          What NOT to flag:
+          - Small tweaks, bug fixes, or extensions of functions/classes that already live in the
+            host file.
+          - Adding a method to a class that already lives in the host file (the class is the right
+            unit of locality, not the file).
+          - Generic utilities legitimately added to a utilities file.
+          - Refactors / renames / moves that just relocate existing code.
+          - Newly added files (out of scope for this check).
+          - Trivial changes (imports, type hints, comments, docstrings, logging).
+          - Cases where the host file already mixes concerns to a similar degree — don't make it
+            worse, but don't fight existing convention either.
+          - Cases where there is no clear better home and inventing a new file would be overkill.
+
+          Be conservative. Only flag clear cases where moving the code would meaningfully improve
+          organization. Borderline cases are FINE.
+          Do NOT modify any files.
+          Stop after finding 5 violations.
+
+          If there are NO violations, your final output must start with the word PASS.
+          If there ARE violations, your final output must start with the word FAIL, followed by a
+          list of violations (up to 5) in the format:
+          <host_filepath>:<symbol_or_block>: <why feature-specific> -> suggested: <filepath>
+          PROMPT
+          )" --model claude-4.6-opus-high-thinking --mode ask --output-format text --trust)
+
+          echo "$RESULT"
+          if echo "$RESULT" | grep -qE "^FAIL([[:space:]]|$)"; then
+            exit 1
+          fi
