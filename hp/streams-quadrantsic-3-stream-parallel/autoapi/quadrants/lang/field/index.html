@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.field &#8212; Quadrants 0.7.3 documentation</title>
+    <title>quadrants.lang.field &#8212; Quadrants 0.7.4 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../_static/documentation_options.js?v=c98573da"></script>
+    <script src="../../../../_static/documentation_options.js?v=020ce317"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.expr" href="../expr/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.3" />
+  <meta name="docsearch:version" content="0.7.4" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
   
 </a></div>
     
@@ -419,6 +419,18 @@ A field member is a Python Expr wrapping a C++ FieldExpression.</p>
 <dd></dd></dl>
 
 <dl class="py property">
+<dt class="sig sig-object py" id="quadrants.lang.field.Field.layout">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">layout</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#Field.layout"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.Field.layout" title="Link to this definition">#</a></dt>
+<dd><p>Canonical-axis-permutation tuple, or <code class="docutils literal notranslate"><span class="pre">None</span></code> for identity.</p>
+<p>Mirrors <code class="xref py py-attr docutils literal notranslate"><span class="pre">Ndarray.layout</span></code>: returns the same value the caller passed to <code class="docutils literal notranslate"><span class="pre">qd.tensor(...,</span> <span class="pre">layout=...)</span></code>
+(or <code class="docutils literal notranslate"><span class="pre">None</span></code> if that kwarg was omitted / was the identity permutation). Lets downstream code introspect the
+physical layout without having to know which backend produced the tensor.</p>
+<p>Fields constructed directly via <code class="docutils literal notranslate"><span class="pre">qd.field(...,</span> <span class="pre">order=...)</span></code> also report their layout here — the <code class="docutils literal notranslate"><span class="pre">order=</span></code>
+axis-string is translated into an integer permutation and stashed on the same <code class="docutils literal notranslate"><span class="pre">_qd_layout</span></code> attribute that
+layout-tagged ndarrays use.</p>
+</dd></dl>
+
+<dl class="py property">
 <dt class="sig sig-object py" id="quadrants.lang.field.Field.dtype">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">dtype</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">quadrants._lib.core.quadrants_python.DataTypeCxx</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#Field.dtype"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.Field.dtype" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
@@ -436,25 +448,31 @@ A field member is a Python Expr wrapping a C++ FieldExpression.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.field.Field.to_numpy">
-<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">quadrants._lib.core.quadrants_python.DataTypeCxx</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#Field.to_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.Field.to_numpy" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">quadrants._lib.core.quadrants_python.DataTypeCxx</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#Field.to_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.Field.to_numpy" title="Link to this definition">#</a></dt>
 <dd><p>Converts <cite>self</cite> to a numpy array.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>The result numpy array.</p>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
 </dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>numpy.ndarray</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The result numpy array.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>numpy.ndarray</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.field.Field.to_torch">
-<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">to_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#Field.to_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.Field.to_torch" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">to_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#Field.to_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.Field.to_torch" title="Link to this definition">#</a></dt>
 <dd><p>Converts <cite>self</cite> to a torch tensor.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – The desired device of returned tensor.</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – The desired device of returned tensor.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
+</ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>The result torch tensor.</p>
@@ -496,6 +514,11 @@ A field member is a Python Expr wrapping a C++ FieldExpression.</p>
 <p>The shape of the other field needs to be the same as <cite>self</cite>.</p>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.field.Field.to_dlpack">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">to_dlpack</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">versioned</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#Field.to_dlpack"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.Field.to_dlpack" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 <dl class="py class">
@@ -510,9 +533,17 @@ A field member is a Python Expr wrapping a C++ FieldExpression.</p>
 </dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.field.ScalarField.to_dlpack">
-<span class="sig-name descname"><span class="pre">to_dlpack</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#ScalarField.to_dlpack"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.ScalarField.to_dlpack" title="Link to this definition">#</a></dt>
-<dd><p>Note: caller is responsible for calling qd.sync() between modifying the field, and
-reading it.</p>
+<span class="sig-name descname"><span class="pre">to_dlpack</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">versioned</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#ScalarField.to_dlpack"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.ScalarField.to_dlpack" title="Link to this definition">#</a></dt>
+<dd><p>Export this field as a DLPack capsule.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>versioned</strong> – If True, emit a DLPack v1 <code class="docutils literal notranslate"><span class="pre">DLManagedTensorVersioned</span></code> capsule (<code class="docutils literal notranslate"><span class="pre">&quot;dltensor_versioned&quot;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">flags=0</span></code>). NumPy &gt;= 2.1 can consume v1 capsules and returns writable arrays; NumPy 2.0 marks v0
+capsules read-only; NumPy &lt; 2.1 cannot consume v1 capsules at all. If False (default), emit a v0
+<code class="docutils literal notranslate"><span class="pre">DLManagedTensor</span></code> (<code class="docutils literal notranslate"><span class="pre">&quot;dltensor&quot;</span></code>), required by <code class="docutils literal notranslate"><span class="pre">torch.utils.dlpack.from_dlpack</span></code>.</p>
+</dd>
+</dl>
+<p>Note: caller is responsible for calling qd.sync() between modifying the field and reading it.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -523,14 +554,30 @@ reading it.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.field.ScalarField.to_numpy">
-<span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#ScalarField.to_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.ScalarField.to_numpy" title="Link to this definition">#</a></dt>
-<dd><p>Converts this field to a <cite>numpy.ndarray</cite>.</p>
+<span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#ScalarField.to_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.ScalarField.to_numpy" title="Link to this definition">#</a></dt>
+<dd><p>Converts this field to a <code class="docutils literal notranslate"><span class="pre">numpy.ndarray</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dtype</strong> – Optional target numpy dtype.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.field.ScalarField.to_torch">
-<span class="sig-name descname"><span class="pre">to_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#ScalarField.to_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.ScalarField.to_torch" title="Link to this definition">#</a></dt>
-<dd><p>Converts this field to a <cite>torch.tensor</cite>.</p>
+<span class="sig-name descname"><span class="pre">to_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#ScalarField.to_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.ScalarField.to_torch" title="Link to this definition">#</a></dt>
+<dd><p>Converts this field to a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> – Optional torch device for the returned tensor.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
@@ -635,6 +682,7 @@ reading it.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.dual"><code class="docutils literal notranslate"><span class="pre">Field.dual</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.snode"><code class="docutils literal notranslate"><span class="pre">Field.snode</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.shape"><code class="docutils literal notranslate"><span class="pre">Field.shape</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.layout"><code class="docutils literal notranslate"><span class="pre">Field.layout</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.dtype"><code class="docutils literal notranslate"><span class="pre">Field.dtype</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.parent"><code class="docutils literal notranslate"><span class="pre">Field.parent()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.fill"><code class="docutils literal notranslate"><span class="pre">Field.fill()</span></code></a></li>
@@ -643,6 +691,7 @@ reading it.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.from_numpy"><code class="docutils literal notranslate"><span class="pre">Field.from_numpy()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.from_torch"><code class="docutils literal notranslate"><span class="pre">Field.from_torch()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.copy_from"><code class="docutils literal notranslate"><span class="pre">Field.copy_from()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.to_dlpack"><code class="docutils literal notranslate"><span class="pre">Field.to_dlpack()</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.ScalarField"><code class="docutils literal notranslate"><span class="pre">ScalarField</span></code></a><ul class="nav section-nav flex-column">

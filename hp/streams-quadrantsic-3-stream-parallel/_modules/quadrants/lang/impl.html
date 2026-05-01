@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.impl &#8212; Quadrants 0.7.3 documentation</title>
+    <title>quadrants.lang.impl &#8212; Quadrants 0.7.4 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../_static/documentation_options.js?v=c98573da"></script>
+    <script src="../../../_static/documentation_options.js?v=020ce317"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.3" />
+  <meta name="docsearch:version" content="0.7.4" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
   
 </a></div>
     
@@ -334,9 +334,10 @@
     <span class="n">Program</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._snode</span><span class="w"> </span><span class="kn">import</span> <span class="n">fields_builder</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">ScalarNdarray</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span><span class="p">,</span> <span class="n">ScalarNdarray</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndrange</span><span class="w"> </span><span class="kn">import</span> <span class="n">GroupedNDRange</span><span class="p">,</span> <span class="n">_Ndrange</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.any_array</span><span class="w"> </span><span class="kn">import</span> <span class="n">AnyArray</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.buffer_view</span><span class="w"> </span><span class="kn">import</span> <span class="n">BufferView</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">QuadrantsCompilationError</span><span class="p">,</span>
     <span class="n">QuadrantsRuntimeError</span><span class="p">,</span>
@@ -394,8 +395,6 @@
 <span class="p">)</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span>
-
     <span class="kn">from</span><span class="w"> </span><span class="nn">.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTTransformerGlobalContext</span>
 
 
@@ -418,6 +417,8 @@
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">make_matrix</span><span class="p">(</span><span class="n">rhs</span><span class="o">.</span><span class="n">to_list</span><span class="p">())</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">SharedArray</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">rhs</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">rhs</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">Struct</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">Struct</span><span class="p">(</span><span class="n">rhs</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="n">include_methods</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">include_ndim</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
@@ -525,6 +526,20 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">subscript</span><span class="p">(</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">*</span><span class="n">_indices</span><span class="p">,</span> <span class="n">skip_reordered</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="n">dbg_info</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
     <span class="n">ast_builder</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
+    <span class="c1"># Ndarray from struct template field: resolve via the AnyArray cache populated by _predeclare_struct_ndarrays</span>
+    <span class="c1"># during kernel compilation.</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">):</span>
+        <span class="n">gc</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">(),</span> <span class="s2">&quot;_current_global_context&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">gc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">arr</span> <span class="o">=</span> <span class="n">gc</span><span class="o">.</span><span class="n">ndarray_to_any_array</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">arr</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">QuadrantsCompilationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Ndarray </span><span class="si">{</span><span class="n">value</span><span class="si">!r}</span><span class="s2"> used in kernel scope but not registered &quot;</span>
+                <span class="s2">&quot;as a kernel parameter. Pass it via qd.Tensor annotation or &quot;</span>
+                <span class="s2">&quot;through a @qd.data_oriented / frozen-dataclass template.&quot;</span>
+            <span class="p">)</span>
     <span class="c1"># Directly evaluate in Python for non-Quadrants types</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span>
         <span class="n">value</span><span class="p">,</span>
@@ -532,6 +547,7 @@
             <span class="n">Expr</span><span class="p">,</span>
             <span class="n">Field</span><span class="p">,</span>
             <span class="n">AnyArray</span><span class="p">,</span>
+            <span class="n">BufferView</span><span class="p">,</span>
             <span class="n">SparseMatrixProxy</span><span class="p">,</span>
             <span class="n">MeshElementFieldProxy</span><span class="p">,</span>
             <span class="n">MeshRelationAccessProxy</span><span class="p">,</span>
@@ -569,6 +585,15 @@
 
     <span class="n">indices_expr_group</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="k">if</span> <span class="n">has_slice</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">slice</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;BufferView only supports 1D slicing in kernels&quot;</span><span class="p">)</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">step</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;BufferView slice does not support an explicit step in kernels&quot;</span><span class="p">)</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">start</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">Expr</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">stop</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">stop</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">stop</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">Expr</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">subview</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">Expr</span><span class="p">(</span><span class="n">stop</span><span class="p">)</span> <span class="o">-</span> <span class="n">Expr</span><span class="p">(</span><span class="n">start</span><span class="p">))</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="n">Field</span><span class="p">,</span> <span class="n">AnyArray</span><span class="p">,</span> <span class="n">SharedArray</span><span class="p">)):</span>
             <span class="n">matched</span><span class="p">,</span> <span class="n">proxy</span> <span class="o">=</span> <span class="n">try_tile_slice</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">matched</span><span class="p">:</span>
@@ -579,6 +604,8 @@
         <span class="n">indices_expr_group</span> <span class="o">=</span> <span class="n">make_expr_group</span><span class="p">(</span><span class="o">*</span><span class="n">indices</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">SharedArray</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">subscript</span><span class="p">(</span><span class="o">*</span><span class="n">indices</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">subscript</span><span class="p">(</span><span class="o">*</span><span class="n">indices</span><span class="p">)</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">MeshElementFieldProxy</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">subscript</span><span class="p">(</span><span class="o">*</span><span class="n">indices</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
@@ -766,10 +793,9 @@
         <span class="k">if</span> <span class="n">root</span><span class="o">.</span><span class="n">finalized</span><span class="p">:</span>
             <span class="k">return</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">is_first_call</span> <span class="ow">and</span> <span class="n">root</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
-            <span class="c1"># We have to forcefully finalize when `is_first_call` is True (even</span>
-            <span class="c1"># if the root itself is empty), so that there is a valid struct</span>
-            <span class="c1"># llvm::Module, if no field has been declared before the first kernel</span>
-            <span class="c1"># invocation. Example case:</span>
+            <span class="c1"># We have to forcefully finalize when `is_first_call` is True (even if the root itself is empty), so that</span>
+            <span class="c1"># there is a valid struct llvm::Module, if no field has been declared before the first kernel invocation.</span>
+            <span class="c1"># Example case:</span>
             <span class="c1"># https://github.com/taichi-dev/taichi/blob/27bb1dc3227d9273a79fcb318fdb06fd053068f5/tests/python/test_ad_basics.py#L260-L266</span>
             <span class="k">return</span>
 
@@ -890,6 +916,9 @@
     <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">old_kernels</span><span class="p">:</span>
         <span class="n">k</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
     <span class="n">_qd_core</span><span class="o">.</span><span class="n">reset_default_compile_config</span><span class="p">()</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._func_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">_frozen_dc_plans</span>  <span class="c1"># pylint: disable=C0415</span>
+
+    <span class="n">_frozen_dc_plans</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
 
 
 <span class="nd">@quadrants_scope</span>
@@ -950,16 +979,13 @@
         <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="s2">&quot;Please call init() first&quot;</span><span class="p">)</span>
 
 
-<span class="c1"># `root` initialization must be delayed until after the program is</span>
-<span class="c1"># created. Unfortunately, `root` exists in both quadrants.lang.impl module and</span>
-<span class="c1"># the top-level quadrants module at this point; so if `root` itself is written, we</span>
-<span class="c1"># would have to make sure that `root` in all the modules get updated to the same</span>
-<span class="c1"># instance. This is an error-prone process.</span>
+<span class="c1"># `root` initialization must be delayed until after the program is created. Unfortunately, `root` exists in both</span>
+<span class="c1"># quadrants.lang.impl module and the top-level quadrants module at this point; so if `root` itself is written, we would</span>
+<span class="c1"># have to make sure that `root` in all the modules get updated to the same instance. This is an error-prone process.</span>
 <span class="c1">#</span>
-<span class="c1"># To avoid this situation, we create `root` once during the import time, and</span>
-<span class="c1"># never write to it. The core part, `_root_fb`, is the one whose initialization</span>
-<span class="c1"># gets delayed. `_root_fb` will only exist in the quadrants.lang.impl module, so</span>
-<span class="c1"># writing to it is would result in less for maintenance cost.</span>
+<span class="c1"># To avoid this situation, we create `root` once during the import time, and never write to it. The core part,</span>
+<span class="c1"># `_root_fb`, is the one whose initialization gets delayed. `_root_fb` will only exist in the quadrants.lang.impl</span>
+<span class="c1"># module, so writing to it is would result in less for maintenance cost.</span>
 <span class="c1">#</span>
 <span class="c1"># `_root_fb` will be overridden inside :func:`quadrants.lang.init`.</span>
 <span class="n">_root_fb</span> <span class="o">=</span> <span class="n">_UninitializedRootFieldsBuilder</span><span class="p">()</span>
@@ -1152,12 +1178,38 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">axis_seq</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">))</span>
             <span class="n">shape_seq</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
-        <span class="n">same_level</span> <span class="o">=</span> <span class="n">order</span> <span class="ow">is</span> <span class="kc">None</span>
-        <span class="n">_create_snode</span><span class="p">(</span><span class="n">axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span>
+        <span class="c1"># Allocate as a SINGLE rank-``dim`` dense SNode, always.</span>
+        <span class="c1">#</span>
+        <span class="c1"># When ``order`` is set the canonical-axis permutation is encoded as:</span>
+        <span class="c1">#   * the SNode is allocated at the *permuted physical shape* (``shape_seq`` above already reflects</span>
+        <span class="c1">#     ``shape[axis_seq]``), using the natural ``axes(0, 1, ..., dim-1)`` declaration, and</span>
+        <span class="c1">#   * the field is tagged with ``_qd_layout = tuple(axis_seq)`` so that ``build_Subscript`` /</span>
+        <span class="c1">#     ``build_struct_for`` permute canonical user indices into physical storage order at the AST level (same</span>
+        <span class="c1">#     rewrite mechanism as layout-tagged ndarrays).</span>
+        <span class="c1">#</span>
+        <span class="c1"># This replaces the legacy scheme of building a nested stack of rank-1 dense SNodes (one per axis), which</span>
+        <span class="c1"># doubled the number of ``linearize`` / SNode ``lookup`` operations per subscript for no memory-layout benefit</span>
+        <span class="c1"># (physical byte order is determined by the shape-permutation, not by SNode nesting depth). See the CHI IR</span>
+        <span class="c1"># comparison in ``perso_hugh/doc/regression_2026apr23_stork_log.md`` (Experiment N+1) and the byte-identity</span>
+        <span class="c1"># regression tests in ``tests/python/test_tensor_layout_physical_bytes.py``.</span>
+        <span class="n">flat_axis_seq</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">))</span>
+        <span class="n">phys_offset</span> <span class="o">=</span> <span class="n">offset</span>
+        <span class="k">if</span> <span class="n">order</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">phys_offset</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">offset</span><span class="p">[</span><span class="n">axis_seq</span><span class="p">[</span><span class="n">p</span><span class="p">]]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">))</span>
+        <span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
-            <span class="n">_create_snode</span><span class="p">(</span><span class="n">axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x_grad</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span>
+            <span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x_grad</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">needs_dual</span><span class="p">:</span>
-            <span class="n">_create_snode</span><span class="p">(</span><span class="n">axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x_dual</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span>
+            <span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x_dual</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">order</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Identity layout is normalised out earlier by ``_layout_to_order`` (``order=`` is not passed when layout</span>
+            <span class="c1"># is the default permutation).</span>
+            <span class="n">_qd_layout</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">axis_seq</span><span class="p">)</span>
+            <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="n">_qd_layout</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span>
+            <span class="k">if</span> <span class="n">x_grad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="n">x_grad</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="n">_qd_layout</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span>
+            <span class="k">if</span> <span class="n">x_dual</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="n">x_dual</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="n">_qd_layout</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span>
     <span class="k">return</span> <span class="n">x</span>
 
 
@@ -1167,10 +1219,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">field</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Defines a Quadrants field.</span>
 
-<span class="sd">    A Quadrants field can be viewed as an abstract N-dimensional array, hiding away</span>
-<span class="sd">    the complexity of how its underlying :class:`~quadrants.lang.snode.SNode` are</span>
-<span class="sd">    actually defined. The data in a Quadrants field can be directly accessed by</span>
-<span class="sd">    a Quadrants :func:`~quadrants.lang.kernel_impl.kernel`.</span>
+<span class="sd">    A Quadrants field can be viewed as an abstract N-dimensional array, hiding away the complexity of how its</span>
+<span class="sd">    underlying :class:`~quadrants.lang.snode.SNode` are actually defined. The data in a Quadrants field can be</span>
+<span class="sd">    directly accessed by a Quadrants :func:`~quadrants.lang.kernel_impl.kernel`.</span>
 
 <span class="sd">    See also https://docs.taichi-lang.org/docs/field</span>
 
@@ -1180,10 +1231,10 @@
 <span class="sd">        order (str, optional): order of the shape laid out in memory.</span>
 <span class="sd">        name (str, optional): name of the field.</span>
 <span class="sd">        offset (Union[int, tuple[int]], optional): offset of the field domain.</span>
-<span class="sd">        needs_grad (bool, optional): whether this field participates in autodiff (reverse mode)</span>
-<span class="sd">            and thus needs an adjoint field to store the gradients.</span>
-<span class="sd">        needs_dual (bool, optional): whether this field participates in autodiff (forward mode)</span>
-<span class="sd">            and thus needs an dual field to store the gradients.</span>
+<span class="sd">        needs_grad (bool, optional): whether this field participates in autodiff (reverse mode) and thus needs an</span>
+<span class="sd">            adjoint field to store the gradients.</span>
+<span class="sd">        needs_dual (bool, optional): whether this field participates in autodiff (forward mode) and thus needs a dual</span>
+<span class="sd">            field to store the gradients.</span>
 
 <span class="sd">    Example::</span>
 
@@ -1395,8 +1446,7 @@
 
 <span class="nd">@quadrants_scope</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">qd_assert</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">extra_args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">):</span>
-    <span class="c1"># Mostly a wrapper to help us convert from Expr (defined in Python) to</span>
-    <span class="c1"># _qd_core.Expr (defined in C++)</span>
+    <span class="c1"># Mostly a wrapper to help us convert from Expr (defined in Python) to _qd_core.Expr (defined in C++)</span>
     <span class="n">ast_builder</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
     <span class="n">ast_builder</span><span class="o">.</span><span class="n">create_assert_stmt</span><span class="p">(</span><span class="n">Expr</span><span class="p">(</span><span class="n">cond</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">extra_args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">)</span>
 
@@ -1519,9 +1569,8 @@
 <span class="sd">            &gt;&gt;&gt;     else:</span>
 <span class="sd">            &gt;&gt;&gt;         do_b()</span>
 
-<span class="sd">        Depending on the value of ``cond``, ``run()`` will be directly compiled</span>
-<span class="sd">        into either ``do_a()`` or ``do_b()``. Thus there won&#39;t be a runtime</span>
-<span class="sd">        condition check.</span>
+<span class="sd">        Depending on the value of ``cond``, ``run()`` will be directly compiled into either ``do_a()`` or ``do_b()``.</span>
+<span class="sd">        Thus there won&#39;t be a runtime condition check.</span>
 
 <span class="sd">        Another common usage is for compile-time loop unrolling::</span>
 
@@ -1653,9 +1702,8 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the maximum shared memory per block in bytes.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        is_lowerbound_ok: If True, return a conservative lower bound based on</span>
-<span class="sd">            hardware specifications. If False, raise RuntimeError for backends</span>
-<span class="sd">            where the exact value cannot be queried.</span>
+<span class="sd">        is_lowerbound_ok: If True, return a conservative lower bound based on hardware specifications. If False,</span>
+<span class="sd">            raise RuntimeError for backends where the exact value cannot be queried.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
@@ -1669,8 +1717,7 @@
             <span class="c1"># https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf</span>
             <span class="k">return</span> <span class="mi">32</span> <span class="o">*</span> <span class="mi">1024</span>
         <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
-            <span class="c1"># AMD GPUs have 64KB LDS per workgroup since at least RDNA 2</span>
-            <span class="c1"># (Nov 2020).</span>
+            <span class="c1"># AMD GPUs have 64KB LDS per workgroup since at least RDNA 2 (Nov 2020).</span>
             <span class="c1"># https://rocm.docs.amd.com/en/docs-6.0.2/reference/gpu-arch/gpu-arch-spec-overview.html</span>
             <span class="k">return</span> <span class="mi">64</span> <span class="o">*</span> <span class="mi">1024</span>
         <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">vulkan</span><span class="p">:</span>

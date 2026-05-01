@@ -186,6 +186,22 @@ Module Contents
       :type:  int
 
 
+   .. py:attribute:: ndarray_to_any_array
+      :type:  dict[int, Any]
+
+
+   .. py:attribute:: struct_ndarray_launch_info
+      :type:  list[tuple]
+      :value: []
+
+
+
+   .. py:attribute:: caller_loop_depth
+      :type:  int
+      :value: 0
+
+
+
 .. py:class:: ASTTransformerFuncContext(global_context: ASTTransformerGlobalContext, template_slot_locations, end_lineno: int, is_kernel: bool, func: quadrants.lang._func_base.FuncBase, arg_features: list[tuple[Any, Ellipsis]] | None, global_vars: dict[str, Any], template_vars: dict[str, Any], is_pure: bool, py_args: tuple[Any, Ellipsis], file: str, src: list[str], start_lineno: int, ast_builder: quadrants._lib.core.quadrants_python.ASTBuilder | None, is_real_function: bool, autodiff_mode: AutodiffMode, raise_on_templated_floats: bool)
 
    .. py:attribute:: global_context

@@ -17,7 +17,9 @@ supported_systems
 tensor_types
 scalar_tensors
 matrix_vector
+tensor
 compound_types
+buffer_view
 static
 sub_functions
 parallelization
@@ -53,9 +55,11 @@ tile16
 :maxdepth: 1
 :titlesonly:
 
+fastcache
 graph
 streams
 perf_dispatch
+init_options
 ```
 
 ```{toctree}

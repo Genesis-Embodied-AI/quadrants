@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.stream &#8212; Quadrants 0.7.3 documentation</title>
+    <title>quadrants.lang.stream &#8212; Quadrants 0.7.4 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../_static/documentation_options.js?v=c98573da"></script>
+    <script src="../../../../_static/documentation_options.js?v=020ce317"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.source_builder" href="../source_builder/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.3" />
+  <meta name="docsearch:version" content="0.7.4" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
   
 </a></div>
     
@@ -385,8 +385,8 @@
 <dt class="sig sig-object py" id="quadrants.lang.stream.Stream">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.stream.</span></span><span class="sig-name descname"><span class="pre">Stream</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">handle</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prog_ref</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">weakref.ref</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/stream.html#Stream"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.stream.Stream" title="Link to this definition">#</a></dt>
 <dd><p>Wraps a backend-specific GPU stream for concurrent kernel execution.</p>
-<p>On backends without native streams (e.g. CPU), this is a no-op object.
-Call destroy() explicitly or use as a context manager to ensure cleanup.</p>
+<p>On backends without native streams (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as
+a context manager to ensure cleanup.</p>
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants.lang.stream.Stream.handle">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">handle</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/stream.html#Stream.handle"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.stream.Stream.handle" title="Link to this definition">#</a></dt>
@@ -402,6 +402,7 @@ Call destroy() explicitly or use as a context manager to ensure cleanup.</p>
 <dt class="sig sig-object py" id="quadrants.lang.stream.Stream.destroy">
 <span class="sig-name descname"><span class="pre">destroy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/stream.html#Stream.destroy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.stream.Stream.destroy" title="Link to this definition">#</a></dt>
 <dd><p>Explicitly destroy the stream. Safe to call multiple times.</p>
+<p>No-op for streams wrapping external handles (created via Stream(ptr) without a prog_ref).</p>
 </dd></dl>
 
 </dd></dl>
@@ -410,8 +411,8 @@ Call destroy() explicitly or use as a context manager to ensure cleanup.</p>
 <dt class="sig sig-object py" id="quadrants.lang.stream.Event">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.stream.</span></span><span class="sig-name descname"><span class="pre">Event</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">handle</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prog_ref</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">weakref.ref</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/stream.html#Event"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.stream.Event" title="Link to this definition">#</a></dt>
 <dd><p>Wraps a backend-specific GPU event for stream synchronization.</p>
-<p>On backends without native events (e.g. CPU), this is a no-op object.
-Call destroy() explicitly or use as a context manager to ensure cleanup.</p>
+<p>On backends without native events (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as
+a context manager to ensure cleanup.</p>
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants.lang.stream.Event.handle">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">handle</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/stream.html#Event.handle"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.stream.Event.handle" title="Link to this definition">#</a></dt>
@@ -439,6 +440,7 @@ Call destroy() explicitly or use as a context manager to ensure cleanup.</p>
 <dt class="sig sig-object py" id="quadrants.lang.stream.Event.destroy">
 <span class="sig-name descname"><span class="pre">destroy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/stream.html#Event.destroy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.stream.Event.destroy" title="Link to this definition">#</a></dt>
 <dd><p>Explicitly destroy the event. Safe to call multiple times.</p>
+<p>No-op for events wrapping external handles (created via Event(ptr) without a prog_ref).</p>
 </dd></dl>
 
 </dd></dl>
@@ -459,9 +461,8 @@ Call destroy() explicitly or use as a context manager to ensure cleanup.</p>
 <dt class="sig sig-object py" id="quadrants.lang.stream.stream_parallel">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.stream.</span></span><span class="sig-name descname"><span class="pre">stream_parallel</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/stream.html#stream_parallel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.stream.stream_parallel" title="Link to this definition">#</a></dt>
 <dd><p>Run top-level for loops in this block on separate GPU streams.</p>
-<p>Used inside &#64;qd.kernel. At Python runtime (outside kernels), this is a
-no-op. During kernel compilation, the AST transformer calls into the C++
-ASTBuilder to tag loops with a stream-parallel group ID.</p>
+<p>Used inside &#64;qd.kernel. At Python runtime (outside kernels), this is a no-op. During kernel compilation, the AST
+transformer calls into the C++ ASTBuilder to tag loops with a stream-parallel group ID.</p>
 </dd></dl>
 
 </section>

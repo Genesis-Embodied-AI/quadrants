@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.stream &#8212; Quadrants 0.7.3 documentation</title>
+    <title>quadrants.lang.stream &#8212; Quadrants 0.7.4 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../_static/documentation_options.js?v=c98573da"></script>
+    <script src="../../../_static/documentation_options.js?v=020ce317"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.3" />
+  <meta name="docsearch:version" content="0.7.4" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
   
 </a></div>
     
@@ -332,8 +332,8 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">Stream</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Wraps a backend-specific GPU stream for concurrent kernel execution.</span>
 
-<span class="sd">    On backends without native streams (e.g. CPU), this is a no-op object.</span>
-<span class="sd">    Call destroy() explicitly or use as a context manager to ensure cleanup.</span>
+<span class="sd">    On backends without native streams (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as</span>
+<span class="sd">    a context manager to ensure cleanup.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handle</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">prog_ref</span><span class="p">:</span> <span class="n">weakref</span><span class="o">.</span><span class="n">ref</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
@@ -358,8 +358,11 @@
 <div class="viewcode-block" id="Stream.destroy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Stream.destroy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">destroy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Explicitly destroy the stream. Safe to call multiple times.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Explicitly destroy the stream. Safe to call multiple times.</span>
+
+<span class="sd">        No-op for streams wrapping external handles (created via Stream(ptr) without a prog_ref).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
             <span class="n">prog</span><span class="o">.</span><span class="n">stream_destroy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">=</span> <span class="mi">0</span></div>
@@ -388,8 +391,8 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">Event</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Wraps a backend-specific GPU event for stream synchronization.</span>
 
-<span class="sd">    On backends without native events (e.g. CPU), this is a no-op object.</span>
-<span class="sd">    Call destroy() explicitly or use as a context manager to ensure cleanup.</span>
+<span class="sd">    On backends without native events (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as</span>
+<span class="sd">    a context manager to ensure cleanup.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handle</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">prog_ref</span><span class="p">:</span> <span class="n">weakref</span><span class="o">.</span><span class="n">ref</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
@@ -432,8 +435,11 @@
 <div class="viewcode-block" id="Event.destroy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Event.destroy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">destroy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Explicitly destroy the event. Safe to call multiple times.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Explicitly destroy the event. Safe to call multiple times.</span>
+
+<span class="sd">        No-op for events wrapping external handles (created via Event(ptr) without a prog_ref).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
             <span class="n">prog</span><span class="o">.</span><span class="n">event_destroy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">=</span> <span class="mi">0</span></div>
@@ -483,9 +489,8 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">stream_parallel</span><span class="p">():</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Run top-level for loops in this block on separate GPU streams.</span>
 
-<span class="sd">    Used inside @qd.kernel. At Python runtime (outside kernels), this is a</span>
-<span class="sd">    no-op. During kernel compilation, the AST transformer calls into the C++</span>
-<span class="sd">    ASTBuilder to tag loops with a stream-parallel group ID.</span>
+<span class="sd">    Used inside @qd.kernel. At Python runtime (outside kernels), this is a no-op. During kernel compilation, the AST</span>
+<span class="sd">    transformer calls into the C++ ASTBuilder to tag loops with a stream-parallel group ID.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">yield</span></div>
 

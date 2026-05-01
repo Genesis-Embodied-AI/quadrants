@@ -30,8 +30,8 @@ Module Contents
 
    Wraps a backend-specific GPU stream for concurrent kernel execution.
 
-   On backends without native streams (e.g. CPU), this is a no-op object.
-   Call destroy() explicitly or use as a context manager to ensure cleanup.
+   On backends without native streams (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as
+   a context manager to ensure cleanup.
 
 
    .. py:property:: handle
@@ -49,14 +49,16 @@ Module Contents
 
       Explicitly destroy the stream. Safe to call multiple times.
 
+      No-op for streams wrapping external handles (created via Stream(ptr) without a prog_ref).
+
 
 
 .. py:class:: Event(handle: int, prog_ref: weakref.ref | None = None)
 
    Wraps a backend-specific GPU event for stream synchronization.
 
-   On backends without native events (e.g. CPU), this is a no-op object.
-   Call destroy() explicitly or use as a context manager to ensure cleanup.
+   On backends without native events (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as
+   a context manager to ensure cleanup.
 
 
    .. py:property:: handle
@@ -86,6 +88,8 @@ Module Contents
 
       Explicitly destroy the event. Safe to call multiple times.
 
+      No-op for events wrapping external handles (created via Event(ptr) without a prog_ref).
+
 
 
 .. py:function:: create_stream() -> Stream
@@ -102,8 +106,7 @@ Module Contents
 
    Run top-level for loops in this block on separate GPU streams.
 
-   Used inside @qd.kernel. At Python runtime (outside kernels), this is a
-   no-op. During kernel compilation, the AST transformer calls into the C++
-   ASTBuilder to tag loops with a stream-parallel group ID.
+   Used inside @qd.kernel. At Python runtime (outside kernels), this is a no-op. During kernel compilation, the AST
+   transformer calls into the C++ ASTBuilder to tag loops with a stream-parallel group ID.
 
 

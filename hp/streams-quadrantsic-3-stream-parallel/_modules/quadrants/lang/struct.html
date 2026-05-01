@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.struct &#8212; Quadrants 0.7.3 documentation</title>
+    <title>quadrants.lang.struct &#8212; Quadrants 0.7.4 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../_static/documentation_options.js?v=c98573da"></script>
+    <script src="../../../_static/documentation_options.js?v=020ce317"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.3" />
+  <meta name="docsearch:version" content="0.7.4" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
   
 </a></div>
     
@@ -926,34 +926,37 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="StructField.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.to_numpy">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the Struct field instance to a dictionary of NumPy arrays.</span>
 
 <span class="sd">        The dictionary may be nested when converting nested structs.</span>
 
+<span class="sd">        Args:</span>
+<span class="sd">            copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises.</span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            Dict[str, Union[numpy.ndarray, Dict]]: The result NumPy array.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
+        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
 
 
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="StructField.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.to_torch">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the Struct field instance to a dictionary of PyTorch tensors.</span>
 
 <span class="sd">        The dictionary may be nested when converting nested structs.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            device (torch.device, optional): The</span>
-<span class="sd">                desired device of returned tensor.</span>
+<span class="sd">            device (torch.device, optional): The desired device of returned tensor.</span>
+<span class="sd">            copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Dict[str, Union[torch.Tensor, Dict]]: The result</span>
 <span class="sd">                PyTorch tensor.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
+        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
 
 
     <span class="nd">@python_scope</span>
