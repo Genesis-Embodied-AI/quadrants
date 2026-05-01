@@ -199,8 +199,7 @@ def test_stream_with_ndarray():
 
 @test_utils.test()
 def test_concurrent_streams_with_events():
-    """Two slow kernels on separate streams run concurrently (~1s on GPU),
-    serial fallback on CPU/Metal."""
+    """Two slow kernels on separate streams run concurrently (~1s on GPU), serial fallback on CPU/Metal."""
     SPIN_ITERS = 5_000_000
 
     @qd.kernel
