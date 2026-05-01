@@ -3320,8 +3320,8 @@ def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
-@test_utils.test(arch=[qd.cpu], require=qd.extension.adstack, ad_stack_size=0, debug=False)
-def test_adstack_static_bound_expr_snode_gate_cpu_grad_correct():
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=0, debug=False)
+def test_adstack_static_bound_expr_snode_gate_primal_dependent_grad_correct():
     # Pins the SNode-backed bound_expr arm of `publish_per_task_bound_count_cpu` (the LLVM CPU host reducer in
     # `runtime/llvm/llvm_runtime_executor.cpp`). The CPU launcher passes `bound_count_length = snode_iter_count`
     # for SNode source kinds, but without the host-side SNode walk the reducer leaves the per-task capacity
@@ -3395,12 +3395,7 @@ def test_adstack_static_bound_expr_snode_gate_cpu_grad_correct():
         assert got_grad[i] == pytest.approx(expected[i], rel=1e-5, abs=1e-7)
 
 
-@test_utils.test(
-    arch=[qd.cpu, qd.cuda, qd.amdgpu],
-    require=[qd.extension.adstack, qd.extension.data64],
-    ad_stack_size=0,
-    debug=False,
-)
+@test_utils.test(require=[qd.extension.adstack, qd.extension.data64], ad_stack_size=0, debug=False)
 def test_adstack_static_bound_expr_snode_gate_multileaf_dense_grad_correct():
     # Pins the LLVM snode_resolver against multi-leaf dense parents with mixed-size children. The dense parent
     # `qd.root.dense(qd.i, n).place(field_f64, field_f32)` has two leaves of sizes 8 and 4 bytes; the LLVM struct
@@ -3728,6 +3723,8 @@ def test_adstack_gpu_dispatch_cap_uses_floor_division():
     # raises `RuntimeError: ... hipErrorIllegalAddress` (AMDGPU) / `cudaErrorIllegalAddress` (CUDA); on the
     # fixed tree `cap_blocks = floor(65536 / 192) = 341` and dispatched = `341 * 192 = 65472` stays within
     # the heap and the gradient matches the numpy reference.
+    #
+    # arch=[qd.cuda, qd.amdgpu] only because Metal requires `block_dim` to be a power of two.
     n = 65700
     block_dim = 192
     n_inner = 6
@@ -3765,7 +3762,7 @@ def test_adstack_gpu_dispatch_cap_uses_floor_division():
     np.testing.assert_allclose(got_grad, grad_ref, rtol=1e-5, atol=1e-6)
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu], require=qd.extension.adstack, ad_stack_size=0, debug=False)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=0, debug=False)
 def test_adstack_static_bound_expr_device_sizer_per_kind_offsets_grad_correct():
     # Pins the per-kind out_offsets[i] write in the LLVM device sizer (`runtime_eval_adstack_size_expr` in
     # `runtime/llvm/runtime_module/runtime.cpp`). The sizer runs on CUDA / AMDGPU when at least one captured
@@ -3824,7 +3821,7 @@ def test_adstack_static_bound_expr_device_sizer_per_kind_offsets_grad_correct():
         assert x.grad[i] == pytest.approx(expected, rel=1e-5)
 
 
-@test_utils.test(arch=[qd.metal, qd.vulkan], require=qd.extension.adstack, ad_stack_size=0)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=0)
 def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
     # Pins the SPIR-V launcher's resolve_length walking the full ndarray flat product instead of capping at
     # advisory_total_num_threads. range_for kernels with a captured ndarray-backed gating predicate over a
@@ -3887,7 +3884,7 @@ def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
         )
 
 
-@test_utils.test(arch=[qd.metal, qd.vulkan], require=qd.extension.adstack, ad_stack_size=0)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=0)
 def test_adstack_static_bound_expr_eager_task_last_observed_skipped():
     # Pins the SPIR-V synchronize() row-counter readback gating: eager-path tasks (no captured `bound_expr`)
     # never atomic-add into their counter slot, so the post-clear zero must NOT be cached into
