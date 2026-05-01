@@ -132,9 +132,8 @@ def create_event() -> Event:
 def stream_parallel():
     """Run top-level for loops in this block on separate GPU streams.
 
-    Used inside @qd.kernel. At Python runtime (outside kernels), this is a
-    no-op. During kernel compilation, the AST transformer calls into the C++
-    ASTBuilder to tag loops with a stream-parallel group ID.
+    Used inside @qd.kernel. At Python runtime (outside kernels), this is a no-op. During kernel compilation, the AST
+    transformer calls into the C++ ASTBuilder to tag loops with a stream-parallel group ID.
     """
     yield
 

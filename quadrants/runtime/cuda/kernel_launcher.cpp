@@ -54,9 +54,14 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
   auto *active_stream = CUDAContext::get_instance().get_stream();
   for (size_t i = 0; i < offloaded_tasks.size();) {
     const auto &task = offloaded_tasks[i];
-    std::size_t n = resolve_num_threads(task.ad_stack, executor);
-    executor->publish_adstack_metadata(task.ad_stack, n, &ctx, device_context_ptr);
     if (task.stream_parallel_group_id == 0) {
+      std::size_t n = resolve_num_threads(task.ad_stack, executor);
+      // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without it the sizer
+      // launches with a host pointer and the next DtoH sync trips `CUDA_ERROR_ILLEGAL_ADDRESS ...
+      // memcpy_device_to_host` on GPUs whose driver + kernel cannot coherently access pageable host memory (the HMM
+      // capability gated below in `launch_llvm_kernel`). `nullptr` on HMM-capable setups keeps
+      // `publish_adstack_metadata`'s host-pointer fast path.
+      executor->publish_adstack_metadata(task.ad_stack, n, &ctx, device_context_ptr);
       QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
       cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
                           {&ctx.get_context()}, {});
@@ -79,6 +84,8 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
 
       for (size_t j = group_start; j < i; j++) {
         const auto &t = offloaded_tasks[j];
+        std::size_t n_t = resolve_num_threads(t.ad_stack, executor);
+        executor->publish_adstack_metadata(t.ad_stack, n_t, &ctx, device_context_ptr);
         CUDAContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
         cuda_module->launch(t.name, t.grid_dim, t.block_dim, t.dynamic_shared_array_bytes, {&ctx.get_context()}, {});
       }
