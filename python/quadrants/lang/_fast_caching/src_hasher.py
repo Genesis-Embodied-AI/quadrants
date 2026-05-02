@@ -12,7 +12,7 @@ from quadrants import _logging
 from .._wrap_inspect import FunctionSourceInfo
 from ..kernel_arguments import ArgMetadata
 from . import args_hasher, config_hasher, function_hasher
-from .args_hasher import HashFailure
+from .args_hasher import FastcacheSkip
 from .fast_caching_types import HashedFunctionSourceInfo
 from .hash_utils import hash_iterable_strings
 from .python_side_cache import PythonSideCache
@@ -32,8 +32,8 @@ def create_cache_key(
     - compilation config (which includes arch, and debug)
     """
     args_hash = args_hasher.hash_args(raise_on_templated_floats, args, arg_metas)
-    if isinstance(args_hash, HashFailure):
-        if args_hash is HashFailure.UNEXPECTED_TYPE:
+    if isinstance(args_hash, FastcacheSkip):
+        if args_hash is FastcacheSkip.WARN:
             # the bit in caps at start should not be modified without modifying corresponding text
             # freetext bit can be freely modified
             _logging.warn(

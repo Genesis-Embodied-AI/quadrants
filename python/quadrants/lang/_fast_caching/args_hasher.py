@@ -39,16 +39,16 @@ FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 _DC_REPR_NONE = object()
 
 
-class HashFailure(enum.Enum):
-    """Why hash_args could not produce a cache key."""
+class FastcacheSkip(enum.Enum):
+    """Why fastcache does not apply to this call."""
 
     FIELD_VIA_TENSOR = "field_via_tensor"
-    UNEXPECTED_TYPE = "unexpected_type"
+    WARN = "warn"
 
 
-# Set by stringify_obj_type / dataclass_to_repr when the failure is not simply a Field arriving through a qd.Tensor
-# annotation. Reset at the start of each hash_args call.
-_had_unexpected_type = False
+# Set when the hash failure is something callers should warn about (as opposed to a Field arriving through a qd.Tensor
+# annotation, which is a normal silent path). Reset at the start of each hash_args call.
+_should_warn = False
 
 
 def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], arg: Any) -> str | None:
@@ -70,8 +70,8 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
         _repr = stringify_obj_type(raise_on_templated_floats, path + (field.name,), child_value, arg_meta=None)
         if _repr is None:
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
-                global _had_unexpected_type
-                _had_unexpected_type = True
+                global _should_warn
+                _should_warn = True
             if is_frozen:
                 try:
                     object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
@@ -164,7 +164,7 @@ def stringify_obj_type(
         for k, v in _dict.items():
             _child_repr = stringify_obj_type(raise_on_templated_floats, (*path, k), v, ArgMetadata(Template, ""))
             if _child_repr is None:
-                if _had_unexpected_type:
+                if _should_warn:
                     _logging.warn(
                         f"A kernel that has been marked as eligible for fast cache was passed 1 or more parameters "
                         f"that are not, in fact, eligible for fast cache: one of the parameters was a "
@@ -190,8 +190,8 @@ def stringify_obj_type(
         return "np.bool_"
     if isinstance(obj, enum.Enum):
         return f"enum-{obj.name}-{obj.value}"
-    global _had_unexpected_type
-    _had_unexpected_type = True
+    global _should_warn
+    _should_warn = True
     # The bit in caps should not be modified without updating corresponding test
     # The rest of free text can be freely modified
     # (will probably formalize this in more general doc / contributor guidelines at some point)
@@ -203,10 +203,10 @@ def stringify_obj_type(
 
 def hash_args(
     raise_on_templated_floats: bool, args: Sequence[Any], arg_metas: Sequence[ArgMetadata | None]
-) -> str | HashFailure:
+) -> str | FastcacheSkip:
     """Return the args hash string, or a HashFailure explaining why hashing failed."""
-    global g_num_calls, g_num_args, g_hashing_time, g_repr_time, g_num_ignored_calls, _had_unexpected_type
-    _had_unexpected_type = False
+    global g_num_calls, g_num_args, g_hashing_time, g_repr_time, g_num_ignored_calls, _should_warn
+    _should_warn = False
     g_num_calls += 1
     g_num_args += len(args)
     hash_l = []
@@ -220,7 +220,7 @@ def hash_args(
         g_repr_time += time.time() - start
         if not _hash:
             g_num_ignored_calls += 1
-            return HashFailure.UNEXPECTED_TYPE if _had_unexpected_type else HashFailure.FIELD_VIA_TENSOR
+            return FastcacheSkip.WARN if _should_warn else FastcacheSkip.FIELD_VIA_TENSOR
         hash_l.append(_hash)
     start = time.time()
     res = hash_iterable_strings(hash_l)
