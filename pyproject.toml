@@ -132,6 +132,10 @@ source = [
 [tool.coverage.report]
 
 [tool.pytest.ini_options]
+markers = [
+    "benchmarks: long-running launch-overhead benchmarks (deselected by default)",
+]
+addopts = "-m 'not benchmarks'"
 filterwarnings = [
     "ignore:Calling non-taichi function",
     "ignore:`np.int` is a deprecated alias",

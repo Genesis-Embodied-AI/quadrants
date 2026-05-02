@@ -30,7 +30,7 @@ jobs:
           bash .github/workflows/scripts_new/linux/2_build.sh
           bash .github/workflows/scripts_new/linux/3_install.sh
       - name: Run launch-overhead benchmarks
-        run: pytest benchmarks/launch_overhead/bench_launch_overhead.py -v -s
+        run: pytest tests/python/test_launch_overhead.py -m benchmarks -v -s
       - name: Upload results as artifact
         if: always()
         uses: actions/upload-artifact@v4
