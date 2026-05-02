@@ -35,21 +35,34 @@ class Stream:
             raise RuntimeError("Stream's owning Program has been destroyed (e.g. after qd.reset())")
         prog.stream_synchronize(self._handle)
 
+    def _destroy_prog(self):
+        """Resolve a Program for resource cleanup.
+
+        Falls back to the current runtime when the owner has been collected, which is safe because
+        CUDAContext is a singleton so the CUDA stream handle remains valid.
+        """
+        prog = self._prog()
+        if prog is None:
+            try:
+                return impl.get_runtime().prog
+            except Exception:
+                return None
+        return prog
+
     def destroy(self):
         """Explicitly destroy the stream. Safe to call multiple times.
 
-        No-op if the owning Program has already been collected, or for streams wrapping external handles
-        (created via Stream(ptr) without a prog_ref).
+        No-op for streams wrapping external handles (created via Stream(ptr) without a prog_ref).
         """
         if self._handle != 0 and self._prog_ref is not None:
-            prog = self._prog()
+            prog = self._destroy_prog()
             if prog is not None:
                 prog.stream_destroy(self._handle)
             self._handle = 0
 
     def __del__(self):
         if self._handle != 0 and self._prog_ref is not None:
-            prog = self._prog_ref()
+            prog = self._destroy_prog()
             if prog is not None:
                 try:
                     prog.stream_destroy(self._handle)
@@ -105,21 +118,34 @@ class Event:
         """Block the host until this event has been reached."""
         self._require_prog().event_synchronize(self._handle)
 
+    def _destroy_prog(self):
+        """Resolve a Program for resource cleanup.
+
+        Falls back to the current runtime when the owner has been collected, which is safe because
+        CUDAContext is a singleton so the CUDA event handle remains valid.
+        """
+        prog = self._prog()
+        if prog is None:
+            try:
+                return impl.get_runtime().prog
+            except Exception:
+                return None
+        return prog
+
     def destroy(self):
         """Explicitly destroy the event. Safe to call multiple times.
 
-        No-op if the owning Program has already been collected, or for events wrapping external handles
-        (created via Event(ptr) without a prog_ref).
+        No-op for events wrapping external handles (created via Event(ptr) without a prog_ref).
         """
         if self._handle != 0 and self._prog_ref is not None:
-            prog = self._prog()
+            prog = self._destroy_prog()
             if prog is not None:
                 prog.event_destroy(self._handle)
             self._handle = 0
 
     def __del__(self):
         if self._handle != 0 and self._prog_ref is not None:
-            prog = self._prog_ref()
+            prog = self._destroy_prog()
             if prog is not None:
                 try:
                     prog.event_destroy(self._handle)
