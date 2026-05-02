@@ -3335,7 +3335,7 @@ def test_adstack_static_bound_expr_ndarray_gate_compound_index_grad_correct():
         "affine_div",
         "constant_index",
         "dynamic_load_index",
-        "shared_source_decomp",
+        "aliased_two_axis",
     ],
 )
 @test_utils.test(
@@ -3346,37 +3346,36 @@ def test_adstack_static_bound_expr_ndarray_gate_compound_index_grad_correct():
 )
 def test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct(gate_shape):
     # Pins gradient correctness on parallel-dispatched backends for `qd.field`-backed gates whose index expression
-    # is not, or cannot be statically proven to be, a per-iteration bijection with the SNode cell space. Five
-    # shapes exercised:
-    #   * `compound_mod`:        `selector[i % K]` with K < n       (loop hits each cell n/K times)
-    #   * `affine_div`:          `selector[i / 2]`                  (pairs of iterations alias onto one cell)
-    #   * `constant_index`:      `selector[K // 2]`                 (every iteration hits the same cell)
-    #   * `dynamic_load_index`:  `selector[idx_field[i]]`           (axis is a runtime load, not loop-derivable)
-    #   * `shared_source_decomp`: `selector[i // 2, i % 2]`         (multi-axis ndrange-style decomp from a single
-    #                                                                loop variable; each iteration visits a unique
-    #                                                                cell, but the analysis cannot prove the
-    #                                                                divisors / moduli form a non-overlapping
-    #                                                                partition without per-axis size analysis -
-    #                                                                conservatively rejected as future work)
+    # is not a per-iteration bijection with the SNode cell space. Five shapes exercised:
+    #   * `compound_mod`:       `selector[i % K]` with K < n           (loop hits each cell n/K times)
+    #   * `affine_div`:         `selector[i / 2]`                      (pairs of iterations alias onto one cell)
+    #   * `constant_index`:     `selector[K // 2]`                     (every iteration hits the same cell)
+    #   * `dynamic_load_index`: `selector[idx_field[i]]`               (axis is a runtime load, not loop-derivable)
+    #   * `aliased_two_axis`:   `selector[i % K, i % K]`               (multi-axis gate where two axes share a
+    #                                                                   value; CSE fuses the two `i % K` to a
+    #                                                                   single `BinaryOpStmt`, the value-based
+    #                                                                   axis dedup collapses them and the
+    #                                                                   distinct-axis check rejects the joint
+    #                                                                   mapping that would otherwise alias n
+    #                                                                   iterations onto K diagonal cells)
     # In all five the SNode arm of `match_field_source` must refuse capture so the runtime falls back to the
     # dispatched-threads worst-case heap. With cross-row aliasing on a wrongly-captured heap, the reverse pass
     # reads a different thread's gate bool from the boolean adstack - the wrong set of `i` values contributes
     # to the gradient and the per-`i` mismatch is detectable even with a linear inner recurrence (the body's
-    # chain rule may not need the primal, but the gate's boolean adstack does). Without the rejection, the
-    # captured count would either undersize the heap (compound_mod / affine_div folds) or capture a
-    # launch-constant count smaller than the n iterations claim (constant_index / dynamic_load_index), aliasing
-    # rows past the reducer's bound. CPU is excluded from `arch=` because its dispatch thread count is small
-    # enough that the alias rarely fires.
+    # chain rule may not need the primal, but the gate's boolean adstack does). CPU is excluded from `arch=`
+    # because its dispatch thread count is small enough that the alias rarely fires. The companion bijective
+    # multi-axis decomposition `selector[i // K, i % K]` is covered by
+    # `test_adstack_static_bound_expr_snode_gate_bijective_decomposed_index_grad_correct`.
     n = 256
     K = 64
     n_iter = 8
     eps = 1e-9
 
     affine_div_size = n  # snode size = n keeps `loop_iter <= snode_iter_count`, so the iter-count check passes
-    if gate_shape == "shared_source_decomp":
-        selector_shape = (n // 2, 2)
-    elif gate_shape == "affine_div":
+    if gate_shape == "affine_div":
         selector_shape = (affine_div_size,)
+    elif gate_shape == "aliased_two_axis":
+        selector_shape = (K, K)
     else:
         selector_shape = (K,)
     selector = qd.field(qd.f32, shape=selector_shape)
@@ -3396,7 +3395,7 @@ def test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct(g
                     else (
                         (K // 2,)
                         if qd.static(gate_shape == "constant_index")
-                        else ((i // 2, i % 2) if qd.static(gate_shape == "shared_source_decomp") else (idx_field[i],))
+                        else ((i % K, i % K) if qd.static(gate_shape == "aliased_two_axis") else (idx_field[i],))
                     )
                 )
             )
@@ -3431,15 +3430,62 @@ def test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct(g
         gated_per_iter = selector_np[np.arange(n) // 2] > eps
     elif gate_shape == "constant_index":
         gated_per_iter = np.full(n, bool(selector_np[K // 2] > eps))
-    elif gate_shape == "shared_source_decomp":
-        idx_pairs = np.arange(n)
-        gated_per_iter = selector_np[idx_pairs // 2, idx_pairs % 2] > eps
+    elif gate_shape == "aliased_two_axis":
+        diag = np.arange(n) % K
+        gated_per_iter = selector_np[diag, diag] > eps
     else:
         gated_per_iter = selector_np[idx_field_np] > eps
     expected = np.where(gated_per_iter, np.float32(expected_per_gated), np.float32(0.0))
     got_grad = np.array([x.grad[i] for i in range(n)], dtype=np.float32)
     assert not np.isnan(got_grad).any(), f"non-bijective-index snode grad returned NaN ({gate_shape}): {got_grad}"
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_bijective_decomposed_index_grad_correct():
+    # Bijective multi-axis gate decomposed from a single flat loop variable: `for i in range(n): if
+    # selector[i // K, i % K] > eps:`. Each iteration visits a unique cell because `(i // K, i % K)` is the
+    # canonical bijection from `[0, n_rows * K)` to `[0, n_rows) x [0, K)`. The two axes share their root
+    # `LoopIndexStmt`, but `same_value`-based deduplication recognises `i // K` and `i % K` as having
+    # different values, so the SNode arm captures and shrinks the float adstack heap to the gate-passing
+    # iteration count. Companion to `test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct`,
+    # which pins the rejected shapes on the same `for i in range(n)` loop.
+    K = 8
+    n_rows = 32
+    n = n_rows * K
+    n_iter = 8
+    eps = 1e-9
+
+    selector = qd.field(qd.f32, shape=(n_rows, K))
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in range(n):
+            if selector[i // K, i % K] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(11)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = (np.random.rand(n_rows, K) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+    compute()
+    compute.grad()
+    qd.sync()
+    idx = np.arange(n)
+    gated_per_iter = selector_np[idx // K, idx % K] > eps
+    expected = np.where(gated_per_iter, np.float32(1.05**n_iter), np.float32(0.0))
+    got = x.grad.to_numpy()
+    assert not np.isnan(got).any(), f"bijective decomposed-index snode grad returned NaN: {got}"
+    np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
@@ -3520,11 +3566,10 @@ def test_adstack_static_bound_expr_snode_gate_bijective_multi_axis_structfor_gra
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
 def test_adstack_static_bound_expr_snode_gate_bijective_multi_axis_ndrange_grad_correct():
     # Bijective multi-axis ndrange gate: `for ii, jj, kk in qd.ndrange(n, n, n): if grid[ii, jj, kk] > eps:`. Each
-    # iteration visits a unique cell. After autodiff, on backends that replay axes via per-axis adstacks (LLVM CUDA /
-    # AMDGPU) the SNode arm captures with distinct `AdStackLoadTopStmt` sources; on backends that decompose from a
-    # single linear `LoopIndexStmt` (SPIR-V Metal / Vulkan) the analysis cannot prove the joint divisor / modulus
-    # structure forms a non-overlapping partition and falls back to the worst-case heap. Either path produces correct
-    # gradients.
+    # iteration visits a unique cell. After `lower_access` rewrites the linearised offset into a `floordiv` /
+    # `mod` / `sub` arithmetic tree over a single `LoopIndexStmt`, the per-axis components hold structurally
+    # different values, so `same_value`-based deduplication of the iterating axes admits the joint-bijective
+    # decomposition uniformly across LLVM and SPIR-V backends.
     n = 16
     n_iter = 8
     eps = 1e-9

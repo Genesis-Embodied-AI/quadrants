@@ -317,19 +317,7 @@ where each quantity means:
 | `bytes_per_slot` | Depends on `T` and on the backend (see table below). |
 | `num_buffers` | Number of adstacks the kernel allocates - one per loop-carried variable plus one per dependent branch flag (see [One adstack per variable](#one-adstack-per-variable)). |
 
-The float heap is by far the main reverse-mode memory bottleneck because a typical kernel allocates many float-typed adstacks - one per floating-point loop-carried scalar, each storing both primal and adjoint - and the total scales as `num_threads * stack_size * num_float_buffers * 8` bytes, dominating the integer / boolean heap. Advanced static IR analysis is used to further shrink the float adstack in some common gated-kernel shapes. When a runtime gate sits directly above the adstack-using body and compares a single field entry to a constant, the compiler counts the gate-passing iterations at launch time and sizes the float adstack to that count instead of `num_threads * stack_size`, so a workload whose gate matches 5% of iterations pays 5% of the float-adstack cost; the float heap grows on demand if a later launch matches more, and integer / boolean adstacks stay at `num_threads * stack_size` since their pushes fire unconditionally for control-flow replay. The shrinking kicks in only when the compiler can statically prove that each loop iteration touches a different field cell; patterns where uniqueness cannot be proven statically fall back to worst-case heap `num_threads * stack_size`.
-
-Patterns that capture:
-  - **Linear range loop**: `for i in range(n): if field[i] > eps: ...`
-  - **Multi-axis StructFor**: `for I, J, K in field3d: if field3d[I, J, K] > eps: ...`
-  - **Multi-axis ndrange**: `for ii, jj, kk in qd.ndrange(*shape): if grid[ii, jj, kk] > eps: ...`
-  - **Iterating axes plus a slice**: a kernel argument or constant on an extra axis, e.g. `grid[i, 0]`, `grid[arg, ii, jj, kk]`.
-
-Patterns that fall back to the worst-case heap:
-  - **Single-axis arithmetic on the loop variable**: `field[i % K]`, `field[i / 2]`, `field[i + 5]`, `field[2 * i]`, and similar.
-  - **Constant-index gate**: `field[42]`, or any axis that is a literal constant.
-  - **Kernel-argument index, no iterating axis**: `field[arg]` where every axis is launch-constant.
-  - **Indirect index via runtime load**: `field[other_field[i]]`; the compiler cannot prove `other_field` is injective.
+The float heap is by far the main reverse-mode memory bottleneck because a typical kernel allocates many float-typed adstacks - one per floating-point loop-carried scalar, each storing both primal and adjoint - and the total scales as `num_threads * stack_size * num_float_buffers * 8` bytes, dominating the integer / boolean heap. Advanced static IR analysis is used to further shrink the float adstack in some common gated-kernel shapes. When a runtime gate sits directly above the adstack-using body and compares a single field entry to a constant, the compiler counts the gate-passing iterations at launch time and sizes the float adstack to that count instead of `num_threads * stack_size`, so a workload whose gate matches 5% of iterations pays 5% of the float-adstack cost; the float heap grows on demand if a later launch matches more, and integer / boolean adstacks stay at `num_threads * stack_size` since their pushes fire unconditionally for control-flow replay. The shrinking kicks in only when the compiler can statically prove that each loop iteration touches a different field cell; patterns where uniqueness cannot be proven statically fall back to worst-case heap `num_threads * stack_size`. See [Appendix B: gate-index shapes that capture vs fall back to the worst-case heap](#appendix-b-gate-index-shapes-that-capture-vs-fall-back-to-the-worst-case-heap) for the authoritative list.
 
 Every adstack slot always stores a *primal* value - the forward-pass value the reverse pass pops to recover the chain-rule step. Floating-point adstacks additionally store an *adjoint* slot where the reverse pass accumulates chain-rule contributions. Integer / boolean adstacks do not need an adjoint slot.
 
@@ -407,3 +395,21 @@ def k_data_dependent(a):
         while a[i] < 10:              # bound that can only be known by running the loop body
             a[i] = a[i] + 1
 ```
+
+## Appendix B: gate-index shapes that capture vs fall back to the worst-case heap
+
+The compiler accepts the gate index shapes below as bijective and rejects the rest.
+
+Patterns that capture:
+  - **Linear range loop**: `for i in range(n): if field[i] > eps: ...`
+  - **Multi-axis StructFor**: `for I, J, K in field3d: if field3d[I, J, K] > eps: ...`
+  - **Multi-axis ndrange**: `for ii, jj, kk in qd.ndrange(*shape): if grid[ii, jj, kk] > eps: ...`
+  - **Multi-axis split of a flat loop**: a gate whose axes are two or more sub-expressions of the loop variable that hold pairwise distinct values, e.g. `field2d[i // K, i % K]`, `field2d[i // K, i]`, `field3d[i // (K * L), (i // L) % K, i % L]`.
+  - **Iterating axes plus a slice**: a kernel argument or constant on an extra axis, e.g. `grid[i, 0]`, `grid[arg, ii, jj, kk]`.
+
+Patterns that fall back to the worst-case heap:
+  - **Single-axis arithmetic on the loop variable**: `field[i % K]`, `field[i / 2]`, `field[i + 5]`, `field[2 * i]`, and similar.
+  - **Multi-axis index with axes holding the same value**: `field[i % K, i % K]`, or any multi-axis gate where two or more axes evaluate to the same value; the joint mapping is many-to-one and would alias iterations onto a few cells.
+  - **Constant-index gate**: `field[42]`, or any axis that is a literal constant.
+  - **Kernel-argument index, no iterating axis**: `field[arg]` where every axis is launch-constant.
+  - **Indirect index via runtime load**: `field[other_field[i]]`; the compiler cannot prove `other_field` is injective.
