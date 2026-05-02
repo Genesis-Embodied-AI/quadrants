@@ -491,11 +491,24 @@ class FunctionDefTransformer:
         return index == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, (ast.Constant, ast.Str))
 
     @staticmethod
+    def _is_coverage_probe(stmt: ast.stmt) -> bool:
+        if not isinstance(stmt, ast.Assign) or len(stmt.targets) != 1:
+            return False
+        target = stmt.targets[0]
+        return (
+            isinstance(target, ast.Subscript)
+            and isinstance(target.value, ast.Name)
+            and target.value.id.startswith("_qd_cov")
+        )
+
+    @staticmethod
     def _validate_stream_parallel_exclusivity(body: list[ast.stmt], global_vars: dict[str, Any]) -> None:
         if not any(FunctionDefTransformer._is_stream_parallel_with(s, global_vars) for s in body):
             return
         for i, stmt in enumerate(body):
             if FunctionDefTransformer._is_docstring(stmt, i):
+                continue
+            if FunctionDefTransformer._is_coverage_probe(stmt):
                 continue
             if not FunctionDefTransformer._is_stream_parallel_with(stmt, global_vars):
                 stmt_desc = f"{type(stmt).__name__}"

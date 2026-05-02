@@ -60,8 +60,8 @@ class ASTResolver:
     def resolve_value(node, scope):
         """Resolve an AST Name/Attribute node to a Python object.
 
-        Same traversal as resolve_to but returns the resolved object (or None)
-        instead of comparing against a wanted value.
+        Same traversal as resolve_to but returns the resolved object (or None) instead of comparing against a wanted
+        value.
         """
         if isinstance(node, ast.Name):
             return scope.get(node.id) if isinstance(scope, dict) else None
