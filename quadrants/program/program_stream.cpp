@@ -61,7 +61,7 @@ void StreamManager::synchronize_stream(uint64 stream_handle) {
   }
 #endif
 #ifdef QD_WITH_AMDGPU
-  if (arch_ == Arch::amdgpu && stream_handle != 0) {
+  if (arch_ == Arch::amdgpu) {
     AMDGPUContext::get_instance().make_current();
     AMDGPUDriver::get_instance().stream_synchronize(reinterpret_cast<void *>(stream_handle));
   }
