@@ -28,7 +28,7 @@ uint64 StreamManager::create_stream() {
   }
 #endif
 #ifdef QD_WITH_AMDGPU
-  if (compile_config().arch == Arch::amdgpu) {
+  if (arch_ == Arch::amdgpu) {
     AMDGPUContext::get_instance().make_current();
     void *stream = nullptr;
     AMDGPUDriver::get_instance().stream_create(&stream, 0x1 /*HIP_STREAM_NON_BLOCKING*/);
@@ -46,7 +46,7 @@ void StreamManager::destroy_stream(uint64 stream_handle) {
   }
 #endif
 #ifdef QD_WITH_AMDGPU
-  if (compile_config().arch == Arch::amdgpu && stream_handle != 0) {
+  if (arch_ == Arch::amdgpu && stream_handle != 0) {
     AMDGPUContext::get_instance().make_current();
     AMDGPUDriver::get_instance().stream_destroy(reinterpret_cast<void *>(stream_handle));
   }
@@ -61,7 +61,7 @@ void StreamManager::synchronize_stream(uint64 stream_handle) {
   }
 #endif
 #ifdef QD_WITH_AMDGPU
-  if (compile_config().arch == Arch::amdgpu && stream_handle != 0) {
+  if (arch_ == Arch::amdgpu && stream_handle != 0) {
     AMDGPUContext::get_instance().make_current();
     AMDGPUDriver::get_instance().stream_synchronize(reinterpret_cast<void *>(stream_handle));
   }
@@ -76,7 +76,7 @@ void StreamManager::set_current_stream(uint64 stream_handle) {
   }
 #endif
 #ifdef QD_WITH_AMDGPU
-  if (compile_config().arch == Arch::amdgpu) {
+  if (arch_ == Arch::amdgpu) {
     AMDGPUContext::get_instance().make_current();
     AMDGPUContext::get_instance().set_stream(reinterpret_cast<void *>(stream_handle));
   }
@@ -93,7 +93,7 @@ uint64 StreamManager::create_event() {
   }
 #endif
 #ifdef QD_WITH_AMDGPU
-  if (compile_config().arch == Arch::amdgpu) {
+  if (arch_ == Arch::amdgpu) {
     AMDGPUContext::get_instance().make_current();
     void *event = nullptr;
     AMDGPUDriver::get_instance().event_create(&event, 0x02 /*hipEventDisableTiming*/);
@@ -111,7 +111,7 @@ void StreamManager::destroy_event(uint64 event_handle) {
   }
 #endif
 #ifdef QD_WITH_AMDGPU
-  if (compile_config().arch == Arch::amdgpu && event_handle != 0) {
+  if (arch_ == Arch::amdgpu && event_handle != 0) {
     AMDGPUContext::get_instance().make_current();
     AMDGPUDriver::get_instance().event_destroy(reinterpret_cast<void *>(event_handle));
   }
@@ -127,7 +127,7 @@ void StreamManager::record_event(uint64 event_handle, uint64 stream_handle) {
   }
 #endif
 #ifdef QD_WITH_AMDGPU
-  if (compile_config().arch == Arch::amdgpu && event_handle != 0) {
+  if (arch_ == Arch::amdgpu && event_handle != 0) {
     AMDGPUContext::get_instance().make_current();
     AMDGPUDriver::get_instance().event_record(reinterpret_cast<void *>(event_handle),
                                               reinterpret_cast<void *>(stream_handle));
@@ -143,7 +143,7 @@ void StreamManager::synchronize_event(uint64 event_handle) {
   }
 #endif
 #ifdef QD_WITH_AMDGPU
-  if (compile_config().arch == Arch::amdgpu && event_handle != 0) {
+  if (arch_ == Arch::amdgpu && event_handle != 0) {
     AMDGPUContext::get_instance().make_current();
     AMDGPUDriver::get_instance().event_synchronize(reinterpret_cast<void *>(event_handle));
   }
@@ -159,7 +159,7 @@ void StreamManager::stream_wait_event(uint64 stream_handle, uint64 event_handle)
   }
 #endif
 #ifdef QD_WITH_AMDGPU
-  if (compile_config().arch == Arch::amdgpu && event_handle != 0) {
+  if (arch_ == Arch::amdgpu && event_handle != 0) {
     AMDGPUContext::get_instance().make_current();
     AMDGPUDriver::get_instance().stream_wait_event(reinterpret_cast<void *>(stream_handle),
                                                    reinterpret_cast<void *>(event_handle), 0 /*flags*/);
