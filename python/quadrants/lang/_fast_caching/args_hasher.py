@@ -7,7 +7,7 @@ from typing import Any, Sequence
 import numpy as np
 
 from quadrants import _logging, _tensor_wrapper
-from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
+from quadrants._tensor_wrapper import Tensor as _TensorWrapper, _TENSOR_WRAPPER_TYPES
 from quadrants.types.annotations import Template
 
 from .._ndarray import ScalarNdarray
@@ -16,6 +16,8 @@ from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
 from ..util import is_data_oriented
 from .hash_utils import hash_iterable_strings
+
+_FIELD_TYPES = (ScalarField, MatrixField)
 
 try:
     import torch
@@ -40,13 +42,12 @@ _DC_REPR_NONE = object()
 class HashFailure(enum.Enum):
     """Why hash_args could not produce a cache key."""
 
-    CONTAINS_FIELD = "contains_field"
+    FIELD_VIA_TENSOR = "field_via_tensor"
     UNEXPECTED_TYPE = "unexpected_type"
 
 
-# Set by stringify_obj_type when it encounters a genuinely unknown type. Reset at the start of each hash_args call.
-# When hash_args fails and this is False, the failure was caused by a Field arriving via a qd.Tensor annotation —
-# fastcache simply doesn't apply in that path and no warning is needed.
+# Set by stringify_obj_type / dataclass_to_repr when the failure is not simply a Field arriving through a qd.Tensor
+# annotation. Reset at the start of each hash_args call.
 _had_unexpected_type = False
 
 
@@ -68,6 +69,9 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
         child_value = getattr(arg, field.name)
         _repr = stringify_obj_type(raise_on_templated_floats, path + (field.name,), child_value, arg_meta=None)
         if _repr is None:
+            if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
+                global _had_unexpected_type
+                _had_unexpected_type = True
             if is_frozen:
                 try:
                     object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
@@ -216,7 +220,7 @@ def hash_args(
         g_repr_time += time.time() - start
         if not _hash:
             g_num_ignored_calls += 1
-            return HashFailure.UNEXPECTED_TYPE if _had_unexpected_type else HashFailure.CONTAINS_FIELD
+            return HashFailure.UNEXPECTED_TYPE if _had_unexpected_type else HashFailure.FIELD_VIA_TENSOR
         hash_l.append(_hash)
     start = time.time()
     res = hash_iterable_strings(hash_l)
