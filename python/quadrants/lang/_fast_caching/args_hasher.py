@@ -37,6 +37,19 @@ FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 _DC_REPR_NONE = object()
 
 
+class HashFailure(enum.Enum):
+    """Why hash_args could not produce a cache key."""
+
+    KNOWN_UNCACHEABLE = "known_uncacheable"
+    UNEXPECTED_TYPE = "unexpected_type"
+
+
+# Set by stringify_obj_type when it encounters a genuinely unknown type. Reset at the start of each hash_args call.
+# When hash_args fails and this is False, the failure was caused by a known-uncacheable type (e.g. Field) and callers
+# should not emit a warning.
+_had_unexpected_type = False
+
+
 def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], arg: Any) -> str | None:
     # PERF: For frozen dataclasses, the repr never changes. Cache it on the instance to avoid repeated
     # ``dataclasses.fields()`` calls (which are slow due to extra runtime checks — see _template_mapper_hotpath.py
@@ -124,9 +137,6 @@ def stringify_obj_type(
     if isinstance(obj, VectorNdarray):
         return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, ScalarField):
-        # disabled for now, because we need to think about how to handle field offset
-        # etc
-        # TODO: think about whether there is a way to include fields
         return None
     if isinstance(obj, MatrixNdarray):
         return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
@@ -135,9 +145,6 @@ def stringify_obj_type(
     if isinstance(obj, np.ndarray):
         return f"[np-{obj.dtype}-{obj.ndim}]"
     if isinstance(obj, MatrixField):
-        # disabled for now, because we need to think about how to handle field offset
-        # etc
-        # TODO: think about whether there is a way to include fields
         return None
     if dataclasses.is_dataclass(obj):
         return dataclass_to_repr(raise_on_templated_floats, path, obj)
@@ -153,10 +160,14 @@ def stringify_obj_type(
         for k, v in _dict.items():
             _child_repr = stringify_obj_type(raise_on_templated_floats, (*path, k), v, ArgMetadata(Template, ""))
             if _child_repr is None:
-                _logging.warn(
-                    f"""A kernel that has been marked as eligible for fast cache was passed 1 or more parameters that are not, in fact, eligible for fast cache: one of the parameters was a @qd.data_oriented objects, and one of its children was not eligible.
-The data oriented object was of type {type(obj)} and the child {k}={type(v)} was not eligible. For information, the path of the value was {path}."""
-                )
+                if _had_unexpected_type:
+                    _logging.warn(
+                        f"A kernel that has been marked as eligible for fast cache was passed 1 or more parameters "
+                        f"that are not, in fact, eligible for fast cache: one of the parameters was a "
+                        f"@qd.data_oriented object, and one of its children was not eligible. The data oriented "
+                        f"object was of type {type(obj)} and the child {k}={type(v)} was not eligible. For "
+                        f"information, the path of the value was {path}."
+                    )
                 return None
             child_repr_l.append(f"{k}: {_child_repr}")
         return ", ".join(child_repr_l)
@@ -175,6 +186,8 @@ The data oriented object was of type {type(obj)} and the child {k}={type(v)} was
         return "np.bool_"
     if isinstance(obj, enum.Enum):
         return f"enum-{obj.name}-{obj.value}"
+    global _had_unexpected_type
+    _had_unexpected_type = True
     # The bit in caps should not be modified without updating corresponding test
     # The rest of free text can be freely modified
     # (will probably formalize this in more general doc / contributor guidelines at some point)
@@ -186,8 +199,10 @@ The data oriented object was of type {type(obj)} and the child {k}={type(v)} was
 
 def hash_args(
     raise_on_templated_floats: bool, args: Sequence[Any], arg_metas: Sequence[ArgMetadata | None]
-) -> str | None:
-    global g_num_calls, g_num_args, g_hashing_time, g_repr_time, g_num_ignored_calls
+) -> str | HashFailure:
+    """Return the args hash string, or a HashFailure explaining why hashing failed."""
+    global g_num_calls, g_num_args, g_hashing_time, g_repr_time, g_num_ignored_calls, _had_unexpected_type
+    _had_unexpected_type = False
     g_num_calls += 1
     g_num_args += len(args)
     hash_l = []
@@ -201,7 +216,7 @@ def hash_args(
         g_repr_time += time.time() - start
         if not _hash:
             g_num_ignored_calls += 1
-            return None
+            return HashFailure.UNEXPECTED_TYPE if _had_unexpected_type else HashFailure.KNOWN_UNCACHEABLE
         hash_l.append(_hash)
     start = time.time()
     res = hash_iterable_strings(hash_l)
