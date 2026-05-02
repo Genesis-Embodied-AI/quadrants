@@ -134,6 +134,6 @@ qd_stream.destroy()
 ## Limitations
 
 - **Not compatible with graphs.** Do not pass `qd_stream` to a kernel decorated with `graph=True`.
-- **Not compatible with autograd Tape.** Do not pass `qd_stream` to a kernel inside a `qd.ad.Tape` context. The backward replay does not preserve the stream, so gradient kernels would run on the default stream with no ordering guarantee.
+- **Not compatible with autodiff.** Do not pass `qd_stream` to a kernel that uses reverse-mode or forward-mode differentiation, or inside a `qd.ad.Tape` context.
 - **`qd.sync()` only waits on the default stream.** It does not drain explicit streams. Call `stream.synchronize()` on each stream you need to wait for.
 - **No automatic synchronization.** You are responsible for inserting events or `synchronize()` calls when one stream's output is another stream's input.
