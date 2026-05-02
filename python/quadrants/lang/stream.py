@@ -38,8 +38,8 @@ class Stream:
     def _destroy_prog(self):
         """Resolve a Program for resource cleanup.
 
-        Falls back to the current runtime when the owner has been collected, which is safe because
-        CUDAContext is a singleton so the CUDA stream handle remains valid.
+        Falls back to the current runtime when the owner has been collected, which is safe because CUDAContext is a
+        singleton so the CUDA stream handle remains valid.
         """
         prog = self._prog()
         if prog is None:
@@ -121,8 +121,8 @@ class Event:
     def _destroy_prog(self):
         """Resolve a Program for resource cleanup.
 
-        Falls back to the current runtime when the owner has been collected, which is safe because
-        CUDAContext is a singleton so the CUDA event handle remains valid.
+        Falls back to the current runtime when the owner has been collected, which is safe because CUDAContext is a
+        singleton so the CUDA event handle remains valid.
         """
         prog = self._prog()
         if prog is None:
