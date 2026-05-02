@@ -7,7 +7,8 @@ from typing import Any, Sequence
 import numpy as np
 
 from quadrants import _logging, _tensor_wrapper
-from quadrants._tensor_wrapper import Tensor as _TensorWrapper, _TENSOR_WRAPPER_TYPES
+from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
+from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
 from .._ndarray import ScalarNdarray

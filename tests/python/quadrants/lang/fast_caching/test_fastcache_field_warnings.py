@@ -10,6 +10,7 @@ Cases:
 6. Field passed directly to qd.Template kernel param → warning fires
 7. Struct with qd.Template-annotated field containing a Field → warning fires
 """
+
 import dataclasses
 import sys
 
