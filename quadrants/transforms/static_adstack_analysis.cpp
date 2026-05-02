@@ -8,6 +8,7 @@
 #include <functional>
 #include <unordered_map>
 
+#include "quadrants/ir/analysis.h"
 #include "quadrants/ir/snode.h"
 #include "quadrants/ir/statements.h"
 
@@ -354,23 +355,33 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
         }
         return false;
       };
-      // Reject fold-attack shapes like `field[i % 2, i % 2]` where two iterating axes are the same IR
-      // statement (CSE collapses both occurrences to a single `BinaryOpStmt`), causing multiple pushes per
-      // outer-loop iteration to alias onto the same SNode cell and undersize the heap. The canonical
-      // `qd.ndrange(*shape)` decomposition produces structurally distinct `floordiv` / `mod` / `sub`
-      // statements per axis even though every axis is rooted at the same `LoopIndexStmt`, so identity
-      // distinctness is the right gate: it rejects the fold attack while admitting the joint-bijective
-      // ndrange shape uniformly across LLVM and SPIR-V backends.
+      // Reject fold-attack shapes like `field[i % 2, i % 2]` where two iterating axes evaluate to the same
+      // value, causing multiple pushes per outer-loop iteration to alias onto the same SNode cell and
+      // undersize the heap. Use `same_value` rather than pointer-identity so an attacker cannot bypass the
+      // check by inserting a no-op like `i % 2 + 0 - 0` that defeats CSE: the value-equivalence walk
+      // collapses arithmetic identities the upstream simplifier missed. The canonical `qd.ndrange(*shape)`
+      // decomposition produces axes with structurally different values (`i // K0`, `(i % K0) // K1`,
+      // `i % K1`) even though every axis is rooted at the same `LoopIndexStmt`, so this admits the
+      // joint-bijective ndrange shape uniformly across LLVM and SPIR-V backends.
       int n_iterating = 0;
       int n_bare_iterating = 0;
-      std::unordered_set<Stmt *> distinct_iterating_axes;
+      std::vector<Stmt *> distinct_iterating_axes;
       for (Stmt *axis : axes) {
         if (contains_loop_index(axis, 0)) {
           n_iterating++;
           if (axis->is<LoopIndexStmt>()) {
             n_bare_iterating++;
           }
-          distinct_iterating_axes.insert(axis);
+          bool already_seen = false;
+          for (Stmt *prev : distinct_iterating_axes) {
+            if (prev == axis || irpass::analysis::same_value(prev, axis)) {
+              already_seen = true;
+              break;
+            }
+          }
+          if (!already_seen) {
+            distinct_iterating_axes.push_back(axis);
+          }
         }
       }
       if (n_iterating == 0) {
