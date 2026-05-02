@@ -354,43 +354,23 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
         }
         return false;
       };
-      // For each iterating axis, walk back to its root source: the underlying `LoopIndexStmt` (StructFor case)
-      // or the `AdStackAllocaStmt` whose `AdStackLoadTopStmt` replays it (autodiff reverse task). Multi-axis
-      // gates whose iterating axes all derive from the SAME source (`field[i % 2, i % 2]`) are non-injective
-      // even though they have multiple iterating axes; requiring `distinct_iterating_sources == n_iterating`
-      // rejects those while admitting the canonical sparse-grid shape where each ndrange axis is replayed via
-      // a distinct per-axis adstack. `BinaryOpStmt` / `UnaryOpStmt` operands are walked recursively to find the
-      // leaf source.
-      std::function<Stmt *(Stmt *, int)> root_source = [&](Stmt *s, int depth) -> Stmt * {
-        if (s == nullptr || depth > 8)
-          return nullptr;
-        if (s->is<LoopIndexStmt>())
-          return s;
-        if (auto *load_top = s->cast<AdStackLoadTopStmt>()) {
-          return load_top->stack;
-        }
-        if (auto *bin = s->cast<BinaryOpStmt>()) {
-          if (Stmt *r = root_source(bin->lhs, depth + 1))
-            return r;
-          return root_source(bin->rhs, depth + 1);
-        }
-        if (auto *un = s->cast<UnaryOpStmt>()) {
-          return root_source(un->operand, depth + 1);
-        }
-        return nullptr;
-      };
+      // Reject fold-attack shapes like `field[i % 2, i % 2]` where two iterating axes are the same IR
+      // statement (CSE collapses both occurrences to a single `BinaryOpStmt`), causing multiple pushes per
+      // outer-loop iteration to alias onto the same SNode cell and undersize the heap. The canonical
+      // `qd.ndrange(*shape)` decomposition produces structurally distinct `floordiv` / `mod` / `sub`
+      // statements per axis even though every axis is rooted at the same `LoopIndexStmt`, so identity
+      // distinctness is the right gate: it rejects the fold attack while admitting the joint-bijective
+      // ndrange shape uniformly across LLVM and SPIR-V backends.
       int n_iterating = 0;
       int n_bare_iterating = 0;
-      std::unordered_set<Stmt *> distinct_iterating_sources;
+      std::unordered_set<Stmt *> distinct_iterating_axes;
       for (Stmt *axis : axes) {
         if (contains_loop_index(axis, 0)) {
           n_iterating++;
           if (axis->is<LoopIndexStmt>()) {
             n_bare_iterating++;
           }
-          if (Stmt *src = root_source(axis, 0)) {
-            distinct_iterating_sources.insert(src);
-          }
+          distinct_iterating_axes.insert(axis);
         }
       }
       if (n_iterating == 0) {
@@ -399,7 +379,7 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       if (n_iterating == 1 && n_bare_iterating == 0) {
         return false;
       }
-      if (static_cast<int>(distinct_iterating_sources.size()) < n_iterating) {
+      if (static_cast<int>(distinct_iterating_axes.size()) < n_iterating) {
         return false;
       }
       out.field_source_kind = StaticAdStackBoundExpr::FieldSourceKind::SNode;
