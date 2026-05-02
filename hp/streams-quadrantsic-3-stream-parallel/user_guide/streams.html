@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Streams &#8212; Quadrants 0.7.4 documentation</title>
+    <title>Streams &#8212; Quadrants 0.7.5 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=020ce317"></script>
+    <script src="../_static/documentation_options.js?v=a674670e"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="CUDA Graph" href="graph.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.4" />
+  <meta name="docsearch:version" content="0.7.5" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.5 documentation</p>
   
 </a></div>
     
@@ -567,7 +567,7 @@
 <h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p><strong>Not compatible with graphs.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel decorated with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>.</p></li>
-<li><p><strong>Not compatible with autograd Tape.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel inside a <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> context. The backward replay does not preserve the stream, so gradient kernels would run on the default stream with no ordering guarantee.</p></li>
+<li><p><strong>Not compatible with autodiff.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel that uses reverse-mode or forward-mode differentiation, or inside a <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> context.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> only waits on the default stream.</strong> It does not drain explicit streams. Call <code class="docutils literal notranslate"><span class="pre">stream.synchronize()</span></code> on each stream you need to wait for.</p></li>
 <li><p><strong>No automatic synchronization with explicit streams.</strong> When using explicit streams, you are responsible for inserting events or <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> calls when one stream’s output is another stream’s input. <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> handles this automatically.</p></li>
 </ul>

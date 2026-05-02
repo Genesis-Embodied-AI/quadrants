@@ -4,7 +4,9 @@ Automatic differentiation (autodiff) computes the exact gradient of a kernel's o
 
 **Note.** Throughout this page, the *primal* is the value a kernel computes in its normal forward pass (the field value, the loss, whatever the kernel writes); the *adjoint* (or *gradient*) is the derivative of the final scalar output (typically a loss) with respect to that primal value, stored in the `.grad` field next to the primal.
 
-Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan. Reverse-mode AD through dynamic loops (described further down) is currently behind an opt-in `ad_stack_experimental_enabled=True` flag.
+Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan.
+
+**Recommendation.** Reverse-mode AD through dynamic loops (described further down) is currently gated behind an opt-in `ad_stack_experimental_enabled=True` flag at `qd.init`. If you are using autodiff at all, we recommend enabling this flag as it is required for any reverse-mode kernel with a dynamic loop carrying a non-linear primal, and free for every other kernel. See [the cost breakdown](./init_options.md#ad_stack_experimental_enabled) for details.
 
 Three mechanisms are supported:
 
@@ -291,11 +293,10 @@ The on-device sizer relies on two common hardware features (64-bit integer arith
 
 #### Manual override
 
-`qd.init()` exposes a single escape hatch:
+`qd.init()` exposes two escape hatches:
 
-- `ad_stack_size=N` (default `0`, meaning "let the sizer decide"): forces every adstack in the program to exactly `N` slots and bypasses the sizer entirely.
-
-Leave it at `0` in day-to-day use. Setting it to a positive `N` is meant for stress tests or for working around a suspected sizer bug; it defeats the per-launch-exact sizing, so every dispatch allocates the full `N` slots whether the kernel actually needs them or not.
+- `ad_stack_size=N` (default `0`): forces every adstack to exactly `N` slots and bypasses the sizer. Leave at `0` in day-to-day use; positive `N` is for stress tests or working around a suspected sizer bug.
+- `ad_stack_sparse_threshold_bytes=B` (default `100 MiB`): cutoff below which the gate-passing-count sizing of [Memory footprint](#memory-footprint) is skipped in favour of the eager `dispatched_threads * stride` heap. The sparse path saves memory but pays a per-launch reducer dispatch; below `B` of conservative heap, that overhead outweighs the savings. Set to `0` to always use the sparse path; lower it if the default still skips kernels you want shrunk.
 
 #### Memory footprint
 
@@ -311,10 +312,12 @@ where each quantity means:
 
 | Quantity | What it is |
 | --- | --- |
-| `num_threads` | Threads the kernel actually dispatches. On CPU: the thread-pool size, typically tens. On GPU: the full ndrange. |
+| `num_threads` | Concurrent thread slots, regardless of logical ndrange. CPU: thread-pool size (~tens). GPU adstack-bearing kernels: capped at 65536 on all backends (131072 on SPIR-V range-for, i.e. `for i in range(N):`), tightened to the actual flat product when the iteration bound is compile-time known. Forward-only kernels keep the full ndrange. |
 | `stack_size` | Per-launch capacity resolved by the sizer. Varies between launches - if an ndarray-bounded loop iterates 16 times at one dispatch and 1024 at another, `stack_size` tracks each. |
 | `bytes_per_slot` | Depends on `T` and on the backend (see table below). |
 | `num_buffers` | Number of adstacks the kernel allocates - one per loop-carried variable plus one per dependent branch flag (see [One adstack per variable](#one-adstack-per-variable)). |
+
+The float heap is by far the main reverse-mode memory bottleneck because a typical kernel allocates many float-typed adstacks - one per floating-point loop-carried scalar, each storing both primal and adjoint - and the total scales as `num_threads * stack_size * num_float_buffers * 8` bytes, dominating the integer / boolean heap. Advanced static IR analysis is used to further shrink the float adstack in some common gated-kernel shapes: when a runtime gate sits directly above the adstack-using body and compares a single field entry to a constant, the compiler counts the gate-passing iterations at launch time and sizes the float adstack to that count, so a workload whose gate matches 5% of iterations pays 5% of the float-adstack cost. See [Appendix B: gate-index shapes that capture vs fall back to the worst-case heap](#appendix-b-gate-index-shapes-that-capture-vs-fall-back-to-the-worst-case-heap) for the authoritative list of supported shapes.
 
 Every adstack slot always stores a *primal* value - the forward-pass value the reverse pass pops to recover the chain-rule step. Floating-point adstacks additionally store an *adjoint* slot where the reverse pass accumulates chain-rule contributions. Integer / boolean adstacks do not need an adjoint slot.
 
@@ -392,3 +395,22 @@ def k_data_dependent(a):
         while a[i] < 10:              # bound that can only be known by running the loop body
             a[i] = a[i] + 1
 ```
+
+## Appendix B: gate-index shapes that capture vs fall back to the worst-case heap
+
+The compiler accepts the gate index shapes below as bijective and falls back to the worst-case heap `num_threads * stack_size` for the rest. Only the float adstack heap shrinks; integer / boolean adstacks stay at `num_threads * stack_size` because their pushes fire unconditionally for control-flow replay. The float heap grows on demand if a later launch's gate matches more iterations.
+
+Patterns that capture:
+  - **Linear range loop**: `for i in range(n): if field[i] > eps: ...`
+  - **Multi-axis StructFor**: `for I, J, K in field3d: if field3d[I, J, K] > eps: ...`
+  - **Multi-axis ndrange**: `for ii, jj, kk in qd.ndrange(*shape): if grid[ii, jj, kk] > eps: ...`
+  - **Multi-axis split of a flat loop**: a gate whose axes are two or more sub-expressions of the loop variable that hold pairwise distinct values, e.g. `field2d[i // K, i % K]`, `field2d[i // K, i]`, `field3d[i // (K * L), (i // L) % K, i % L]`.
+  - **Iterating axes plus a slice**: a kernel argument or constant on an extra axis, e.g. `grid[i, 0]`, `grid[arg, ii, jj, kk]`.
+
+Patterns that fall back to the worst-case heap:
+  - **Single-axis arithmetic on the loop variable**: `field[i % K]`, `field[i / 2]`, `field[i + 5]`, `field[2 * i]`, and similar.
+  - **Multi-axis index with axes holding the same value**: `field[i % K, i % K]`, or any multi-axis gate where two or more axes evaluate to the same value; the joint mapping is many-to-one and would alias iterations onto a few cells.
+  - **Multi-axis index folding onto a smaller subspace**: `field[i % K0, (i // K0) % K1]` with the loop trip count above `K0 * K1`; the joint axis space is smaller than the loop and iterations wrap around it.
+  - **Constant-index gate**: `field[42]`, or any axis that is a literal constant.
+  - **Kernel-argument index, no iterating axis**: `field[arg]` where every axis is launch-constant.
+  - **Indirect index via runtime load**: `field[other_field[i]]`; the compiler cannot prove `other_field` is injective.

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Contributing to quadrants &#8212; Quadrants 0.7.4 documentation</title>
+    <title>Contributing to quadrants &#8212; Quadrants 0.7.5 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=020ce317"></script>
+    <script src="../_static/documentation_options.js?v=a674670e"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Troubleshooting" href="troubleshooting.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.4" />
+  <meta name="docsearch:version" content="0.7.5" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.5 documentation</p>
   
 </a></div>
     
@@ -531,6 +531,11 @@
 <h3>Test coverage check (<code class="docutils literal notranslate"><span class="pre">check_test_coverage.yml</span></code>)<a class="headerlink" href="#test-coverage-check-check-test-coverage-yml" title="Link to this heading">#</a></h3>
 <p>Uses an AI agent to verify that new or modified source code in a PR has corresponding test coverage. The agent examines the diff of non-test source files and cross-references them against test files in the repo (existing or added in the PR). It flags up to 5 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
 </section>
+<section id="feature-factorization-check-check-feature-factorization-yml">
+<h3>Feature factorization check (<code class="docutils literal notranslate"><span class="pre">check_feature_factorization.yml</span></code>)<a class="headerlink" href="#feature-factorization-check-check-feature-factorization-yml" title="Link to this heading">#</a></h3>
+<p>Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the “wrong” place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.</p>
+<p>The agent reports up to 5 violations, each annotated with the host file’s hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
 </section>
 </section>
 
@@ -596,6 +601,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#line-wrapping-check-check-wrapping-yml">Line wrapping check (<code class="docutils literal notranslate"><span class="pre">check_wrapping.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deleted-comments-check-check-deleted-comments-yml">Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#test-coverage-check-check-test-coverage-yml">Test coverage check (<code class="docutils literal notranslate"><span class="pre">check_test_coverage.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#feature-factorization-check-check-feature-factorization-yml">Feature factorization check (<code class="docutils literal notranslate"><span class="pre">check_feature_factorization.yml</span></code>)</a></li>
 </ul>
 </li>
 </ul>

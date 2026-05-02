@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Automatic differentiation &#8212; Quadrants 0.7.4 documentation</title>
+    <title>Automatic differentiation &#8212; Quadrants 0.7.5 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=020ce317"></script>
+    <script src="../_static/documentation_options.js?v=a674670e"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Numpy and Torch interop" href="interop.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.4" />
+  <meta name="docsearch:version" content="0.7.5" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.5 documentation</p>
   
 </a></div>
     
@@ -399,7 +399,8 @@
 <h1>Automatic differentiation<a class="headerlink" href="#automatic-differentiation" title="Link to this heading">#</a></h1>
 <p>Automatic differentiation (autodiff) computes the exact gradient of a kernel’s output with respect to its inputs, without the user writing the derivative formulas by hand. Gradient-based optimizers then use this gradient to train neural networks, fit physical models to data, drive differentiable simulators, or solve inverse problems.</p>
 <p><strong>Note.</strong> Throughout this page, the <em>primal</em> is the value a kernel computes in its normal forward pass (the field value, the loss, whatever the kernel writes); the <em>adjoint</em> (or <em>gradient</em>) is the derivative of the final scalar output (typically a loss) with respect to that primal value, stored in the <code class="docutils literal notranslate"><span class="pre">.grad</span></code> field next to the primal.</p>
-<p>Quadrants implements autodiff at compile time: when <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields’ <code class="docutils literal notranslate"><span class="pre">.grad</span></code> companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan. Reverse-mode AD through dynamic loops (described further down) is currently behind an opt-in <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=True</span></code> flag.</p>
+<p>Quadrants implements autodiff at compile time: when <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields’ <code class="docutils literal notranslate"><span class="pre">.grad</span></code> companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan.</p>
+<p><strong>Recommendation.</strong> Reverse-mode AD through dynamic loops (described further down) is currently gated behind an opt-in <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=True</span></code> flag at <code class="docutils literal notranslate"><span class="pre">qd.init</span></code>. If you are using autodiff at all, we recommend enabling this flag as it is required for any reverse-mode kernel with a dynamic loop carrying a non-linear primal, and free for every other kernel. See <a class="reference internal" href="init_options.html#ad-stack-experimental-enabled"><span class="std std-ref">the cost breakdown</span></a> for details.</p>
 <p>Three mechanisms are supported:</p>
 <ul class="simple">
 <li><p><strong><a class="reference internal" href="#reverse-mode-autodiff">Reverse mode</a></strong> - one scalar output, many inputs. One backward pass yields every input gradient. This is the usual training setup and the bulk of the page.</p></li>
@@ -672,11 +673,11 @@
 </section>
 <section id="manual-override">
 <h4>Manual override<a class="headerlink" href="#manual-override" title="Link to this heading">#</a></h4>
-<p><code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> exposes a single escape hatch:</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> exposes two escape hatches:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">ad_stack_size=N</span></code> (default <code class="docutils literal notranslate"><span class="pre">0</span></code>, meaning “let the sizer decide”): forces every adstack in the program to exactly <code class="docutils literal notranslate"><span class="pre">N</span></code> slots and bypasses the sizer entirely.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ad_stack_size=N</span></code> (default <code class="docutils literal notranslate"><span class="pre">0</span></code>): forces every adstack to exactly <code class="docutils literal notranslate"><span class="pre">N</span></code> slots and bypasses the sizer. Leave at <code class="docutils literal notranslate"><span class="pre">0</span></code> in day-to-day use; positive <code class="docutils literal notranslate"><span class="pre">N</span></code> is for stress tests or working around a suspected sizer bug.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes=B</span></code> (default <code class="docutils literal notranslate"><span class="pre">100</span> <span class="pre">MiB</span></code>): cutoff below which the gate-passing-count sizing of <a class="reference internal" href="#memory-footprint">Memory footprint</a> is skipped in favour of the eager <code class="docutils literal notranslate"><span class="pre">dispatched_threads</span> <span class="pre">*</span> <span class="pre">stride</span></code> heap. The sparse path saves memory but pays a per-launch reducer dispatch; below <code class="docutils literal notranslate"><span class="pre">B</span></code> of conservative heap, that overhead outweighs the savings. Set to <code class="docutils literal notranslate"><span class="pre">0</span></code> to always use the sparse path; lower it if the default still skips kernels you want shrunk.</p></li>
 </ul>
-<p>Leave it at <code class="docutils literal notranslate"><span class="pre">0</span></code> in day-to-day use. Setting it to a positive <code class="docutils literal notranslate"><span class="pre">N</span></code> is meant for stress tests or for working around a suspected sizer bug; it defeats the per-launch-exact sizing, so every dispatch allocates the full <code class="docutils literal notranslate"><span class="pre">N</span></code> slots whether the kernel actually needs them or not.</p>
 </section>
 <section id="memory-footprint">
 <h4>Memory footprint<a class="headerlink" href="#memory-footprint" title="Link to this heading">#</a></h4>
@@ -694,7 +695,7 @@
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">num_threads</span></code></p></td>
-<td><p>Threads the kernel actually dispatches. On CPU: the thread-pool size, typically tens. On GPU: the full ndrange.</p></td>
+<td><p>Concurrent thread slots, regardless of logical ndrange. CPU: thread-pool size (~tens). GPU adstack-bearing kernels: capped at 65536 on all backends (131072 on SPIR-V range-for, i.e. <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(N):</span></code>), tightened to the actual flat product when the iteration bound is compile-time known. Forward-only kernels keep the full ndrange.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stack_size</span></code></p></td>
 <td><p>Per-launch capacity resolved by the sizer. Varies between launches - if an ndarray-bounded loop iterates 16 times at one dispatch and 1024 at another, <code class="docutils literal notranslate"><span class="pre">stack_size</span></code> tracks each.</p></td>
@@ -708,6 +709,7 @@
 </tbody>
 </table>
 </div>
+<p>The float heap is by far the main reverse-mode memory bottleneck because a typical kernel allocates many float-typed adstacks - one per floating-point loop-carried scalar, each storing both primal and adjoint - and the total scales as <code class="docutils literal notranslate"><span class="pre">num_threads</span> <span class="pre">*</span> <span class="pre">stack_size</span> <span class="pre">*</span> <span class="pre">num_float_buffers</span> <span class="pre">*</span> <span class="pre">8</span></code> bytes, dominating the integer / boolean heap. Advanced static IR analysis is used to further shrink the float adstack in some common gated-kernel shapes: when a runtime gate sits directly above the adstack-using body and compares a single field entry to a constant, the compiler counts the gate-passing iterations at launch time and sizes the float adstack to that count, so a workload whose gate matches 5% of iterations pays 5% of the float-adstack cost. See <a class="reference internal" href="#appendix-b-gate-index-shapes-that-capture-vs-fall-back-to-the-worst-case-heap">Appendix B: gate-index shapes that capture vs fall back to the worst-case heap</a> for the authoritative list of supported shapes.</p>
 <p>Every adstack slot always stores a <em>primal</em> value - the forward-pass value the reverse pass pops to recover the chain-rule step. Floating-point adstacks additionally store an <em>adjoint</em> slot where the reverse pass accumulates chain-rule contributions. Integer / boolean adstacks do not need an adjoint slot.</p>
 <p>Platform-specific notes:</p>
 <ul class="simple">
@@ -835,6 +837,27 @@
 </pre></div>
 </div>
 </section>
+<section id="appendix-b-gate-index-shapes-that-capture-vs-fall-back-to-the-worst-case-heap">
+<h2>Appendix B: gate-index shapes that capture vs fall back to the worst-case heap<a class="headerlink" href="#appendix-b-gate-index-shapes-that-capture-vs-fall-back-to-the-worst-case-heap" title="Link to this heading">#</a></h2>
+<p>The compiler accepts the gate index shapes below as bijective and falls back to the worst-case heap <code class="docutils literal notranslate"><span class="pre">num_threads</span> <span class="pre">*</span> <span class="pre">stack_size</span></code> for the rest. Only the float adstack heap shrinks; integer / boolean adstacks stay at <code class="docutils literal notranslate"><span class="pre">num_threads</span> <span class="pre">*</span> <span class="pre">stack_size</span></code> because their pushes fire unconditionally for control-flow replay. The float heap grows on demand if a later launch’s gate matches more iterations.</p>
+<p>Patterns that capture:</p>
+<ul class="simple">
+<li><p><strong>Linear range loop</strong>: <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n):</span> <span class="pre">if</span> <span class="pre">field[i]</span> <span class="pre">&gt;</span> <span class="pre">eps:</span> <span class="pre">...</span></code></p></li>
+<li><p><strong>Multi-axis StructFor</strong>: <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">I,</span> <span class="pre">J,</span> <span class="pre">K</span> <span class="pre">in</span> <span class="pre">field3d:</span> <span class="pre">if</span> <span class="pre">field3d[I,</span> <span class="pre">J,</span> <span class="pre">K]</span> <span class="pre">&gt;</span> <span class="pre">eps:</span> <span class="pre">...</span></code></p></li>
+<li><p><strong>Multi-axis ndrange</strong>: <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">ii,</span> <span class="pre">jj,</span> <span class="pre">kk</span> <span class="pre">in</span> <span class="pre">qd.ndrange(*shape):</span> <span class="pre">if</span> <span class="pre">grid[ii,</span> <span class="pre">jj,</span> <span class="pre">kk]</span> <span class="pre">&gt;</span> <span class="pre">eps:</span> <span class="pre">...</span></code></p></li>
+<li><p><strong>Multi-axis split of a flat loop</strong>: a gate whose axes are two or more sub-expressions of the loop variable that hold pairwise distinct values, e.g. <code class="docutils literal notranslate"><span class="pre">field2d[i</span> <span class="pre">//</span> <span class="pre">K,</span> <span class="pre">i</span> <span class="pre">%</span> <span class="pre">K]</span></code>, <code class="docutils literal notranslate"><span class="pre">field2d[i</span> <span class="pre">//</span> <span class="pre">K,</span> <span class="pre">i]</span></code>, <code class="docutils literal notranslate"><span class="pre">field3d[i</span> <span class="pre">//</span> <span class="pre">(K</span> <span class="pre">*</span> <span class="pre">L),</span> <span class="pre">(i</span> <span class="pre">//</span> <span class="pre">L)</span> <span class="pre">%</span> <span class="pre">K,</span> <span class="pre">i</span> <span class="pre">%</span> <span class="pre">L]</span></code>.</p></li>
+<li><p><strong>Iterating axes plus a slice</strong>: a kernel argument or constant on an extra axis, e.g. <code class="docutils literal notranslate"><span class="pre">grid[i,</span> <span class="pre">0]</span></code>, <code class="docutils literal notranslate"><span class="pre">grid[arg,</span> <span class="pre">ii,</span> <span class="pre">jj,</span> <span class="pre">kk]</span></code>.</p></li>
+</ul>
+<p>Patterns that fall back to the worst-case heap:</p>
+<ul class="simple">
+<li><p><strong>Single-axis arithmetic on the loop variable</strong>: <code class="docutils literal notranslate"><span class="pre">field[i</span> <span class="pre">%</span> <span class="pre">K]</span></code>, <code class="docutils literal notranslate"><span class="pre">field[i</span> <span class="pre">/</span> <span class="pre">2]</span></code>, <code class="docutils literal notranslate"><span class="pre">field[i</span> <span class="pre">+</span> <span class="pre">5]</span></code>, <code class="docutils literal notranslate"><span class="pre">field[2</span> <span class="pre">*</span> <span class="pre">i]</span></code>, and similar.</p></li>
+<li><p><strong>Multi-axis index with axes holding the same value</strong>: <code class="docutils literal notranslate"><span class="pre">field[i</span> <span class="pre">%</span> <span class="pre">K,</span> <span class="pre">i</span> <span class="pre">%</span> <span class="pre">K]</span></code>, or any multi-axis gate where two or more axes evaluate to the same value; the joint mapping is many-to-one and would alias iterations onto a few cells.</p></li>
+<li><p><strong>Multi-axis index folding onto a smaller subspace</strong>: <code class="docutils literal notranslate"><span class="pre">field[i</span> <span class="pre">%</span> <span class="pre">K0,</span> <span class="pre">(i</span> <span class="pre">//</span> <span class="pre">K0)</span> <span class="pre">%</span> <span class="pre">K1]</span></code> with the loop trip count above <code class="docutils literal notranslate"><span class="pre">K0</span> <span class="pre">*</span> <span class="pre">K1</span></code>; the joint axis space is smaller than the loop and iterations wrap around it.</p></li>
+<li><p><strong>Constant-index gate</strong>: <code class="docutils literal notranslate"><span class="pre">field[42]</span></code>, or any axis that is a literal constant.</p></li>
+<li><p><strong>Kernel-argument index, no iterating axis</strong>: <code class="docutils literal notranslate"><span class="pre">field[arg]</span></code> where every axis is launch-constant.</p></li>
+<li><p><strong>Indirect index via runtime load</strong>: <code class="docutils literal notranslate"><span class="pre">field[other_field[i]]</span></code>; the compiler cannot prove <code class="docutils literal notranslate"><span class="pre">other_field</span></code> is injective.</p></li>
+</ul>
+</section>
 </section>
 
 
@@ -909,6 +932,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-can-go-wrong">What can go wrong</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-characteristics">Performance characteristics</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#appendix-a-types-of-dynamic-loops-supported-by-reverse-mode-ad">Appendix A: types of dynamic loops supported by reverse-mode AD</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#appendix-b-gate-index-shapes-that-capture-vs-fall-back-to-the-worst-case-heap">Appendix B: gate-index shapes that capture vs fall back to the worst-case heap</a></li>
 </ul>
   </nav></div>
 

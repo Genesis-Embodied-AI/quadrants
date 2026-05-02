@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.stream &#8212; Quadrants 0.7.4 documentation</title>
+    <title>quadrants.lang.stream &#8212; Quadrants 0.7.5 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../_static/documentation_options.js?v=020ce317"></script>
+    <script src="../../../_static/documentation_options.js?v=a674670e"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.4" />
+  <meta name="docsearch:version" content="0.7.5" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.5 documentation</p>
   
 </a></div>
     
@@ -347,12 +347,18 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span></div>
 
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_prog</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">prog</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">prog</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
+
 <div class="viewcode-block" id="Stream.synchronize">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Stream.synchronize">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">synchronize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Block until all operations on this stream complete.&quot;&quot;&quot;</span>
-        <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
-        <span class="n">prog</span><span class="o">.</span><span class="n">stream_synchronize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span><span class="o">.</span><span class="n">stream_synchronize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Stream.destroy">
@@ -363,8 +369,7 @@
 <span class="sd">        No-op for streams wrapping external handles (created via Stream(ptr) without a prog_ref).</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
-            <span class="n">prog</span><span class="o">.</span><span class="n">stream_destroy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span><span class="o">.</span><span class="n">stream_destroy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">=</span> <span class="mi">0</span></div>
 
 
@@ -406,30 +411,34 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span></div>
 
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_prog</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">prog</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">prog</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
+
 <div class="viewcode-block" id="Event.record">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Event.record">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">record</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">qd_stream</span><span class="p">:</span> <span class="n">Stream</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Record this event on a stream. None means the default stream.&quot;&quot;&quot;</span>
-        <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
         <span class="n">stream_handle</span> <span class="o">=</span> <span class="n">qd_stream</span><span class="o">.</span><span class="n">handle</span> <span class="k">if</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">0</span>
-        <span class="n">prog</span><span class="o">.</span><span class="n">event_record</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">,</span> <span class="n">stream_handle</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span><span class="o">.</span><span class="n">event_record</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">,</span> <span class="n">stream_handle</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Event.wait">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Event.wait">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">wait</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">qd_stream</span><span class="p">:</span> <span class="n">Stream</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Make a stream wait for this event. None means the default stream.&quot;&quot;&quot;</span>
-        <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
         <span class="n">stream_handle</span> <span class="o">=</span> <span class="n">qd_stream</span><span class="o">.</span><span class="n">handle</span> <span class="k">if</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">0</span>
-        <span class="n">prog</span><span class="o">.</span><span class="n">stream_wait_event</span><span class="p">(</span><span class="n">stream_handle</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span><span class="o">.</span><span class="n">stream_wait_event</span><span class="p">(</span><span class="n">stream_handle</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Event.synchronize">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Event.synchronize">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">synchronize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Block the host until this event has been reached.&quot;&quot;&quot;</span>
-        <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
-        <span class="n">prog</span><span class="o">.</span><span class="n">event_synchronize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span><span class="o">.</span><span class="n">event_synchronize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Event.destroy">
@@ -440,8 +449,7 @@
 <span class="sd">        No-op for events wrapping external handles (created via Event(ptr) without a prog_ref).</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
-            <span class="n">prog</span><span class="o">.</span><span class="n">event_destroy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span><span class="o">.</span><span class="n">event_destroy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">=</span> <span class="mi">0</span></div>
 
 
