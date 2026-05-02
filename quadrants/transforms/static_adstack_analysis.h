@@ -131,6 +131,37 @@ struct StaticAdStackBoundExpr {
             loop_iter_size_expr);
 };
 
+// Captured `MaxOverRange` reducible by a dedicated parallel max-reducer dispatch at launch time. Stage 1 grammar
+// (option-D plan): `MaxOverRange(begin, end, body)` where `begin` and `end` evaluate to closed-form scalars after
+// recursive substitution of any deeper captured `MaxOverRange`s, and `body` is integer-typed arithmetic
+// (`Const`, `ExternalTensorRead(arg, [BoundVar(this_var)])`, `Add` / `Sub` / `Mul` / `Max` of those). The runtime
+// dispatches one reducer per spec in dependency order (deepest first); the per-launch result is substituted as a
+// `Const` into the SizeExpr tree so the per-thread sizer never walks the iteration domain. Anything outside the
+// grammar is left for the existing capped path (silent truncation today; tracked as future work).
+struct StaticAdStackMaxReducerSpec {
+  // Index of the alloca within `AdStackSizingAttribs::allocas` (same indexing the per-thread sizer uses).
+  int32_t stack_id{-1};
+  // Index of the `MaxOverRange` node in this alloca's `size_expr.nodes`. The runtime keys results by
+  // `(task_id_in_kernel, stack_id, mor_node_idx)` and the substitution helper replaces `nodes[mor_node_idx]` with
+  // a `Const` carrying the dispatched reducer's output.
+  int32_t mor_node_idx{-1};
+  // Indices into `size_expr.nodes` for the `MaxOverRange`'s `[begin, end)`. Both must evaluate closed-form at
+  // dispatch time (after recursive substitution); the runtime walks them via `evaluate_adstack_size_expr`.
+  int32_t begin_node_idx{-1};
+  int32_t end_node_idx{-1};
+  // Body subtree root. Walked at launch time to extract the arg-id paths the reducer reads from. Stage 1 keeps the
+  // body tree itself in the captured spec so the runtime can evaluate Const/Sub/Add/Mul/Max combinations of
+  // ExternalTensorRead leaves without re-walking the analyzer.
+  int32_t body_node_idx{-1};
+  // Bound variable id introduced by this `MaxOverRange`. Body-leaf `ExternalTensorRead` indices encoded as
+  // `-(var_id + 1)` must match this id; any other bound-var reference rejects the spec.
+  int32_t var_id{-1};
+  // Indices into `size_expr.nodes` that are deeper captured `MaxOverRange` specs this one depends on. The runtime
+  // dispatches in topological order so all dependencies have been substituted before this spec's body is read.
+  std::vector<int32_t> dependent_mor_node_idxs;
+  QD_IO_DEF(stack_id, mor_node_idx, begin_node_idx, end_node_idx, body_node_idx, var_id, dependent_mor_node_idxs);
+};
+
 // SNode descriptor info the analysis needs to capture an SNode-backed gate. The resolver returns `std::nullopt` when
 // the leaf / dense pair has no compile-time descriptor available (e.g. on backends that walk the SNode tree at
 // runtime), in which case the analysis rejects the gate and the runtime falls back to worst-case sizing.

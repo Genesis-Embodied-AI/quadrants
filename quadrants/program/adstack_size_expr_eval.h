@@ -366,6 +366,21 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
     Program *prog,
     LaunchContextBuilder *ctx);
 
+// Stage 1 of `quadrants_adstack_max_reducer_plan.md`: walk every per-stack `SerializedSizeExpr` in `size_exprs`
+// post-order and return the list of `MaxOverRange` nodes the runtime can reduce in parallel via a dedicated
+// max-reducer dispatch. Each returned spec references its alloca by `stack_id` (index into `size_exprs`) and its
+// `MaxOverRange` by `mor_node_idx` (index into `size_exprs[stack_id].nodes`). Specs are returned in dependency
+// order: deeper `MaxOverRange` nodes first so the runtime can substitute their results before evaluating outer
+// nodes that depend on them. Grammar (Stage 1):
+//   * `body` subtree references only `Const`, `ExternalTensorRead(arg, [BoundVariable(this_var_id)])`, and
+//     `Add` / `Sub` / `Mul` / `Max` of those. Single index axis. Integer dtype on every leaf.
+//   * `begin` and `end` subtrees reference only `Const`, `ExternalTensorShape`, `Add` / `Sub` / `Mul` / `Max`,
+//     or another `MaxOverRange` already captured deeper in the same tree (becomes a `Const` after substitution).
+// Anything outside the grammar is skipped silently; that `MaxOverRange` continues to fall through to the existing
+// capped path (host hard-error when `QD_DEBUG_ADSTACK=1`, silent truncation otherwise).
+std::vector<StaticAdStackMaxReducerSpec> recognize_adstack_max_reducer_specs(
+    const std::vector<SerializedSizeExpr> &size_exprs);
+
 // Apply the captured per-task loop trip-count clip to `effective_rows`. Each loop iteration of an adstack
 // task claims at most one row at the LCA-block, so the heap needs at most `trip_count` rows regardless of
 // how many cells of an oversized gating SNode/ndarray the reducer counted. Two trip-count sources, picked
