@@ -129,7 +129,7 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         // Size the float heap from the published gate-passing count (DtoH'd per task). Mirrors the CPU launcher's
         // post-reducer sizing call - this is what shrinks the float slab to `count * stride_float` instead of the
         // dispatched-threads worst case on sparse-grid workloads.
-        executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n);
+        executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n, &ctx);
       }
     }
     ++task_index;

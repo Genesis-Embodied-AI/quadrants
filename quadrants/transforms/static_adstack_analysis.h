@@ -41,6 +41,7 @@
 #include <vector>
 
 #include "quadrants/common/serialization.h"
+#include "quadrants/ir/adstack_size_expr.h"
 #include "quadrants/ir/ir.h"
 
 namespace quadrants::lang {
@@ -94,6 +95,24 @@ struct StaticAdStackBoundExpr {
   uint32_t snode_byte_cell_stride{0};
   uint32_t snode_iter_count{0};
 
+  // Compile-time loop trip count of the task whose pushes this gate dominates. Set when the task's
+  // `range_for` has a constant `[begin, end)` (the same `static_bound` predicate the iteration-count check
+  // uses). Zero means runtime-bound (analyzer cannot resolve the trip count from IR alone). The runtime
+  // uses this as an upper bound when sizing the float adstack heap from the reducer's gate-passing-cell
+  // count: each loop iteration claims at most one row at the LCA-block, so the heap needs at most
+  // `loop_iter_static` rows regardless of how many cells of an oversized SNode the reducer counted.
+  uint32_t loop_iter_static{0};
+
+  // Pre-chunking loop trip-count `SizeExpr` for the same task, captured by `determine_ad_stack_size` and
+  // copied here at codegen time. Covers the runtime-bounded shapes the static `loop_iter_static` cannot:
+  // `for j in range(field[i])`, `for k in range(arr.shape[axis])`, two-arg ranges over either of those,
+  // multi-axis ndrange products, and casts of a stashed loop index. Empty when the analyzer found no
+  // bound shape (the user kernel is outside the SizeExpr grammar) or the task is not a range-for; in
+  // those cases the runtime falls back to the unclipped reducer count. Evaluated at every kernel launch
+  // (cheap - same `evaluate_adstack_size_expr` walk the per-thread `ad_stack_size` already runs) so the
+  // clip tracks the live trip count even when it varies between launches.
+  SerializedSizeExpr loop_iter_size_expr;
+
   QD_IO_DEF(cmp_op,
             field_dtype_is_float,
             field_dtype_is_double,
@@ -107,7 +126,9 @@ struct StaticAdStackBoundExpr {
             snode_root_id,
             snode_byte_base_offset,
             snode_byte_cell_stride,
-            snode_iter_count);
+            snode_iter_count,
+            loop_iter_static,
+            loop_iter_size_expr);
 };
 
 // SNode descriptor info the analysis needs to capture an SNode-backed gate. The resolver returns `std::nullopt` when
@@ -154,8 +175,14 @@ struct StaticAdStackAnalysisResult {
 // addressing and the launchers skip the per-launch reducer dispatch + DtoH; see `CompileConfig::
 // ad_stack_sparse_threshold_bytes` for the user-facing knob (default 100 MiB; 0 forces capture, useful for tests
 // that pin the reducer-backed sizing path).
+// `task_range_is_original_loop`: true when `task_ir->{begin_value, end_value}` is the original user-loop trip
+// count, false when an upstream pass (e.g. `make_cpu_multithreaded_range_for` on CPU LLVM) has rewritten it
+// into a per-chunk subrange. The analyzer only fills `bound_expr.loop_iter_static` when this is true; on
+// rewritten loops the original trip count is no longer recoverable from `task_ir` and the runtime falls back to
+// the unclipped reducer count for that task.
 StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir,
                                                           const SNodeDescriptorResolver &snode_descriptor_resolver,
-                                                          std::size_t sparse_heap_threshold_bytes);
+                                                          std::size_t sparse_heap_threshold_bytes,
+                                                          bool task_range_is_original_loop = true);
 
 }  // namespace quadrants::lang

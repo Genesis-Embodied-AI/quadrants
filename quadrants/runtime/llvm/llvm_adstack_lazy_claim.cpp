@@ -404,7 +404,8 @@ void LlvmRuntimeExecutor::ensure_adstack_heap_int(std::size_t needed_bytes) {
 
 void LlvmRuntimeExecutor::ensure_per_task_float_heap_post_reducer(std::size_t task_index,
                                                                   const AdStackSizingInfo &ad_stack,
-                                                                  std::size_t num_threads) {
+                                                                  std::size_t num_threads,
+                                                                  LaunchContextBuilder *ctx) {
   // Skip when the task has no float heap need (no f32 allocas, or analysis didn't capture a gate so we wouldn't have
   // routed it through the lazy float path on the codegen side).
   if (!ad_stack.bound_expr.has_value() || ad_stack.per_thread_stride_float == 0) {
@@ -436,9 +437,37 @@ void LlvmRuntimeExecutor::ensure_per_task_float_heap_post_reducer(std::size_t ta
 
   // Floor at 1 row when the captured count is zero (no thread passed the gate this launch). The codegen-emitted bounds
   // clamp keeps `claimed_row` in [0, count-1] so threads that miss the gate never reach the LCA-block claim - the heap
-  // row stays unused. A 1-row allocation is cheap and keeps the heap pointer non-null.
-  const std::size_t effective_rows =
+  // row stays unused. A 1-row allocation is cheap and keeps the heap pointer non-null. Clip by the captured
+  // compile-time loop trip count when known: each iteration claims at most one row at the LCA-block (one `atomic_add`
+  // per gating iteration), so the heap needs at most `loop_iter_static` rows regardless of how many cells of an
+  // oversized gating SNode the reducer counted. The analyzer leaves `loop_iter_static == 0` for runtime-bounded loops
+  // and for CPU LLVM tasks whose `[begin_value, end_value)` is a post-chunking subrange (the unclipped reducer count is
+  // the right upper bound there).
+  std::size_t effective_rows =
       (count == std::numeric_limits<uint32_t>::max()) ? num_threads : std::max<std::size_t>(count, 1);
+  if (count != std::numeric_limits<uint32_t>::max() && ad_stack.bound_expr.has_value()) {
+    if (ad_stack.bound_expr->loop_iter_static > 0) {
+      // Compile-time trip count: integer compare, no per-launch eval cost. Constant `SizeExpr` shapes are
+      // already collapsed into this field by the analyzer so they short-circuit the runtime eval below.
+      effective_rows =
+          std::min<std::size_t>(effective_rows, static_cast<std::size_t>(ad_stack.bound_expr->loop_iter_static));
+    } else if (!ad_stack.bound_expr->loop_iter_size_expr.nodes.empty()) {
+      // Runtime-bounded clip: evaluate the captured trip-count `SizeExpr` only when the static field is unset
+      // (the analyzer leaves `loop_iter_static == 0` for shapes the compile-time path cannot cover, e.g.
+      // `for j in range(field[i])` / `for k in range(arr.shape[axis])`). Cost = one tree walk per launch,
+      // dominated by host scalar reads through `SNodeRwAccessorsBank` on `FieldLoad` / `ExternalTensorRead`
+      // nodes (CPU: a memory load; CUDA / AMDGPU: a 4-8 byte DtoH). The evaluator returns -1 when the tree
+      // references state that is not host-resolvable from `ctx`; in that case we leave `effective_rows`
+      // unclipped from this source.
+      Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
+      if (ctx != nullptr && prog != nullptr) {
+        const int64_t evaluated = evaluate_adstack_size_expr(ad_stack.bound_expr->loop_iter_size_expr, prog, ctx);
+        if (evaluated > 0) {
+          effective_rows = std::min<std::size_t>(effective_rows, static_cast<std::size_t>(evaluated));
+        }
+      }
+    }
+  }
   // Read back the per-thread float stride (in bytes) that `publish_adstack_metadata` published into
   // `runtime->adstack_per_thread_stride_float`. `AdStackSizingInfo::per_thread_stride_float` from the analysis pre-pass
   // is in entry-count units (`2 * max_size`), not bytes, and would massively undersize the heap.

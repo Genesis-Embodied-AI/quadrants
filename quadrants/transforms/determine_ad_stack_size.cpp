@@ -1393,6 +1393,47 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
         " or a shape the pre-pass already recognises, or extend the `SizeExpr` grammar to cover this shape.",
         alloca->get_last_tb(), dump_hint);
   }
+  // Build a per-task `SizeExpr` for each adstack-bearing parallel range-for offload's loop trip count, captured
+  // here BEFORE `make_cpu_multithreaded_range_for` rewrites the user loop into chunks. The same `SizeExpr`
+  // grammar `compute_bounded_adstack_size` uses for per-thread stack sizing applies: integer constants, scalar
+  // i32 / i64 field reads, ndarray shape axes, ndarray element reads at constant or loop indices, plus the
+  // arithmetic / max-over-range combinators. The runtime float-heap clip evaluates this expression at launch
+  // and uses it as an upper bound on row claims (each loop iteration claims at most one row at the LCA-block,
+  // so the heap needs at most `evaluate(loop_trip_count_expr)` rows regardless of how many cells of an
+  // oversized gating SNode the reducer counted). Skipped for non-range-for offloads (struct-for / mesh-for /
+  // serial / listgen / gc) because their iteration model does not fit the simple `[begin, end)` walk the
+  // expression captures; those tasks fall back to the unclipped reducer count.
+  auto offloaded_tasks = irpass::analysis::gather_statements(root, [&](Stmt *s) { return s->is<OffloadedStmt>(); });
+  for (Stmt *s : offloaded_tasks) {
+    auto *task = s->as<OffloadedStmt>();
+    if (task->task_type != OffloadedTaskType::range_for) {
+      continue;
+    }
+    bool has_adstack = false;
+    irpass::analysis::gather_statements(task, [&](Stmt *inner) {
+      if (inner->is<AdStackAllocaStmt>()) {
+        has_adstack = true;
+      }
+      return false;
+    });
+    if (!has_adstack) {
+      continue;
+    }
+    int32_t var_id_counter = 0;
+    auto end_e = resolve_loop_end(task, root, &var_id_counter);
+    if (!end_e) {
+      continue;
+    }
+    auto begin_e = resolve_loop_begin_lower_bound(task);
+    auto trip = expr_sub(std::move(end_e), std::move(begin_e));
+    if (!trip) {
+      continue;
+    }
+    if (trip->kind == SizeExpr::Kind::Const && trip->const_value < 0) {
+      trip = SizeExpr::make_const(0);
+    }
+    task->pre_chunk_loop_trip_count_expr = std::shared_ptr<SizeExpr>(std::move(trip));
+  }
   return true;
 }
 

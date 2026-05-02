@@ -685,6 +685,45 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         auto bound_count_it = per_task_bound_count.find(i);
         if (bound_count_it != per_task_bound_count.end()) {
           effective_rows = bound_count_it->second;
+          // Clip by the captured loop trip count. Each loop iteration claims at most one row at the LCA-block
+          // (one `atomic_add` per gating iteration), so the heap needs at most `trip_count` rows regardless of
+          // how many cells of the gating SNode the reducer counted; without this, an oversized SNode (1024-cell
+          // `selector` paired with a 64-iter loop) inflates the float heap to the SNode's cell count even
+          // though the loop can only claim 64 rows. Two trip-count sources, both gated by the
+          // `dispatched_threads` ceiling so a `dynamic_gpu_range_for` that exceeds the SPIR-V dispatch cap and
+          // serialises iterations across threads (each thread reaches the LCA-block multiple times) does not
+          // accidentally undersize the heap:
+          //   * `loop_iter_static`: compile-time-known trip count (`for i in range(N)` with N a constant).
+          //     Cheap integer compare.
+          //   * `loop_iter_size_expr`: runtime-evaluated `SizeExpr` for shapes the static field cannot cover
+          //     (`for j in range(field[i])`, `for k in range(arr.shape[axis])`, two-arg ranges over either,
+          //     plus the multi-axis ndrange and bound-cast variants the SizeExpr grammar already supports).
+          //     Evaluator cost is the same per-launch host walk the per-thread `ad_stack_size` already runs;
+          //     returns -1 on shapes that aren't host-resolvable, in which case we skip the clip from this
+          //     source.
+          if (attribs.ad_stack.bound_expr.has_value()) {
+            const auto &bound_expr = *attribs.ad_stack.bound_expr;
+            if (bound_expr.loop_iter_static > 0) {
+              // Compile-time trip count: integer compare, no per-launch eval cost. Constant `SizeExpr` shapes
+              // are already collapsed into this field by the analyzer so they short-circuit the runtime eval
+              // below.
+              const size_t loop_iter_static = static_cast<size_t>(bound_expr.loop_iter_static);
+              if (loop_iter_static <= dispatched_threads) {
+                effective_rows = std::min<size_t>(effective_rows, loop_iter_static);
+              }
+            } else if (!bound_expr.loop_iter_size_expr.nodes.empty() && program_impl_ != nullptr &&
+                       program_impl_->program != nullptr) {
+              // Runtime-bounded clip: only evaluated when the static field is unset (the analyzer leaves it
+              // 0 for shapes the compile-time path cannot cover, e.g. `for j in range(field[i])` /
+              // `for k in range(arr.shape[axis])`). Cost = one tree walk per launch, same path the
+              // per-thread `ad_stack_size` host-eval already runs.
+              const int64_t evaluated =
+                  evaluate_adstack_size_expr(bound_expr.loop_iter_size_expr, program_impl_->program, &host_ctx);
+              if (evaluated > 0 && static_cast<size_t>(evaluated) <= dispatched_threads) {
+                effective_rows = std::min<size_t>(effective_rows, static_cast<size_t>(evaluated));
+              }
+            }
+          }
         } else if (attribs.ad_stack.bound_expr.has_value()) {
           // Reaching here means the bound reducer skipped this `bound_expr`-captured task and `per_task_bound_count`
           // has no entry for slot `i`. The reducer's skip paths in `dispatch_adstack_bound_reducers` are: PSB

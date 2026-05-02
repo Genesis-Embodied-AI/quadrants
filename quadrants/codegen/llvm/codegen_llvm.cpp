@@ -1850,8 +1850,16 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     desc.iter_count = static_cast<uint32_t>(iter_count);
     return desc;
   };
-  auto adstack_analysis =
-      analyze_adstack_static_bounds(stmt, snode_resolver, compile_config.ad_stack_sparse_threshold_bytes);
+  // CPU LLVM goes through `make_cpu_multithreaded_range_for` in `offload_to_executable`, which rewrites the user
+  // loop's `[begin_value, end_value)` into per-thread chunks before codegen runs. The atomic row counter the
+  // codegen emits is shared across every chunk of the same task, so the total claim count is the original
+  // pre-chunk loop trip count, not the per-chunk subrange. Signal that to the analyzer so it skips filling
+  // `bound_expr.loop_iter_static` on CPU and the runtime falls back to the unclipped reducer count there. CUDA
+  // and AMDGPU dispatch one thread per iteration without chunking, so their per-task `[begin_value, end_value)`
+  // matches the user loop and the analyzer can fill the field.
+  const bool task_range_is_original_loop = !arch_is_cpu(compile_config.arch);
+  auto adstack_analysis = analyze_adstack_static_bounds(
+      stmt, snode_resolver, compile_config.ad_stack_sparse_threshold_bytes, task_range_is_original_loop);
   ad_stack_bootstrap_pushes_ = std::move(adstack_analysis.bootstrap_pushes);
   ad_stack_lca_block_float_ir_ = adstack_analysis.lca_block_float;
   ad_stack_static_bound_expr_ = adstack_analysis.bound_expr;
