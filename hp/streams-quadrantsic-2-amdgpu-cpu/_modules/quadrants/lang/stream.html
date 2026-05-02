@@ -365,8 +365,8 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_destroy_prog</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve a Program for resource cleanup.</span>
 
-<span class="sd">        Falls back to the current runtime when the owner has been collected, which is safe because</span>
-<span class="sd">        CUDAContext is a singleton so the CUDA stream handle remains valid.</span>
+<span class="sd">        Falls back to the current runtime when the owner has been collected, which is safe because CUDAContext is a</span>
+<span class="sd">        singleton so the CUDA stream handle remains valid.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">prog</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -466,8 +466,8 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_destroy_prog</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve a Program for resource cleanup.</span>
 
-<span class="sd">        Falls back to the current runtime when the owner has been collected, which is safe because</span>
-<span class="sd">        CUDAContext is a singleton so the CUDA event handle remains valid.</span>
+<span class="sd">        Falls back to the current runtime when the owner has been collected, which is safe because CUDAContext is a</span>
+<span class="sd">        singleton so the CUDA event handle remains valid.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">prog</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
