@@ -440,6 +440,27 @@
 <p>Number of host threads used when compiling kernels. Default <code class="docutils literal notranslate"><span class="pre">4</span></code>. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to <code class="docutils literal notranslate"><span class="pre">1</span></code>) on memory-pressure-bound systems where concurrent LLVM compilations thrash.</p>
 </section>
 </section>
+<section id="reverse-mode-autodiff">
+<h2>Reverse-mode autodiff<a class="headerlink" href="#reverse-mode-autodiff" title="Link to this heading">#</a></h2>
+<p>See <a class="reference internal" href="autodiff.html"><span class="std std-doc">Autodiff</span></a> for the reverse-mode pipeline overview.</p>
+<section id="ad-stack-experimental-enabled">
+<h3><code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled</span></code><a class="headerlink" href="#ad-stack-experimental-enabled" title="Link to this heading">#</a></h3>
+<p>Enables the dynamic-loop reverse-mode pipeline (the <em>adstack</em>). Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Required when a reverse-mode kernel has a runtime-bounded loop carrying a non-linear primal; without it, such kernels either compile-error or produce silently-wrong gradients depending on the loop shape. See <a class="reference internal" href="autodiff.html#autodiff-with-dynamic-loops"><span class="std std-ref">Autodiff with dynamic loops</span></a> for the rules. Adstack-on is safe even when not strictly needed, but it does come with a few drawbacks:</p>
+<ul class="simple">
+<li><p><strong>Memory.</strong> The reverse pass replays each iteration of the dynamic loop, so the adstack stores per-iteration intermediate values for every thread. See <a class="reference internal" href="autodiff.html#memory-footprint"><span class="std std-ref">Memory footprint</span></a> for the exact formula and the knobs that shrink it (<code class="docutils literal notranslate"><span class="pre">ad_stack_size</span></code>, <code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes</span></code>).</p></li>
+<li><p><strong>Per-launch overhead.</strong> Every backward kernel launch incurs a small fixed CPU-to-GPU data transfer. Kernels whose dynamic loop is gated by a sparse predicate (e.g. <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n):</span> <span class="pre">if</span> <span class="pre">active[i]</span> <span class="pre">&gt;</span> <span class="pre">0:</span> <span class="pre">...</span></code>) additionally run a fast GPU pre-step that counts how many threads pass the gate so that the adstack can be tightly sized instead of upper-bounded by worst case.</p></li>
+</ul>
+<p><em>Note.</em> These drawbacks affect only reverse-mode kernels that actually use the adstack; forward-only kernels and reverse-mode kernels without a dynamic non-linear inner loop pay nothing extra. In other words, enabling adstack globally is effectively free except for kernels that need it anyway!</p>
+</section>
+<section id="ad-stack-size">
+<h3><code class="docutils literal notranslate"><span class="pre">ad_stack_size</span></code><a class="headerlink" href="#ad-stack-size" title="Link to this heading">#</a></h3>
+<p>Forces every adstack in the program to exactly <code class="docutils literal notranslate"><span class="pre">N</span></code> slots and bypasses the launch-time sizer. Default <code class="docutils literal notranslate"><span class="pre">0</span></code>, meaning “let the sizer decide” (the recommended setting for day-to-day use). Setting a positive <code class="docutils literal notranslate"><span class="pre">N</span></code> is meant for stress tests or working around a suspected sizer bug; it defeats the per-launch-exact sizing so every dispatch allocates the full <code class="docutils literal notranslate"><span class="pre">N</span></code> slots whether or not the kernel actually needs them. Has no effect when <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=False</span></code>.</p>
+</section>
+<section id="ad-stack-sparse-threshold-bytes">
+<h3><code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes</span></code><a class="headerlink" href="#ad-stack-sparse-threshold-bytes" title="Link to this heading">#</a></h3>
+<p>Cutoff (in bytes) below which the gate-passing-count sizing path described in <a class="reference internal" href="autodiff.html#memory-footprint"><span class="std std-ref">Memory footprint</span></a> is skipped in favour of the eager <code class="docutils literal notranslate"><span class="pre">dispatched_threads</span> <span class="pre">*</span> <span class="pre">stride</span></code> heap. Default <code class="docutils literal notranslate"><span class="pre">100</span> <span class="pre">MiB</span></code>. The sparse path saves memory on kernels of the shape <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(...):</span> <span class="pre">if</span> <span class="pre">field[i]</span> <span class="pre">cmp</span> <span class="pre">literal:</span> <span class="pre">&lt;adstack</span> <span class="pre">work&gt;</span></code> but pays a per-launch reducer dispatch; below the threshold that overhead outweighs the savings. Set to <code class="docutils literal notranslate"><span class="pre">0</span></code> to always use the sparse path; lower it if the default still skips kernels you want shrunk. No effect when <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=False</span></code> or when the kernel has no such gate.</p>
+</section>
+</section>
 <section id="debugging">
 <h2>Debugging<a class="headerlink" href="#debugging" title="Link to this heading">#</a></h2>
 <p>See <a class="reference internal" href="debug.html"><span class="std std-doc">Debug mode</span></a> for runnable examples and a typical develop / benchmark workflow.</p>
@@ -584,6 +605,12 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cfg-optimization"><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fast-math"><code class="docutils literal notranslate"><span class="pre">fast_math</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#num-compile-threads"><code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reverse-mode-autodiff">Reverse-mode autodiff</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ad-stack-experimental-enabled"><code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ad-stack-size"><code class="docutils literal notranslate"><span class="pre">ad_stack_size</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ad-stack-sparse-threshold-bytes"><code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debugging">Debugging</a><ul class="nav section-nav flex-column">
