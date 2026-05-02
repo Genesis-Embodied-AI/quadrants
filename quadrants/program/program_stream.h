@@ -11,7 +11,8 @@ namespace quadrants::lang {
 
 class StreamManager {
  public:
-  explicit StreamManager(Arch arch) : arch_(arch) {}
+  explicit StreamManager(Arch arch) : arch_(arch) {
+  }
 
   uint64 create_stream();
   void destroy_stream(uint64 stream_handle);
