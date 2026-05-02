@@ -1,7 +1,6 @@
 // StreamManager implementation and Program delegation.
 
 #include "program_stream.h"
-#include "program.h"
 
 #ifdef QD_WITH_CUDA
 #include "quadrants/rhi/cuda/cuda_driver.h"
@@ -101,38 +100,6 @@ void StreamManager::stream_wait_event(uint64 stream_handle, uint64 event_handle)
                                                  reinterpret_cast<void *>(event_handle), 0 /*flags*/);
   }
 #endif
-}
-
-// ---------------------------------------------------------------------------
-// Program delegation — keeps the pybind / Python API unchanged.
-// ---------------------------------------------------------------------------
-
-uint64 Program::stream_create() {
-  return stream_manager_.create_stream();
-}
-void Program::stream_destroy(uint64 h) {
-  stream_manager_.destroy_stream(h);
-}
-void Program::stream_synchronize(uint64 h) {
-  stream_manager_.synchronize_stream(h);
-}
-void Program::set_current_cuda_stream(uint64 h) {
-  stream_manager_.set_current_stream(h);
-}
-uint64 Program::event_create() {
-  return stream_manager_.create_event();
-}
-void Program::event_destroy(uint64 h) {
-  stream_manager_.destroy_event(h);
-}
-void Program::event_record(uint64 eh, uint64 sh) {
-  stream_manager_.record_event(eh, sh);
-}
-void Program::event_synchronize(uint64 h) {
-  stream_manager_.synchronize_event(h);
-}
-void Program::stream_wait_event(uint64 sh, uint64 eh) {
-  stream_manager_.stream_wait_event(sh, eh);
 }
 
 }  // namespace quadrants::lang
