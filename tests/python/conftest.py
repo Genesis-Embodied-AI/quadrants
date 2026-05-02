@@ -159,6 +159,10 @@ import sys
 import pytest
 
 
+def pytest_addoption(parser):
+    parser.addoption("--bench-out", type=str, default="bench_interop.txt", help="Output file for benchmark results.")
+
+
 @pytest.fixture
 def temporary_module():
     """

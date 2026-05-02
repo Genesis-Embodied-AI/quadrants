@@ -33,13 +33,9 @@ jobs:
           path: dist/*.whl
 
   benchmark-cuda:
-    name: Interop benchmarks (CUDA, n_envs=${{ matrix.n_envs }})
+    name: Interop benchmarks (CUDA)
     needs: build
     runs-on: gpu-t4-4-core
-    strategy:
-      fail-fast: false
-      matrix:
-        n_envs: [4096, 30000]
     env:
       WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
     steps:
@@ -68,29 +64,28 @@ jobs:
           pip install wandb
       - name: Run benchmarks
         run: |
-          python tests/python/bench_interop.py \
-            --arch cuda \
-            --n-envs ${{ matrix.n_envs }} \
-            --warmup 10 \
-            --record 10 \
-            --json /tmp/bench_cuda_${{ matrix.n_envs }}.json
+          pytest tests/python/test_interop_benchmarks.py \
+            -v -s -k cuda -m benchmarks \
+            --bench-out /tmp/bench_cuda.txt
       - name: Upload results to W&B
         if: >
           github.repository == 'Genesis-Embodied-AI/gstaichi'
           && github.ref == 'refs/heads/main'
           && env.WANDB_API_KEY != ''
         run: |
+          cat /tmp/bench_cuda*.txt > /tmp/bench_cuda_all.txt
           python tests/python/upload_bench_to_wandb.py \
-            --in-file /tmp/bench_cuda_${{ matrix.n_envs }}.json \
+            --in-file /tmp/bench_cuda_all.txt \
             --project quadrants-interop-benchmarks \
-            --run-prefix "cuda-${{ matrix.n_envs }}"
+            --metrics steps_per_sec us_per_step \
+            --run-prefix cuda
       - name: Display results
-        run: cat /tmp/bench_cuda_${{ matrix.n_envs }}.json | python -m json.tool
+        run: cat /tmp/bench_cuda*.txt
       - name: Upload results artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bench-cuda-${{ matrix.n_envs }}
-          path: /tmp/bench_cuda_${{ matrix.n_envs }}.json
+          name: bench-cuda
+          path: /tmp/bench_cuda*.txt
 
   benchmark-cpu:
     name: Interop benchmarks (CPU)
@@ -118,26 +113,25 @@ jobs:
           pip install wandb
       - name: Run benchmarks
         run: |
-          python tests/python/bench_interop.py \
-            --arch cpu \
-            --n-envs 4096 \
-            --warmup 5 \
-            --record 5 \
-            --json /tmp/bench_cpu.json
+          pytest tests/python/test_interop_benchmarks.py \
+            -v -s -k cpu -m benchmarks \
+            --bench-out /tmp/bench_cpu.txt
       - name: Upload results to W&B
         if: >
           github.repository == 'Genesis-Embodied-AI/gstaichi'
           && github.ref == 'refs/heads/main'
           && env.WANDB_API_KEY != ''
         run: |
+          cat /tmp/bench_cpu*.txt > /tmp/bench_cpu_all.txt
           python tests/python/upload_bench_to_wandb.py \
-            --in-file /tmp/bench_cpu.json \
+            --in-file /tmp/bench_cpu_all.txt \
             --project quadrants-interop-benchmarks \
+            --metrics steps_per_sec us_per_step \
             --run-prefix cpu
       - name: Display results
-        run: cat /tmp/bench_cpu.json | python -m json.tool
+        run: cat /tmp/bench_cpu*.txt
       - name: Upload results artifact
         uses: actions/upload-artifact@v4
         with:
           name: bench-cpu
-          path: /tmp/bench_cpu.json
+          path: /tmp/bench_cpu*.txt
