@@ -5,7 +5,9 @@
 // parameterized via the resolver callback in the header.
 #include "quadrants/transforms/static_adstack_analysis.h"
 
+#include <algorithm>
 #include <functional>
+#include <limits>
 #include <unordered_map>
 
 #include "quadrants/ir/analysis.h"
@@ -284,8 +286,9 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       // eps:` keep `loop_iter <= snode_iter_count` (slice axes like the kernel-arg `f` make the reducer
       // over-count by the slice factor, which is benign over-allocation).
       const bool static_bound = task_ir->const_begin && task_ir->const_end && task_ir->end_stmt == nullptr;
+      const int64_t loop_iter =
+          static_bound ? (static_cast<int64_t>(task_ir->end_value) - static_cast<int64_t>(task_ir->begin_value)) : 0;
       if (static_bound) {
-        const int64_t loop_iter = static_cast<int64_t>(task_ir->end_value) - static_cast<int64_t>(task_ir->begin_value);
         if (loop_iter <= 0 || static_cast<uint64_t>(loop_iter) > static_cast<uint64_t>(desc_opt->iter_count)) {
           return false;
         }
@@ -392,6 +395,103 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       }
       if (static_cast<int>(distinct_iterating_axes.size()) < n_iterating) {
         return false;
+      }
+      // Joint-axis-space check: when no iterating axis is the task loop's bare `LoopIndexStmt` (which would
+      // make the joint mapping bijective by itself), bound the product of axis value ranges from above and
+      // require it to cover the loop trip count. Without this an oversized SNode lets a fold attack like
+      // `field[i % 8, (i // 8) % 8]` with `loop_iter > 64` slip through: every iterating axis is value-
+      // distinct (so the same_value dedup admits the shape) and `loop_iter <= snode_iter_count` because the
+      // SNode is large, yet the joint mapping wraps and aliases iterations onto a 64-cell subspace,
+      // undersizing the float heap. Each axis range is recovered by walking the lowered arithmetic for
+      // `_ % K`, `_ // K`, and the `sub(_, mul/bit_shl(floordiv(_, K), K))` post-`lower_access` shape; an
+      // unrecognised shape contributes the parent's range conservatively. The check is gated on
+      // `static_bound` because the trip count needs to be a known constant for the comparison to be sound.
+      std::function<int64_t(Stmt *, int)> axis_max_range = [&](Stmt *s, int depth) -> int64_t {
+        if (s == nullptr || depth > 12) {
+          return loop_iter;
+        }
+        if (s->is<LoopIndexStmt>()) {
+          return loop_iter;
+        }
+        if (auto *bin = s->cast<BinaryOpStmt>()) {
+          if (bin->op_type == BinaryOpType::mod) {
+            if (auto *c = bin->rhs ? bin->rhs->cast<ConstStmt>() : nullptr) {
+              const int64_t k = c->val.val_as_int64();
+              if (k > 0) {
+                return std::min<int64_t>(k, axis_max_range(bin->lhs, depth + 1));
+              }
+            }
+          }
+          if (bin->op_type == BinaryOpType::floordiv) {
+            if (auto *c = bin->rhs ? bin->rhs->cast<ConstStmt>() : nullptr) {
+              const int64_t k = c->val.val_as_int64();
+              if (k > 0) {
+                const int64_t parent = axis_max_range(bin->lhs, depth + 1);
+                return (parent + k - 1) / k;
+              }
+            }
+          }
+          if (bin->op_type == BinaryOpType::sub) {
+            // Post-`lower_access` `_ % K` is `sub(L, mul(floordiv(L, K), K))` (or `bit_shl` for power-of-two K).
+            if (auto *factor = bin->rhs ? bin->rhs->cast<BinaryOpStmt>() : nullptr) {
+              int64_t k_factor = -1;
+              Stmt *div_inner = nullptr;
+              if (factor->op_type == BinaryOpType::mul) {
+                if (auto *c = factor->rhs ? factor->rhs->cast<ConstStmt>() : nullptr) {
+                  k_factor = c->val.val_as_int64();
+                  div_inner = factor->lhs;
+                }
+              } else if (factor->op_type == BinaryOpType::bit_shl) {
+                if (auto *c = factor->rhs ? factor->rhs->cast<ConstStmt>() : nullptr) {
+                  const int64_t shift = c->val.val_as_int64();
+                  if (shift >= 0 && shift < 62) {
+                    k_factor = (int64_t)1 << shift;
+                    div_inner = factor->lhs;
+                  }
+                }
+              }
+              if (k_factor > 0 && div_inner != nullptr) {
+                if (auto *div = div_inner->cast<BinaryOpStmt>(); div && div->op_type == BinaryOpType::floordiv) {
+                  if (auto *div_c = div->rhs ? div->rhs->cast<ConstStmt>() : nullptr) {
+                    if (div_c->val.val_as_int64() == k_factor && div->lhs == bin->lhs) {
+                      return std::min<int64_t>(k_factor, axis_max_range(bin->lhs, depth + 1));
+                    }
+                  }
+                }
+              }
+            }
+            return axis_max_range(bin->lhs, depth + 1);
+          }
+        }
+        return loop_iter;
+      };
+      const bool any_task_loop_bare_index = std::any_of(axes.begin(), axes.end(), [&](Stmt *axis) {
+        auto *li = axis->cast<LoopIndexStmt>();
+        return li != nullptr && li->loop == task_ir;
+      });
+      if (static_bound && !any_task_loop_bare_index) {
+        constexpr int64_t kRangeCap = std::numeric_limits<int64_t>::max() / 2;
+        int64_t joint_product = 1;
+        for (Stmt *axis : axes) {
+          if (!contains_loop_index(axis, 0)) {
+            continue;
+          }
+          int64_t r = axis_max_range(axis, 0);
+          if (r <= 0) {
+            r = loop_iter;
+          }
+          if (r > kRangeCap || joint_product > kRangeCap / std::max<int64_t>(r, 1)) {
+            joint_product = kRangeCap;
+            break;
+          }
+          joint_product *= r;
+          if (joint_product >= loop_iter) {
+            break;
+          }
+        }
+        if (joint_product < loop_iter) {
+          return false;
+        }
       }
       out.field_source_kind = StaticAdStackBoundExpr::FieldSourceKind::SNode;
       out.snode_root_id = desc_opt->root_id;

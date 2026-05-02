@@ -3335,7 +3335,7 @@ def test_adstack_static_bound_expr_ndarray_gate_compound_index_grad_correct():
         "affine_div",
         "constant_index",
         "dynamic_load_index",
-        "aliased_two_axis",
+        "folding_two_axis_decomp",
     ],
 )
 @test_utils.test(
@@ -3347,17 +3347,19 @@ def test_adstack_static_bound_expr_ndarray_gate_compound_index_grad_correct():
 def test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct(gate_shape):
     # Pins gradient correctness on parallel-dispatched backends for `qd.field`-backed gates whose index expression
     # is not a per-iteration bijection with the SNode cell space. Five shapes exercised:
-    #   * `compound_mod`:       `selector[i % K]` with K < n           (loop hits each cell n/K times)
-    #   * `affine_div`:         `selector[i / 2]`                      (pairs of iterations alias onto one cell)
-    #   * `constant_index`:     `selector[K // 2]`                     (every iteration hits the same cell)
-    #   * `dynamic_load_index`: `selector[idx_field[i]]`               (axis is a runtime load, not loop-derivable)
-    #   * `aliased_two_axis`:   `selector[i % K, i % K]`               (multi-axis gate where two axes share a
-    #                                                                   value; CSE fuses the two `i % K` to a
-    #                                                                   single `BinaryOpStmt`, the value-based
-    #                                                                   axis dedup collapses them and the
-    #                                                                   distinct-axis check rejects the joint
-    #                                                                   mapping that would otherwise alias n
-    #                                                                   iterations onto K diagonal cells)
+    #   * `compound_mod`:        `selector[i % K]` with K < n               (loop hits each cell n/K times)
+    #   * `affine_div`:          `selector[i / 2]`                          (pairs of iterations alias onto one cell)
+    #   * `constant_index`:      `selector[K // 2]`                         (every iteration hits the same cell)
+    #   * `dynamic_load_index`:  `selector[idx_field[i]]`                   (axis is a runtime load, not loop-derivable)
+    #   * `folding_two_axis_decomp`:
+    #                            `selector[i % 8, (i // 8) % 8]` with `loop_iter > 64` and an oversized SNode
+    #                                                                       (axes are value-distinct so the same_value
+    #                                                                        dedup admits them and `loop_iter <=
+    #                                                                        snode_iter_count` because the SNode is
+    #                                                                        large, but the joint axis space is
+    #                                                                        8 * 8 = 64 and folds n iterations onto
+    #                                                                        that subspace; the joint-axis-product
+    #                                                                        check refuses capture)
     # In all five the SNode arm of `match_field_source` must refuse capture so the runtime falls back to the
     # dispatched-threads worst-case heap. With cross-row aliasing on a wrongly-captured heap, the reverse pass
     # reads a different thread's gate bool from the boolean adstack - the wrong set of `i` values contributes
@@ -3372,10 +3374,11 @@ def test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct(g
     eps = 1e-9
 
     affine_div_size = n  # snode size = n keeps `loop_iter <= snode_iter_count`, so the iter-count check passes
+    fold_axis = 8  # `folding_two_axis_decomp` joint space is `fold_axis * fold_axis = 64 < n = 256`
     if gate_shape == "affine_div":
         selector_shape = (affine_div_size,)
-    elif gate_shape == "aliased_two_axis":
-        selector_shape = (K, K)
+    elif gate_shape == "folding_two_axis_decomp":
+        selector_shape = (fold_axis, fold_axis)
     else:
         selector_shape = (K,)
     selector = qd.field(qd.f32, shape=selector_shape)
@@ -3395,7 +3398,11 @@ def test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct(g
                     else (
                         (K // 2,)
                         if qd.static(gate_shape == "constant_index")
-                        else ((i % K, i % K) if qd.static(gate_shape == "aliased_two_axis") else (idx_field[i],))
+                        else (
+                            (i % fold_axis, (i // fold_axis) % fold_axis)
+                            if qd.static(gate_shape == "folding_two_axis_decomp")
+                            else (idx_field[i],)
+                        )
                     )
                 )
             )
@@ -3430,9 +3437,9 @@ def test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct(g
         gated_per_iter = selector_np[np.arange(n) // 2] > eps
     elif gate_shape == "constant_index":
         gated_per_iter = np.full(n, bool(selector_np[K // 2] > eps))
-    elif gate_shape == "aliased_two_axis":
-        diag = np.arange(n) % K
-        gated_per_iter = selector_np[diag, diag] > eps
+    elif gate_shape == "folding_two_axis_decomp":
+        idx = np.arange(n)
+        gated_per_iter = selector_np[idx % fold_axis, (idx // fold_axis) % fold_axis] > eps
     else:
         gated_per_iter = selector_np[idx_field_np] > eps
     expected = np.where(gated_per_iter, np.float32(expected_per_gated), np.float32(0.0))
