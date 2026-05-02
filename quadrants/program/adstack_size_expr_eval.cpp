@@ -1523,6 +1523,109 @@ const AdStackCache::DiagnoseLaunchSnapshot *AdStackCache::get_diagnose_snapshot(
   return diagnose_snapshot_.valid ? &diagnose_snapshot_ : nullptr;
 }
 
+namespace {
+
+// True iff the body subtree rooted at `node_idx` references only `Const`, `ExternalTensorRead(arg,
+// [BoundVariable(expected_var_id)])`, and `Add` / `Sub` / `Mul` / `Max` of those (Stage 1 grammar of the
+// max-reducer plan). Single-axis ndarray reads only; the index slot must be exactly `-(expected_var_id + 1)`
+// per the `SerializedSizeExprNode::indices` encoding (negative entries reference an enclosing
+// `MaxOverRange`'s bound variable). Returns false on any out-of-grammar node.
+bool max_reducer_body_is_recognizable(const SerializedSizeExpr &expr, int32_t node_idx, int32_t expected_var_id) {
+  if (node_idx < 0 || static_cast<std::size_t>(node_idx) >= expr.nodes.size()) {
+    return false;
+  }
+  const auto &n = expr.nodes[node_idx];
+  switch (static_cast<SizeExpr::Kind>(n.kind)) {
+    case SizeExpr::Kind::Const:
+      return true;
+    case SizeExpr::Kind::ExternalTensorRead:
+      return n.indices.size() == 1 && n.indices[0] == -(expected_var_id + 1);
+    case SizeExpr::Kind::Add:
+    case SizeExpr::Kind::Sub:
+    case SizeExpr::Kind::Mul:
+    case SizeExpr::Kind::Max:
+      return max_reducer_body_is_recognizable(expr, n.operand_a, expected_var_id) &&
+             max_reducer_body_is_recognizable(expr, n.operand_b, expected_var_id);
+    default:
+      return false;
+  }
+}
+
+// True iff the bound subtree rooted at `node_idx` evaluates to a closed-form scalar after substituting any
+// `MaxOverRange` nodes already captured (`captured_mors`) as `Const`s. Allowed: `Const`, `ExternalTensorShape`,
+// `Add` / `Sub` / `Mul` / `Max` of recursively-closed subtrees, and `MaxOverRange` whose node index is in
+// `captured_mors`. On success appends every captured-MOR dependency this subtree references to `deps_out`.
+bool max_reducer_bound_is_closed(const SerializedSizeExpr &expr,
+                                 int32_t node_idx,
+                                 const std::unordered_set<int32_t> &captured_mors,
+                                 std::vector<int32_t> &deps_out) {
+  if (node_idx < 0 || static_cast<std::size_t>(node_idx) >= expr.nodes.size()) {
+    return false;
+  }
+  const auto &n = expr.nodes[node_idx];
+  switch (static_cast<SizeExpr::Kind>(n.kind)) {
+    case SizeExpr::Kind::Const:
+    case SizeExpr::Kind::ExternalTensorShape:
+      return true;
+    case SizeExpr::Kind::Add:
+    case SizeExpr::Kind::Sub:
+    case SizeExpr::Kind::Mul:
+    case SizeExpr::Kind::Max:
+      return max_reducer_bound_is_closed(expr, n.operand_a, captured_mors, deps_out) &&
+             max_reducer_bound_is_closed(expr, n.operand_b, captured_mors, deps_out);
+    case SizeExpr::Kind::MaxOverRange: {
+      if (captured_mors.count(node_idx) == 0) {
+        return false;
+      }
+      deps_out.push_back(node_idx);
+      return true;
+    }
+    default:
+      return false;  // FieldLoad, BoundVariable from a non-immediately-enclosing scope, ExternalTensorRead, etc.
+  }
+}
+
+}  // namespace
+
+std::vector<StaticAdStackMaxReducerSpec> recognize_adstack_max_reducer_specs(
+    const std::vector<SerializedSizeExpr> &size_exprs) {
+  std::vector<StaticAdStackMaxReducerSpec> specs;
+  for (std::size_t stack_id = 0; stack_id < size_exprs.size(); ++stack_id) {
+    const auto &expr = size_exprs[stack_id];
+    // `SerializedSizeExpr` is built post-order so deeper `MaxOverRange` nodes always have a smaller `n` than
+    // the outer `MaxOverRange` that depends on them. Iterating ascending `n` therefore visits dependencies
+    // before dependants and `captured_mors` is always populated in the right order for `max_reducer_bound_is_closed`.
+    std::unordered_set<int32_t> captured_mors;
+    for (std::size_t n = 0; n < expr.nodes.size(); ++n) {
+      const auto &node = expr.nodes[n];
+      if (static_cast<SizeExpr::Kind>(node.kind) != SizeExpr::Kind::MaxOverRange) {
+        continue;
+      }
+      if (!max_reducer_body_is_recognizable(expr, node.body_node_idx, node.var_id)) {
+        continue;
+      }
+      std::vector<int32_t> deps;
+      if (!max_reducer_bound_is_closed(expr, node.operand_a, captured_mors, deps)) {
+        continue;
+      }
+      if (!max_reducer_bound_is_closed(expr, node.operand_b, captured_mors, deps)) {
+        continue;
+      }
+      StaticAdStackMaxReducerSpec spec;
+      spec.stack_id = static_cast<int32_t>(stack_id);
+      spec.mor_node_idx = static_cast<int32_t>(n);
+      spec.begin_node_idx = node.operand_a;
+      spec.end_node_idx = node.operand_b;
+      spec.body_node_idx = node.body_node_idx;
+      spec.var_id = node.var_id;
+      spec.dependent_mor_node_idxs = std::move(deps);
+      specs.push_back(std::move(spec));
+      captured_mors.insert(static_cast<int32_t>(n));
+    }
+  }
+  return specs;
+}
+
 void clip_effective_rows_by_loop_trip_count(std::size_t &effective_rows,
                                             const StaticAdStackBoundExpr &bound_expr,
                                             std::size_t dispatched_threads_ceiling,
