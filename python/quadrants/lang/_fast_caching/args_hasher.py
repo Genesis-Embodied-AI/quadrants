@@ -46,9 +46,16 @@ class FastcacheSkip(enum.Enum):
     WARN = "warn"
 
 
-# Set when the hash failure is something callers should warn about (as opposed to a Field arriving through a qd.Tensor
-# annotation, which is a normal silent path). Reset at the start of each hash_args call.
+# Set when the fastcache skip is something callers should warn about (as opposed to a Field arriving through a
+# qd.Tensor annotation, which is a normal silent path). Reset at the start of each hash_args call.
 _should_warn = False
+
+
+def _mark_warn_if_not_tensor_annotation(arg_meta: ArgMetadata | None) -> None:
+    """Flag that a warning is needed if the Field didn't arrive through a qd.Tensor annotation."""
+    global _should_warn
+    if arg_meta is not None and arg_meta.annotation is not _TensorWrapper:
+        _should_warn = True
 
 
 def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], arg: Any) -> str | None:
@@ -141,6 +148,7 @@ def stringify_obj_type(
     if isinstance(obj, VectorNdarray):
         return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, ScalarField):
+        _mark_warn_if_not_tensor_annotation(arg_meta)
         return None
     if isinstance(obj, MatrixNdarray):
         return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
@@ -149,6 +157,7 @@ def stringify_obj_type(
     if isinstance(obj, np.ndarray):
         return f"[np-{obj.dtype}-{obj.ndim}]"
     if isinstance(obj, MatrixField):
+        _mark_warn_if_not_tensor_annotation(arg_meta)
         return None
     if dataclasses.is_dataclass(obj):
         return dataclass_to_repr(raise_on_templated_floats, path, obj)
@@ -190,7 +199,7 @@ def stringify_obj_type(
         return "np.bool_"
     if isinstance(obj, enum.Enum):
         return f"enum-{obj.name}-{obj.value}"
-    global _should_warn
+    global _should_warn  # pylint: disable=global-statement
     _should_warn = True
     # The bit in caps should not be modified without updating corresponding test
     # The rest of free text can be freely modified
