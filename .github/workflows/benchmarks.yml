@@ -1,0 +1,143 @@
+name: Interop Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build wheel
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Prerequisites
+        run: bash .github/workflows/scripts_new/linux/1_prerequisites.sh
+      - name: Build
+        run: bash .github/workflows/scripts_new/linux/2_build.sh
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-wheel
+          path: dist/*.whl
+
+  benchmark-cuda:
+    name: Interop benchmarks (CUDA, n_envs=${{ matrix.n_envs }})
+    needs: build
+    runs-on: gpu-t4-4-core
+    strategy:
+      fail-fast: false
+      matrix:
+        n_envs: [4096, 30000]
+    env:
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install CUDA libraries
+        run: |
+          sudo apt-get install -y libcusolver-dev-12-8 libcusolver-12-8 \
+            libcusparse-dev-12-8 libcusparse-12-8 libnvjitlink-12-8 libcublas-12-8
+          echo "/usr/local/cuda/targets/x86_64-linux/lib" | sudo tee /etc/ld.so.conf.d/cuda-targets.conf
+          sudo ldconfig
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: bench-wheel
+      - name: Install quadrants + torch
+        run: |
+          set -ex
+          mkdir -p dist && mv *.whl dist/
+          pip install dist/*.whl
+          pip install torch --index-url https://download.pytorch.org/whl/cu128
+          pip install wandb
+      - name: Run benchmarks
+        run: |
+          python tests/python/bench_interop.py \
+            --arch cuda \
+            --n-envs ${{ matrix.n_envs }} \
+            --warmup 10 \
+            --record 10 \
+            --json /tmp/bench_cuda_${{ matrix.n_envs }}.json
+      - name: Upload results to W&B
+        if: >
+          github.repository == 'Genesis-Embodied-AI/gstaichi'
+          && github.ref == 'refs/heads/main'
+          && env.WANDB_API_KEY != ''
+        run: |
+          python tests/python/upload_bench_to_wandb.py \
+            --in-file /tmp/bench_cuda_${{ matrix.n_envs }}.json \
+            --project quadrants-interop-benchmarks \
+            --run-prefix "cuda-${{ matrix.n_envs }}"
+      - name: Display results
+        run: cat /tmp/bench_cuda_${{ matrix.n_envs }}.json | python -m json.tool
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-cuda-${{ matrix.n_envs }}
+          path: /tmp/bench_cuda_${{ matrix.n_envs }}.json
+
+  benchmark-cpu:
+    name: Interop benchmarks (CPU)
+    needs: build
+    runs-on: ubuntu-22.04
+    env:
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: bench-wheel
+      - name: Install quadrants + torch
+        run: |
+          set -ex
+          mkdir -p dist && mv *.whl dist/
+          pip install dist/*.whl
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install wandb
+      - name: Run benchmarks
+        run: |
+          python tests/python/bench_interop.py \
+            --arch cpu \
+            --n-envs 4096 \
+            --warmup 5 \
+            --record 5 \
+            --json /tmp/bench_cpu.json
+      - name: Upload results to W&B
+        if: >
+          github.repository == 'Genesis-Embodied-AI/gstaichi'
+          && github.ref == 'refs/heads/main'
+          && env.WANDB_API_KEY != ''
+        run: |
+          python tests/python/upload_bench_to_wandb.py \
+            --in-file /tmp/bench_cpu.json \
+            --project quadrants-interop-benchmarks \
+            --run-prefix cpu
+      - name: Display results
+        run: cat /tmp/bench_cpu.json | python -m json.tool
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-cpu
+          path: /tmp/bench_cpu.json
