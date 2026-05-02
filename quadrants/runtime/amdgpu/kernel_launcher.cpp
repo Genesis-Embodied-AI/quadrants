@@ -288,6 +288,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   } else if (ctx.result_buffer_size > 0) {
     AMDGPUDriver::get_instance().stream_synchronize(active_stream);
   }
+  // Free the per-launch `RuntimeContext` on the active stream rather than through `AMDGPUContext`'s deferred free
+  // list.  The deferred list is drained by `LlvmRuntimeExecutor::synchronize`, which is also called from
+  // `fetch_result_uint64` during `ensure_adstack_heap`'s field-pointer query -- that path would free
+  // `context_pointer` mid-launch, and HIP could recycle the address for the adstack heap allocated right after,
+  // clobbering the `RuntimeContext` the next task still reads from.
   AMDGPUDriver::get_instance().mem_free_async(context_pointer, active_stream);
 }
 
