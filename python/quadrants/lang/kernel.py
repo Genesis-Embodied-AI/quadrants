@@ -4,6 +4,7 @@ import os
 import pathlib
 import time
 from collections import defaultdict
+from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
 # Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.
 from functools import partial
@@ -492,6 +493,13 @@ class Kernel(FuncBase):
                 if needed_ is template or type(needed_) is template:
                     template_num += 1
                     i_out += 1
+                    continue
+                # FIXME: This shortcut skips _recursive_set_args() solely when val._qd_all_field is true and the annotation is
+                # a dataclass, but _recursive_set_args() is where the strict provided_arg_type-is-needed_arg_type check lives.
+                # As a result, once an instance has _qd_all_field=True, passing it to a kernel parameter annotated with a
+                # different all-Field dataclass type can be silently accepted instead of raising the previous runtime type error,
+                # which weakens API/type safety and can route the wrong struct type through launch.
+                if getattr(val, "_qd_all_field", False) and getattr(needed_, _FIELDS, None) is not None:
                     continue
                 if self.graph_do_while_arg is not None and self.arg_metas[i_in].name == self.graph_do_while_arg:
                     self._graph_do_while_cpp_arg_id = i_out - template_num

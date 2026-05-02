@@ -4,7 +4,9 @@ Automatic differentiation (autodiff) computes the exact gradient of a kernel's o
 
 **Note.** Throughout this page, the *primal* is the value a kernel computes in its normal forward pass (the field value, the loss, whatever the kernel writes); the *adjoint* (or *gradient*) is the derivative of the final scalar output (typically a loss) with respect to that primal value, stored in the `.grad` field next to the primal.
 
-Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan. Reverse-mode AD through dynamic loops (described further down) is currently behind an opt-in `ad_stack_experimental_enabled=True` flag.
+Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan.
+
+**Recommendation.** Reverse-mode AD through dynamic loops (described further down) is currently gated behind an opt-in `ad_stack_experimental_enabled=True` flag at `qd.init`. If you are using autodiff at all, we recommend enabling this flag as it is required for any reverse-mode kernel with a dynamic loop carrying a non-linear primal, and free for every other kernel. See [the cost breakdown](./init_options.md#ad_stack_experimental_enabled) for details.
 
 Three mechanisms are supported:
 
@@ -291,11 +293,10 @@ The on-device sizer relies on two common hardware features (64-bit integer arith
 
 #### Manual override
 
-`qd.init()` exposes a single escape hatch:
+`qd.init()` exposes two escape hatches:
 
-- `ad_stack_size=N` (default `0`, meaning "let the sizer decide"): forces every adstack in the program to exactly `N` slots and bypasses the sizer entirely.
-
-Leave it at `0` in day-to-day use. Setting it to a positive `N` is meant for stress tests or for working around a suspected sizer bug; it defeats the per-launch-exact sizing, so every dispatch allocates the full `N` slots whether the kernel actually needs them or not.
+- `ad_stack_size=N` (default `0`): forces every adstack to exactly `N` slots and bypasses the sizer. Leave at `0` in day-to-day use; positive `N` is for stress tests or working around a suspected sizer bug.
+- `ad_stack_sparse_threshold_bytes=B` (default `100 MiB`): cutoff below which the gate-passing-count sizing of [Memory footprint](#memory-footprint) is skipped in favour of the eager `dispatched_threads * stride` heap. The sparse path saves memory but pays a per-launch reducer dispatch; below `B` of conservative heap, that overhead outweighs the savings. Set to `0` to always use the sparse path; lower it if the default still skips kernels you want shrunk.
 
 #### Memory footprint
 
@@ -311,10 +312,12 @@ where each quantity means:
 
 | Quantity | What it is |
 | --- | --- |
-| `num_threads` | Threads the kernel actually dispatches. On CPU: the thread-pool size, typically tens. On GPU: the full ndrange. |
+| `num_threads` | Concurrent thread slots, regardless of logical ndrange. CPU: thread-pool size (~tens). GPU adstack-bearing kernels: capped at 65536 on all backends (131072 on SPIR-V range-for, i.e. `for i in range(N):`), tightened to the actual flat product when the iteration bound is compile-time known. Forward-only kernels keep the full ndrange. |
 | `stack_size` | Per-launch capacity resolved by the sizer. Varies between launches - if an ndarray-bounded loop iterates 16 times at one dispatch and 1024 at another, `stack_size` tracks each. |
 | `bytes_per_slot` | Depends on `T` and on the backend (see table below). |
 | `num_buffers` | Number of adstacks the kernel allocates - one per loop-carried variable plus one per dependent branch flag (see [One adstack per variable](#one-adstack-per-variable)). |
+
+Kernels of the shape `for i in range(...): if field[i] cmp literal: <adstack work>` (a runtime gate directly above the adstack-using body, comparing one field entry to a constant) shrink further: the compiler counts gate-passing iterations at launch time and sizes the float adstack to that count instead of `num_threads * stack_size`. A workload whose gate matches 5% of iterations pays 5% of the float-adstack cost; the float heap grows on demand if a later launch matches more. Integer / boolean adstacks stay at `num_threads * stack_size` - their pushes fire unconditionally for control-flow replay. The shrinking is exact only when the gate's per-axis index is a bare loop variable (`field[i]`, `field[I, J, K]`); see [What can go wrong](#what-can-go-wrong) for a known limitation on `qd.field`-backed gates indexed by compound expressions.
 
 Every adstack slot always stores a *primal* value - the forward-pass value the reverse pass pops to recover the chain-rule step. Floating-point adstacks additionally store an *adjoint* slot where the reverse pass accumulates chain-rule contributions. Integer / boolean adstacks do not need an adjoint slot.
 
@@ -351,6 +354,9 @@ A large `ndrange` combined with several loop-carried variables multiplies quickl
   - pass `ad_stack_size=N` to `qd.init()` with `N` large enough to cover the real push count (bypasses the sizer).
 - **Out-of-memory before the kernel even runs.** A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer's number is correct. Surfaces as an allocator OOM at launch time. Remedies are the ones listed under *Avoiding OOM on GPU* above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.
 - **Loop bounds backed by a mutated ndarray.** A reverse-mode kernel with `for i in range(n[j])` requires `n[j]` to hold the same value at the forward call and at `.grad()`. If anything writes to `n[j]` between those two points - the differentiable kernel itself, or any other kernel call - the computed gradient may come out wrong, sometimes as an `Adstack overflow` exception at `qd.sync()`, sometimes silently. The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until `.grad()` returns. The reason for that is Quadrants' adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like [PyTorch's autograd](https://pytorch.org/docs/stable/notes/autograd.html) is not affected, since the trip count is recorded as the forward runs and reused at backward time.
+- :warning: **Gate on a `qd.field` indexed by an expression that is not a plain loop variable.** A reverse-mode kernel of the shape `for i in range(n): if field[i % K] > eps: <adstack work>` (or any gate whose index is not a plain loop variable - `field[2 * i]`, `field[42]`, `field[other_field[i]]`) may produce silently wrong gradients. Workarounds:
+  - raise `ad_stack_sparse_threshold_bytes` in `qd.init()` past the kernel's conservative-heap byte size;
+  - use a `qd.ndarray` for the gating field instead of a `qd.field`.
 
 ## Performance characteristics
 

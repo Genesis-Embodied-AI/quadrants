@@ -1,6 +1,14 @@
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <limits>
+#include <vector>
+
+#include "quadrants/ir/stmt_op_types.h"
+
 #include "quadrants/rhi/common/host_memory_pool.h"
 #include "quadrants/runtime/llvm/llvm_offline_cache.h"
 #include "quadrants/rhi/cpu/cpu_device.h"
@@ -233,27 +241,6 @@ std::size_t LlvmRuntimeExecutor::get_snode_num_dynamically_allocated(SNode *snod
   auto data_list = runtime_query<void *>("NodeManager_get_data_list", result_buffer, node_allocator);
 
   return (std::size_t)runtime_query<int32>("ListManager_get_num_elements", result_buffer, data_list);
-}
-
-void LlvmRuntimeExecutor::check_adstack_overflow() {
-  // Called from `synchronize()` on every sync so adstack overflow surfaces as a Python exception regardless of
-  // `compile_config.debug`. The runtime / result buffer may not exist yet (e.g. a C++ test that constructs Program
-  // without materializing the runtime and then triggers Program::finalize -> synchronize), so no-op in that case.
-  if (llvm_runtime_ == nullptr || result_buffer_cache_ == nullptr) {
-    return;
-  }
-  auto *runtime_jit_module = get_runtime_jit_module();
-  runtime_jit_module->call<void *>("runtime_retrieve_and_reset_adstack_overflow", llvm_runtime_);
-  auto flag = fetch_result<int64>(quadrants_result_buffer_error_id, result_buffer_cache_);
-  if (flag != 0) {
-    throw QuadrantsAssertionError(
-        "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
-        "allows. Raised at the next qd.sync() rather than at the offending kernel launch. The pre-pass "
-        "resolved this alloca to a bound tighter than the actual runtime push count - either the enclosing "
-        "loop shape is outside the current `SizeExpr` grammar (rewrite it, or extend the grammar), or the "
-        "Bellman-Ford analyzer undercounted the forward-pass accumulation on this stack (file a bug with "
-        "the kernel IR via `QD_DUMP_IR=1`).");
-  }
 }
 
 void LlvmRuntimeExecutor::check_runtime_error(uint64 *result_buffer) {
@@ -502,11 +489,22 @@ void LlvmRuntimeExecutor::finalize() {
   // Release the host-owned adstack heap before the device teardown below so its `DeviceAllocationGuard` destructor
   // runs while the RHI device is still valid. The destructor drops the allocation back to the driver memory pool
   // (or to the host allocator on CPU); deferring past `llvm_device()->clear()` would leak it.
-  adstack_heap_alloc_.reset();
-  adstack_heap_size_ = 0;
   runtime_temporaries_cache_ = nullptr;
-  runtime_adstack_heap_buffer_field_ptr_ = nullptr;
-  runtime_adstack_heap_size_field_ptr_ = nullptr;
+  runtime_adstack_heap_buffer_float_field_ptr_ = nullptr;
+  runtime_adstack_heap_size_float_field_ptr_ = nullptr;
+  runtime_adstack_heap_buffer_int_field_ptr_ = nullptr;
+  runtime_adstack_heap_size_int_field_ptr_ = nullptr;
+  adstack_heap_alloc_float_.reset();
+  adstack_heap_size_float_ = 0;
+  adstack_heap_alloc_int_.reset();
+  adstack_heap_size_int_ = 0;
+  runtime_adstack_row_counters_field_ptr_ = nullptr;
+  runtime_adstack_bound_row_capacities_field_ptr_ = nullptr;
+  adstack_row_counters_alloc_.reset();
+  adstack_bound_row_capacities_alloc_.reset();
+  adstack_lazy_claim_capacity_ = 0;
+  adstack_bound_reducer_params_alloc_.reset();
+  adstack_bound_reducer_params_capacity_ = 0;
   // Release the pinned-host metadata scratch and its completion event. Sequence: first drain the pending in-flight
   // copy via `event_synchronize` (the next launch's reuse path would have done this lazily, but on shutdown there
   // is no next launch), then free the host pinning, then destroy the event. Skipping the synchronize before
