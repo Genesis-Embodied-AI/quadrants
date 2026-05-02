@@ -316,8 +316,8 @@ void export_lang(py::module &m) {
   auto compiled_kernel_data = py::class_<CompiledKernelData>(m, "CompiledKernelData")
                                   .def("_debug_dump_to_string", &CompiledKernelData::debug_dump_to_string);
 
-  py::class_<Program>(m, "Program")
-      .def(py::init<>())
+  auto program_class = py::class_<Program>(m, "Program");
+  program_class.def(py::init<>())
       .def(
           "ndarray_to_dlpack",
           [](Program *program, pybind11::object owner, Ndarray *ndarray, const std::vector<int> &layout,
@@ -408,20 +408,12 @@ void export_lang(py::module &m) {
       .def("compile_kernel", &Program::compile_kernel, py::return_value_policy::reference)
       .def("launch_kernel", &Program::launch_kernel)
       .def("get_device_caps", &Program::get_device_caps)
-      .def("stream_create", [](Program *p) { return p->stream_manager().create_stream(); })
-      .def("stream_destroy", [](Program *p, uint64 h) { p->stream_manager().destroy_stream(h); })
-      .def("stream_synchronize", [](Program *p, uint64 h) { p->stream_manager().synchronize_stream(h); })
-      .def("set_current_cuda_stream", [](Program *p, uint64 h) { p->stream_manager().set_current_stream(h); })
-      .def("event_create", [](Program *p) { return p->stream_manager().create_event(); })
-      .def("event_destroy", [](Program *p, uint64 h) { p->stream_manager().destroy_event(h); })
-      .def("event_record", [](Program *p, uint64 eh, uint64 sh) { p->stream_manager().record_event(eh, sh); })
-      .def("event_synchronize", [](Program *p, uint64 h) { p->stream_manager().synchronize_event(h); })
-      .def("stream_wait_event", [](Program *p, uint64 sh, uint64 eh) { p->stream_manager().stream_wait_event(sh, eh); })
       .def("get_graph_cache_size", &Program::get_graph_cache_size)
       .def("get_graph_cache_used_on_last_call", &Program::get_graph_cache_used_on_last_call)
       .def("get_num_offloaded_tasks_on_last_call", &Program::get_num_offloaded_tasks_on_last_call)
       .def("get_graph_num_nodes_on_last_call", &Program::get_graph_num_nodes_on_last_call)
       .def("get_graph_total_builds", &Program::get_graph_total_builds);
+  export_stream(m, program_class);
 
   py::class_<CompileResult>(m, "CompileResult")
       .def_property_readonly(
