@@ -1287,6 +1287,27 @@ AdStackBoundResult compute_bounded_adstack_size(AdStackAllocaStmt *alloca, IRNod
   return result;
 }
 
+// True if the tree references any inner-domain enumeration node (`MaxOverRange` or its `BoundVariable`
+// references). Used by the per-task trip-count capture to refuse trees the host evaluator would have to
+// walk index-by-index at launch: the trip count of an `OffloadedStmt`'s `[begin, end)` is a scalar bound
+// by construction, so a `MaxOverRange` here means `build_value_expr` walked into a nested loop (e.g. an
+// `end_stmt` referencing a `LoopIndexStmt` of an outer offload, whose range is the dispatched-thread
+// count) and the resulting tree would trip the 1<<24 enumeration guard in `evaluate_adstack_size_expr`.
+bool size_expr_contains_inner_domain_enumeration(const SizeExpr *e) {
+  if (e == nullptr) {
+    return false;
+  }
+  if (e->kind == SizeExpr::Kind::MaxOverRange || e->kind == SizeExpr::Kind::BoundVariable) {
+    return true;
+  }
+  for (const auto &child : e->operands) {
+    if (size_expr_contains_inner_domain_enumeration(child.get())) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
@@ -1431,6 +1452,15 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
     }
     if (trip->kind == SizeExpr::Kind::Const && trip->const_value < 0) {
       trip = SizeExpr::make_const(0);
+    }
+    // Refuse trees that would force the host evaluator to enumerate an inner index domain at launch. The
+    // trip count of `[begin, end)` is a scalar bound by construction; a `MaxOverRange` / `BoundVariable`
+    // node here means `resolve_loop_end` walked through a `LoopIndexStmt` whose enclosing loop end ends up
+    // as the `MaxOverRange` end (typically the dispatched-thread count of an outer offload), and the
+    // resulting tree would trip `evaluate_node`'s 1<<24 guard at every launch. Skip the clip for these
+    // tasks; the runtime falls back to the unclipped reducer count, same as the runtime-bound path.
+    if (size_expr_contains_inner_domain_enumeration(trip.get())) {
+      continue;
     }
     task->pre_chunk_loop_trip_count_expr = std::shared_ptr<SizeExpr>(std::move(trip));
   }
