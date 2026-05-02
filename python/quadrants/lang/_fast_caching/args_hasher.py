@@ -40,13 +40,13 @@ _DC_REPR_NONE = object()
 class HashFailure(enum.Enum):
     """Why hash_args could not produce a cache key."""
 
-    KNOWN_UNCACHEABLE = "known_uncacheable"
+    CONTAINS_FIELD = "contains_field"
     UNEXPECTED_TYPE = "unexpected_type"
 
 
 # Set by stringify_obj_type when it encounters a genuinely unknown type. Reset at the start of each hash_args call.
-# When hash_args fails and this is False, the failure was caused by a known-uncacheable type (e.g. Field) and callers
-# should not emit a warning.
+# When hash_args fails and this is False, the failure was caused by a Field arriving via a qd.Tensor annotation —
+# fastcache simply doesn't apply in that path and no warning is needed.
 _had_unexpected_type = False
 
 
@@ -216,7 +216,7 @@ def hash_args(
         g_repr_time += time.time() - start
         if not _hash:
             g_num_ignored_calls += 1
-            return HashFailure.UNEXPECTED_TYPE if _had_unexpected_type else HashFailure.KNOWN_UNCACHEABLE
+            return HashFailure.UNEXPECTED_TYPE if _had_unexpected_type else HashFailure.CONTAINS_FIELD
         hash_l.append(_hash)
     start = time.time()
     res = hash_iterable_strings(hash_l)
