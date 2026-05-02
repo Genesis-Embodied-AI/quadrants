@@ -81,8 +81,19 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     int effective_grid_dim = task.grid_dim;
     if (!task.ad_stack.allocas.empty()) {
       std::size_t n = resolve_num_threads(task.ad_stack, executor);
+      // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without it the sizer
+      // launches with a host pointer and the next DtoH sync trips `CUDA_ERROR_ILLEGAL_ADDRESS ...
+      // memcpy_device_to_host` on GPUs whose driver + kernel cannot coherently access pageable host memory (the HMM
+      // capability gated below in `launch_llvm_kernel`). `nullptr` on HMM-capable setups keeps
+      // `publish_adstack_metadata`'s host-pointer fast path.
       executor->publish_adstack_metadata(task.ad_stack, n, &ctx, device_context_ptr);
       if (task.ad_stack.bound_expr.has_value()) {
+        // Reducer length is the gating ndarray's full flat element count, not `n`: the lazy row-claim atomic-rmw
+        // fires once per LCA execution, and `gpu_parallel_struct_for` / `gpu_parallel_range_for` grid-stride (`i +=
+        // grid_dim()`) so a single dispatched thread can hit the LCA many times across one launch when the logical
+        // loop span exceeds the (capped) concurrent thread count. Walking the reducer over the full ndarray length
+        // keeps `bound_row_capacities[task_index]` consistent with the total claim count, which the codegen-emitted
+        // bounds clamp reads. Mirrors the CPU launcher's `bound_count_length` derivation.
         std::size_t bound_count_length = n;
         if (task.ad_stack.bound_expr->field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::NdArray &&
             !task.ad_stack.bound_expr->ndarray_arg_id.empty() && task.ad_stack.bound_expr->ndarray_ndim > 0 &&
@@ -92,6 +103,11 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
             std::vector<int> indices = task.ad_stack.bound_expr->ndarray_arg_id;
             indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
             indices.push_back(axis);
+            // get_struct_arg_host (NOT get_struct_arg): `launch_llvm_kernel` above has already swapped
+            // `ctx_->arg_buffer` to a device pointer, so a plain `get_struct_arg` here would dereference device
+            // memory from the host - SIGSEGV / CUDA_ERROR_ILLEGAL_ADDRESS on drivers without HMM, garbage
+            // `flat_len` on HMM-capable setups. The host backing buffer (`arg_buffer_`) stays host-resident across
+            // the swap and holds the same shape entries, so the host-safe variant is byte-equivalent here.
             flat_len *= int64_t(ctx.get_struct_arg_host<int32_t>(indices));
           }
           bound_count_length = static_cast<std::size_t>(std::max<int64_t>(0, flat_len));
@@ -100,6 +116,11 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                                       device_context_ptr);
         executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n);
       }
+      // Floor division (not ceiling): the heap-row count `n` resolved by `resolve_num_threads` floors at
+      // `kAdStackMaxConcurrentThreads`, so dispatching `cap_blocks * block_dim` threads must not exceed that count.
+      // Ceiling division would over-dispatch by `block_dim - 1` threads when `block_dim` does not divide
+      // `kAdStackMaxConcurrentThreads` evenly (e.g. `block_dim=192`: `ceil(65536/192)*192 = 65664`), and threads
+      // with `linear_thread_idx >= 65536` would index past the heap end.
       if (task.block_dim > 0) {
         const std::size_t cap_blocks =
             std::max<std::size_t>(1u, kAdStackMaxConcurrentThreads / static_cast<std::size_t>(task.block_dim));
@@ -143,8 +164,8 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         int effective_grid_dim = prepare_task(j, t);
         CUDAContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
         QD_TRACE("Launching kernel {}<<<{}, {}>>>", t.name, effective_grid_dim, t.block_dim);
-        cuda_module->launch(t.name, effective_grid_dim, t.block_dim, t.dynamic_shared_array_bytes,
-                            {&ctx.get_context()}, {});
+        cuda_module->launch(t.name, effective_grid_dim, t.block_dim, t.dynamic_shared_array_bytes, {&ctx.get_context()},
+                            {});
       }
 
       for (auto &[sid, s] : stream_by_id) {
