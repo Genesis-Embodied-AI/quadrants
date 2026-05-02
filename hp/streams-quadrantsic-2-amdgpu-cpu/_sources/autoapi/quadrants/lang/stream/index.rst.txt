@@ -48,7 +48,8 @@ Module Contents
 
       Explicitly destroy the stream. Safe to call multiple times.
 
-      No-op for streams wrapping external handles (created via Stream(ptr) without a prog_ref).
+      No-op if the owning Program has already been collected, or for streams wrapping external handles
+      (created via Stream(ptr) without a prog_ref).
 
 
 
@@ -87,7 +88,8 @@ Module Contents
 
       Explicitly destroy the event. Safe to call multiple times.
 
-      No-op for events wrapping external handles (created via Event(ptr) without a prog_ref).
+      No-op if the owning Program has already been collected, or for events wrapping external handles
+      (created via Event(ptr) without a prog_ref).
 
 
 

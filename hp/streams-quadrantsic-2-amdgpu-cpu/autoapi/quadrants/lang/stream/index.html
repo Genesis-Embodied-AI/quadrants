@@ -399,7 +399,8 @@ a context manager to ensure cleanup.</p>
 <dt class="sig sig-object py" id="quadrants.lang.stream.Stream.destroy">
 <span class="sig-name descname"><span class="pre">destroy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/stream.html#Stream.destroy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.stream.Stream.destroy" title="Link to this definition">#</a></dt>
 <dd><p>Explicitly destroy the stream. Safe to call multiple times.</p>
-<p>No-op for streams wrapping external handles (created via Stream(ptr) without a prog_ref).</p>
+<p>No-op if the owning Program has already been collected, or for streams wrapping external handles
+(created via Stream(ptr) without a prog_ref).</p>
 </dd></dl>
 
 </dd></dl>
@@ -437,7 +438,8 @@ a context manager to ensure cleanup.</p>
 <dt class="sig sig-object py" id="quadrants.lang.stream.Event.destroy">
 <span class="sig-name descname"><span class="pre">destroy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/stream.html#Event.destroy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.stream.Event.destroy" title="Link to this definition">#</a></dt>
 <dd><p>Explicitly destroy the event. Safe to call multiple times.</p>
-<p>No-op for events wrapping external handles (created via Event(ptr) without a prog_ref).</p>
+<p>No-op if the owning Program has already been collected, or for events wrapping external handles
+(created via Event(ptr) without a prog_ref).</p>
 </dd></dl>
 
 </dd></dl>
