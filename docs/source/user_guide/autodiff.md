@@ -410,6 +410,7 @@ Patterns that capture:
 Patterns that fall back to the worst-case heap:
   - **Single-axis arithmetic on the loop variable**: `field[i % K]`, `field[i / 2]`, `field[i + 5]`, `field[2 * i]`, and similar.
   - **Multi-axis index with axes holding the same value**: `field[i % K, i % K]`, or any multi-axis gate where two or more axes evaluate to the same value; the joint mapping is many-to-one and would alias iterations onto a few cells.
+  - **Multi-axis index folding onto a smaller subspace**: `field[i % K0, (i // K0) % K1]` with the loop trip count above `K0 * K1`; the joint axis space is smaller than the loop and iterations wrap around it.
   - **Constant-index gate**: `field[42]`, or any axis that is a literal constant.
   - **Kernel-argument index, no iterating axis**: `field[arg]` where every axis is launch-constant.
   - **Indirect index via runtime load**: `field[other_field[i]]`; the compiler cannot prove `other_field` is injective.
