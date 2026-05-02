@@ -21,6 +21,10 @@
 
 #include "quadrants/common/core.h"
 
+namespace quadrants::lang {
+class Program;
+}  // namespace quadrants::lang
+
 namespace quadrants {
 
 namespace py = pybind11;
@@ -32,5 +36,7 @@ void export_lang(py::module &m);
 void export_math(py::module &m);
 
 void export_misc(py::module &m);
+
+void export_stream(py::module &m, py::class_<lang::Program> &program_class);
 
 }  // namespace quadrants
