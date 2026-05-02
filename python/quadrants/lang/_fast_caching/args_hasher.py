@@ -53,9 +53,14 @@ _should_warn = False
 
 def _mark_warn_if_not_tensor_annotation(arg_meta: ArgMetadata | None) -> None:
     """Flag that a warning is needed if the Field didn't arrive through a qd.Tensor annotation."""
-    global _should_warn
+    global _should_warn  # pylint: disable=global-statement
     if arg_meta is not None and arg_meta.annotation is not _TensorWrapper:
         _should_warn = True
+
+
+def _mark_should_warn() -> None:
+    global _should_warn  # pylint: disable=global-statement
+    _should_warn = True
 
 
 def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], arg: Any) -> str | None:
@@ -77,8 +82,7 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
         _repr = stringify_obj_type(raise_on_templated_floats, path + (field.name,), child_value, arg_meta=None)
         if _repr is None:
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
-                global _should_warn
-                _should_warn = True
+                _mark_should_warn()
             if is_frozen:
                 try:
                     object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
@@ -199,8 +203,7 @@ def stringify_obj_type(
         return "np.bool_"
     if isinstance(obj, enum.Enum):
         return f"enum-{obj.name}-{obj.value}"
-    global _should_warn  # pylint: disable=global-statement
-    _should_warn = True
+    _mark_should_warn()
     # The bit in caps should not be modified without updating corresponding test
     # The rest of free text can be freely modified
     # (will probably formalize this in more general doc / contributor guidelines at some point)
