@@ -132,7 +132,7 @@ Fastcache supports the following parameter types:
 | `enum.Enum` | Yes | name and value |
 | `qd.field` / `ScalarField` / `MatrixField` | **No** | — |
 
-If any parameter is of an unsupported type, fastcache is disabled for that call and the kernel falls back to normal compilation. For `qd.field` / `ScalarField` / `MatrixField` arriving through a `qd.Tensor`-annotated parameter (the normal field-mode path), this is silent — no warning is emitted. For other unsupported types, a warning is logged at the `warn` level identifying the offending parameter.
+If any parameter is of an unsupported type, fastcache is disabled for that call and the kernel falls back to normal compilation. For `qd.field` / `ScalarField` / `MatrixField` arriving through a `qd.Tensor`-annotated parameter, this is silent — no warning is emitted. For other unsupported types, a warning is logged at the `warn` level identifying the offending parameter.
 
 ### 3. Source code must be available
 
