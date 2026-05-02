@@ -23,10 +23,16 @@ class Stream:
     def handle(self) -> int:
         return self._handle
 
+    def _prog(self):
+        if self._prog_ref is not None:
+            prog = self._prog_ref()
+            if prog is not None:
+                return prog
+        return impl.get_runtime().prog
+
     def synchronize(self):
         """Block until all operations on this stream complete."""
-        prog = impl.get_runtime().prog
-        prog.stream_synchronize(self._handle)
+        self._prog().stream_synchronize(self._handle)
 
     def destroy(self):
         """Explicitly destroy the stream. Safe to call multiple times.
@@ -34,8 +40,7 @@ class Stream:
         No-op for streams wrapping external handles (created via Stream(ptr) without a prog_ref).
         """
         if self._handle != 0 and self._prog_ref is not None:
-            prog = impl.get_runtime().prog
-            prog.stream_destroy(self._handle)
+            self._prog().stream_destroy(self._handle)
             self._handle = 0
 
     def __del__(self):
@@ -70,22 +75,26 @@ class Event:
     def handle(self) -> int:
         return self._handle
 
+    def _prog(self):
+        if self._prog_ref is not None:
+            prog = self._prog_ref()
+            if prog is not None:
+                return prog
+        return impl.get_runtime().prog
+
     def record(self, qd_stream: Stream | None = None):
         """Record this event on a stream. None means the default stream."""
-        prog = impl.get_runtime().prog
         stream_handle = qd_stream.handle if qd_stream is not None else 0
-        prog.event_record(self._handle, stream_handle)
+        self._prog().event_record(self._handle, stream_handle)
 
     def wait(self, qd_stream: Stream | None = None):
         """Make a stream wait for this event. None means the default stream."""
-        prog = impl.get_runtime().prog
         stream_handle = qd_stream.handle if qd_stream is not None else 0
-        prog.stream_wait_event(stream_handle, self._handle)
+        self._prog().stream_wait_event(stream_handle, self._handle)
 
     def synchronize(self):
         """Block the host until this event has been reached."""
-        prog = impl.get_runtime().prog
-        prog.event_synchronize(self._handle)
+        self._prog().event_synchronize(self._handle)
 
     def destroy(self):
         """Explicitly destroy the event. Safe to call multiple times.
@@ -93,8 +102,7 @@ class Event:
         No-op for events wrapping external handles (created via Event(ptr) without a prog_ref).
         """
         if self._handle != 0 and self._prog_ref is not None:
-            prog = impl.get_runtime().prog
-            prog.event_destroy(self._handle)
+            self._prog().event_destroy(self._handle)
             self._handle = 0
 
     def __del__(self):
