@@ -321,6 +321,21 @@ def test_stream_with_tape_raises():
 
 
 @test_utils.test(arch=[qd.cuda])
+def test_stream_with_autodiff_kernel_raises():
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        loss[None] = x[None] ** 2
+
+    s = qd.create_stream()
+    with pytest.raises(RuntimeError, match="not compatible with autodiff"):
+        compute.grad(qd_stream=s)
+    s.destroy()
+
+
+@test_utils.test(arch=[qd.cuda])
 def test_stream_with_graph_raises():
     N = 64
     x = qd.field(qd.f32, shape=(N,))

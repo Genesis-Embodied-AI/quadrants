@@ -13,37 +13,51 @@ namespace cuda {
 
 namespace {
 
+// SPIR-V's `generate_struct_for_kernel` dispatches at most 65536 threads (`advisory_total_num_threads = 65536`, see
+// `quadrants/codegen/spirv/spirv_codegen.cpp`) and grid-strides over the full element list inside the kernel body. The
+// CUDA / AMDGPU launcher path inherits `current_task->grid_dim = saturating_grid_dim` (~9000 blocks, ~1.15M threads on
+// a 144-SM Blackwell with `query_max_block_per_sm * 2`), giving the runtime kernel ~17x more concurrent thread slots
+// than SPIR-V dispatches for the same workload. Per-thread adstack heap rows scale with that, so a bound_expr-less
+// reverse kernel that fits in 1.2 GB on Metal balloons to ~20 GB worst case here. `gpu_parallel_struct_for` and
+// `gpu_parallel_range_for` both grid-stride (`i += grid_dim()` / `idx += block_dim() * grid_dim()`) so reducing the
+// concurrent thread count is correctness-equivalent; we capped to the same 65536 advisory total to track the SPIR-V
+// backend's heap footprint.
+constexpr std::size_t kAdStackMaxConcurrentThreads = 65536;
+
 // Resolve the tight thread count for a task's adstack sizing. For dynamic-bound range_for the begin / end
 // i32 values live in `runtime->temporaries` on device; the launcher fetches them via a 4-byte DtoH memcpy
 // each (dominated by the kernel-launch overhead that follows and only paid for kernels that actually use an
 // adstack under a dynamic iteration range). Const-bound range_for and non-range_for tasks use the codegen-
 // computed `static_num_threads`.
 std::size_t resolve_num_threads(const AdStackSizingInfo &info, LlvmRuntimeExecutor *executor) {
-  if (!info.dynamic_gpu_range_for) {
-    return info.static_num_threads;
-  }
-  std::int32_t begin = info.begin_const_value;
-  std::int32_t end = info.end_const_value;
-  if (info.begin_offset_bytes >= 0 || info.end_offset_bytes >= 0) {
-    auto *active_stream = CUDAContext::get_instance().get_stream();
-    auto *temp_dev_ptr = reinterpret_cast<uint8_t *>(executor->get_runtime_temporaries_device_ptr());
-    if (info.begin_offset_bytes >= 0) {
-      CUDADriver::get_instance().memcpy_device_to_host_async(&begin, temp_dev_ptr + info.begin_offset_bytes,
-                                                             sizeof(std::int32_t), active_stream);
+  std::size_t base = info.static_num_threads;
+  if (info.dynamic_gpu_range_for) {
+    std::int32_t begin = info.begin_const_value;
+    std::int32_t end = info.end_const_value;
+    if (info.begin_offset_bytes >= 0 || info.end_offset_bytes >= 0) {
+      auto *active_stream = CUDAContext::get_instance().get_stream();
+      auto *temp_dev_ptr = reinterpret_cast<uint8_t *>(executor->get_runtime_temporaries_device_ptr());
+      if (info.begin_offset_bytes >= 0) {
+        CUDADriver::get_instance().memcpy_device_to_host_async(&begin, temp_dev_ptr + info.begin_offset_bytes,
+                                                               sizeof(std::int32_t), active_stream);
+      }
+      if (info.end_offset_bytes >= 0) {
+        CUDADriver::get_instance().memcpy_device_to_host_async(&end, temp_dev_ptr + info.end_offset_bytes,
+                                                               sizeof(std::int32_t), active_stream);
+      }
+      CUDADriver::get_instance().stream_synchronize(active_stream);
     }
-    if (info.end_offset_bytes >= 0) {
-      CUDADriver::get_instance().memcpy_device_to_host_async(&end, temp_dev_ptr + info.end_offset_bytes,
-                                                             sizeof(std::int32_t), active_stream);
-    }
-    CUDADriver::get_instance().stream_synchronize(active_stream);
+    // Clamp the logical iteration count to the launched thread count: adstack slices are indexed by
+    // `linear_thread_idx()` (`block_idx * block_dim + thread_idx`), so only `static_num_threads = grid_dim * block_dim`
+    // slices can ever be touched concurrently. A logical range much larger than the launch size does not need more heap
+    // than `static_num_threads * per_thread_stride`; allocating the logical count would over-commit memory and trip OOM
+    // paths for no gain.
+    std::size_t iter = end > begin ? static_cast<std::size_t>(end - begin) : 0;
+    base = std::min(iter, info.static_num_threads);
   }
-  // Clamp the logical iteration count to the launched thread count: adstack slices are indexed by
-  // `linear_thread_idx()` (`block_idx * block_dim + thread_idx`), so only `static_num_threads = grid_dim *
-  // block_dim` slices can ever be touched concurrently. A logical range much larger than the launch size does
-  // not need more heap than `static_num_threads * per_thread_stride`; allocating the logical count would
-  // over-commit memory and trip OOM paths for no gain.
-  std::size_t iter = end > begin ? static_cast<std::size_t>(end - begin) : 0;
-  return std::min(iter, info.static_num_threads);
+  // Match the SPIR-V advisory cap on adstack-bearing kernels so the heap footprint scales with
+  // `kAdStackMaxConcurrentThreads * stride` instead of `saturating_grid_dim * block_dim * stride`.
+  return std::min(base, kAdStackMaxConcurrentThreads);
 }
 
 }  // namespace
@@ -53,19 +67,59 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             const std::vector<OffloadedTask> &offloaded_tasks,
                                             void *device_context_ptr) {
   auto *executor = get_runtime_executor();
+  // Two gates govern the per-launch adstack publish work, both opt-in by the kernel's IR shape. Forward-only kernels
+  // skip both gates and pay zero adstack overhead; reverse-mode kernels without a captured `bound_expr` skip the
+  // lazy-claim block, paying the per-task `publish_adstack_metadata` only.
+  const bool any_lazy_task = std::any_of(offloaded_tasks.begin(), offloaded_tasks.end(),
+                                         [](const OffloadedTask &t) { return t.ad_stack.bound_expr.has_value(); });
+  if (any_lazy_task) {
+    executor->publish_adstack_lazy_claim_buffers(offloaded_tasks.size());
+  }
+
+  // Per-task adstack setup + grid-dim capping. Shared by serial and stream-parallel paths.
+  auto prepare_task = [&](std::size_t task_index, const OffloadedTask &task) -> int {
+    int effective_grid_dim = task.grid_dim;
+    if (!task.ad_stack.allocas.empty()) {
+      std::size_t n = resolve_num_threads(task.ad_stack, executor);
+      executor->publish_adstack_metadata(task.ad_stack, n, &ctx, device_context_ptr);
+      if (task.ad_stack.bound_expr.has_value()) {
+        std::size_t bound_count_length = n;
+        if (task.ad_stack.bound_expr->field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::NdArray &&
+            !task.ad_stack.bound_expr->ndarray_arg_id.empty() && task.ad_stack.bound_expr->ndarray_ndim > 0 &&
+            ctx.args_type != nullptr) {
+          int64_t flat_len = 1;
+          for (int axis = 0; axis < task.ad_stack.bound_expr->ndarray_ndim; ++axis) {
+            std::vector<int> indices = task.ad_stack.bound_expr->ndarray_arg_id;
+            indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+            indices.push_back(axis);
+            flat_len *= int64_t(ctx.get_struct_arg_host<int32_t>(indices));
+          }
+          bound_count_length = static_cast<std::size_t>(std::max<int64_t>(0, flat_len));
+        }
+        executor->publish_per_task_bound_count_device(task_index, task.ad_stack, bound_count_length, &ctx,
+                                                      device_context_ptr);
+        executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n);
+      }
+      if (task.block_dim > 0) {
+        const std::size_t cap_blocks =
+            std::max<std::size_t>(1u, kAdStackMaxConcurrentThreads / static_cast<std::size_t>(task.block_dim));
+        effective_grid_dim =
+            static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(task.grid_dim), cap_blocks));
+        if (effective_grid_dim < 1) {
+          effective_grid_dim = 1;
+        }
+      }
+    }
+    return effective_grid_dim;
+  };
+
   auto *active_stream = CUDAContext::get_instance().get_stream();
   for (size_t i = 0; i < offloaded_tasks.size();) {
     const auto &task = offloaded_tasks[i];
     if (task.stream_parallel_group_id == 0) {
-      std::size_t n = resolve_num_threads(task.ad_stack, executor);
-      // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without it the sizer
-      // launches with a host pointer and the next DtoH sync trips `CUDA_ERROR_ILLEGAL_ADDRESS ...
-      // memcpy_device_to_host` on GPUs whose driver + kernel cannot coherently access pageable host memory (the HMM
-      // capability gated below in `launch_llvm_kernel`). `nullptr` on HMM-capable setups keeps
-      // `publish_adstack_metadata`'s host-pointer fast path.
-      executor->publish_adstack_metadata(task.ad_stack, n, &ctx, device_context_ptr);
-      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
-      cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
+      int effective_grid_dim = prepare_task(i, task);
+      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, effective_grid_dim, task.block_dim);
+      cuda_module->launch(task.name, effective_grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
                           {&ctx.get_context()}, {});
       i++;
     } else {
@@ -86,10 +140,11 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
 
       for (size_t j = group_start; j < i; j++) {
         const auto &t = offloaded_tasks[j];
-        std::size_t n_t = resolve_num_threads(t.ad_stack, executor);
-        executor->publish_adstack_metadata(t.ad_stack, n_t, &ctx, device_context_ptr);
+        int effective_grid_dim = prepare_task(j, t);
         CUDAContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
-        cuda_module->launch(t.name, t.grid_dim, t.block_dim, t.dynamic_shared_array_bytes, {&ctx.get_context()}, {});
+        QD_TRACE("Launching kernel {}<<<{}, {}>>>", t.name, effective_grid_dim, t.block_dim);
+        cuda_module->launch(t.name, effective_grid_dim, t.block_dim, t.dynamic_shared_array_bytes,
+                            {&ctx.get_context()}, {});
       }
 
       for (auto &[sid, s] : stream_by_id) {
