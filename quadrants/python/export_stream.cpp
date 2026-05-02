@@ -10,8 +10,7 @@ namespace quadrants {
 
 void export_stream(py::module &m, py::class_<lang::Program> &program_class) {
   using lang::Program;
-  program_class
-      .def("stream_create", [](Program *p) { return p->stream_manager().create_stream(); })
+  program_class.def("stream_create", [](Program *p) { return p->stream_manager().create_stream(); })
       .def("stream_destroy", [](Program *p, uint64 h) { p->stream_manager().destroy_stream(h); })
       .def("stream_synchronize", [](Program *p, uint64 h) { p->stream_manager().synchronize_stream(h); })
       .def("set_current_cuda_stream", [](Program *p, uint64 h) { p->stream_manager().set_current_stream(h); })
