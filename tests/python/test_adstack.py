@@ -3328,9 +3328,15 @@ def test_adstack_static_bound_expr_ndarray_gate_compound_index_grad_correct():
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
-@pytest.mark.xfail(
-    reason="known SNode-arm bound-expr capture limitation on parallel-dispatched backends - see test docstring",
-    strict=True,
+@pytest.mark.parametrize(
+    "gate_shape",
+    [
+        "compound_mod",
+        "affine_div",
+        "constant_index",
+        "dynamic_load_index",
+        "folding_two_axis_decomp",
+    ],
 )
 @test_utils.test(
     arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal],
@@ -3338,28 +3344,69 @@ def test_adstack_static_bound_expr_ndarray_gate_compound_index_grad_correct():
     ad_stack_size=32,
     ad_stack_sparse_threshold_bytes=0,
 )
-def test_adstack_static_bound_expr_snode_gate_compound_index_grad_correct():
-    # Pins gradient correctness when the SNode-backed gating field is indexed by a compound expression
-    # (`selector[i % K]` with K < n). With the captured `iter_count = K`, the float heap is undersized to K rows, the
-    # LCA-block atomic-rmw aliases the n - K excess gated iterations onto row K-1, and gradients corrupt on every
-    # parallel-dispatched backend. The CPU LLVM backend is excluded because its dispatch thread count is typically <= K
-    # so no aliasing fires - the test would pass on CPU for the wrong reason and mislead about what it pins.
-    # xfail-scoped to the parallel-dispatched backends until the SNode arm of `match_field_source` validates the gate's
-    # index expression as a per-axis bijection (future work: walk the IR before `auto_diff` where indices are still bare
-    # `LoopIndexStmt`s and stash a validated leaf-SNode id set the analysis post-`lower_access` consults).
+def test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct(gate_shape):
+    # Pins gradient correctness on parallel-dispatched backends for `qd.field`-backed gates whose index expression
+    # is not a per-iteration bijection with the SNode cell space. Five shapes exercised:
+    #   * `compound_mod`:        `selector[i % K]` with K < n               (loop hits each cell n/K times)
+    #   * `affine_div`:          `selector[i / 2]`                          (pairs of iterations alias onto one cell)
+    #   * `constant_index`:      `selector[K // 2]`                         (every iteration hits the same cell)
+    #   * `dynamic_load_index`:  `selector[idx_field[i]]`                   (axis is a runtime load, not loop-derivable)
+    #   * `folding_two_axis_decomp`:
+    #                            `selector[i % 8, (i // 8) % 8]` with `loop_iter > 64` and an oversized SNode
+    #                                                                       (axes are value-distinct so the same_value
+    #                                                                        dedup admits them and `loop_iter <=
+    #                                                                        snode_iter_count` because the SNode is
+    #                                                                        large, but the joint axis space is
+    #                                                                        8 * 8 = 64 and folds n iterations onto
+    #                                                                        that subspace; the joint-axis-product
+    #                                                                        check refuses capture)
+    # In all five the SNode arm of `match_field_source` must refuse capture so the runtime falls back to the
+    # dispatched-threads worst-case heap. With cross-row aliasing on a wrongly-captured heap, the reverse pass
+    # reads a different thread's gate bool from the boolean adstack - the wrong set of `i` values contributes
+    # to the gradient and the per-`i` mismatch is detectable even with a linear inner recurrence (the body's
+    # chain rule may not need the primal, but the gate's boolean adstack does). CPU is excluded from `arch=`
+    # because its dispatch thread count is small enough that the alias rarely fires. The companion bijective
+    # multi-axis decomposition `selector[i // K, i % K]` is covered by
+    # `test_adstack_static_bound_expr_snode_gate_bijective_decomposed_index_grad_correct`.
     n = 256
-    K = 64  # selector field has only K cells; loop body indexes it as `selector[i % K]` so K < n triggers the alias.
+    K = 64
     n_iter = 8
     eps = 1e-9
 
-    selector = qd.field(qd.f32, shape=(K,))
+    affine_div_size = n  # snode size = n keeps `loop_iter <= snode_iter_count`, so the iter-count check passes
+    fold_axis = 8  # `folding_two_axis_decomp` joint space is `fold_axis * fold_axis = 64 < n = 256`
+    if gate_shape == "affine_div":
+        selector_shape = (affine_div_size,)
+    elif gate_shape == "folding_two_axis_decomp":
+        selector_shape = (fold_axis, fold_axis)
+    else:
+        selector_shape = (K,)
+    selector = qd.field(qd.f32, shape=selector_shape)
+    idx_field = qd.field(qd.i32, shape=(n,))
     x = qd.field(qd.f32, shape=(n,), needs_grad=True)
     out = qd.field(qd.f32, shape=(), needs_grad=True)
 
     @qd.kernel
     def compute() -> None:
         for i in range(n):
-            if selector[i % K] > eps:
+            gate_idx = (
+                (i % K,)
+                if qd.static(gate_shape == "compound_mod")
+                else (
+                    (i // 2,)
+                    if qd.static(gate_shape == "affine_div")
+                    else (
+                        (K // 2,)
+                        if qd.static(gate_shape == "constant_index")
+                        else (
+                            (i % fold_axis, (i // fold_axis) % fold_axis)
+                            if qd.static(gate_shape == "folding_two_axis_decomp")
+                            else (idx_field[i],)
+                        )
+                    )
+                )
+            )
+            if selector[gate_idx] > eps:
                 v = x[i]
                 for _ in range(n_iter):
                     v = v * 1.05 + 0.05
@@ -3367,11 +3414,12 @@ def test_adstack_static_bound_expr_snode_gate_compound_index_grad_correct():
 
     np.random.seed(2)
     x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
-    selector_np = (np.random.rand(K) < 0.3).astype(np.float32)
-    for i in range(K):
-        selector[i] = float(selector_np[i])
+    selector_np = (np.random.rand(*selector_shape) < 0.3).astype(np.float32)
+    idx_field_np = (np.arange(n) % K).astype(np.int32)
+    selector.from_numpy(selector_np)
     for i in range(n):
         x[i] = float(x_np[i])
+        idx_field[i] = int(idx_field_np[i])
     out[None] = 0.0
     out.grad[None] = 1.0
     for i in range(n):
@@ -3383,10 +3431,274 @@ def test_adstack_static_bound_expr_snode_gate_compound_index_grad_correct():
 
     coeff = 1.05
     expected_per_gated = coeff**n_iter
-    gated_per_iter = selector_np[np.arange(n) % K] > eps
+    if gate_shape == "compound_mod":
+        gated_per_iter = selector_np[np.arange(n) % K] > eps
+    elif gate_shape == "affine_div":
+        gated_per_iter = selector_np[np.arange(n) // 2] > eps
+    elif gate_shape == "constant_index":
+        gated_per_iter = np.full(n, bool(selector_np[K // 2] > eps))
+    elif gate_shape == "folding_two_axis_decomp":
+        idx = np.arange(n)
+        gated_per_iter = selector_np[idx % fold_axis, (idx // fold_axis) % fold_axis] > eps
+    else:
+        gated_per_iter = selector_np[idx_field_np] > eps
     expected = np.where(gated_per_iter, np.float32(expected_per_gated), np.float32(0.0))
     got_grad = np.array([x.grad[i] for i in range(n)], dtype=np.float32)
-    assert not np.isnan(got_grad).any(), f"compound-index snode grad returned NaN: {got_grad}"
+    assert not np.isnan(got_grad).any(), f"non-bijective-index snode grad returned NaN ({gate_shape}): {got_grad}"
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_bijective_decomposed_index_grad_correct():
+    # Bijective multi-axis gate decomposed from a single flat loop variable: `for i in range(n): if
+    # selector[i // K, i % K] > eps:`. Each iteration visits a unique cell because `(i // K, i % K)` is the
+    # canonical bijection from `[0, n_rows * K)` to `[0, n_rows) x [0, K)`. The two axes share their root
+    # `LoopIndexStmt`, but `same_value`-based deduplication recognises `i // K` and `i % K` as having
+    # different values, so the SNode arm captures and shrinks the float adstack heap to the gate-passing
+    # iteration count. Companion to `test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct`,
+    # which pins the rejected shapes on the same `for i in range(n)` loop.
+    K = 8
+    n_rows = 32
+    n = n_rows * K
+    n_iter = 8
+    eps = 1e-9
+
+    selector = qd.field(qd.f32, shape=(n_rows, K))
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in range(n):
+            if selector[i // K, i % K] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(11)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = (np.random.rand(n_rows, K) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+    compute()
+    compute.grad()
+    qd.sync()
+    idx = np.arange(n)
+    gated_per_iter = selector_np[idx // K, idx % K] > eps
+    expected = np.where(gated_per_iter, np.float32(1.05**n_iter), np.float32(0.0))
+    got = x.grad.to_numpy()
+    assert not np.isnan(got).any(), f"bijective decomposed-index snode grad returned NaN: {got}"
+    np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_bijective_linear_range_grad_correct():
+    # Bijective single-axis gate: `for i in range(n): if field[i] > eps:`. The gate's index is a bare `LoopIndexStmt`,
+    # every iteration visits a unique cell, the SNode arm accepts capture and the backward grad matches `1.05^n_iter`
+    # on every gated cell.
+    n = 256
+    n_iter = 8
+    eps = 1e-9
+    field = qd.field(qd.f32, shape=(n,))
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in range(n):
+            if field[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(7)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    field_np = (np.random.rand(n) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    field.from_numpy(field_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+    compute()
+    compute.grad()
+    qd.sync()
+    expected = np.where(field_np > eps, np.float32(1.05**n_iter), np.float32(0.0))
+    got = x.grad.to_numpy()
+    assert not np.isnan(got).any(), f"linear-range bijective grad returned NaN: {got}"
+    np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_bijective_multi_axis_structfor_grad_correct():
+    # Bijective multi-axis StructFor gate: `for I, J, K in field3d: if field3d[I, J, K] > eps:`. Each axis is a distinct
+    # bare `LoopIndexStmt` (one per StructFor axis), so the joint mapping is bijective and the SNode arm captures.
+    n = 16
+    n_iter = 8
+    eps = 1e-9
+    field3d = qd.field(qd.f32, shape=(n, n, n))
+    x = qd.field(qd.f32, shape=(n, n, n), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for I, J, K in field3d:
+            if field3d[I, J, K] > eps:
+                v = x[I, J, K]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(7)
+    x_np = (0.1 + 0.001 * np.arange(n**3).reshape(n, n, n)).astype(np.float32)
+    field_np = (np.random.rand(n, n, n) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    field3d.from_numpy(field_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+    compute()
+    compute.grad()
+    qd.sync()
+    expected = np.where(field_np > eps, np.float32(1.05**n_iter), np.float32(0.0))
+    got = x.grad.to_numpy()
+    assert not np.isnan(got).any(), f"multi-axis StructFor bijective grad returned NaN: {got}"
+    np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_bijective_multi_axis_ndrange_grad_correct():
+    # Bijective multi-axis ndrange gate: `for ii, jj, kk in qd.ndrange(n, n, n): if grid[ii, jj, kk] > eps:`. Each
+    # iteration visits a unique cell. After `lower_access` rewrites the linearised offset into a `floordiv` /
+    # `mod` / `sub` arithmetic tree over a single `LoopIndexStmt`, the per-axis components hold structurally
+    # different values, so `same_value`-based deduplication of the iterating axes admits the joint-bijective
+    # decomposition uniformly across LLVM and SPIR-V backends.
+    n = 16
+    n_iter = 8
+    eps = 1e-9
+    grid = qd.field(qd.f32, shape=(n, n, n))
+    x = qd.field(qd.f32, shape=(n, n, n), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for ii, jj, kk in qd.ndrange(n, n, n):
+            if grid[ii, jj, kk] > eps:
+                v = x[ii, jj, kk]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(7)
+    x_np = (0.1 + 0.001 * np.arange(n**3).reshape(n, n, n)).astype(np.float32)
+    grid_np = (np.random.rand(n, n, n) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    grid.from_numpy(grid_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+    compute()
+    compute.grad()
+    qd.sync()
+    expected = np.where(grid_np > eps, np.float32(1.05**n_iter), np.float32(0.0))
+    got = x.grad.to_numpy()
+    assert not np.isnan(got).any(), f"multi-axis ndrange bijective grad returned NaN: {got}"
+    np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_bijective_slice_with_iter_grad_correct():
+    # Bijective gate with one iterating axis plus a constant slice: `for i in range(n): if grid[i, 0] > eps:`. The
+    # first axis varies with the loop (bijective), the second axis is a literal constant (slice). The SNode arm
+    # accepts capture; the reducer over-counts by the slice factor (it walks all `cols` cells per row) but
+    # over-allocation is safe.
+    n = 256
+    cols = 4
+    n_iter = 8
+    eps = 1e-9
+    grid = qd.field(qd.f32, shape=(n, cols))
+    x = qd.field(qd.f32, shape=(n, cols), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in range(n):
+            if grid[i, 0] > eps:
+                v = x[i, 0]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(7)
+    x_np = (0.1 + 0.001 * np.arange(n * cols).reshape(n, cols)).astype(np.float32)
+    grid_np = (np.random.rand(n, cols) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    grid.from_numpy(grid_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+    compute()
+    compute.grad()
+    qd.sync()
+    expected = np.zeros_like(x_np)
+    expected[:, 0] = np.where(grid_np[:, 0] > eps, np.float32(1.05**n_iter), np.float32(0.0))
+    got = x.grad.to_numpy()
+    assert not np.isnan(got).any(), f"slice-with-iter bijective grad returned NaN: {got}"
+    np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_multi_axis_ndrange_with_arg_index_grad_correct():
+    # Pins SNode-arm bound-expr capture for the canonical sparse-grid kernel shape: `for ii, jj, kk, ib in
+    # qd.ndrange(...): if grid[f, ii, jj, kk, ib] > eps:`. The leading axis `f` is a kernel `qd.i32` argument that
+    # slices the SNode space without folding iterations together; the four iterating axes cover the loop's flat
+    # index range exactly once. The capture must engage (the analysis sees `loop_iter <= snode_iter_count` and at
+    # least one `LinearizeStmt::input` containing a `LoopIndexStmt`), and gradients must match the analytic
+    # backward of the inner recurrence. Companion regression test for `mpm_grid_op` in Genesis MPM, where this
+    # shape with `len(f) > 1` previously lost capture under an over-strict bare-`LoopIndexStmt` check.
+    F = 2
+    n = 4
+    B = 1
+    n_iter = 4
+    eps = 1e-9
+
+    grid = qd.field(qd.f32, shape=(F, n, n, n, B))
+    x = qd.field(qd.f32, shape=(F, n, n, n, B), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(f: qd.i32) -> None:
+        for ii, jj, kk, ib in qd.ndrange(n, n, n, B):
+            if grid[f, ii, jj, kk, ib] > eps:
+                v = x[f, ii, jj, kk, ib]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(3)
+    x_np = (0.1 + 0.001 * np.arange(F * n * n * n * B).reshape(F, n, n, n, B)).astype(np.float32)
+    grid_np = (np.random.rand(F, n, n, n, B) < 0.4).astype(np.float32)
+    grid.from_numpy(grid_np)
+    x.from_numpy(x_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    f_active = 0
+    compute(f_active)
+    compute.grad(f_active)
+    qd.sync()
+
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    expected = np.zeros_like(x_np)
+    expected[f_active] = np.where(grid_np[f_active] > eps, np.float32(expected_per_gated), np.float32(0.0))
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"multi-axis ndrange grad returned NaN: {got_grad}"
     np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
 
 
