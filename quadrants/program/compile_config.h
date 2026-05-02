@@ -53,6 +53,14 @@ struct CompileConfig {
   int gpu_max_reg;
   bool ad_stack_experimental_enabled{false};
   int ad_stack_size{0};  // 0 = adaptive
+  // Conservative-heap threshold (in bytes) below which a kernel keeps the eager `linear_thread_idx * stride` adstack
+  // heap addressing instead of paying the per-launch reducer dispatch + per-task DtoH the `bound_expr`-driven sparse
+  // heap sizing costs. Above the threshold the static analyser captures the gating predicate and routes the task
+  // through the lazy LCA-block atomic-rmw row claim, sizing the float adstack heap from the runtime-counted gate-
+  // passing-thread count rather than `dispatched_threads * stride * sizeof(float)`. Default 100 MiB; set to 0 to
+  // always capture (force the sparse path - useful for tests that pin the reducer-backed sizing) or to a very large
+  // value to always disable it.
+  std::size_t ad_stack_sparse_threshold_bytes{100u * 1024u * 1024u};
 
   int saturating_grid_dim;
   int max_block_dim;

@@ -1,0 +1,142 @@
+name: Check feature factorization
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  check-feature-factorization:
+    name: Check feature factorization
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait using dead-reckoning for builds to finish, before running, to save AI cost, if someone pushes many commits in a row
+        run: sleep 1800
+
+      - name: Collect diffs and file lists
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          MERGE_BASE=$(git merge-base "origin/$BASE_REF" HEAD)
+
+          # Diff restricted to MODIFIED (not added/deleted/renamed) source files. Newly added files
+          # are out of scope for this check — we only care about feature-specific code being grafted
+          # onto pre-existing files.
+          git diff --diff-filter=M "$MERGE_BASE...HEAD" \
+            -- '*.py' '*.cpp' '*.h' '*.hpp' '*.c' '*.cc' '*.cu' \
+            ':!tests/' ':!benchmarks/' ':!docs/' ':!scripts/' ':!misc/' \
+            > /tmp/source_diff.patch
+
+          # List of source files MODIFIED in this PR (the universe being examined).
+          git diff --name-only --diff-filter=M "$MERGE_BASE...HEAD" \
+            -- '*.py' '*.cpp' '*.h' '*.hpp' '*.c' '*.cc' '*.cu' \
+            ':!tests/' ':!benchmarks/' ':!docs/' ':!scripts/' ':!misc/' \
+            > /tmp/modified_source_files.txt
+
+          if [ ! -s /tmp/source_diff.patch ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No modifications to existing source files."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Source diff: $(wc -l < /tmp/source_diff.patch) lines"
+            echo "Modified source files: $(wc -l < /tmp/modified_source_files.txt)"
+          fi
+
+      - name: Install Cursor CLI
+        if: steps.changed.outputs.skip != 'true'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+
+      - name: Check feature factorization with Cursor agent
+        if: steps.changed.outputs.skip != 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_KEY_HUGH }}
+        run: |
+          RESULT=$(agent -p "$(cat <<'PROMPT'
+          You are reviewing a PR for one specific factorization smell: *feature-specific code being
+          piled into a heavily-tracked core file* when it could instead live in its own
+          feature-specific file (new or existing). The concern is NOT that the new code is in the
+          "wrong" place semantically — it is usually topically related to the host file. The concern
+          is that the host file is already a hot, central, frequently-edited file, and adding more
+          self-contained feature code to it makes review, merge conflicts, and future churn worse.
+          The fix is almost always: extract the feature-specific block into its own module/file.
+
+          Inputs:
+          - /tmp/source_diff.patch — unified diff of NON-TEST source files MODIFIED (not added,
+            deleted, or renamed) in this PR (.py, .cpp, .h, .hpp, .c, .cc, .cu, excluding tests/,
+            benchmarks/, docs/, scripts/, misc/)
+          - /tmp/modified_source_files.txt — list of those modified source files
+
+          You may inspect any file in the repo and run shell commands to gather signal. Useful ones:
+          - git log --oneline -- <path> | wc -l      # total commit count for the file
+          - git log --since=1.year.ago --oneline -- <path> | wc -l   # recent churn
+          - git shortlog -sn -- <path> | wc -l       # distinct authors
+          - wc -l <path>                             # current size
+
+          Repo layout:
+          - Python source: python/quadrants/
+          - C++ source: quadrants/ (subdirs: codegen, ir, runtime, transforms, rhi, python, etc.)
+          The repo factorizes per-backend / per-pass / per-feature (separate files per RHI backend
+          under quadrants/rhi/, separate files per IR transform under quadrants/transforms/,
+          separate Python modules per concept under python/quadrants/lang/).
+
+          Procedure (apply to each modified existing file):
+          1. Is the host file *heavily tracked / core*? Treat it as such if any of these hold:
+             - High lifetime commit count (e.g. >= 100 commits).
+             - High recent churn (e.g. >= 20 commits in the last year).
+             - Many distinct authors (e.g. >= 8).
+             - It is large (e.g. >= 800 lines) AND clearly central (frequently imported, sits in a
+               core subdir like codegen/, ir/, runtime/, transforms/, lang/, lang/ast/).
+             If NONE of these hold, do not flag anything in this file — the host is not hot enough
+             to warrant carving things out.
+          2. If the host IS hot, examine the substantial added code. In scope:
+             - New top-level functions or classes.
+             - Large new self-contained blocks.
+             - New methods added to an *existing* class. This is one of the most common shapes of
+               this smell: a feature accretes methods on a central class living in a hot file.
+               Suggested fixes are typically: extract the feature logic into free functions in a
+               new feature module that the class delegates to (one-line forwarding methods are
+               fine), or split the class via a mixin / partial / sibling helper class living in
+               its own file.
+          3. Flag a block only if it is plausibly extractable: it has a clear feature/subsystem
+             name, it is mostly self-contained (limited entanglement with the host file's existing
+             internals beyond a small interface), and a reasonable file path can be named for it.
+          4. For each violation, suggest a better location: an *existing* feature-specific file or
+             a plausible new file path that matches the repo's naming conventions. Briefly note the
+             host's hotness numbers (commits / authors / size) so the reviewer can sanity-check.
+
+          What NOT to flag:
+          - Anything in a file that is not heavily-tracked / core (most files).
+          - Small tweaks, bug fixes, or extensions of functions that already live in the host file.
+          - Code that is tightly coupled to the host file's internals and would not cleanly extract.
+          - Refactors / renames / moves that just relocate existing code.
+          - Newly added files (out of scope for this check).
+          - Trivial changes (imports, type hints, comments, docstrings, logging).
+          - Cases where there is no clear better home and inventing a new file would be overkill.
+
+          Be conservative. The bar is: "this PR is making a hot file hotter for no good reason, and
+          the new block obviously wants to be its own file." Borderline cases are FINE.
+          Do NOT modify any files.
+          Stop after finding 5 violations.
+
+          If there are NO violations, your final output must start with the word PASS.
+          If there ARE violations, your final output must start with the word FAIL, followed by a
+          list of violations (up to 5) in the format:
+          <host_filepath> [commits=N, authors=M, lines=L]:<symbol_or_block>: <why extractable> -> suggested: <filepath>
+          PROMPT
+          )" --model claude-4.6-opus-high-thinking --mode ask --output-format text --trust)
+
+          echo "$RESULT"
+          if echo "$RESULT" | grep -qE "^FAIL([[:space:]]|$)"; then
+            exit 1
+          fi
