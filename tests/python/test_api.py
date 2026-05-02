@@ -57,6 +57,7 @@ user_api = {}
 user_api[qd] = [
     "Backend",
     "BitpackedFields",
+    "BufferView",
     "CRITICAL",
     "DEBUG",
     "DeviceCapability",
@@ -264,6 +265,7 @@ user_api[qd.Field] = [
     "parent",
     "shape",
     "snode",
+    "to_dlpack",
     "to_numpy",
     "to_torch",
 ]
@@ -435,6 +437,7 @@ user_api[qd.StructField] = [
     "parent",
     "shape",
     "snode",
+    "to_dlpack",
     "to_numpy",
     "to_torch",
 ]

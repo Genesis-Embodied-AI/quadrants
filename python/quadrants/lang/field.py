@@ -16,6 +16,13 @@ from quadrants.lang.util import (
     to_numpy_type,
     to_pytorch_type,
 )
+from quadrants.types.primitive_types import (
+    f32,
+    f64,
+    i32,
+    i64,
+    u1,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -59,9 +66,27 @@ class _DLManagedTensor(ctypes.Structure):
     ]
 
 
+class _DLPackVersion(ctypes.Structure):
+    _fields_ = [("major", ctypes.c_uint32), ("minor", ctypes.c_uint32)]
+
+
+class _DLManagedTensorVersioned(ctypes.Structure):
+    """Matches the C ``DLManagedTensorVersioned`` layout: version, manager_ctx, deleter, flags, then dl_tensor."""
+
+    _fields_ = [
+        ("version", _DLPackVersion),
+        ("manager_ctx", ctypes.c_void_p),
+        ("deleter", ctypes.c_void_p),
+        ("flags", ctypes.c_uint64),
+        ("dl_tensor", _DLTensor),
+    ]
+
+
 def _patch_field_dlpack_canonical(capsule, layout):
     """Mutate the DLManagedTensor inside *capsule* so its shape/strides expose a canonical view of the
     permuted-physical field buffer.
+
+    Supports both v0 (``"dltensor"``) and v1 (``"dltensor_versioned"``) capsules.
 
     Invariants (input):
       * ``shape[i]`` = physical shape along axis ``i`` of the SNode (which is the *permuted* shape the field was
@@ -80,14 +105,22 @@ def _patch_field_dlpack_canonical(capsule, layout):
         return
     if tuple(layout) == tuple(range(ndim)):
         return  # identity layout — nothing to do
+    _PyCapsule_IsValid = ctypes.pythonapi.PyCapsule_IsValid
+    _PyCapsule_IsValid.restype = ctypes.c_int
+    _PyCapsule_IsValid.argtypes = [ctypes.py_object, ctypes.c_char_p]
     _PyCapsule_GetPointer = ctypes.pythonapi.PyCapsule_GetPointer
     _PyCapsule_GetPointer.restype = ctypes.c_void_p
     _PyCapsule_GetPointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
-    raw = _PyCapsule_GetPointer(capsule, b"dltensor")
-    if not raw:
-        raise RuntimeError("field_to_dlpack returned a capsule without the expected 'dltensor' name")
-    mt = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensor)).contents
-    t = mt.dl_tensor
+
+    if _PyCapsule_IsValid(capsule, b"dltensor"):
+        raw = _PyCapsule_GetPointer(capsule, b"dltensor")
+        t = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensor)).contents.dl_tensor
+    elif _PyCapsule_IsValid(capsule, b"dltensor_versioned"):
+        raw = _PyCapsule_GetPointer(capsule, b"dltensor_versioned")
+        t = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensorVersioned)).contents.dl_tensor
+    else:
+        raise RuntimeError("field_to_dlpack returned a capsule with an unrecognised name")
+
     if t.ndim < ndim:
         raise RuntimeError(f"field_to_dlpack returned ndim={t.ndim} but layout has rank {ndim}; cannot patch")
     # Only the first ``ndim`` axes carry the canonical permutation; any trailing axes (element dims for VectorField /
@@ -104,6 +137,173 @@ def _patch_field_dlpack_canonical(capsule, layout):
 
 if TYPE_CHECKING:
     from quadrants.lang.expr import Expr
+
+_ARCH_METAL = _qd_core.Arch.metal
+_ARCH_VULKAN = _qd_core.Arch.vulkan
+_ARCH_CPU = frozenset({_qd_core.Arch.x64, _qd_core.Arch.arm64})
+
+_DLPACK_SUPPORTED_DTYPES = frozenset({f32, f64, i32, i64, u1})
+
+
+def _compute_torch_mps_supports_dlpack_bytes_offset() -> bool:
+    try:
+        import torch  # pylint: disable=C0415
+    except ImportError:
+        return False
+    parts = torch.__version__.replace("+", ".").split(".")[:3]
+    try:
+        return tuple(map(int, parts)) > (2, 9, 1)
+    except ValueError:
+        return False
+
+
+_TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET = _compute_torch_mps_supports_dlpack_bytes_offset()
+
+
+def _is_aos_struct_member(field: "Field") -> bool:
+    """True when *field* is a member of a multi-member StructField with AOS layout.
+
+    AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous
+    strides at the member dtype size, so a zero-copy view would silently read neighbouring members' bytes as garbage.
+
+    SNode.place flattens vec/mat field components directly under the struct cell (no intermediate matrix SNode), so both
+    ScalarField and MatrixField members sit as direct children of the struct cell dense SNode. For a ScalarField, num_ch
+    != 1 means it's not a standalone field. For a MatrixField with n*m components, num_ch != n*m means either SOA layout
+    (num_ch == 1, each component in its own subtree -- DLPack strides are wrong) or AOS struct member (num_ch > n*m,
+    interleaved with other struct members). Only num_ch == n*m (standalone AOS) is safe for zero-copy.
+    """
+    try:
+        from quadrants.lang.matrix import MatrixField  # pylint: disable=C0415
+
+        parent_snode = field.parent()._snode.ptr
+        if isinstance(field, MatrixField):
+            return parent_snode.get_num_ch() != field.n * field.m
+        return parent_snode.get_num_ch() != 1
+    except Exception:
+        return False
+
+
+def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False, is_ndarray: bool = False) -> bool:
+    """Check whether zero-copy DLPack export is available for this field on the current backend."""
+    dtype = field.dtype
+    if dtype not in _DLPACK_SUPPORTED_DTYPES:
+        return False
+    arch = impl.current_cfg().arch
+    if arch == _ARCH_VULKAN:
+        return False
+    if not is_ndarray:
+        if arch == _ARCH_METAL and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET:
+            return False
+        if is_scalar and not field.shape:
+            return False
+    if _is_aos_struct_member(field):
+        return False
+    return True
+
+
+def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = False, is_ndarray: bool = False):
+    """Try to return a zero-copy torch tensor via DLPack.
+
+    Only called when ``copy is False``. Returns the tensor on success. Raises ``ValueError`` when zero-copy is not
+    available. Does NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the copy=True
+    (kernel-copy) path instead.
+    """
+    if not _can_zerocopy_field(field, is_scalar=is_scalar, is_ndarray=is_ndarray):
+        raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
+
+    import torch  # pylint: disable=C0415
+    import torch.utils.dlpack  # pylint: disable=C0415
+
+    try:
+        tc = torch.utils.dlpack.from_dlpack(field.to_dlpack())
+    except RuntimeError as e:
+        raise ValueError(f"Zero-copy not available: {e}") from None
+    if impl.current_cfg().arch == _ARCH_METAL:
+        impl.get_runtime().sync()
+
+    if device is not None:
+        requested = torch.device(device)
+        type_mismatch = tc.device.type != requested.type
+        index_mismatch = (
+            requested.index is not None and tc.device.index is not None and tc.device.index != requested.index
+        )
+        if type_mismatch or index_mismatch:
+            raise ValueError(
+                f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})"
+            )
+
+    return tc
+
+
+def _mps_sync_if_metal():
+    """Call ``torch.mps.synchronize()`` when running on the Metal backend, no-op otherwise.
+
+    Quadrants and PyTorch MPS use separate Metal command queues, so ``qd.sync()`` only guarantees Quadrants writes are
+    complete. A subsequent ``.clone()`` or kernel copy is queued on the MPS stream and may execute *after* the next
+    Quadrants kernel overwrites the source buffer. We must also synchronize MPS after the copy.
+    """
+    # FIXME: DLPack may return old values on Apple Metal if sync is not systematically called manually.
+    if impl.current_cfg().arch == _ARCH_METAL:
+        import torch  # pylint: disable=C0415
+
+        torch.mps.synchronize()
+
+
+class _DLPackV1Adapter:
+    """Wraps a DLPack PyCapsule into a v1-compatible object for ``np.from_dlpack``.
+
+    NumPy >= 1.23 requires the v1 protocol -- an object exposing ``__dlpack__`` and ``__dlpack_device__``. The capsule
+    itself can be either v0 (``"dltensor"``) or v1 (``"dltensor_versioned"``); this adapter just satisfies the protocol
+    so ``np.from_dlpack`` can call ``__dlpack__()`` to retrieve it.
+    """
+
+    __slots__ = ("_capsule",)
+
+    def __init__(self, capsule):
+        self._capsule = capsule
+
+    def __dlpack__(self, stream=None):
+        return self._capsule
+
+    def __dlpack_device__(self):
+        return (1, 0)  # kDLCPU = 1
+
+
+def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False, is_ndarray: bool = False):
+    """Try to return a zero-copy numpy array via DLPack.
+
+    Returns the array on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``. Raises
+    ``ValueError`` when ``copy=False`` but zero-copy is not available.
+    """
+    if impl.current_cfg().arch not in _ARCH_CPU:
+        if copy is False:
+            raise ValueError("Zero-copy numpy requires a CPU backend (numpy arrays cannot reference GPU memory)")
+        return None
+    if not _can_zerocopy_field(field, is_scalar=is_scalar, is_ndarray=is_ndarray):
+        if copy is False:
+            raise ValueError(f"Zero-copy not available for dtype={field.dtype}")
+        return None
+
+    import numpy as np  # pylint: disable=C0415
+
+    _np_ver = tuple(int(x) for x in np.__version__.split(".")[:2])
+    use_versioned = _np_ver >= (2, 1)
+    try:
+        arr = np.from_dlpack(_DLPackV1Adapter(field.to_dlpack(versioned=use_versioned)))
+    except ModuleNotFoundError:
+        if copy is False:
+            raise ValueError(
+                "Zero-copy numpy for fields requires torch (the C++ DLPack export checks torch version). "
+                "Install torch or use copy=True."
+            ) from None
+        return None
+    except RuntimeError as e:
+        if copy is False:
+            raise ValueError(f"Zero-copy not available: {e}") from None
+        return None
+    if copy is True:
+        arr = arr.copy()
+    return arr
 
 
 class Field:
@@ -227,8 +427,11 @@ class Field:
         raise NotImplementedError()
 
     @python_scope
-    def to_numpy(self, dtype: DataTypeCxx | None = None):
+    def to_numpy(self, dtype: DataTypeCxx | None = None, *, copy=True):
         """Converts `self` to a numpy array.
+
+        Args:
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
         Returns:
             numpy.ndarray: The result numpy array.
@@ -236,11 +439,12 @@ class Field:
         raise NotImplementedError()
 
     @python_scope
-    def to_torch(self, device=None):
+    def to_torch(self, device=None, *, copy=True):
         """Converts `self` to a torch tensor.
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
 
         Returns:
             torch.tensor: The result torch tensor.
@@ -332,6 +536,9 @@ class Field:
     def _host_access(self, key):
         return [SNodeHostAccess(e, key) for e in self.host_accessors]  # type: ignore
 
+    def to_dlpack(self, versioned=False):
+        raise NotImplementedError
+
     def __iter__(self):
         raise NotImplementedError("Struct for is only available in Quadrants scope.")
 
@@ -346,13 +553,20 @@ class ScalarField(Field):
     def __init__(self, var):
         super().__init__([var])
 
-    def to_dlpack(self):
-        """
-        Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.
+    def to_dlpack(self, versioned=False):
+        """Export this field as a DLPack capsule.
+
+        Args:
+            versioned: If True, emit a DLPack v1 ``DLManagedTensorVersioned`` capsule (``"dltensor_versioned"``,
+                ``flags=0``). NumPy >= 2.1 can consume v1 capsules and returns writable arrays; NumPy 2.0 marks v0
+                capsules read-only; NumPy < 2.1 cannot consume v1 capsules at all. If False (default), emit a v0
+                ``DLManagedTensor`` (``"dltensor"``), required by ``torch.utils.dlpack.from_dlpack``.
+
+        Note: caller is responsible for calling qd.sync() between modifying the field and reading it.
         """
         impl.get_runtime().materialize()
         try:
-            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, 0, 0, 0)
+            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, 0, 0, 0, versioned=versioned)
         except ModuleNotFoundError:
             # The C++ ``field_to_dlpack`` calls ``torch_supports_byte_offset`` which unconditionally does ``import
             # torch``. Guard here so callers that don't need torch (e.g. raw DLPack consumers) get a clear error
@@ -385,8 +599,20 @@ class ScalarField(Field):
             field_fill_quadrants_scope(self, val)
 
     @python_scope
-    def to_numpy(self, dtype=None):
-        """Converts this field to a `numpy.ndarray`."""
+    def to_numpy(self, dtype=None, *, copy=True):
+        """Converts this field to a ``numpy.ndarray``.
+
+        Args:
+            dtype: Optional target numpy dtype.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+        """
+        if copy is False:
+            arr = _try_zerocopy_numpy(self, copy=False, is_scalar=True)
+            if arr is not None:
+                if dtype is not None and arr.dtype != dtype:
+                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                return arr
+
         if self.parent()._snode.ptr.type == _qd_core.SNodeType.dynamic:
             warn(
                 "You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the snode will be converted to zeros in the resulting array."
@@ -399,22 +625,28 @@ class ScalarField(Field):
         from quadrants._kernels import tensor_to_ext_arr  # pylint: disable=C0415
 
         tensor_to_ext_arr(self, arr)
-        # TODO: can we remove .runtime_ops here?
-        quadrants.lang.runtime_ops.sync()  # type: ignore
+        quadrants.lang.runtime_ops.sync()  # type: ignore  # TODO: can we remove .runtime_ops here?
         return arr
 
     @python_scope
-    def to_torch(self, device=None):
-        """Converts this field to a `torch.tensor`."""
+    def to_torch(self, device=None, *, copy=True):
+        """Converts this field to a ``torch.Tensor``.
+
+        Args:
+            device: Optional torch device for the returned tensor.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+        """
+        if copy is False:
+            return _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
+
         import torch  # pylint: disable=C0415
 
-        # pylint: disable=E1101
         arr = torch.zeros(size=self.shape, dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import tensor_to_ext_arr  # pylint: disable=C0415
 
         tensor_to_ext_arr(self, arr)
-        # TODO: can we remove .runtime_ops here?
-        quadrants.lang.runtime_ops.sync()  # type: ignore
+        quadrants.lang.runtime_ops.sync()  # type: ignore  # TODO: can we remove .runtime_ops here?
+        _mps_sync_if_metal()
         return arr
 
     @python_scope
