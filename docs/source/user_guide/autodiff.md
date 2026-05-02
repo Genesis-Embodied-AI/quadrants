@@ -317,7 +317,7 @@ where each quantity means:
 | `bytes_per_slot` | Depends on `T` and on the backend (see table below). |
 | `num_buffers` | Number of adstacks the kernel allocates - one per loop-carried variable plus one per dependent branch flag (see [One adstack per variable](#one-adstack-per-variable)). |
 
-Kernels of the shape `for i in range(...): if field[i] cmp literal: <adstack work>` (a runtime gate directly above the adstack-using body, comparing one field entry to a constant) shrink further: the compiler counts gate-passing iterations at launch time and sizes the float adstack to that count instead of `num_threads * stack_size`. A workload whose gate matches 5% of iterations pays 5% of the float-adstack cost; the float heap grows on demand if a later launch matches more. Integer / boolean adstacks stay at `num_threads * stack_size` - their pushes fire unconditionally for control-flow replay. The shrinking is exact only when the gate's per-axis index is a bare loop variable (`field[i]`, `field[I, J, K]`); see [What can go wrong](#what-can-go-wrong) for a known limitation on `qd.field`-backed gates indexed by compound expressions.
+The float heap is by far the main reverse-mode memory bottleneck because a typical kernel allocates many float-typed adstacks - one per floating-point loop-carried scalar, each storing both primal and adjoint - and the total scales as `num_threads * stack_size * num_float_buffers * 8` bytes, dominating the integer / boolean heap. Advanced static IR analysis is used to further shrink the float adstack in some common gated-kernel shapes: when a runtime gate sits directly above the adstack-using body and compares a single field entry to a constant, the compiler counts the gate-passing iterations at launch time and sizes the float adstack to that count, so a workload whose gate matches 5% of iterations pays 5% of the float-adstack cost. See [Appendix B: gate-index shapes that capture vs fall back to the worst-case heap](#appendix-b-gate-index-shapes-that-capture-vs-fall-back-to-the-worst-case-heap) for the authoritative list of supported shapes.
 
 Every adstack slot always stores a *primal* value - the forward-pass value the reverse pass pops to recover the chain-rule step. Floating-point adstacks additionally store an *adjoint* slot where the reverse pass accumulates chain-rule contributions. Integer / boolean adstacks do not need an adjoint slot.
 
@@ -354,9 +354,6 @@ A large `ndrange` combined with several loop-carried variables multiplies quickl
   - pass `ad_stack_size=N` to `qd.init()` with `N` large enough to cover the real push count (bypasses the sizer).
 - **Out-of-memory before the kernel even runs.** A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer's number is correct. Surfaces as an allocator OOM at launch time. Remedies are the ones listed under *Avoiding OOM on GPU* above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.
 - **Loop bounds backed by a mutated ndarray.** A reverse-mode kernel with `for i in range(n[j])` requires `n[j]` to hold the same value at the forward call and at `.grad()`. If anything writes to `n[j]` between those two points - the differentiable kernel itself, or any other kernel call - the computed gradient may come out wrong, sometimes as an `Adstack overflow` exception at `qd.sync()`, sometimes silently. The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until `.grad()` returns. The reason for that is Quadrants' adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like [PyTorch's autograd](https://pytorch.org/docs/stable/notes/autograd.html) is not affected, since the trip count is recorded as the forward runs and reused at backward time.
-- :warning: **Gate on a `qd.field` indexed by an expression that is not a plain loop variable.** A reverse-mode kernel of the shape `for i in range(n): if field[i % K] > eps: <adstack work>` (or any gate whose index is not a plain loop variable - `field[2 * i]`, `field[42]`, `field[other_field[i]]`) may produce silently wrong gradients. Workarounds:
-  - raise `ad_stack_sparse_threshold_bytes` in `qd.init()` past the kernel's conservative-heap byte size;
-  - use a `qd.ndarray` for the gating field instead of a `qd.field`.
 
 ## Performance characteristics
 
@@ -398,3 +395,22 @@ def k_data_dependent(a):
         while a[i] < 10:              # bound that can only be known by running the loop body
             a[i] = a[i] + 1
 ```
+
+## Appendix B: gate-index shapes that capture vs fall back to the worst-case heap
+
+The compiler accepts the gate index shapes below as bijective and falls back to the worst-case heap `num_threads * stack_size` for the rest. Only the float adstack heap shrinks; integer / boolean adstacks stay at `num_threads * stack_size` because their pushes fire unconditionally for control-flow replay. The float heap grows on demand if a later launch's gate matches more iterations.
+
+Patterns that capture:
+  - **Linear range loop**: `for i in range(n): if field[i] > eps: ...`
+  - **Multi-axis StructFor**: `for I, J, K in field3d: if field3d[I, J, K] > eps: ...`
+  - **Multi-axis ndrange**: `for ii, jj, kk in qd.ndrange(*shape): if grid[ii, jj, kk] > eps: ...`
+  - **Multi-axis split of a flat loop**: a gate whose axes are two or more sub-expressions of the loop variable that hold pairwise distinct values, e.g. `field2d[i // K, i % K]`, `field2d[i // K, i]`, `field3d[i // (K * L), (i // L) % K, i % L]`.
+  - **Iterating axes plus a slice**: a kernel argument or constant on an extra axis, e.g. `grid[i, 0]`, `grid[arg, ii, jj, kk]`.
+
+Patterns that fall back to the worst-case heap:
+  - **Single-axis arithmetic on the loop variable**: `field[i % K]`, `field[i / 2]`, `field[i + 5]`, `field[2 * i]`, and similar.
+  - **Multi-axis index with axes holding the same value**: `field[i % K, i % K]`, or any multi-axis gate where two or more axes evaluate to the same value; the joint mapping is many-to-one and would alias iterations onto a few cells.
+  - **Multi-axis index folding onto a smaller subspace**: `field[i % K0, (i // K0) % K1]` with the loop trip count above `K0 * K1`; the joint axis space is smaller than the loop and iterations wrap around it.
+  - **Constant-index gate**: `field[42]`, or any axis that is a literal constant.
+  - **Kernel-argument index, no iterating axis**: `field[arg]` where every axis is launch-constant.
+  - **Indirect index via runtime load**: `field[other_field[i]]`; the compiler cannot prove `other_field` is injective.
