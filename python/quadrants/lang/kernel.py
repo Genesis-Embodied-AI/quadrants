@@ -664,6 +664,11 @@ class Kernel(FuncBase):
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
         qd_stream = kwargs.pop("qd_stream", None)
+        if qd_stream is not None and self.autodiff_mode != _NONE:
+            raise RuntimeError(
+                "qd_stream is not compatible with autodiff kernels. Streams cannot be used with "
+                "reverse-mode or forward-mode differentiation."
+            )
         if qd_stream is not None and self.runtime.target_tape:
             raise RuntimeError(
                 "qd_stream is not compatible with autograd Tape. Launch the kernel outside the Tape "
