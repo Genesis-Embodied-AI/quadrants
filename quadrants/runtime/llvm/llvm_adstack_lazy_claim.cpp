@@ -446,27 +446,15 @@ void LlvmRuntimeExecutor::ensure_per_task_float_heap_post_reducer(std::size_t ta
   std::size_t effective_rows =
       (count == std::numeric_limits<uint32_t>::max()) ? num_threads : std::max<std::size_t>(count, 1);
   if (count != std::numeric_limits<uint32_t>::max() && ad_stack.bound_expr.has_value()) {
-    if (ad_stack.bound_expr->loop_iter_static > 0) {
-      // Compile-time trip count: integer compare, no per-launch eval cost. Constant `SizeExpr` shapes are
-      // already collapsed into this field by the analyzer so they short-circuit the runtime eval below.
-      effective_rows =
-          std::min<std::size_t>(effective_rows, static_cast<std::size_t>(ad_stack.bound_expr->loop_iter_static));
-    } else if (!ad_stack.bound_expr->loop_iter_size_expr.nodes.empty()) {
-      // Runtime-bounded clip: evaluate the captured trip-count `SizeExpr` only when the static field is unset
-      // (the analyzer leaves `loop_iter_static == 0` for shapes the compile-time path cannot cover, e.g.
-      // `for j in range(field[i])` / `for k in range(arr.shape[axis])`). Cost = one tree walk per launch,
-      // dominated by host scalar reads through `SNodeRwAccessorsBank` on `FieldLoad` / `ExternalTensorRead`
-      // nodes (CPU: a memory load; CUDA / AMDGPU: a 4-8 byte DtoH). The evaluator returns -1 when the tree
-      // references state that is not host-resolvable from `ctx`; in that case we leave `effective_rows`
-      // unclipped from this source.
-      Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
-      if (ctx != nullptr && prog != nullptr) {
-        const int64_t evaluated = evaluate_adstack_size_expr(ad_stack.bound_expr->loop_iter_size_expr, prog, ctx);
-        if (evaluated > 0) {
-          effective_rows = std::min<std::size_t>(effective_rows, static_cast<std::size_t>(evaluated));
-        }
-      }
-    }
+    // Shared with the SPIR-V launcher: see `clip_effective_rows_by_loop_trip_count` in
+    // `program/adstack_size_expr_eval.cpp`. LLVM dispatches one thread per loop iteration without the
+    // SPIR-V dispatch-cap-driven serialisation, so pass `numeric_limits::max()` to disable the
+    // dispatched-threads ceiling - any positive trip-count value is a sound upper bound on row claims
+    // here. `numeric_limits<size_t>::max()` is the ceiling sentinel `clip_effective_rows_by_loop_trip_count`
+    // documents.
+    Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
+    clip_effective_rows_by_loop_trip_count(effective_rows, *ad_stack.bound_expr,
+                                           std::numeric_limits<std::size_t>::max(), prog, ctx);
   }
   // Read back the per-thread float stride (in bytes) that `publish_adstack_metadata` published into
   // `runtime->adstack_per_thread_stride_float`. `AdStackSizingInfo::per_thread_stride_float` from the analysis pre-pass
