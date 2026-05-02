@@ -23,7 +23,7 @@ from tests import test_utils
 
 @test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
-def test_no_warning_for_field_via_tensor(tmp_path, capfd):
+def test_fastcache_field_warnings_no_warning_for_field_via_tensor(tmp_path, capfd):
     """Struct whose qd.Tensor fields contain Fields — fastcache silently skipped."""
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
@@ -48,7 +48,7 @@ def test_no_warning_for_field_via_tensor(tmp_path, capfd):
 
 @test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
-def test_no_warning_for_ndarray_via_tensor(tmp_path, capfd):
+def test_fastcache_field_warnings_no_warning_for_ndarray_via_tensor(tmp_path, capfd):
     """Struct whose qd.Tensor fields contain Ndarrays — fastcache succeeds, no warning."""
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
@@ -73,7 +73,7 @@ def test_no_warning_for_ndarray_via_tensor(tmp_path, capfd):
 
 @test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
-def test_no_warning_for_mixed_field_ndarray_via_tensor(tmp_path, capfd):
+def test_fastcache_field_warnings_no_warning_for_mixed_field_ndarray(tmp_path, capfd):
     """Struct with qd.Tensor fields containing a mix of Field and Ndarray — still silently skipped."""
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
@@ -98,7 +98,7 @@ def test_no_warning_for_mixed_field_ndarray_via_tensor(tmp_path, capfd):
 
 @test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
-def test_no_warning_for_non_pure_kernel_with_fields(tmp_path, capfd):
+def test_fastcache_field_warnings_no_warning_non_pure_kernel(tmp_path, capfd):
     """Non-pure kernel with Field args — fastcache not attempted, no warning."""
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
@@ -121,7 +121,7 @@ def test_no_warning_for_non_pure_kernel_with_fields(tmp_path, capfd):
 
 @test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
-def test_no_warning_for_field_as_top_level_tensor_param(tmp_path, capfd):
+def test_fastcache_field_warnings_no_warning_top_level_tensor(tmp_path, capfd):
     """Field passed directly to a kernel parameter annotated as qd.Tensor — no warning."""
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
@@ -140,7 +140,7 @@ def test_no_warning_for_field_as_top_level_tensor_param(tmp_path, capfd):
 
 @test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
-def test_warning_for_field_as_top_level_template_param(tmp_path, capfd):
+def test_fastcache_field_warnings_warn_top_level_template(tmp_path, capfd):
     """Field passed directly to a kernel parameter annotated as qd.Template — warning should fire."""
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
@@ -158,7 +158,7 @@ def test_warning_for_field_as_top_level_template_param(tmp_path, capfd):
 
 @test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
-def test_warning_for_field_in_struct_with_template_annotation(tmp_path, capfd):
+def test_fastcache_field_warnings_warn_struct_template_field(tmp_path, capfd):
     """Struct with qd.Template-annotated field containing a Field — warning should fire."""
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
