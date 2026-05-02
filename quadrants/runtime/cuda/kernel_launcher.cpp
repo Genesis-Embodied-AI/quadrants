@@ -141,8 +141,8 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         int effective_grid_dim = prepare_task(j, t);
         CUDAContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
         QD_TRACE("Launching kernel {}<<<{}, {}>>>", t.name, effective_grid_dim, t.block_dim);
-        cuda_module->launch(t.name, effective_grid_dim, t.block_dim, t.dynamic_shared_array_bytes,
-                            {&ctx.get_context()}, {});
+        cuda_module->launch(t.name, effective_grid_dim, t.block_dim, t.dynamic_shared_array_bytes, {&ctx.get_context()},
+                            {});
       }
 
       for (auto &[sid, s] : stream_by_id) {
