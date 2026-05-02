@@ -36,7 +36,7 @@ void StreamManager::destroy_stream(uint64 stream_handle) {
 
 void StreamManager::synchronize_stream(uint64 stream_handle) {
 #ifdef QD_WITH_CUDA
-  if (arch_ == Arch::cuda && stream_handle != 0) {
+  if (arch_ == Arch::cuda) {
     CUDAContext::get_instance().make_current();
     CUDADriver::get_instance().stream_synchronize(reinterpret_cast<void *>(stream_handle));
   }
