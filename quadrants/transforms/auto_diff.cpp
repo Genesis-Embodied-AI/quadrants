@@ -52,6 +52,13 @@ class IndependentBlockMetaData {
 // classes invoked sequentially by the kernel-level driver in `auto_diff()`.
 static std::unordered_map<Stmt *, Stmt *> g_fwd_to_rev_for;
 
+// Loop-carried `AdStackAllocaStmt` -> iter-INPUT checkpoint `AdStackAllocaStmt` mapping. Built by
+// `InsertLoopCarriedCheckpointStacks` (Stage 3). Read by `RecomputableChainCloner::clone_at` to
+// redirect cloned `AdStackLoadTopStmt` reads to the checkpoint, returning iter k INPUT independent of
+// consumer position. Cleared at `auto_diff` entry per kernel.
+class AdStackAllocaStmt;  // forward decl to satisfy the typed map declaration ahead of its full def.
+static std::unordered_map<AdStackAllocaStmt *, AdStackAllocaStmt *> g_loop_carried_to_checkpoint;
+
 class NonLinearOps {
  public:
   inline static const std::set<TernaryOpType> ternary_collections{TernaryOpType::select};
@@ -140,14 +147,14 @@ class RecomputableChainAnalyzer {
       return g_fwd_to_rev_for.find(li->loop) != g_fwd_to_rev_for.end();
     }
     // LocalLoadStmt of a regular AllocaStmt is recomputable iff the alloca's value is stable across the
-    // forward-to-reverse boundary. Stability holds when the alloca has all its writes at the IB top level
-    // (no LocalStore inside any container stmt - if/for/while). Then writes happen exactly once per kernel
-    // execution, in document order; any read returns the same value at any later position. The cloned read
-    // in the reverse scope returns that same final value.
+    // forward-to-reverse boundary. Stability holds when ALL `LocalStoreStmt`s targeting the alloca are in
+    // STATIC scope - i.e., outside any RangeForStmt / StructForStmt / MeshForStmt. Stores under IfStmt at
+    // any nesting are fine because the if executes at most once per kernel run; stores under a dynamic
+    // for execute per iteration and the alloca holds a different value each iter, breaking the iter-
+    // invariance the cloned read needs.
     //
-    // Cross-block aliasing through `MatrixPtrStmt` (slot loads from matrix-typed allocas) is intentionally
-    // NOT covered here - that path goes through the `MatrixPtrStmt` interior op below, whose operands are
-    // recursively checked. The LocalLoadStmt branch only handles direct loads of the alloca itself.
+    // Cross-block aliasing through `MatrixPtrStmt` is handled by the interior-op recursion below, not
+    // here. The LocalLoadStmt branch only handles direct loads of the alloca.
     if (auto *ll = stmt->cast<LocalLoadStmt>()) {
       auto *alloca = ll->src->cast<AllocaStmt>();
       if (alloca == nullptr)
@@ -155,36 +162,38 @@ class RecomputableChainAnalyzer {
       Block *ib_root = alloca->parent;
       if (ib_root == nullptr)
         return false;
-      bool all_stores_at_ib_top = true;
-      std::function<void(Block *, bool)> walk = [&](Block *b, bool is_top) {
-        if (!all_stores_at_ib_top)
+      bool all_stores_static = true;
+      // `dynamic_depth` counts enclosing RangeForStmt / StructForStmt / MeshForStmt as we recurse. A
+      // LocalStore to `alloca` is allowed iff dynamic_depth == 0 at its position.
+      std::function<void(Block *, int)> walk = [&](Block *b, int dynamic_depth) {
+        if (!all_stores_static)
           return;
         for (auto &owned : b->statements) {
           Stmt *s = owned.get();
           if (auto *st = s->cast<LocalStoreStmt>()) {
-            if (st->dest == alloca && !is_top) {
-              all_stores_at_ib_top = false;
+            if (st->dest == alloca && dynamic_depth > 0) {
+              all_stores_static = false;
               return;
             }
           }
           if (auto *if_s = s->cast<IfStmt>()) {
             if (if_s->true_statements)
-              walk(if_s->true_statements.get(), false);
+              walk(if_s->true_statements.get(), dynamic_depth);
             if (if_s->false_statements)
-              walk(if_s->false_statements.get(), false);
+              walk(if_s->false_statements.get(), dynamic_depth);
           } else if (auto *rf = s->cast<RangeForStmt>()) {
             if (rf->body)
-              walk(rf->body.get(), false);
+              walk(rf->body.get(), dynamic_depth + 1);
           } else if (auto *sf = s->cast<StructForStmt>()) {
             if (sf->body)
-              walk(sf->body.get(), false);
+              walk(sf->body.get(), dynamic_depth + 1);
           }
-          if (!all_stores_at_ib_top)
+          if (!all_stores_static)
             return;
         }
       };
-      walk(ib_root, true);
-      return all_stores_at_ib_top;
+      walk(ib_root, 0);
+      return all_stores_static;
     }
     // GlobalLoadStmt as recomputable: the load reads a SNode value via GlobalPtrStmt. The cloned chain in
     // the reverse pass re-issues the same load - safe iff the global is not mutated between the forward
@@ -236,12 +245,26 @@ class RecomputableChainCloner {
     if (src->is<AdStackAllocaStmt>()) {
       // The alloca is shared, not cloned: every load reads the same physical stack.
       cloned = src;
-    } else if (src->is<AdStackLoadTopStmt>() || src->is<ArgLoadStmt>() || src->is<ConstStmt>() ||
-               src->is<LocalLoadStmt>()) {
+    } else if (auto *lt = src->cast<AdStackLoadTopStmt>()) {
+      // If the loop-carried stack has an iter-INPUT checkpoint (Stage 3), redirect the cloned read
+      // to the checkpoint. The checkpoint's load_top returns iter k INPUT regardless of consumer
+      // position, decoupling cloned reads from the loop-carried stack's pop ordering.
+      auto *src_stack = lt->stack->cast<AdStackAllocaStmt>();
+      auto it_ck = src_stack ? g_loop_carried_to_checkpoint.find(src_stack) : g_loop_carried_to_checkpoint.end();
+      if (it_ck != g_loop_carried_to_checkpoint.end()) {
+        auto *checkpoint_stack = it_ck->second;
+        auto load_check = Stmt::make<AdStackLoadTopStmt>(checkpoint_stack);
+        load_check->ret_type = lt->ret_type;
+        cloned = insert_point->insert_before_me(std::move(load_check));
+      } else {
+        auto cloned_unique = src->clone();
+        cloned = insert_point->insert_before_me(std::move(cloned_unique));
+      }
+    } else if (src->is<ArgLoadStmt>() || src->is<ConstStmt>() || src->is<LocalLoadStmt>()) {
       auto cloned_unique = src->clone();
       cloned = insert_point->insert_before_me(std::move(cloned_unique));
-      // For AdStackLoadTopStmt and LocalLoadStmt clones, the cloned stmt's source operand still points at
-      // the original AdStackAllocaStmt or AllocaStmt at IB top - that's the desired sharing.
+      // For LocalLoadStmt clones, the cloned stmt's source AllocaStmt is shared - the alloca is at
+      // IB top, accessible from both forward and reverse scopes.
     } else if (auto *li = src->cast<LoopIndexStmt>()) {
       // Remap the cloned LoopIndexStmt's `loop` field to the reverse for (recorded in g_fwd_to_rev_for
       // by MakeAdjoint::visit(RangeForStmt)). Recomputability was gated on the mapping existing, so the
@@ -1361,6 +1384,255 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
 // chains rooted at a single loop-carried alloca - the dominant shape on Genesis-style rigid-step kernels -
 // the win is typically 5-10x: each push is a memory op crossing the L1 boundary on every iteration, while
 // the recomputed arithmetic stays in registers and reuses warmed-up sin/cos/exp pipeline state.
+// Stage 3: Iter-INPUT checkpoint adstack insertion for loop-carried allocas.
+//
+// For each AdStackAllocaStmt with 2+ non-init body pushes (= loop-carried under a dynamic for-loop),
+// allocate a sibling "checkpoint" AdStackAllocaStmt and emit a snapshot push (val = load_top of the
+// loop-carried stack) RIGHT BEFORE each body push of the loop-carried stack. At forward iter k, the
+// loop-carried stack's top hasn't been updated yet at the snapshot point, so the snapshot captures
+// iter k's INPUT primal.
+//
+// In reverse, `RecomputableChainCloner::clone_at` redirects cloned `AdStackLoadTopStmt(loop_carried)`
+// to read `AdStackLoadTopStmt(checkpoint)`, which returns iter k's INPUT primal at any reverse-block
+// position - decoupled from where the loop-carried's pop fires. This unlocks the rev-pos blocked
+// stacks (`EliminateRecomputableAdStackPushes` checks `g_loop_carried_to_checkpoint` in its rev-pos
+// fallback path).
+//
+// Sized via `ad_stack_size` (= `config.ad_stack_size`); 0 means adaptive, picked up by
+// `determine_ad_stack_size` later in the pipeline. Same `dt` as the loop-carried stack. Init-zero
+// push at IB top mirrors the convention `ReplaceLocalVarWithStacks` follows for primary stacks.
+//
+// Adjoint flow on the checkpoint: `MakeAdjoint::visit(AdStackPushStmt)` for the snap push emits
+// `acc_adj` on the snap push's `v` (= the load_top of loop-carried). `MakeAdjoint::visit
+// (AdStackLoadTopStmt)` for that load_top emits `AdStackAccAdjointStmt(loop_carried, ...)` which
+// propagates the adjoint into the loop-carried's adj slot at iter k INPUT (after the loop-carried's
+// pop has fired). Same propagation as if the chain leaf had been read directly via the loop-carried's
+// load_top. No special handling needed for checkpoint adj slot - it accumulates per-iter as expected.
+//
+// Run between ReplaceLocalVarWithStacks and EliminateRecomputableAdStackPushes. Populates
+// `g_loop_carried_to_checkpoint` consumed by `RecomputableChainCloner`.
+class InsertLoopCarriedCheckpointStacks {
+ public:
+  // Selective checkpoint creation: only allocates a checkpoint for a loop-carried stack T iff at least
+  // one rev-pos-blocked elimination candidate has T as a chain leaf with `T_push_pos <= max_consumer_pos`
+  // in the same block. Otherwise the checkpoint's per-iter snap push cost outweighs any unlock.
+  //
+  // The selection runs an analysis pre-pass that mirrors `EliminateRecomputableAdStackPushes::
+  // run_one_pass` predicates (multi-body, recomputable chain, dominance, control-flow consumer, self-
+  // load) but stops at the rev-pos check; for candidates that would have been killed only by rev-pos,
+  // it walks the chain leaves and records each loop-carried leaf with an in-block push position
+  // <= max consumer position. Those are the leaves that need a checkpoint to unblock.
+  static void run(Block *ib, int ad_stack_size) {
+    auto is_zero_init_value = [](Stmt *s) -> bool {
+      if (auto *c = s->cast<ConstStmt>())
+        return c->val.equal_value(0);
+      if (auto *mi = s->cast<MatrixInitStmt>()) {
+        for (auto *elem : mi->values) {
+          auto *c = elem->cast<ConstStmt>();
+          if (c == nullptr || !c->val.equal_value(0))
+            return false;
+        }
+        return true;
+      }
+      return false;
+    };
+
+    // Collect non-init body pushes per stack across the whole IB (used both for "is loop-carried"
+    // detection and to find specific push positions per-block during the analysis below).
+    std::unordered_map<AdStackAllocaStmt *, std::vector<AdStackPushStmt *>> non_init_pushes;
+    std::function<void(Block *)> collect_pushes = [&](Block *b) {
+      for (auto &owned : b->statements) {
+        Stmt *s = owned.get();
+        if (auto *p = s->cast<AdStackPushStmt>()) {
+          if (!is_zero_init_value(p->v)) {
+            if (auto *as = p->stack->cast<AdStackAllocaStmt>())
+              non_init_pushes[as].push_back(p);
+          }
+        }
+        if (auto *if_s = s->cast<IfStmt>()) {
+          if (if_s->true_statements)
+            collect_pushes(if_s->true_statements.get());
+          if (if_s->false_statements)
+            collect_pushes(if_s->false_statements.get());
+        } else if (auto *rf = s->cast<RangeForStmt>()) {
+          if (rf->body)
+            collect_pushes(rf->body.get());
+        } else if (auto *sf = s->cast<StructForStmt>()) {
+          if (sf->body)
+            collect_pushes(sf->body.get());
+        }
+      }
+    };
+    collect_pushes(ib);
+
+    // Identify the loop-carried stacks needed as checkpoints. A stack T qualifies iff there exists a
+    // candidate stack S (with one body push, recomputable pushed value, no self-load on S, no
+    // control-flow consumer of S's load_tops) such that T is a chain leaf of S's pushed value AND T
+    // has a non-init body push in S's containing block at position <= max consumer position of S's
+    // load_tops in that block.
+    //
+    // We do NOT replicate EliminateRecomputableAdStackPushes' full check here; we approximate the
+    // qualifying-S set by "stacks with single body push and chain whose all leaves are AdStackAlloca/
+    // AdStackLoadTop/ArgLoad/Const/LocalLoad/LoopIndex via interior side-effect-free ops". The pass
+    // overestimates qualified S; checkpoints created for over-estimates still work correctly, just at
+    // marginal cost. False positives are bounded by the same combinatorial structure as the elim pass.
+    std::unordered_set<AdStackAllocaStmt *> needed_checkpoints;
+
+    std::vector<AdStackAllocaStmt *> stacks;
+    auto collected = irpass::analysis::gather_statements(ib, [&](Stmt *s) { return s->is<AdStackAllocaStmt>(); });
+    for (auto *s : collected)
+      stacks.push_back(s->as<AdStackAllocaStmt>());
+
+    for (auto *S : stacks) {
+      // Single-body-push gate.
+      auto it_pushes = non_init_pushes.find(S);
+      if (it_pushes == non_init_pushes.end() || it_pushes->second.size() != 1)
+        continue;
+      AdStackPushStmt *body_push = it_pushes->second[0];
+      Stmt *pushed_val = body_push->v;
+
+      // Chain recomputable check via the analyzer.
+      std::unordered_map<Stmt *, bool> reach_cache;
+      if (!RecomputableChainAnalyzer::is_recomputable(pushed_val, reach_cache))
+        continue;
+
+      // Self-load check: skip if pushed_val's chain reads load_top of S (self-recurrence).
+      bool self_loaded = false;
+      std::unordered_set<Stmt *> visited;
+      std::function<void(Stmt *)> walk_self = [&](Stmt *s) {
+        if (self_loaded || visited.count(s))
+          return;
+        visited.insert(s);
+        if (auto *lt = s->cast<AdStackLoadTopStmt>()) {
+          if (lt->stack == S)
+            self_loaded = true;
+          return;
+        }
+        if (s->is<AdStackAllocaStmt>() || s->is<ArgLoadStmt>() || s->is<ConstStmt>())
+          return;
+        for (auto *op : s->get_operands()) {
+          if (op != nullptr)
+            walk_self(op);
+        }
+      };
+      walk_self(pushed_val);
+      if (self_loaded)
+        continue;
+
+      // Find S's load_tops and their max position in body_push's block.
+      Block *push_block = body_push->parent;
+      if (push_block == nullptr)
+        continue;
+      int push_pos = -1;
+      for (size_t i = 0; i < push_block->statements.size(); i++) {
+        if (push_block->statements[i].get() == body_push) {
+          push_pos = static_cast<int>(i);
+          break;
+        }
+      }
+      if (push_pos < 0)
+        continue;
+
+      // Walk chain leaves to collect AdStackAllocaStmt referenced via load_top.
+      std::unordered_set<AdStackAllocaStmt *> chain_leaves;
+      std::unordered_set<Stmt *> walked;
+      std::function<void(Stmt *)> collect_leaves = [&](Stmt *s) {
+        if (walked.count(s))
+          return;
+        walked.insert(s);
+        if (auto *lt = s->cast<AdStackLoadTopStmt>()) {
+          if (auto *as = lt->stack->cast<AdStackAllocaStmt>())
+            chain_leaves.insert(as);
+          return;
+        }
+        if (s->is<AdStackAllocaStmt>() || s->is<ArgLoadStmt>() || s->is<ConstStmt>())
+          return;
+        for (auto *op : s->get_operands()) {
+          if (op != nullptr)
+            collect_leaves(op);
+        }
+      };
+      collect_leaves(pushed_val);
+
+      // Find max consumer position of S's load_tops in push_block (and nested containers, mapped to the
+      // top-level push_block index of their enclosing container).
+      int max_consumer_pos = -1;
+      std::function<void(Block *, int)> find_consumers = [&](Block *b, int outer_pos) {
+        for (size_t i = 0; i < b->statements.size(); i++) {
+          Stmt *s = b->statements[i].get();
+          int eff_pos = (b == push_block) ? static_cast<int>(i) : outer_pos;
+          if (auto *lt = s->cast<AdStackLoadTopStmt>()) {
+            if (lt->stack == S && eff_pos > max_consumer_pos)
+              max_consumer_pos = eff_pos;
+          }
+          if (auto *if_s = s->cast<IfStmt>()) {
+            if (if_s->true_statements)
+              find_consumers(if_s->true_statements.get(), eff_pos);
+            if (if_s->false_statements)
+              find_consumers(if_s->false_statements.get(), eff_pos);
+          } else if (auto *rf = s->cast<RangeForStmt>()) {
+            if (rf->body)
+              find_consumers(rf->body.get(), eff_pos);
+          } else if (auto *sf = s->cast<StructForStmt>()) {
+            if (sf->body)
+              find_consumers(sf->body.get(), eff_pos);
+          }
+        }
+      };
+      find_consumers(push_block, -1);
+      if (max_consumer_pos < 0)
+        continue;
+
+      // For each chain leaf T with non-init body push in push_block at position <= max_consumer_pos:
+      // T needs a checkpoint to unblock S's elim under the rev-pos rule.
+      for (AdStackAllocaStmt *T : chain_leaves) {
+        for (size_t i = 0; i < push_block->statements.size(); i++) {
+          Stmt *s = push_block->statements[i].get();
+          if (auto *p = s->cast<AdStackPushStmt>()) {
+            if (p->stack == T && !is_zero_init_value(p->v) && static_cast<int>(i) <= max_consumer_pos) {
+              needed_checkpoints.insert(T);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Restrict checkpoints to multi-body-push (2+) stacks. Single-body-push checkpoints have unresolved
+    // crash modes (segfaults at launch_kernel) when the snap-push interacts with `determine_ad_stack_size`
+    // size determination or with adstack-heap codegen layouts. Closing the single-push case for the
+    // remaining ~922 rev-pos blocks needs the pop-split architectural change in plan Stage 5.
+    for (AdStackAllocaStmt *loop_carried : needed_checkpoints) {
+      auto it_pushes = non_init_pushes.find(loop_carried);
+      if (it_pushes == non_init_pushes.end() || it_pushes->second.size() < 2)
+        continue;
+      if (g_loop_carried_to_checkpoint.find(loop_carried) != g_loop_carried_to_checkpoint.end())
+        continue;
+      Block *insert_block = loop_carried->parent;
+      if (insert_block == nullptr)
+        continue;
+
+      auto checkpoint_alloca = Stmt::make<AdStackAllocaStmt>(loop_carried->dt, ad_stack_size);
+      AdStackAllocaStmt *checkpoint_ptr = checkpoint_alloca->as<AdStackAllocaStmt>();
+      loop_carried->insert_after_me(std::move(checkpoint_alloca));
+
+      auto zero = insert_const(loop_carried->dt, checkpoint_ptr, 0);
+      zero->insert_after_me(Stmt::make<AdStackPushStmt>(checkpoint_ptr, zero));
+
+      for (AdStackPushStmt *body_push : it_pushes->second) {
+        auto load_top = Stmt::make<AdStackLoadTopStmt>(loop_carried);
+        load_top->ret_type = loop_carried->ret_type.ptr_removed();
+        AdStackLoadTopStmt *load_top_ptr = load_top->as<AdStackLoadTopStmt>();
+        auto snap_push = Stmt::make<AdStackPushStmt>(checkpoint_ptr, load_top_ptr);
+        body_push->insert_before_me(std::move(load_top));
+        body_push->insert_before_me(std::move(snap_push));
+      }
+
+      g_loop_carried_to_checkpoint[loop_carried] = checkpoint_ptr;
+    }
+  }
+};
+
 class EliminateRecomputableAdStackPushes {
  public:
   static void run(Block *ib) {
@@ -1750,9 +2022,32 @@ class EliminateRecomputableAdStackPushes {
           break;
       }
       if (!reverse_safe) {
-        if (diag_enabled())
-          diag_count_skip_rev_pos++;
-        continue;
+        // Stage 3 unlock: if every problematic chain leaf (those pushed in same block before the
+        // consumer) has a checkpoint mapping, the cloned chain reads iter-INPUT primal via the
+        // checkpoint and the rev-pos timing constraint is satisfied. See
+        // InsertLoopCarriedCheckpointStacks for the mechanism.
+        bool all_problematic_have_checkpoint = true;
+        for (auto *T : chain_leaf_stacks) {
+          bool has_in_block_push = false;
+          for (size_t i = 0; i < push_block->statements.size(); i++) {
+            Stmt *s = push_block->statements[i].get();
+            if (auto *p = s->cast<AdStackPushStmt>()) {
+              if (p->stack == T && !is_zero_init_value(p->v) && static_cast<int>(i) <= max_consumer_pos) {
+                has_in_block_push = true;
+                break;
+              }
+            }
+          }
+          if (has_in_block_push && g_loop_carried_to_checkpoint.find(T) == g_loop_carried_to_checkpoint.end()) {
+            all_problematic_have_checkpoint = false;
+            break;
+          }
+        }
+        if (!all_problematic_have_checkpoint) {
+          if (diag_enabled())
+            diag_count_skip_rev_pos++;
+          continue;
+        }
       }
 
       bool is_self_loaded = false;
@@ -3907,6 +4202,7 @@ class OffloadLevelGlobalCrossIterRAWChecker : public BasicStmtVisitor {
 void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_mode, bool use_stack) {
   QD_AUTO_PROF;
   g_fwd_to_rev_for.clear();
+  g_loop_carried_to_checkpoint.clear();
   if (autodiff_mode == AutodiffMode::kReverse) {
     if (auto *root_block = root->cast<Block>()) {
       // Top-level range-fors at the kernel root become the offload-level loop. Walk each direct child once
@@ -3938,6 +4234,11 @@ void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_
         // `ReplaceLocalVarWithStacks` (so the analyzer sees the AdStackAlloca shape, not the alloca-with-store
         // shape PromoteSSA2LocalVar emits) and before `MakeAdjoint` (so the reverse pass is generated against
         // the cleaned forward IR with no spurious push/load scaffolding).
+        // Stage 3: Insert iter-INPUT checkpoint adstacks for loop-carried allocas. Checkpoints are
+        // read by RecomputableChainCloner in the reverse scope to get iter-INPUT primal values
+        // independent of consumer position - unlocks the rev-pos blocked stacks.
+        InsertLoopCarriedCheckpointStacks::run(ib, config.ad_stack_size);
+        type_check(root, config);
         EliminateRecomputableAdStackPushes::run(ib);
         type_check(root, config);
 
