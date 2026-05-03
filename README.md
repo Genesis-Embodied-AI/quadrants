@@ -25,15 +25,14 @@ This project is now fully independent and does not aim to maintain backward comp
 
 While the repository still resembles upstream in structure, major changes include:
 
-### Modernized infrastructure
+### Platform support
 
-* Support for Python 3.10–3.13
-* Support for macOS up to 15
-* Significantly improved reliability (≥90% CI success on correct code)
+* Python 3.10–3.13
+* macOS up to 15, Windows, Ubuntu 22.04–24.04
+* LLVM 22, ARM (aarch64) support
+* Significantly improved reliability (≥90% CI success rate on correct code)
 
 ### CI
-
-* Revamped CI pipeline with ≥90% success rate on correct code
 * Kernel-level [code coverage](https://genesis-embodied-ai.github.io/quadrants/user_guide/kernel_coverage.html) — device-side branch coverage in standard `coverage.py` format, integrated with pytest-cov
 * AI-driven checks for line wrapping, deleted comments, test coverage, and feature factorization
 
@@ -65,10 +64,6 @@ To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API
 * **[Reverse-mode AD with dynamic loops](https://genesis-embodied-ai.github.io/quadrants/user_guide/autodiff.html)** — heap-backed adstack on all backends (LLVM + SPIR-V) with automatic launch-time sizing; no manual stack-size tuning required
 * Forward-mode AD, custom gradients (`@qd.ad.grad_replaced`), `qd.ad.Tape`
 
-### Compiler upgrades
-
-* Upgraded to LLVM 22
-* Enabled ARM support
 
 ### Debugging & development
 
