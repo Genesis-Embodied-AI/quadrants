@@ -85,33 +85,40 @@ class RecomputableChainAnalyzer {
 
  private:
   static bool check(Stmt *stmt, std::unordered_map<Stmt *, bool> &cache) {
-    // Conservative leaf set: only ConstStmt and ArgLoadStmt count as recomputable. Two intentional
-    // exclusions:
+    // Recomputable leaves: ConstStmt, ArgLoadStmt, AdStackLoadTopStmt, AdStackAllocaStmt. LoopIndexStmt is
+    // intentionally excluded - cloning a LoopIndexStmt copies the reference to the forward RangeForStmt,
+    // but the cloned consumer lives inside the reverse RangeForStmt (a separate stmt with its own loop
+    // index), so the cloned read points at undefined state and silently double-accumulates gradients
+    // (`test_adstack_sum_linear`). A future MakeAdjoint coordination pass that tracks
+    // forward-RangeFor-to-reverse-RangeFor mapping could lift this restriction.
     //
-    //   - LoopIndexStmt: the cloned IR-level reference would still point at the original RangeForStmt
-    //     (the forward replay's for), but the cloned consumer ends up inside the reverse for-stmt.
-    //     Reading a forward for's loop index from inside the reverse for double-accumulates gradients
-    //     (`test_adstack_sum_linear` pins this).
+    // AdStackLoadTopStmt as a leaf is correct under the dominance + control-flow-consumer + self-load
+    // guards in `EliminateRecomputableAdStackPushes::run_one_pass`. The reasoning:
     //
-    //   - AdStackLoadTopStmt: the cloned read happens at the consumer's IR position in the reverse
-    //     scope. For loop-carried stacks (multi-body-push), `MakeAdjoint::visit(AdStackPushStmt)` emits
-    //     a pop somewhere within the reverse iteration, and the cloned read can land before or after
-    //     that pop depending on where the consumer lives - reading pre-pop returns iteration k's
-    //     OUTPUT, post-pop returns iteration k's INPUT, and the choice depends on `MakeAdjoint`'s
-    //     ordering of adjoint emission. Even for single-body-push stacks, downstream consumer
-    //     placement under nested control flow can produce stale reads (`test_ad_fibonacci_index` and
-    //     `test_adstack_many_non_f32_stacks_heap_backed` pinned this in two different shapes - off-by-
-    //     one-iteration recurrence and pre-pop cond evaluation respectively). Until BackupSSA grows
-    //     a dedicated mechanism to position cloned chains after pops on dependent loop-carried
-    //     stacks (or until MakeAdjoint emits a snap-stack-like fixup for the cross-block-use case),
-    //     load_top reads stay non-recomputable.
+    //   - In FORWARD: the eliminated stack S's body push dominates each `AdStackLoadTopStmt(S)` (the
+    //     dominance guard), and the chain leaves' pushes dominate the chain's evaluation point. Each
+    //     stack referenced by a chain leaf has a stable "top" value within one forward iteration body
+    //     (no pops in forward), so substituting load_top(S) with the chain re-evaluates to the same
+    //     value (no iteration shift).
     //
-    // The remaining recomputable shape is "values whose forward computation depends only on kernel-
-    // arg / kernel-constant inputs" - effectively LICM-hoist of operand spills for loop-invariant
-    // expressions. The chain cloning machinery in `BackupSSA::generic_visit` produces correct reverse
-    // IR for these because every leaf is iteration-invariant (constants and args don't change across
-    // forward iters), so the cloned read at any consumer position returns the same value.
-    if (stmt->is<AdStackAllocaStmt>() || stmt->is<ArgLoadStmt>() || stmt->is<ConstStmt>()) {
+    //   - In REVERSE: `MakeAdjoint` visits forward stmts in reverse order, emitting reverse code at a
+    //     cursor that advances one position per visit. For a forward stmt F at position P_F, the
+    //     emitted reverse code lands at cursor position roughly inversely correlated with P_F. The
+    //     dominance guard ensures every chain-leaf stack T has its body push at a position P_T with
+    //     P_T < P (where P is load_top(S)'s forward position). Therefore T's pop in reverse (emitted
+    //     when MakeAdjoint visits T's body push) lands AFTER the chain consumer's reverse emission
+    //     (the consumer's forward position is P > P_T). At the consumer's reverse cursor, T has not
+    //     been popped yet, so load_top(T) returns T's iter-k-push value - matching what the original
+    //     load_top(S) returned in forward iter k.
+    //
+    // The control-flow-consumer guard in `run_one_pass` covers a separate issue: stacks whose load_tops
+    // are direct operands of IfStmt cond / RangeFor begin/end. `MakeAdjoint::visit(IfStmt)` runs a
+    // dedicated snap-stack fixup that ONLY triggers when the cond is a bare `AdStackLoadTopStmt` (line
+    // 2168-2202). Eliminating the cond stack converts the cond into a compound stmt, the snap-stack
+    // does not trigger, and the reverse cond falls back to BackupSSA's load(op) which is single-slot
+    // last-iter only - silent gradient corruption on multi-iter loops.
+    if (stmt->is<AdStackLoadTopStmt>() || stmt->is<AdStackAllocaStmt>() || stmt->is<ArgLoadStmt>() ||
+        stmt->is<ConstStmt>()) {
       return true;
     }
     bool is_interior = stmt->is<UnaryOpStmt>() || stmt->is<BinaryOpStmt>() || stmt->is<TernaryOpStmt>() ||
@@ -1271,8 +1278,13 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
 class EliminateRecomputableAdStackPushes {
  public:
   static void run(Block *ib) {
-    // Iterate to fixed point. Each pass either eliminates at least one stack or terminates.
-    while (run_one_pass(ib)) {
+    // Iterate to fixed point. Each pass either eliminates at least one stack or terminates. The hard cap
+    // protects against analysis bugs (e.g. an eligibility check that returns true on the same stmt twice
+    // in a row); under a correct implementation each pass strictly reduces the AdStackAllocaStmt count, so
+    // the actual iteration bound is the number of stacks at entry. 1024 is well above any realistic kernel.
+    for (int i = 0; i < 1024; i++) {
+      if (!run_one_pass(ib))
+        return;
     }
   }
 
@@ -1460,6 +1472,115 @@ class EliminateRecomputableAdStackPushes {
         }
       }
       if (!dominates_all_loads) {
+        continue;
+      }
+
+      // Reverse-position correctness for chain leaves pushed in the same block as S.
+      //
+      // After elimination, every reverse stmt that consumed `load_top(S)` instead consumes the chain
+      // (cloned by `BackupSSA::generic_visit` at the consumer's reverse position). The cloned chain reads
+      // `load_top(T)` for each chain leaf T, where the read happens at the consumer's reverse cursor.
+      //
+      // `MakeAdjoint` visits forward stmts in REVERSE order, emitting at a cursor that advances per visit.
+      // For a forward stmt at position P, its reverse emissions land "later" in reverse block iff P is
+      // smaller. T's pop is emitted when `MakeAdjoint` visits T's body push at position P_T. The cloned
+      // chain at the consumer's reverse position reads `load_top(T)` POST-pop iff T's pop has fired by then,
+      // i.e. iff visit(P_T) precedes visit(C_pos), i.e. iff P_T > C_pos for every consumer C of S's
+      // load_tops.
+      //
+      // Forward chain evaluates at S's push position P_S, before any of T's same-block body pushes (since
+      // we already required P_T > P_S via the dominance check above for S's loads). So forward chain reads
+      // T's pre-iter-k-push value. Reverse clone post-pop also returns T's pre-iter-k-push value (= iter k
+      // INPUT for loop-carried T). Match.
+      //
+      // Without this check, the canonical Fibonacci-style shape (`p, q = q, p + q; b[q] += a[q]`) where S
+      // stores `p + q` and chain leaves p_stack / q_stack are pushed AFTER S but BEFORE the GlobalPtr
+      // index consumer would silently corrupt gradients: the reverse clone at the GlobalPtr's adjoint
+      // emission reads p_stack and q_stack PRE-pop (iter k POST-push values), summing to a different value
+      // than the forward chain at P_S used.
+      //
+      // Chain leaves T whose stacks have NO body push in S's containing block are stable within the iter
+      // (their tops do not change during the iter), so neither forward nor reverse evaluation order shifts
+      // their values. Excluded from this check.
+      auto find_consumers_of_load_tops = [&](std::vector<int> &out_positions) {
+        std::function<void(Block *, int)> walk = [&](Block *b, int container_pos_in_push_block) {
+          for (size_t i = 0; i < b->statements.size(); i++) {
+            Stmt *s = b->statements[i].get();
+            int effective_pos = (b == push_block) ? static_cast<int>(i) : container_pos_in_push_block;
+            for (auto *op : s->get_operands()) {
+              if (op == nullptr)
+                continue;
+              for (auto *lt : load_tops) {
+                if (op == lt) {
+                  out_positions.push_back(effective_pos);
+                  break;
+                }
+              }
+            }
+            if (auto *if_s = s->cast<IfStmt>()) {
+              if (if_s->true_statements)
+                walk(if_s->true_statements.get(), effective_pos);
+              if (if_s->false_statements)
+                walk(if_s->false_statements.get(), effective_pos);
+            } else if (auto *rf = s->cast<RangeForStmt>()) {
+              if (rf->body)
+                walk(rf->body.get(), effective_pos);
+            } else if (auto *sf = s->cast<StructForStmt>()) {
+              if (sf->body)
+                walk(sf->body.get(), effective_pos);
+            }
+          }
+        };
+        walk(push_block, -1);
+      };
+      std::vector<int> consumer_positions;
+      find_consumers_of_load_tops(consumer_positions);
+      int max_consumer_pos = -1;
+      for (int p : consumer_positions) {
+        if (p > max_consumer_pos)
+          max_consumer_pos = p;
+      }
+
+      // Collect all distinct AdStackAllocaStmt referenced via AdStackLoadTopStmt leaves in pushed_val's chain.
+      std::unordered_set<AdStackAllocaStmt *> chain_leaf_stacks;
+      std::unordered_set<Stmt *> walked_for_leaves;
+      std::function<void(Stmt *)> collect_leaves = [&](Stmt *s) {
+        if (walked_for_leaves.count(s))
+          return;
+        walked_for_leaves.insert(s);
+        if (auto *lt = s->cast<AdStackLoadTopStmt>()) {
+          if (auto *as = lt->stack->cast<AdStackAllocaStmt>())
+            chain_leaf_stacks.insert(as);
+          return;
+        }
+        if (s->is<AdStackAllocaStmt>() || s->is<ArgLoadStmt>() || s->is<ConstStmt>())
+          return;
+        for (auto *op : s->get_operands()) {
+          if (op != nullptr)
+            collect_leaves(op);
+        }
+      };
+      collect_leaves(pushed_val);
+
+      bool reverse_safe = true;
+      for (auto *T : chain_leaf_stacks) {
+        // Find T's body pushes (non-init) in push_block. Only same-block pushes can interfere: pushes in
+        // outer blocks happen once per outer iteration, so their tops are stable across the inner iter.
+        for (size_t i = 0; i < push_block->statements.size(); i++) {
+          Stmt *s = push_block->statements[i].get();
+          if (auto *p = s->cast<AdStackPushStmt>()) {
+            if (p->stack == T && !is_zero_init_value(p->v)) {
+              if (static_cast<int>(i) <= max_consumer_pos) {
+                reverse_safe = false;
+                break;
+              }
+            }
+          }
+        }
+        if (!reverse_safe)
+          break;
+      }
+      if (!reverse_safe) {
         continue;
       }
 
