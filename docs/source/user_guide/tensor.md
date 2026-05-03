@@ -168,6 +168,10 @@ clone = a.to_torch(copy=True)    # independent copy (default)
 | `True` (default) | Independent copy via kernel. Safe to mutate freely. |
 | `False` | Zero-copy DLPack view, or `ValueError` if unsupported for this backend/dtype. |
 
+`copy=False` avoids both the buffer allocation and the copy kernel entirely — the returned numpy array or torch tensor points directly at Quadrants' existing memory. For a large tensor this eliminates a potentially expensive memcpy and a device-side kernel launch. Writes through the view are immediately visible to subsequent Quadrants kernels (and vice versa), removing the need for `to_torch` → modify → `from_torch` round-trips.
+
+The tradeoff is lifetime coupling: the view is invalidated on `qd.reset()` or `qd.init()`, and on GPU you must be mindful of stream synchronisation when both frameworks write to the same buffer.
+
 This works identically on both backends. For the full support matrix (which backends/dtypes qualify, lifetime caveats, Metal synchronisation) see [`interop`](interop.md#zero-copy-interop-via-dlpack).
 
 Gradient buffers behave identically: `a.grad.to_numpy()` returns the canonical view of the gradient.
