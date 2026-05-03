@@ -70,9 +70,18 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
   // Two gates govern the per-launch adstack publish work, both opt-in by the kernel's IR shape. Forward-only kernels
   // skip both gates and pay zero adstack overhead; reverse-mode kernels without a captured `bound_expr` skip the
   // lazy-claim block, paying the per-task `publish_adstack_metadata` only.
+  //   - `any_adstack`: at least one task has an `AdStackAllocaStmt`. Gates the per-task `publish_adstack_metadata`
+  //     call (sets per-thread stride for the codegen heap-base addressing).
+  //   - `any_lazy_task`: at least one task has a captured `bound_expr` (the codegen routes such tasks through the
+  //     lazy LCA-block atomic-rmw row claim, which reads `runtime->adstack_row_counters[task_id]` and
+  //     `runtime->adstack_bound_row_capacities[task_id]`). Gates `publish_adstack_lazy_claim_buffers` and the
+  //     per-task reducer dispatch + DtoH heap sizing.
   const bool any_lazy_task = std::any_of(offloaded_tasks.begin(), offloaded_tasks.end(),
                                          [](const OffloadedTask &t) { return t.ad_stack.bound_expr.has_value(); });
   if (any_lazy_task) {
+    // Allocate / reset the per-kernel lazy-claim arrays once before the first task. See the matching CPU launcher
+    // block for rationale; on CUDA the same memcpy_host_to_device path through the cached field pointers publishes
+    // the cleared counter and UINT32_MAX-defaulted capacity arrays.
     executor->publish_adstack_lazy_claim_buffers(offloaded_tasks.size());
   }
 
@@ -88,6 +97,12 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
       // `publish_adstack_metadata`'s host-pointer fast path.
       executor->publish_adstack_metadata(task.ad_stack, n, &ctx, device_context_ptr);
       if (task.ad_stack.bound_expr.has_value()) {
+        // Device-side reducer for tasks with a captured ndarray-backed `bound_expr`: a single-thread CUDA kernel
+        // walks the gating ndarray, counts gate-passing threads, writes the count into
+        // `runtime->adstack_bound_row_capacities[task_index]`. The codegen-emitted clamp at the float LCA-block
+        // claim site reads it back. Tasks without a captured gate keep the UINT32_MAX default and the clamp stays
+        // inert.
+        //
         // Reducer length is the gating ndarray's full flat element count, not `n`: the lazy row-claim atomic-rmw
         // fires once per LCA execution, and `gpu_parallel_struct_for` / `gpu_parallel_range_for` grid-stride (`i +=
         // grid_dim()`) so a single dispatched thread can hit the LCA many times across one launch when the logical
@@ -98,6 +113,9 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         if (task.ad_stack.bound_expr->field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::NdArray &&
             !task.ad_stack.bound_expr->ndarray_arg_id.empty() && task.ad_stack.bound_expr->ndarray_ndim > 0 &&
             ctx.args_type != nullptr) {
+          // Length = product of shape entries via `args_type`. See `runtime/cpu/kernel_launcher.cpp` for the
+          // unit-stability rationale; `array_runtime_sizes` carries different units depending on the dispatch entry
+          // point and would undercount by `sizeof(elem)`x for `qd.ndarray` arguments.
           int64_t flat_len = 1;
           for (int axis = 0; axis < task.ad_stack.bound_expr->ndarray_ndim; ++axis) {
             std::vector<int> indices = task.ad_stack.bound_expr->ndarray_arg_id;
@@ -119,6 +137,12 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         // dispatched-threads worst case on sparse-grid workloads.
         executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n, &ctx);
       }
+      // For adstack-bearing tasks, dispatch at most `kAdStackMaxConcurrentThreads` (matching the heap row count
+      // resolved above). The runtime's grid-strided loop (`gpu_parallel_struct_for` / `gpu_parallel_range_for`,
+      // `quadrants/runtime/llvm/runtime_module/runtime.cpp`) walks the full element list / range with
+      // `i += grid_dim()`, so a smaller grid completes the same workload sequentially per slot. Tasks without an
+      // adstack keep the codegen-emitted `task.grid_dim` (saturating_grid_dim) for max throughput.
+      //
       // Floor division (not ceiling): the heap-row count `n` resolved by `resolve_num_threads` floors at
       // `kAdStackMaxConcurrentThreads`, so dispatching `cap_blocks * block_dim` threads must not exceed that count.
       // Ceiling division would over-dispatch by `block_dim - 1` threads when `block_dim` does not divide
