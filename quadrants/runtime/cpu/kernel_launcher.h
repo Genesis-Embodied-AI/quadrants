@@ -22,6 +22,8 @@ class KernelLauncher : public LLVM::KernelLauncher {
     std::vector<AdStackSizingInfo> ad_stacks;
     std::vector<std::size_t> num_threads_per_task;
     const std::vector<std::pair<int, Callable::Parameter>> *parameters;
+    // arg_ids of the array-typed entries in `parameters`, precomputed at register time.
+    std::vector<int> array_arg_ids;
   };
 
  public:
