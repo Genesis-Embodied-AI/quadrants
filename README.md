@@ -27,57 +27,48 @@ While the repository still resembles upstream in structure, major changes includ
 
 ### Modernized infrastructure
 
-* Revamped CI
+* Revamped CI with kernel-level [code coverage](https://genesis-embodied-ai.github.io/quadrants/user_guide/kernel_coverage.html) (device-side branch coverage in standard `coverage.py` format)
 * Support for Python 3.10–3.13
 * Support for macOS up to 15
 * Significantly improved reliability (≥90% CI success on correct code)
 
 ### Structural improvements
 
-* Added `dataclasses.dataclass` structs:
-
-  * Work with both ndarrays and fields
-  * Can be passed into child `ti.func` functions
-  * Can be nested
-  * No kernel runtime overhead (kernels see only underlying arrays)
+* `dataclasses.dataclass` structs — work with ndarrays and fields, nestable, passable to `qd.func`, zero kernel-runtime overhead
+* [`qd.Tensor`](https://genesis-embodied-ai.github.io/quadrants/user_guide/tensor.html) — unified API over fields and ndarrays with per-tensor layout control, pickle support, and a `backend=` switch
+* [`BufferView`](https://genesis-embodied-ai.github.io/quadrants/user_guide/buffer_view.html) — safe sub-range ndarray access with bounds checking in debug mode
 
 ### Removed components
 
-To focus the compiler and reduce maintenance burden, we removed:
+To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API, AOT, DX11/DX12, iOS/Android, OpenGL/GLES, argpack, CLI.
 
-* GUI / GGUI
-* C-API
-* AOT
-* DX11 / DX12
-* iOS / Android
-* OpenGL / GLES
-* argpack
-* CLI
+### Performance
 
-### Performance improvements
+* **Reduced launch latency** — ndarray CPU performance improved **4.5×**; ndarray GPU performance went from 11× slower than fields to 1.8× slower (5090 GPU, Genesis benchmark)
+* **[Fastcache](https://genesis-embodied-ai.github.io/quadrants/user_guide/fastcache.html)** — opt-in source-level cache (`@qd.kernel(fastcache=True)`) that bypasses front-end AST parsing; reduces warm-cache kernel load from **7.2 s → 0.3 s** on Genesis benchmarks
+* **[CUDA Graphs](https://genesis-embodied-ai.github.io/quadrants/user_guide/graph.html)** — `@qd.kernel(graph=True)` captures kernel sequences into a graph; `qd.graph_do_while` runs GPU-side iteration loops (hardware conditional nodes on SM 9.0+)
+* **[perf_dispatch](https://genesis-embodied-ai.github.io/quadrants/user_guide/perf_dispatch.html)** — auto-benchmarks multiple kernel implementations and selects the fastest at runtime
+* **[Zero-copy interop](https://genesis-embodied-ai.github.io/quadrants/user_guide/interop.html)** — `to_torch(copy=False)` / `to_numpy(copy=False)` via DLPack on CUDA, CPU, AMDGPU, and Metal; direct torch tensor pass-through into kernels
 
-#### Reduced launch latency
+### SIMT primitives
 
-* Release 4.0.0 improved non-batched ndarray CPU performance by **4.5×** in Genesis benchmarks.
-* Release 3.2.0 improved ndarray performance from **11× slower than fields** to **1.8× slower** (on a 5090 GPU, Genesis benchmark).
+* **[Tile16x16](https://genesis-embodied-ai.github.io/quadrants/user_guide/tile16.html)** — register-resident 16×16 matrix tiles with Cholesky, triangular solve, and rank-1 updates; 5× faster than shared-memory baselines on blocked linear algebra
+* **[Subgroup ops](https://genesis-embodied-ai.github.io/quadrants/user_guide/subgroup.html)** — cross-platform `shuffle`, `shuffle_down`, `reduce_add`, `reduce_all_add` across CUDA, AMDGPU, and Vulkan
 
-#### Reduced warm-cache latency
+### Autodiff
 
-On Genesis simulator (Linux + NVIDIA 5090):
-
-* `single_franka_envs.py` cache load time reduced from **7.2s → 0.3s**
-
-#### Zero-copy Torch interop
-
-* Added `to_dlpack`
-* Enables zero-copy memory sharing between PyTorch and Quadrants
-* Avoids kernel-based accessors
-* Significantly improves performance
+* **[Reverse-mode AD with dynamic loops](https://genesis-embodied-ai.github.io/quadrants/user_guide/autodiff.html)** — heap-backed adstack on all backends (LLVM + SPIR-V) with automatic launch-time sizing; no manual stack-size tuning required
+* Forward-mode AD, custom gradients (`@qd.ad.grad_replaced`), `qd.ad.Tape`
 
 ### Compiler upgrades
 
 * Upgraded to LLVM 22
 * Enabled ARM support
+
+### Debugging & development
+
+* **[Python backend](https://genesis-embodied-ai.github.io/quadrants/user_guide/python_backend.html)** — `qd.init(qd.python)` runs kernels as plain Python for debugging without a GPU
+* **[Debug mode](https://genesis-embodied-ai.github.io/quadrants/user_guide/debug.html)** — field bounds checking, adstack overflow detection, in-kernel assertions, IR dumping (`QD_DUMP_IR`)
 
 ---
 
