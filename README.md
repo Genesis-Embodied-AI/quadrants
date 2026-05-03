@@ -73,7 +73,7 @@ To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API
 
 ### Debugging & development
 
-* **[Python backend](https://genesis-embodied-ai.github.io/quadrants/user_guide/python_backend.html)** — `qd.init(qd.python)` runs kernels as plain Python for debugging without a GPU
+* **[Python backend](https://genesis-embodied-ai.github.io/quadrants/user_guide/python_backend.html)** — `qd.init(qd.python)` interprets kernels as plain Python so they can be stepped through in a standard Python debugger
 
 ---
 
