@@ -68,34 +68,51 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
   auto prepare_task = [&](std::size_t task_index, const OffloadedTask &task) -> int {
     int effective_grid_dim = task.grid_dim;
     if (!task.ad_stack.allocas.empty()) {
-      const std::size_t n = resolve_num_threads(task, executor);
-      executor->publish_adstack_metadata(task.ad_stack, n, &ctx, context_pointer);
+      // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without this the sizer
+      // launches with a host pointer and the next DtoH sync trips `hipErrorIllegalAddress ... memcpy_device_to_host`
+      // because HIP has no UVA fallback for the host `RuntimeContext` struct.
+      const std::size_t n_threads_amdgpu = resolve_num_threads(task, executor);
+      executor->publish_adstack_metadata(task.ad_stack, n_threads_amdgpu, &ctx, context_pointer);
       if (task.ad_stack.bound_expr.has_value()) {
-        std::size_t bound_count_length = n;
+        // Device-side reducer for tasks with a captured ndarray-backed `bound_expr`. Mirrors the CUDA launcher
+        // block; on AMDGPU the runtime function dispatches as a single-thread HIP kernel via runtime_jit->call.
+        // Reducer length is the gating ndarray's full flat element count (not `n_threads_amdgpu`); see the matching
+        // `bound_count_length` comment in `runtime/cuda/kernel_launcher.cpp` for the rationale.
+        std::size_t bound_count_length = n_threads_amdgpu;
         if (task.ad_stack.bound_expr->field_source_kind == StaticAdStackBoundExpr::FieldSourceKind::NdArray &&
             !task.ad_stack.bound_expr->ndarray_arg_id.empty() && task.ad_stack.bound_expr->ndarray_ndim > 0 &&
             ctx.args_type != nullptr) {
+          // Length = product of shape entries via `args_type`. See `runtime/cpu/kernel_launcher.cpp` for the
+          // unit-stability rationale.
           int64_t flat_len = 1;
           for (int axis = 0; axis < task.ad_stack.bound_expr->ndarray_ndim; ++axis) {
             std::vector<int> indices = task.ad_stack.bound_expr->ndarray_arg_id;
             indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
             indices.push_back(axis);
+            // get_struct_arg_host (NOT get_struct_arg): `launch_llvm_kernel` above has swapped `ctx_->arg_buffer`
+            // to a device pointer, so a plain `get_struct_arg` would dereference device memory from the host. See
+            // the matching CUDA launcher comment for the full rationale.
             flat_len *= int64_t(ctx.get_struct_arg_host<int32_t>(indices));
           }
           bound_count_length = static_cast<std::size_t>(std::max<int64_t>(0, flat_len));
         }
         executor->publish_per_task_bound_count_device(task_index, task.ad_stack, bound_count_length, &ctx,
                                                       context_pointer);
-        executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n);
+        // Size the float heap from the published gate-passing count (DtoH'd per task). Mirrors the CUDA / CPU
+        // launcher post-reducer sizing.
+        executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n_threads_amdgpu, &ctx);
       }
-      if (task.block_dim > 0) {
-        const std::size_t cap_blocks =
-            std::max<std::size_t>(1u, kAdStackMaxConcurrentThreads / static_cast<std::size_t>(task.block_dim));
-        effective_grid_dim =
-            static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(task.grid_dim), cap_blocks));
-        if (effective_grid_dim < 1) {
-          effective_grid_dim = 1;
-        }
+    }
+    // Match the heap-row count resolved above: adstack-bearing tasks dispatch at most `kAdStackMaxConcurrentThreads`.
+    // The runtime grid-strided loop walks the full element list / range with `i += grid_dim()` so a smaller grid
+    // completes the same workload sequentially per slot.
+    if (!task.ad_stack.allocas.empty() && task.block_dim > 0) {
+      // Floor division - see the matching comment in `runtime/cuda/kernel_launcher.cpp`.
+      const std::size_t cap_blocks =
+          std::max<std::size_t>(1u, kAdStackMaxConcurrentThreads / static_cast<std::size_t>(task.block_dim));
+      effective_grid_dim = static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(task.grid_dim), cap_blocks));
+      if (effective_grid_dim < 1) {
+        effective_grid_dim = 1;
       }
     }
     return effective_grid_dim;

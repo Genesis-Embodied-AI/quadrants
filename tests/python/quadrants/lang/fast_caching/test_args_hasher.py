@@ -6,6 +6,7 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE, args_hasher
+from quadrants.lang._fast_caching.args_hasher import FastcacheSkip
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import has_pytorch
 
@@ -174,7 +175,7 @@ def test_args_hasher_field() -> None:
             _qd_init_same_arch()
             arg = qd.field(dtype, shape)
             hash = args_hasher.hash_args(False, [arg], [None])
-            assert hash is None
+            assert isinstance(hash, FastcacheSkip)
 
 
 @test_utils.test()
@@ -186,7 +187,7 @@ def test_args_hasher_field_vector() -> None:
                 _qd_init_same_arch()
                 arg = qd.Vector.field(n, dtype, shape)
                 hash = args_hasher.hash_args(False, [arg], [None])
-                assert hash is None
+                assert isinstance(hash, FastcacheSkip)
 
 
 @test_utils.test()
@@ -199,7 +200,7 @@ def test_args_hasher_field_matrix() -> None:
                     _qd_init_same_arch()
                     arg = qd.Matrix.field(m, n, dtype, shape)
                     hash = args_hasher.hash_args(False, [arg], [None])
-                    assert hash is None
+                    assert isinstance(hash, FastcacheSkip)
 
 
 @test_utils.test()
@@ -209,7 +210,7 @@ def test_args_hasher_field_vs_ndarray() -> None:
     ndarray_hash = args_hasher.hash_args(False, [a_ndarray], [None])
     field_hash = args_hasher.hash_args(False, [a_field], [None])
     assert ndarray_hash is not None
-    assert field_hash is None
+    assert isinstance(field_hash, FastcacheSkip)
     assert ndarray_hash != field_hash
 
 
@@ -310,7 +311,7 @@ def test_args_hasher_dataclass_with_field_child_returns_none() -> None:
     f = qd.field(qd.i32, shape=(4,))
     state = State(a=f)
     h = args_hasher.hash_args(False, [state], [None])
-    assert h is None, f"Dataclass with ScalarField child must disable fastcache, got {h!r}"
+    assert isinstance(h, FastcacheSkip), f"Dataclass with ScalarField child must disable fastcache, got {h!r}"
 
 
 @test_utils.test()
@@ -325,7 +326,7 @@ def test_args_hasher_dataclass_with_tensor_field_child_returns_none() -> None:
     t = qd.Tensor(f)
     state = State(a=t)
     h = args_hasher.hash_args(False, [state], [None])
-    assert h is None, f"Dataclass with Tensor-wrapped ScalarField must disable fastcache, got {h!r}"
+    assert isinstance(h, FastcacheSkip), f"Dataclass with Tensor-wrapped ScalarField must disable fastcache, got {h!r}"
 
 
 @test_utils.test()
@@ -363,7 +364,7 @@ def test_args_hasher_dataclass_field_none_not_collide_with_ndarray() -> None:
     h_f = args_hasher.hash_args(False, [State(a=f)], [None])
 
     assert h_nd is not None
-    assert h_f is None
+    assert isinstance(h_f, FastcacheSkip)
     assert h_nd != h_f
 
 

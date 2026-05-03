@@ -685,6 +685,20 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         auto bound_count_it = per_task_bound_count.find(i);
         if (bound_count_it != per_task_bound_count.end()) {
           effective_rows = bound_count_it->second;
+          // Clip by the captured loop trip count. Each loop iteration claims at most one row at the LCA-block
+          // (one `atomic_add` per gating iteration), so the heap needs at most `trip_count` rows regardless of
+          // how many cells of the gating SNode the reducer counted; without this, an oversized SNode (1024-cell
+          // `selector` paired with a 64-iter loop) inflates the float heap to the SNode's cell count even
+          // though the loop can only claim 64 rows. Both trip-count sources are gated by the
+          // `dispatched_threads` ceiling so a `dynamic_gpu_range_for` that exceeds the SPIR-V dispatch cap and
+          // serialises iterations across threads (each thread reaches the LCA-block multiple times) does not
+          // accidentally undersize the heap. See `clip_effective_rows_by_loop_trip_count` in
+          // `program/adstack_size_expr_eval.cpp` for the shared implementation (LLVM mirrors the same call).
+          if (attribs.ad_stack.bound_expr.has_value()) {
+            clip_effective_rows_by_loop_trip_count(effective_rows, *attribs.ad_stack.bound_expr, dispatched_threads,
+                                                   program_impl_ != nullptr ? program_impl_->program : nullptr,
+                                                   &host_ctx);
+          }
         } else if (attribs.ad_stack.bound_expr.has_value()) {
           // Reaching here means the bound reducer skipped this `bound_expr`-captured task and `per_task_bound_count`
           // has no entry for slot `i`. The reducer's skip paths in `dispatch_adstack_bound_reducers` are: PSB
