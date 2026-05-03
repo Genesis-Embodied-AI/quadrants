@@ -1429,21 +1429,24 @@ class MatrixField(Field):
                 keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a 4x1
                 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
             dtype (DataType, optional): The desired data type of returned numpy array.
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Returns:
             numpy.ndarray: The result NumPy array.
         """
-        if copy is False:
-            arr = _try_zerocopy_numpy(self, copy=False)
+        if copy is not True:
+            arr = _try_zerocopy_numpy(self, copy=copy)
             if arr is not None:
                 as_vector = self.m == 1 and not keep_dims
                 expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
                 if arr.shape != expected:
                     arr = arr.reshape(expected)
                 if dtype is not None and arr.dtype != dtype:
-                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
-                return arr
+                    if copy is False:
+                        raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                else:
+                    return arr
 
         if dtype is None:
             dtype = to_numpy_type(self.dtype)
@@ -1463,18 +1466,20 @@ class MatrixField(Field):
             device (torch.device, optional): The desired device of returned tensor.
             keep_dims (bool, optional): Whether to keep the dimension after conversion.
                 See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Returns:
             torch.tensor: The result torch tensor.
         """
-        if copy is False:
+        if copy is not True:
             tc = _try_zerocopy_torch(self, copy=copy, device=device)
-            as_vector = self.m == 1 and not keep_dims
-            expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
-            if tc.shape != expected:
-                tc = tc.reshape(expected)
-            return tc
+            if tc is not None:
+                as_vector = self.m == 1 and not keep_dims
+                expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
+                if tc.shape != expected:
+                    tc = tc.reshape(expected)
+                return tc
 
         import torch  # pylint: disable=C0415
 
@@ -1859,7 +1864,8 @@ class MatrixNdarray(Ndarray):
         """Converts this ndarray to a ``numpy.ndarray``.
 
         Args:
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Example::
 
@@ -1871,12 +1877,14 @@ class MatrixNdarray(Ndarray):
              [[[0. 0.]
                [0. 0.]]]]
         """
-        if copy is False:
-            arr = _try_zerocopy_numpy(self, copy=False, is_ndarray=True)
+        if copy is not True:
+            arr = _try_zerocopy_numpy(self, copy=copy, is_ndarray=True)
             if arr is not None:
                 if dtype is not None and arr.dtype != dtype:
-                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
-                return arr
+                    if copy is False:
+                        raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                else:
+                    return arr
         arr = self._ndarray_matrix_to_numpy(as_vector=0)
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
@@ -1901,10 +1909,13 @@ class MatrixNdarray(Ndarray):
         Mirrors :meth:`MatrixField.to_torch`.
 
         Args:
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
-        if copy is False:
-            return _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
+        if copy is not True:
+            result = _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
+            if result is not None:
+                return result
         return self._ndarray_matrix_to_torch(as_vector=0, device=device)
 
     @python_scope
@@ -2004,7 +2015,8 @@ class VectorNdarray(Ndarray):
         """Converts this vector ndarray to a ``numpy.ndarray``.
 
         Args:
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Example::
 
@@ -2016,12 +2028,14 @@ class VectorNdarray(Ndarray):
                    [[0., 0., 0.],
                     [0., 0., 0.]]], dtype=float32)
         """
-        if copy is False:
-            arr = _try_zerocopy_numpy(self, copy=False, is_ndarray=True)
+        if copy is not True:
+            arr = _try_zerocopy_numpy(self, copy=copy, is_ndarray=True)
             if arr is not None:
                 if dtype is not None and arr.dtype != dtype:
-                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
-                return arr
+                    if copy is False:
+                        raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                else:
+                    return arr
         arr = self._ndarray_matrix_to_numpy(as_vector=1)
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
@@ -2049,10 +2063,13 @@ class VectorNdarray(Ndarray):
         Mirrors :meth:`MatrixField.to_torch` on the vector code path.
 
         Args:
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
-        if copy is False:
-            return _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
+        if copy is not True:
+            result = _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
+            if result is not None:
+                return result
         return self._ndarray_matrix_to_torch(as_vector=1, device=device)
 
     @python_scope

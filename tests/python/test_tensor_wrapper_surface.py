@@ -369,3 +369,49 @@ def test_to_torch_copy_false(backend):
     np.testing.assert_array_equal(out.numpy(), src)
     out[0] = 999.0
     assert t.to_numpy(copy=True)[0] == 999.0
+
+
+# ----------------------------------------------------------------------
+# copy=None (best-effort zero-copy)
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_to_numpy_copy_none_zerocopy_when_available(backend):
+    """copy=None returns a zero-copy view on CPU with a supported dtype."""
+    t = qd.tensor(qd.f32, shape=(4,), backend=backend)
+    src = np.arange(4, dtype=np.float32)
+    t.from_numpy(src)
+    arr = t.to_numpy(copy=None)
+    np.testing.assert_array_equal(arr, src)
+    arr[0] = 999.0
+    assert t.to_numpy(copy=True)[0] == 999.0
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_to_numpy_copy_none_with_dtype_falls_back(backend):
+    """copy=None with dtype conversion silently falls back to a copy."""
+    t = qd.tensor(qd.f32, shape=(4,), backend=backend)
+    src = np.arange(4, dtype=np.float32)
+    t.from_numpy(src)
+    arr = t.to_numpy(dtype=np.float64, copy=None)
+    assert arr.dtype == np.float64
+    np.testing.assert_array_equal(arr, src.astype(np.float64))
+    arr[0] = 999.0
+    np.testing.assert_array_equal(t.to_numpy(), src)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_to_torch_copy_none_zerocopy_when_available(backend):
+    """copy=None returns a zero-copy torch tensor on CPU with a supported dtype."""
+    torch = pytest.importorskip("torch")
+    t = qd.tensor(qd.f32, shape=(4,), backend=backend)
+    src = np.arange(4, dtype=np.float32)
+    t.from_numpy(src)
+    out = t.to_torch(copy=None)
+    np.testing.assert_array_equal(out.numpy(), src)
+    out[0] = 999.0
+    assert t.to_numpy(copy=True)[0] == 999.0

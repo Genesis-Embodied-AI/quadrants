@@ -159,18 +159,22 @@ The exact same surface is available on both backends — switching `qd.tensor(..
 a = qd.tensor(qd.f32, shape=(1024,))
 a.fill(1.0)
 
-view  = a.to_torch(copy=False)   # zero-copy: aliases a's memory
+view  = a.to_torch(copy=False)   # zero-copy: aliases a's memory, or ValueError
+auto  = a.to_torch(copy=None)    # zero-copy if possible, otherwise copy
 clone = a.to_torch(copy=True)    # independent copy (default)
 ```
 
 | Value | Behaviour |
 |---|---|
 | `True` (default) | Independent copy via kernel. Safe to mutate freely. |
+| `None` | Zero-copy when available, otherwise falls back to a copy silently. |
 | `False` | Zero-copy DLPack view, or `ValueError` if unsupported for this backend/dtype. |
 
-`copy=False` avoids both the buffer allocation and the copy kernel entirely — the returned numpy array or torch tensor points directly at Quadrants' existing memory. For a large tensor this eliminates a potentially expensive memcpy and a device-side kernel launch. Writes through the view are immediately visible to subsequent Quadrants kernels (and vice versa), removing the need for `to_torch` → modify → `from_torch` round-trips.
+`copy=False` and `copy=None` avoid both the buffer allocation and the copy kernel when zero-copy is available — the returned numpy array or torch tensor points directly at Quadrants' existing memory. For a large tensor this eliminates a potentially expensive memcpy and a device-side kernel launch. Writes through the view are immediately visible to subsequent Quadrants kernels (and vice versa), removing the need for `to_torch` → modify → `from_torch` round-trips.
 
-The tradeoff is lifetime coupling: the view is invalidated on `qd.reset()` or `qd.init()`, and on GPU you must be mindful of stream synchronisation when both frameworks write to the same buffer.
+The difference between `False` and `None`: `copy=False` raises `ValueError` when zero-copy is not supported (e.g. unsupported dtype or GPU-to-numpy), while `copy=None` silently falls back to a kernel copy in those cases. Use `copy=None` when you want zero-copy as a best-effort optimisation without having to handle exceptions.
+
+The tradeoff of zero-copy is lifetime coupling: the view is invalidated on `qd.reset()` or `qd.init()`, and on GPU you must be mindful of stream synchronisation when both frameworks write to the same buffer.
 
 This works identically on both backends. For the full support matrix (which backends/dtypes qualify, lifetime caveats, Metal synchronisation) see [`interop`](interop.md#zero-copy-interop-via-dlpack).
 
