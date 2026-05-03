@@ -41,6 +41,17 @@ class IndependentBlockMetaData {
   bool is_smallest_ib = true;
 };
 
+// Forward-RangeForStmt -> reverse-RangeForStmt mapping populated by `MakeAdjoint::visit(RangeForStmt)`.
+// `RecomputableChainCloner::clone_at` reads it when cloning a LoopIndexStmt: the cloned consumer lives
+// inside the reverse for body, so the cloned LoopIndex's `loop` field must point at the reverse for, not
+// the original forward for. Without the remap, the cloned read evaluates an undefined loop index in the
+// reverse scope and silently double-accumulates gradients (`test_adstack_sum_linear`).
+//
+// Cleared at the entry of `auto_diff` for each kernel to avoid stale entries leaking across compilations.
+// File-static rather than threaded through APIs because MakeAdjoint and BackupSSA are separate visitor
+// classes invoked sequentially by the kernel-level driver in `auto_diff()`.
+static std::unordered_map<Stmt *, Stmt *> g_fwd_to_rev_for;
+
 class NonLinearOps {
  public:
   inline static const std::set<TernaryOpType> ternary_collections{TernaryOpType::select};
@@ -120,6 +131,13 @@ class RecomputableChainAnalyzer {
     if (stmt->is<AdStackLoadTopStmt>() || stmt->is<AdStackAllocaStmt>() || stmt->is<ArgLoadStmt>() ||
         stmt->is<ConstStmt>()) {
       return true;
+    }
+    // LoopIndexStmt: cloning naively references the forward RangeForStmt; the cloned consumer in the
+    // reverse scope evaluates against an undefined loop index (the reverse for has its own LoopIndex).
+    // Recomputable iff `g_fwd_to_rev_for` has a mapping entry for the referenced for - the cloner uses
+    // the reverse for in that case. If no entry, conservative: not recomputable.
+    if (auto *li = stmt->cast<LoopIndexStmt>()) {
+      return g_fwd_to_rev_for.find(li->loop) != g_fwd_to_rev_for.end();
     }
     // LocalLoadStmt of a regular AllocaStmt is recomputable iff the alloca's value is stable across the
     // forward-to-reverse boundary. Stability holds when the alloca has all its writes at the IB top level
@@ -224,6 +242,13 @@ class RecomputableChainCloner {
       cloned = insert_point->insert_before_me(std::move(cloned_unique));
       // For AdStackLoadTopStmt and LocalLoadStmt clones, the cloned stmt's source operand still points at
       // the original AdStackAllocaStmt or AllocaStmt at IB top - that's the desired sharing.
+    } else if (auto *li = src->cast<LoopIndexStmt>()) {
+      // Remap the cloned LoopIndexStmt's `loop` field to the reverse for (recorded in g_fwd_to_rev_for
+      // by MakeAdjoint::visit(RangeForStmt)). Recomputability was gated on the mapping existing, so the
+      // lookup must succeed.
+      auto it = g_fwd_to_rev_for.find(li->loop);
+      QD_ASSERT(it != g_fwd_to_rev_for.end());
+      cloned = insert_point->insert_before_me(Stmt::make<LoopIndexStmt>(it->second, li->index));
     } else {
       // Compound op: clone first, then walk operands and rewire each to a recursive clone.
       auto cloned_unique = src->clone();
@@ -2589,6 +2614,7 @@ class MakeAdjoint : public ADTransform {
     auto new_for = for_stmt->clone();
     auto new_for_ptr = new_for->as<RangeForStmt>();
     new_for_ptr->reversed = !new_for_ptr->reversed;
+    g_fwd_to_rev_for[for_stmt] = new_for_ptr;
     insert_grad_stmt(std::move(new_for));
     const int len = new_for_ptr->body->size();
 
@@ -3789,6 +3815,7 @@ class OffloadLevelGlobalCrossIterRAWChecker : public BasicStmtVisitor {
 
 void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_mode, bool use_stack) {
   QD_AUTO_PROF;
+  g_fwd_to_rev_for.clear();
   if (autodiff_mode == AutodiffMode::kReverse) {
     if (auto *root_block = root->cast<Block>()) {
       // Top-level range-fors at the kernel root become the offload-level loop. Walk each direct child once
