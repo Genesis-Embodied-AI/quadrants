@@ -140,7 +140,8 @@ void walk_ir(IRNode *node, Fn &&visit) {
 
 StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir,
                                                           const SNodeDescriptorResolver &snode_descriptor_resolver,
-                                                          std::size_t sparse_heap_threshold_bytes) {
+                                                          std::size_t sparse_heap_threshold_bytes,
+                                                          bool task_range_is_original_loop) {
   StaticAdStackAnalysisResult result;
   if (task_ir == nullptr || task_ir->body == nullptr) {
     return result;
@@ -228,6 +229,39 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
     }
   });
 
+  // Compile-time loop trip count of the analyzed task, used by the runtime to clip the reducer's gate-passing-cell
+  // count down to the actual maximum row claim count: each iteration claims at most one row at the LCA-block, so
+  // `loop_iter` is a sound upper bound on heap rows regardless of how oversized the gating SNode / ndarray is.
+  // Zero when:
+  //   * the task's loop is runtime-bounded (`task_ir->end_stmt != nullptr` or non-const begin / end - the analyzer
+  //     cannot resolve the trip count from IR alone), or
+  //   * `task_range_is_original_loop` is false (the caller signals that the task's `[begin_value, end_value)` is a
+  //     post-chunking subrange, e.g. CPU LLVM after `make_cpu_multithreaded_range_for` rewrote a 256-iteration
+  //     range-for into 16 parallel chunks of 16; the chunked subrange would massively undersize the heap clip
+  //     because the atomic row counter is shared across all chunks of the same task).
+  // In both cases the runtime falls back to the unclipped reducer count.
+  const bool task_static_bound = task_ir->const_begin && task_ir->const_end && task_ir->end_stmt == nullptr;
+  const int64_t task_loop_iter =
+      task_static_bound ? (static_cast<int64_t>(task_ir->end_value) - static_cast<int64_t>(task_ir->begin_value)) : 0;
+  const uint32_t loop_iter_static_for_bound_expr =
+      (task_range_is_original_loop && task_loop_iter > 0 &&
+       static_cast<uint64_t>(task_loop_iter) <= std::numeric_limits<uint32_t>::max())
+          ? static_cast<uint32_t>(task_loop_iter)
+          : 0;
+  // Snapshot the task's pre-chunking loop trip-count `SizeExpr` (populated by `determine_ad_stack_size` in
+  // `compile_to_offloads`, before `make_cpu_multithreaded_range_for` rewrites the loop on CPU). Empty when
+  // the task is not a range-for, the SizeExpr grammar could not bound the trip count, or the trip count is
+  // already a `Const` (in which case `loop_iter_static` carries the same value at zero per-launch cost).
+  // Runtime-bounded shapes like `for j in range(field[i])` are the actual reason this exists; encoding
+  // them here moves the trip-count resolution off the compile-time path and onto the same per-launch
+  // `evaluate_adstack_size_expr` walk the per-thread stack-sizer already runs. The runtime evaluates this
+  // ONLY when `loop_iter_static == 0`, so compile-time-known loops never pay the per-launch eval cost.
+  SerializedSizeExpr loop_iter_size_expr_for_bound_expr;
+  if (task_ir->pre_chunk_loop_trip_count_expr &&
+      task_ir->pre_chunk_loop_trip_count_expr->kind != SizeExpr::Kind::Const) {
+    loop_iter_size_expr_for_bound_expr = task_ir->pre_chunk_loop_trip_count_expr->serialize();
+  }
+
   // Resolve a `GlobalLoadStmt::src` chain to a captured field source. Returns true on a recognized shape (ndarray
   // ext-ptr or SNode root->dense->place(scalar)); on success populates the source-kind-specific fields of `out`.
   auto match_field_source = [&](Stmt *load_src, StaticAdStackBoundExpr &out) -> bool {
@@ -245,6 +279,8 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
           }
         }
         out.field_source_kind = StaticAdStackBoundExpr::FieldSourceKind::NdArray;
+        out.loop_iter_static = loop_iter_static_for_bound_expr;
+        out.loop_iter_size_expr = loop_iter_size_expr_for_bound_expr;
         out.ndarray_arg_id = base_arg->arg_id;
         // Capture the gating ndarray's ndim so the host launcher can walk shape[0..ndim) at dispatch time and product
         // them into the reducer's flat-element walk bound. Without this the launcher would have to fall back to
@@ -498,6 +534,8 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       out.snode_byte_base_offset = desc_opt->byte_base_offset;
       out.snode_byte_cell_stride = desc_opt->byte_cell_stride;
       out.snode_iter_count = desc_opt->iter_count;
+      out.loop_iter_static = loop_iter_static_for_bound_expr;
+      out.loop_iter_size_expr = loop_iter_size_expr_for_bound_expr;
       return true;
     }
     return false;

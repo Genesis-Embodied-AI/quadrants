@@ -103,7 +103,7 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                                       context_pointer);
         // Size the float heap from the published gate-passing count (DtoH'd per task). Mirrors the CUDA / CPU
         // launcher post-reducer sizing.
-        executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n_threads_amdgpu);
+        executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n_threads_amdgpu, &ctx);
       }
     }
     ++task_index;

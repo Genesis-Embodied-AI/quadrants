@@ -1287,6 +1287,27 @@ AdStackBoundResult compute_bounded_adstack_size(AdStackAllocaStmt *alloca, IRNod
   return result;
 }
 
+// True if the tree references any inner-domain enumeration node (`MaxOverRange` or its `BoundVariable`
+// references). Used by the per-task trip-count capture to refuse trees the host evaluator would have to
+// walk index-by-index at launch: the trip count of an `OffloadedStmt`'s `[begin, end)` is a scalar bound
+// by construction, so a `MaxOverRange` here means `build_value_expr` walked into a nested loop (e.g. an
+// `end_stmt` referencing a `LoopIndexStmt` of an outer offload, whose range is the dispatched-thread
+// count) and the resulting tree would trip the 1<<24 enumeration guard in `evaluate_adstack_size_expr`.
+bool size_expr_contains_inner_domain_enumeration(const SizeExpr *e) {
+  if (e == nullptr) {
+    return false;
+  }
+  if (e->kind == SizeExpr::Kind::MaxOverRange || e->kind == SizeExpr::Kind::BoundVariable) {
+    return true;
+  }
+  for (const auto &child : e->operands) {
+    if (size_expr_contains_inner_domain_enumeration(child.get())) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
@@ -1392,6 +1413,56 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
         " reverse-mode loop so every enclosing range is bounded by an integer constant, a scalar field load,"
         " or a shape the pre-pass already recognises, or extend the `SizeExpr` grammar to cover this shape.",
         alloca->get_last_tb(), dump_hint);
+  }
+  // Build a per-task `SizeExpr` for each adstack-bearing parallel range-for offload's loop trip count, captured
+  // here BEFORE `make_cpu_multithreaded_range_for` rewrites the user loop into chunks. The same `SizeExpr`
+  // grammar `compute_bounded_adstack_size` uses for per-thread stack sizing applies: integer constants, scalar
+  // i32 / i64 field reads, ndarray shape axes, ndarray element reads at constant or loop indices, plus the
+  // arithmetic / max-over-range combinators. The runtime float-heap clip evaluates this expression at launch
+  // and uses it as an upper bound on row claims (each loop iteration claims at most one row at the LCA-block,
+  // so the heap needs at most `evaluate(loop_trip_count_expr)` rows regardless of how many cells of an
+  // oversized gating SNode the reducer counted). Skipped for non-range-for offloads (struct-for / mesh-for /
+  // serial / listgen / gc) because their iteration model does not fit the simple `[begin, end)` walk the
+  // expression captures; those tasks fall back to the unclipped reducer count.
+  auto offloaded_tasks = irpass::analysis::gather_statements(root, [&](Stmt *s) { return s->is<OffloadedStmt>(); });
+  for (Stmt *s : offloaded_tasks) {
+    auto *task = s->as<OffloadedStmt>();
+    if (task->task_type != OffloadedTaskType::range_for) {
+      continue;
+    }
+    bool has_adstack = false;
+    irpass::analysis::gather_statements(task, [&](Stmt *inner) {
+      if (inner->is<AdStackAllocaStmt>()) {
+        has_adstack = true;
+      }
+      return false;
+    });
+    if (!has_adstack) {
+      continue;
+    }
+    int32_t var_id_counter = 0;
+    auto end_e = resolve_loop_end(task, root, &var_id_counter);
+    if (!end_e) {
+      continue;
+    }
+    auto begin_e = resolve_loop_begin_lower_bound(task);
+    auto trip = expr_sub(std::move(end_e), std::move(begin_e));
+    if (!trip) {
+      continue;
+    }
+    if (trip->kind == SizeExpr::Kind::Const && trip->const_value < 0) {
+      trip = SizeExpr::make_const(0);
+    }
+    // Refuse trees that would force the host evaluator to enumerate an inner index domain at launch. The
+    // trip count of `[begin, end)` is a scalar bound by construction; a `MaxOverRange` / `BoundVariable`
+    // node here means `resolve_loop_end` walked through a `LoopIndexStmt` whose enclosing loop end ends up
+    // as the `MaxOverRange` end (typically the dispatched-thread count of an outer offload), and the
+    // resulting tree would trip `evaluate_node`'s 1<<24 guard at every launch. Skip the clip for these
+    // tasks; the runtime falls back to the unclipped reducer count, same as the runtime-bound path.
+    if (size_expr_contains_inner_domain_enumeration(trip.get())) {
+      continue;
+    }
+    task->pre_chunk_loop_trip_count_expr = std::shared_ptr<SizeExpr>(std::move(trip));
   }
   return true;
 }
