@@ -30,9 +30,10 @@ While the repository still resembles upstream in structure, major changes includ
 * Python 3.10–3.13
 * macOS up to 15, Windows, Ubuntu 22.04–24.04
 * LLVM 22, ARM (aarch64) support
-* Significantly improved reliability (≥90% CI success rate on correct code)
 
 ### CI
+
+* ≥90% CI success rate on correct code
 * Kernel-level [code coverage](https://genesis-embodied-ai.github.io/quadrants/user_guide/kernel_coverage.html) — device-side branch coverage in standard `coverage.py` format, integrated with pytest-cov
 * AI-driven checks for line wrapping, deleted comments, test coverage, and feature factorization
 
