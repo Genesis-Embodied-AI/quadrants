@@ -28,7 +28,7 @@ While the repository still resembles upstream in structure, major changes includ
 ### Platform support
 
 * Python 3.10–3.13
-* macOS up to 15, Windows, Ubuntu 22.04–24.04
+* macOS 15, Windows, Ubuntu 22.04–24.04
 * LLVM 22, ARM (aarch64) support
 
 ### CI
