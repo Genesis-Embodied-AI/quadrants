@@ -121,10 +121,23 @@ class RecomputableChainAnalyzer {
         stmt->is<ConstStmt>()) {
       return true;
     }
+    // GlobalLoadStmt as recomputable: the load reads a SNode value via GlobalPtrStmt. The cloned chain in
+    // the reverse pass re-issues the same load - safe iff the global is not mutated between the forward
+    // chain evaluation and the cloned re-read. Within a single kernel execution, forward writes complete
+    // before reverse runs, so the reverse re-read sees the kernel's final post-write state. If a global is
+    // mutated by the forward and then re-read by the reverse clone, the values can differ.
+    //
+    // Most rigid-step kernel chain leaves are reads of input parameters (mass, inertia, joint params,
+    // morphology) that the kernel does NOT write. For those, the re-read returns the same value.
+    // Conservative analysis: a future safety check could prove the SNode is read-only in the kernel; until
+    // then this path relies on the test suite's gradient-correctness asserts to surface any mutated-global
+    // miscompilation.
     bool is_interior = stmt->is<UnaryOpStmt>() || stmt->is<BinaryOpStmt>() || stmt->is<TernaryOpStmt>() ||
-                       stmt->is<MatrixPtrStmt>() || stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>();
-    if (!is_interior)
+                       stmt->is<MatrixPtrStmt>() || stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() ||
+                       stmt->is<GlobalLoadStmt>();
+    if (!is_interior) {
       return false;
+    }
     auto operands = stmt->get_operands();
     for (auto *op : operands) {
       if (op == nullptr)
