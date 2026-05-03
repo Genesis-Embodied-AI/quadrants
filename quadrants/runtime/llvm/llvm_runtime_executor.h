@@ -240,6 +240,11 @@ class LlvmRuntimeExecutor {
   // this cache, so avoid that.
   uint64 *result_buffer_cache_{nullptr};
 
+  // Memoised host-callable pointer to `runtime_retrieve_and_reset_adstack_overflow`. Populated only on backends
+  // whose JIT module supports direct dispatch (CPU LLVM); other backends leave it null and route through
+  // `JITModule::call`. Valid for the lifetime of the runtime JIT module.
+  void (*adstack_overflow_retriever_)(void *){nullptr};
+
   std::unique_ptr<ThreadPool> thread_pool_{nullptr};
   std::shared_ptr<Device> device_{nullptr};
 
