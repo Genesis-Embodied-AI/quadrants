@@ -151,6 +151,25 @@ a.from_torch(out)
 
 The exact same surface is available on both backends — switching `qd.tensor(..., backend=qd.Backend.FIELD/NDARRAY)` does not require any other code change at the call site.
 
+### Zero-copy with `copy=False`
+
+`to_numpy()` and `to_torch()` accept a keyword-only `copy` argument:
+
+```python
+a = qd.tensor(qd.f32, shape=(1024,))
+a.fill(1.0)
+
+view  = a.to_torch(copy=False)   # zero-copy: aliases a's memory
+clone = a.to_torch(copy=True)    # independent copy (default)
+```
+
+| Value | Behaviour |
+|---|---|
+| `True` (default) | Independent copy via kernel. Safe to mutate freely. |
+| `False` | Zero-copy DLPack view, or `ValueError` if unsupported for this backend/dtype. |
+
+This works identically on both backends. For the full support matrix (which backends/dtypes qualify, lifetime caveats, Metal synchronisation) see [`interop`](interop.md#zero-copy-interop-via-dlpack).
+
 Gradient buffers behave identically: `a.grad.to_numpy()` returns the canonical view of the gradient.
 
 ## Annotating kernel arguments: `qd.Tensor`
