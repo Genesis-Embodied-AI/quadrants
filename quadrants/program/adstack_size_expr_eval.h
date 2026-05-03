@@ -1,11 +1,13 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
 #include "quadrants/codegen/llvm/llvm_compiled_data.h"
 #include "quadrants/codegen/spirv/kernel_utils.h"
 #include "quadrants/ir/adstack_size_expr.h"
+#include "quadrants/transforms/static_adstack_analysis.h"
 
 namespace quadrants::lang {
 
@@ -61,5 +63,22 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
     const spirv::TaskAttributes::AdStackSizingAttribs &ad_stack,
     Program *prog,
     LaunchContextBuilder *ctx);
+
+// Apply the captured per-task loop trip-count clip to `effective_rows`. Each loop iteration of an adstack
+// task claims at most one row at the LCA-block, so the heap needs at most `trip_count` rows regardless of
+// how many cells of an oversized gating SNode/ndarray the reducer counted. Two trip-count sources, picked
+// in order: `bound_expr.loop_iter_static` (compile-time-known constant, integer compare) and
+// `bound_expr.loop_iter_size_expr` (per-launch tree walk via `evaluate_adstack_size_expr`). Both are
+// gated by `dispatched_threads_ceiling` so a `dynamic_gpu_range_for` that exceeds the dispatch cap and
+// serialises iterations across threads (each thread reaches the LCA-block multiple times) does not
+// accidentally undersize the heap; pass `std::numeric_limits<std::size_t>::max()` to disable the
+// ceiling. No-op when the static field is zero AND the SizeExpr is empty (the analyzer leaves both
+// unset for shapes the compile-time path cannot cover) - the caller's pre-clip `effective_rows` is left
+// unchanged so the runtime falls through to the unclipped reducer count.
+void clip_effective_rows_by_loop_trip_count(std::size_t &effective_rows,
+                                            const StaticAdStackBoundExpr &bound_expr,
+                                            std::size_t dispatched_threads_ceiling,
+                                            Program *prog,
+                                            LaunchContextBuilder *ctx);
 
 }  // namespace quadrants::lang
