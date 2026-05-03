@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Automatic differentiation &#8212; Quadrants 0.7.5 documentation</title>
+    <title>Automatic differentiation &#8212; Quadrants 0.7.6 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=a674670e"></script>
+    <script src="../_static/documentation_options.js?v=918ced64"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Numpy and Torch interop" href="interop.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.5" />
+  <meta name="docsearch:version" content="0.7.6" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.5 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
   
 </a></div>
     
@@ -709,7 +709,7 @@
 </tbody>
 </table>
 </div>
-<p>The float heap is by far the main reverse-mode memory bottleneck because a typical kernel allocates many float-typed adstacks - one per floating-point loop-carried scalar, each storing both primal and adjoint - and the total scales as <code class="docutils literal notranslate"><span class="pre">num_threads</span> <span class="pre">*</span> <span class="pre">stack_size</span> <span class="pre">*</span> <span class="pre">num_float_buffers</span> <span class="pre">*</span> <span class="pre">8</span></code> bytes, dominating the integer / boolean heap. Advanced static IR analysis is used to further shrink the float adstack in some common gated-kernel shapes: when a runtime gate sits directly above the adstack-using body and compares a single field entry to a constant, the compiler counts the gate-passing iterations at launch time and sizes the float adstack to that count, so a workload whose gate matches 5% of iterations pays 5% of the float-adstack cost. See <a class="reference internal" href="#appendix-b-gate-index-shapes-that-capture-vs-fall-back-to-the-worst-case-heap">Appendix B: gate-index shapes that capture vs fall back to the worst-case heap</a> for the authoritative list of supported shapes.</p>
+<p>The float heap is by far the main reverse-mode memory bottleneck because a typical kernel allocates many float-typed adstacks - one per floating-point loop-carried scalar, each storing both primal and adjoint. The total scales as <code class="docutils literal notranslate"><span class="pre">num_threads</span> <span class="pre">*</span> <span class="pre">stack_size</span> <span class="pre">*</span> <span class="pre">num_float_buffers</span> <span class="pre">*</span> <span class="pre">8</span></code> bytes, dominating the integer / boolean heap. Advanced static IR analysis is used to further shrink the float adstack in some common gated-kernel shapes. When a runtime gate sits directly above the adstack-using body and compares a single field entry to a constant, the compiler counts the gate-passing iterations at launch time and sizes the float adstack to that count. So a workload whose gate matches 5% of iterations pays 5% of the float-adstack cost. See <a class="reference internal" href="#appendix-b-gate-index-shapes-that-capture-vs-fall-back-to-the-worst-case-heap">Appendix B: gate-index shapes that capture vs fall back to the worst-case heap</a> for the authoritative list of supported shapes.</p>
 <p>Every adstack slot always stores a <em>primal</em> value - the forward-pass value the reverse pass pops to recover the chain-rule step. Floating-point adstacks additionally store an <em>adjoint</em> slot where the reverse pass accumulates chain-rule contributions. Integer / boolean adstacks do not need an adjoint slot.</p>
 <p>Platform-specific notes:</p>
 <ul class="simple">
