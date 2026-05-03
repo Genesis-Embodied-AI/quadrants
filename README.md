@@ -27,10 +27,16 @@ While the repository still resembles upstream in structure, major changes includ
 
 ### Modernized infrastructure
 
-* Revamped CI with kernel-level [code coverage](https://genesis-embodied-ai.github.io/quadrants/user_guide/kernel_coverage.html) (device-side branch coverage in standard `coverage.py` format)
 * Support for Python 3.10–3.13
 * Support for macOS up to 15
 * Significantly improved reliability (≥90% CI success on correct code)
+
+### CI
+
+* Revamped CI pipeline with ≥90% success rate on correct code
+* Kernel-level [code coverage](https://genesis-embodied-ai.github.io/quadrants/user_guide/kernel_coverage.html) — device-side branch coverage in standard `coverage.py` format, integrated with pytest-cov
+* Per-PR diff coverage reports posted as GitHub Check annotations
+* AI-driven checks for line wrapping, deleted comments, test coverage, and feature factorization
 
 ### Structural improvements
 
