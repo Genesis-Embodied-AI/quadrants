@@ -170,7 +170,8 @@ class LlvmRuntimeExecutor {
   // is sized exactly to the reducer's count instead of the dispatched-threads worst case.
   void ensure_per_task_float_heap_post_reducer(std::size_t task_index,
                                                const AdStackSizingInfo &ad_stack,
-                                               std::size_t num_threads);
+                                               std::size_t num_threads,
+                                               LaunchContextBuilder *ctx);
 
   // Return (and lazily cache) the device pointer to `runtime->temporaries`, the global temporary buffer backing
   // `GlobalTemporaryStmt` loads and stores. GPU kernel launchers use this to read back dynamic range_for bounds (begin

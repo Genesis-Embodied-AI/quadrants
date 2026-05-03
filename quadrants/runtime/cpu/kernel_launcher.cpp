@@ -71,7 +71,7 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         // allocas (in tasks with a captured `bound_expr`) address through `heap_float + row_id_var * stride_float +
         // float_offset`; sizing the heap at `count * stride_float` instead of the dispatched-threads worst case is
         // where the actual memory savings on sparse-grid workloads come from.
-        executor->ensure_per_task_float_heap_post_reducer(i, ad_stacks[i], num_threads_per_task[i]);
+        executor->ensure_per_task_float_heap_post_reducer(i, ad_stacks[i], num_threads_per_task[i], &ctx);
       }
     }
     task_funcs[i](&ctx.get_context());
