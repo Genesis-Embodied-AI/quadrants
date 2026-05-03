@@ -198,10 +198,8 @@ class QD_DLL_EXPORT Program {
     return snode_rw_accessors_bank_;
   }
 
-  // Look up an `SNode` in this `Program`'s snode trees by its global `SNode::id`. Used by the host-side adstack
-  // size-expression evaluator to rehydrate an `SNode *` from a `snode_id` that survived the offline cache. Linear
-  // over all snode trees; called at most once per adstack leaf per kernel launch so the cost is negligible in
-  // practice.
+  // Resolve an `SNode *` from its global `SNode::id`. Lazy `snode_id_cache_` lookup; the cache is wiped by
+  // `add_snode_tree` and `destroy_snode_tree`.
   SNode *get_snode_by_id(int snode_id);
 
   /**
@@ -338,6 +336,8 @@ class QD_DLL_EXPORT Program {
   SNodeRwAccessorsBank snode_rw_accessors_bank_;
 
   std::vector<std::unique_ptr<SNodeTree>> snode_trees_;
+  // Lazy cache for `get_snode_by_id`. Invalidated by `add_snode_tree` and `destroy_snode_tree`.
+  std::unordered_map<int, SNode *> snode_id_cache_;
   std::stack<int> free_snode_tree_ids_;
 
   std::vector<std::unique_ptr<Function>> functions_;
