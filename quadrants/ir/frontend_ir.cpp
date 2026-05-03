@@ -119,7 +119,8 @@ FrontendForStmt::FrontendForStmt(const FrontendForStmt &o)
       num_cpu_threads(o.num_cpu_threads),
       strictly_serialized(o.strictly_serialized),
       mem_access_opt(o.mem_access_opt),
-      block_dim(o.block_dim) {
+      block_dim(o.block_dim),
+      force_inline(o.force_inline) {
 }
 
 void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
@@ -127,6 +128,7 @@ void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
   strictly_serialized = config.strictly_serialized;
   mem_access_opt = config.mem_access_opt;
   block_dim = config.block_dim;
+  force_inline = config.force_inline;
   if (arch == Arch::cuda || arch == Arch::amdgpu) {
     num_cpu_threads = 1;
     QD_ASSERT(block_dim <= quadrants_max_gpu_block_dim);

@@ -490,6 +490,9 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
       patch_intrinsic("cuda_shfl_xor_sync_i32",
                       Intrinsic::nvvm_shfl_sync_bfly_i32);
 
+      patch_intrinsic("cuda_shfl_xor_sync_f32",
+                      Intrinsic::nvvm_shfl_sync_bfly_f32);
+
       patch_intrinsic("cuda_match_any_sync_i32",
                       Intrinsic::nvvm_match_any_sync_i32);
 
@@ -580,6 +583,228 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
       patch_intrinsic("block_barrier", llvm::Intrinsic::amdgcn_s_barrier,
                       false);
       patch_intrinsic("amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
+
+      auto patch_amdgpu_shfl_down = [&](std::string name, bool is_float,
+                                        bool has_mask) {
+        auto func = module->getFunction(name);
+        if (!func) {
+          return;
+        }
+        func->deleteBody();
+        auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+        IRBuilder<> builder(*ctx);
+        builder.SetInsertPoint(bb);
+
+        // Argument layout (matches runtime.cpp stubs):
+        //   has_mask = true:  (u32 mask, T val, i32 delta, i32 width)
+        //   has_mask = false: (i32 delta, T val, i32 width)
+        std::vector<llvm::Value *> args;
+        for (auto &arg : func->args())
+          args.push_back(&arg);
+
+        llvm::Value *val_arg, *delta_arg;
+        if (has_mask) {
+          val_arg = args[1];
+          delta_arg = args[2];
+        } else {
+          delta_arg = args[0];
+          val_arg = args[1];
+        }
+
+        auto *i32_ty = builder.getInt32Ty();
+
+        llvm::Value *val_i32 = val_arg;
+        if (is_float) {
+          val_i32 = builder.CreateBitCast(val_arg, i32_ty);
+        }
+
+        auto *neg_one = llvm::ConstantInt::get(i32_ty, -1, true);
+        auto *zero = llvm::ConstantInt::get(i32_ty, 0);
+        auto *mbcnt_lo = builder.CreateIntrinsic(
+            llvm::Intrinsic::amdgcn_mbcnt_lo, {}, {neg_one, zero});
+        auto *lane_id = builder.CreateIntrinsic(
+            llvm::Intrinsic::amdgcn_mbcnt_hi, {}, {neg_one, mbcnt_lo});
+
+        auto *src_lane = builder.CreateAdd(lane_id, delta_arg);
+        // Wave-wide bound only: source lane must be in [0, 64).
+        auto *wave_size = llvm::ConstantInt::get(i32_ty, 64);
+        auto *in_wave = builder.CreateICmpULT(src_lane, wave_size);
+
+        auto *addr = builder.CreateShl(
+            src_lane, llvm::ConstantInt::get(i32_ty, 2));
+        auto *bpermute_i32 = builder.CreateIntrinsic(
+            llvm::Intrinsic::amdgcn_ds_bpermute, {}, {addr, val_i32});
+
+        auto *picked = builder.CreateSelect(in_wave, bpermute_i32, val_i32);
+
+        if (is_float) {
+          builder.CreateRet(builder.CreateBitCast(picked, builder.getFloatTy()));
+        } else {
+          builder.CreateRet(picked);
+        }
+        QuadrantsLLVMContext::mark_inline(func);
+      };
+
+      auto patch_amdgpu_shfl_up = [&](std::string name, bool is_float,
+                                      bool has_mask) {
+        auto func = module->getFunction(name);
+        if (!func) {
+          return;
+        }
+        func->deleteBody();
+        auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+        IRBuilder<> builder(*ctx);
+        builder.SetInsertPoint(bb);
+
+        std::vector<llvm::Value *> args;
+        for (auto &arg : func->args())
+          args.push_back(&arg);
+        llvm::Value *val_arg, *delta_arg;
+        if (has_mask) {
+          val_arg = args[1];
+          delta_arg = args[2];
+        } else {
+          delta_arg = args[0];
+          val_arg = args[1];
+        }
+        auto *i32_ty = builder.getInt32Ty();
+        llvm::Value *val_i32 = val_arg;
+        if (is_float) {
+          val_i32 = builder.CreateBitCast(val_arg, i32_ty);
+        }
+        auto *neg_one = llvm::ConstantInt::get(i32_ty, -1, true);
+        auto *zero = llvm::ConstantInt::get(i32_ty, 0);
+        auto *mbcnt_lo = builder.CreateIntrinsic(
+            llvm::Intrinsic::amdgcn_mbcnt_lo, {}, {neg_one, zero});
+        auto *lane_id = builder.CreateIntrinsic(
+            llvm::Intrinsic::amdgcn_mbcnt_hi, {}, {neg_one, mbcnt_lo});
+        auto *src_lane = builder.CreateSub(lane_id, delta_arg);
+        // Wave-wide bound: src_lane must be >= 0.
+        auto *in_wave = builder.CreateICmpSGE(src_lane, zero);
+        auto *addr = builder.CreateShl(
+            src_lane, llvm::ConstantInt::get(i32_ty, 2));
+        auto *bpermute_i32 = builder.CreateIntrinsic(
+            llvm::Intrinsic::amdgcn_ds_bpermute, {}, {addr, val_i32});
+        auto *picked = builder.CreateSelect(in_wave, bpermute_i32, val_i32);
+        if (is_float) {
+          builder.CreateRet(builder.CreateBitCast(picked, builder.getFloatTy()));
+        } else {
+          builder.CreateRet(picked);
+        }
+        QuadrantsLLVMContext::mark_inline(func);
+      };
+
+      auto patch_amdgpu_shfl_idx = [&](std::string name, bool is_float,
+                                       bool has_mask) {
+        // shfl_sync(mask, val, src_lane, width): broadcast val from src_lane
+        // to all lanes. Implemented via amdgcn.ds.bpermute(src_lane * 4, val).
+        // The lowering is wave-wide; `width` is intentionally ignored on AMD
+        // for the same reasons documented above for shfl_down/shfl_up.
+        auto func = module->getFunction(name);
+        if (!func) {
+          return;
+        }
+        func->deleteBody();
+        auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+        IRBuilder<> builder(*ctx);
+        builder.SetInsertPoint(bb);
+
+        std::vector<llvm::Value *> args;
+        for (auto &arg : func->args())
+          args.push_back(&arg);
+        llvm::Value *val_arg, *src_lane_arg;
+        if (has_mask) {
+          val_arg = args[1];
+          src_lane_arg = args[2];
+        } else {
+          src_lane_arg = args[0];
+          val_arg = args[1];
+        }
+        auto *i32_ty = builder.getInt32Ty();
+        llvm::Value *val_i32 = val_arg;
+        if (is_float) {
+          val_i32 = builder.CreateBitCast(val_arg, i32_ty);
+        }
+        auto *addr = builder.CreateShl(
+            src_lane_arg, llvm::ConstantInt::get(i32_ty, 2));
+        auto *bpermute_i32 = builder.CreateIntrinsic(
+            llvm::Intrinsic::amdgcn_ds_bpermute, {}, {addr, val_i32});
+        if (is_float) {
+          builder.CreateRet(
+              builder.CreateBitCast(bpermute_i32, builder.getFloatTy()));
+        } else {
+          builder.CreateRet(bpermute_i32);
+        }
+        QuadrantsLLVMContext::mark_inline(func);
+      };
+
+      auto patch_amdgpu_shfl_xor = [&](std::string name, bool is_float,
+                                       bool has_mask) {
+        auto func = module->getFunction(name);
+        if (!func) {
+          return;
+        }
+        func->deleteBody();
+        auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+        IRBuilder<> builder(*ctx);
+        builder.SetInsertPoint(bb);
+
+        std::vector<llvm::Value *> args;
+        for (auto &arg : func->args())
+          args.push_back(&arg);
+        llvm::Value *val_arg, *delta_arg /* = lane_mask */;
+        if (has_mask) {
+          val_arg = args[1];
+          delta_arg = args[2];
+        } else {
+          delta_arg = args[0];
+          val_arg = args[1];
+        }
+        auto *i32_ty = builder.getInt32Ty();
+        llvm::Value *val_i32 = val_arg;
+        if (is_float) {
+          val_i32 = builder.CreateBitCast(val_arg, i32_ty);
+        }
+        auto *neg_one = llvm::ConstantInt::get(i32_ty, -1, true);
+        auto *zero = llvm::ConstantInt::get(i32_ty, 0);
+        auto *mbcnt_lo = builder.CreateIntrinsic(
+            llvm::Intrinsic::amdgcn_mbcnt_lo, {}, {neg_one, zero});
+        auto *lane_id = builder.CreateIntrinsic(
+            llvm::Intrinsic::amdgcn_mbcnt_hi, {}, {neg_one, mbcnt_lo});
+        auto *src_lane = builder.CreateXor(lane_id, delta_arg);
+        auto *addr = builder.CreateShl(
+            src_lane, llvm::ConstantInt::get(i32_ty, 2));
+        auto *bpermute_i32 = builder.CreateIntrinsic(
+            llvm::Intrinsic::amdgcn_ds_bpermute, {}, {addr, val_i32});
+        if (is_float) {
+          builder.CreateRet(
+              builder.CreateBitCast(bpermute_i32, builder.getFloatTy()));
+        } else {
+          builder.CreateRet(bpermute_i32);
+        }
+        QuadrantsLLVMContext::mark_inline(func);
+      };
+
+      patch_amdgpu_shfl_down("cuda_shfl_down_sync_f32", /*is_float=*/true,
+                             /*has_mask=*/true);
+      patch_amdgpu_shfl_down("cuda_shfl_down_sync_i32", /*is_float=*/false,
+                             /*has_mask=*/true);
+      patch_amdgpu_shfl_down("cuda_shfl_down_f32", /*is_float=*/true,
+                             /*has_mask=*/false);
+      patch_amdgpu_shfl_down("cuda_shfl_down_i32", /*is_float=*/false,
+                             /*has_mask=*/false);
+      patch_amdgpu_shfl_up("cuda_shfl_up_sync_f32", /*is_float=*/true,
+                           /*has_mask=*/true);
+      patch_amdgpu_shfl_up("cuda_shfl_up_sync_i32", /*is_float=*/false,
+                           /*has_mask=*/true);
+      patch_amdgpu_shfl_xor("cuda_shfl_xor_sync_i32", /*is_float=*/false,
+                            /*has_mask=*/true);
+      patch_amdgpu_shfl_xor("cuda_shfl_xor_sync_f32", /*is_float=*/true,
+                            /*has_mask=*/true);
+      patch_amdgpu_shfl_idx("cuda_shfl_sync_i32", /*is_float=*/false,
+                            /*has_mask=*/true);
+      patch_amdgpu_shfl_idx("cuda_shfl_sync_f32", /*is_float=*/true,
+                            /*has_mask=*/true);
 
       link_module_with_amdgpu_libdevice(module);
       patch_amdgpu_kernel_dim(

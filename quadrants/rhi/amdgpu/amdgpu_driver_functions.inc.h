@@ -133,6 +133,35 @@ PER_AMDGPU_FUNCTION(kernel_get_occupancy,
 // Stream management
 PER_AMDGPU_FUNCTION(stream_synchronize, hipStreamSynchronize, void *);
 
+// HIP graphs
+// hipGraphCreate(hipGraph_t *pGraph, unsigned int flags)
+PER_AMDGPU_FUNCTION(graph_create, hipGraphCreate, void **, uint32);
+// hipGraphDestroy(hipGraph_t graph)
+PER_AMDGPU_FUNCTION(graph_destroy, hipGraphDestroy, void *);
+// hipGraphAddKernelNode(hipGraphNode_t *pGraphNode, hipGraph_t graph,
+//   const hipGraphNode_t *pDependencies, size_t numDependencies,
+//   const hipKernelNodeParams *pNodeParams)
+PER_AMDGPU_FUNCTION(graph_add_kernel_node,
+                    hipGraphAddKernelNode,
+                    void **,
+                    void *,
+                    const void *,
+                    std::size_t,
+                    const void *);
+// hipGraphInstantiate(hipGraphExec_t *pGraphExec, hipGraph_t graph,
+//   hipGraphNode_t *pErrorNode, char *pLogBuffer, size_t bufferSize)
+PER_AMDGPU_FUNCTION(graph_instantiate,
+                    hipGraphInstantiate,
+                    void **,
+                    void *,
+                    void *,
+                    char *,
+                    std::size_t);
+// hipGraphExecDestroy(hipGraphExec_t graphExec)
+PER_AMDGPU_FUNCTION(graph_exec_destroy, hipGraphExecDestroy, void *);
+// hipGraphLaunch(hipGraphExec_t graphExec, hipStream_t stream)
+PER_AMDGPU_FUNCTION(graph_launch, hipGraphLaunch, void *, void *);
+
 // Event management
 PER_AMDGPU_FUNCTION(event_create, hipEventCreateWithFlags, void **, uint32);
 PER_AMDGPU_FUNCTION(event_destroy, hipEventDestroy, void *);

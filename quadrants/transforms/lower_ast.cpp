@@ -270,6 +270,7 @@ class LowerAST : public IRVisitor {
           begin, end, std::move(stmt->body), stmt->is_bit_vectorized,
           stmt->num_cpu_threads, stmt->block_dim, stmt->strictly_serialized,
           /*range_hint=*/fmt::format("arg ({})", fmt::join(arg_id, ", ")));
+      new_for->force_inline = stmt->force_inline;
       VecStatement new_statements;
       Stmt *loop_index =
           new_statements.push_back<LoopIndexStmt>(new_for.get(), 0);
@@ -289,6 +290,9 @@ class LowerAST : public IRVisitor {
       auto &&new_for = std::make_unique<MeshForStmt>(
           stmt->mesh, stmt->element_type, std::move(stmt->body),
           stmt->is_bit_vectorized, stmt->num_cpu_threads, stmt->block_dim);
+      // MeshForStmt doesn't carry the force_inline hint, so its body
+      // never gets AlwaysInline on AMDGPU. If a mesh-for ever needs to
+      // opt in, plumb force_inline through MeshForStmt and FrontendForStmt.
       new_for->body->insert(std::make_unique<LoopIndexStmt>(new_for.get(), 0),
                             0);
       new_for->body->local_var_to_stmt[stmt->loop_var_ids[0]] =
@@ -311,6 +315,7 @@ class LowerAST : public IRVisitor {
             begin_stmt, end_stmt, std::move(stmt->body),
             stmt->is_bit_vectorized, stmt->num_cpu_threads, stmt->block_dim,
             stmt->strictly_serialized);
+        new_for->force_inline = stmt->force_inline;
         new_for->body->insert(std::make_unique<LoopIndexStmt>(new_for.get(), 0),
                               0);
         new_for->body->local_var_to_stmt[stmt->loop_var_ids[0]] =

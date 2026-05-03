@@ -211,6 +211,19 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     create_naive_range_for(for_stmt);
   }
 
+  int get_effective_range_grid_dim(OffloadedStmt *stmt) {
+    int grid_dim = stmt->grid_dim;
+    if (stmt->const_begin && stmt->const_end) {
+      int num_threads = stmt->end_value - stmt->begin_value;
+      int exact_grid_dim = ((num_threads % stmt->block_dim) == 0)
+                               ? (num_threads / stmt->block_dim)
+                               : (num_threads / stmt->block_dim) + 1;
+      exact_grid_dim = std::max(exact_grid_dim, 1);
+      grid_dim = std::min(grid_dim, exact_grid_dim);
+    }
+    return grid_dim;
+  }
+
   void create_offload_range_for(OffloadedStmt *stmt) override {
     auto tls_prologue = create_xlogue(stmt->tls_prologue);
 
@@ -228,12 +241,21 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       body = guard.body;
     }
 
+    // ``stmt->force_inline`` is set via ``qd.loop_config(force_inline=...)``
+    // at the frontend:
+    //    +1 -> force inline
+    //     0 (default) or -1 -> do not inline; LLVM decides on its own
+    if (body && stmt->force_inline > 0) {
+      tlctx->mark_inline(body);
+    }
+
     auto epilogue = create_xlogue(stmt->tls_epilogue);
 
     auto [begin, end] = get_range_for_bounds(stmt);
-    call("gpu_parallel_range_for",
-         {get_context(), begin, end, tls_prologue, body, epilogue,
-          tlctx->get_constant(stmt->tls_size)});
+    call("gpu_parallel_range_for_fixed_config",
+         {get_context(), begin, end, tlctx->get_constant(stmt->block_dim),
+          tlctx->get_constant(get_effective_range_grid_dim(stmt)), tls_prologue,
+          body, epilogue, tlctx->get_constant(stmt->tls_size)});
   }
 
   void create_offload_mesh_for(OffloadedStmt *stmt) override {
@@ -485,14 +507,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       finalize_offloaded_task_function();
       current_task->grid_dim = stmt->grid_dim;
       if (stmt->task_type == Type::range_for) {
-        if (stmt->const_begin && stmt->const_end) {
-          int num_threads = stmt->end_value - stmt->begin_value;
-          int grid_dim = ((num_threads % stmt->block_dim) == 0)
-                             ? (num_threads / stmt->block_dim)
-                             : (num_threads / stmt->block_dim) + 1;
-          grid_dim = std::max(grid_dim, 1);
-          current_task->grid_dim = std::min(stmt->grid_dim, grid_dim);
-        }
+        current_task->grid_dim = get_effective_range_grid_dim(stmt);
       }
       if (stmt->task_type == Type::listgen) {
         int num_SMs;

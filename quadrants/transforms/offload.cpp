@@ -97,6 +97,7 @@ class Offloader {
         assemble_serial_statements();
         auto offloaded = Stmt::make_typed<OffloadedStmt>(
             OffloadedStmt::TaskType::range_for, arch, kernel);
+        offloaded->force_inline = s->force_inline;
         // offloaded->body is an empty block now.
         offloaded->grid_dim = config.saturating_grid_dim;
         if (s->block_dim == 0) {

@@ -244,6 +244,7 @@ std::unique_ptr<Stmt> RangeForStmt::clone() const {
       begin, end, body->clone(), is_bit_vectorized, num_cpu_threads, block_dim,
       strictly_serialized);
   new_stmt->reversed = reversed;
+  new_stmt->force_inline = force_inline;
   return new_stmt;
 }
 
@@ -439,6 +440,7 @@ std::unique_ptr<Stmt> OffloadedStmt::clone() const {
   new_stmt->tls_size = tls_size;
   new_stmt->bls_size = bls_size;
   new_stmt->mem_access_opt = mem_access_opt;
+  new_stmt->force_inline = force_inline;
   return new_stmt;
 }
 

@@ -616,6 +616,13 @@ def _block_dim(dim):
     get_runtime().compiling_callable.ast_builder().block_dim(dim)
 
 
+def _force_inline(v):
+    """Tri-state hint to the AMDGPU codegen force-inline heuristic for
+    the body of the next parallel-range-for. Ignored on non-AMDGPU backends.
+    """
+    get_runtime().compiling_callable.ast_builder().force_inline(int(v))
+
+
 def _block_dim_adaptive(block_dim_adaptive):
     """Enable/Disable backends set block_dim adaptively."""
     if get_runtime().prog.config().arch != cpu:
@@ -636,6 +643,7 @@ def loop_config(
     parallelize=None,
     block_dim_adaptive=True,
     bit_vectorize=False,
+    force_inline=None,
 ):
     """Sets directives for the next loop
 
@@ -645,6 +653,10 @@ def loop_config(
         parallelize (int): The number of threads to use on CPU
         block_dim_adaptive (bool): Whether to allow backends set block_dim adaptively, enabled by default
         bit_vectorize (bool): Whether to enable bit vectorization of struct fors on quant_arrays.
+        force_inline (Optional[bool]): AMDGPU-only hint for the parallel-range-for body inlining heuristic.
+            ``True`` forces the body to be inlined into the launcher trampoline (good for call-heavy bodies),
+            ``False`` forces it NOT to be inlined (good for register-pressure-sensitive bodies like large
+            arithmetic kernels), ``None`` uses the default call-density heuristic. Ignored on non-AMDGPU.
 
     Examples::
 
@@ -699,6 +711,9 @@ def loop_config(
 
     if bit_vectorize:
         _bit_vectorize()
+
+    if force_inline is not None:
+        _force_inline(1 if force_inline else -1)
 
 
 def graph_do_while(condition) -> bool:

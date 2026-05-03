@@ -1016,6 +1016,10 @@ class RangeForStmt : public Stmt {
   int block_dim;
   bool strictly_serialized;
   std::string range_hint;
+  // Tri-state codegen hint, propagated from the frontend FrontendForStmt
+  // through offload to OffloadedStmt. 0 = use heuristic, 1 = force inline,
+  // -1 = force no-inline. AMDGPU-only.
+  int force_inline{0};
 
   RangeForStmt(Stmt *begin,
                Stmt *end,
@@ -1097,6 +1101,7 @@ class MeshForStmt : public Stmt {
   std::unordered_set<mesh::MeshElementType> major_to_types{};
   std::unordered_set<mesh::MeshRelationType> minor_relation_types{};
   MemoryAccessOptions mem_access_opt;
+  int force_inline{0};
 
   MeshForStmt(mesh::Mesh *mesh,
               mesh::MeshElementType element_type,
@@ -1443,6 +1448,7 @@ class OffloadedStmt : public Stmt {
   std::size_t tls_size{1};  // avoid allocating dynamic memory with 0 byte
   std::size_t bls_size{0};
   MemoryAccessOptions mem_access_opt;
+  int force_inline{0};
 
   OffloadedStmt(TaskType task_type, Arch arch, Kernel *kernel);
 

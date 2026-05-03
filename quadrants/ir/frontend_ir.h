@@ -23,6 +23,7 @@ struct ForLoopConfig {
   MemoryAccessOptions mem_access_opt;
   int block_dim{0};
   bool uniform{false};
+  int force_inline{0};
 };
 
 #define QD_DEFINE_CLONE_FOR_FRONTEND_IR                \
@@ -207,6 +208,7 @@ class FrontendForStmt : public Stmt {
   bool strictly_serialized;
   MemoryAccessOptions mem_access_opt;
   int block_dim;
+  int force_inline{0};
 
   FrontendForStmt(const ExprGroup &loop_vars,
                   SNode *snode,
@@ -952,6 +954,7 @@ class ASTBuilder {
       config.mem_access_opt.clear();
       config.block_dim = 0;
       config.strictly_serialized = false;
+      config.force_inline = 0;
     }
   };
 
@@ -1097,6 +1100,11 @@ class ASTBuilder {
       QD_ASSERT(bit::is_power_of_two(v));
     }
     for_loop_dec_.config.block_dim = v;
+  }
+
+  void force_inline(int v) {
+    QD_ASSERT(v == -1 || v == 0 || v == 1);
+    for_loop_dec_.config.force_inline = v;
   }
 
   void insert_snode_access_flag(SNodeAccessFlag v, const Expr &field) {
