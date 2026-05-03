@@ -300,3 +300,72 @@ def test_wrap_picks_matrix_tensor(backend):
         a = qd.Matrix.ndarray(2, 2, qd.f32, shape=(3,))
     t = qd.wrap(a)
     assert isinstance(t, qd.MatrixTensor)
+
+
+# ----------------------------------------------------------------------
+# copy= kwarg on to_numpy / to_torch
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_to_numpy_copy_true(backend):
+    """copy=True (default) returns an independent array."""
+    t = qd.tensor(qd.f32, shape=(4,), backend=backend)
+    src = np.arange(4, dtype=np.float32)
+    t.from_numpy(src)
+    arr = t.to_numpy(copy=True)
+    np.testing.assert_array_equal(arr, src)
+    arr[0] = 999.0
+    np.testing.assert_array_equal(t.to_numpy(), src)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_to_numpy_copy_false(backend):
+    """copy=False returns a zero-copy view (CPU backend supports this)."""
+    t = qd.tensor(qd.f32, shape=(4,), backend=backend)
+    src = np.arange(4, dtype=np.float32)
+    t.from_numpy(src)
+    arr = t.to_numpy(copy=False)
+    np.testing.assert_array_equal(arr, src)
+    arr[0] = 999.0
+    assert t.to_numpy(copy=True)[0] == 999.0
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_to_numpy_copy_false_with_dtype_raises(backend):
+    """copy=False combined with dtype conversion must raise."""
+    t = qd.tensor(qd.f32, shape=(4,), backend=backend)
+    t.from_numpy(np.ones(4, dtype=np.float32))
+    with pytest.raises(ValueError, match="copy=False"):
+        t.to_numpy(dtype=np.float64, copy=False)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_to_torch_copy_true(backend):
+    """copy=True (default) returns an independent torch tensor."""
+    torch = pytest.importorskip("torch")
+    t = qd.tensor(qd.f32, shape=(4,), backend=backend)
+    src = np.arange(4, dtype=np.float32)
+    t.from_numpy(src)
+    out = t.to_torch(copy=True)
+    np.testing.assert_array_equal(out.numpy(), src)
+    out[0] = 999.0
+    np.testing.assert_array_equal(t.to_numpy(), src)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_to_torch_copy_false(backend):
+    """copy=False returns a zero-copy torch tensor (CPU backend)."""
+    torch = pytest.importorskip("torch")
+    t = qd.tensor(qd.f32, shape=(4,), backend=backend)
+    src = np.arange(4, dtype=np.float32)
+    t.from_numpy(src)
+    out = t.to_torch(copy=False)
+    np.testing.assert_array_equal(out.numpy(), src)
+    out[0] = 999.0
+    assert t.to_numpy(copy=True)[0] == 999.0
