@@ -1,0 +1,137 @@
+name: Interop Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build wheel
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Prerequisites
+        run: bash .github/workflows/scripts_new/linux/1_prerequisites.sh
+      - name: Build
+        run: bash .github/workflows/scripts_new/linux/2_build.sh
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-wheel
+          path: dist/*.whl
+
+  benchmark-cuda:
+    name: Interop benchmarks (CUDA)
+    needs: build
+    runs-on: gpu-t4-4-core
+    env:
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install CUDA libraries
+        run: |
+          sudo apt-get install -y libcusolver-dev-12-8 libcusolver-12-8 \
+            libcusparse-dev-12-8 libcusparse-12-8 libnvjitlink-12-8 libcublas-12-8
+          echo "/usr/local/cuda/targets/x86_64-linux/lib" | sudo tee /etc/ld.so.conf.d/cuda-targets.conf
+          sudo ldconfig
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: bench-wheel
+      - name: Install quadrants + torch
+        run: |
+          set -ex
+          mkdir -p dist && mv *.whl dist/
+          pip install dist/*.whl
+          pip install torch --index-url https://download.pytorch.org/whl/cu128
+          pip install wandb
+      - name: Run benchmarks
+        run: |
+          pytest tests/python/test_interop_benchmarks.py \
+            -v -s -k cuda -m benchmarks \
+            --bench-out /tmp/bench_cuda.txt
+      - name: Upload results to W&B
+        if: >
+          github.repository == 'Genesis-Embodied-AI/gstaichi'
+          && github.ref == 'refs/heads/main'
+          && env.WANDB_API_KEY != ''
+        run: |
+          cat /tmp/bench_cuda*.txt > /tmp/bench_cuda_all.txt
+          python tests/python/upload_bench_to_wandb.py \
+            --in-file /tmp/bench_cuda_all.txt \
+            --project quadrants-interop-benchmarks \
+            --metrics steps_per_sec us_per_step \
+            --run-prefix cuda
+      - name: Display results
+        run: cat /tmp/bench_cuda*.txt
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-cuda
+          path: /tmp/bench_cuda*.txt
+
+  benchmark-cpu:
+    name: Interop benchmarks (CPU)
+    needs: build
+    runs-on: ubuntu-22.04
+    env:
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: bench-wheel
+      - name: Install quadrants + torch
+        run: |
+          set -ex
+          mkdir -p dist && mv *.whl dist/
+          pip install dist/*.whl
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install wandb
+      - name: Run benchmarks
+        run: |
+          pytest tests/python/test_interop_benchmarks.py \
+            -v -s -k cpu -m benchmarks \
+            --bench-out /tmp/bench_cpu.txt
+      - name: Upload results to W&B
+        if: >
+          github.repository == 'Genesis-Embodied-AI/gstaichi'
+          && github.ref == 'refs/heads/main'
+          && env.WANDB_API_KEY != ''
+        run: |
+          cat /tmp/bench_cpu*.txt > /tmp/bench_cpu_all.txt
+          python tests/python/upload_bench_to_wandb.py \
+            --in-file /tmp/bench_cpu_all.txt \
+            --project quadrants-interop-benchmarks \
+            --metrics steps_per_sec us_per_step \
+            --run-prefix cpu
+      - name: Display results
+        run: cat /tmp/bench_cpu*.txt
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-cpu
+          path: /tmp/bench_cpu*.txt

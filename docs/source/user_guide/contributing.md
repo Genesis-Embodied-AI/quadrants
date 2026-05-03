@@ -145,6 +145,30 @@ Uses an AI agent to check that comments and docstrings have not been unnecessari
 
 Uses an AI agent to verify that new or modified source code in a PR has corresponding test coverage. The agent examines the diff of non-test source files and cross-references them against test files in the repo (existing or added in the PR). It flags up to 5 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
 
+### Interop benchmarks (`benchmarks.yml` / `benchmark_alarm.yml`)
+
+Measures Python-side interop overhead — the same bottleneck exercised by Genesis benchmarks like `franka_accessors` and `anymal_zero`, but without any Genesis dependency.
+
+The benchmark file is `tests/python/test_interop_benchmarks.py`.  It creates fields shaped like Genesis rigid-solver state (positions, quaternions, velocities, DOFs) and times the hot-path operations: `to_torch(copy=True/False)`, `to_numpy()`, `from_torch()`, DLPack roundtrips, and trivial kernel launch overhead.
+
+**Running locally:**
+
+```
+# All benchmarks
+pytest tests/python/test_interop_benchmarks.py -v -s -m benchmarks
+
+# Just CUDA zero-copy scenarios
+pytest tests/python/test_interop_benchmarks.py -v -s -k "zerocopy and cuda"
+
+# Write results to a file
+pytest tests/python/test_interop_benchmarks.py -v -s -m benchmarks --bench-out results.txt
+```
+
+**CI behaviour:**
+
+- `benchmarks.yml` runs on every push to `main` and on PRs. It builds a wheel, then runs benchmarks on CUDA (`gpu-t4-4-core`, with `n_envs=4096` and `n_envs=30000`) and CPU. On `main` pushes, results are uploaded to the `quadrants-interop-benchmarks` W&B project.
+- `benchmark_alarm.yml` triggers after `benchmarks.yml` completes on a PR. It downloads the benchmark artifacts, compares against the last 5 revisions on W&B, and posts a PR check with a regression table. Regressions beyond 10% tolerance cause a check failure.
+
 ### Feature factorization check (`check_feature_factorization.yml`)
 
 Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the "wrong" place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.
