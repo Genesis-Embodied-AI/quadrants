@@ -91,7 +91,10 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
 
 void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
-  auto launcher_ctx = contexts_[handle.get_launch_id()];
+  // Hold a reference to the `Context` rather than a copy. Safe because `contexts_` is a `std::deque`
+  // (see `kernel_launcher.h`) - a nested `register_llvm_kernel` running inside this same launch cannot
+  // relocate the entry held here.
+  const auto &launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();
 
   ctx.get_context().runtime = executor->get_llvm_runtime();

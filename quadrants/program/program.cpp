@@ -199,6 +199,8 @@ void Program::destroy_snode_tree(SNodeTree *snode_tree) {
 
   program_impl_->destroy_snode_tree(snode_tree);
   free_snode_tree_ids_.push(snode_tree->id());
+  // The destroyed tree's `SNode *`s are about to be freed; cached entries pointing into them must go.
+  snode_id_cache_.clear();
 }
 
 SNodeTree *Program::add_snode_tree(std::unique_ptr<SNode> root, bool compile_only) {
@@ -216,6 +218,8 @@ SNodeTree *Program::add_snode_tree(std::unique_ptr<SNode> root, bool compile_onl
     QD_ASSERT(id == snode_trees_.size());
     snode_trees_.push_back(std::move(tree));
   }
+  // Wipe so any negative `nullptr` entry in the cache does not shadow an snode id newly satisfiable by this tree.
+  snode_id_cache_.clear();
   return snode_trees_[id].get();
 }
 
@@ -225,6 +229,16 @@ SNode *Program::get_snode_root(int tree_id) {
 
 void Program::synchronize() {
   program_impl_->synchronize();
+}
+
+void Program::synchronize_and_assert() {
+  program_impl_->synchronize_and_assert();
+}
+
+void Program::record_size_expr_eval(const SerializedSizeExpr *expr_key,
+                                    int64_t result,
+                                    std::vector<SizeExprReadObservation> reads) {
+  size_expr_cache_[expr_key] = SizeExprCacheEntry{result, std::move(reads)};
 }
 
 StreamSemaphore Program::flush() {
@@ -251,11 +265,16 @@ SNode *find_snode_by_id_recursive(SNode *root, int snode_id) {
 }  // namespace
 
 SNode *Program::get_snode_by_id(int snode_id) {
+  auto it = snode_id_cache_.find(snode_id);
+  if (it != snode_id_cache_.end())
+    return it->second;
   for (auto &tree : snode_trees_) {
     if (auto *hit = find_snode_by_id_recursive(tree->root(), snode_id)) {
+      snode_id_cache_[snode_id] = hit;
       return hit;
     }
   }
+  snode_id_cache_[snode_id] = nullptr;
   return nullptr;
 }
 

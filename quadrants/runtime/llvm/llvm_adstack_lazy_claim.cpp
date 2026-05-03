@@ -647,8 +647,20 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
   if (llvm_runtime_ == nullptr || result_buffer_cache_ == nullptr) {
     return;
   }
+  // `lookup_function` returns a host-callable pointer only on direct-dispatch backends (CPU LLVM JIT). CUDA / AMDGPU
+  // return device-side pointers and require the arg-marshalling `JITModule::call` path; the cached fast path therefore
+  // only fires when `direct_dispatch()` is true.
   auto *runtime_jit_module = get_runtime_jit_module();
-  runtime_jit_module->call<void *>("runtime_retrieve_and_reset_adstack_overflow", llvm_runtime_);
+  if (runtime_jit_module->direct_dispatch()) {
+    if (adstack_overflow_retriever_ == nullptr) {
+      adstack_overflow_retriever_ = reinterpret_cast<void (*)(void *)>(
+          runtime_jit_module->lookup_function("runtime_retrieve_and_reset_adstack_overflow"));
+      QD_ASSERT(adstack_overflow_retriever_ != nullptr);
+    }
+    adstack_overflow_retriever_(llvm_runtime_);
+  } else {
+    runtime_jit_module->call<void *>("runtime_retrieve_and_reset_adstack_overflow", llvm_runtime_);
+  }
   auto flag = fetch_result<int64>(quadrants_result_buffer_error_id, result_buffer_cache_);
   if (flag != 0) {
     throw QuadrantsAssertionError(

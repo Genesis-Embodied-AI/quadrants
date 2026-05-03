@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdio>
 #include <memory>
 
 #include "quadrants/runtime/llvm/llvm_offline_cache.h"
@@ -99,11 +100,8 @@ class LlvmProgramImpl : public ProgramImpl {
     return runtime_exec_->fetch_result<T>(i, result_buffer);
   }
 
-  // Skip the adstack-overflow poll from this point on: `Program::finalize()` invokes `pre_finalize()` before the
-  // two teardown `synchronize()` calls, and we do not want `check_adstack_overflow()` to throw into a
-  // `~Program()` unwinding path - that would terminate the process with a bare `QuadrantsAssertionError` instead
-  // of letting the user handle it at their own `qd.sync()` site. The flag only affects the internal poll; the
-  // user can still call `qd.sync()` explicitly before finalize to observe the raise.
+  // Mark the impl as shutting down so `synchronize_and_assert()` skips the overflow poll, preventing a
+  // `qd.sync()` racing with destruction from throwing inside `~Program()` unwinding.
   void pre_finalize() override {
     finalizing_ = true;
   }
@@ -160,9 +158,15 @@ class LlvmProgramImpl : public ProgramImpl {
 
   void synchronize() override {
     runtime_exec_->synchronize();
+  }
+
+  void synchronize_and_assert() override {
+    runtime_exec_->synchronize();
     if (!finalizing_) {
       runtime_exec_->check_adstack_overflow();
     }
+    // Flush JIT-generated `qd.print()` output at every user-visible sync.
+    fflush(stdout);
   }
 
   LLVMRuntime *get_llvm_runtime() {
@@ -263,11 +267,8 @@ class LlvmProgramImpl : public ProgramImpl {
   std::size_t num_snode_trees_processed_{0};
   std::unique_ptr<LlvmRuntimeExecutor> runtime_exec_;
   std::unique_ptr<LlvmOfflineCache> cache_data_;
-  // Flipped on by `pre_finalize()` (with a defensive re-assignment in `finalize()`) so the `synchronize()`
-  // override stops polling the adstack-overflow flag during teardown. `Program::finalize()` invokes
-  // `pre_finalize()` before its two teardown syncs, so the flag is already true when those syncs run; moving
-  // the assignment back into `finalize()` alone would silently re-introduce the `std::terminate()` teardown bug
-  // this field was introduced to fix.
+  // Set by `pre_finalize()` / `finalize()` so `synchronize_and_assert()` skips the overflow poll while
+  // teardown is in progress.
   bool finalizing_{false};
 };
 

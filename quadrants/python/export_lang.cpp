@@ -351,7 +351,7 @@ void export_lang(py::module &m) {
       .def("finalize", &Program::finalize)
       .def("get_total_compilation_time", &Program::get_total_compilation_time)
       .def("get_snode_num_dynamically_allocated", &Program::get_snode_num_dynamically_allocated)
-      .def("synchronize", &Program::synchronize)
+      .def("synchronize", &Program::synchronize_and_assert)
       .def("materialize_runtime", &Program::materialize_runtime)
       .def("get_snode_tree_size", &Program::get_snode_tree_size)
       .def("get_snode_root", &Program::get_snode_root, py::return_value_policy::reference)

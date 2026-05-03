@@ -13,6 +13,16 @@ class KernelLauncher : public LLVM::KernelLauncher {
     JITModule *jit_module{nullptr};
     const std::vector<std::pair<int, Callable::Parameter>> *parameters;
     std::vector<OffloadedTask> offloaded_tasks;
+    // Per-kernel-handle persistent scratch. Allocated lazily on first use, grown amortised-doubling on demand,
+    // freed only on launcher destruction. Stored per-handle (not per-launcher) because `publish_adstack_metadata`'s
+    // host-eval branch evaluates `FieldLoad` SizeExpr leaves through `SNodeRwAccessorsBank`, which recursively
+    // launches `snode_reader_*` kernels via the same launcher singleton; sharing one device-side `arg_buffer` /
+    // `RuntimeContext` across kernels would let the recursive launch overwrite the parent's args before the parent
+    // kernel reads them. Per-handle buffers give each kernel a private device address that recursive launches
+    // cannot touch.
+    void *arg_buffer_dev_ptr{nullptr};
+    std::size_t arg_buffer_capacity{0};
+    void *runtime_context_dev_ptr{nullptr};
   };
 
  public:
@@ -33,7 +43,16 @@ class KernelLauncher : public LLVM::KernelLauncher {
                                             void *context_pointer,
                                             int arg_size);
   bool on_amdgpu_device(void *ptr);
+  // `result_buffer` is the only scratch that stays launcher-global: kernels write to it then the host reads it
+  // back via `hipMemcpyDtoH` before the next kernel runs, so recursive snode-reader launches that reuse it cannot
+  // smuggle stale bytes into the parent's read (the parent's host-side `fetch_result_uint64` happens after every
+  // child completes, before the parent kernel that would be the next reader). Grown amortised-doubling.
+  void *persistent_result_buffer_dev_ptr_{nullptr};
+  std::size_t persistent_result_buffer_capacity_{0};
   std::vector<Context> contexts_;
+
+ public:
+  ~KernelLauncher();
 };
 
 }  // namespace amdgpu

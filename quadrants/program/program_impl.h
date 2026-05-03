@@ -66,9 +66,17 @@ class ProgramImpl {
   virtual std::size_t get_snode_num_dynamically_allocated(SNode *snode, uint64 *result_buffer) = 0;
 
   /**
-   * Perform a backend synchronization.
+   * Drain the backend command queue. Does not raise.
    */
   virtual void synchronize() = 0;
+
+  /**
+   * Drain the queue and raise on any pending user-visible assert (e.g. adstack overflow). Override on
+   * backends that have such asserts.
+   */
+  virtual void synchronize_and_assert() {
+    synchronize();
+  }
 
   virtual StreamSemaphore flush() {
     synchronize();
@@ -135,9 +143,8 @@ class ProgramImpl {
   virtual void finalize() {
   }
 
-  // Hook invoked by `Program::finalize()` before any teardown sync. Lets backends flip state (e.g. the LLVM
-  // `finalizing_` flag used to suppress adstack-overflow polling) so the two `Program::synchronize()` calls that
-  // precede `finalize()` do not throw into the Program destructor path.
+  // Invoked by `Program::finalize()` before any teardown sync, so the backend can flip state that
+  // silences user-visible asserts during destructor unwinding.
   virtual void pre_finalize() {
   }
 

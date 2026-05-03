@@ -17,6 +17,14 @@ class KernelLauncher : public LLVM::KernelLauncher {
     JITModule *jit_module{nullptr};
     const std::vector<std::pair<int, Callable::Parameter>> *parameters;
     std::vector<OffloadedTask> offloaded_tasks;
+    // Per-kernel-handle persistent scratch. See the matching AMDGPU `Context` struct in
+    // `runtime/amdgpu/kernel_launcher.h` for the rationale: `publish_adstack_metadata`'s host-eval branch
+    // recursively launches `snode_reader_*` kernels via this same launcher, and a launcher-global persistent
+    // buffer would let those recursive launches overwrite the parent's `arg_buffer` / `RuntimeContext` before
+    // the parent kernel reads them. Per-handle isolation prevents the cross-clobber.
+    void *arg_buffer_dev_ptr{nullptr};
+    std::size_t arg_buffer_capacity{0};
+    void *runtime_context_dev_ptr{nullptr};
   };
 
  public:
@@ -49,6 +57,15 @@ class KernelLauncher : public LLVM::KernelLauncher {
 
   std::vector<Context> contexts_;
   GraphManager graph_manager_;
+  // `result_buffer` stays launcher-global: kernels write to it, the host reads it back synchronously before any
+  // other kernel runs as a reader, so recursive snode-reader launches that reuse the buffer cannot smuggle stale
+  // bytes into the parent's read path. Grown amortised-doubling. See `runtime/amdgpu/kernel_launcher.h` for the
+  // matching scheme and the recursive-launch rationale this whole layout is designed around.
+  void *persistent_result_buffer_dev_ptr_{nullptr};
+  std::size_t persistent_result_buffer_capacity_{0};
+
+ public:
+  ~KernelLauncher();
 };
 
 }  // namespace cuda
