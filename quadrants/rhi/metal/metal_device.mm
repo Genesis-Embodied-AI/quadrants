@@ -1028,7 +1028,6 @@ MetalStream *MetalStream::create(const MetalDevice &device) {
 MetalStream *
 MetalStream::create_with_external_queue(const MetalDevice &device,
                                         MTLCommandQueue_id external_queue) {
-  [external_queue retain];
   return new MetalStream(device, external_queue, /*owns_queue=*/false);
 }
 void MetalStream::destroy() {
