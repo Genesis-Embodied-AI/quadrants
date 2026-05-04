@@ -533,6 +533,12 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   // Record commands
   const auto &task_attribs = ti_kernel->ti_kernel_attribs().tasks_attribs;
 
+  // Adstack-cache invalidation bump - see `bump_writes_for_kernel_spirv` in `program/adstack_size_expr_eval.{h,cpp}`.
+  if (program_impl_ != nullptr) {
+    bump_writes_for_kernel_spirv(program_impl_->program, &host_ctx, task_attribs,
+                                 ti_kernel->ti_kernel_attribs().ctx_attribs.arr_access);
+  }
+
   // Device-side adstack SizeExpr evaluation: every task with adstack allocas has its per-alloca `max_size` /
   // `offset` metadata resolved by a dedicated compute shader (see `quadrants/runtime/gfx/adstack_sizer_launch.cpp`
   // for the full mechanism). The helper internally early-returns (after seeding the per-task vector with

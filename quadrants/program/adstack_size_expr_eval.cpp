@@ -25,15 +25,24 @@ namespace quadrants::lang {
 
 namespace {
 
+using ReadSink = std::vector<AdStackCache::SizeExprReadObservation>;
+
+// Forward-declared, defined further down. Reads SNode `snode_id` at `indices` via the per-launch read
+// cache (when active) so multiple size-expr trees evaluated within the same outer launch share a single
+// reader-kernel dispatch per `(snode_id, indices)` pair.
+int64_t read_field_with_launch_cache(int snode_id, const std::vector<int> &indices, Program *prog);
+
 int64_t evaluate_node(const SerializedSizeExpr &expr,
                       int32_t node_idx,
-                      const std::unordered_map<int32_t, int64_t> &bound_vars,
+                      std::unordered_map<int32_t, int64_t> &bound_vars,
                       Program *prog,
-                      LaunchContextBuilder *ctx);
+                      LaunchContextBuilder *ctx,
+                      ReadSink *reads);
 
 int64_t evaluate_field_load(const SerializedSizeExprNode &node,
-                            const std::unordered_map<int32_t, int64_t> &bound_vars,
-                            Program *prog) {
+                            std::unordered_map<int32_t, int64_t> &bound_vars,
+                            Program *prog,
+                            ReadSink *reads) {
   QD_ASSERT_INFO(node.snode_id >= 0, "SerializedSizeExpr FieldLoad with no snode_id");
   SNode *snode = prog->get_snode_by_id(node.snode_id);
   QD_ASSERT_INFO(snode != nullptr,
@@ -54,13 +63,24 @@ int64_t evaluate_field_load(const SerializedSizeExprNode &node,
       indices.push_back(static_cast<int>(it->second));
     }
   }
-  auto accessors = prog->get_snode_rw_accessors_bank().get(snode);
-  return accessors.read_int(indices);
+  int64_t v = read_field_with_launch_cache(node.snode_id, indices, prog);
+  if (reads != nullptr) {
+    AdStackCache::SizeExprReadObservation obs;
+    obs.kind = AdStackCache::SizeExprReadObservation::FieldLoadObs;
+    obs.snode_id = node.snode_id;
+    obs.indices = std::move(indices);
+    obs.arg_shape_axis = 0;
+    obs.prim_dt = 0;
+    obs.observed_value = v;
+    reads->push_back(std::move(obs));
+  }
+  return v;
 }
 
 int64_t evaluate_external_tensor_read(const SerializedSizeExprNode &node,
-                                      const std::unordered_map<int32_t, int64_t> &bound_vars,
-                                      LaunchContextBuilder *ctx) {
+                                      std::unordered_map<int32_t, int64_t> &bound_vars,
+                                      LaunchContextBuilder *ctx,
+                                      ReadSink *reads) {
   QD_ASSERT_INFO(ctx != nullptr,
                  "SerializedSizeExpr ExternalTensorRead evaluated with no LaunchContextBuilder; the launcher "
                  "must pass the current launch's context in");
@@ -104,30 +124,53 @@ int64_t evaluate_external_tensor_read(const SerializedSizeExprNode &node,
     }
   }
   auto prim_dt = static_cast<PrimitiveTypeID>(node.const_value);
+  int64_t v;
   switch (prim_dt) {
     case PrimitiveTypeID::i32:
-      return static_cast<int64_t>(static_cast<int32_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<int32_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::i64:
-      return static_cast<int64_t *>(data_ptr)[linear];
+      v = static_cast<int64_t *>(data_ptr)[linear];
+      break;
     case PrimitiveTypeID::u32:
-      return static_cast<int64_t>(static_cast<uint32_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<uint32_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::u64:
-      return static_cast<int64_t>(static_cast<uint64_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<uint64_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::i16:
-      return static_cast<int64_t>(static_cast<int16_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<int16_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::u16:
-      return static_cast<int64_t>(static_cast<uint16_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<uint16_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::i8:
-      return static_cast<int64_t>(static_cast<int8_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<int8_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::u8:
-      return static_cast<int64_t>(static_cast<uint8_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<uint8_t *>(data_ptr)[linear]);
+      break;
     default:
       QD_ERROR("SerializedSizeExpr ExternalTensorRead: unsupported element type {}", node.const_value);
+      v = 0;
   }
-  return 0;
+  if (reads != nullptr) {
+    AdStackCache::SizeExprReadObservation obs;
+    obs.kind = AdStackCache::SizeExprReadObservation::ExternalReadObs;
+    obs.snode_id = 0;
+    obs.indices.reserve(resolved.size());
+    for (auto r : resolved)
+      obs.indices.push_back(static_cast<int>(r));
+    obs.arg_id_path = node.arg_id_path;
+    obs.arg_shape_axis = 0;
+    obs.prim_dt = static_cast<int>(prim_dt);
+    obs.observed_value = v;
+    reads->push_back(std::move(obs));
+  }
+  return v;
 }
 
-int64_t evaluate_external_tensor_shape(const SerializedSizeExprNode &node, LaunchContextBuilder *ctx) {
+int64_t evaluate_external_tensor_shape(const SerializedSizeExprNode &node, LaunchContextBuilder *ctx, ReadSink *reads) {
   QD_ASSERT_INFO(ctx != nullptr,
                  "SerializedSizeExpr ExternalTensorShape evaluated with no LaunchContextBuilder; the launcher "
                  "must pass the current launch's context into the evaluator to resolve ndarray shapes");
@@ -141,14 +184,26 @@ int64_t evaluate_external_tensor_shape(const SerializedSizeExprNode &node, Launc
   // garbage - often zero when the adjacent field is zero-initialised - and the containing tree collapses to
   // zero. The adstack max_size is clamped to 1 on a zero tree result, which under-bounds real push counts and
   // trips an overflow assertion at the next `qd.sync()`.
-  return static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(arg_indices));
+  int64_t v = static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(arg_indices));
+  if (reads != nullptr) {
+    AdStackCache::SizeExprReadObservation obs;
+    obs.kind = AdStackCache::SizeExprReadObservation::ExternalShapeObs;
+    obs.snode_id = 0;
+    obs.arg_id_path = node.arg_id_path;
+    obs.arg_shape_axis = node.arg_shape_axis;
+    obs.prim_dt = 0;
+    obs.observed_value = v;
+    reads->push_back(std::move(obs));
+  }
+  return v;
 }
 
 int64_t evaluate_node(const SerializedSizeExpr &expr,
                       int32_t node_idx,
-                      const std::unordered_map<int32_t, int64_t> &bound_vars,
+                      std::unordered_map<int32_t, int64_t> &bound_vars,
                       Program *prog,
-                      LaunchContextBuilder *ctx) {
+                      LaunchContextBuilder *ctx,
+                      ReadSink *reads) {
   QD_ASSERT_INFO(node_idx >= 0 && static_cast<std::size_t>(node_idx) < expr.nodes.size(),
                  "SerializedSizeExpr node_idx {} out of bounds (size={})", node_idx, expr.nodes.size());
   const auto &node = expr.nodes[node_idx];
@@ -156,23 +211,23 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
     case SizeExpr::Kind::Const:
       return node.const_value;
     case SizeExpr::Kind::FieldLoad:
-      return evaluate_field_load(node, bound_vars, prog);
+      return evaluate_field_load(node, bound_vars, prog, reads);
     case SizeExpr::Kind::Add:
-      return evaluate_node(expr, node.operand_a, bound_vars, prog, ctx) +
-             evaluate_node(expr, node.operand_b, bound_vars, prog, ctx);
+      return evaluate_node(expr, node.operand_a, bound_vars, prog, ctx, reads) +
+             evaluate_node(expr, node.operand_b, bound_vars, prog, ctx, reads);
     case SizeExpr::Kind::Sub:
-      return std::max<int64_t>(evaluate_node(expr, node.operand_a, bound_vars, prog, ctx) -
-                                   evaluate_node(expr, node.operand_b, bound_vars, prog, ctx),
+      return std::max<int64_t>(evaluate_node(expr, node.operand_a, bound_vars, prog, ctx, reads) -
+                                   evaluate_node(expr, node.operand_b, bound_vars, prog, ctx, reads),
                                0);
     case SizeExpr::Kind::Mul:
-      return evaluate_node(expr, node.operand_a, bound_vars, prog, ctx) *
-             evaluate_node(expr, node.operand_b, bound_vars, prog, ctx);
+      return evaluate_node(expr, node.operand_a, bound_vars, prog, ctx, reads) *
+             evaluate_node(expr, node.operand_b, bound_vars, prog, ctx, reads);
     case SizeExpr::Kind::Max:
-      return std::max(evaluate_node(expr, node.operand_a, bound_vars, prog, ctx),
-                      evaluate_node(expr, node.operand_b, bound_vars, prog, ctx));
+      return std::max(evaluate_node(expr, node.operand_a, bound_vars, prog, ctx, reads),
+                      evaluate_node(expr, node.operand_b, bound_vars, prog, ctx, reads));
     case SizeExpr::Kind::MaxOverRange: {
-      int64_t begin = evaluate_node(expr, node.operand_a, bound_vars, prog, ctx);
-      int64_t end = evaluate_node(expr, node.operand_b, bound_vars, prog, ctx);
+      int64_t begin = evaluate_node(expr, node.operand_a, bound_vars, prog, ctx, reads);
+      int64_t end = evaluate_node(expr, node.operand_b, bound_vars, prog, ctx, reads);
       // Guard against pathological trip counts. The evaluator walks `[begin, end)` linearly and re-evaluates the
       // body at every i; a range of several million would stall the launch hot path for seconds. Real reverse-mode
       // trip counts sit well below this cap (a few hundred to a few thousand in practice); anything above is
@@ -183,13 +238,23 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
                   "Shrink the enclosing reverse-mode loop or restructure the `SizeExpr` source kernel.",
                   end - begin, kMaxOverRangeIterations);
       int64_t result = 0;
-      auto extended = bound_vars;
+      // Bind `var_id` in `bound_vars` for the duration of the loop and restore the outer-scope value (or erase, if
+      // there was none) before returning, so nested `MaxOverRange` bindings of the same `var_id` stay correct without
+      // cloning the entire map per iteration.
+      auto prev_it = bound_vars.find(node.var_id);
+      bool had_prev = prev_it != bound_vars.end();
+      int64_t prev_val = had_prev ? prev_it->second : 0;
       for (int64_t i = begin; i < end; ++i) {
-        extended[node.var_id] = i;
-        int64_t v = evaluate_node(expr, node.body_node_idx, extended, prog, ctx);
+        bound_vars[node.var_id] = i;
+        int64_t v = evaluate_node(expr, node.body_node_idx, bound_vars, prog, ctx, reads);
         if (v > result) {
           result = v;
         }
+      }
+      if (had_prev) {
+        bound_vars[node.var_id] = prev_val;
+      } else {
+        bound_vars.erase(node.var_id);
       }
       return result;
     }
@@ -201,9 +266,9 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
       return it->second;
     }
     case SizeExpr::Kind::ExternalTensorShape:
-      return evaluate_external_tensor_shape(node, ctx);
+      return evaluate_external_tensor_shape(node, ctx, reads);
     case SizeExpr::Kind::ExternalTensorRead:
-      return evaluate_external_tensor_read(node, bound_vars, ctx);
+      return evaluate_external_tensor_read(node, bound_vars, ctx, reads);
   }
   QD_ERROR("unreachable SerializedSizeExpr kind {}", node.kind);
   return 0;
@@ -414,7 +479,8 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
                        LaunchContextBuilder *ctx,
                        const FieldLoadDeviceEmitter &fl_emitter,
                        std::vector<AdStackSizeExprDeviceNode> &out_nodes,
-                       std::vector<int32_t> &out_indices) {
+                       std::vector<int32_t> &out_indices,
+                       ReadSink *reads) {
   QD_ASSERT_INFO(src_idx >= 0 && static_cast<std::size_t>(src_idx) < src.nodes.size(),
                  "encode_subtree: src_idx {} out of bounds (size={})", src_idx, src.nodes.size());
   const bool subtree_needs_device = contains_device_leaf[src_idx];
@@ -426,7 +492,7 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
     // `FieldLoad` / `ExternalTensorShape` leaves - the device interpreter does not know how to walk SNodes or
     // index into `args_type`.
     std::unordered_map<int32_t, int64_t> empty_bound;
-    int64_t val = evaluate_node(src, src_idx, empty_bound, prog, ctx);
+    int64_t val = evaluate_node(src, src_idx, empty_bound, prog, ctx, reads);
     AdStackSizeExprDeviceNode dn = make_empty_device_node(static_cast<int32_t>(AdStackSizeExprDeviceKind::kConst));
     dn.const_value = val;
     out_nodes.push_back(dn);
@@ -454,9 +520,9 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
     case SizeExpr::Kind::Mul:
     case SizeExpr::Kind::Max: {
       int32_t a = encode_subtree(src, node.operand_a, contains_device_leaf, free_vars, var_id_remap, prog, ctx,
-                                 fl_emitter, out_nodes, out_indices);
+                                 fl_emitter, out_nodes, out_indices, reads);
       int32_t b = encode_subtree(src, node.operand_b, contains_device_leaf, free_vars, var_id_remap, prog, ctx,
-                                 fl_emitter, out_nodes, out_indices);
+                                 fl_emitter, out_nodes, out_indices, reads);
       AdStackSizeExprDeviceKind dk = AdStackSizeExprDeviceKind::kAdd;
       if (kind == SizeExpr::Kind::Sub)
         dk = AdStackSizeExprDeviceKind::kSub;
@@ -472,11 +538,11 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
     }
     case SizeExpr::Kind::MaxOverRange: {
       int32_t a = encode_subtree(src, node.operand_a, contains_device_leaf, free_vars, var_id_remap, prog, ctx,
-                                 fl_emitter, out_nodes, out_indices);
+                                 fl_emitter, out_nodes, out_indices, reads);
       int32_t b = encode_subtree(src, node.operand_b, contains_device_leaf, free_vars, var_id_remap, prog, ctx,
-                                 fl_emitter, out_nodes, out_indices);
+                                 fl_emitter, out_nodes, out_indices, reads);
       int32_t body = encode_subtree(src, node.body_node_idx, contains_device_leaf, free_vars, var_id_remap, prog, ctx,
-                                    fl_emitter, out_nodes, out_indices);
+                                    fl_emitter, out_nodes, out_indices, reads);
       AdStackSizeExprDeviceNode dn =
           make_empty_device_node(static_cast<int32_t>(AdStackSizeExprDeviceKind::kMaxOverRange));
       dn.operand_a = a;
@@ -610,12 +676,317 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
 
 }  // namespace
 
+namespace {
+
+// Per-launch cache of `FieldLoad` re-reads, keyed by `(snode_id, indices)`. Within one host-side eval root
+// call the SNode field values are pinned (no other kernel runs concurrently), so deduping repeats across
+// the size-expr trees evaluated in that window is correctness-safe.
+struct LaunchScopedReadCache {
+  struct Key {
+    int snode_id;
+    std::vector<int> indices;
+    bool operator==(const Key &o) const noexcept {
+      return snode_id == o.snode_id && indices == o.indices;
+    }
+  };
+  struct KeyHash {
+    std::size_t operator()(const Key &k) const noexcept {
+      std::size_t h = std::hash<int>{}(k.snode_id);
+      for (int v : k.indices) {
+        h ^= std::hash<int>{}(v) + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+      }
+      return h;
+    }
+  };
+  std::unordered_map<Key, int64_t, KeyHash> map;
+};
+thread_local LaunchScopedReadCache *t_launch_read_cache = nullptr;
+
+int64_t read_field_with_launch_cache(int snode_id, const std::vector<int> &indices, Program *prog) {
+  SNode *snode = prog->get_snode_by_id(snode_id);
+  if (snode == nullptr) {
+    return std::numeric_limits<int64_t>::min();
+  }
+  if (t_launch_read_cache != nullptr) {
+    LaunchScopedReadCache::Key key{snode_id, indices};
+    auto it = t_launch_read_cache->map.find(key);
+    if (it != t_launch_read_cache->map.end()) {
+      return it->second;
+    }
+    int64_t v = prog->get_snode_rw_accessors_bank().get(snode).read_int(indices);
+    t_launch_read_cache->map.emplace(std::move(key), v);
+    return v;
+  }
+  return prog->get_snode_rw_accessors_bank().get(snode).read_int(indices);
+}
+
+// Read the input that `obs` describes against the live state and `ctx`. Caller compares the result to
+// `obs.observed_value` to decide whether the cached `SizeExprCacheEntry` is still valid. Each `obs.kind`
+// mirrors the corresponding leaf in `evaluate_field_load` / `evaluate_external_tensor_shape` /
+// `evaluate_external_tensor_read`.
+int64_t replay_one_observation(const AdStackCache::SizeExprReadObservation &obs,
+                               Program *prog,
+                               LaunchContextBuilder *ctx) {
+  using Obs = AdStackCache::SizeExprReadObservation;
+  switch (obs.kind) {
+    case Obs::FieldLoadObs: {
+      int64_t v = read_field_with_launch_cache(obs.snode_id, obs.indices, prog);
+      if (v == std::numeric_limits<int64_t>::min()) {
+        return obs.observed_value + 1;  // force a mismatch if SNode disappeared
+      }
+      return v;
+    }
+    case Obs::ExternalShapeObs: {
+      if (ctx == nullptr) {
+        return obs.observed_value + 1;
+      }
+      std::vector<int> arg_indices(obs.arg_id_path.begin(), obs.arg_id_path.end());
+      arg_indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+      arg_indices.push_back(obs.arg_shape_axis);
+      return static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(arg_indices));
+    }
+    case Obs::ExternalReadObs: {
+      if (ctx == nullptr || obs.arg_id_path.empty()) {
+        return obs.observed_value + 1;
+      }
+      int arg_id = obs.arg_id_path[0];
+      ArgArrayPtrKey key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+      auto it = ctx->array_ptrs.find(key);
+      if (it == ctx->array_ptrs.end()) {
+        return obs.observed_value + 1;
+      }
+      void *data_ptr = it->second;
+      int64_t linear = 0;
+      int64_t stride = 1;
+      for (std::size_t i = obs.indices.size(); i > 0; --i) {
+        linear += static_cast<int64_t>(obs.indices[i - 1]) * stride;
+        if (i - 1 > 0) {
+          std::vector<int> sh_idx(obs.arg_id_path.begin(), obs.arg_id_path.end());
+          sh_idx.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+          sh_idx.push_back(static_cast<int>(i - 1));
+          stride *= static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(sh_idx));
+        }
+      }
+      switch (static_cast<PrimitiveTypeID>(obs.prim_dt)) {
+        case PrimitiveTypeID::i32:
+          return static_cast<int64_t>(static_cast<int32_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::i64:
+          return static_cast<int64_t *>(data_ptr)[linear];
+        case PrimitiveTypeID::u32:
+          return static_cast<int64_t>(static_cast<uint32_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::u64:
+          return static_cast<int64_t>(static_cast<uint64_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::i16:
+          return static_cast<int64_t>(static_cast<int16_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::u16:
+          return static_cast<int64_t>(static_cast<uint16_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::i8:
+          return static_cast<int64_t>(static_cast<int8_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::u8:
+          return static_cast<int64_t>(static_cast<uint8_t *>(data_ptr)[linear]);
+        default:
+          return obs.observed_value + 1;
+      }
+    }
+  }
+  return obs.observed_value + 1;
+}
+}  // namespace
+
+bool AdStackCache::try_size_expr_cache_hit(Program *prog,
+                                           const SerializedSizeExpr *expr_key,
+                                           LaunchContextBuilder *ctx,
+                                           int64_t &out_result) {
+  auto it = size_expr_cache_.find(expr_key);
+  if (it == size_expr_cache_.end()) {
+    return false;
+  }
+  const auto &entry = it->second;
+  for (const auto &obs : entry.reads) {
+    int64_t now = replay_one_observation(obs, prog, ctx);
+    if (now != obs.observed_value) {
+      size_expr_cache_.erase(it);
+      return false;
+    }
+  }
+  out_result = entry.result;
+  return true;
+}
+
+void AdStackCache::record_size_expr_eval(const SerializedSizeExpr *expr_key,
+                                         int64_t result,
+                                         std::vector<SizeExprReadObservation> reads) {
+  size_expr_cache_[expr_key] = SizeExprCacheEntry{result, std::move(reads)};
+}
+
+bool AdStackCache::try_spirv_bytecode_cache_hit(Program *prog,
+                                                const void *attribs_key,
+                                                LaunchContextBuilder *ctx,
+                                                std::vector<uint8_t> &out_bytecode) {
+  auto it = spirv_bytecode_cache_.find(attribs_key);
+  if (it == spirv_bytecode_cache_.end()) {
+    return false;
+  }
+  const auto &entry = it->second;
+  for (const auto &obs : entry.reads) {
+    int64_t now = replay_one_observation(obs, prog, ctx);
+    if (now != obs.observed_value) {
+      spirv_bytecode_cache_.erase(it);
+      return false;
+    }
+  }
+  out_bytecode = entry.bytecode;
+  return true;
+}
+
+void AdStackCache::record_spirv_bytecode_eval(const void *attribs_key,
+                                              std::vector<uint8_t> bytecode,
+                                              std::vector<SizeExprReadObservation> reads) {
+  spirv_bytecode_cache_[attribs_key] = SpirvBytecodeCacheEntry{std::move(bytecode), std::move(reads)};
+}
+
+void AdStackCache::record_per_task_ad_stack(const void *attribs_key,
+                                            std::vector<uint32_t> metadata,
+                                            uint32_t stride_float,
+                                            uint32_t stride_int,
+                                            std::vector<std::pair<int, uint64_t>> snode_gens,
+                                            std::vector<std::tuple<int, void *, uint64_t>> arg_gens) {
+  per_task_ad_stack_cache_[attribs_key] = PerTaskAdStackCacheEntry{std::move(metadata), stride_float, stride_int,
+                                                                   std::move(snode_gens), std::move(arg_gens)};
+}
+
+bool AdStackCache::try_per_task_ad_stack_cache_hit(const void *attribs_key,
+                                                   LaunchContextBuilder *ctx,
+                                                   PerTaskAdStackCacheEntry &out) {
+  auto it = per_task_ad_stack_cache_.find(attribs_key);
+  if (it == per_task_ad_stack_cache_.end()) {
+    return false;
+  }
+  const auto &entry = it->second;
+  for (const auto &snode_pair : entry.snode_gens) {
+    if (snode_write_gen(snode_pair.first) != snode_pair.second) {
+      per_task_ad_stack_cache_.erase(it);
+      return false;
+    }
+  }
+  for (const auto &arg_tuple : entry.arg_gens) {
+    int arg_id = std::get<0>(arg_tuple);
+    void *recorded_devalloc = std::get<1>(arg_tuple);
+    uint64_t recorded_gen = std::get<2>(arg_tuple);
+    void *current_devalloc = nullptr;
+    if (ctx != nullptr) {
+      ArgArrayPtrKey key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+      auto ap_it = ctx->array_ptrs.find(key);
+      if (ap_it != ctx->array_ptrs.end()) {
+        current_devalloc = ap_it->second;
+      }
+    }
+    if (current_devalloc != recorded_devalloc) {
+      per_task_ad_stack_cache_.erase(it);
+      return false;
+    }
+    if (ndarray_data_gen(recorded_devalloc) != recorded_gen) {
+      per_task_ad_stack_cache_.erase(it);
+      return false;
+    }
+  }
+  out = entry;
+  return true;
+}
+
+void AdStackCache::record_llvm_per_task_ad_stack(const void *attribs_key,
+                                                 std::vector<uint64_t> offsets,
+                                                 std::vector<uint64_t> max_sizes,
+                                                 uint64_t stride_combined,
+                                                 uint64_t stride_float,
+                                                 uint64_t stride_int,
+                                                 std::vector<std::pair<int, uint64_t>> snode_gens,
+                                                 std::vector<std::tuple<int, void *, uint64_t>> arg_gens) {
+  llvm_per_task_ad_stack_cache_[attribs_key] =
+      LlvmPerTaskAdStackCacheEntry{std::move(offsets), std::move(max_sizes),  stride_combined,    stride_float,
+                                   stride_int,         std::move(snode_gens), std::move(arg_gens)};
+}
+
+bool AdStackCache::try_llvm_per_task_ad_stack_cache_hit(const void *attribs_key,
+                                                        LaunchContextBuilder *ctx,
+                                                        LlvmPerTaskAdStackCacheEntry &out) {
+  auto it = llvm_per_task_ad_stack_cache_.find(attribs_key);
+  if (it == llvm_per_task_ad_stack_cache_.end()) {
+    return false;
+  }
+  const auto &entry = it->second;
+  for (const auto &snode_pair : entry.snode_gens) {
+    if (snode_write_gen(snode_pair.first) != snode_pair.second) {
+      llvm_per_task_ad_stack_cache_.erase(it);
+      return false;
+    }
+  }
+  for (const auto &arg_tuple : entry.arg_gens) {
+    int arg_id = std::get<0>(arg_tuple);
+    void *recorded_devalloc = std::get<1>(arg_tuple);
+    uint64_t recorded_gen = std::get<2>(arg_tuple);
+    void *current_devalloc = nullptr;
+    if (ctx != nullptr) {
+      ArgArrayPtrKey key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+      auto ap_it = ctx->array_ptrs.find(key);
+      if (ap_it != ctx->array_ptrs.end()) {
+        current_devalloc = ap_it->second;
+      }
+    }
+    if (current_devalloc != recorded_devalloc) {
+      llvm_per_task_ad_stack_cache_.erase(it);
+      return false;
+    }
+    if (ndarray_data_gen(recorded_devalloc) != recorded_gen) {
+      llvm_per_task_ad_stack_cache_.erase(it);
+      return false;
+    }
+  }
+  out = entry;
+  return true;
+}
+
+// Per-thread backing for `SizeExprLaunchScope`. The outer scope on each thread points `t_launch_read_cache` here
+// after clearing the map; nested scopes are no-ops.
+thread_local LaunchScopedReadCache t_launch_read_cache_storage{};
+
+SizeExprLaunchScope::SizeExprLaunchScope() : owns_(t_launch_read_cache == nullptr) {
+  if (owns_) {
+    t_launch_read_cache_storage.map.clear();
+    t_launch_read_cache = &t_launch_read_cache_storage;
+  }
+}
+SizeExprLaunchScope::~SizeExprLaunchScope() {
+  if (owns_) {
+    t_launch_read_cache = nullptr;
+  }
+}
+
 int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx) {
   if (expr.nodes.empty()) {
     return -1;
   }
+  // Open a `SizeExprLaunchScope` if no enclosing one is active, so repeated reads within this eval share
+  // the launch read cache. Callers that issue several `evaluate_adstack_size_expr` calls back-to-back
+  // should open their own scope to span all of them.
+  SizeExprLaunchScope local_scope;
+
+  // Cache fast path: replay the recorded reads against the live state and reuse the cached result if
+  // every input still matches. The full walk runs only on cache miss.
+  if (prog != nullptr) {
+    int64_t cached;
+    if (prog->adstack_cache().try_size_expr_cache_hit(prog, &expr, ctx, cached)) {
+      return cached;
+    }
+  }
   std::unordered_map<int32_t, int64_t> empty_bound_vars;
-  return evaluate_node(expr, static_cast<int32_t>(expr.nodes.size() - 1), empty_bound_vars, prog, ctx);
+  std::vector<AdStackCache::SizeExprReadObservation> reads;
+  int64_t result =
+      evaluate_node(expr, static_cast<int32_t>(expr.nodes.size() - 1), empty_bound_vars, prog, ctx, &reads);
+  if (prog != nullptr) {
+    prog->adstack_cache().record_size_expr_eval(&expr, result, std::move(reads));
+  }
+  return result;
 }
 
 void clip_effective_rows_by_loop_trip_count(std::size_t &effective_rows,
@@ -662,7 +1033,8 @@ std::vector<uint8_t> encode_bytecode_common(std::vector<AdStackSizeExprDeviceSta
                                             Program *prog,
                                             LaunchContextBuilder *ctx,
                                             const FieldLoadDeviceEmitter &fl_emitter,
-                                            int max_nodes_per_stack = 0) {
+                                            int max_nodes_per_stack = 0,
+                                            ReadSink *reads = nullptr) {
   const std::size_t n_stacks = stack_headers.size();
   QD_ASSERT(exprs.size() == n_stacks);
 
@@ -749,7 +1121,7 @@ std::vector<uint8_t> encode_bytecode_common(std::vector<AdStackSizeExprDeviceSta
                 i, mor_depth, spirv::kAdStackSizerMaxPendingFrames);
     const std::size_t nodes_before = nodes.size();
     sh.root_node_idx = encode_subtree(*expr, static_cast<int32_t>(root_src_idx), contains_device_leaf, free_vars,
-                                      var_id_remap, prog, ctx, fl_emitter, nodes, indices);
+                                      var_id_remap, prog, ctx, fl_emitter, nodes, indices, reads);
     if (max_nodes_per_stack > 0) {
       const std::size_t per_stack = nodes.size() - nodes_before;
       QD_ERROR_IF(per_stack > static_cast<std::size_t>(max_nodes_per_stack),
@@ -950,8 +1322,96 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
     *out_base_psb = root_psb + static_cast<uint64_t>(place_byte_offset);
     return true;
   };
-  return encode_bytecode_common(std::move(stack_headers), exprs, prog, ctx, fl_emitter,
-                                spirv::kAdStackSizerMaxNodesPerStack);
+  // Bytecode fast path: replay the recorded host-fold reads against the live state and reuse the cached
+  // bytecode if every input still matches. The full encode runs only on cache miss.
+  if (prog != nullptr) {
+    std::vector<uint8_t> cached;
+    if (prog->adstack_cache().try_spirv_bytecode_cache_hit(prog, static_cast<const void *>(&ad_stack), ctx, cached)) {
+      return cached;
+    }
+  }
+  std::vector<AdStackCache::SizeExprReadObservation> reads;
+  std::vector<uint8_t> bytecode = encode_bytecode_common(std::move(stack_headers), exprs, prog, ctx, fl_emitter,
+                                                         spirv::kAdStackSizerMaxNodesPerStack, &reads);
+  if (prog != nullptr) {
+    prog->adstack_cache().record_spirv_bytecode_eval(static_cast<const void *>(&ad_stack), bytecode, std::move(reads));
+  }
+  return bytecode;
+}
+
+void bump_writes_for_kernel_llvm(Program *prog,
+                                 LaunchContextBuilder *ctx,
+                                 const std::vector<OffloadedTask> &offloaded_tasks) {
+  if (prog == nullptr) {
+    return;
+  }
+  for (const auto &task : offloaded_tasks) {
+    for (int snode_id : task.snode_writes) {
+      prog->adstack_cache().bump_snode_write_gen(snode_id);
+    }
+    for (int arg_id : task.arr_writes) {
+      ArgArrayPtrKey data_key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+      auto it = ctx->array_ptrs.find(data_key);
+      if (it != ctx->array_ptrs.end() && it->second != nullptr) {
+        prog->adstack_cache().bump_ndarray_data_gen(it->second);
+      }
+    }
+  }
+}
+
+void bump_writes_for_kernel_llvm(Program *prog,
+                                 LaunchContextBuilder *ctx,
+                                 const std::vector<std::vector<int>> &snode_writes_per_task,
+                                 const std::vector<std::vector<int>> &arr_writes_per_task) {
+  if (prog == nullptr) {
+    return;
+  }
+  for (const auto &task_snodes : snode_writes_per_task) {
+    for (int snode_id : task_snodes) {
+      prog->adstack_cache().bump_snode_write_gen(snode_id);
+    }
+  }
+  for (const auto &task_args : arr_writes_per_task) {
+    for (int arg_id : task_args) {
+      ArgArrayPtrKey data_key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+      auto it = ctx->array_ptrs.find(data_key);
+      if (it != ctx->array_ptrs.end() && it->second != nullptr) {
+        prog->adstack_cache().bump_ndarray_data_gen(it->second);
+      }
+    }
+  }
+}
+
+void bump_writes_for_kernel_spirv(
+    Program *prog,
+    LaunchContextBuilder *ctx,
+    const std::vector<spirv::TaskAttributes> &task_attribs,
+    const std::vector<std::pair<std::vector<int>, irpass::ExternalPtrAccess>> &arr_access) {
+  if (prog == nullptr) {
+    return;
+  }
+  for (const auto &task : task_attribs) {
+    for (int snode_id : task.snode_writes) {
+      prog->adstack_cache().bump_snode_write_gen(snode_id);
+    }
+  }
+  for (const auto &kv : arr_access) {
+    const std::vector<int> &indices = kv.first;
+    uint32_t access = uint32_t(kv.second);
+    QD_ASSERT(indices.size() == 1);
+    int arg_id = indices[0];
+    bool kernel_writes = (access & uint32_t(irpass::ExternalPtrAccess::WRITE)) != 0;
+    bool kone_h2d_blit = (access & uint32_t(irpass::ExternalPtrAccess::READ)) != 0 &&
+                         ctx->device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone;
+    if (!kernel_writes && !kone_h2d_blit) {
+      continue;
+    }
+    ArgArrayPtrKey data_key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+    auto it = ctx->array_ptrs.find(data_key);
+    if (it != ctx->array_ptrs.end()) {
+      prog->adstack_cache().bump_ndarray_data_gen(it->second);
+    }
+  }
 }
 
 }  // namespace quadrants::lang

@@ -212,6 +212,15 @@ struct TaskAttributes {
   };
   AdStackSizingAttribs ad_stack;
 
+  // Snode IDs this task writes to (read-modify-write counts as a write). Computed at SPIR-V codegen time
+  // by walking the offloaded IR with `gather_snode_read_writes`. Consumed by the SPIR-V launcher on every
+  // `launch_kernel` call: each id here bumps `Program::snode_write_gen_[id]` so the per-task adstack
+  // metadata cache invalidates whenever a kernel that ran since the cache was recorded mutated a SNode
+  // a downstream `size_expr::FieldLoad` may read. Stored as raw IDs (not `SNode *`) so the field
+  // survives offline-cache load-store; the runtime resolves the pointer on demand via
+  // `Program::get_snode_by_id` only if it ever needs to call into snode-specific APIs.
+  std::vector<int> snode_writes;
+
   static std::string buffers_name(BufferInfo b);
 
   std::string debug_string() const;
@@ -222,7 +231,8 @@ struct TaskAttributes {
             task_type,
             buffer_binds,
             range_for_attribs,
-            ad_stack);
+            ad_stack,
+            snode_writes);
 };
 
 /**

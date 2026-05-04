@@ -17,6 +17,7 @@
 #include "quadrants/rhi/cuda/cuda_driver.h"
 #include "quadrants/rhi/llvm/device_memory_pool.h"
 #include "quadrants/program/program_impl.h"
+#include "quadrants/program/program.h"
 
 #if defined(QD_WITH_CUDA)
 #include "quadrants/rhi/cuda/cuda_context.h"
@@ -191,6 +192,10 @@ void LlvmRuntimeExecutor::print_list_manager_info(void *list_manager, uint64 *re
 
   fmt::print(" length={:n}     {:n} chunks x [{:n} x {:n} B]  total={:.4f} MB\n", list_manager_len, num_active_chunks,
              elements_per_chunk, element_size, size_MB);
+}
+
+Program *LlvmRuntimeExecutor::get_program() const {
+  return program_impl_ != nullptr ? program_impl_->program : nullptr;
 }
 
 void LlvmRuntimeExecutor::synchronize() {

@@ -17,7 +17,9 @@
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
 #include "quadrants/codegen/spirv/detail/spirv_codegen.h"
 #include "quadrants/codegen/spirv/spirv_shared_array_retyping.h"
+#include "quadrants/ir/analysis.h"
 #include "quadrants/ir/transforms.h"
+#include "quadrants/ir/snode.h"
 #include "quadrants/math/arithmetic.h"
 #include "quadrants/codegen/ir_dump.h"
 
@@ -197,6 +199,23 @@ TaskCodegen::Result TaskCodegen::run() {
 
   task_attribs_.ad_stack.per_thread_stride_float_compile_time = ad_stack_heap_per_thread_stride_float_;
   task_attribs_.ad_stack.per_thread_stride_int_compile_time = ad_stack_heap_per_thread_stride_int_;
+
+  // Snodes the task body mutates (any `GlobalStore` or `AtomicOp` whose dest resolves to a
+  // `GlobalPtrStmt`). Persisted on `task_attribs_.snode_writes` so the SPIR-V launcher can bump
+  // `Program::snode_write_gen_` for each id on every `launch_kernel` call - that is the precise signal
+  // the per-task adstack metadata cache uses to invalidate when a prior kernel may have changed a
+  // value an enclosing `size_expr::FieldLoad` reads. Stored as raw int ids (not `SNode *`) so the
+  // field round-trips through the offline cache without resolving the pointer at serialise time.
+  auto snode_rw = irpass::analysis::gather_snode_read_writes(task_ir_);
+  task_attribs_.snode_writes.reserve(snode_rw.second.size());
+  for (auto *s : snode_rw.second) {
+    if (s != nullptr) {
+      task_attribs_.snode_writes.push_back(s->id);
+    }
+  }
+  std::sort(task_attribs_.snode_writes.begin(), task_attribs_.snode_writes.end());
+  task_attribs_.snode_writes.erase(std::unique(task_attribs_.snode_writes.begin(), task_attribs_.snode_writes.end()),
+                                   task_attribs_.snode_writes.end());
 
   Result res;
   res.spirv_code = ir_->finalize();
