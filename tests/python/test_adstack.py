@@ -1186,25 +1186,22 @@ def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
     if not is_extension_supported(qd.cpu, qd.extension.adstack):
         pytest.skip("adstack extension not available on cpu")
 
-    # If a user launches an overflowing grad kernel and never calls `qd.sync()` before the process exits, the
-    # adstack-overflow flag is still set when Python interpreter teardown invokes `Program::finalize()`. The two
-    # teardown syncs inside `Program::finalize()` must not re-raise a `QuadrantsAssertionError` into the
-    # destructor path - doing so would terminate the process with `std::terminate()` instead of returning a clean
-    # exit code. A subprocess runs the overflowing-grad kernel without calling `qd.sync()` at all and exits; this
-    # test asserts that the child returns with exit code 0 rather than SIGABRT (-6) or any other non-zero code.
+    # Pins the teardown-no-double-raise contract for `Program::finalize()`. The per-launch
+    # `check_adstack_overflow_and_assert()` poll wired into `Program::launch_kernel` surfaces an overflow at
+    # the very next kernel-launch entry rather than waiting for `qd.sync()`. The user catches the resulting
+    # `QuadrantsAssertionError` and exits cleanly. Even after the catch, the two teardown `synchronize()`
+    # calls inside `Program::finalize()` re-enter the LLVM `check_adstack_overflow_and_assert` path, and
+    # `LlvmProgramImpl::pre_finalize()` must have set `finalizing_ = true` early enough that the per-launch
+    # poll AND the `synchronize_and_assert` poll BOTH short-circuit during the destructor. If either path
+    # re-raised, the destructor would `std::terminate()` instead of returning a clean exit code (-6 / SIGABRT
+    # on macOS, std::terminate's _Exit on linux). The subprocess asserts the child returns with exit code 0.
     #
-    # Internal details: `Program::finalize()` invokes `program_impl_->pre_finalize()` before the two teardown
-    # `synchronize()` calls. `LlvmProgramImpl::pre_finalize()` sets `finalizing_ = true` so
-    # `LlvmProgramImpl::synchronize()` short-circuits `check_adstack_overflow()`. Note the flag must be set
-    # *before* those syncs run - setting it only inside `LlvmProgramImpl::finalize()` (which is dispatched after
-    # them) is too late. The subprocess is launched from a temp file because `python -c "<kernel>"` breaks
-    # Quadrants' kernel source-inspect (`getsourcelines` cannot find the source of an inlined `-c` string); the
-    # grad call is deliberately left unsynced so this is the teardown path, not the user-catch path.
-    # `debug=True` is required for the same reason as `test_adstack_overflow_raises`: release-build LLVM codegen
-    # elides the per-push bounds check on the premise the sizer's bound is tight, so a manually-misconfigured
-    # `ad_stack_size=32` kernel only flips the runtime overflow flag in debug mode. Without the flag set there
-    # is no flag for the teardown guard to swallow, and the bug this test pins (re-raise during destructor path
-    # leading to `std::terminate()`) cannot trigger.
+    # Internal details: the subprocess is launched from a temp file because `python -c "<kernel>"` breaks
+    # Quadrants' kernel source-inspect (`getsourcelines` cannot find the source of an inlined `-c` string).
+    # `debug=True` is required because release-build LLVM codegen elides the per-push bounds check on the
+    # premise the sizer's bound is tight, so a manually-misconfigured `ad_stack_size=32` kernel only flips
+    # the runtime overflow flag in debug mode. Without the flag set there is no flag for the teardown
+    # guard to swallow, and the bug this test pins cannot trigger.
     child_script = textwrap.dedent(
         """
         import quadrants as qd
@@ -1229,9 +1226,10 @@ def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
         compute()
         y.grad[None] = 1.0
         x.grad[0] = 0.0
-        compute.grad()
-        # Intentionally no qd.sync() and no try/except here: the adstack-overflow flag is left set when the
-        # process exits, so teardown must swallow it via the `finalizing_` guard rather than re-raising.
+        try:
+            compute.grad()
+        except (AssertionError, RuntimeError) as e:
+            assert "adstack overflow" in str(e).lower()
         """
     )
     script_path = tmp_path / "overflow_teardown_child.py"

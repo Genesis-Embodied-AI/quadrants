@@ -166,6 +166,11 @@ void Program::launch_kernel(const CompiledKernelData &compiled_kernel_data, Laun
   if (compile_config().debug && arch_uses_llvm(compiled_kernel_data.arch())) {
     program_impl_->check_runtime_error(result_buffer);
   }
+  // Free per-launch poll on the pinned-host adstack overflow flag. Catches DLPack-bypass mutations and
+  // pre-pass undersizing within one Quadrants Python entry of the offending launch, including in async
+  // release loops that never call `qd.sync()`. SPIR-V backends' poll stays in `synchronize_and_assert()`
+  // because their overflow buffer needs `wait_idle()` to be coherent.
+  program_impl_->check_adstack_overflow_and_assert();
 }
 
 void Program::materialize_runtime() {

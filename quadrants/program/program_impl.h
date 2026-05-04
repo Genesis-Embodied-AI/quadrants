@@ -78,6 +78,16 @@ class ProgramImpl {
     synchronize();
   }
 
+  /**
+   * Per-launch poll for any user-visible async error (currently: adstack overflow). Default no-op. LLVM
+   * backends override to read the pinned-host overflow flag without sync drain - the cost is one host atomic
+   * load. SPIR-V's overflow buffer needs `wait_idle()` to be coherent so its check stays in
+   * `synchronize_and_assert()`; promoting it to per-launch would tank the queue throughput on Apple Metal /
+   * Vulkan.
+   */
+  virtual void check_adstack_overflow_and_assert() {
+  }
+
   virtual StreamSemaphore flush() {
     synchronize();
     return nullptr;

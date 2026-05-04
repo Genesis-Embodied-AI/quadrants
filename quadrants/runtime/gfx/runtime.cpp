@@ -1008,12 +1008,22 @@ void GfxRuntime::synchronize() {
                 "means the reducer and the main pass observed different threads passing the captured gating "
                 "predicate. File a bug with the kernel IR via `QD_DUMP_IR=1` and a minimal repro.");
     QD_ERROR_IF(flag_val != 0,
-                "Adstack overflow (offending stack_id={}): a reverse-mode autodiff kernel pushed more elements "
-                "than the adstack capacity allows. Raised at the next qd.sync() rather than at the offending "
-                "kernel launch. The pre-pass resolved this alloca to a bound tighter than the actual runtime "
-                "push count - either the enclosing loop shape is outside the current `SizeExpr` grammar "
-                "(rewrite it, or extend the grammar), or the Bellman-Ford analyzer undercounted the "
-                "forward-pass accumulation on this stack (file a bug with the kernel IR via `QD_DUMP_IR=1`).",
+                "Adstack overflow (offending stack_id={}): a reverse-mode autodiff kernel pushed more "
+                "elements than the adstack capacity allows. Raised at the next `qd.sync()`. Two possible "
+                "causes:\n"
+                "  1. A tensor backing a data-dependent loop bound was mutated outside Quadrants's tracking "
+                "(typically a DLPack zero-copy mutation through a torch tensor sharing storage with a "
+                "Quadrants ndarray, or a raw pointer write through a non-torch DLPack consumer). The cached "
+                "adstack capacity was sized against the value before the mutation. Recovery: route the "
+                "mutation through Quadrants APIs (`Ndarray.write` / `fill` / kernel writes) so the cache "
+                "invalidates correctly, OR set a generous initial cap if a workload-change milestone "
+                "genuinely grew capacity. Restart the iteration / training loop from a clean state.\n"
+                "  2. (Quadrants bug) the pre-pass resolved the alloca to a bound tighter than the actual "
+                "runtime push count - the enclosing loop shape is outside the current `SizeExpr` grammar, "
+                "or the Bellman-Ford analyzer undercounted the forward-pass accumulation. Please file with "
+                "the kernel IR (`QD_DUMP_IR=1`).\n"
+                "Note: kernel state may be inconsistent post-overflow; do not retry the same step without "
+                "addressing the cause and restarting from a clean state.",
                 flag_val - 1);
   }
   fflush(stdout);
