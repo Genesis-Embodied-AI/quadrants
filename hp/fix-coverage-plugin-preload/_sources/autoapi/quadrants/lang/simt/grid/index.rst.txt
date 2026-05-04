@@ -1,0 +1,19 @@
+quadrants.lang.simt.grid
+========================
+
+.. py:module:: quadrants.lang.simt.grid
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.simt.grid.memfence
+
+
+Module Contents
+---------------
+
+.. py:function:: memfence()
+
