@@ -1,0 +1,154 @@
+name: PR change report
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  pr-change-report:
+    name: PR change report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait using dead-reckoning for builds to finish, before running, to save AI cost, if someone pushes many commits in a row
+        run: sleep 1800
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Build agent inputs (per-file totals, diffs, base contents)
+        id: inputs
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          python .github/workflows/scripts_new/pr_change_report/build_inputs.py \
+            --base-ref "$BASE_REF" \
+            --output-dir /tmp/pr_change_report
+
+          if [ ! -s /tmp/pr_change_report/file_list.txt ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No source files changed."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Files in report:"
+            cat /tmp/pr_change_report/file_list.txt
+            echo
+            echo "Pre-computed file headers:"
+            cat /tmp/pr_change_report/report_header.md
+          fi
+
+      - name: Install Cursor CLI
+        if: steps.inputs.outputs.skip != 'true'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+
+      - name: Generate per-function breakdown with Cursor agent
+        if: steps.inputs.outputs.skip != 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_KEY_HUGH }}
+        run: |
+          agent -p "$(cat <<'PROMPT'
+          You are producing a PR change report. Inputs are under /tmp/pr_change_report/ :
+            - summary.json     : list of {"path","language","total","added","removed"} for each
+                                 changed source file. Numbers are NON-comment, NON-blank code
+                                 lines, computed deterministically. Treat them as authoritative.
+            - report_header.md : exact file-header lines you must use verbatim, e.g.
+                                   foo.py 700 +63 -5
+                                   blah.cpp 2000 +45 -20
+            - file_list.txt    : changed paths, one per line, in the order you must emit.
+            - diffs/<path>.diff : per-file unified diff vs merge-base.
+            - base/<path>      : full base content of that file (missing if newly added).
+          The HEAD content of each file is in the workspace (current checkout) at the same path.
+
+          Your task: for each path in file_list.txt, in order, emit:
+            1. The exact file-header line from report_header.md, verbatim, on its own line.
+            2. Indented (4 spaces) per-function lines, one per function/method that was added
+               or modified by this PR. One line per function, format:
+                  <name>() NEW +<added>                 (function did not exist on base)
+                  <name>() <total> +<added>             (only added code lines)
+                  <name>() <total> -<removed>           (only removed code lines)
+                  <name>() <total> +<added> -<removed>  (both)
+               where:
+                 - <total>   = current LoC of the function in HEAD (NON-comment, NON-blank).
+                 - <added>   = code lines this function gained.
+                 - <removed> = code lines this function lost.
+               For top-level statements that are not inside a function/class, group them
+               under the synthetic name `<module>()`.
+
+          Constraints:
+            - Use function names as they appear in source. C++ class methods are
+              "ClassName::method". Free functions are just "func". Lambdas inside another
+              function may be skipped or grouped under their enclosing function.
+            - Only list functions whose +/- counts are non-zero. Do not include unchanged
+              functions.
+            - Do not invent functions that do not exist in HEAD or base.
+            - Sums of per-function +/- counts SHOULD MATCH the file-level +/- counts in
+              report_header.md. Small drift (1-2 lines) is acceptable for unusual hunks
+              (e.g. straddling block-comment boundaries) but if drift exceeds 5 lines on
+              either side, add ONE line below that file's section, indented 4 spaces:
+                  # note: per-function +/- differs from file totals by +N -M
+            - Output ONLY the report. No preamble, no headings, no closing remarks, no
+              code fences, no explanations.
+          PROMPT
+          )" --model claude-4.6-opus-high-thinking --mode ask --output-format text --trust \
+            > /tmp/pr_change_report/report.txt
+
+          echo "----- report.txt -----"
+          cat /tmp/pr_change_report/report.txt
+          echo "----------------------"
+
+      - name: Write report to job summary
+        if: steps.inputs.outputs.skip != 'true'
+        run: |
+          {
+            echo "## PR change report"
+            echo
+            echo "Per-file totals + per-function breakdown of code lines (excluding blank lines and comment-only lines)."
+            echo
+            echo "Header line format: \`<file> <total_LoC_at_HEAD> +<added> -<removed>\`."
+            echo "Per-function lines (indented) follow the same format, with \`NEW\` instead of \`<total>\` for newly-introduced functions."
+            echo
+            echo '```text'
+            cat /tmp/pr_change_report/report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post PR comment linking to the report
+        if: steps.inputs.outputs.skip != 'true' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          RUN_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
+          if [ -n "${RUN_ATTEMPT}" ]; then
+            RUN_URL="${RUN_URL}/attempts/${RUN_ATTEMPT}"
+          fi
+          cat > /tmp/pr_change_report/comment.md <<EOF
+          **PR change report**
+
+          A per-file / per-function breakdown of code-line additions and removals (excluding blank lines and comment-only lines) has been generated for this run.
+
+          Open the GitHub Check **PR change report** for the full report:
+
+          - [View the report on the run summary](${RUN_URL}#summary)
+
+          A new comment is posted on every run.
+          EOF
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body-file /tmp/pr_change_report/comment.md
