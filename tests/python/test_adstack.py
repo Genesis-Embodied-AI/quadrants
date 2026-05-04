@@ -184,33 +184,34 @@ def test_unary_forward_mode_derivative(op_name):
 
 
 def test_unary_collections_audit():
-    # Prevents drift between the Python unary op registry and the C++ `unary_collections` set in
-    # `quadrants/transforms/auto_diff.cpp`. Every unary op whose `MakeAdjoint` branch accumulates onto
-    # `stmt->operand` must be either in `unary_collections` (nonlinear: needs per-iteration operand spilling on
-    # the adstack inside dynamic loops) or in the local `_KNOWN_LINEAR_UNARY_OPS` allow-list (reverse formula
-    # uses a compile-time constant coefficient, so the single-slot spill path is correct for it). Forgetting to
-    # classify a new diffable unary op falls back to the single-slot spill and produces silently wrong gradients
-    # in dynamic loops.
+    # Prevents drift between the Python unary op registry and the C++ `unary_collections` set declared in
+    # `quadrants/transforms/auto_diff/auto_diff_common.h`. Every unary op whose `MakeAdjoint` branch (defined in
+    # `quadrants/transforms/auto_diff/make_adjoint.cpp`) accumulates onto `stmt->operand` must be either in
+    # `unary_collections` (nonlinear: needs per-iteration operand spilling on the adstack inside dynamic loops) or
+    # in the local `_KNOWN_LINEAR_UNARY_OPS` allow-list (reverse formula uses a compile-time constant coefficient,
+    # so the single-slot spill path is correct for it). Forgetting to classify a new diffable unary op falls back
+    # to the single-slot spill and produces silently wrong gradients in dynamic loops.
     #
     # Four invariants are checked, all of them symmetric:
     #   (1) Every diffable-math op detected in MakeAdjoint is in `cpp_nonlinear` OR in `_KNOWN_LINEAR_UNARY_OPS`.
     #   (2) Every op in `cpp_nonlinear` has a matching diffable-math branch in MakeAdjoint.
     #   (3) Every op in `_KNOWN_LINEAR_UNARY_OPS` has a matching diffable-math branch in MakeAdjoint.
     #   (4) `cpp_nonlinear` and `_KNOWN_LINEAR_UNARY_OPS` are disjoint (an op cannot be both nonlinear and linear).
-    src_path = pathlib.Path(__file__).resolve().parents[2] / "quadrants" / "transforms" / "auto_diff.cpp"
-    src = src_path.read_text()
+    auto_diff_dir = pathlib.Path(__file__).resolve().parents[2] / "quadrants" / "transforms" / "auto_diff"
+    common_src = (auto_diff_dir / "auto_diff_common.h").read_text()
+    make_adjoint_src = (auto_diff_dir / "make_adjoint.cpp").read_text()
 
-    cc_match = re.search(r"unary_collections\s*\{([^}]+)\}", src)
-    assert cc_match is not None, "unary_collections not located in auto_diff.cpp"
+    cc_match = re.search(r"unary_collections\s*\{([^}]+)\}", common_src)
+    assert cc_match is not None, "unary_collections not located in auto_diff_common.h"
     cpp_nonlinear = set(re.findall(r"UnaryOpType::(\w+)", cc_match.group(1)))
 
-    make_adjoint_start = src.find("class MakeAdjoint")
-    assert make_adjoint_start != -1, "class MakeAdjoint not located in auto_diff.cpp"
-    adj_start = src.find("void visit(UnaryOpStmt *stmt) override", make_adjoint_start)
-    assert adj_start != -1, "MakeAdjoint::visit(UnaryOpStmt*) not located in auto_diff.cpp"
-    adj_end = src.find("void visit(", adj_start + 10)
+    make_adjoint_start = make_adjoint_src.find("class MakeAdjoint")
+    assert make_adjoint_start != -1, "class MakeAdjoint not located in make_adjoint.cpp"
+    adj_start = make_adjoint_src.find("void visit(UnaryOpStmt *stmt) override", make_adjoint_start)
+    assert adj_start != -1, "MakeAdjoint::visit(UnaryOpStmt*) not located in make_adjoint.cpp"
+    adj_end = make_adjoint_src.find("void visit(", adj_start + 10)
     assert adj_end != -1, "next visitor method after MakeAdjoint::visit(UnaryOpStmt*) not found"
-    adj_block = src[adj_start:adj_end]
+    adj_block = make_adjoint_src[adj_start:adj_end]
     # Split the visitor's if/else-if chain into per-op segments, then classify each segment as "diffable math"
     # iff its body accumulates onto `stmt->operand`. Two accumulate entry points are recognised: the raw
     # `accumulate(stmt->operand, ...)` call (used by `neg` and `cast_value`) and the `acc(...)` lambda (used by
@@ -242,8 +243,8 @@ def test_unary_collections_audit():
     missing = diffable_math - cpp_nonlinear - _KNOWN_LINEAR_UNARY_OPS
     assert not missing, (
         f"Diffable unary ops not classified as nonlinear or linear: {sorted(missing)}. "
-        f"Add each one to `unary_collections` in quadrants/transforms/auto_diff.cpp (if nonlinear) or to "
-        f"`_KNOWN_LINEAR_UNARY_OPS` in this file (if linear)."
+        f"Add each one to `unary_collections` in quadrants/transforms/auto_diff/auto_diff_common.h (if "
+        f"nonlinear) or to `_KNOWN_LINEAR_UNARY_OPS` in this file (if linear)."
     )
     stray_nonlinear = cpp_nonlinear - diffable_math
     assert not stray_nonlinear, (
