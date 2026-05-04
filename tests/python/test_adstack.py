@@ -414,6 +414,67 @@ def test_adstack_basic_gradient_f64(n_iter):
     _run_basic_gradient(qd.f64, n_iter=n_iter, rel_tol=1e-14, approx=pytest.approx, abs_tol=0)
 
 
+@test_utils.test(require=qd.extension.adstack)
+def test_eliminate_recomputable_pushes_preserves_zero_body_store():
+    # Cross-checks `dloss/dc` against the analytic value `2 * cos(c) * cos(sin(c))` for an adstack-mode kernel where
+    # `tmp` receives one recomputable body push (`tmp = qd.sin(c[None])`) plus one conditional zero body store
+    # (`if reset[i] != 0: tmp = 0.0`). The reset mask `[0, 1, 0, 1]` zeros `tmp` for two of four iterations so only
+    # the other two contribute to the gradient.
+    #
+    # Internal details: the adstack promotion of `tmp` comes from `AdStackAllocaJudger::visit(UnaryOpStmt)` (`tmp`
+    # feeds the non-linear `qd.sin(tmp)` accumulator); the load+store rule does not fire because the offload-level
+    # for-loop sits outside the IB and `dynamic_for_depth_` stays 0 throughout the judger walk. The body push value
+    # `sin(GlobalLoad(c))` is a recomputable chain by `RecomputableChainAnalyzer`, which makes the stack a candidate
+    # for `EliminateRecomputableAdStackPushes`. The eligibility gate must count the conditional `tmp = 0.0` as a
+    # body push: two body pushes for one stack disqualify the stack and the original IR survives. A weaker gate that
+    # classifies the conditional zero as the prologue init - e.g. detecting init by literal-zero value rather than
+    # by position relative to the alloca - drops the user's zero store, rewires every `load_top` to `sin(c)`, and
+    # produces `c.grad` exactly 2x the analytic value because the gradient flows through every iteration regardless
+    # of the reset mask.
+    n = 4
+    c = qd.field(qd.f32, shape=(), needs_grad=True)
+    reset = qd.field(qd.i32, shape=n)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in range(n):
+            # Recomputable body push: sin of a globally-loaded scalar. The chain `sin(GlobalLoad(c))` has interior
+            # side-effect-free ops only and no LoopIndex / LocalLoad leaves, so RecomputableChainAnalyzer returns
+            # true.
+            tmp = qd.sin(c[None])
+            if reset[i] != 0:
+                # Real `tmp = 0.0` body store. Lowers to AdStackPushStmt with value zero. A weaker eligibility gate
+                # misclassifies this push as an init prologue push and silently erases it.
+                tmp = 0.0
+            # Use tmp as a non-linear unary op operand so AdStackAllocaJudger marks the alloca stack-needed via its
+            # visit(UnaryOpStmt) rule, which is what makes this an AdStack in the first place (the load+store rule
+            # does not fire here because the offload-level for-loop is outside the IB and `dynamic_for_depth_` stays
+            # 0).
+            loss[None] += qd.sin(tmp)
+
+    c[None] = 0.5
+    reset[0] = 0
+    reset[1] = 1
+    reset[2] = 0
+    reset[3] = 1
+    loss[None] = 0.0
+    c.grad[None] = 0.0
+
+    compute()
+    loss.grad[None] = 1.0
+    compute.grad()
+
+    # Forward semantics: tmp_i = sin(c) when reset[i]==0, 0 when reset[i]!=0. Two of four iterations are not reset,
+    # so loss == 2 * sin(sin(c)). Gradient: dloss/dc contributes cos(c)*cos(sin(c)) per non-reset iteration, so
+    # dloss/dc == 2 * cos(c) * cos(sin(c)).
+    n_no_reset = 2
+    expected_loss = n_no_reset * math.sin(math.sin(0.5))
+    expected_grad = n_no_reset * math.cos(0.5) * math.cos(math.sin(0.5))
+    assert loss[None] == pytest.approx(expected_loss, rel=1e-5)
+    assert c.grad[None] == pytest.approx(expected_grad, rel=1e-5)
+
+
 @pytest.mark.parametrize("n_iter", [1, 3, 10])
 @pytest.mark.parametrize("wrap_inner_in_func", [False, True])
 @test_utils.test(ad_stack_experimental_enabled=False)

@@ -6,9 +6,8 @@ namespace quadrants::lang {
 namespace {
 
 // ============================================================================
-// RegulateTensorTypedStatements: rewrite tensor-typed local/global stores that
-// touch a sub-tensor through MatrixPtr into an explicit gather + matrix-init
-// + scalar store, so downstream passes never see a partial-tensor store.
+// RegulateTensorTypedStatements: rewrite tensor-typed local/global stores that touch a sub-tensor through MatrixPtr
+// into an explicit gather + matrix-init + scalar store, so downstream passes never see a partial-tensor store.
 // ============================================================================
 
 class RegulateTensorTypedStatements : public BasicStmtVisitor {
@@ -180,10 +179,9 @@ class RegulateTensorTypedStatements : public BasicStmtVisitor {
 // ============================================================================
 // Independent-Blocks discovery: IBJudger / DupCleaner / IdentifyIBs.
 //
-// Independent Block (IB): a block (i.e. loop body) whose iterations are
-// independent of previous iterations and outer scopes. IBs are where
-// MakeAdjoint emits the reverse pass; outside an IB only iteration order
-// matters and ReverseOuterLoops handles that.
+// Independent Block (IB): a block (i.e. loop body) whose iterations are independent of previous iterations and outer
+// scopes. IBs are where MakeAdjoint emits the reverse pass; outside an IB only iteration order matters and
+// ReverseOuterLoops handles that.
 // ============================================================================
 
 class IndependentBlocksJudger : public BasicStmtVisitor {
@@ -202,12 +200,9 @@ class IndependentBlocksJudger : public BasicStmtVisitor {
   }
 
   void visit(AtomicOpStmt *stmt) override {
-    // We don't need to check the global atomics inside the range for-loops
-    // because
-    // 1. If the range for-loop is innermost, they will be captured by
-    // MakeAdjoint anyway
-    // 2. If the range for-loop is not innermost, they will be processed by
-    // another IndependentBlocksJudger
+    // We don't need to check the global atomics inside the range for-loops because:
+    //   1. If the range for-loop is innermost, they are captured by MakeAdjoint anyway.
+    //   2. If the range for-loop is not innermost, they are processed by another IndependentBlocksJudger.
     if (is_inside_loop_)
       return;
 
@@ -234,12 +229,9 @@ class IndependentBlocksJudger : public BasicStmtVisitor {
   }
 
   void visit(GlobalLoadStmt *stmt) override {
-    // We don't need to check the global load inside the range for-loops
-    // because
-    // 1. If the range for-loop is innermost, they will be captured by
-    // MakeAdjoint anyway
-    // 2. If the range for-loop is not innermost, they will be processed by
-    // another IndependentBlocksJudger
+    // We don't need to check the global load inside the range for-loops because:
+    //   1. If the range for-loop is innermost, they are captured by MakeAdjoint anyway.
+    //   2. If the range for-loop is not innermost, they are processed by another IndependentBlocksJudger.
     if (is_inside_loop_)
       return;
 
@@ -271,27 +263,23 @@ class IndependentBlocksJudger : public BasicStmtVisitor {
     Block *block = root->as<Block>();
     root->accept(&Judger);
     std::set<Block *> outside_blocks;
-    // Collect all parent blocks (i.e. outside blocks) of the current block for
-    // local load/store stmt checks
+    // Collect all parent blocks (i.e. outside blocks) of the current block for local load/store stmt checks.
     for (auto b = block->parent_block(); b; b = b->parent_block()) {
       if (b)
         outside_blocks.insert(b);
     }
     for (const auto &alloca : Judger.touched_allocas_) {
-      // Test if the alloca belongs to the current block
+      // Test if the alloca belongs to the current block.
       if (outside_blocks.find(alloca->parent) != outside_blocks.end()) {
-        // This block is not an IB since it loads/modifies outside variables
+        // This block is not an IB since it loads/modifies outside variables.
         ib_meta_data.is_ib = false;
       }
     }
 
-    // To judge whether a block is an IB
-    // - No local load/store to allocas *outside* itself has been strictly
-    // enforced
-
-    // To judge whether a block is a smallest IB
-    // - If the #1 is satisfied, either an inner most loop or a block without
-    // global atomics / global load is an IB
+    // IB classification rules:
+    //   - To be an IB, the block must have no local load/store to allocas outside itself (enforced above).
+    //   - To be a smallest IB on top of that, it must be an inner-most loop or a block without qualified global
+    //     atomics / global loads.
     ib_meta_data.is_smallest_ib = ib_meta_data.is_ib && (Judger.qualified_glb_operations_ || Judger.inner_most_loop_);
   }
 
@@ -302,8 +290,7 @@ class IndependentBlocksJudger : public BasicStmtVisitor {
   bool is_inside_loop_ = false;
 };
 
-// Remove the duplicated IBs, remove blocks who are others' children because
-// each block should only be processed once
+// Remove duplicated IBs and remove blocks that are others' children, so each block is processed at most once.
 class DuplicateIndependentBlocksCleaner : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
@@ -332,8 +319,7 @@ class DuplicateIndependentBlocksCleaner : public BasicStmtVisitor {
     }
     // No clean is needed if only one IB exists
     if (cleaner.independent_blocks_cleaned_.size() > 1) {
-      // Check from the block with smallest depth, ensure no duplicate visit
-      // happens
+      // Check from the block with smallest depth, ensure no duplicate visit happens.
       for (const auto &block : cleaner.independent_blocks_cleaned_) {
         block->accept(&cleaner);
       }
@@ -363,12 +349,10 @@ class IdentifyIndependentBlocks : public BasicStmtVisitor {
 
   void visit_loop_body(Block *block) {
     auto ib_meta_data = IndependentBlockMetaData();
-    // An IB has no local load/store to allocas *outside* itself
-    // Note:
-    //  - Local atomics should have been demoted before this pass.
-    //  - It is OK for an IB to have more than two for loops.
-    //  - No global load/atomics operations to the global variables which
-    //  require gradient
+    // An IB has no local load/store to allocas *outside* itself. Note:
+    //   - Local atomics must have been demoted before this pass.
+    //   - It is OK for an IB to have more than two for loops.
+    //   - No global load/atomics operations to global variables that require gradient.
     if (block->statements.empty()) {
       // A empty block shoud be a smallest IB
       ib_meta_data.is_ib = true;
@@ -441,9 +425,8 @@ class IdentifyIndependentBlocks : public BasicStmtVisitor {
 };
 
 // ============================================================================
-// ReverseOuterLoops: flip iteration direction on outer (non-IB) for-loops and
-// reorder sibling for-loops in non-IB container blocks so the reverse pass
-// walks the iteration trace backward.
+// ReverseOuterLoops: flip iteration direction on outer (non-IB) for-loops and reorder sibling for-loops in non-IB
+// container blocks so the reverse pass walks the iteration trace backward.
 // ============================================================================
 
 class ReverseOuterLoops : public BasicStmtVisitor {
@@ -457,26 +440,24 @@ class ReverseOuterLoops : public BasicStmtVisitor {
     return std::find(ib_.begin(), ib_.end(), block) != ib_.end();
   }
 
-  // Sibling for-loops inside a non-IB container block execute their reverse-mode companions
-  // in the container's forward order by default, because MakeAdjoint only touches IB-level bodies
-  // and nothing else permutes the enclosing order. Reverse-mode AD requires the opposite: if the
-  // forward body runs `for_A; for_B` and for_B's reverse depends on reads produced by for_A's
-  // forward run, the reverse pass must execute `rev-for_B; rev-for_A` so for_A's reverse sees the
-  // adjoints for_B has populated (e.g. `cdof[i]=x[i]; cdofvel[i]=cdof[i]*vel[i]` silently returns
-  // x.grad=0 otherwise: rev-for_A clears cdof.grad before rev-for_B has populated it).
+  // Sibling for-loops inside a non-IB container block execute their reverse-mode companions in the container's forward
+  // order by default, because MakeAdjoint only touches IB-level bodies and nothing else permutes the enclosing order.
+  // Reverse-mode AD requires the opposite: if the forward body runs `for_A; for_B` and for_B's reverse depends on reads
+  // produced by for_A's forward run, the reverse pass must execute `rev-for_B; rev-for_A` so for_A's reverse sees the
+  // adjoints for_B has populated (e.g. `a[i]=x[i]; b[i]=a[i]*y[i]` silently returns x.grad=0 otherwise: rev-for_A
+  // clears a.grad before rev-for_B has populated it).
   //
-  // Naive pairwise swap of for-loop positions is unsafe whenever a non-loop stmt between two
-  // for-loops feeds the later sibling's SSA operand chain (e.g. a GlobalLoad that supplies a
-  // dynamic trip count): after the swap, the consumer for-loop ends up before its producer and
-  // the IR verifier rejects the block. Before swapping, hoist any such producer (and its
-  // transitive in-block dependencies) to the slot just before the first sibling for-loop. Non-loop
-  // stmts unrelated to for-loop operands stay at their original indices; memory ordering between
-  // non-loop stmts is preserved because the hoist keeps them in their original relative order and
-  // only moves them upward over for-loops (which produce no SSA value and cannot be the source of
-  // a missed memory read for a non-loop that gets hoisted above them).
+  // Naive pairwise swap of for-loop positions is unsafe whenever a non-loop stmt between two for-loops feeds the later
+  // sibling's SSA operand chain (e.g. a GlobalLoad that supplies a dynamic trip count): after the swap, the consumer
+  // for-loop ends up before its producer and the IR verifier rejects the block. Before swapping, hoist any such
+  // producer (and its transitive in-block dependencies) to the slot just before the first sibling for-loop. Non-loop
+  // stmts unrelated to for-loop operands stay at their original indices; memory ordering between non-loop stmts is
+  // preserved because the hoist keeps them in their original relative order and only moves them upward over for-loops
+  // (which produce no SSA value and cannot be the source of a missed memory read for a non-loop that gets hoisted above
+  // them).
   //
-  // The top-level kernel block is handled by `reverse_segments` before this pass, so we only
-  // reorder inside nested non-IB blocks here.
+  // The top-level kernel block is handled by `reverse_segments` before this pass, so we only reorder inside nested
+  // non-IB blocks here.
   static void reverse_for_loop_order_in_place(Block *block) {
     const int n = (int)block->statements.size();
     std::vector<int> for_indices;
@@ -497,9 +478,9 @@ class ReverseOuterLoops : public BasicStmtVisitor {
       pos_of[block->statements[i].get()] = i;
     }
 
-    // Walk the SSA operand graph of every for-loop (restricted to this block). Any in-block stmt
-    // that (a) the operand closure reaches and (b) sits at or after `first_for` gets flagged for
-    // hoisting: after swap, that stmt must precede every for-loop, not just the ones it feeds.
+    // Walk the SSA operand graph of every for-loop (restricted to this block). Any in-block stmt that (a) the operand
+    // closure reaches and (b) sits at or after `first_for` gets flagged for hoisting: after swap, that stmt must
+    // precede every for-loop, not just the ones it feeds.
     std::unordered_set<Stmt *> must_hoist;
     std::vector<Stmt *> stack;
     auto push_if_internal = [&](Stmt *s) {
@@ -514,13 +495,12 @@ class ReverseOuterLoops : public BasicStmtVisitor {
         stack.push_back(s);
       }
     };
-    // Seed the hoist frontier from both the for-loop's direct SSA operands (`begin`, `end`) and
-    // from every stmt nested inside the for-loop's body that references an outer-block stmt as a
-    // free variable. The body-use gather is what catches the case where the later sibling
-    // for-loop consumes a non-loop outer-block stmt `S` inside its body (e.g. `for_B: body reads
-    // S`) rather than through `for_B`'s range bound: `RangeForStmt::get_operands()` returns only
-    // `{begin, end}`, so without walking the body `S` would miss `must_hoist`, the pairwise swap
-    // would place `for_B` ahead of `S`, and the IR verifier would reject the SSA violation.
+    // Seed the hoist frontier from both the for-loop's direct SSA operands (`begin`, `end`) and from every stmt nested
+    // inside the for-loop's body that references an outer-block stmt as a free variable. The body-use gather catches
+    // the case where the later sibling for-loop consumes a non-loop outer-block stmt `S` inside its body (e.g. `for_B:
+    // body reads S`) rather than through `for_B`'s range bound: `RangeForStmt::get_operands()` returns only `{begin,
+    // end}`, so without walking the body `S` would miss `must_hoist`, the pairwise swap would place `for_B` ahead of
+    // `S`, and the IR verifier would reject the SSA violation.
     for (int fi : for_indices) {
       for (Stmt *op : block->statements[fi]->get_operands()) {
         push_if_internal(op);
@@ -540,9 +520,9 @@ class ReverseOuterLoops : public BasicStmtVisitor {
         push_if_internal(op);
       }
     }
-    // For-loops themselves end up in `must_hoist` only because their own operand-closure reached
-    // them; they do not get hoisted as non-loop producers - strip them here to keep `must_hoist`
-    // to "non-loop stmts that need to move above all for-loops".
+    // For-loops themselves end up in `must_hoist` only because their own operand-closure reached them; they do not get
+    // hoisted as non-loop producers - strip them here to keep `must_hoist` to "non-loop stmts that need to move above
+    // all for-loops".
     for (int fi : for_indices) {
       must_hoist.erase(block->statements[fi].get());
     }
@@ -559,8 +539,8 @@ class ReverseOuterLoops : public BasicStmtVisitor {
         new_stmts.push_back(std::move(block->statements[i]));
       }
     }
-    // Remainder (for-loops and non-hoisted non-loops) in original order, with for-loops swapped
-    // pairwise inside this suffix.
+    // Remainder (for-loops and non-hoisted non-loops) in original order, with for-loops swapped pairwise inside this
+    // suffix.
     std::vector<std::unique_ptr<Stmt>> suffix;
     std::vector<int> suffix_for_positions;
     for (int i = first_for; i < n; ++i) {
@@ -609,15 +589,15 @@ class ReverseOuterLoops : public BasicStmtVisitor {
     loop_depth_ -= 1;
   }
 
-  // Deliberately no `visit(IfStmt *)` override, although sibling for-loops can live directly inside an if-branch
-  // block (`true_statements` / `false_statements`) the same way they live inside a for-body. The default
+  // Deliberately no `visit(IfStmt *)` override, although sibling for-loops can live directly inside an if-branch block
+  // (`true_statements` / `false_statements`) the same way they live inside a for-body. The default
   // `BasicStmtVisitor::visit(IfStmt *)` recurses into both branches so inner `RangeForStmt::body`s still get the
-  // sibling-reorder treatment via the range-for visitor above, but `reverse_for_loop_order_in_place` is never
-  // invoked on the branch block itself. That is intentional: `MakeAdjoint::visit(IfStmt *)` below emits the adjoint
-  // if-stmt by iterating each branch's statements in reverse order (`for (int i = size - 1; i >= 0; --i)` in its
-  // `true_statements` / `false_statements` loops), which achieves the same sibling-for reordering effect that the
-  // missing override here would provide. Overriding `visit(IfStmt)` in this class is therefore a no-op on the
-  // generated adjoint code. Keep the comment rather than the override so the visitor-coverage gap is documented.
+  // sibling-reorder treatment via the range-for visitor above, but `reverse_for_loop_order_in_place` is never invoked
+  // on the branch block itself. That is intentional: `MakeAdjoint::visit(IfStmt *)` below emits the adjoint if-stmt by
+  // iterating each branch's statements in reverse order (`for (int i = size - 1; i >= 0; --i)` in its `true_statements`
+  // / `false_statements` loops), which achieves the same sibling-for reordering effect that the missing override here
+  // would provide. Overriding `visit(IfStmt)` in this class is therefore a no-op on the generated adjoint code. Keep
+  // the comment rather than the override so the visitor-coverage gap is documented.
 
   int loop_depth_;
   std::set<Block *> ib_;

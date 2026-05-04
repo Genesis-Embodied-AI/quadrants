@@ -6,12 +6,11 @@ namespace quadrants::lang {
 namespace {
 
 // ============================================================================
-// PromoteSSA2LocalVar: hoist forward-pass SSA defs that the reverse pass will
-// re-read into AllocaStmt + LocalStore + LocalLoad. Demand-driven.
+// PromoteSSA2LocalVar: hoist forward-pass SSA defs that the reverse pass will re-read into AllocaStmt + LocalStore +
+// LocalLoad. Demand-driven.
 //
-// Note that SSA does not mean the instruction will be executed at most once.
-// For instructions that may be executed multiple times, we treat them as a
-// mutable local variables.
+// Note that SSA does not mean the instruction will be executed at most once. For instructions that may be executed
+// multiple times, we treat them as a mutable local variables.
 // ============================================================================
 class PromoteSSA2LocalVar : public BasicStmtVisitor {
  public:
@@ -24,19 +23,19 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
   }
 
   // Demand-driven `required_defs_` set: the SSA defining stmts that downstream consumers actually require to be
-  // available at every iteration. A consumer requires its operand iff its adjoint formula reads it - the precise
-  // set is the operands of any non-linear unary / binary / ternary op (per `NonLinearOps::*_collections`), the
-  // indices of any `GlobalPtrStmt` / `ExternalPtrStmt` (the reverse pass replays the load), and the `cond` of any
-  // `IfStmt` / the `begin`/`end` of any `RangeForStmt` (the reverse pass clones the control flow). Stmts outside
-  // this set are left in pure SSA form: their values stay register-resident inside the forward pass, and
-  // `MakeAdjoint`'s reverse-pass formulas (which never read those values directly) generate correct adjoint
-  // accumulations against the adstack-backed defs that ARE in the set. Skipping promotion for the rest of the
-  // body collapses the alloca + LocalStore + LocalLoad triple-multiplier on unrolled IR that emitted a spill +
-  // reload pair per non-required arithmetic op with no reverse-pass consumer for the spilled value.
+  // available at every iteration. A consumer requires its operand iff its adjoint formula reads it - the precise set is
+  // the operands of any non-linear unary / binary / ternary op (per `NonLinearOps::*_collections`), the indices of any
+  // `GlobalPtrStmt` / `ExternalPtrStmt` (the reverse pass replays the load), and the `cond` of any `IfStmt` / the
+  // `begin`/`end` of any `RangeForStmt` (the reverse pass clones the control flow). Stmts outside this set are left in
+  // pure SSA form: their values stay register-resident inside the forward pass, and `MakeAdjoint`'s reverse-pass
+  // formulas (which never read those values directly) generate correct adjoint accumulations against the adstack-backed
+  // defs that ARE in the set. Skipping promotion for the rest of the body collapses the alloca + LocalStore + LocalLoad
+  // triple-multiplier on unrolled IR that emitted a spill + reload pair per non-required arithmetic op with no
+  // reverse-pass consumer for the spilled value.
   //
   // Operands of `LocalStoreStmt` are not added because `MakeAdjoint::visit(LocalStoreStmt)` reads only
-  // `adjoint(stmt->dest)`, not the forward `stmt->val`. Linear ops (add / sub / mod / cmp / neg / floor / ceil /
-  // cast / logic_not / bit-ops) are likewise excluded because their adjoint formulas read only `adjoint(stmt)`.
+  // `adjoint(stmt->dest)`, not the forward `stmt->val`. Linear ops (add / sub / mod / cmp / neg / floor / ceil / cast /
+  // logic_not / bit-ops) are likewise excluded because their adjoint formulas read only `adjoint(stmt)`.
   static void compute_required_defs(Block *block, std::unordered_set<Stmt *> &out) {
     std::function<void(Block *)> walk = [&](Block *b) {
       for (auto &owned : b->statements) {
@@ -65,13 +64,12 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
             out.insert(idx);
           }
         } else if (auto *mp = stmt->cast<MatrixPtrStmt>()) {
-          // Reverse-mode `MakeAdjoint::visit(MatrixPtrStmt)` reads `stmt->offset` for dynamic-index adjoint
-          // routing, so a per-iteration-varying offset producer left in pure SSA would be backed by BackupSSA's
-          // single overwrite-each-iteration alloca and the reverse pass would read the last forward offset for
-          // every iteration. Promote it to alloca so `AdStackAllocaJudger::visit(MatrixPtrStmt)` can
-          // adstack-promote loop-varying offsets. Speculative fix: not exhibited by any failing test in the AD
-          // suite today, but the analysis is sound and the cost of leaving it unfixed is silent gradient
-          // corruption on `tensor[i + j]`-style local-tensor indexing inside a serial range-for.
+          // Reverse-mode `MakeAdjoint::visit(MatrixPtrStmt)` reads `stmt->offset` for dynamic-index adjoint routing, so
+          // a per-iteration-varying offset producer left in pure SSA would be backed by BackupSSA's single
+          // overwrite-each-iteration alloca and the reverse pass would read the last forward offset for every
+          // iteration. Promote it to alloca so `AdStackAllocaJudger::visit(MatrixPtrStmt)` can adstack-promote
+          // loop-varying offsets. The cost of skipping this promotion is silent gradient corruption on `tensor[i +
+          // j]`-style local-tensor indexing inside a serial range-for.
           out.insert(mp->offset);
         } else if (auto *if_s = stmt->cast<IfStmt>()) {
           out.insert(if_s->cond);
@@ -108,13 +106,13 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
       return;
     }
 
-    // `AllocaStmt`s always need to be hoisted to the top of the IB regardless of consumer analysis: a user-level
-    // `var = ...` construct inside a loop body must own a fixed slot at the IB's entry so every iteration shares it
-    // (cross-iteration accumulators are exactly the shape that drives the hoist). The demand-driven gate only
-    // applies to value-producing stmts (UnaryOp / BinaryOp / TernaryOp / GlobalLoad / LoopIndex) where the
-    // alloca + LocalStore + LocalLoad triple is purely a reverse-pass-readable spill - those skip when no consumer
-    // requires the value. The `LocalStoreStmt`s emitted here are placeholders that `ReplaceLocalVarWithStacks`
-    // rewrites into `AdStackPushStmt`s downstream.
+    // `AllocaStmt`s always need to be hoisted to the top of the IB regardless of consumer analysis: a user-level `var =
+    // ...` construct inside a loop body must own a fixed slot at the IB's entry so every iteration shares it
+    // (cross-iteration accumulators are exactly the shape that drives the hoist). The demand-driven gate only applies
+    // to value-producing stmts (UnaryOp / BinaryOp / TernaryOp / GlobalLoad / LoopIndex) where the alloca + LocalStore
+    // + LocalLoad triple is purely a reverse-pass-readable spill - those skip when no consumer requires the value. The
+    // `LocalStoreStmt`s emitted here are placeholders that `ReplaceLocalVarWithStacks` rewrites into `AdStackPushStmt`s
+    // downstream.
     if (stmt->is<AllocaStmt>()) {
       auto dtype = stmt->ret_type.ptr_removed();
       auto alloc = Stmt::make<AllocaStmt>(dtype);
@@ -139,8 +137,8 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
     alloca_block_->insert(std::move(alloc), 0);
     auto load = stmt->insert_after_me(Stmt::make<LocalLoadStmt>(alloc_ptr));
     immediate_modifier_->replace_usages_with(stmt, load);
-    // Create the load first so that the operand of the store does not get rewritten to point at the load (the
-    // SSA value `stmt` is still the right thing to spill; only the downstream consumers see the load).
+    // Create the load first so that the operand of the store does not get rewritten to point at the load (the SSA value
+    // `stmt` is still the right thing to spill; only the downstream consumers see the load).
     stmt->insert_after_me(Stmt::make<LocalStoreStmt>(alloc_ptr, stmt));
   }
 
@@ -163,18 +161,17 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
   bool execute_once_;
   std::unordered_set<Stmt *> required_defs_;
   // ImmediateIRModifier collapses each `replace_usages_with` from a whole-tree walk (O(N)) to a constant-time
-  // operand-pointer rewrite: the modifier gathers every (consumer, operand_index) pair feeding any existing stmt
-  // once at construction (one O(N) pass), and per-replacement just looks up the table for `old_stmt` and rewrites
-  // each consumer's operand pointer. Without it, `PromoteSSA2LocalVar` ran K (= number of promoted defs) full IR
-  // walks - O(K*N), the dominant Quadrants-IR-side compile cost on unrolled reverse-mode bodies.
+  // operand-pointer rewrite: the modifier gathers every (consumer, operand_index) pair feeding any existing stmt once
+  // at construction (one O(N) pass), and per-replacement just looks up the table for `old_stmt` and rewrites each
+  // consumer's operand pointer. Without it, `PromoteSSA2LocalVar` would run K (= number of promoted defs) full IR walks
+  // - O(K*N), which dominates the Quadrants-IR-side compile cost on unrolled reverse-mode bodies.
   std::unique_ptr<ImmediateIRModifier> immediate_modifier_;
 };
 
 // ============================================================================
-// AdStackAllocaJudger: per-AllocaStmt analysis. Decides whether an alloca's
-// runtime sequence of values must be preserved on an AdStack so the reverse
-// pass can re-read every forward-time value, or whether a single overwrite-
-// each-iteration backing slot suffices.
+// AdStackAllocaJudger: per-AllocaStmt analysis. Decides whether an alloca's runtime sequence of values must be
+// preserved on an AdStack so the reverse pass can re-read every forward-time value, or whether a single
+// overwrite-each-iteration backing slot suffices.
 // ============================================================================
 class AdStackAllocaJudger : public BasicStmtVisitor {
  public:
@@ -188,35 +185,33 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
   }
 
   // Track whether the alloca has any store at all so a load-only alloca (no adstack-relevant data flow either
-  // direction) can short-circuit `run()` regardless of what the per-op visitors below find. The decision of
-  // whether the alloca needs adstack promotion is made entirely by the precise visitors: non-linear unary /
-  // binary / ternary, GlobalPtr / ExternalPtr index, and IfStmt / RangeForStmt bound. Plus an alloca that is
-  // both loaded and stored anywhere in the IB is treated as loop-carried, which is needed for kernels like
-  // `for j: p, q = q, p + q` where the reverse pass routes the gradient through the cross-iteration
-  // recurrence and BackupSSA's single overwrite-each-iteration alloca cannot back the read-after-write across
-  // iterations. The visit-order-dependent load+store evidence here is conservative: any alloca with both a
-  // load and a store inside the IB triggers it, including pure accumulators whose adjoint formulas don't
-  // actually need per-iteration values - the slight over-promotion cost is the price of correctness on
-  // Fibonacci-style recurrences (silent gradient corruption otherwise).
+  // direction) can short-circuit `run()` regardless of what the per-op visitors below find. The decision of whether the
+  // alloca needs adstack promotion is made entirely by the precise visitors: non-linear unary / binary / ternary,
+  // GlobalPtr / ExternalPtr index, and IfStmt / RangeForStmt bound. Plus an alloca that is both loaded and stored
+  // anywhere in the IB is treated as loop-carried, which is needed for kernels like `for j: p, q = q, p + q` where the
+  // reverse pass routes the gradient through the cross-iteration recurrence and BackupSSA's single
+  // overwrite-each-iteration alloca cannot back the read-after-write across iterations. The visit-order-dependent
+  // load+store evidence here is conservative: any alloca with both a load and a store inside the IB triggers it,
+  // including pure accumulators whose adjoint formulas don't actually need per-iteration values - the slight
+  // over-promotion cost is the price of correctness on Fibonacci-style recurrences (silent gradient corruption
+  // otherwise).
   void visit(LocalStoreStmt *stmt) override {
     if (stmt->dest == target_alloca_backup_) {
       load_only_ = false;
-      // Gate the load+store-implies-stack-needed rule on actually being inside a dynamic RangeForStmt at the
-      // point this evidence accumulates. The rule's purpose is to preserve cross-iteration RAW dependencies
-      // (`for j: p, q = q, p + q` Fibonacci-style) that BackupSSA's single overwrite-each-iteration alloca
-      // cannot back. With no enclosing dynamic for-loop the IB body executes once: there is no cross-
-      // iteration RAW to preserve, and the "load+store" pattern is just an in-block accumulator that the
-      // reverse pass handles via plain SSA cloning. Promoting such allocas under a static-unrolled loop body
-      // wastes one AdStack per accumulator (one push per unrolled-iter store + one load_top per unrolled-
-      // iter load) without any reverse-pass consumer needing per-iter replay - that is the unrolled-overhead
-      // bug Plan B targets.
+      // Gate the load+store-implies-stack-needed rule on actually being inside a dynamic RangeForStmt at the point this
+      // evidence accumulates. The rule's purpose is to preserve cross-iteration RAW dependencies (`for j: p, q = q, p +
+      // q` Fibonacci-style) that BackupSSA's single overwrite-each-iteration alloca cannot back. With no enclosing
+      // dynamic for-loop the IB body executes once: there is no cross-iteration RAW to preserve, and the "load+store"
+      // pattern is just an in-block accumulator that the reverse pass handles via plain SSA cloning. Promoting such
+      // allocas under a static-unrolled loop body wastes one AdStack per accumulator (one push per unrolled-iter store
+      // + one load_top per unrolled-iter load) without any reverse-pass consumer needing per-iter replay.
       //
-      // `dynamic_for_depth_` is incremented in `visit(RangeForStmt)` and decremented on exit. The judger
-      // walks the IB tree from the alloca's enclosing block, so depth here reflects exactly the nesting of
-      // *dynamic* for-loops between the alloca and the current load/store. StructFor / WhileStmt do not
-      // increment because their bodies still execute per-iter and need the same RAW protection (StructFor
-      // is the kernel-level offload-loop in some cases, but its body is a per-thread independent block;
-      // load+store there is the same shape as for a top-level alloca).
+      // `dynamic_for_depth_` is incremented in `visit(RangeForStmt)` and decremented on exit. The judger walks the IB
+      // tree from the alloca's enclosing block, so depth here reflects exactly the nesting of *dynamic* for-loops
+      // between the alloca and the current load/store. StructFor / WhileStmt do not increment because their bodies
+      // still execute per-iter and need the same RAW protection (StructFor is the kernel-level offload-loop in some
+      // cases, but its body is a per-thread independent block; load+store there is the same shape as for a top-level
+      // alloca).
       if (local_loaded_ && dynamic_for_depth_ > 0) {
         is_stack_needed_ = true;
       }
@@ -229,12 +224,12 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
       load_only_ = false;
   }
 
-  // The stack is needed if the alloca serves as the index of any global variables. Same cursor-vs-backup
-  // pattern as visit(IfStmt)/visit(RangeForStmt) below: `index` is always a value-producing stmt (typically a
-  // `LocalLoadStmt` reading the alloca, or a `ConstStmt`), never the alloca itself. The raw `index ==
-  // target_alloca_` comparison only matches the first load's instance the `visit(LocalLoadStmt)` cursor
-  // advanced to - any subsequent load of the same alloca used as a different GlobalPtr index slips through.
-  // Resolve the LocalLoad chain and compare `ll->src` against `target_alloca_backup_` to catch every load.
+  // The stack is needed if the alloca serves as the index of any global variables. Same cursor-vs-backup pattern as
+  // visit(IfStmt) / visit(RangeForStmt) below: `index` is always a value-producing stmt (typically a `LocalLoadStmt`
+  // reading the alloca, or a `ConstStmt`), never the alloca itself. The raw `index == target_alloca_` comparison only
+  // matches the first load's instance the `visit(LocalLoadStmt)` cursor advanced to - any subsequent load of the same
+  // alloca used as a different GlobalPtr index slips through. Resolve the LocalLoad chain and compare `ll->src` against
+  // `target_alloca_backup_` to catch every load.
   void visit(GlobalPtrStmt *stmt) override {
     if (is_stack_needed_)
       return;
@@ -255,10 +250,10 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
     }
   }
 
-  // Reverse-mode `MakeAdjoint::visit(MatrixPtrStmt)` reads `stmt->offset` for dynamic-index adjoint routing, so
-  // a runtime-varying offset whose value comes from this alloca needs adstack promotion - otherwise BackupSSA
-  // backs the offset with a single overwrite-each-iteration slot and the reverse pass routes every iteration's
-  // adjoint into the last forward offset's slot. Same cursor-vs-backup pattern as the index visitors above.
+  // Reverse-mode `MakeAdjoint::visit(MatrixPtrStmt)` reads `stmt->offset` for dynamic-index adjoint routing, so a
+  // runtime-varying offset whose value comes from this alloca needs adstack promotion - otherwise BackupSSA backs the
+  // offset with a single overwrite-each-iteration slot and the reverse pass routes every iteration's adjoint into the
+  // last forward offset's slot. Same cursor-vs-backup pattern as the index visitors above.
   void visit(MatrixPtrStmt *stmt) override {
     if (is_stack_needed_)
       return;
@@ -268,8 +263,8 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
   }
 
   // Check whether the target alloca is fed into a non-linear unary op. Same cursor-vs-backup pattern as
-  // visit(GlobalPtrStmt) above: `stmt->operand` is a value-producing stmt (typically LocalLoad), never the
-  // alloca itself, so resolve the LocalLoad chain and compare against the backup.
+  // visit(GlobalPtrStmt) above: `stmt->operand` is a value-producing stmt (typically LocalLoad), never the alloca
+  // itself, so resolve the LocalLoad chain and compare against the backup.
   void visit(UnaryOpStmt *stmt) override {
     if (is_stack_needed_)
       return;
@@ -306,15 +301,13 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
     }
   }
 
-  // Check whether the target alloca feeds the condition of an if stmt. `stmt->cond` is always a
-  // value-producing stmt - typically a direct `LocalLoadStmt` reading the alloca, but also commonly a
-  // `BinaryOpStmt` wrapping such a load (e.g. `j < i+1`). Walk the expression chain to catch every load of
-  // the target alloca: the raw `stmt->cond == target_alloca_` comparison the old code used only matched the
-  // first-visited load's instance, and a direct `cast<LocalLoadStmt>` still misses the BinaryOp case that
-  // `visit(BinaryOpStmt)` cannot catch (comparison ops are linear and so not in `NonLinearOps`). Covers the
-  // shape defensively: IR simplification currently collapses most BinaryOp-wrapped conds before the judger
-  // sees them, so no failing regression test pins it today, but the fix is structurally correct for future
-  // IR changes that preserve the BinaryOp wrapping.
+  // Check whether the target alloca feeds the condition of an if stmt. `stmt->cond` is always a value-producing stmt -
+  // typically a direct `LocalLoadStmt` reading the alloca, but also commonly a `BinaryOpStmt` wrapping such a load
+  // (e.g. `j < i+1`). Walk the expression chain via `feeds_target_alloca` to catch every load of the target alloca,
+  // including loads nested under comparison or other linear ops (which `visit(BinaryOpStmt)` does not flag because
+  // comparison ops are not in `NonLinearOps`). The walk is defensive: IR simplification currently collapses most
+  // BinaryOp-wrapped conds before the judger sees them, so most input IR uses the bare-LocalLoad shape; the walker
+  // stays sound when the wrapping is preserved.
   void visit(IfStmt *stmt) override {
     if (is_stack_needed_)
       return;
@@ -330,21 +323,19 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
       stmt->false_statements->accept(this);
   }
 
-  // Check whether the target alloca feeds the begin or end of a range-for bound. Under reverse-mode AD, if an
-  // inner for-loop's bound is an enclosing loop-carried counter (the canonical triangular-nested
-  // `for k in range(j)` shape, or the `range(j+1)` / `range(n-i)` shapes where the bound is a linear arithmetic
-  // expression of a loop-carried alloca), its reverse clone must read the bound from the per-iteration forward
-  // value; without an adstack the reverse pass sees only the last forward value and the inner loop over- or
-  // under-runs, silently corrupting gradients for the earliest inner indices (those visited most often across
-  // outer iterations). This check is the only thing that promotes such a loop-counter alloca -
-  // `visit(LocalStoreStmt)`'s `local_loaded_` short-circuit does not fire because the counter is only LOAD-ed
-  // inside the inner-loop bound, not LOAD-then-STORE-ed. Walk the expression chain through
-  // `feeds_target_alloca` so both direct LocalLoads (`range(j)`) and LocalLoads nested under linear ops
-  // (`range(j+1)`, `range(n-i)`, ...) trigger promotion. The BinaryOp-wrapped case is defensively covered: IR
-  // simplification currently collapses most such bounds before the judger sees them, so no failing regression
-  // test pins it today, but the walker is structurally correct for future IR changes that preserve the
-  // wrapping. The raw-cast direct `LocalLoadStmt` variant pinned by `test_adstack_inner_for_bound_is_enclosing
-  // _loop_index` remains covered - that shape takes the first branch of the walker trivially.
+  // Check whether the target alloca feeds the begin or end of a range-for bound. Under reverse-mode AD, if an inner
+  // for-loop's bound is an enclosing loop-carried counter (the canonical triangular-nested `for k in range(j)` shape,
+  // or the `range(j+1)` / `range(n-i)` shapes where the bound is a linear arithmetic expression of a loop-carried
+  // alloca), its reverse clone must read the bound from the per-iteration forward value; without an adstack the reverse
+  // pass sees only the last forward value and the inner loop over- or under-runs, silently corrupting gradients for the
+  // earliest inner indices (those visited most often across outer iterations). This check is the only thing that
+  // promotes such a loop-counter alloca - `visit(LocalStoreStmt)`'s `local_loaded_` short-circuit does not fire because
+  // the counter is only LOAD-ed inside the inner-loop bound, not LOAD-then-STORE-ed. Walk the expression chain through
+  // `feeds_target_alloca` so both direct LocalLoads (`range(j)`) and LocalLoads nested under linear ops (`range(j+1)`,
+  // `range(n-i)`, ...) trigger promotion. The BinaryOp-wrapped case is covered defensively: IR simplification currently
+  // collapses most such bounds before the judger sees them, so most input IR uses the bare-LocalLoad shape; the walker
+  // stays sound when the wrapping is preserved. The bare-LocalLoad shape takes the first branch of the walker
+  // trivially.
   void visit(RangeForStmt *stmt) override {
     if (is_stack_needed_)
       return;
@@ -370,11 +361,11 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
 
  private:
   // Recursively walk a value expression to decide whether it transitively reads `target_alloca_backup_` via a
-  // `LocalLoadStmt`. Used by `visit(IfStmt)` and `visit(RangeForStmt)` to detect the target alloca feeding a
-  // bound or condition even when wrapped by linear ops (e.g. `range(j+1)`, `j < i+1`). Linear binary/unary
-  // ops are traversed because `visit(BinaryOpStmt)`/`visit(UnaryOpStmt)` only flag *non-linear* ops - their
-  // linear-op path does not otherwise promote the alloca. `ConstStmt`s and unrelated values return false and
-  // terminate the recursion; the walker is always finite because SSA IR guarantees acyclic operand graphs.
+  // `LocalLoadStmt`. Used by `visit(IfStmt)` and `visit(RangeForStmt)` to detect the target alloca feeding a bound or
+  // condition even when wrapped by linear ops (e.g. `range(j+1)`, `j < i+1`). Linear binary/unary ops are traversed
+  // because `visit(BinaryOpStmt)`/`visit(UnaryOpStmt)` only flag *non-linear* ops - their linear-op path does not
+  // otherwise promote the alloca. `ConstStmt`s and unrelated values return false and terminate the recursion; the
+  // walker is always finite because SSA IR guarantees acyclic operand graphs.
   bool feeds_target_alloca(Stmt *expr) const {
     if (auto *ll = expr->cast<LocalLoadStmt>()) {
       return ll->src == target_alloca_backup_;
@@ -396,17 +387,16 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
   bool is_stack_needed_ = false;
   bool local_loaded_ = false;
   bool load_only_ = true;
-  // Nesting depth of dynamic `RangeForStmt` containers between the alloca's enclosing block and the current
-  // visit cursor. Static-unrolled `qd.static(range(...))` loops are removed by the AST transformer before the
-  // judger sees the IR, so they do not contribute to depth. The load+store-implies-stack-needed rule fires
-  // only when this depth is positive; see the rationale in `visit(LocalStoreStmt)`.
+  // Nesting depth of dynamic `RangeForStmt` containers between the alloca's enclosing block and the current visit
+  // cursor. Static-unrolled `qd.static(range(...))` loops are removed by the AST transformer before the judger sees the
+  // IR, so they do not contribute to depth. The load+store-implies-stack-needed rule fires only when this depth is
+  // positive; see the rationale in `visit(LocalStoreStmt)`.
   int dynamic_for_depth_ = 0;
 };
 
 // ============================================================================
-// ReplaceLocalVarWithStacks: rewrite each AllocaStmt that AdStackAllocaJudger
-// approved into AdStackAllocaStmt + AdStackPush + AdStackLoadTop. Tensor-typed
-// allocas need extra care because per-slot stack writes are not a reaching
+// ReplaceLocalVarWithStacks: rewrite each AllocaStmt that AdStackAllocaJudger approved into AdStackAllocaStmt +
+// AdStackPush + AdStackLoadTop. Tensor-typed allocas need extra care because per-slot stack writes are not a reaching
 // def for the store-to-load forwarding walker.
 // ============================================================================
 class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
@@ -427,8 +417,8 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
 
       alloc->replace_with(VecStatement(std::move(stack_alloca)));
 
-      // Note that unlike AllocaStmt, AdStackAllocaStmt does NOT have an 0 as
-      // initial value. Therefore here we push an initial 0 value.
+      // Note that unlike AllocaStmt, AdStackAllocaStmt does NOT have a 0 as initial value, so we push an initial 0
+      // here.
       auto zero = insert_const(dtype, stack_alloca_ptr, 0);
       zero->insert_after_me(Stmt::make<AdStackPushStmt>(stack_alloca_ptr, zero));
     }
@@ -444,12 +434,12 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
     }
 
     // Slot load from a stack-backed tensor. After `visit(MatrixPtrStmt)`, `stmt->src` is of the form
-    // `MatrixPtrStmt(AdStackLoadTopStmt(stack, return_ptr=true), offset)`. A direct load through that pointer
-    // leaves the store-to-load forwarding walker in `ir/control_flow_graph.cpp` with no reaching definition,
-    // because the only producer for the stack's top slots is an `AdStackPushStmt` (tagged `ir_traits::Load`,
-    // invisible to `get_store_destination`). Replace the load with a full-tensor `AdStackLoadTopStmt`
-    // materialized into a fresh regular `AllocaStmt`, then re-subscript it - a plain alloca + LocalStore
-    // sequence is a shape the reach-in walker can trace end-to-end.
+    // `MatrixPtrStmt(AdStackLoadTopStmt(stack, return_ptr=true), offset)`. A direct load through that pointer leaves
+    // the store-to-load forwarding walker in `ir/control_flow_graph.cpp` with no reaching definition, because the only
+    // producer for the stack's top slots is an `AdStackPushStmt` (tagged `ir_traits::Load`, invisible to
+    // `get_store_destination`). Replace the load with a full-tensor `AdStackLoadTopStmt` materialized into a fresh
+    // regular `AllocaStmt`, then re-subscript it - a plain alloca + LocalStore sequence is a shape the reach-in walker
+    // can trace end-to-end.
     if (stmt->src->is<MatrixPtrStmt>()) {
       auto matrix_ptr = stmt->src->as<MatrixPtrStmt>();
       if (matrix_ptr->origin->is<AdStackLoadTopStmt>() && matrix_ptr->origin->as<AdStackLoadTopStmt>()->return_ptr) {

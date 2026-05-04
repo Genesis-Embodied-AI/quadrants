@@ -63,10 +63,8 @@ class MakeDual : public ADTransform {
     if (dual_stmt.find(stmt) == dual_stmt.end()) {
       // normal SSA cases
 
-      // create the alloca
-      // auto alloca =
-      //    Stmt::make<AllocaStmt>(get_current_program().config.gradient_dt);
-      // maybe it's better to use the statement data type than the default type
+      // Create the alloca. Using the statement's own `ret_type` tends to fit better than the kernel-wide
+      // `get_current_program().config.gradient_dt` default.
       auto alloca = Stmt::make<AllocaStmt>(dual_type);
       dual_stmt[stmt] = alloca.get();
 
@@ -86,9 +84,8 @@ class MakeDual : public ADTransform {
     } else if (stmt->op_type == UnaryOpType::cos) {
       accumulate(stmt, negate(mul(sin(stmt->operand), dual(stmt->operand))));
     } else if (stmt->op_type == UnaryOpType::tan) {
-      // d/dx tan(x) = 1 + tan(x)^2. Forward mode executes in primal order, so `stmt` is the
-      // current-iteration tan value - no BackupSSA stale-value concern; reusing it is per-iteration
-      // correct.
+      // d/dx tan(x) = 1 + tan(x)^2. Forward mode executes in primal order, so `stmt` is the current-iteration tan value
+      // - no BackupSSA stale-value concern; reusing it is per-iteration correct.
       accumulate(stmt, mul(add(constant(1), sqr(stmt)), dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::tanh) {
       accumulate(stmt, mul(sub(constant(1), sqr(stmt)), dual(stmt->operand)));
@@ -204,10 +201,9 @@ class MakeDual : public ADTransform {
   }
 
   void visit(StructForStmt *for_stmt) override {
-    // Save/restore mirrors visit(RangeForStmt) above and MakeAdjoint::visit(StructForStmt). An enclosing
-    // compound visitor that resumes iterating its body after this StructForStmt needs alloca_block to still
-    // point at its own block, not the sparse-for body, so new dual allocas land where the enclosing reverse
-    // code can reach them.
+    // Save/restore mirrors visit(RangeForStmt) above and MakeAdjoint::visit(StructForStmt). An enclosing compound
+    // visitor that resumes iterating its body after this StructForStmt needs alloca_block to still point at its own
+    // block, not the sparse-for body, so new dual allocas land where the enclosing reverse code can reach them.
     auto previous_alloca_block = alloca_block;
     alloca_block = for_stmt->body.get();
     for_stmt->body->accept(this);
@@ -220,11 +216,9 @@ class MakeDual : public ADTransform {
   }
 
   void visit(LocalStoreStmt *stmt) override {
-    // Clear the dual of the dest before local store,
-    // Because LocalStoreStmt overwrites the dest,
-    // If the alloca serves as the dest of multiple LocalStoreStmt, only the
-    // last LocalStoreStmt should be taken account of, i.e, its history should
-    // be cleared
+    // Clear the dual of the dest before local store, because LocalStoreStmt overwrites the dest. If the alloca serves
+    // as the dest of multiple LocalStoreStmts, only the last one counts and the prior accumulated dual must be
+    // discarded.
     auto dtype = stmt->dest->ret_type.ptr_removed();
     if (is_real(dtype.get_element_type())) {
       auto zero = insert_const_for_grad(dtype, stmt, 0);

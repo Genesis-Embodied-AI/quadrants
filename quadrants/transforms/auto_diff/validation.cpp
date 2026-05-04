@@ -6,16 +6,16 @@ namespace quadrants::lang {
 namespace {
 
 // Detect cross-iteration read-after-write through a `needs_grad` global field at the body of an offload-level
-// range-for. `MakeAdjoint` treats each iteration of an offload-level loop as independent and only chases
-// loop-carried dependencies through `AdStackAllocaJudger`, which inspects local `AllocaStmt`s - cross-iteration
-// dependencies through `GlobalStoreStmt` / `GlobalLoadStmt` on a `has_adjoint()` SNode are silently dropped.
-// A kernel like `out[i] = out[i-1] + x[None]` therefore returns wrong gradients with no diagnostic, even with
-// `ad_stack_experimental_enabled`. Pair every same-SNode (store, load) and raise when the index Stmt*s differ.
-// Same-Stmt indices (`out[i] = out[i] + x[None]`) are in-place accumulation and the per-iteration backward
-// pass handles those correctly; pointer equality on the SSA index Stmts after the `pre_autodiff` simplify
-// (`compile_to_offloads.cpp:121`) is enough to distinguish the two cases. Walks the body of every direct-child
-// `RangeForStmt` of `root`; nested for-loops' bodies are skipped via `inside_nested_` because their cross-iter
-// behavior is governed by the existing IB / adstack machinery, not by this offload-level guard.
+// range-for. `MakeAdjoint` treats each iteration of an offload-level loop as independent and only chases loop-carried
+// dependencies through `AdStackAllocaJudger`, which inspects local `AllocaStmt`s - cross-iteration dependencies through
+// `GlobalStoreStmt` / `GlobalLoadStmt` on a `has_adjoint()` SNode are silently dropped. A kernel like `out[i] =
+// out[i-1] + x[None]` therefore returns wrong gradients with no diagnostic, even with `ad_stack_experimental_enabled`.
+// Pair every same-SNode (store, load) and raise when the index Stmt*s differ. Same-Stmt indices (`out[i] = out[i] +
+// x[None]`) are in-place accumulation and the per-iteration backward pass handles those correctly; pointer equality on
+// the SSA index Stmts after the `pre_autodiff` simplify (`compile_to_offloads.cpp:121`) is enough to distinguish the
+// two cases. Walks the body of every direct-child `RangeForStmt` of `root`; nested for-loops' bodies are skipped via
+// `inside_nested_` because their cross-iter behavior is governed by the existing IB / adstack machinery, not by this
+// offload-level guard.
 class OffloadLevelGlobalCrossIterRAWChecker : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
@@ -68,9 +68,9 @@ class OffloadLevelGlobalCrossIterRAWChecker : public BasicStmtVisitor {
         if (!any_axis_references_loop_index(store))
           continue;
         for (auto *load : load_it->second) {
-          // Skip loads whose index is iteration-independent on every axis (constants, captures from outer
-          // scopes, ...). Such loads read from a slice of the SNode that the loop never writes to in this
-          // iteration, so they are not a cross-iter RAW hazard.
+          // Skip loads whose index is iteration-independent on every axis (constants, captures from outer scopes, ...).
+          // Such loads read from a slice of the SNode that the loop never writes to in this iteration, so they are not
+          // a cross-iter RAW hazard.
           if (!any_axis_references_loop_index(load))
             continue;
           if (!indices_have_no_cross_iter_dependency(store, load)) {
@@ -133,11 +133,11 @@ class OffloadLevelGlobalCrossIterRAWChecker : public BasicStmtVisitor {
     return true;
   }
 
-  // Walk an index `Stmt*` and decide whether it (transitively) references a `LoopIndexStmt` of any enclosing
-  // loop. Recurses through linear arithmetic ops because an index like `i - 1` lowers to
-  // `BinaryOpStmt(LoopIndexStmt(i), Sub, ConstStmt(1))` and we want to recognise the `LoopIndexStmt` underneath.
-  // Conservatively returns false for anything else (constants, ndarray loads from outer scope, ...) - those
-  // express iteration-independent indexing that the cross-iter guard intentionally exempts.
+  // Walk an index `Stmt*` and decide whether it (transitively) references a `LoopIndexStmt` of any enclosing loop.
+  // Recurses through linear arithmetic ops because an index like `i - 1` lowers to `BinaryOpStmt(LoopIndexStmt(i), Sub,
+  // ConstStmt(1))` and we want to recognise the `LoopIndexStmt` underneath. Conservatively returns false for anything
+  // else (constants, ndarray loads from outer scope, ...) - those express iteration-independent indexing that the
+  // cross-iter guard intentionally exempts.
   static bool references_loop_index(Stmt *s) {
     if (s == nullptr)
       return false;

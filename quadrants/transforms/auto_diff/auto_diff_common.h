@@ -61,31 +61,28 @@ class NonLinearOps {
 };
 
 // ----------------------------------------------------------------------------
-// Recomputable chain analyzer + cloner: decide whether a forward SSA value can
-// be reconstructed in the reverse-pass scope from already-stack-backed allocas,
-// kernel args, constants, and loop indices, and clone the DAG at a target
-// insertion point. Cross-stage shared infrastructure: used by
-// `EliminateRecomputableAdStackPushes` (forward_state_spill stage) to drop
-// pushes whose values are recomputable, and by `BackupSSA::generic_visit`
-// (post_adjoint_cleanup stage) to clone such chains in place of cross-block
-// SSA reads.
+// Recomputable chain analyzer + cloner: decide whether a forward SSA value can be reconstructed in the reverse-pass
+// scope from already-stack-backed allocas, kernel args, constants, and loop indices, and clone the DAG at a target
+// insertion point. Cross-stage shared infrastructure: used by `EliminateRecomputableAdStackPushes`
+// (forward_state_spill stage) to drop pushes whose values are recomputable, and by `BackupSSA::generic_visit`
+// (post_adjoint_cleanup stage) to clone such chains in place of cross-block SSA reads.
 // ----------------------------------------------------------------------------
 
-// Returns true iff `stmt`'s transitive operand DAG terminates at recomputable leaves via side-effect-free
-// interior ops only. Used by `EliminateRecomputableAdStackPushes` and `BackupSSA::generic_visit` to decide
-// whether a forward SSA value can be reconstructed in the reverse-pass scope from already-stack-backed allocas
-// + kernel-args + constants + loop indices, instead of being spilled to a per-iteration adstack or to
-// `BackupSSA::load`'s last-iteration plain alloca.
+// Returns true iff `stmt`'s transitive operand DAG terminates at recomputable leaves via side-effect-free interior ops
+// only. Used by `EliminateRecomputableAdStackPushes` and `BackupSSA::generic_visit` to decide whether a forward SSA
+// value can be reconstructed in the reverse-pass scope from already-stack-backed allocas + kernel-args + constants +
+// loop indices, instead of being spilled to a per-iteration adstack or to `BackupSSA::load`'s last-iteration plain
+// alloca.
 //
-// Recomputable leaves: AdStackLoadTopStmt (re-readable via cloned load), AdStackAllocaStmt (the stack itself,
-// shared not cloned), ArgLoadStmt (kernel-arg, immutable within the launch), ConstStmt, LoopIndexStmt (clonable
-// to read the reverse-direction loop's index, which matches the forward iteration the reverse is currently
-// processing). Side-effect-free interior ops: UnaryOp, BinaryOp, TernaryOp, MatrixPtr, GlobalPtr, ExternalPtr.
+// Recomputable leaves: AdStackLoadTopStmt (re-readable via cloned load), AdStackAllocaStmt (the stack itself, shared
+// not cloned), ArgLoadStmt (kernel-arg, immutable within the launch), ConstStmt, LoopIndexStmt (clonable to read the
+// reverse-direction loop's index, which matches the forward iteration the reverse is currently processing).
+// Side-effect-free interior ops: UnaryOp, BinaryOp, TernaryOp, MatrixPtr, GlobalPtr, ExternalPtr.
 //
-// `GlobalLoadStmt` and `ExternalPtrAccessStmt`-style reads are intentionally not recomputable: the underlying
-// global memory may be mutated mid-kernel by a sibling task, so reading at a different IR position can yield a
-// different value. `LocalLoadStmt` similarly aliases mutable allocas; the reverse pass must read its forward
-// value through the dedicated spill machinery.
+// `GlobalLoadStmt` and `ExternalPtrAccessStmt`-style reads are intentionally not recomputable: the underlying global
+// memory may be mutated mid-kernel by a sibling task, so reading at a different IR position can yield a different
+// value. `LocalLoadStmt` similarly aliases mutable allocas; the reverse pass must read its forward value through the
+// dedicated spill machinery.
 //
 // Caller passes a `cache` to share memoization across multiple queries on the same DAG (diamond shapes).
 class RecomputableChainAnalyzer {
@@ -94,8 +91,8 @@ class RecomputableChainAnalyzer {
     auto it = cache.find(stmt);
     if (it != cache.end())
       return it->second;
-    // Tentatively false to break cycles in pathological IR (real SSA DAGs are acyclic, but the cache also
-    // serves as a visited set during recursion).
+    // Tentatively false to break cycles in pathological IR (real SSA DAGs are acyclic, but the cache also serves as a
+    // visited set during recursion).
     cache[stmt] = false;
     bool result = check(stmt, cache);
     cache[stmt] = result;
@@ -105,14 +102,12 @@ class RecomputableChainAnalyzer {
  private:
   static bool check(Stmt *stmt, std::unordered_map<Stmt *, bool> &cache) {
     // Recomputable leaves: ConstStmt, ArgLoadStmt, AdStackLoadTopStmt, AdStackAllocaStmt. LoopIndexStmt is
-    // intentionally excluded - cloning a LoopIndexStmt copies the reference to the forward RangeForStmt,
-    // but the cloned consumer lives inside the reverse RangeForStmt (a separate stmt with its own loop
-    // index), so the cloned read points at undefined state and silently double-accumulates gradients
-    // (`test_adstack_sum_linear`). A future MakeAdjoint coordination pass that tracks
-    // forward-RangeFor-to-reverse-RangeFor mapping could lift this restriction.
+    // intentionally excluded - cloning a LoopIndexStmt copies the reference to the forward RangeForStmt, but the cloned
+    // consumer lives inside the reverse RangeForStmt (a separate stmt with its own loop index), so the cloned read
+    // points at undefined state and silently double-accumulates gradients.
     //
-    // AdStackLoadTopStmt as a leaf is correct under the dominance + control-flow-consumer + self-load
-    // guards in `EliminateRecomputableAdStackPushes::run_one_pass`. The reasoning:
+    // AdStackLoadTopStmt as a leaf is correct under the dominance + control-flow-consumer + self-load guards in
+    // `EliminateRecomputableAdStackPushes::run_one_pass`. The reasoning:
     //
     //   - In FORWARD: the eliminated stack S's body push dominates each `AdStackLoadTopStmt(S)` (the
     //     dominance guard), and the chain leaves' pushes dominate the chain's evaluation point. Each
@@ -130,27 +125,24 @@ class RecomputableChainAnalyzer {
     //     been popped yet, so load_top(T) returns T's iter-k-push value - matching what the original
     //     load_top(S) returned in forward iter k.
     //
-    // The control-flow-consumer guard in `run_one_pass` covers a separate issue: stacks whose load_tops
-    // are direct operands of IfStmt cond / RangeFor begin/end. `MakeAdjoint::visit(IfStmt)` runs a
-    // dedicated snap-stack fixup that ONLY triggers when the cond is a bare `AdStackLoadTopStmt` (line
-    // 2168-2202). Eliminating the cond stack converts the cond into a compound stmt, the snap-stack
-    // does not trigger, and the reverse cond falls back to BackupSSA's load(op) which is single-slot
-    // last-iter only - silent gradient corruption on multi-iter loops.
+    // The control-flow-consumer guard in `run_one_pass` covers a separate issue: stacks whose load_tops are direct
+    // operands of IfStmt cond / RangeFor begin/end. `MakeAdjoint::visit(IfStmt)` runs a dedicated snap-stack fixup that
+    // ONLY triggers when the cond is a bare `AdStackLoadTopStmt` (line 2168-2202). Eliminating the cond stack converts
+    // the cond into a compound stmt, the snap-stack does not trigger, and the reverse cond falls back to BackupSSA's
+    // load(op) which is single-slot last-iter only - silent gradient corruption on multi-iter loops.
     if (stmt->is<AdStackLoadTopStmt>() || stmt->is<AdStackAllocaStmt>() || stmt->is<ArgLoadStmt>() ||
         stmt->is<ConstStmt>()) {
       return true;
     }
-    // GlobalLoadStmt as recomputable: the load reads a SNode value via GlobalPtrStmt. The cloned chain in
-    // the reverse pass re-issues the same load - safe iff the global is not mutated between the forward
-    // chain evaluation and the cloned re-read. Within a single kernel execution, forward writes complete
-    // before reverse runs, so the reverse re-read sees the kernel's final post-write state. If a global is
-    // mutated by the forward and then re-read by the reverse clone, the values can differ.
+    // GlobalLoadStmt as recomputable: the load reads a SNode value via GlobalPtrStmt. The cloned chain in the reverse
+    // pass re-issues the same load - safe iff the global is not mutated between the forward chain evaluation and the
+    // cloned re-read. Within a single kernel execution, forward writes complete before reverse runs, so the reverse
+    // re-read sees the kernel's final post-write state. If a global is mutated by the forward and then re-read by the
+    // reverse clone, the values can differ.
     //
-    // Most rigid-step kernel chain leaves are reads of input parameters (mass, inertia, joint params,
-    // morphology) that the kernel does NOT write. For those, the re-read returns the same value.
-    // Conservative analysis: a future safety check could prove the SNode is read-only in the kernel; until
-    // then this path relies on the test suite's gradient-correctness asserts to surface any mutated-global
-    // miscompilation.
+    // Chain leaves that pass this branch are typically reads of kernel-input parameters not written by the kernel; for
+    // those, the re-read returns the same value as the forward read. The pass does not statically verify SNode
+    // read-only-ness, and mutated-global cases would silently produce wrong gradients.
     bool is_interior = stmt->is<UnaryOpStmt>() || stmt->is<BinaryOpStmt>() || stmt->is<TernaryOpStmt>() ||
                        stmt->is<MatrixPtrStmt>() || stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() ||
                        stmt->is<GlobalLoadStmt>();
@@ -168,18 +160,18 @@ class RecomputableChainAnalyzer {
   }
 };
 
-// Clones the SSA chain rooted at `src` into the IR, inserting cloned stmts before `insert_point`. Returns the
-// cloned root. Per-stmt cache shared across one resolution materializes each SSA value at most once: diamond
-// DAGs see two consumers but get one shared clone. `AdStackAllocaStmt` is treated as a leaf and shared (not
-// cloned) - the stack itself is a unique storage handle that must not be duplicated.
+// Clones the SSA chain rooted at `src` into the IR, inserting cloned stmts before `insert_point`. Returns the cloned
+// root. Per-stmt cache shared across one resolution materializes each SSA value at most once: diamond DAGs see two
+// consumers but get one shared clone. `AdStackAllocaStmt` is treated as a leaf and shared (not cloned) - the stack
+// itself is a unique storage handle that must not be duplicated.
 //
-// Pop-ordering safety: cloned `AdStackLoadTopStmt`s read the live top at the cloned position. `MakeAdjoint`
-// emits `AdStackPopStmt` for each surviving `AdStackPushStmt`, and the existing reverse-pass scheme places
-// the pop AFTER all uses of that stack within the reverse iteration (uses include both the original
-// `AdStackLoadTopStmt`s emitted by `ReplaceLocalVarWithStacks` and the consumers' clones). For loop-carried
-// allocas the pop fires early to expose the iteration's INPUT primal as the new top, which is exactly the
-// value the recomputed chain needs - the existing per-consumer clone path at `BackupSSA::generic_visit` line
-// ~2697 relies on this same property and has been correct in production.
+// Pop-ordering safety: cloned `AdStackLoadTopStmt`s read the live top at the cloned position. `MakeAdjoint` emits
+// `AdStackPopStmt` for each surviving `AdStackPushStmt`, and the existing reverse-pass scheme places the pop AFTER all
+// uses of that stack within the reverse iteration (uses include both the original `AdStackLoadTopStmt`s emitted by
+// `ReplaceLocalVarWithStacks` and the consumers' clones). For loop-carried allocas the pop fires early to expose the
+// iteration's INPUT primal as the new top, which is exactly the value the recomputed chain needs - the existing
+// per-consumer clone path at `BackupSSA::generic_visit` line ~2697 relies on this same property and has been correct in
+// production.
 class RecomputableChainCloner {
  public:
   static Stmt *clone_at(Stmt *src, Stmt *insert_point, std::unordered_map<Stmt *, Stmt *> &cache) {
@@ -193,8 +185,8 @@ class RecomputableChainCloner {
     } else if (src->is<AdStackLoadTopStmt>() || src->is<ArgLoadStmt>() || src->is<ConstStmt>()) {
       auto cloned_unique = src->clone();
       cloned = insert_point->insert_before_me(std::move(cloned_unique));
-      // For AdStackLoadTopStmt clones, the cloned stmt's `stack` operand still points at the original
-      // AdStackAllocaStmt - that's the desired sharing.
+      // For AdStackLoadTopStmt clones, the cloned stmt's `stack` operand still points at the original AdStackAllocaStmt
+      // - that's the desired sharing.
     } else {
       // Compound op: clone first, then walk operands and rewire each to a recursive clone.
       auto cloned_unique = src->clone();
@@ -214,9 +206,8 @@ class RecomputableChainCloner {
 };
 
 // ----------------------------------------------------------------------------
-// ADTransform: shared base for reverse-mode (MakeAdjoint) and forward-mode
-// (MakeDual) IR builders. All methods are inline so derived classes in
-// separate translation units can use them without ODR concerns.
+// ADTransform: shared base for reverse-mode (MakeAdjoint) and forward-mode (MakeDual) IR builders. Methods are inline
+// so derived classes in separate translation units can use them without ODR concerns.
 // ----------------------------------------------------------------------------
 class ADTransform : public IRVisitor {
  protected:

@@ -8,13 +8,11 @@ namespace {
 // ============================================================================
 // BackupSSA: spill cross-block SSA operands the reverse-mode clones reference.
 //
-// MakeAdjoint clones forward stmts into the reverse scope but shares operand
-// pointers with the forward graph; when those operands live inside the
-// forward body (e.g. an inner-for's `begin`/`end`), the reverse clone's
-// operand no longer dominates its use. This pass rewrites such operands:
-// AdStackLoadTopStmt / ArgLoadStmt get cloned in place, AdStackAllocaStmt
-// gets re-rooted at the IB, generic SSA values get a per-IB backup
-// AllocaStmt + LocalStore + LocalLoad chain.
+// MakeAdjoint clones forward stmts into the reverse scope but shares operand pointers with the forward graph; when
+// those operands live inside the forward body (e.g. an inner-for's `begin`/`end`), the reverse clone's operand no
+// longer dominates its use. This pass rewrites such operands: AdStackLoadTopStmt / ArgLoadStmt get cloned in place,
+// AdStackAllocaStmt gets re-rooted at the IB, generic SSA values get a per-IB backup AllocaStmt + LocalStore +
+// LocalLoad chain.
 // ============================================================================
 class BackupSSA : public BasicStmtVisitor {
  public:
@@ -59,36 +57,32 @@ class BackupSSA : public BasicStmtVisitor {
           // Just create another AdStackLoadTopStmt
           stmt->set_operand(i, stmt->insert_before_me(op->clone()));
         } else if (op->is<AdStackAllocaStmt>()) {
-          // Backup AdStackAllocaStmt because it should not be local stored and
-          // local loaded
+          // Backup AdStackAllocaStmt because it should not be local stored and local loaded.
           auto stack_alloca = op->as<AdStackAllocaStmt>();
           if (backup_alloca.find(op) == backup_alloca.end()) {
             auto backup_stack_alloca = Stmt::make<AdStackAllocaStmt>(stack_alloca->dt, stack_alloca->max_size);
             auto backup_stack_alloca_ptr = backup_stack_alloca.get();
             independent_block->insert(std::move(backup_stack_alloca), 0);
             backup_alloca[op] = backup_stack_alloca_ptr;
-            // Replace usages of all blocks i.e., the entry point for the
-            // replace is the top level block
+            // Replace usages of all blocks, i.e. the entry point for the replace is the top level block.
             irpass::replace_all_usages_with(leaf_to_root.back(), op, backup_stack_alloca_ptr);
-            // Erase the outdated AdStackAllocaStmt
+            // Erase the outdated AdStackAllocaStmt.
             op->parent->erase(op);
           }
         } else if (op->is<ArgLoadStmt>()) {
           stmt->set_operand(i, stmt->insert_before_me(op->clone()));
         } else {
-          // Recomputable-chain fallback before the last-iter `load(op)` spill: when the cross-block SSA op
-          // is rooted in a DAG of side-effect-free arithmetic over already-stack-backed allocas, kernel-args,
-          // constants, and loop indices, clone the chain into the reverse scope at the consumer site. The
-          // cloned chain reads stack tops live (matching `MakeAdjoint`'s pop ordering, which fires pops
-          // AFTER all uses of a stack within one reverse iter) and reads kernel-args / constants / loop
-          // indices via direct clones - exactly the path that was already correct for AdStackLoadTopStmt and
-          // ArgLoadStmt operands.
+          // Recomputable-chain fallback before the last-iter `load(op)` spill: when the cross-block SSA op is rooted in
+          // a DAG of side-effect-free arithmetic over already-stack-backed allocas, kernel-args, constants, and loop
+          // indices, clone the chain into the reverse scope at the consumer site. The cloned chain reads stack tops
+          // live (matching `MakeAdjoint`'s pop ordering, which fires pops AFTER all uses of a stack within one reverse
+          // iter) and reads kernel-args / constants / loop indices via direct clones - matching the path used for
+          // AdStackLoadTopStmt and ArgLoadStmt operands.
           //
-          // The pre-existing `load(op)` fallback below remains correct for genuinely non-recomputable
-          // cross-block ops (a forward `GlobalLoadStmt` of a needs_grad SNode whose value the reverse must
-          // read at last-write rather than recompute, for instance) and for shapes outside one of our
-          // independent blocks. Adding the recomputable path above the fallback strictly subsets the
-          // previous behaviour: a chain that fails the predicate falls through to the old `load(op)` line.
+          // The `load(op)` fallback below covers genuinely non-recomputable cross-block ops (a forward `GlobalLoadStmt`
+          // of a needs_grad SNode whose value the reverse must read at last-write rather than recompute, for instance)
+          // and shapes outside one of our independent blocks. The recomputable path above takes precedence when its
+          // predicate matches; otherwise control falls through to the `load(op)` line.
           if (RecomputableChainAnalyzer::is_recomputable(op, recomputable_cache_)) {
             std::unordered_map<Stmt *, Stmt *> clone_cache;
             Stmt *cloned = RecomputableChainCloner::clone_at(op, stmt, clone_cache);
@@ -102,8 +96,8 @@ class BackupSSA : public BasicStmtVisitor {
     }
   }
 
-  // Memoization cache for `RecomputableChainAnalyzer::is_recomputable` queries within one BackupSSA run.
-  // Re-used across all generic_visit calls; invariant during the visit because forward IR is read-only here.
+  // Memoization cache for `RecomputableChainAnalyzer::is_recomputable` queries within one BackupSSA run. Re-used across
+  // all generic_visit calls; invariant during the visit because forward IR is read-only here.
   std::unordered_map<Stmt *, bool> recomputable_cache_;
 
   void visit(Stmt *stmt) override {
@@ -115,12 +109,12 @@ class BackupSSA : public BasicStmtVisitor {
     BasicStmtVisitor::visit(stmt);
   }
 
-  // generic_visit spills cross-block operands (the for-loop's `begin` and `end`) the same way it does for an
-  // IfStmt's cond. MakeAdjoint clones a forward for-loop into the reverse scope and shares the clone's
-  // `begin`/`end` pointers with the forward stmt; when those operands live inside the forward for's body (e.g.
-  // inner `for k in range(j)` where `j` is an enclosing loop's index promoted to a per-iter adstack), the reverse
-  // clone's operand no longer dominates its use. generic_visit's AdStackLoadTopStmt branch handles this by
-  // inserting a fresh AdStackLoadTop in the reverse scope, which reads the correct per-iteration value.
+  // generic_visit spills cross-block operands (the for-loop's `begin` and `end`) the same way it does for an IfStmt's
+  // cond. MakeAdjoint clones a forward for-loop into the reverse scope and shares the clone's `begin`/`end` pointers
+  // with the forward stmt; when those operands live inside the forward for's body (e.g. inner `for k in range(j)` where
+  // `j` is an enclosing loop's index promoted to a per-iter adstack), the reverse clone's operand no longer dominates
+  // its use. generic_visit's AdStackLoadTopStmt branch handles this by inserting a fresh AdStackLoadTop in the reverse
+  // scope, which reads the correct per-iteration value.
   void visit(RangeForStmt *stmt) override {
     generic_visit(stmt);
     stmt->body->accept(this);
@@ -154,19 +148,17 @@ class BackupSSA : public BasicStmtVisitor {
 };
 
 // ============================================================================
-// CoalesceAdStackLoads: dedup redundant AdStackLoadTop / AdStackLoadTopAdj
-// reads emitted by the reverse pass.
+// CoalesceAdStackLoads: dedup redundant AdStackLoadTop / AdStackLoadTopAdj reads emitted by the reverse pass.
 //
-// Within a single straight-line block, multiple `AdStackLoadTopStmt` reads of the same stack with no
-// intervening `AdStackPushStmt` / `AdStackPopStmt` for that stack return the same value, and multiple
-// `AdStackLoadTopAdjStmt` reads are equivalent under the same conditions plus no intervening
-// `AdStackAccAdjointStmt`. After Python-side static unrolling collapses an inner loop into straight-line IR,
-// every iteration's read of an outer-loop-invariant adstack value emits a separate LoadTop in the same block;
-// each individual load is cheap (read u64 count + GEP) but unrolled-loop counts of hundreds to thousands
-// inflate PTX size and ptxas register-allocator cost. This pass walks each block, caches the most recent
-// LoadTop / LoadTopAdj per stack, replaces subsequent same-stack reads with the cached SSA value until a
-// Push / Pop / AccAdjoint invalidates the cache for that stack, and conservatively clears the cache when
-// crossing into nested control flow (IfStmt / RangeForStmt / StructForStmt / WhileStmt) where unseen
+// Within a single straight-line block, multiple `AdStackLoadTopStmt` reads of the same stack with no intervening
+// `AdStackPushStmt` / `AdStackPopStmt` for that stack return the same value, and multiple `AdStackLoadTopAdjStmt`
+// reads are equivalent under the same conditions plus no intervening `AdStackAccAdjointStmt`. After Python-side
+// static unrolling collapses an inner loop into straight-line IR, every iteration's read of an outer-loop-invariant
+// adstack value emits a separate LoadTop in the same block; each individual load is cheap (read u64 count + GEP) but
+// unrolled-loop counts of hundreds to thousands inflate PTX size and ptxas register-allocator cost. This pass walks
+// each block, caches the most recent LoadTop / LoadTopAdj per stack, replaces subsequent same-stack reads with the
+// cached SSA value until a Push / Pop / AccAdjoint invalidates the cache for that stack, and conservatively clears
+// the cache when crossing into nested control flow (IfStmt / RangeForStmt / StructForStmt / WhileStmt) where unseen
 // push/pop/AccAdjoint may appear.
 // ============================================================================
 
@@ -245,9 +237,9 @@ class CoalesceAdStackLoads : public BasicStmtVisitor {
   void visit(Block *block) override {
     std::unordered_map<Stmt *, Stmt *> primal_cache;
     std::unordered_map<Stmt *, Stmt *> adjoint_cache;
-    // Iterate over a snapshot so erase()s during the walk do not invalidate the iteration. The
-    // DelayedIRModifier still applies erases at the end via `modify_ir()` so SSA users get rewritten in one
-    // pass; the snapshot only protects the visitor's own walk.
+    // Iterate over a snapshot so erase()s during the walk do not invalidate the iteration. The DelayedIRModifier still
+    // applies erases at the end via `modify_ir()` so SSA users get rewritten in one pass; the snapshot only protects
+    // the visitor's own walk.
     std::vector<Stmt *> stmts;
     stmts.reserve(block->statements.size());
     for (auto &s : block->statements) {
@@ -255,9 +247,9 @@ class CoalesceAdStackLoads : public BasicStmtVisitor {
     }
     for (Stmt *s : stmts) {
       if (auto *lt = s->cast<AdStackLoadTopStmt>()) {
-        // `return_ptr=true` returns a pointer into the stack slot rather than loading a value; coalescing
-        // those is unsound because subsequent stores via the pointer would alias with each other through
-        // the cached SSA value. The non-pointer variant is the common case driven by reverse-pass formulas.
+        // `return_ptr=true` returns a pointer into the stack slot rather than loading a value; coalescing those is
+        // unsound because subsequent stores via the pointer would alias with each other through the cached SSA value.
+        // The non-pointer variant is the common case driven by reverse-pass formulas.
         if (lt->return_ptr) {
           continue;
         }
@@ -283,19 +275,19 @@ class CoalesceAdStackLoads : public BasicStmtVisitor {
         primal_cache.erase(po->stack);
         adjoint_cache.erase(po->stack);
       } else if (auto *aa = s->cast<AdStackAccAdjointStmt>()) {
-        // Accumulating into the top adjoint slot does not alter the primal half, so the primal cache for
-        // the same stack stays valid; only the adjoint cache must be invalidated.
+        // Accumulating into the top adjoint slot does not alter the primal half, so the primal cache for the same stack
+        // stays valid; only the adjoint cache must be invalidated.
         adjoint_cache.erase(aa->stack);
       } else if (s->is<IfStmt>() || s->is<RangeForStmt>() || s->is<StructForStmt>() || s->is<WhileStmt>()) {
-        // The pass is intentionally intra-block: any push / pop hidden inside a nested block would
-        // invalidate caches asymmetrically across branches and make a sound merge complex. Conservatively
-        // drop both caches before descending so reads after the nested block see no stale entries.
+        // The pass is intentionally intra-block: any push / pop hidden inside a nested block would invalidate caches
+        // asymmetrically across branches and make a sound merge complex. Conservatively drop both caches before
+        // descending so reads after the nested block see no stale entries.
         primal_cache.clear();
         adjoint_cache.clear();
         s->accept(this);
       } else {
-        // Any other statement is assumed inert with respect to the AdStack count headers; recurse into
-        // potential nested blocks (defensively) but leave the caches intact.
+        // Any other statement is assumed inert with respect to the AdStack count headers; recurse into potential nested
+        // blocks (defensively) but leave the caches intact.
         s->accept(this);
       }
     }

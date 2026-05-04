@@ -11,16 +11,12 @@ class MakeAdjoint : public ADTransform {
   using ADTransform::visit;
   Block *current_block;
   Block *alloca_block;
-  // Backup the forward pass (the forward pass might be modified during the
-  // MakeAdjoint) for search whether a GlobalLoadStmt is inside a for-loop when
-  // allocating adjoint (see the function `adjoint`) Should be stored
-  // 1. Before entering a for-loop body
-  // 2. Before entering a if-stmt
-  // Should be restored after processing every statement in the two cases above
+  // Backup the forward pass (the forward pass might be modified during the MakeAdjoint) for search whether a
+  // GlobalLoadStmt is inside a for-loop when allocating adjoint (see the function `adjoint`). Should be stored before
+  // entering a for-loop body or an if-stmt, and restored after processing every statement in those two cases.
   Block *forward_backup;
-  // IB root: stays constant across visitor recursion. Used when we need to allocate
-  // persistent storage that must survive enclosing for-loop iterations (e.g. the
-  // dedicated ad-stacks that snapshot IfStmt conds in visit(IfStmt)).
+  // IB root: stays constant across visitor recursion. Used when we need to allocate persistent storage that must
+  // survive enclosing for-loop iterations (e.g. the dedicated ad-stacks that snapshot IfStmt conds in visit(IfStmt)).
   Block *ib_root;
   std::map<Stmt *, Stmt *> adjoint_stmt;
 
@@ -36,16 +32,15 @@ class MakeAdjoint : public ADTransform {
     block->accept(&p);
   }
 
-  // Does `if_stmt`'s true/false body contain any AdStackPushStmt targeting `stack`? Recursive to
-  // catch pushes nested inside further control flow (if-in-if, if-in-for). Used by visit(IfStmt)
-  // to gate cond-snapshotting. Must be narrow: snapshotting every if-stmt would add an
-  // AdStackAllocaStmt per if, and determine_ad_stack_size cannot size stacks whose push/pop pair
-  // is only reachable through branches its Bellman-Ford walk considers "unreached" -- codegen then
-  // aborts with "Adaptive autodiff stack's size should have been determined" and the extras also
-  // spam "Unused autodiff stack should have been eliminated" for every untouched snap stack. Only
-  // when the body actually pushes onto the cond's backing stack does BackupSSA's reverse-time
-  // clone of load_top read a post-body value rather than the forward cond (the real bug); in every
-  // other case the clone is already correct and a snapshot would be dead weight.
+  // Does `if_stmt`'s true/false body contain any AdStackPushStmt targeting `stack`? Recursive to catch pushes nested
+  // inside further control flow (if-in-if, if-in-for). Used by visit(IfStmt) to gate cond-snapshotting. Must be narrow:
+  // snapshotting every if-stmt would add an AdStackAllocaStmt per if, and determine_ad_stack_size cannot size stacks
+  // whose push/pop pair is only reachable through branches its Bellman-Ford walk considers "unreached" - codegen then
+  // aborts with "Adaptive autodiff stack's size should have been determined" and the extras also spam "Unused autodiff
+  // stack should have been eliminated" for every untouched snap stack. Only when the body actually pushes onto the
+  // cond's backing stack does BackupSSA's reverse-time clone of load_top read a post-body value rather than the forward
+  // cond (the case this snapshot guards against); in every other case the clone is correct and a snapshot would be dead
+  // weight.
   static bool block_pushes_to_stack(Block *block, Stmt *stack) {
     if (!block)
       return false;
@@ -77,8 +72,7 @@ class MakeAdjoint : public ADTransform {
            block_pushes_to_stack(if_stmt->false_statements.get(), stack);
   }
 
-  // TODO: current block might not be the right block to insert adjoint
-  // instructions!
+  // TODO: current block might not be the right block to insert adjoint instructions!
   void visit(Block *block) override {
     std::vector<Stmt *> statements;
     // always make a copy since the list can be modified.
@@ -136,40 +130,36 @@ class MakeAdjoint : public ADTransform {
     if (adjoint_stmt.find(stmt) == adjoint_stmt.end()) {
       // normal SSA cases
 
-      // create the alloca
-      // auto alloca =
-      //    Stmt::make<AllocaStmt>(get_current_program().config.gradient_dt);
-      // maybe it's better to use the statement data type than the default type
+      // Create the alloca. Using the statement's own `ret_type` tends to fit better than the kernel-wide
+      // `get_current_program().config.gradient_dt` default.
       auto alloca = Stmt::make<AllocaStmt>(adjoint_dtype);
       adjoint_stmt[stmt] = alloca.get();
 
-      // We need to insert the alloca in the block of GlobalLoadStmt when the
-      // GlobalLoadStmt is not inside the currently-processed range-for.
-      // Code sample:
-      // a and b require grad
-      // Case 1 (GlobalLoadStmt is outside the for-loop, compute 5 times and
-      // accumulate once, alloca history value is needed):
+      // We need to insert the alloca in the block of GlobalLoadStmt when the GlobalLoadStmt is not inside the
+      // currently-processed range-for. Code sample (a and b require grad):
+      //
+      // Case 1 (GlobalLoadStmt is outside the for-loop, compute 5 times and accumulate once, alloca history value
+      // is needed):
       // for i in range(5):
       //     p = a[i]
       //     q = b[i]
       //     for _ in range(5)
       //         q += p
 
-      // Case 2 (GlobalLoadStmt is inside the for-loop, compute once and
-      // accumulate immediately, alloca history value can be discarded):
+      // Case 2 (GlobalLoadStmt is inside the for-loop, compute once and accumulate immediately, alloca history
+      // value can be discarded):
       // for i in range(5):
       //     q = b[i]
       //     for _ in range(5)
       //         q += a[i]
       if (stmt->is<GlobalLoadStmt>() && forward_backup->locate(stmt->as<GlobalLoadStmt>()) == -1) {
-        // Case 1: the GlobalLoadStmt lives in a block outside the currently-processed range-for iteration. Its
-        // adjoint must persist across all iterations of the inner reversed loop, so the alloca cannot live in the
-        // current alloca_block (which would be the inner reversed loop body). Walk up from the primal's enclosing
-        // block until we hit one whose owning statement unconditionally dominates both the forward and the reverse
-        // code (a loop / offloaded / kernel body, not an if / while body): visit(IfStmt) emits the reverse code
-        // into a brand new sibling IfStmt, not back into the forward if-body, so an alloca placed inside the
-        // forward branch is SSA-invalid from the reverse branch's point of view and gets DCE'd into silently-zero
-        // gradients.
+        // Case 1: the GlobalLoadStmt lives in a block outside the currently-processed range-for iteration. Its adjoint
+        // must persist across all iterations of the inner reversed loop, so the alloca cannot live in the current
+        // alloca_block (which would be the inner reversed loop body). Walk up from the primal's enclosing block until
+        // we hit one whose owning statement unconditionally dominates both the forward and the reverse code (a loop /
+        // offloaded / kernel body, not an if / while body): visit(IfStmt) emits the reverse code into a brand new
+        // sibling IfStmt, not back into the forward if-body, so an alloca placed inside the forward branch is
+        // SSA-invalid from the reverse branch's point of view and gets DCE'd into silently-zero gradients.
         Block *target = stmt->as<GlobalLoadStmt>()->parent;
         while (target != nullptr) {
           Stmt *parent_stmt = target->parent_stmt();
@@ -179,9 +169,9 @@ class MakeAdjoint : public ADTransform {
           }
           target = parent_stmt->parent;
         }
-        // Reaching a null target means the primal's enclosing-block chain is broken (an unparented block). Falling
-        // back to alloca_block here would silently restore the pre-fix bug (adjoint eliminated as DCE on the
-        // reverse branch); hard-assert instead so malformed IR surfaces loudly.
+        // Reaching a null target means the primal's enclosing-block chain is broken (an unparented block). Falling back
+        // to alloca_block here would place the adjoint inside a branch that gets DCE'd on the reverse side (silently
+        // zeroed gradients); hard-assert instead so malformed IR surfaces loudly.
         QD_ASSERT(target != nullptr);
         target->insert(std::move(alloca), 0);
       } else {
@@ -191,13 +181,13 @@ class MakeAdjoint : public ADTransform {
     return adjoint_stmt[stmt];
   }
 
-  // For ops in `NonLinearOps::unary_collections` the reverse formula must NOT read the forward `stmt`
-  // directly - only `stmt->operand` (adstack-backed), `adjoint(stmt)`, and constants. BackupSSA spills the
-  // forward stmt to a single plain alloca overwritten each iteration, so reading `stmt` from a reversed
-  // dynamic loop would use the last-iteration value regardless of which reverse iteration is running. This
-  // helper walks the value-tree at IR-transform time and asserts the invariant; paired with the Python
-  // meta-test `test_unary_collections_audit` (which catches "forgot to add to unary_collections"), it
-  // covers both halves of the class of bugs the per-op audit used to miss.
+  // For ops in `NonLinearOps::unary_collections` the reverse formula must NOT read the forward `stmt` directly - only
+  // `stmt->operand` (adstack-backed), `adjoint(stmt)`, and constants. BackupSSA spills the forward stmt to a single
+  // plain alloca overwritten each iteration, so reading `stmt` from a reversed dynamic loop would use the
+  // last-iteration value regardless of which reverse iteration is running. This helper walks the value-tree at
+  // IR-transform time and asserts the invariant. It covers the formula-reads-forward-stmt half of the per-op
+  // classification check; the missing-from-unary_collections half is covered by a Python-side audit of the
+  // unary_collections set.
   void accumulate_unary_operand_checked(UnaryOpStmt *stmt, Stmt *value) {
     if (NonLinearOps::unary_collections.find(stmt->op_type) != NonLinearOps::unary_collections.end()) {
       std::unordered_set<const Stmt *> visited;
@@ -238,10 +228,10 @@ class MakeAdjoint : public ADTransform {
       acc(mul(adjoint(stmt), add(constant(1, stmt->ret_type), sqr(tan(stmt->operand)))));
     } else if (stmt->op_type == UnaryOpType::tanh) {
       // Recompute tanh(operand) in the reverse pass instead of reusing the forward stmt value. In dynamic loops
-      // BackupSSA spills the forward stmt to a single plain alloca overwritten each iteration, so the reversed
-      // loop would read the last-iteration tanh for every backward step. The operand rides the adstack through
-      // LocalLoad, so a fresh tanh on it is per-iteration correct. Trade-off: tanh is evaluated twice per
-      // iteration (once forward, once backward); caching the forward value on the adstack is a future optimization.
+      // BackupSSA spills the forward stmt to a single plain alloca overwritten each iteration, so the reversed loop
+      // would read the last-iteration tanh for every backward step. The operand rides the adstack through LocalLoad, so
+      // a fresh tanh on it is per-iteration correct. Trade-off: tanh is evaluated twice per iteration (once forward,
+      // once backward).
       acc(mul(adjoint(stmt), sub(constant(1, stmt->ret_type), sqr(tanh(stmt->operand)))));
     } else if (stmt->op_type == UnaryOpType::asin) {
       acc(mul(adjoint(stmt),
@@ -251,19 +241,17 @@ class MakeAdjoint : public ADTransform {
               negate(div(constant(1, stmt->ret_type), sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand)))))));
     } else if (stmt->op_type == UnaryOpType::exp) {
       // See the tanh case above: recompute exp on the adstack-backed operand so the reversed loop sees the
-      // per-iteration value rather than the last-forward value spilled by BackupSSA. Same trade-off as tanh: exp
-      // is evaluated twice per iteration (once forward, once backward); caching the forward value on the adstack
-      // is a future optimization.
+      // per-iteration value rather than the last-forward value spilled by BackupSSA. Same trade-off as tanh: exp is
+      // evaluated twice per iteration (once forward, once backward).
       acc(mul(adjoint(stmt), exp(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::log) {
-      // No recompute workaround needed: the reverse formula `1 / operand` reads `stmt->operand` directly (which
-      // is adstack-backed via LocalLoad inside dynamic loops), not the forward `log(operand)` stmt value.
+      // No recompute workaround needed: the reverse formula `1 / operand` reads `stmt->operand` directly (which is
+      // adstack-backed via LocalLoad inside dynamic loops), not the forward `log(operand)` stmt value.
       acc(div(adjoint(stmt), stmt->operand));
     } else if (stmt->op_type == UnaryOpType::sqrt) {
-      // No recompute workaround needed: the reverse formula reads `stmt->operand` (adstack-backed via LocalLoad
-      // inside dynamic loops, gated on `unary_collections` membership) and recomputes `sqrt(operand)` from it,
-      // not the forward `sqrt(operand)` stmt value. Unlike tanh/exp this case was already operand-based before
-      // the recompute fix landed; the structure mirrors log above.
+      // No recompute workaround needed: the reverse formula reads `stmt->operand` (adstack-backed via LocalLoad inside
+      // dynamic loops, gated on `unary_collections` membership) and recomputes `sqrt(operand)` from it, not the forward
+      // `sqrt(operand)` stmt value. Structure mirrors log above.
       acc(mul(adjoint(stmt), div(constant(0.5f, stmt->ret_type), sqrt(stmt->operand))));
     } else if (stmt->op_type == UnaryOpType::rsqrt) {
       acc(mul(adjoint(stmt),
@@ -329,30 +317,29 @@ class MakeAdjoint : public ADTransform {
   }
 
   void visit(IfStmt *if_stmt) override {
-    // Snapshot a stack-backed forward cond into a dedicated 1-push-per-if-execution ad-stack,
-    // but only when the cond's backing stack is also pushed inside the if body (e.g. short-circuit
-    // lowering pushes the rhs of `&&` onto the same stack that holds the cond). Without this,
-    // BackupSSA's clone of `if_stmt->cond` in the reverse block reads the cond stack AFTER the
-    // body-pushes rather than the forward-time cond value - the reverse IfStmt flips, pop counts
-    // drift, and gradients come out silently zero. A dedicated stack has exactly one push per
-    // forward if-execution, so the reverse load_top matches the forward cond.
+    // Snapshot a stack-backed forward cond into a dedicated 1-push-per-if-execution ad-stack, but only when the cond's
+    // backing stack is also pushed inside the if body (e.g. short-circuit lowering pushes the rhs of `&&` onto the same
+    // stack that holds the cond). Without this, BackupSSA's clone of `if_stmt->cond` in the reverse block reads the
+    // cond stack AFTER the body-pushes rather than the forward-time cond value - the reverse IfStmt flips, pop counts
+    // drift, and gradients come out silently zero. A dedicated stack has exactly one push per forward if-execution, so
+    // the reverse load_top matches the forward cond.
     //
-    // Guarded by the body-push check because snapshotting indiscriminately adds AdStackAllocaStmts
-    // that go through `determine_ad_stack_size` unused on every other if-stmt in the kernel - the
-    // adaptive-size pass emits "Unused autodiff stack should have been eliminated" warnings and
-    // the codegen step then fails with "Adaptive autodiff stack's size should have been determined".
+    // Guarded by the body-push check because snapshotting indiscriminately adds AdStackAllocaStmts that go through
+    // `determine_ad_stack_size` unused on every other if-stmt in the kernel - the adaptive-size pass emits "Unused
+    // autodiff stack should have been eliminated" warnings and the codegen step then fails with "Adaptive autodiff
+    // stack's size should have been determined".
     Stmt *reverse_cond = if_stmt->cond;
     AdStackAllocaStmt *snap_stack_ptr = nullptr;
     // Narrow guard: only the bare `AdStackLoadTopStmt` shape needs the explicit snapshot below. A compound cond (e.g.
     // `cmp_lt(load_top(x_stack) + 0.1, threshold)` from `if x + 0.1 < threshold` when `x` has been promoted to an
-    // adstack by `ReplaceLocalVarWithStacks`) reaches this visitor as a BARE `AdStackLoadTopStmt` cond anyway - the
-    // cmp / arithmetic value goes through `PromoteSSA2LocalVar`'s required-defs set (the IfStmt cond path adds the
-    // cond's value-producing op), then `AdStackAllocaJudger::visit(IfStmt)` (around line 763) marks its alloca
-    // stack-needed because it feeds the cond, then `ReplaceLocalVarWithStacks` promotes the alloca to an adstack. By
-    // the time control reaches here, `if_stmt->cond` is `AdStackLoadTopStmt` of that snap-promoted adstack and the
-    // body of the if does NOT push to that stack (the cmp value is pushed once just before the IfStmt, never inside),
-    // so the `body_pushes_to_stack` guard below is false and we correctly skip the additional snap-stack. Per-iter
-    // cond values are preserved by the alloca-promotion pipeline.
+    // adstack by `ReplaceLocalVarWithStacks`) reaches this visitor as a BARE `AdStackLoadTopStmt` cond anyway - the cmp
+    // / arithmetic value goes through `PromoteSSA2LocalVar`'s required-defs set (the IfStmt cond path adds the cond's
+    // value-producing op), then `AdStackAllocaJudger::visit(IfStmt)` marks its alloca stack-needed because it feeds the
+    // cond, then `ReplaceLocalVarWithStacks` promotes the alloca to an adstack. By the time control reaches here,
+    // `if_stmt->cond` is `AdStackLoadTopStmt` of that snap-promoted adstack and the body of the if does NOT push to
+    // that stack (the cmp value is pushed once just before the IfStmt, never inside), so the `body_pushes_to_stack`
+    // guard below is false and we correctly skip the additional snap-stack. Per-iter cond values are preserved by the
+    // alloca-promotion pipeline.
     //
     // The bare-`AdStackLoadTopStmt` case the snap-stack below handles is the OTHER shape: a load_top whose backing
     // stack IS pushed to inside the if body (e.g. short-circuit lowering of `&&` pushes the rhs onto the same stack
@@ -361,29 +348,26 @@ class MakeAdjoint : public ADTransform {
     // wrong cond value. The snap-stack here decouples the cond value from the body's pushes by capturing it once just
     // before the IfStmt and reading it back at the matching reverse cursor.
     //
-    // Earlier comments here claimed that compound conds rely on `BackupSSA::generic_visit`'s `load(op)` else-branch
-    // ("single alloca, last-write-wins" spill) for correctness. That description was incomplete: the alloca-promotion-
-    // to-adstack pipeline catches compound conds before they reach BackupSSA, so the spill is a FALLBACK for shapes
-    // the alloca-promotion missed, not the load-bearing path for compound conds in general. Verified empirically on
-    // 2026-05-04 with a loop-carried local v + compound cond `v + 0.1 > threshold` + nonlinear use of v in the if
-    // body: gradients match analytic on origin/main and on C3.
+    // Compound conds whose value-producing op is not adstack-promoted by the alloca-promotion pipeline fall through to
+    // `BackupSSA::generic_visit`'s `load(op)` spill: a single alloca written immediately after the forward cond and
+    // reloaded at reverse-cond construction. That captures the forward-time cond value correctly within one iteration
+    // of an enclosing dynamic loop.
     if (if_stmt->cond->is<AdStackLoadTopStmt>()) {
       auto *cond_stack = if_stmt->cond->as<AdStackLoadTopStmt>()->stack->as<AdStackAllocaStmt>();
       if (body_pushes_to_stack(if_stmt, cond_stack)) {
         auto cond_type = if_stmt->cond->ret_type.ptr_removed();
-        // Size the snap stack the same way as the cond stack it mirrors: one forward push per
-        // if-execution matched by one reverse pop. Reusing cond_stack->max_size keeps the snap
-        // stack exempt from `determine_ad_stack_size` when the cond stack itself was built with a
-        // fixed size, which is always true when ReplaceLocalVarWithStacks ran with a non-zero
-        // `ad_stack_size` (the only configuration we currently support for stack-based reverse AD).
+        // Size the snap stack the same way as the cond stack it mirrors: one forward push per if-execution matched by
+        // one reverse pop. Reusing cond_stack->max_size keeps the snap stack exempt from `determine_ad_stack_size` when
+        // the cond stack itself was built with a fixed size, which holds when ReplaceLocalVarWithStacks ran with a
+        // non-zero `ad_stack_size` (the only configuration supported for stack-based reverse AD).
         auto snap_stack = Stmt::make<AdStackAllocaStmt>(cond_type, cond_stack->max_size);
         snap_stack_ptr = snap_stack->as<AdStackAllocaStmt>();
         // Allocate at the IB root so the stack persists across enclosing for-loop iterations.
         ib_root->insert(std::move(snap_stack), 0);
-        // Per-execution forward push of the cond value, just before the forward if-stmt. No
-        // initial zero push: the reverse load_top always runs after a matching forward push, so
-        // leaving the stack empty at entry is both correct and avoids a dead store that DSE would
-        // otherwise drop (and that `determine_ad_stack_size` would then miscount).
+        // Per-execution forward push of the cond value, just before the forward if-stmt. No initial zero push: the
+        // reverse load_top always runs after a matching forward push, so leaving the stack empty at entry is both
+        // correct and avoids a dead store that DSE would otherwise drop (and that `determine_ad_stack_size` would then
+        // miscount).
         if_stmt->insert_before_me(Stmt::make<AdStackPushStmt>(snap_stack_ptr, if_stmt->cond));
         // Per-execution reverse load of the snapshotted cond, emitted in the current reverse block.
         reverse_cond = insert<AdStackLoadTopStmt>(snap_stack_ptr);
@@ -459,27 +443,26 @@ class MakeAdjoint : public ADTransform {
       // Restore the forward pass
       forward_backup = for_stmt->body.get();
     }
-    // Restore current_block. Missing here before: if this RangeForStmt is visited from within another compound
-    // stmt (notably visit(IfStmt)), that outer visitor will continue iterating its own body in reverse after we
-    // return and emit further reverse stmts. Without this restore those emissions land in the reversed-for's
-    // body instead of the outer block, producing silently-wrong gradients whenever a runtime-guarded if wraps a
-    // for-loop with loop-carried variables (the reverse loop body ends up over-popping the adstack and emitting
-    // the x.grad accumulation on every iteration instead of once).
+    // Restore current_block: if this RangeForStmt is visited from within another compound stmt (notably visit(IfStmt)),
+    // that outer visitor continues iterating its own body in reverse after we return and emit further reverse stmts.
+    // Without the restore, those emissions would land in the reversed-for's body instead of the outer block, producing
+    // silently-wrong gradients whenever a runtime-guarded if wraps a for-loop with loop-carried variables (the reverse
+    // loop body would over-pop the adstack and emit the x.grad accumulation on every iteration instead of once).
     current_block = old_current_block;
     forward_backup = old_forward_backup;
     alloca_block = old_alloca_block;
   }
 
   void visit(StructForStmt *for_stmt) override {
-    // Save/restore mirrors visit(RangeForStmt) above. Rationale: visit(Block) inside `body->accept(this)`
-    // sets current_block = for_stmt->body at the start of every iteration, so on return current_block
-    // points at the struct-for's body. An enclosing compound visitor (e.g. visit(IfStmt)) that resumes
-    // iterating its children in reverse after this StructForStmt needs current_block and alloca_block to
-    // still be its own, not this for's; otherwise subsequent reverse emissions land inside the struct-for
-    // body and any adjoint alloca lives in a block the enclosing if-branch cannot reach. forward_backup
-    // must be saved too because `visit(IfStmt)` mutates it without restoring, so a nested if inside the
-    // struct-for body leaves it pointing at the if-branch block, which then survives past this visitor and
-    // mis-routes `adjoint()` on GlobalLoadStmts for later siblings at the enclosing scope.
+    // Save/restore mirrors visit(RangeForStmt) above. Rationale: visit(Block) inside `body->accept(this)` sets
+    // current_block = for_stmt->body at the start of every iteration, so on return current_block points at the
+    // struct-for's body. An enclosing compound visitor (e.g. visit(IfStmt)) that resumes iterating its children in
+    // reverse after this StructForStmt needs current_block and alloca_block to still be its own, not this for's;
+    // otherwise subsequent reverse emissions land inside the struct-for body and any adjoint alloca lives in a block
+    // the enclosing if-branch cannot reach. forward_backup must be saved too because `visit(IfStmt)` mutates it
+    // without restoring, so a nested if inside the struct-for body leaves it pointing at the if-branch block, which
+    // then survives past this visitor and mis-routes `adjoint()` on GlobalLoadStmts for later siblings at the
+    // enclosing scope.
     auto old_alloca_block = alloca_block;
     auto old_current_block = current_block;
     auto old_forward_backup = forward_backup;
@@ -501,12 +484,10 @@ class MakeAdjoint : public ADTransform {
   void visit(LocalStoreStmt *stmt) override {
     accumulate(stmt->val, load(adjoint(stmt->dest)));
 
-    // Clear the adjoint of the dest after local store,
-    // Because LocalStoreStmt overwrites the dest,
-    // 1. If the alloca is inside a loop, the adjoint of this alloca of this
-    // iteration should be cleared after this iteration has been done
-    // 2. If the alloca serves as the dest of multiple LocalStoreStmt, only the
-    // last LocalStoreStmt should be taken account of
+    // Clear the adjoint of the dest after local store, because LocalStoreStmt overwrites the dest:
+    // 1. If the alloca is inside a loop, the adjoint of this alloca for this iteration must be cleared once the
+    //    iteration completes.
+    // 2. If the alloca serves as the dest of multiple LocalStoreStmts, only the last LocalStoreStmt counts.
     auto dest_type = stmt->dest->ret_type.ptr_removed();
     if (is_real(dest_type.get_element_type())) {
       auto dtype = dest_type;
@@ -727,12 +708,11 @@ class MakeAdjoint : public ADTransform {
   void visit(MatrixPtrStmt *stmt) override {
     if (stmt->origin->is<GlobalPtrStmt>() || stmt->origin->is<ExternalPtrStmt>()) {
       /*
-        The case of MatrixPtrStmt(GlobalPtrStmt, ...) is already handled in
-        GlobalPtrStmt, GlobalStoreStmt and AtomicStmt
+        The case of MatrixPtrStmt(GlobalPtrStmt, ...) is already handled in GlobalPtrStmt, GlobalStoreStmt and
+        AtomicStmt.
 
-        TODO(zhanlue): Try to separate out the chain rule for MatrixPtrStmt from
-        GlobalPtrStmt, GlobalStoreStmt and AtomicStmt and migrate the logics
-        here.
+        TODO(zhanlue): Try to separate out the chain rule for MatrixPtrStmt from GlobalPtrStmt, GlobalStoreStmt and
+        AtomicStmt and migrate the logics here.
       */
       return;
     }
