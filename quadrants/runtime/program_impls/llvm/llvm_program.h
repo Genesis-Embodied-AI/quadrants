@@ -160,6 +160,10 @@ class LlvmProgramImpl : public ProgramImpl {
 
   void synchronize() override {
     runtime_exec_->synchronize();
+  }
+
+  void synchronize_and_assert() override {
+    runtime_exec_->synchronize();
     if (!finalizing_) {
       runtime_exec_->check_adstack_overflow();
     }

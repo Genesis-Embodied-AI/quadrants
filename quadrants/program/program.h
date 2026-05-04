@@ -100,7 +100,11 @@ class QD_DLL_EXPORT Program {
     return profiler.get();
   }
 
+  // Drain the backend command queue. Does not raise; for internal use only.
   void synchronize();
+
+  // Drain the queue and raise on any pending user-visible assert (e.g. adstack overflow). Bound to `qd.sync()`.
+  void synchronize_and_assert();
 
   StreamSemaphore flush();
 
@@ -203,6 +207,34 @@ class QD_DLL_EXPORT Program {
   // over all snode trees; called at most once per adstack leaf per kernel launch so the cost is negligible in
   // practice.
   SNode *get_snode_by_id(int snode_id);
+
+  // One input read observed during a `evaluate_adstack_size_expr` walk. The cache entry records these so
+  // a subsequent lookup re-reads the same inputs and compares to `observed_value`; a single mismatch
+  // forces a full re-walk.
+  struct SizeExprReadObservation {
+    enum Kind : uint8_t { FieldLoadObs, ExternalShapeObs, ExternalReadObs };
+    Kind kind;
+    int snode_id;                  // FieldLoad
+    std::vector<int> indices;      // FieldLoad / ExternalReadObs: resolved indices
+    std::vector<int> arg_id_path;  // External*: arg_id_path
+    int arg_shape_axis;            // ExternalShapeObs
+    int prim_dt;                   // ExternalReadObs: PrimitiveTypeID
+    int64_t observed_value;
+  };
+  struct SizeExprCacheEntry {
+    int64_t result;
+    std::vector<SizeExprReadObservation> reads;
+  };
+  // Replay the recorded reads against the live state and `ctx`; on full match write `result` to
+  // `out_result` and return true. Any mismatch erases the entry and returns false, leaving the caller
+  // to run a full eval and repopulate the cache via `record_size_expr_eval`.
+  bool try_size_expr_cache_hit(const SerializedSizeExpr *expr_key, LaunchContextBuilder *ctx, int64_t &out_result);
+  void record_size_expr_eval(const SerializedSizeExpr *expr_key,
+                             int64_t result,
+                             std::vector<SizeExprReadObservation> reads);
+  void invalidate_size_expr_cache() {
+    size_expr_cache_.clear();
+  }
 
   /**
    * Destroys a new SNode tree.
@@ -338,6 +370,10 @@ class QD_DLL_EXPORT Program {
   SNodeRwAccessorsBank snode_rw_accessors_bank_;
 
   std::vector<std::unique_ptr<SNodeTree>> snode_trees_;
+  // Lazy cache for `get_snode_by_id`. Invalidated by `add_snode_tree` and `destroy_snode_tree`.
+  std::unordered_map<int, SNode *> snode_id_cache_;
+  // Cache backing `try_size_expr_cache_hit` / `record_size_expr_eval`.
+  std::unordered_map<const SerializedSizeExpr *, SizeExprCacheEntry> size_expr_cache_;
   std::stack<int> free_snode_tree_ids_;
 
   std::vector<std::unique_ptr<Function>> functions_;

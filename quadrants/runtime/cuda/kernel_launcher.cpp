@@ -183,7 +183,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   }
   graph_manager_.mark_not_used();
 
-  auto launcher_ctx = contexts_[handle.get_launch_id()];
+  // Mutable reference: per-handle persistent buffers grow on demand on first launch. See the matching comment
+  // in `runtime/amdgpu/kernel_launcher.cpp` and the `Context` struct in `kernel_launcher.h` for why these have
+  // to be per-handle (recursive launches from `publish_adstack_metadata` host-eval).
+  auto &launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();
   auto *cuda_module = launcher_ctx.jit_module;
   const auto &parameters = *launcher_ctx.parameters;
@@ -210,8 +213,19 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   std::unordered_map<ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher> device_ptrs;
 
   char *device_result_buffer{nullptr};
-  CUDADriver::get_instance().malloc_async((void **)&device_result_buffer,
-                                          std::max(ctx.result_buffer_size, sizeof(uint64)), nullptr);
+  // Launcher-global persistent `result_buffer`. See `kernel_launcher.h` for why this one is shared across handles
+  // (kernel writes + synchronous host readback before any other reader runs). `arg_buffer` and `runtime_context`
+  // are per-handle (in `Context`) to avoid recursive snode-reader launches clobbering the parent's args.
+  const std::size_t needed_result = std::max(ctx.result_buffer_size, sizeof(uint64));
+  if (needed_result > persistent_result_buffer_capacity_) {
+    if (persistent_result_buffer_dev_ptr_ != nullptr) {
+      CUDADriver::get_instance().mem_free_async(persistent_result_buffer_dev_ptr_, nullptr);
+    }
+    const std::size_t new_cap = std::max(needed_result, 2 * persistent_result_buffer_capacity_);
+    CUDADriver::get_instance().malloc_async(&persistent_result_buffer_dev_ptr_, new_cap, nullptr);
+    persistent_result_buffer_capacity_ = new_cap;
+  }
+  device_result_buffer = static_cast<char *>(persistent_result_buffer_dev_ptr_);
   ctx.get_context().runtime = executor->get_llvm_runtime();
 
   for (int i = 0; i < (int)parameters.size(); i++) {
@@ -290,7 +304,15 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   }
   char *device_arg_buffer = nullptr;
   if (ctx.arg_buffer_size > 0) {
-    CUDADriver::get_instance().malloc_async((void **)&device_arg_buffer, ctx.arg_buffer_size, nullptr);
+    if (ctx.arg_buffer_size > launcher_ctx.arg_buffer_capacity) {
+      if (launcher_ctx.arg_buffer_dev_ptr != nullptr) {
+        CUDADriver::get_instance().mem_free_async(launcher_ctx.arg_buffer_dev_ptr, nullptr);
+      }
+      const std::size_t new_cap = std::max<std::size_t>(ctx.arg_buffer_size, 2 * launcher_ctx.arg_buffer_capacity);
+      CUDADriver::get_instance().malloc_async(&launcher_ctx.arg_buffer_dev_ptr, new_cap, nullptr);
+      launcher_ctx.arg_buffer_capacity = new_cap;
+    }
+    device_arg_buffer = static_cast<char *>(launcher_ctx.arg_buffer_dev_ptr);
     CUDADriver::get_instance().memcpy_host_to_device_async(device_arg_buffer, ctx.get_context().arg_buffer,
                                                            ctx.arg_buffer_size, nullptr);
     ctx.get_context().arg_buffer = device_arg_buffer;
@@ -317,7 +339,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().supports_pageable_memory_access();
   void *device_context_ptr = nullptr;
   if (needs_sizer_device_ctx) {
-    CUDADriver::get_instance().malloc_async(&device_context_ptr, sizeof(RuntimeContext), nullptr);
+    if (launcher_ctx.runtime_context_dev_ptr == nullptr) {
+      CUDADriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext), nullptr);
+    }
+    device_context_ptr = launcher_ctx.runtime_context_dev_ptr;
     CUDADriver::get_instance().memcpy_host_to_device_async(device_context_ptr, &ctx.get_context(),
                                                            sizeof(RuntimeContext), nullptr);
   }
@@ -328,17 +353,12 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   } else {
     launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
   }
-  if (needs_sizer_device_ctx) {
-    CUDADriver::get_instance().mem_free_async(device_context_ptr, nullptr);
-  }
-  if (ctx.arg_buffer_size > 0) {
-    CUDADriver::get_instance().mem_free_async(device_arg_buffer, nullptr);
-  }
+  // Persistent scratch: no per-launch free for the per-handle `arg_buffer` / `runtime_context` or the launcher-
+  // global `result_buffer`. All live until launcher destruction; the dtor handles the final `mem_free_async`.
   if (ctx.result_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_device_to_host_async(host_result_buffer, device_result_buffer,
                                                            ctx.result_buffer_size, nullptr);
   }
-  CUDADriver::get_instance().mem_free_async(device_result_buffer, nullptr);
   // copy data back to host
   if (transfers.size() > 0) {
     CUDADriver::get_instance().stream_synchronize(nullptr);
@@ -348,6 +368,22 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
                                                        ctx.array_runtime_sizes[idx.arg_id]);
       executor->deallocate_memory_on_device(itr->second.second);
     }
+  }
+}
+
+KernelLauncher::~KernelLauncher() {
+  // Free per-handle and launcher-global persistent scratch. `mem_free_async` queues behind any in-flight kernel
+  // reads on the default stream, so the bytes stay valid until the launcher actually goes away.
+  for (auto &launcher_ctx : contexts_) {
+    if (launcher_ctx.arg_buffer_dev_ptr != nullptr) {
+      CUDADriver::get_instance().mem_free_async(launcher_ctx.arg_buffer_dev_ptr, nullptr);
+    }
+    if (launcher_ctx.runtime_context_dev_ptr != nullptr) {
+      CUDADriver::get_instance().mem_free_async(launcher_ctx.runtime_context_dev_ptr, nullptr);
+    }
+  }
+  if (persistent_result_buffer_dev_ptr_ != nullptr) {
+    CUDADriver::get_instance().mem_free_async(persistent_result_buffer_dev_ptr_, nullptr);
   }
 }
 
