@@ -134,7 +134,7 @@ def test_zerocopy_with_shared_queue():
 @test_utils.test(arch=[qd.metal])
 def test_sync_skipped_with_shared_queue():
     """When using a shared queue, mps_sync_if_metal and _try_zerocopy_torch skip explicit sync."""
-    from unittest.mock import patch
+    from unittest.mock import MagicMock, patch
 
     import torch  # noqa: F401
 
@@ -149,7 +149,11 @@ def test_sync_skipped_with_shared_queue():
 
     fill()
 
-    with patch("quadrants.lang.runtime_ops.sync") as mock_sync:
+    from quadrants.lang import impl
+
+    runtime = impl.get_runtime()
+    mock_sync = MagicMock()
+    with patch.object(runtime, "sync", mock_sync):
         x.to_torch(copy=False)
         mock_sync.assert_not_called()
 
