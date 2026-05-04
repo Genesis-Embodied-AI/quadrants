@@ -1179,18 +1179,23 @@ def test_adstack_overflow_multithreaded():
         qd.sync()
 
 
-def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
+@pytest.mark.parametrize("force_sync", [False, True])
+def test_adstack_overflow_caught_then_clean_teardown(tmp_path, force_sync):
     # This test runs the kernel in a child process (not via `@test_utils.test`, which iterates arches), so it
     # cannot rely on the decorator's `require=qd.extension.adstack` skip. Guard manually: skip if the CPU backend
     # was not built with the adstack extension, matching what the sibling overflow tests get from the decorator.
     if not is_extension_supported(qd.cpu, qd.extension.adstack):
         pytest.skip("adstack extension not available on cpu")
 
-    # Pins the teardown-no-double-raise contract for `Program::finalize()`. The per-launch
+    # Pins the per-launch-raise + clean-teardown contract for `Program::finalize()`. The per-launch
     # `check_adstack_overflow_and_assert()` poll wired into `Program::launch_kernel` surfaces an overflow at
-    # the very next kernel-launch entry rather than waiting for `qd.sync()`. The user catches the resulting
-    # `QuadrantsAssertionError` and exits cleanly. Even after the catch, the two teardown `synchronize()`
-    # calls inside `Program::finalize()` re-enter the LLVM `check_adstack_overflow_and_assert` path, and
+    # the very next kernel-launch entry on synchronous backends (CPU). On async backends (CUDA / AMDGPU /
+    # Metal / Vulkan) the kernel may still be in flight when `launch_kernel` returns, so the post-launch poll
+    # reads a not-yet-set flag - the overflow is then surfaced at the next `qd.sync()` via the post-drain
+    # check in `LlvmProgramImpl::synchronize_and_assert` (or the host-mapped readback in
+    # `GfxRuntime::synchronize`). The `force_sync` parametrisation toggles whether the user issues an
+    # explicit `qd.sync()`. Either way the teardown contract holds: the two teardown `synchronize()` calls
+    # inside `Program::finalize()` re-enter the LLVM `check_adstack_overflow_and_assert` path, and
     # `LlvmProgramImpl::pre_finalize()` must have set `finalizing_ = true` early enough that the per-launch
     # poll AND the `synchronize_and_assert` poll BOTH short-circuit during the destructor. If either path
     # re-raised, the destructor would `std::terminate()` instead of returning a clean exit code (-6 / SIGABRT
@@ -1203,7 +1208,10 @@ def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
     # the runtime overflow flag in debug mode. Without the flag set there is no flag for the teardown
     # guard to swallow, and the bug this test pins cannot trigger.
     child_script = textwrap.dedent(
-        """
+        f"""
+        from contextlib import nullcontext
+
+        import pytest
         import quadrants as qd
 
         qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=32, debug=True)
@@ -1226,10 +1234,25 @@ def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
         compute()
         y.grad[None] = 1.0
         x.grad[0] = 0.0
-        try:
+
+        # CPU is the only arch the child runs on for now; synchronous-backend semantics apply.
+        # The per-launch poll wired into `Program::launch_kernel` surfaces the overflow at `compute.grad()`.
+        # On a future async-arch parametrisation, flip `is_sync_backend` and the qd.sync() branch becomes
+        # the raising path while compute.grad() drops to nullcontext.
+        is_sync_backend = True
+        force_sync = {force_sync}
+
+        def raises_overflow():
+            return pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow")
+
+        with raises_overflow() if is_sync_backend else nullcontext():
             compute.grad()
-        except (AssertionError, RuntimeError) as e:
-            assert "adstack overflow" in str(e).lower()
+        if force_sync:
+            with raises_overflow() if not is_sync_backend else nullcontext():
+                qd.sync()
+        # Process exits without `qd.sync()` (when force_sync=False). Teardown's two `synchronize()` calls
+        # plus their per-launch polls must short-circuit on `finalizing_`; otherwise the destructor
+        # double-raises and the process exits non-zero / SIGABRTs.
         """
     )
     script_path = tmp_path / "overflow_teardown_child.py"
