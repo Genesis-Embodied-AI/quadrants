@@ -414,6 +414,11 @@ def main() -> int:
 
         summaries.append(FileSummary(path=path, language=lang, total=len(head_codes), added=added, removed=removed))
 
+    # Sort files by descending lines added, then descending lines removed, then path. This is the
+    # order used for every downstream artifact (summary.json, file_list.txt, report_header.md,
+    # report_comment.md) so that the report and PR comment surface the largest-impact files first.
+    summaries.sort(key=lambda s: (-s.added, -s.removed, s.path))
+
     summary_dicts = [
         {"path": s.path, "language": s.language, "total": s.total, "added": s.added, "removed": s.removed}
         for s in summaries
