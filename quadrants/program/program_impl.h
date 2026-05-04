@@ -143,8 +143,9 @@ class ProgramImpl {
   virtual void finalize() {
   }
 
-  // Invoked by `Program::finalize()` before any teardown sync, so the backend can flip state that
-  // silences user-visible asserts during destructor unwinding.
+  // Hook invoked by `Program::finalize()` before any teardown sync. Lets backends flip state (e.g. the LLVM
+  // `finalizing_` flag used to suppress adstack-overflow polling) so the two `Program::synchronize()` calls that
+  // precede `finalize()` do not throw into the Program destructor path.
   virtual void pre_finalize() {
   }
 

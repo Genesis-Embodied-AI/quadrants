@@ -175,15 +175,18 @@ struct MetalShaderBindingMapping {
   // Map GLSL binding to MSL index (buffer/texture index, sampler index)
   std::unordered_map<int, std::pair<int, int>> vertex;
   std::unordered_map<int, std::pair<int, int>> fragment;
-  // The highest used buffer index used in the MSL vertex function Vertex attributes use up vertex buffer indices in
-  // Metal, but SPIRV-cross generated MSL doesn't know how many buffer indices the vertex attributes will take. So bind
-  // vertex input after the other buffers.
+  // The highest used buffer index used in the MSL vertex function
+  // Vertex attributes use up vertex buffer indices in Metal, but
+  // SPIRV-cross generated MSL doesn't know how many buffer indices
+  // the vertex attributes will take. So bind vertex input after the other
+  // buffers.
   int max_vert_buffer_index{-1};
 };
 
 class MetalPipeline final : public Pipeline, public rhi_impl::NonAssignable {
  public:
-  // `mtl_library`, `mtl_function`, `mtl_compute_pipeline_state` should be already retained.
+  // `mtl_library`, `mtl_function`, `mtl_compute_pipeline_state` should be
+  // already retained.
   explicit MetalPipeline(const MetalDevice &device,
                          MTLLibrary_id mtl_library,
                          MTLFunction_id mtl_function,
@@ -379,7 +382,8 @@ class MetalCommandList final : public CommandList {
   void set_line_width(float width) override;
 
   MTLCommandBuffer_id finalize();
-  // If noclear is false, ignore whatever is set in details This may be used to "resume" the current renderpass
+  // If noclear is false, ignore whatever is set in details
+  // This may be used to "resume" the current renderpass
   MTLRenderPassDescriptor *create_render_pass_desc(bool depth_write, bool noclear = false);
 
   bool is_renderpass_active() const;
@@ -405,12 +409,12 @@ class MetalCommandList final : public CommandList {
   std::vector<MTLTexture_id> render_targets_;
   MTLTexture_id depth_target_;
 
-  // Buffers accessed via physical storage buffer pointers in the next dispatch. Needed for Metal hazard tracking since
-  // these are not explicitly bound.
+  // Buffers accessed via physical storage buffer pointers in the next dispatch.
+  // Needed for Metal hazard tracking since these are not explicitly bound.
   std::vector<DeviceAllocation> tracked_physical_buffers_;
 
-  // For renderpass resuming, track whether a renderpass has been started Used to override LoadAction, to prevent
-  // uninteded clearing when resuming
+  // For renderpass resuming, track whether a renderpass has been started
+  // Used to override LoadAction, to prevent uninteded clearing when resuming
   bool is_renderpass_active_{false};
 
   // Persistent compute command encoder reused across consecutive `dispatch()` calls so the GPU sees one
