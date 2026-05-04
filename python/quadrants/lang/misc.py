@@ -13,7 +13,7 @@ from quadrants.lang import impl, util
 from quadrants.lang.expr import Expr
 from quadrants.lang.impl import axes, get_runtime
 from quadrants.profiler.kernel_profiler import get_default_kernel_profiler
-from quadrants.types.primitive_types import f32, f64, i32, i64
+from quadrants.types.primitive_types import PrimitiveMeta, f32, f64, i32, i64
 
 warnings.filterwarnings("once", category=DeprecationWarning, module="quadrants")
 
@@ -314,15 +314,14 @@ def _install_python_backend_dtype_call():
         return
     _dtype_call_installed = True
 
-    DataTypeCxx = type(f32)
-    _original = DataTypeCxx.__call__
+    _original = PrimitiveMeta.__call__
 
     def _dtype_call(self, value):
         if impl.is_python_backend():
             return float(value) if self in _FLOAT_DTYPES else int(value)
         return _original(self, value)
 
-    DataTypeCxx.__call__ = _dtype_call  # type: ignore[assignment]
+    PrimitiveMeta.__call__ = _dtype_call  # type: ignore[assignment]
 
 
 def init(
