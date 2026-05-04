@@ -606,9 +606,6 @@ def reset():
     for k in old_kernels:
         k.reset()
     _qd_core.reset_default_compile_config()
-    from quadrants.lang._func_base import _frozen_dc_plans  # pylint: disable=C0415
-
-    _frozen_dc_plans.clear()
 
     for hook in _reset_hooks:
         hook()

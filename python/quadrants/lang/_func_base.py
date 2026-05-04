@@ -102,10 +102,20 @@ _is_cpython = sys.implementation.name == "cpython"
 
 _frozen_dc_plans: dict[tuple[int, type, str], tuple[set[str], tuple[tuple[str, str, Any], ...]]] = {}
 
+_frozen_dc_plans_hook_registered = False
+
+
+def _ensure_frozen_dc_plans_reset_hook():
+    global _frozen_dc_plans_hook_registered
+    if not _frozen_dc_plans_hook_registered:
+        impl.on_reset(_frozen_dc_plans.clear)
+        _frozen_dc_plans_hook_registered = True
+
 
 def _get_frozen_dc_plan(
     used_params: set[str], struct_cls: type, basename: str, fields_dict: dict
 ) -> tuple[tuple[str, str, Any], ...]:
+    _ensure_frozen_dc_plans_reset_hook()
     key = (id(used_params), struct_cls, basename)
     entry = _frozen_dc_plans.get(key)
     # Guard against id() reuse: after the original set is garbage-collected, a new set can be allocated at the same
