@@ -248,10 +248,17 @@ class LlvmRuntimeExecutor {
   // this cache, so avoid that.
   uint64 *result_buffer_cache_{nullptr};
 
-  // Memoised host-callable pointer to `runtime_retrieve_and_reset_adstack_overflow`. Populated only on backends
-  // whose JIT module supports direct dispatch (CPU LLVM); other backends leave it null and route through
-  // `JITModule::call`. Valid for the lifetime of the runtime JIT module.
-  void (*adstack_overflow_retriever_)(void *){nullptr};
+  // Pinned host slot for the adstack overflow flag. The kernel-side `stack_push` writes through the runtime's
+  // device-mapped address (`adstack_overflow_flag_dev_ptr_` published into `LLVMRuntime` at materialise time);
+  // the host polls `adstack_overflow_flag_host_ptr_` directly with `__atomic_exchange_n` - no DtoH, no JIT call,
+  // no sync drain. Backends:
+  //   - CPU LLVM: plain malloc; host and device addresses are identical.
+  //   - CUDA: `cuMemAllocHost_v2` plus `cuMemHostGetDevicePointer` for the device-mapped address.
+  //   - AMDGPU: `hipHostMalloc(0)` plus the HIP equivalent.
+  // Required hardware envelope (Pascal+ / GFX9+) matches what the existing pinned-host H2D-async pattern in
+  // `llvm_adstack_lazy_claim.cpp` already needs.
+  int64_t *adstack_overflow_flag_host_ptr_{nullptr};
+  void *adstack_overflow_flag_dev_ptr_{nullptr};
 
   std::unique_ptr<ThreadPool> thread_pool_{nullptr};
   std::shared_ptr<Device> device_{nullptr};

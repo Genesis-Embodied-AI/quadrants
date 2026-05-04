@@ -2443,10 +2443,12 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
 
   // Per-task capacity slot for the defense-in-depth bounds check: clamp the claimed row at `capacity - 1` so any
   // overshoot stays in-bounds. For tasks without a captured `bound_expr` the launcher writes UINT32_MAX into this slot
-  // so the clamp is inert. The divergence-overflow signal that the SPIR-V codegen emits via OpAtomicUMax is not yet
-  // wired on the LLVM side - it requires a `__atomic_or_n` against `runtime->adstack_overflow_flag` and a matching
-  // runtime-side getter; in its absence we still get the in-bounds clamp, so the kernel cannot silently corrupt the
-  // heap end. Surfacing the divergence is future work.
+  // so the clamp is inert. On overshoot (`claimed_row > capacity - 1`) the codegen also OR-1's the host-visible
+  // adstack overflow flag (`runtime->adstack_overflow_flag_dev_ptr`, which the host allocated as pinned UVA-mapped
+  // memory in `LlvmRuntimeExecutor::materialize_runtime`) so the host poll surfaces the divergence at the next
+  // Quadrants Python entry. The atomic crosses the host/device boundary cleanly because the slot is in
+  // pinned host memory; required hardware envelope is the same Pascal+ / GFX9+ that the existing pinned-host
+  // H2D-async pattern already requires.
   llvm::Value *capacities_base = call("LLVMRuntime_get_adstack_bound_row_capacities", get_runtime());
   llvm::Value *capacity_slot_ptr = builder->CreateGEP(i32ty, capacities_base, task_id_i64);
   llvm::Value *capacity = builder->CreateLoad(i32ty, capacity_slot_ptr);
@@ -2461,6 +2463,25 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
   llvm::Value *cmp = builder->CreateICmpUGT(claimed_row, clamp_upper);
   llvm::Value *clamped_row = builder->CreateSelect(cmp, clamp_upper, claimed_row);
   builder->CreateStore(clamped_row, row_id_var);
+
+  // Overflow signal: on `claimed_row > clamp_upper`, atomically OR 1 into the pinned-host overflow flag. The
+  // condition is hoisted to a structured if so the not-overflowing fast path skips the atomic entirely - one
+  // function call to fetch the flag pointer plus one CreateICmpUGT comparison, the same compare we already
+  // emitted for the clamp.
+  auto *current_function = builder->GetInsertBlock()->getParent();
+  auto *overflow_then_block = llvm::BasicBlock::Create(*llvm_context, "adstack_overflow_signal", current_function);
+  auto *overflow_merge_block = llvm::BasicBlock::Create(*llvm_context, "adstack_overflow_merge", current_function);
+  builder->CreateCondBr(cmp, overflow_then_block, overflow_merge_block);
+  builder->SetInsertPoint(overflow_then_block);
+  {
+    auto *i64ty_local = llvm::Type::getInt64Ty(*llvm_context);
+    llvm::Value *flag_ptr = call("LLVMRuntime_get_adstack_overflow_flag_dev_ptr", get_runtime());
+    llvm::Value *one_i64 = llvm::ConstantInt::get(i64ty_local, 1);
+    builder->CreateAtomicRMW(llvm::AtomicRMWInst::Or, flag_ptr, one_i64, llvm::MaybeAlign(),
+                             llvm::AtomicOrdering::Monotonic);
+    builder->CreateBr(overflow_merge_block);
+  }
+  builder->SetInsertPoint(overflow_merge_block);
 }
 
 // Return (creating on first call) the per-stack `alloca i64` that holds the live push count for this stack on the

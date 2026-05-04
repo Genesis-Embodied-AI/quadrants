@@ -580,10 +580,16 @@ struct LLVMRuntime {
   uint64 error_message_arguments[quadrants_error_message_max_num_arguments];
   i32 error_message_lock = 0;
   i64 error_code = 0;
-  // Dedicated flag for adstack-overflow-specific errors. Separate from `error_code` so assertions (which set
-  // error_code=1 and are only surfaced when `compile_config.debug` is on) do not leak through the always-on poll
-  // that Program::synchronize runs.
-  i64 adstack_overflow_flag = 0;
+  // Dedicated overflow signal. Pointer to a 64-bit slot in pinned host memory (CUDA `cuMemAllocHost_v2`,
+  // HIP `hipHostMalloc`; CPU plain malloc; on this struct stored as the device-mapped address obtained via
+  // `cuMemHostGetDevicePointer` / HIP equivalent). The kernel-side `stack_push` writes via a system-wide
+  // atomic OR through this pointer; the host polls the corresponding host-side pointer (cached separately on
+  // `LlvmRuntimeExecutor`) without any DtoH or sync drain. Required hardware capability is system-scope
+  // atomics on host-mapped memory: NVIDIA Compute Capability 6.0+ (Pascal+, 2016) and AMD GFX9+ (Vega+, 2017),
+  // matching the existing pinned-host-scratch H2D-async pattern in `llvm_adstack_lazy_claim.cpp`. Separate from
+  // `error_code` so assertions (which set error_code=1, gated on `compile_config.debug`) do not leak through the
+  // always-on overflow poll. nullptr until `materialize_runtime` initialises it; nullptr-guarded in `stack_push`.
+  i64 *adstack_overflow_flag_dev_ptr = nullptr;
 
   // Combined-heap fields. The codegen single-heap path reads these directly; the split-heap path leaves them untouched
   // and uses the per-kind fields below. Kept for backward compatibility with kernels that have not yet migrated to the
@@ -678,6 +684,7 @@ STRUCT_FIELD(LLVMRuntime, adstack_offsets);
 STRUCT_FIELD(LLVMRuntime, adstack_max_sizes);
 STRUCT_FIELD(LLVMRuntime, adstack_row_counters);
 STRUCT_FIELD(LLVMRuntime, adstack_bound_row_capacities);
+STRUCT_FIELD(LLVMRuntime, adstack_overflow_flag_dev_ptr);
 
 // NodeManager of node S (hash, pointer) managers the memory allocation of S_ch
 // It makes use of three ListManagers.
@@ -1239,12 +1246,13 @@ void runtime_retrieve_and_reset_error_code(LLVMRuntime *runtime) {
   runtime->error_code = 0;
 }
 
-void runtime_retrieve_and_reset_adstack_overflow(LLVMRuntime *runtime) {
-  // Paired with the relaxed atomic write in `stack_push`. The host calls this only after the thread pool has
-  // joined, so strictly no synchronization is required here, but use `__atomic_exchange_n` anyway to keep the
-  // read/reset symmetric with the write and to avoid annotating the single shared field as half-atomic.
-  i64 flag = __atomic_exchange_n(&runtime->adstack_overflow_flag, (i64)0, __ATOMIC_RELAXED);
-  runtime->set_result(quadrants_result_buffer_error_id, flag);
+// Publish the device-mapped address of the pinned host slot the host allocated for the adstack overflow flag.
+// Called once at materialise_runtime time after the host allocates the slot via `cuMemAllocHost_v2` / `hipHostMalloc`
+// / plain malloc and obtains the device-mapped address (CUDA `cuMemHostGetDevicePointer` / HIP equivalent / identity
+// on CPU). Subsequent kernel-side `stack_push` reads this pointer to write the overflow signal; the host polls the
+// host-side address directly without involving any JIT helper.
+void runtime_set_adstack_overflow_flag_dev_ptr(LLVMRuntime *runtime, void *dev_ptr) {
+  runtime->adstack_overflow_flag_dev_ptr = (i64 *)dev_ptr;
 }
 
 void runtime_retrieve_error_message(LLVMRuntime *runtime, int i) {
@@ -1487,7 +1495,7 @@ void runtime_initialize(Ptr result_buffer,
   runtime->adstack_row_counters_capacity = 0;
   runtime->adstack_bound_row_capacities = nullptr;
   runtime->adstack_bound_row_capacities_capacity = 0;
-  runtime->adstack_overflow_flag = 0;
+  runtime->adstack_overflow_flag_dev_ptr = nullptr;
 
   runtime->temporaries = (Ptr)runtime->allocate_aligned(runtime->runtime_objects_chunk,
                                                         quadrants_global_tmp_buffer_size, quadrants_page_size);
@@ -2569,12 +2577,12 @@ void quadrants_printf(LLVMRuntime *runtime, const char *format, Args &&...args) 
 extern "C" {  // local stack operations
 
 // The stack index `n` is clamped on read so that overflow (push past capacity) does not let subsequent pops and
-// top-accesses underflow it and index far out of bounds. The corresponding stack_push sets
-// `runtime->adstack_overflow_flag` and skips the increment instead of trapping, so the host-side launcher
-// surfaces the failure as a Python exception rather than killing the process via __builtin_trap. When n == 0
-// (pop-after-overflow underflow path) we return a pointer to slot 0 - an uninitialized-but-in-bounds slot. The
-// caller will read garbage from it, but the host raises on `runtime->adstack_overflow_flag` before any such
-// value reaches user code.
+// top-accesses underflow it and index far out of bounds. The corresponding stack_push writes through
+// `runtime->adstack_overflow_flag_dev_ptr` (the device-mapped address of a pinned host slot) and skips the
+// increment instead of trapping, so the host-side launcher surfaces the failure as a Python exception rather
+// than killing the process via __builtin_trap. When n == 0 (pop-after-overflow underflow path) we return a
+// pointer to slot 0 - an uninitialized-but-in-bounds slot. The caller will read garbage from it, but the host
+// polls the pinned slot at every Quadrants Python entry and raises before any such value reaches user code.
 Ptr stack_top_primal(Ptr stack, std::size_t element_size) {
   auto n = *(u64 *)stack;
   std::size_t idx = n > 0 ? n - 1 : 0;
@@ -2600,16 +2608,27 @@ void stack_push(LLVMRuntime *runtime, Ptr stack, size_t max_num_elements, std::s
   u64 &n = *(u64 *)stack;
   if (n + 1 > max_num_elements) {
     // Overflow: the loop has more iterations than the adstack capacity. Skip the push and flip the dedicated
-    // overflow flag so the host launcher throws at sync. Multiple CPU threads can hit this branch concurrently
-    // (thread pool dispatch over a multi-element field), so write the sentinel through `__atomic_store_n` with
-    // relaxed ordering: on x86-64/ARM64 this compiles to a regular naturally-aligned store, but it satisfies the
-    // C++11 memory model (plain non-atomic writes from multiple threads to the same object are a data race, even
-    // when every writer stores the same value). The host only reads the flag from `check_adstack_overflow()`
-    // after the thread pool has joined, so no ordering beyond "happens eventually" is required.
-    // `locked_task` was avoided because the AMDGPU JIT cannot retarget its host-side machinery
-    // (`hipErrorNoBinaryForGpu`). Using a separate field (not `error_code`) keeps this check distinct from
-    // assertion machinery, which is debug-gated.
-    __atomic_store_n(&runtime->adstack_overflow_flag, (i64)1, __ATOMIC_RELAXED);
+    // overflow flag in pinned host memory. The host polls the pinned slot at every Quadrants Python entry
+    // and raises a `QuadrantsAssertionError` with a diagnosis routed through a synchronous sizer that
+    // distinguishes a Quadrants bug (pre-pass undercount of the bound) from a user-side mutation that bypassed
+    // tracking (DLPack zero-copy is the typical case; the sizer's freshly-computed required size will exceed
+    // the cached allocated size in that case).
+    //
+    // Relaxed atomic ordering: multiple threads can hit this branch concurrently (CPU thread pool, GPU warp
+    // divergence) and they all store the same sentinel value, so no inter-thread ordering is required. On
+    // CPU this compiles to a naturally-aligned store; on CUDA/AMDGPU device kernels with the pointer aimed
+    // at pinned host memory (`cuMemAllocHost_v2` / `hipHostMalloc` with the device-mapped address obtained
+    // via `cuMemHostGetDevicePointer` / HIP equivalent) the store is a system-wide atomic on UVA host memory.
+    // Available on Compute Capability 6.0+ / GFX9+, the same hardware envelope the existing pinned-host
+    // H2D-async pattern in `llvm_adstack_lazy_claim.cpp` already requires.
+    //
+    // Nullptr-guard: `adstack_overflow_flag_dev_ptr` is nullptr until `materialize_runtime` initialises it.
+    // A kernel running before that (a stale cached kernel, a C++-only test) silently no-ops the overflow
+    // signal. The runtime cannot raise from device code; this is the safest behavior.
+    i64 *flag_ptr = runtime->adstack_overflow_flag_dev_ptr;
+    if (flag_ptr != nullptr) {
+      __atomic_store_n(flag_ptr, (i64)1, __ATOMIC_RELAXED);
+    }
     return;
   }
   n += 1;

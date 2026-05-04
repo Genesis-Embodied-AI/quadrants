@@ -627,35 +627,26 @@ void LlvmRuntimeExecutor::ensure_adstack_heap_float(std::size_t needed_bytes) {
 }
 
 void LlvmRuntimeExecutor::check_adstack_overflow() {
-  // Called from `synchronize()` on every sync so adstack overflow surfaces as a Python exception regardless of
-  // `compile_config.debug`. The runtime / result buffer may not exist yet (e.g. a C++ test that constructs Program
-  // without materializing the runtime and then triggers Program::finalize -> synchronize), so no-op in that case.
-  if (llvm_runtime_ == nullptr || result_buffer_cache_ == nullptr) {
+  // Called from `synchronize()` on every sync, plus other Quadrants Python entry points wired in
+  // `Program::check_adstack_overflow_and_raise`. The flag lives in pinned host memory (allocated at
+  // `materialize_runtime`); polling is a plain `__atomic_exchange_n` on the cached host pointer - no DtoH,
+  // no JIT call, no sync drain. Available on all backends because the pinned-host memory is in the
+  // host process address space regardless of where the kernel that wrote it ran.
+  //
+  // Returns early when the slot has not been allocated yet (e.g. a C++ test that constructs Program without
+  // materializing the runtime and then triggers `Program::finalize -> synchronize`).
+  if (adstack_overflow_flag_host_ptr_ == nullptr) {
     return;
   }
-  // `lookup_function` returns a host-callable pointer only on direct-dispatch backends (CPU LLVM JIT). CUDA / AMDGPU
-  // return device-side pointers and require the arg-marshalling `JITModule::call` path; the cached fast path therefore
-  // only fires when `direct_dispatch()` is true.
-  auto *runtime_jit_module = get_runtime_jit_module();
-  if (runtime_jit_module->direct_dispatch()) {
-    if (adstack_overflow_retriever_ == nullptr) {
-      adstack_overflow_retriever_ = reinterpret_cast<void (*)(void *)>(
-          runtime_jit_module->lookup_function("runtime_retrieve_and_reset_adstack_overflow"));
-      QD_ASSERT(adstack_overflow_retriever_ != nullptr);
-    }
-    adstack_overflow_retriever_(llvm_runtime_);
-  } else {
-    runtime_jit_module->call<void *>("runtime_retrieve_and_reset_adstack_overflow", llvm_runtime_);
-  }
-  auto flag = fetch_result<int64>(quadrants_result_buffer_error_id, result_buffer_cache_);
+  int64_t flag = __atomic_exchange_n(adstack_overflow_flag_host_ptr_, (int64_t)0, __ATOMIC_RELAXED);
   if (flag != 0) {
     throw QuadrantsAssertionError(
         "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
-        "allows. Raised at the next qd.sync() rather than at the offending kernel launch. The pre-pass "
-        "resolved this alloca to a bound tighter than the actual runtime push count - either the enclosing "
-        "loop shape is outside the current `SizeExpr` grammar (rewrite it, or extend the grammar), or the "
-        "Bellman-Ford analyzer undercounted the forward-pass accumulation on this stack (file a bug with "
-        "the kernel IR via `QD_DUMP_IR=1`).");
+        "allows. Raised at the next Quadrants Python entry rather than at the offending kernel launch. The "
+        "pre-pass resolved this alloca to a bound tighter than the actual runtime push count - either the "
+        "enclosing loop shape is outside the current `SizeExpr` grammar (rewrite it, or extend the grammar), "
+        "or the Bellman-Ford analyzer undercounted the forward-pass accumulation on this stack (file a bug "
+        "with the kernel IR via `QD_DUMP_IR=1`).");
   }
 }
 
