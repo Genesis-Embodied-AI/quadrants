@@ -42,7 +42,6 @@ from build_inputs import (  # noqa: E402  (import after sys.path tweak)
     code_line_set,
     diff_changed_line_numbers,
     format_header,
-    language_for,
 )
 
 
@@ -102,9 +101,7 @@ def _load_function_entries(jsonl_path: Path) -> dict[str, list[_FunctionEntry]]:
             duplicates += 1
             continue
         seen.add(key)
-        by_path.setdefault(path, []).append(
-            _FunctionEntry(name=name, head_range=head_range, base_range=base_range)
-        )
+        by_path.setdefault(path, []).append(_FunctionEntry(name=name, head_range=head_range, base_range=base_range))
     if duplicates:
         sys.stderr.write(f"info: deduplicated {duplicates} identical JSONL entry/entries\n")
     return by_path
@@ -127,9 +124,7 @@ def _read_or_empty(path: Path) -> str:
     return path.read_text() if path.exists() else ""
 
 
-def _build_file_bookkeeping(
-    summary: dict, output_dir: Path
-) -> _FileBookkeeping:
+def _build_file_bookkeeping(summary: dict, output_dir: Path) -> _FileBookkeeping:
     path = summary["path"]
     language = summary["language"]
     head_text = _read_or_empty(output_dir / "head" / path)
@@ -151,9 +146,7 @@ def _build_file_bookkeeping(
     )
 
 
-def _attribute_function(
-    entry: _FunctionEntry, book: _FileBookkeeping
-) -> tuple[int, int, int, bool, bool]:
+def _attribute_function(entry: _FunctionEntry, book: _FileBookkeeping) -> tuple[int, int, int, bool, bool]:
     """Return ``(total, added, removed, is_new, is_deleted)`` for a single function entry.
 
     ``total`` is the number of code lines in the function's HEAD body. ``added`` / ``removed``
