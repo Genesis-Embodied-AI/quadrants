@@ -591,6 +591,15 @@ struct LLVMRuntime {
   // always-on overflow poll. nullptr until `materialize_runtime` initialises it; nullptr-guarded in `stack_push`.
   i64 *adstack_overflow_flag_dev_ptr = nullptr;
 
+  // Pinned-host slot recording the Program-assigned u32 identity of the FIRST adstack-sizing-info whose
+  // overflow path fired this Quadrants entry window. Codegen emits a `cmpxchg(0, id)` immediately after the
+  // OR-1 on `adstack_overflow_flag_dev_ptr`; only the first overflowing thread's id sticks, subsequent
+  // threads' cmpxchg fails harmlessly. Host reads the slot during the raise to produce a diagnostic that
+  // names the offending kernel / task / stack via `Program::adstack_sizing_info_registry_`. nullptr until
+  // `materialize_runtime` allocates the slot. Lives on the same UVA-mapped pinned host page as the flag
+  // above so a single `mem_alloc_host` call covers both.
+  i64 *adstack_overflow_task_id_dev_ptr = nullptr;
+
   // Combined-heap fields. The codegen single-heap path reads these directly; the split-heap path leaves them untouched
   // and uses the per-kind fields below. Kept for backward compatibility with kernels that have not yet migrated to the
   // split layout (no codegen-side opt-in), so existing AdStack* tests stay byte-identical.
@@ -685,6 +694,7 @@ STRUCT_FIELD(LLVMRuntime, adstack_max_sizes);
 STRUCT_FIELD(LLVMRuntime, adstack_row_counters);
 STRUCT_FIELD(LLVMRuntime, adstack_bound_row_capacities);
 STRUCT_FIELD(LLVMRuntime, adstack_overflow_flag_dev_ptr);
+STRUCT_FIELD(LLVMRuntime, adstack_overflow_task_id_dev_ptr);
 
 // NodeManager of node S (hash, pointer) managers the memory allocation of S_ch
 // It makes use of three ListManagers.
@@ -1253,6 +1263,15 @@ void runtime_retrieve_and_reset_error_code(LLVMRuntime *runtime) {
 // host-side address directly without involving any JIT helper.
 void runtime_set_adstack_overflow_flag_dev_ptr(LLVMRuntime *runtime, void *dev_ptr) {
   runtime->adstack_overflow_flag_dev_ptr = (i64 *)dev_ptr;
+}
+
+// Companion to `runtime_set_adstack_overflow_flag_dev_ptr`. Called once at materialise_runtime alongside the
+// flag setter. The task-id slot lives on the same pinned host page so a single allocation backs both. Codegen
+// emits a `cmpxchg(0, baked_id)` against this pointer at the lazy-claim overflow path; only the first
+// overflowing thread's id sticks. Host reads the slot during the raise to look up the offending kernel /
+// task in `Program::adstack_sizing_info_registry_`.
+void runtime_set_adstack_overflow_task_id_dev_ptr(LLVMRuntime *runtime, void *dev_ptr) {
+  runtime->adstack_overflow_task_id_dev_ptr = (i64 *)dev_ptr;
 }
 
 void runtime_retrieve_error_message(LLVMRuntime *runtime, int i) {
@@ -2604,7 +2623,11 @@ void stack_pop(Ptr stack) {
   }
 }
 
-void stack_push(LLVMRuntime *runtime, Ptr stack, size_t max_num_elements, std::size_t element_size) {
+void stack_push(LLVMRuntime *runtime,
+                Ptr stack,
+                size_t max_num_elements,
+                std::size_t element_size,
+                i64 task_registry_id) {
   u64 &n = *(u64 *)stack;
   if (n + 1 > max_num_elements) {
     // Overflow: the loop has more iterations than the adstack capacity. Skip the push and flip the dedicated
@@ -2628,6 +2651,16 @@ void stack_push(LLVMRuntime *runtime, Ptr stack, size_t max_num_elements, std::s
     i64 *flag_ptr = runtime->adstack_overflow_flag_dev_ptr;
     if (flag_ptr != nullptr) {
       __atomic_store_n(flag_ptr, (i64)1, __ATOMIC_RELAXED);
+    }
+    // Record task identity in the companion pinned-host slot via cmpxchg(0, registry_id) so the host raise
+    // site can name the offending kernel + task in the diagnostic message. `task_registry_id == 0` means
+    // "not registered" (e.g. a deserialised offline-cache task that has not yet been re-registered); skip
+    // the cmpxchg so the slot stays zero and the host falls through to the generic dual-cause message.
+    i64 *task_id_ptr = runtime->adstack_overflow_task_id_dev_ptr;
+    if (task_id_ptr != nullptr && task_registry_id != 0) {
+      i64 expected = 0;
+      __atomic_compare_exchange_n(task_id_ptr, &expected, task_registry_id, /*weak=*/false, __ATOMIC_RELAXED,
+                                  __ATOMIC_RELAXED);
     }
     return;
   }

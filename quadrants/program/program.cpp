@@ -2,6 +2,8 @@
 
 #include "program.h"
 
+#include <mutex>
+
 #include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/type_factory.h"
@@ -237,6 +239,76 @@ void Program::synchronize() {
 
 void Program::synchronize_and_assert() {
   program_impl_->synchronize_and_assert();
+}
+
+uint32_t Program::register_adstack_sizing_info(const void *ad_stack_ptr,
+                                               const std::string &kernel_name,
+                                               int task_id_in_kernel,
+                                               std::vector<int> allocated_max_sizes) {
+  std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
+  // Idempotent re-registration: same `ad_stack_ptr` yields the same id across re-compiles. The pointer is
+  // task-stable for the kernel's lifetime; if a kernel is destroyed and a new one happens to hit the same
+  // address, the previous entry's metadata is overwritten - acceptable because the diagnostic message reads
+  // metadata at the same instant as the lookup, and the new entry's `kernel_name` / `allocated_max_sizes`
+  // describe the live kernel.
+  auto it = adstack_sizing_info_id_by_ptr_.find(ad_stack_ptr);
+  if (it != adstack_sizing_info_id_by_ptr_.end()) {
+    auto &entry = adstack_sizing_info_registry_[it->second];
+    entry.kernel_name = kernel_name;
+    entry.task_id_in_kernel = task_id_in_kernel;
+    entry.allocated_max_sizes = std::move(allocated_max_sizes);
+    return it->second;
+  }
+  uint32_t id = static_cast<uint32_t>(adstack_sizing_info_registry_.size());
+  AdStackSizingInfoEntry entry;
+  entry.ad_stack_ptr = ad_stack_ptr;
+  entry.kernel_name = kernel_name;
+  entry.task_id_in_kernel = task_id_in_kernel;
+  entry.allocated_max_sizes = std::move(allocated_max_sizes);
+  adstack_sizing_info_registry_.push_back(std::move(entry));
+  adstack_sizing_info_id_by_ptr_.emplace(ad_stack_ptr, id);
+  return id;
+}
+
+const Program::AdStackSizingInfoEntry *Program::lookup_adstack_sizing_info(uint32_t id) const {
+  std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
+  if (id == 0 || id >= adstack_sizing_info_registry_.size()) {
+    return nullptr;
+  }
+  return &adstack_sizing_info_registry_[id];
+}
+
+std::string Program::diagnose_adstack_overflow_message(uint32_t task_id) const {
+  std::string identity_block;
+  if (task_id != 0) {
+    const auto *entry = lookup_adstack_sizing_info(task_id);
+    if (entry != nullptr) {
+      identity_block = "  Offending task: kernel `" + entry->kernel_name + "` offload task #" +
+                       std::to_string(entry->task_id_in_kernel) + "; per-stack allocated max_size = [";
+      for (size_t i = 0; i < entry->allocated_max_sizes.size(); ++i) {
+        if (i != 0) {
+          identity_block += ", ";
+        }
+        identity_block += std::to_string(entry->allocated_max_sizes[i]);
+      }
+      identity_block += "].\n";
+    }
+  }
+  return identity_block +
+         "Two possible causes:\n"
+         "  1. A tensor backing a data-dependent loop bound was mutated outside Quadrants's tracking "
+         "(typically a DLPack zero-copy mutation through a torch tensor sharing storage with a Quadrants "
+         "ndarray, or a raw pointer write through a non-torch DLPack consumer). The cached adstack capacity "
+         "was sized against the value before the mutation. Recovery: route the mutation through Quadrants "
+         "APIs (`Ndarray.write` / `fill` / kernel writes) so the cache invalidates correctly, OR set a "
+         "generous initial cap if a workload-change milestone genuinely grew capacity. Restart the "
+         "iteration / training loop from a clean state.\n"
+         "  2. (Quadrants bug) the pre-pass resolved the alloca to a bound tighter than the actual runtime "
+         "push count - the enclosing loop shape is outside the current `SizeExpr` grammar, or the "
+         "Bellman-Ford analyzer undercounted the forward-pass accumulation. Please file with the kernel IR "
+         "(`QD_DUMP_IR=1`).\n"
+         "Note: kernel state may be inconsistent post-overflow; do not retry the same step without "
+         "addressing the cause and restarting from a clean state.";
 }
 
 StreamSemaphore Program::flush() {

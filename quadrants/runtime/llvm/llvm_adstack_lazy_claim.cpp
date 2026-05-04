@@ -639,25 +639,29 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
     return;
   }
   int64_t flag = __atomic_exchange_n(adstack_overflow_flag_host_ptr_, (int64_t)0, __ATOMIC_RELAXED);
-  if (flag != 0) {
-    throw QuadrantsAssertionError(
-        "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
-        "allows. Raised at the next Quadrants Python entry rather than at the offending kernel launch. Two "
-        "possible causes:\n"
-        "  1. A tensor backing a data-dependent loop bound was mutated outside Quadrants's tracking "
-        "(typically a DLPack zero-copy mutation through a torch tensor sharing storage with a Quadrants "
-        "ndarray, or a raw pointer write through a non-torch DLPack consumer). The cached adstack capacity "
-        "was sized against the value before the mutation. Recovery: route the mutation through Quadrants "
-        "APIs (`Ndarray.write` / `fill` / kernel writes) so the cache invalidates correctly, OR set a "
-        "generous initial cap if a workload-change milestone genuinely grew capacity. Restart the "
-        "iteration / training loop from a clean state.\n"
-        "  2. (Quadrants bug) the pre-pass resolved the alloca to a bound tighter than the actual runtime "
-        "push count - the enclosing loop shape is outside the current `SizeExpr` grammar, or the "
-        "Bellman-Ford analyzer undercounted the forward-pass accumulation. Please file with the kernel IR "
-        "(`QD_DUMP_IR=1`).\n"
-        "Note: kernel state may be inconsistent post-overflow; do not retry the same step without "
-        "addressing the cause and restarting from a clean state.");
+  if (flag == 0) {
+    return;
   }
+  // Drain the companion task-id slot in the same poll. Both slots cleared so the next overflow records
+  // a fresh identity. `task_id == 0` means the kernel that overflowed pre-dates the registry wiring or
+  // its `ad_stack.registry_id` was unset for any reason (e.g. a deserialised offline-cache task that has
+  // not yet been re-registered); the diagnose helper falls through to the generic dual-cause message in
+  // that case.
+  uint32_t task_id = 0;
+  if (adstack_overflow_task_id_host_ptr_ != nullptr) {
+    int64_t recorded = __atomic_exchange_n(adstack_overflow_task_id_host_ptr_, (int64_t)0, __ATOMIC_RELAXED);
+    task_id = static_cast<uint32_t>(recorded);
+  }
+  Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
+  std::string diagnostic = (prog != nullptr) ? prog->diagnose_adstack_overflow_message(task_id)
+                                             : std::string(
+                                                   "Adstack overflow: a reverse-mode autodiff kernel pushed more "
+                                                   "elements than the adstack capacity allows.");
+  throw QuadrantsAssertionError(
+      "Adstack overflow: a reverse-mode autodiff kernel pushed more elements "
+      "than the adstack capacity allows. Raised at the next Quadrants Python "
+      "entry rather than at the offending kernel launch.\n" +
+      diagnostic);
 }
 
 std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInfo &ad_stack,

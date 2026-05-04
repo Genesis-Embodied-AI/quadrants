@@ -260,6 +260,13 @@ class LlvmRuntimeExecutor {
   int64_t *adstack_overflow_flag_host_ptr_{nullptr};
   void *adstack_overflow_flag_dev_ptr_{nullptr};
 
+  // Companion task-id slot. Codegen emits `cmpxchg(0, id)` from the lazy-claim overflow path; the first
+  // overflowing thread's `Program::adstack_sizing_info_registry_` id sticks. Host reads the slot at the
+  // raise site for diagnostic message generation. Same allocation strategy as the flag above; on a fresh
+  // page so neither write contends with the flag's atomic OR.
+  int64_t *adstack_overflow_task_id_host_ptr_{nullptr};
+  void *adstack_overflow_task_id_dev_ptr_{nullptr};
+
   std::unique_ptr<ThreadPool> thread_pool_{nullptr};
   std::shared_ptr<Device> device_{nullptr};
 

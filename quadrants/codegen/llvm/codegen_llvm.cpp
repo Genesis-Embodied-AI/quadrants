@@ -1940,6 +1940,16 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   func = llvm::Function::Create(task_function_type, llvm::Function::ExternalLinkage, task_kernel_name, module.get());
 
   current_task = std::make_unique<OffloadedTask>(task_kernel_name);
+  // Pre-register the per-task AdStackSizingInfo so the registry id is assigned BEFORE codegen visits any
+  // `AdStackPushStmt`. Metadata (allocated_max_sizes) is filled in at `finalize_offloaded_task_function`
+  // time after the alloca scan completes; the registry call is idempotent on the same `ad_stack_ptr` so
+  // the second call updates the entry in place. Skipping registration when `prog == nullptr` (C++-only
+  // tests) leaves `registry_id == 0`, which the codegen-emitted cmpxchg short-circuits.
+  if (prog != nullptr) {
+    uint32_t id = prog->register_adstack_sizing_info(static_cast<const void *>(&current_task->ad_stack), kernel_name,
+                                                     task_codegen_id, /*allocated_max_sizes=*/{});
+    current_task->ad_stack.registry_id = id;
+  }
 
   for (auto &arg : func->args()) {
     kernel_args.push_back(&arg);
@@ -2009,6 +2019,20 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
       std::sort(current_task->arr_writes.begin(), current_task->arr_writes.end());
       current_task->arr_writes.erase(std::unique(current_task->arr_writes.begin(), current_task->arr_writes.end()),
                                      current_task->arr_writes.end());
+    }
+    // Register the per-task AdStackSizingInfo with the Program-side identity registry. The id is baked
+    // into the lazy-claim overflow path's `cmpxchg(0, id)` so the host raise site can name the offending
+    // kernel + task in its diagnostic message. Empty alloca list = no adstack pushes in this task; skip
+    // registration to keep the registry compact.
+    if (!current_task->ad_stack.allocas.empty() && prog != nullptr) {
+      std::vector<int> allocated_max_sizes;
+      allocated_max_sizes.reserve(current_task->ad_stack.allocas.size());
+      for (const auto &a : current_task->ad_stack.allocas) {
+        allocated_max_sizes.push_back(static_cast<int>(a.max_size_compile_time));
+      }
+      uint32_t id = prog->register_adstack_sizing_info(static_cast<const void *>(&current_task->ad_stack), kernel_name,
+                                                       task_codegen_id, std::move(allocated_max_sizes));
+      current_task->ad_stack.registry_id = id;
     }
   }
 
@@ -2464,10 +2488,12 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
   llvm::Value *clamped_row = builder->CreateSelect(cmp, clamp_upper, claimed_row);
   builder->CreateStore(clamped_row, row_id_var);
 
-  // Overflow signal: on `claimed_row > clamp_upper`, atomically OR 1 into the pinned-host overflow flag. The
-  // condition is hoisted to a structured if so the not-overflowing fast path skips the atomic entirely - one
-  // function call to fetch the flag pointer plus one CreateICmpUGT comparison, the same compare we already
-  // emitted for the clamp.
+  // Overflow signal: on `claimed_row > clamp_upper`, atomically OR 1 into the pinned-host overflow flag and
+  // record the offending task identity in the companion `adstack_overflow_task_id_dev_ptr` slot via a
+  // `cmpxchg(0, registry_id)`. Only the FIRST overflowing thread's id sticks; subsequent threads observe
+  // a non-zero value and their cmpxchg fails harmlessly. The condition is hoisted to a structured if so
+  // the not-overflowing fast path skips both atomics entirely - one function call to fetch the pointers
+  // plus one CreateICmpUGT comparison (the same compare we already emitted for the clamp).
   auto *current_function = builder->GetInsertBlock()->getParent();
   auto *overflow_then_block = llvm::BasicBlock::Create(*llvm_context, "adstack_overflow_signal", current_function);
   auto *overflow_merge_block = llvm::BasicBlock::Create(*llvm_context, "adstack_overflow_merge", current_function);
@@ -2479,6 +2505,17 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
     llvm::Value *one_i64 = llvm::ConstantInt::get(i64ty_local, 1);
     builder->CreateAtomicRMW(llvm::AtomicRMWInst::Or, flag_ptr, one_i64, llvm::MaybeAlign(),
                              llvm::AtomicOrdering::Monotonic);
+    // Record the registry id (0 means "not registered"; skip the cmpxchg in that case so the slot stays
+    // zero and the host raise site falls through to the generic dual-cause message). Each offload task
+    // emits its own lazy-claim block, so the immediate is task-local at codegen time.
+    if (current_task != nullptr && current_task->ad_stack.registry_id != 0) {
+      llvm::Value *task_id_ptr = call("LLVMRuntime_get_adstack_overflow_task_id_dev_ptr", get_runtime());
+      llvm::Value *expected_zero = llvm::ConstantInt::get(i64ty_local, 0);
+      llvm::Value *new_id =
+          llvm::ConstantInt::get(i64ty_local, static_cast<uint64_t>(current_task->ad_stack.registry_id));
+      builder->CreateAtomicCmpXchg(task_id_ptr, expected_zero, new_id, llvm::MaybeAlign(),
+                                   llvm::AtomicOrdering::Monotonic, llvm::AtomicOrdering::Monotonic);
+    }
     builder->CreateBr(overflow_merge_block);
   }
   builder->SetInsertPoint(overflow_merge_block);
@@ -2742,7 +2779,11 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
     llvm::Value *max_size_addr = builder->CreateGEP(i64ty, ad_stack_max_sizes_ptr_llvm_, stack_id_i64);
     llvm::Value *max_size = builder->CreateLoad(i64ty, max_size_addr);
     llvm::Value *stack_base = get_ad_stack_base_llvm(stack);
-    call("stack_push", get_runtime(), stack_base, max_size, tlctx->get_constant(stack->element_size_in_bytes()));
+    auto *i64ty_local = llvm::Type::getInt64Ty(*llvm_context);
+    llvm::Value *registry_id_const = llvm::ConstantInt::get(
+        i64ty_local, current_task != nullptr ? static_cast<uint64_t>(current_task->ad_stack.registry_id) : 0u);
+    call("stack_push", get_runtime(), stack_base, max_size, tlctx->get_constant(stack->element_size_in_bytes()),
+         registry_id_const);
     auto primal_ptr = call("stack_top_primal", stack_base, tlctx->get_constant(stack->element_size_in_bytes()));
     primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(tlctx->get_data_type(stmt->ret_type), 0));
     builder->CreateStore(llvm_val[stmt->v], primal_ptr);

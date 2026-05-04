@@ -57,10 +57,10 @@ i32 test_stack(RuntimeContext *context) {
   runtime->adstack_overflow_flag_dev_ptr = &local_flag;
 
   // Basic push/pop accounting.
-  stack_push(runtime, stack, 16, 4);
-  stack_push(runtime, stack, 16, 4);
-  stack_push(runtime, stack, 16, 4);
-  stack_push(runtime, stack, 16, 4);
+  stack_push(runtime, stack, 16, 4, 0);
+  stack_push(runtime, stack, 16, 4, 0);
+  stack_push(runtime, stack, 16, 4, 0);
+  stack_push(runtime, stack, 16, 4, 0);
   QD_TEST_CHECK(*(u64 *)stack == 4, runtime);
   QD_TEST_CHECK(local_flag == 0, runtime);
 
@@ -85,11 +85,11 @@ i32 test_stack(RuntimeContext *context) {
 
   // Push past capacity: `n` stops at max_num_elements and the overflow flag flips to 1.
   for (int i = 0; i < 16; i++) {
-    stack_push(runtime, stack, 16, 4);
+    stack_push(runtime, stack, 16, 4, 0);
   }
   QD_TEST_CHECK(*(u64 *)stack == 16, runtime);
   QD_TEST_CHECK(local_flag == 0, runtime);
-  stack_push(runtime, stack, 16, 4);  // overflow push
+  stack_push(runtime, stack, 16, 4, 0);  // overflow push
   QD_TEST_CHECK(*(u64 *)stack == 16, runtime);
   QD_TEST_CHECK(local_flag == 1, runtime);
 

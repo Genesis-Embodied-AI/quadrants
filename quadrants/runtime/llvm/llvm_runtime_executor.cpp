@@ -570,6 +570,23 @@ void LlvmRuntimeExecutor::finalize() {
     adstack_overflow_flag_host_ptr_ = nullptr;
     adstack_overflow_flag_dev_ptr_ = nullptr;
   }
+  if (adstack_overflow_task_id_host_ptr_ != nullptr) {
+#if defined(QD_WITH_CUDA)
+    if (config_.arch == Arch::cuda) {
+      CUDADriver::get_instance().mem_free_host(adstack_overflow_task_id_host_ptr_);
+    }
+#endif
+#if defined(QD_WITH_AMDGPU)
+    if (config_.arch == Arch::amdgpu) {
+      AMDGPUDriver::get_instance().mem_free_host(adstack_overflow_task_id_host_ptr_);
+    }
+#endif
+    if (config_.arch != Arch::cuda && config_.arch != Arch::amdgpu) {
+      std::free(adstack_overflow_task_id_host_ptr_);
+    }
+    adstack_overflow_task_id_host_ptr_ = nullptr;
+    adstack_overflow_task_id_dev_ptr_ = nullptr;
+  }
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
     preallocated_runtime_objects_allocs_.reset();
     preallocated_runtime_memory_allocs_.reset();
@@ -790,6 +807,34 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
     adstack_overflow_flag_dev_ptr_ = host_slot;
     runtime_jit->call<void *, void *>("runtime_set_adstack_overflow_flag_dev_ptr", llvm_runtime_,
                                       adstack_overflow_flag_dev_ptr_);
+  }
+  // Companion task-id slot. Same allocation strategy as the flag above; placed in a separate page so the
+  // codegen-emitted `cmpxchg` does not contend with the flag's `atomic OR` on a shared cache line. Codegen
+  // writes the Program-assigned `adstack_sizing_info_id` here on the first overflowing thread; host reads
+  // the slot during the raise to look up the offending kernel / task in the Program-side registry.
+  {
+    void *host_slot = nullptr;
+    if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+      CUDADriver::get_instance().mem_alloc_host(&host_slot, sizeof(int64_t));
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+      AMDGPUDriver::get_instance().mem_alloc_host(&host_slot, sizeof(int64_t), 0u);
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else {
+      host_slot = std::malloc(sizeof(int64_t));
+    }
+    QD_ASSERT(host_slot != nullptr);
+    adstack_overflow_task_id_host_ptr_ = static_cast<int64_t *>(host_slot);
+    *adstack_overflow_task_id_host_ptr_ = 0;
+    adstack_overflow_task_id_dev_ptr_ = host_slot;
+    runtime_jit->call<void *, void *>("runtime_set_adstack_overflow_task_id_dev_ptr", llvm_runtime_,
+                                      adstack_overflow_task_id_dev_ptr_);
   }
 }
 

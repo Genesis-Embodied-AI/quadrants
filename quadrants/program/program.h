@@ -3,10 +3,13 @@
 #pragma once
 
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <atomic>
 #include <stack>
 #include <shared_mutex>
+#include <string>
+#include <vector>
 
 #define QD_RUNTIME_HOST
 #include "quadrants/ir/frontend_ir.h"
@@ -214,6 +217,29 @@ class QD_DLL_EXPORT Program {
     return *adstack_cache_;
   }
 
+  // Identity registry for adstack-sizer info. Codegen registers each `OffloadedTask::ad_stack` once per
+  // kernel compilation and bakes the assigned id as an immediate into the lazy-claim overflow path; on
+  // overflow the codegen emits `cmpxchg(0, id)` against the pinned-host task-id slot. The host raise site
+  // reads the slot and routes through `diagnose_adstack_overflow_message(id)` to look up the kernel name,
+  // task index, and per-stack metadata for an enriched error message. Pointer ownership stays with
+  // `OffloadedTask`; entries are added but not removed - the registry size is bounded by the number of
+  // adstack-bearing tasks compiled in the program's lifetime, typically dozens.
+  struct AdStackSizingInfoEntry {
+    const void *ad_stack_ptr{nullptr};
+    std::string kernel_name;
+    int task_id_in_kernel{0};
+    std::vector<int> allocated_max_sizes;
+  };
+  uint32_t register_adstack_sizing_info(const void *ad_stack_ptr,
+                                        const std::string &kernel_name,
+                                        int task_id_in_kernel,
+                                        std::vector<int> allocated_max_sizes);
+  const AdStackSizingInfoEntry *lookup_adstack_sizing_info(uint32_t id) const;
+  // Format a diagnostic message for an overflow signal. `task_id` is the value read from the pinned-host
+  // task-id slot (0 if no thread overflowed; otherwise the registry id of the first overflowing task).
+  // Returns the dual-cause message body to embed in the `QuadrantsAssertionError` raised at the poll site.
+  std::string diagnose_adstack_overflow_message(uint32_t task_id) const;
+
   /**
    * Destroys a new SNode tree.
    *
@@ -352,6 +378,14 @@ class QD_DLL_EXPORT Program {
   // Adstack caching state (per-task metadata, bytecode, size-expr results, generation counters). All adstack-specific
   // surface lives in `program/adstack_size_expr_eval.{h,cpp}`; routed through `adstack_cache()` getter.
   std::unique_ptr<AdStackCache> adstack_cache_;
+
+  // Adstack-sizing-info identity registry. See `register_adstack_sizing_info`. Index 0 is reserved as the
+  // "no overflow" sentinel so the codegen-emitted `cmpxchg(0, id)` cleanly distinguishes "task id recorded"
+  // from "slot still clean". Reverse lookup map keyed by `ad_stack_ptr` keeps `register_adstack_sizing_info`
+  // idempotent across re-launches of the same kernel.
+  std::vector<AdStackSizingInfoEntry> adstack_sizing_info_registry_{AdStackSizingInfoEntry{}};
+  std::unordered_map<const void *, uint32_t> adstack_sizing_info_id_by_ptr_;
+  mutable std::mutex adstack_sizing_info_registry_mutex_;
   std::stack<int> free_snode_tree_ids_;
 
   std::vector<std::unique_ptr<Function>> functions_;

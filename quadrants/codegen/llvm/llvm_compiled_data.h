@@ -73,6 +73,14 @@ struct AdStackSizingInfo {
   // the actual gate-passing thread count; `nullopt` falls through to dispatched-threads worst-case sizing (no behavior
   // change versus a kernel without this metadata).
   std::optional<StaticAdStackBoundExpr> bound_expr;
+  // Identity in `Program::adstack_sizing_info_registry_`. Assigned at `finalize_offloaded_task_function`
+  // time after the registry idempotently maps `&this` to a u32 id. Baked as an immediate into the
+  // codegen-emitted lazy-claim `cmpxchg(0, registry_id)` so the host raise site can name the offending
+  // kernel + task in its diagnostic message. `0` means "not registered" - the lazy-claim emit short-
+  // circuits the cmpxchg in that case (no information to record). NOT serialised to the offline cache:
+  // ids are assigned per `Program` lifetime, not per-kernel-content; a deserialised task re-registers
+  // itself at the next launch.
+  uint32_t registry_id{0};
   QD_IO_DEF(per_thread_stride,
             per_thread_stride_float,
             per_thread_stride_int,
