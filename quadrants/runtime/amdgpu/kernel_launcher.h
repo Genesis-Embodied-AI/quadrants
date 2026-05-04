@@ -52,7 +52,7 @@ class KernelLauncher : public LLVM::KernelLauncher {
   std::vector<Context> contexts_;
 
  public:
-  ~KernelLauncher();
+  ~KernelLauncher() override;
 };
 
 }  // namespace amdgpu

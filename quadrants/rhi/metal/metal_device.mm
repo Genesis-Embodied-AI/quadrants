@@ -413,7 +413,7 @@ MetalCommandList::MetalCommandList(const MetalDevice &device,
 }
 
 MetalCommandList::~MetalCommandList() {
-  flush_pending_encoder_();
+  flush_pending_encoder();
   [cmdbuf_ release];
 }
 
@@ -422,7 +422,7 @@ MetalCommandList::~MetalCommandList() {
 // returned for commit, so a long chain of `dispatch()` calls collapses to a
 // single MTLComputeCommandEncoder while incompatible ops still observe the
 // right per-encoder boundary that Metal's hazard tracking relies on.
-void MetalCommandList::flush_pending_encoder_() {
+void MetalCommandList::flush_pending_encoder() {
   if (current_compute_encoder_ != nil) {
     [current_compute_encoder_ endEncoding];
     [current_compute_encoder_ release];
@@ -487,7 +487,7 @@ void MetalCommandList::track_physical_buffer(DeviceAllocation alloc) noexcept {
 
 void MetalCommandList::buffer_copy(DevicePtr dst, DevicePtr src,
                                    size_t size) noexcept {
-  flush_pending_encoder_();
+  flush_pending_encoder();
   const MetalMemory &src_memory = device_->get_memory(src.alloc_id);
   const MetalMemory &dst_memory = device_->get_memory(dst.alloc_id);
 
@@ -515,7 +515,7 @@ void MetalCommandList::buffer_copy(DevicePtr dst, DevicePtr src,
 void MetalCommandList::buffer_fill(DevicePtr ptr, size_t size,
                                    uint32_t data) noexcept {
   RHI_ASSERT(data == 0);
-  flush_pending_encoder_();
+  flush_pending_encoder();
 
   const MetalMemory &memory = device_->get_memory(ptr.alloc_id);
 
@@ -555,7 +555,7 @@ RhiResult MetalCommandList::dispatch(uint32_t x, uint32_t y,
     // so per-dispatch ordering inside one encoder is the same as separate
     // encoders, but we save the ~700 us of encoder-end / encoder-begin gap that
     // the Metal System Trace surfaces between every quadrants dispatch. The
-    // encoder is torn down by `flush_pending_encoder_` whenever an
+    // encoder is torn down by `flush_pending_encoder` whenever an
     // encoder-incompatible op (blit / render / cmdbuf finalize) needs to start.
     if (current_compute_encoder_ == nullptr) {
       // `[cmdbuf_ computeCommandEncoder]` returns an autoreleased encoder.
@@ -563,7 +563,7 @@ RhiResult MetalCommandList::dispatch(uint32_t x, uint32_t y,
       // drain into the next `dispatch()` call; without this the autoreleased
       // encoder is freed before we end it, and Metal's
       // `_MTLCommandEncoder dealloc` asserts "Command encoder released without
-      // endEncoding". Released by `flush_pending_encoder_` after `endEncoding`.
+      // endEncoding". Released by `flush_pending_encoder` after `endEncoding`.
       current_compute_encoder_ = [[cmdbuf_ computeCommandEncoder] retain];
     }
     MTLComputeCommandEncoder_id encoder = current_compute_encoder_;
@@ -621,7 +621,7 @@ void MetalCommandList::begin_renderpass(int x0, int y0, int x1, int y1,
                                         std::vector<float> *clear_colors,
                                         DeviceAllocation *depth_attachment,
                                         bool depth_clear) {
-  flush_pending_encoder_();
+  flush_pending_encoder();
   current_renderpass_details_.clear_depth = depth_clear;
 
   int rendertarget_height = 0;
@@ -771,7 +771,7 @@ bool MetalCommandList::is_renderpass_active() const {
 void MetalCommandList::set_renderpass_active() { is_renderpass_active_ = true; }
 
 MTLRenderCommandEncoder_id MetalCommandList::pre_draw_setup() {
-  flush_pending_encoder_();
+  flush_pending_encoder();
   const RasterParams *raster_params = current_pipeline_->raster_params();
 
   MTLRenderPassDescriptor *rpd = create_render_pass_desc(
@@ -983,7 +983,7 @@ void MetalCommandList::buffer_to_image(DeviceAllocation dst_img,
   buffer_image_copy_params_to_mtl(params, src_buf.offset,
                                   dst_image.mtl_texture(), &mtl_params);
 
-  flush_pending_encoder_();
+  flush_pending_encoder();
   @autoreleasepool {
     MTLBlitCommandEncoder_id encoder = [cmdbuf_ blitCommandEncoder];
     [encoder copyFromBuffer:src_buffer.mtl_buffer()
@@ -1011,7 +1011,7 @@ void MetalCommandList::image_to_buffer(DevicePtr dst_buf,
   buffer_image_copy_params_to_mtl(params, dst_buf.offset,
                                   src_image.mtl_texture(), &mtl_params);
 
-  flush_pending_encoder_();
+  flush_pending_encoder();
   @autoreleasepool {
     MTLBlitCommandEncoder_id encoder = [cmdbuf_ blitCommandEncoder];
     [encoder copyFromTexture:src_image.mtl_texture()
@@ -1036,7 +1036,7 @@ void MetalCommandList::copy_image(DeviceAllocation dst_img,
   const MetalImage &src_image = device_->get_image(src_img.alloc_id);
   const MetalImage &dst_image = device_->get_image(dst_img.alloc_id);
 
-  flush_pending_encoder_();
+  flush_pending_encoder();
   @autoreleasepool {
     MTLBlitCommandEncoder_id encoder = [cmdbuf_ blitCommandEncoder];
     [encoder
@@ -1062,7 +1062,7 @@ void MetalCommandList::blit_image(DeviceAllocation dst_img,
 }
 
 MTLCommandBuffer_id MetalCommandList::finalize() {
-  flush_pending_encoder_();
+  flush_pending_encoder();
   return cmdbuf_;
 }
 

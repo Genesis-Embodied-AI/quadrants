@@ -422,7 +422,7 @@ class MetalCommandList final : public CommandList {
   // Silicon's M-series GPUs costs ~700 us of inter-dispatch gap (encoder teardown plus re-bind state), and Metal's
   // `dispatchType=Serial` already gives the same per-dispatch ordering inside a single encoder, so coalescing into one
   // encoder is semantics-preserving and shaves the gap to driver-scheduling overhead. The encoder is opened lazily on
-  // the first `dispatch()` call and torn down via `flush_pending_encoder_` before any encoder-incompatible op
+  // the first `dispatch()` call and torn down via `flush_pending_encoder` before any encoder-incompatible op
   // (`buffer_copy`, `buffer_fill`, `begin_renderpass`) and before `finalize()` returns the cmdbuf to the stream for
   // commit. Set of physical buffers already passed through `useResource:` in this encoder lifetime is tracked alongside
   // so we don't issue redundant `useResource:` calls inside one encoder. Initialised to `nullptr` (the C++ form of
@@ -431,7 +431,7 @@ class MetalCommandList final : public CommandList {
   // `nullptr` is a valid initialiser for both.
   MTLComputeCommandEncoder_id current_compute_encoder_{nullptr};
   std::unordered_set<uint64_t> compute_encoder_resident_alloc_ids_;
-  void flush_pending_encoder_();
+  void flush_pending_encoder();
 };
 
 class MetalStream final : public Stream {

@@ -65,7 +65,7 @@ class KernelLauncher : public LLVM::KernelLauncher {
   std::size_t persistent_result_buffer_capacity_{0};
 
  public:
-  ~KernelLauncher();
+  ~KernelLauncher() override;
 };
 
 }  // namespace cuda
