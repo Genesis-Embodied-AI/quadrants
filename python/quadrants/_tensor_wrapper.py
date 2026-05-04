@@ -190,13 +190,19 @@ class Tensor:
     # ------------------------------------------------------------------
 
     def to_numpy(self, dtype: typing.Any = None, *, copy: typing.Optional[bool] = True) -> typing.Any:
-        return self._impl.to_numpy(dtype=dtype, copy=copy)
+        kw: dict[str, typing.Any] = {"copy": copy}
+        if dtype is not None:
+            kw["dtype"] = dtype
+        return self._impl.to_numpy(**kw)
 
     def from_numpy(self, arr: typing.Any) -> None:
         self._impl.from_numpy(arr)
 
     def to_torch(self, device: typing.Any = None, *, copy: typing.Optional[bool] = True) -> typing.Any:
-        return self._impl.to_torch(device=device, copy=copy)
+        kw: dict[str, typing.Any] = {"copy": copy}
+        if device is not None:
+            kw["device"] = device
+        return self._impl.to_torch(**kw)
 
     def from_torch(self, arr: typing.Any) -> None:
         self._impl.from_torch(arr)
