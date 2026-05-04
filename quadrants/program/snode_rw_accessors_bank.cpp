@@ -1,5 +1,6 @@
 #include "quadrants/program/snode_rw_accessors_bank.h"
 
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/program.h"
 
 namespace quadrants::lang {
@@ -45,6 +46,11 @@ void SNodeRwAccessorsBank::Accessors::write_float(const std::vector<int> &I, flo
   prog_->synchronize();
   const auto &compiled_kernel_data = get_or_compile(kernels_.writer_compiled, prog_, *writer_);
   prog_->launch_kernel(compiled_kernel_data, launch_ctx);
+  // Drives invalidation of the SPIR-V per-task adstack metadata cache: a runtime adstack bound that
+  // reads this snode (`SizeExpr::FieldLoad`) must see the GPU sizer re-run on the next launch after
+  // any host-side mutation. Bumped per snode_id so the cache only evicts entries whose `size_expr`
+  // actually depends on this specific snode.
+  prog_->adstack_cache().bump_snode_write_gen(snode_->id);
 }
 
 float64 SNodeRwAccessorsBank::Accessors::read_float(const std::vector<int> &I) {
@@ -65,6 +71,7 @@ void SNodeRwAccessorsBank::Accessors::write_int(const std::vector<int> &I, int64
   prog_->synchronize();
   const auto &compiled_kernel_data = get_or_compile(kernels_.writer_compiled, prog_, *writer_);
   prog_->launch_kernel(compiled_kernel_data, launch_ctx);
+  prog_->adstack_cache().bump_snode_write_gen(snode_->id);
 }
 
 // for int32 and int64
@@ -75,6 +82,7 @@ void SNodeRwAccessorsBank::Accessors::write_uint(const std::vector<int> &I, uint
   prog_->synchronize();
   const auto &compiled_kernel_data = get_or_compile(kernels_.writer_compiled, prog_, *writer_);
   prog_->launch_kernel(compiled_kernel_data, launch_ctx);
+  prog_->adstack_cache().bump_snode_write_gen(snode_->id);
 }
 
 int64 SNodeRwAccessorsBank::Accessors::read_int(const std::vector<int> &I) {

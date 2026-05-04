@@ -95,12 +95,26 @@ class OffloadedTask {
   int dynamic_shared_array_bytes{0};
   AdStackSizingInfo ad_stack{};
 
+  // Snode IDs this task writes to (read-modify-write counts as a write). Computed at codegen time
+  // by walking the offloaded IR with `gather_snode_read_writes`. Consumed at launch time: each id
+  // here bumps `Program::snode_write_gen_[id]` so the per-task adstack metadata cache invalidates
+  // whenever a kernel that ran since the cache was recorded mutated a SNode a downstream
+  // `size_expr::FieldLoad` may read. Mirrors the SPIR-V `TaskAttributes::snode_writes` field.
+  std::vector<int> snode_writes;
+  // Argument arg_ids this task writes to (WRITE bit set in `irpass::detect_external_ptr_access_in_task`).
+  // Consumed at launch time to bump `Program::ndarray_data_gen_` for the bound DeviceAllocation so
+  // the per-task adstack metadata cache invalidates when a kernel that ran since the cache was
+  // recorded mutated an ndarray a downstream `size_expr::ExternalTensorRead` reads. Mirrors the
+  // SPIR-V `KernelContextAttributes::arr_access` WRITE-bit set, but stored per-task here because
+  // LLVM codegen does not aggregate `arr_access` to the kernel level.
+  std::vector<int> arr_writes;
+
   explicit OffloadedTask(const std::string &name = "",
                          int block_dim = 0,
                          int grid_dim = 0,
                          int dynamic_shared_array_bytes = 0)
       : name(name), block_dim(block_dim), grid_dim(grid_dim), dynamic_shared_array_bytes(dynamic_shared_array_bytes) {};
-  QD_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes, ad_stack);
+  QD_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes, ad_stack, snode_writes, arr_writes);
 };
 
 struct LLVMCompiledTask {

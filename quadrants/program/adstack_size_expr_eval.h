@@ -2,17 +2,139 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 #include "quadrants/codegen/llvm/llvm_compiled_data.h"
 #include "quadrants/codegen/spirv/kernel_utils.h"
 #include "quadrants/ir/adstack_size_expr.h"
+#include "quadrants/program/program.h"
 #include "quadrants/transforms/static_adstack_analysis.h"
 
 namespace quadrants::lang {
 
-class Program;
 class LaunchContextBuilder;
+class Program;
+
+// Adstack-specific caching state. Owns the per-task adstack-sizer metadata caches (SPIR-V + LLVM-GPU), the encoded
+// SPIR-V bytecode cache, the per-launch SizeExpr-eval result cache, and the per-snode / per-DeviceAllocation generation
+// counters that drive precise invalidation. Held by `Program` via a unique_ptr; all callers route through
+// `program->adstack_cache().method(...)`. Lifecycle matches `Program`.
+class AdStackCache {
+ public:
+  // One input read observed during a `evaluate_adstack_size_expr` walk. The cache entry records these so a subsequent
+  // lookup re-reads the same inputs and compares to `observed_value`; a single mismatch forces a full re-walk.
+  struct SizeExprReadObservation {
+    enum Kind : uint8_t { FieldLoadObs, ExternalShapeObs, ExternalReadObs };
+    Kind kind;
+    int snode_id;
+    std::vector<int> indices;
+    std::vector<int> arg_id_path;
+    int arg_shape_axis;
+    int prim_dt;
+    int64_t observed_value;
+  };
+  struct SizeExprCacheEntry {
+    int64_t result;
+    std::vector<SizeExprReadObservation> reads;
+  };
+  bool try_size_expr_cache_hit(Program *prog,
+                               const SerializedSizeExpr *expr_key,
+                               LaunchContextBuilder *ctx,
+                               int64_t &out_result);
+  void record_size_expr_eval(const SerializedSizeExpr *expr_key,
+                             int64_t result,
+                             std::vector<SizeExprReadObservation> reads);
+  void invalidate_size_expr_cache() {
+    size_expr_cache_.clear();
+  }
+
+  // Cache for encoded SPIR-V adstack-sizer bytecode. Same dep-tracking contract as `try_size_expr_cache_hit` but the
+  // cached payload is the encoded bytes rather than an integer.
+  struct SpirvBytecodeCacheEntry {
+    std::vector<uint8_t> bytecode;
+    std::vector<SizeExprReadObservation> reads;
+  };
+  bool try_spirv_bytecode_cache_hit(Program *prog,
+                                    const void *attribs_key,
+                                    LaunchContextBuilder *ctx,
+                                    std::vector<uint8_t> &out_bytecode);
+  void record_spirv_bytecode_eval(const void *attribs_key,
+                                  std::vector<uint8_t> bytecode,
+                                  std::vector<SizeExprReadObservation> reads);
+  void invalidate_spirv_bytecode_cache() {
+    spirv_bytecode_cache_.clear();
+  }
+
+  // Per-task adstack metadata output cache for the SPIR-V on-device sizer.
+  struct PerTaskAdStackCacheEntry {
+    std::vector<uint32_t> metadata;
+    uint32_t stride_float{0};
+    uint32_t stride_int{0};
+    std::vector<std::pair<int, uint64_t>> snode_gens;
+    std::vector<std::tuple<int, void *, uint64_t>> arg_gens;
+  };
+  bool try_per_task_ad_stack_cache_hit(const void *attribs_key,
+                                       LaunchContextBuilder *ctx,
+                                       PerTaskAdStackCacheEntry &out);
+  void record_per_task_ad_stack(const void *attribs_key,
+                                std::vector<uint32_t> metadata,
+                                uint32_t stride_float,
+                                uint32_t stride_int,
+                                std::vector<std::pair<int, uint64_t>> snode_gens,
+                                std::vector<std::tuple<int, void *, uint64_t>> arg_gens);
+  void invalidate_per_task_ad_stack_cache() {
+    per_task_ad_stack_cache_.clear();
+  }
+
+  // Per-task adstack metadata output cache for the LLVM-GPU on-device sizer (CUDA + AMDGPU).
+  struct LlvmPerTaskAdStackCacheEntry {
+    std::vector<uint64_t> offsets;
+    std::vector<uint64_t> max_sizes;
+    uint64_t stride_combined{0};
+    uint64_t stride_float{0};
+    uint64_t stride_int{0};
+    std::vector<std::pair<int, uint64_t>> snode_gens;
+    std::vector<std::tuple<int, void *, uint64_t>> arg_gens;
+  };
+  bool try_llvm_per_task_ad_stack_cache_hit(const void *attribs_key,
+                                            LaunchContextBuilder *ctx,
+                                            LlvmPerTaskAdStackCacheEntry &out);
+  void record_llvm_per_task_ad_stack(const void *attribs_key,
+                                     std::vector<uint64_t> offsets,
+                                     std::vector<uint64_t> max_sizes,
+                                     uint64_t stride_combined,
+                                     uint64_t stride_float,
+                                     uint64_t stride_int,
+                                     std::vector<std::pair<int, uint64_t>> snode_gens,
+                                     std::vector<std::tuple<int, void *, uint64_t>> arg_gens);
+  void invalidate_llvm_per_task_ad_stack_cache() {
+    llvm_per_task_ad_stack_cache_.clear();
+  }
+
+  uint64_t snode_write_gen(int snode_id) const {
+    auto it = snode_write_gen_.find(snode_id);
+    return it == snode_write_gen_.end() ? 0u : it->second;
+  }
+  void bump_snode_write_gen(int snode_id) {
+    ++snode_write_gen_[snode_id];
+  }
+  uint64_t ndarray_data_gen(void *devalloc_ptr) const {
+    auto it = ndarray_data_gen_.find(devalloc_ptr);
+    return it == ndarray_data_gen_.end() ? 0u : it->second;
+  }
+  void bump_ndarray_data_gen(void *devalloc_ptr) {
+    ++ndarray_data_gen_[devalloc_ptr];
+  }
+
+ private:
+  std::unordered_map<const SerializedSizeExpr *, SizeExprCacheEntry> size_expr_cache_;
+  std::unordered_map<const void *, SpirvBytecodeCacheEntry> spirv_bytecode_cache_;
+  std::unordered_map<const void *, PerTaskAdStackCacheEntry> per_task_ad_stack_cache_;
+  std::unordered_map<const void *, LlvmPerTaskAdStackCacheEntry> llvm_per_task_ad_stack_cache_;
+  std::unordered_map<int, uint64_t> snode_write_gen_;
+  std::unordered_map<void *, uint64_t> ndarray_data_gen_;
+};
 
 // Evaluates a compile-time captured `SerializedSizeExpr` against the current field state of `prog` and the
 // per-launch argument values in `ctx`, returning the concrete adstack capacity for this launch. Scalar i32/i64
@@ -21,6 +143,20 @@ class LaunchContextBuilder;
 // enumerates its range and takes the max of the body expression across the bound variable. Returns -1 when the
 // expression is empty (no symbolic bound captured), signalling to the caller to use the compile-time fallback.
 int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx);
+
+// RAII guard opening a thread-local read-cache scope. Every nested `evaluate_adstack_size_expr` running inside the
+// scope shares one cache, so repeated `(snode_id, indices)` reads share a single reader-kernel dispatch. Place around
+// any block that calls `evaluate_adstack_size_expr` more than once back-to-back.
+class SizeExprLaunchScope {
+ public:
+  SizeExprLaunchScope();
+  ~SizeExprLaunchScope();
+  SizeExprLaunchScope(const SizeExprLaunchScope &) = delete;
+  SizeExprLaunchScope &operator=(const SizeExprLaunchScope &) = delete;
+
+ private:
+  bool owns_;
+};
 
 // Flattens every alloca's `SerializedSizeExpr` tree into the device-readable bytecode defined in
 // `quadrants/ir/adstack_size_expr_device.h` and returns the raw bytes ready to upload to a device scratch buffer.
@@ -80,5 +216,34 @@ void clip_effective_rows_by_loop_trip_count(std::size_t &effective_rows,
                                             std::size_t dispatched_threads_ceiling,
                                             Program *prog,
                                             LaunchContextBuilder *ctx);
+
+// Adstack-cache invalidation bump. Called from each backend's kernel launcher BEFORE the per-task
+// `publish_adstack_metadata` loop runs, so the per-task metadata cache (`Program::*PerTaskAdStackCacheEntry`) snapshots
+// the latest counters at record time and the next lookup detects any drift. Two sources contribute:
+//
+//   - SNode writes: every task in the kernel lists its compile-time `snode_writes` set (computed at codegen via
+//     `irpass::analysis::gather_snode_read_writes`), bumped per id; covers `SizeExpr::FieldLoad` cache invalidation.
+//   - ndarray data writes: every arg slot the kernel writes to (`OffloadedTask::arr_writes` on LLVM-GPU, the kernel-
+//     level `ctx_attribs.arr_access` WRITE bits on SPIR-V) bumps the bound `DeviceAllocation`'s data generation.
+//     SPIR-V also bumps on the `kNone` READ branch to catch host-driven mutations of raw numpy / torch buffers blitted
+//     between launches; covers `SizeExpr::ExternalTensorRead` invalidation.
+//
+// The two helpers share the same Program-level effect; their signatures differ only because the codegen-time write
+// sets are stored in different per-backend structs. Forward-only kernels (no adstack tasks) still call these to keep
+// counters monotone, which is cheap (one map insert per snode_id at most).
+void bump_writes_for_kernel_llvm(Program *prog,
+                                 LaunchContextBuilder *ctx,
+                                 const std::vector<OffloadedTask> &offloaded_tasks);
+// CPU launcher overload: per-task snode_writes / arr_writes are stored as separate parallel vectors on the launcher
+// `Context` rather than as `OffloadedTask` clones, for legacy reasons documented in the CPU `Context` struct.
+void bump_writes_for_kernel_llvm(Program *prog,
+                                 LaunchContextBuilder *ctx,
+                                 const std::vector<std::vector<int>> &snode_writes_per_task,
+                                 const std::vector<std::vector<int>> &arr_writes_per_task);
+void bump_writes_for_kernel_spirv(
+    Program *prog,
+    LaunchContextBuilder *ctx,
+    const std::vector<spirv::TaskAttributes> &task_attribs,
+    const std::vector<std::pair<std::vector<int>, irpass::ExternalPtrAccess>> &arr_access);
 
 }  // namespace quadrants::lang

@@ -107,6 +107,14 @@ class LlvmRuntimeExecutor {
                                        LaunchContextBuilder *ctx,
                                        void *device_runtime_context_ptr = nullptr);
 
+  // Accessor for the per-program `Program *` used by the launchers to bump per-snode and per-
+  // DeviceAllocation generation counters in `Program::snode_write_gen_` / `ndarray_data_gen_`. Used
+  // exclusively by the LLVM-GPU per-task adstack metadata cache (`record_llvm_per_task_ad_stack`)
+  // so a kernel write to a SNode or ndarray a downstream `size_expr::FieldLoad` /
+  // `ExternalTensorRead` reads invalidates cached metadata on the next launch. Returns nullptr in
+  // C++-only test contexts where `program_impl_` was constructed without a parent Program.
+  Program *get_program() const;
+
   // Allocate-on-demand and clear the per-kernel lazy-claim arrays:
   //   `adstack_row_counters[num_tasks]` = 0  (codegen-emitted LCA-block atomic-rmw target; each task counts its own
   //                                           LCA-block-reaching threads in slot `task_codegen_id`)
@@ -321,6 +329,17 @@ class LlvmRuntimeExecutor {
   DeviceAllocationUnique adstack_offsets_alloc_ = nullptr;
   DeviceAllocationUnique adstack_max_sizes_alloc_ = nullptr;
   std::size_t adstack_metadata_capacity_{0};
+  // Last device-pointer values published into `runtime->adstack_offsets` / `adstack_max_sizes`. The pointed-to scratch
+  // allocations stay stable across launches (only grown via `grow_to`), so we skip the per-launch h2d when the pointer
+  // we would write matches what we already wrote on a prior launch.
+  void *adstack_offsets_dev_ptr_published_{nullptr};
+  void *adstack_max_sizes_dev_ptr_published_{nullptr};
+  // The float stride (in bytes) the most recent `publish_adstack_metadata` wrote to
+  // `runtime->adstack_per_thread_stride_float`. Read by `ensure_per_task_float_heap_post_reducer` for the matching
+  // task to size the float heap; we keep the value host-side so we do not need to DtoH-readback the stride field on
+  // every bound_expr task. The launcher pairs publish + reducer + post-reducer per task with no intervening publish,
+  // so the value remains accurate at the consumer call site.
+  std::size_t last_published_stride_float_bytes_{0};
 
   // Per-launch scratch buffer used on GPU arches (CUDA / AMDGPU) to ship the `LlvmAdStackBoundReducerDeviceParams` blob
   // into for `runtime_eval_static_bound_count`. Allocated on demand on the first bound_expr task in a kernel, reused

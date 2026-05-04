@@ -7,6 +7,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Linker/Linker.h"
 #include "quadrants/analysis/offline_cache_util.h"
+#include "quadrants/ir/analysis.h"
+#include "quadrants/ir/snode.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/program/extension.h"
@@ -1975,6 +1977,39 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
     current_task->ad_stack.allocas = ad_stack_allocas_info_;
     current_task->ad_stack.size_exprs = ad_stack_size_exprs_;
     current_task->ad_stack.bound_expr = ad_stack_static_bound_expr_;
+    // Snodes the task body mutates. Persisted on `OffloadedTask::snode_writes` so the LLVM
+    // launcher can invalidate the per-task adstack metadata cache when a kernel that runs in
+    // between mutated a SNode an enclosing `size_expr::FieldLoad` reads. Mirrors the SPIR-V
+    // analogue in `spirv_codegen.cpp`. Sorted + deduplicated for stable serialisation.
+    if (current_offload != nullptr) {
+      auto snode_rw = irpass::analysis::gather_snode_read_writes(current_offload);
+      current_task->snode_writes.reserve(snode_rw.second.size());
+      for (auto *s : snode_rw.second) {
+        if (s != nullptr) {
+          current_task->snode_writes.push_back(s->id);
+        }
+      }
+      std::sort(current_task->snode_writes.begin(), current_task->snode_writes.end());
+      current_task->snode_writes.erase(
+          std::unique(current_task->snode_writes.begin(), current_task->snode_writes.end()),
+          current_task->snode_writes.end());
+      // Ndarray args this task writes to. Same role as `snode_writes` but for ndarray data;
+      // covers `size_expr::ExternalTensorRead` invalidation. The first element of each
+      // `arg_id_path` key is the kernel-arg slot, which is what `Program::ndarray_data_gen_`
+      // is keyed by (via the bound DeviceAllocation).
+      auto arr_access = irpass::detect_external_ptr_access_in_task(current_offload);
+      for (const auto &kv : arr_access) {
+        if ((static_cast<uint32_t>(kv.second) & static_cast<uint32_t>(irpass::ExternalPtrAccess::WRITE)) == 0) {
+          continue;
+        }
+        if (!kv.first.empty()) {
+          current_task->arr_writes.push_back(kv.first.front());
+        }
+      }
+      std::sort(current_task->arr_writes.begin(), current_task->arr_writes.end());
+      current_task->arr_writes.erase(std::unique(current_task->arr_writes.begin(), current_task->arr_writes.end()),
+                                     current_task->arr_writes.end());
+    }
   }
 
   // entry_block should jump to the body after all allocas are inserted

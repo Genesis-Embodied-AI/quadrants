@@ -1,4 +1,6 @@
 #include "quadrants/runtime/cpu/kernel_launcher.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
+#include "quadrants/program/program.h"
 #include "quadrants/rhi/arch.h"
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 
@@ -25,6 +27,8 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // reducer below tightens specific slots.
     executor->publish_adstack_lazy_claim_buffers(task_funcs.size());
   }
+  // Span every task's `publish_adstack_metadata` call below with one shared read cache.
+  SizeExprLaunchScope launch_scope;
   for (size_t i = 0; i < task_funcs.size(); ++i) {
     if (!ad_stacks[i].allocas.empty()) {
       executor->publish_adstack_metadata(ad_stacks[i], num_threads_per_task[i], &ctx);
@@ -98,36 +102,33 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   auto *executor = get_runtime_executor();
 
   ctx.get_context().runtime = executor->get_llvm_runtime();
-  // For quadrants ndarrays, context.array_ptrs saves pointer to its
-  // |DeviceAllocation|, CPU backend actually want to use the raw ptr here.
-  const auto &parameters = *launcher_ctx.parameters;
-  for (int i = 0; i < (int)parameters.size(); i++) {
-    const auto &kv = parameters[i];
-    const auto &arg_id = kv.first;
-    const auto &parameter = kv.second;
-    if (parameter.is_array) {
-      void *data_ptr = ctx.array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}];
-      void *grad_ptr = ctx.array_ptrs[{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}];
+  // For quadrants ndarrays, context.array_ptrs saves pointer to its |DeviceAllocation|; the CPU backend wants the raw
+  // ptr here. Iterate only the precomputed array-typed `arg_id`s.
+  for (int arg_id : launcher_ctx.array_arg_ids) {
+    void *data_ptr = ctx.array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}];
+    void *grad_ptr = ctx.array_ptrs[{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}];
 
-      if (ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone) {
-        ctx.set_host_accessible_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
-        if (arg_id == ctx.graph_do_while_arg_id) {
-          ctx.graph_do_while_flag_dev_ptr = data_ptr;
-        }
-      } else if (ctx.array_runtime_sizes[arg_id] > 0) {
-        uint64 host_ptr = (uint64)executor->get_device_alloc_info_ptr(*static_cast<DeviceAllocation *>(data_ptr));
-        ctx.set_array_device_allocation_type(arg_id, LaunchContextBuilder::DevAllocType::kNone);
-        uint64 host_ptr_grad =
-            grad_ptr == nullptr
-                ? 0
-                : (uint64)executor->get_device_alloc_info_ptr(*static_cast<DeviceAllocation *>(grad_ptr));
-        ctx.set_host_accessible_ndarray_ptrs(arg_id, host_ptr, host_ptr_grad);
-        if (arg_id == ctx.graph_do_while_arg_id) {
-          ctx.graph_do_while_flag_dev_ptr = (void *)host_ptr;
-        }
+    if (ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone) {
+      ctx.set_host_accessible_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
+      if (arg_id == ctx.graph_do_while_arg_id) {
+        ctx.graph_do_while_flag_dev_ptr = data_ptr;
+      }
+    } else if (ctx.array_runtime_sizes[arg_id] > 0) {
+      uint64 host_ptr = (uint64)executor->get_device_alloc_info_ptr(*static_cast<DeviceAllocation *>(data_ptr));
+      ctx.set_array_device_allocation_type(arg_id, LaunchContextBuilder::DevAllocType::kNone);
+      uint64 host_ptr_grad =
+          grad_ptr == nullptr ? 0
+                              : (uint64)executor->get_device_alloc_info_ptr(*static_cast<DeviceAllocation *>(grad_ptr));
+      ctx.set_host_accessible_ndarray_ptrs(arg_id, host_ptr, host_ptr_grad);
+      if (arg_id == ctx.graph_do_while_arg_id) {
+        ctx.graph_do_while_flag_dev_ptr = (void *)host_ptr;
       }
     }
   }
+  // Adstack-cache invalidation bump - see `bump_writes_for_kernel_llvm` in `program/adstack_size_expr_eval.{h,cpp}`.
+  bump_writes_for_kernel_llvm(executor->get_program(), &ctx, launcher_ctx.snode_writes_per_task,
+                              launcher_ctx.arr_writes_per_task);
+
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
     launch_offloaded_tasks_with_do_while(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks,
@@ -154,9 +155,13 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     std::vector<TaskFunc> task_funcs;
     std::vector<AdStackSizingInfo> ad_stacks;
     std::vector<std::size_t> num_threads_per_task;
+    std::vector<std::vector<int>> snode_writes_per_task;
+    std::vector<std::vector<int>> arr_writes_per_task;
     task_funcs.reserve(data.tasks.size());
     ad_stacks.reserve(data.tasks.size());
     num_threads_per_task.reserve(data.tasks.size());
+    snode_writes_per_task.reserve(data.tasks.size());
+    arr_writes_per_task.reserve(data.tasks.size());
     for (auto &task : data.tasks) {
       auto *func_ptr = jit_module->lookup_function(task.name);
       QD_ASSERT_INFO(func_ptr, "Offloaded datum function {} not found", task.name);
@@ -167,6 +172,8 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
       // time.
       ad_stacks.push_back(task.ad_stack);
       num_threads_per_task.push_back(task.ad_stack.static_num_threads);
+      snode_writes_per_task.push_back(task.snode_writes);
+      arr_writes_per_task.push_back(task.arr_writes);
     }
 
     // Populate ctx
@@ -174,6 +181,17 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     ctx.task_funcs = std::move(task_funcs);
     ctx.ad_stacks = std::move(ad_stacks);
     ctx.num_threads_per_task = std::move(num_threads_per_task);
+    ctx.snode_writes_per_task = std::move(snode_writes_per_task);
+    ctx.arr_writes_per_task = std::move(arr_writes_per_task);
+
+    // Precompute the array-typed parameter `arg_id`s so `launch_llvm_kernel` does not have to walk the
+    // full parameters list and re-check `is_array` on every invocation.
+    ctx.array_arg_ids.clear();
+    for (const auto &kv : *ctx.parameters) {
+      if (kv.second.is_array) {
+        ctx.array_arg_ids.push_back(kv.first);
+      }
+    }
 
     compiled.set_handle(handle);
   }

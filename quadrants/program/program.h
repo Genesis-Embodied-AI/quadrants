@@ -1,4 +1,4 @@
-// Program  - Quadrants program execution context
+// Program - Quadrants program execution context
 
 #pragma once
 
@@ -29,6 +29,7 @@
 
 namespace quadrants::lang {
 
+class AdStackCache;
 class StructCompiler;
 
 /**
@@ -49,15 +50,14 @@ class QD_DLL_EXPORT Program {
   using Kernel = quadrants::lang::Kernel;
 
   uint64 *result_buffer{nullptr};  // Note that this result_buffer is used
-                                   // only for runtime JIT functions (e.g.
-                                   // `runtime_memory_allocate_aligned`)
+                                   // only for runtime JIT functions (e.g. `runtime_memory_allocate_aligned`)
 
   std::vector<std::unique_ptr<Kernel>> kernels;
 
   std::unique_ptr<KernelProfilerBase> profiler{nullptr};
 
-  // Note: for now we let all Programs share a single TypeFactory for smooth
-  // migration. In the future each program should have its own copy.
+  // Note: for now we let all Programs share a single TypeFactory for smooth migration. In the future each program
+  // should have its own copy.
   static TypeFactory &get_type_factory();
 
   Program() : Program(default_compile_config.arch) {
@@ -187,8 +187,7 @@ class QD_DLL_EXPORT Program {
 
   static int default_block_dim(const CompileConfig &config);
 
-  // Note this method is specific to LlvmProgramImpl, but we keep it here since
-  // it's exposed to python.
+  // Note this method is specific to LlvmProgramImpl, but we keep it here since it's exposed to python.
   void print_memory_profiler_info();
 
   // Returns zero if the SNode is statically allocated
@@ -206,32 +205,11 @@ class QD_DLL_EXPORT Program {
   // `add_snode_tree` and `destroy_snode_tree`.
   SNode *get_snode_by_id(int snode_id);
 
-  // One input read observed during a `evaluate_adstack_size_expr` walk. The cache entry records these so
-  // a subsequent lookup re-reads the same inputs and compares to `observed_value`; a single mismatch
-  // forces a full re-walk.
-  struct SizeExprReadObservation {
-    enum Kind : uint8_t { FieldLoadObs, ExternalShapeObs, ExternalReadObs };
-    Kind kind;
-    int snode_id;                  // FieldLoad
-    std::vector<int> indices;      // FieldLoad / ExternalReadObs: resolved indices
-    std::vector<int> arg_id_path;  // External*: arg_id_path
-    int arg_shape_axis;            // ExternalShapeObs
-    int prim_dt;                   // ExternalReadObs: PrimitiveTypeID
-    int64_t observed_value;
-  };
-  struct SizeExprCacheEntry {
-    int64_t result;
-    std::vector<SizeExprReadObservation> reads;
-  };
-  // Replay the recorded reads against the live state and `ctx`; on full match write `result` to
-  // `out_result` and return true. Any mismatch erases the entry and returns false, leaving the caller
-  // to run a full eval and repopulate the cache via `record_size_expr_eval`.
-  bool try_size_expr_cache_hit(const SerializedSizeExpr *expr_key, LaunchContextBuilder *ctx, int64_t &out_result);
-  void record_size_expr_eval(const SerializedSizeExpr *expr_key,
-                             int64_t result,
-                             std::vector<SizeExprReadObservation> reads);
-  void invalidate_size_expr_cache() {
-    size_expr_cache_.clear();
+  // Adstack-specific caching: per-task adstack-sizer metadata caches (SPIR-V + LLVM-GPU), encoded SPIR-V bytecode
+  // cache, per-launch SizeExpr-eval result cache, and per-snode / per-DeviceAllocation generation counters that drive
+  // precise invalidation. Defined in `program/adstack_size_expr_eval.h`. Lifecycle matches `Program`.
+  AdStackCache &adstack_cache() {
+    return *adstack_cache_;
   }
 
   /**
@@ -349,12 +327,11 @@ class QD_DLL_EXPORT Program {
     return ndarrays_.size();
   }
 
-  // TODO(zhanlue): Move these members and corresponding interfaces to
-  // ProgramImpl Ideally, Program should serve as a pure interface class and all
-  // the implementations should fall inside ProgramImpl
+  // TODO(zhanlue): Move these members and corresponding interfaces to ProgramImpl Ideally, Program should serve as a
+  // pure interface class and all the implementations should fall inside ProgramImpl
   //
-  // Once we migrated these implementations to ProgramImpl, lower-level objects
-  // could store ProgramImpl rather than Program.
+  // Once we migrated these implementations to ProgramImpl, lower-level objects could store ProgramImpl rather than
+  // Program.
 
  private:
   CompileConfig compile_config_;
@@ -370,8 +347,9 @@ class QD_DLL_EXPORT Program {
   std::vector<std::unique_ptr<SNodeTree>> snode_trees_;
   // Lazy cache for `get_snode_by_id`. Invalidated by `add_snode_tree` and `destroy_snode_tree`.
   std::unordered_map<int, SNode *> snode_id_cache_;
-  // Cache backing `try_size_expr_cache_hit` / `record_size_expr_eval`.
-  std::unordered_map<const SerializedSizeExpr *, SizeExprCacheEntry> size_expr_cache_;
+  // Adstack caching state (per-task metadata, bytecode, size-expr results, generation counters). All adstack-specific
+  // surface lives in `program/adstack_size_expr_eval.{h,cpp}`; routed through `adstack_cache()` getter.
+  std::unique_ptr<AdStackCache> adstack_cache_;
   std::stack<int> free_snode_tree_ids_;
 
   std::vector<std::unique_ptr<Function>> functions_;
