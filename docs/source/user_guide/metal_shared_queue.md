@@ -98,7 +98,7 @@ qd.init(arch=qd.metal, external_metal_command_queue=queue_ptr)
 
 ## Lifetime and ownership
 
-The caller (your application) owns the command queue. Quadrants retains it for the duration of the runtime and does **not** release it on `qd.reset()`. You must keep PyTorch (and its MPS backend) alive for as long as the Quadrants runtime is active.
+The caller (your application) owns the command queue. Quadrants borrows the pointer without retaining it, so the caller must keep the queue alive for the lifetime of the Quadrants runtime. In practice this means keeping PyTorch (and its MPS backend) alive for as long as `qd.init()` is active.
 
 ## Fallback
 
