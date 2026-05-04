@@ -15,10 +15,17 @@ JSONL input (one object per line) -- emitted by the agent::
 Output ``report.txt`` shape::
 
   <path> <total> +<added> -<removed>
-      <func>() NEW +<added>
-      <func>() <total> +<added> -<removed>
-      <func>() DELETED -<removed>
-      ...
+      New:
+        <func>()                                   NEW    +<added>
+        ...
+      Existing:
+        <func>()                              <total>     +<added>   -<removed>
+        ...
+
+Within each file, functions are split into a ``New:`` group (added by this PR) and an
+``Existing:`` group (modified or deleted by this PR), and within each group sorted by added
+lines descending, then removed lines descending. Function-name and numeric columns are
+padded with spaces so the columns line up within a file.
 """
 
 from __future__ import annotations
@@ -154,33 +161,112 @@ def _attribute_function(
     return total, added, removed, is_new, is_deleted
 
 
-def _format_function_line(name: str, total: int, added: int, removed: int, is_new: bool, is_deleted: bool) -> str | None:
-    """Produce the indented per-function line, or ``None`` if the function has no real change.
+@dataclass
+class _AttributedEntry:
+    """A ``_FunctionEntry`` plus its computed total / added / removed counts."""
 
-    For a NEW function we never print a ``-N`` because nothing was removed by definition.
-    For a DELETED function we never print ``<total>`` (it's 0) -- we use the literal ``DELETED``.
+    entry: _FunctionEntry
+    total: int
+    added: int
+    removed: int
+    is_new: bool
+    is_deleted: bool
+
+
+def _attribute_all(entries: list[_FunctionEntry], book: _FileBookkeeping) -> list[_AttributedEntry]:
+    out: list[_AttributedEntry] = []
+    for entry in entries:
+        total, added, removed, is_new, is_deleted = _attribute_function(entry, book)
+        if added == 0 and removed == 0:
+            continue
+        out.append(_AttributedEntry(entry, total, added, removed, is_new, is_deleted))
+    return out
+
+
+def _impact_sort_key(a: _AttributedEntry) -> tuple[int, int, str]:
+    """Sort by added desc, then removed desc, then name asc (stable across runs)."""
+    return (-a.added, -a.removed, a.entry.name)
+
+
+# Column widths chosen to fit the longest expected token in each column without crowding adjacent
+# columns. ``DELETED`` is 7 chars (the longest total token); five-digit ``+``/``-`` counts are
+# the longest expected numeric tokens.
+_TOTAL_WIDTH = 8
+_ADDED_WIDTH = 7
+_REMOVED_WIDTH = 7
+_FUNC_INDENT = "      "
+_GROUP_INDENT = "    "
+
+
+def _format_total(a: _AttributedEntry) -> str:
+    if a.is_deleted:
+        return "DELETED"
+    if a.is_new:
+        return "NEW"
+    return str(a.total)
+
+
+def _function_label(name: str) -> str:
+    """Append ``()`` only when the agent did not already supply a parenthesized signature.
+
+    For overloads like ``Foo::visit(RangeForStmt*)`` the agent's parameter list is the
+    disambiguating part; we keep it verbatim instead of producing ``Foo::visit(...)()``.
     """
-    if added == 0 and removed == 0:
-        return None
-    label = f"{name}()"
-    if is_deleted:
-        return f"    {label} DELETED -{removed}"
-    if is_new:
-        return f"    {label} NEW +{added}"
-    parts = [label, str(total)]
-    if added:
-        parts.append(f"+{added}")
-    if removed:
-        parts.append(f"-{removed}")
-    return "    " + " ".join(parts)
+    return name if name.rstrip().endswith(")") else f"{name}()"
 
 
-def _function_sort_key(entry: _FunctionEntry) -> tuple[int, int]:
-    if entry.head_range is not None:
-        return (0, entry.head_range[0])
-    if entry.base_range is not None:
-        return (1, entry.base_range[0])
-    return (2, 0)
+def _format_aligned_function(a: _AttributedEntry, name_width: int) -> str:
+    name = _function_label(a.entry.name)
+    total_str = _format_total(a)
+    added_str = f"+{a.added}" if a.added else ""
+    removed_str = f"-{a.removed}" if a.removed else ""
+    return (
+        f"{_FUNC_INDENT}{name:<{name_width}}  "
+        f"{total_str:>{_TOTAL_WIDTH}}  "
+        f"{added_str:>{_ADDED_WIDTH}}  "
+        f"{removed_str:>{_REMOVED_WIDTH}}"
+    ).rstrip()
+
+
+def _emit_file_section(book: _FileBookkeeping, attributed: list[_AttributedEntry]) -> tuple[list[str], int, int]:
+    """Render a single file's section (header + grouped/sorted/aligned function rows).
+
+    Returns ``(lines, per_func_added_total, per_func_removed_total)``. Trailing blank line is
+    appended by the caller, not here.
+    """
+    lines: list[str] = [format_header(_HeaderProxy(book))]
+    if not attributed:
+        if book.added or book.removed:
+            lines.append(f"{_GROUP_INDENT}# note: no per-function attribution available")
+        return lines, 0, 0
+
+    new_group = sorted([a for a in attributed if a.is_new], key=_impact_sort_key)
+    existing_group = sorted([a for a in attributed if not a.is_new], key=_impact_sort_key)
+
+    # Pad function names to the longest name across BOTH groups so the New: and Existing:
+    # subsections line up with each other.
+    all_names = [_function_label(a.entry.name) for a in new_group + existing_group]
+    name_width = max((len(n) for n in all_names), default=0)
+
+    if new_group:
+        lines.append(f"{_GROUP_INDENT}New:")
+        for a in new_group:
+            lines.append(_format_aligned_function(a, name_width))
+    if existing_group:
+        lines.append(f"{_GROUP_INDENT}Existing:")
+        for a in existing_group:
+            lines.append(_format_aligned_function(a, name_width))
+
+    per_added = sum(a.added for a in attributed)
+    per_removed = sum(a.removed for a in attributed)
+    added_drift = book.added - per_added
+    removed_drift = book.removed - per_removed
+    if abs(added_drift) > 5 or abs(removed_drift) > 5:
+        lines.append(
+            f"{_GROUP_INDENT}# note: per-function +/- differs from file totals by "
+            f"+{added_drift} -{removed_drift}"
+        )
+    return lines, per_added, per_removed
 
 
 def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
@@ -188,36 +274,11 @@ def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
     by_path = _load_function_entries(jsonl_path)
 
     out_lines: list[str] = []
-    file_drift_notes: list[str] = []
     for s in summaries:
         book = _build_file_bookkeeping(s, output_dir)
-        header = format_header(_HeaderProxy(book))
-        out_lines.append(header)
-        entries = sorted(by_path.get(book.path, []), key=_function_sort_key)
-        per_func_added = 0
-        per_func_removed = 0
-        any_func_line = False
-        for entry in entries:
-            total, added, removed, is_new, is_deleted = _attribute_function(entry, book)
-            line = _format_function_line(entry.name, total, added, removed, is_new, is_deleted)
-            if line is None:
-                continue
-            out_lines.append(line)
-            per_func_added += added
-            per_func_removed += removed
-            any_func_line = True
-        if not any_func_line and (book.added or book.removed):
-            out_lines.append("    # note: no per-function attribution available")
-        else:
-            added_drift = book.added - per_func_added
-            removed_drift = book.removed - per_func_removed
-            if abs(added_drift) > 5 or abs(removed_drift) > 5:
-                note = (
-                    f"    # note: per-function +/- differs from file totals by "
-                    f"+{added_drift} -{removed_drift}"
-                )
-                out_lines.append(note)
-                file_drift_notes.append(f"{book.path}: {note.strip()}")
+        attributed = _attribute_all(by_path.get(book.path, []), book)
+        lines, _, _ = _emit_file_section(book, attributed)
+        out_lines.extend(lines)
         out_lines.append("")
     while out_lines and out_lines[-1] == "":
         out_lines.pop()
