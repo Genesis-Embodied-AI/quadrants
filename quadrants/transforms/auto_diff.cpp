@@ -1624,28 +1624,27 @@ class EliminateRecomputableAdStackPushes {
         continue;
       }
 
-      // Control-flow-cond consumers: `MakeAdjoint::visit(IfStmt)` (auto_diff.cpp:2131-) detects bare
-      // `AdStackLoadTopStmt` conds and emits a dedicated 1-push-per-execution snap-stack so the reverse
-      // IfStmt's cond reads the forward-time cond value rather than re-reading the stack at the consumer
-      // position (which sits BEFORE the per-iter pops in the reverse scope and would see a stale top).
-      // Compound conds rely on `BackupSSA`'s `load(op)` spill, which inserts a `LocalStore` immediately
-      // after the forward cond - per-iter, single alloca, last-write-wins.
+      // Control-flow-cond consumers: by the time the IR reaches this pass, every IfStmt cond and RangeFor begin/end
+      // is either a bare `AdStackLoadTopStmt` (loop-carried local promoted via `PromoteSSA2LocalVar` ->
+      // `AdStackAllocaJudger::visit(IfStmt|RangeForStmt)` -> `ReplaceLocalVarWithStacks`) or a stmt outside any
+      // adstack-bearing alloca (no load_top in the chain at all). `MakeAdjoint::visit(IfStmt)` (auto_diff.cpp around
+      // line 2452) caps the bare-load_top case with a 1-push-per-execution snap-stack when the if body itself pushes
+      // to the cond's backing stack so the reverse cond reads the forward-time value, not a stack top mutated by the
+      // body.
       //
-      // If we eliminate a stack whose load_top is the bare cond of an IfStmt (or feeds the begin/end of an
-      // inner RangeForStmt, by the same argument applied to MakeAdjoint::visit(RangeForStmt)), the rewrite
-      // turns the cond / loop-bound into an inlined recomputed SSA chain. The snap-stack guard at line
-      // 2157 stops firing (the cond is no longer a bare AdStackLoadTopStmt), and `BackupSSA`'s
-      // recomputable-clone fallback positions a fresh `AdStackLoadTopStmt` of an enclosing loop-carried
-      // stack at the consumer's IR location - which sits BEFORE the per-iter pops, returning the post-
-      // iteration value of the loop-carried stack instead of the iteration-k value the cond was originally
-      // computed against. Net effect: silent gradient corruption in any if/loop nested inside a dynamic
-      // for-loop with a loop-carried alloca.
+      // If we eliminate a stack whose load_top IS the bare cond of an IfStmt / inner RangeFor, the rewrite turns the
+      // cond / loop-bound into an inlined recomputed SSA chain. The snap-stack guard at the `AdStackLoadTopStmt`-cond
+      // check in `MakeAdjoint::visit(IfStmt)` stops firing (the cond is no longer bare), and `BackupSSA`'s clone path
+      // positions a fresh `AdStackLoadTopStmt` of an enclosing loop-carried stack at the consumer's IR location -
+      // which sits BEFORE the per-iter pops, returning the post-iteration value instead of the iteration-k value the
+      // cond was originally computed against. Net effect: silent gradient corruption in any if/loop nested inside a
+      // dynamic for-loop with a loop-carried alloca.
       //
-      // Keep stacks whose load_tops have such consumers. Note that this is structurally narrower than
-      // "don't eliminate stacks with cross-IR control-flow uses": `cmp_lt(load_top, threshold) -> IfStmt`
-      // is fine when the cond is THIS stack's pushed value (the stack itself is the cond stack), because
-      // that's the snap-stack-eligible shape. The consumer check below trips only on a load_top of THIS
-      // stack feeding directly into a control-flow-shaping operand of another stmt.
+      // Keep stacks whose load_tops have such consumers. The consumer check below trips only on a load_top of THIS
+      // stack feeding DIRECTLY into a control-flow-shaping operand of another stmt; that is also the exhaustive set
+      // of unsafe-elim shapes here, because compound-cond cases (arithmetic over a load_top feeding a cond) reach
+      // this pass with the cond rewritten into a separate adstack-promoted value via the alloca-promotion pipeline
+      // above and so look like the bare case from this guard's POV.
       // `irpass::analysis::gather_statements` walks via `BasicStmtVisitor`, whose visit overrides for
       // IfStmt / RangeForStmt / StructForStmt do not invoke the per-stmt test predicate on the container
       // itself - only on stmts inside their bodies. Walk container stmts manually here.
@@ -2465,16 +2464,29 @@ class MakeAdjoint : public ADTransform {
     Stmt *reverse_cond = if_stmt->cond;
     AdStackAllocaStmt *snap_stack_ptr = nullptr;
     // Narrow guard: only the bare `AdStackLoadTopStmt` shape needs the explicit snapshot below. A compound cond (e.g.
-    // `BinaryOp(cmp_lt, AdStackLoadTopStmt(x_stack), threshold)` from `if x < threshold` when `x` has been promoted to
-    // an adstack by `ReplaceLocalVarWithStacks`) is already handled correctly by `BackupSSA::generic_visit`'s
-    // else-branch (`load(op)` path at the end of that function): it spills the forward-time value of the whole cond
-    // stmt - including the embedded `AdStackLoadTopStmt` read - into a dedicated alloca via a `LocalStoreStmt` emitted
-    // immediately after the forward cond, then the reverse IfStmt's operand becomes a `LocalLoadStmt` of that alloca.
-    // That captures the forward-time cond exactly. The bare-`AdStackLoadTopStmt` case is special because
-    // `generic_visit` takes a different branch for that shape (clone-branch): it emits a fresh `AdStackLoadTopStmt` at
-    // reverse time, which re-reads the stack top AFTER the body's pushes and therefore sees the wrong cond value. The
-    // snap-stack below is the dedicated fix for that single shape - no recursive walk needed for compound conds
-    // because the spill branch already covers them.
+    // `cmp_lt(load_top(x_stack) + 0.1, threshold)` from `if x + 0.1 < threshold` when `x` has been promoted to an
+    // adstack by `ReplaceLocalVarWithStacks`) reaches this visitor as a BARE `AdStackLoadTopStmt` cond anyway - the
+    // cmp / arithmetic value goes through `PromoteSSA2LocalVar`'s required-defs set (the IfStmt cond path adds the
+    // cond's value-producing op), then `AdStackAllocaJudger::visit(IfStmt)` (around line 763) marks its alloca
+    // stack-needed because it feeds the cond, then `ReplaceLocalVarWithStacks` promotes the alloca to an adstack. By
+    // the time control reaches here, `if_stmt->cond` is `AdStackLoadTopStmt` of that snap-promoted adstack and the
+    // body of the if does NOT push to that stack (the cmp value is pushed once just before the IfStmt, never inside),
+    // so the `body_pushes_to_stack` guard below is false and we correctly skip the additional snap-stack. Per-iter
+    // cond values are preserved by the alloca-promotion pipeline.
+    //
+    // The bare-`AdStackLoadTopStmt` case the snap-stack below handles is the OTHER shape: a load_top whose backing
+    // stack IS pushed to inside the if body (e.g. short-circuit lowering of `&&` pushes the rhs onto the same stack
+    // that holds the cond). Without the snap-stack, `BackupSSA::generic_visit`'s clone-branch for `AdStackLoadTopStmt`
+    // emits a fresh `AdStackLoadTopStmt` at the reverse cursor, which then reads the post-body-push top and sees the
+    // wrong cond value. The snap-stack here decouples the cond value from the body's pushes by capturing it once just
+    // before the IfStmt and reading it back at the matching reverse cursor.
+    //
+    // Earlier comments here claimed that compound conds rely on `BackupSSA::generic_visit`'s `load(op)` else-branch
+    // ("single alloca, last-write-wins" spill) for correctness. That description was incomplete: the alloca-promotion-
+    // to-adstack pipeline catches compound conds before they reach BackupSSA, so the spill is a FALLBACK for shapes
+    // the alloca-promotion missed, not the load-bearing path for compound conds in general. Verified empirically on
+    // 2026-05-04 with a loop-carried local v + compound cond `v + 0.1 > threshold` + nonlinear use of v in the if
+    // body: gradients match analytic on origin/main and on C3.
     if (if_stmt->cond->is<AdStackLoadTopStmt>()) {
       auto *cond_stack = if_stmt->cond->as<AdStackLoadTopStmt>()->stack->as<AdStackAllocaStmt>();
       if (body_pushes_to_stack(if_stmt, cond_stack)) {
