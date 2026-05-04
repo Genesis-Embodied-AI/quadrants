@@ -6,13 +6,15 @@ For each source file changed in the PR (.py / .c / .cc / .cpp / .h / .hpp / .cu)
   ``<output_dir>/summary.json``        list of ``{path, language, total, added, removed}``
   ``<output_dir>/file_list.txt``       one path per line (same order as ``summary.json``)
   ``<output_dir>/report_header.md``    pre-formatted file-header lines (verbatim for the report)
+  ``<output_dir>/report_comment.md``   compact PR-comment markdown (table + totals line)
   ``<output_dir>/diffs/<path>.diff``   per-file unified diff vs. merge-base
   ``<output_dir>/base/<path>``         file content at merge-base (absent for newly added files)
 
 ``total`` is the number of code lines in the HEAD version of the file. ``added`` and ``removed`` are
 the number of code lines added or removed by this PR (vs. merge-base). A "code line" excludes blank
-lines and lines whose only non-whitespace content is a comment. C/C++ ``/* ... */`` block comments
-are stripped before counting.
+lines, lines whose only non-whitespace content is a comment, and (in Python) lines whose only token
+content is a string literal -- i.e. docstrings and continuation lines of multi-line strings. C/C++
+``/* ... */`` block comments are stripped before counting.
 
 The agent consumes these inputs to produce the per-function breakdown.
 """
@@ -20,10 +22,12 @@ The agent consumes these inputs to produce the per-function breakdown.
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import re
 import subprocess
 import sys
+import tokenize
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -119,23 +123,81 @@ def strip_cpp_comments(src: str) -> str:
     return "".join(out)
 
 
-def code_line_set(src: str, language: str) -> set[int]:
-    """Return 1-indexed line numbers in ``src`` whose content is "code" (not blank, not a comment)."""
-    if language == "cpp":
-        src = strip_cpp_comments(src)
+# Python tokens that DO NOT count as code on their own: comments, string literals (incl. docstrings
+# and continuation lines of multi-line strings), f-string string-portion tokens, the encoding
+# declaration, and structural newlines / indents that produce no executable text.
+_PY_NON_CODE_TOKEN_TYPES: set[int] = {
+    tokenize.COMMENT,
+    tokenize.STRING,
+    tokenize.NL,
+    tokenize.NEWLINE,
+    tokenize.ENCODING,
+    tokenize.INDENT,
+    tokenize.DEDENT,
+    tokenize.ENDMARKER,
+}
+for _name in ("FSTRING_START", "FSTRING_MIDDLE", "FSTRING_END"):
+    if hasattr(tokenize, _name):
+        _PY_NON_CODE_TOKEN_TYPES.add(getattr(tokenize, _name))
+
+
+def _python_code_line_set(src: str) -> set[int]:
+    """Lines of ``src`` (1-indexed) that contain at least one non-string, non-comment token.
+
+    Multi-line strings, docstrings, and continuation lines of multi-line strings are excluded.
+    A line that contains a string literal alongside real code (e.g. ``x = "foo"``) is still code,
+    because the ``=`` and ``x`` are non-excluded tokens on that line.
+    """
+    code_lines: set[int] = set()
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(src).readline))
+    except (tokenize.TokenizeError, IndentationError, SyntaxError):
+        # Malformed or partial source: fall back to a coarse heuristic that treats any non-blank
+        # non-``#`` line as code. Multi-line string lines may be over-counted in this fallback.
+        for idx, line in enumerate(src.splitlines(), start=1):
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                code_lines.add(idx)
+        return code_lines
+
+    for tok in tokens:
+        if tok.type in _PY_NON_CODE_TOKEN_TYPES:
+            continue
+        for line_no in range(tok.start[0], tok.end[0] + 1):
+            code_lines.add(line_no)
+    return code_lines
+
+
+def _cpp_code_line_set(src: str) -> set[int]:
+    """Lines of ``src`` (1-indexed) that contain at least one non-comment, non-blank character.
+
+    String literal contents are kept (a string literal is a code expression). ``// ...`` line
+    comments and ``/* ... */`` block comments are stripped first, so a line that holds only a
+    block comment becomes blank and is excluded.
+    """
+    src = strip_cpp_comments(src)
     code_lines: set[int] = set()
     for idx, line in enumerate(src.splitlines(), start=1):
         stripped = line.strip()
         if not stripped:
             continue
-        if language == "py" and stripped.startswith("#"):
-            continue
-        # After ``strip_cpp_comments`` line comments have been blanked, but defensively also skip
-        # any residual ``//`` (e.g. a line that was already in a malformed state).
-        if language == "cpp" and stripped.startswith("//"):
+        # Defensive: if ``strip_cpp_comments`` left a ``//`` (malformed source edge case), skip it.
+        if stripped.startswith("//"):
             continue
         code_lines.add(idx)
     return code_lines
+
+
+def code_line_set(src: str, language: str) -> set[int]:
+    """Return 1-indexed line numbers in ``src`` that contain code (not blank, not comment-only,
+    and -- for Python -- not string-literal-only)."""
+    if not src:
+        return set()
+    if language == "py":
+        return _python_code_line_set(src)
+    if language == "cpp":
+        return _cpp_code_line_set(src)
+    return set()
 
 
 HUNK_RE = re.compile(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
@@ -206,11 +268,40 @@ def format_header(s: FileSummary) -> str:
     return " ".join(parts)
 
 
+def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
+    """Render the compact PR-comment markdown: heading + per-file table + totals line.
+
+    The comment intentionally does NOT include the per-function breakdown; that lives in the
+    Check page (which the comment links to).
+    """
+    head = f"## PR change report (`{commit}`)\n" if commit else "## PR change report\n"
+    lines = [head]
+    if not summaries:
+        lines.append("No source files (.py, .c, .cc, .cpp, .h, .hpp, .cu) changed in this PR.")
+        return "\n".join(lines) + "\n"
+    lines.append("Code lines (excluding blank lines, comment-only lines, and Python multi-line strings).")
+    lines.append("")
+    lines.append("| File | LoC | Added | Removed |")
+    lines.append("|------|-----|-------|---------|")
+    total_added = 0
+    total_removed = 0
+    for s in summaries:
+        added_cell = f"+{s.added}" if s.added else ""
+        removed_cell = f"-{s.removed}" if s.removed else ""
+        lines.append(f"| `{s.path}` | {s.total} | {added_cell} | {removed_cell} |")
+        total_added += s.added
+        total_removed += s.removed
+    lines.append("")
+    lines.append(f"**Total**: {len(summaries)} file(s) changed, +{total_added} -{total_removed} code lines.")
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", required=True, help="PR base ref name (e.g. main)")
     parser.add_argument("--head-ref", default="HEAD", help="PR head ref / sha (default: HEAD)")
     parser.add_argument("--output-dir", required=True, help="Where to write summary.json + diffs/ + base/")
+    parser.add_argument("--commit-hash", default="", help="Short commit hash to embed in the comment heading")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -267,6 +358,8 @@ def main() -> int:
 
     headers = "\n".join(format_header(s) for s in summaries)
     (output_dir / "report_header.md").write_text(headers + ("\n" if headers else ""))
+
+    (output_dir / "report_comment.md").write_text(render_comment_markdown(summaries, args.commit_hash))
 
     print(f"Wrote summaries for {len(summaries)} file(s) to {output_dir}")
     if summaries:
