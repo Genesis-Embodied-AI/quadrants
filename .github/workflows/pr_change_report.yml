@@ -85,9 +85,12 @@ jobs:
           such function on its own line, with these keys:
             path : the file path, exactly as it appears in file_list.txt.
             name : the function or method name. C++ class methods MUST be
-                   "ClassName::method"; free functions are just "func"; top-level statements
-                   that are not inside any function/class go under the synthetic name
-                   "<module>".
+                   "ClassName::method"; free functions are just "func". Use the synthetic
+                   name "<module>" ONLY for top-level non-function code (imports,
+                   module-level constants, type-alias / dataclass declarations, free
+                   ``static`` C/C++ definitions, etc.) -- and ONLY when at least one ``+``
+                   or ``-`` line lands OUTSIDE every function/method body. Do NOT use
+                   "<module>" as a catch-all for an entire file.
             head : [start_line, end_line] in HEAD, both 1-indexed and inclusive (signature
                    line through closing brace / dedent), or null if the function was
                    DELETED by this PR.
@@ -106,6 +109,9 @@ jobs:
             - Use the touched_ranges.txt hints to narrow your reading -- you should not need
               to read whole large files. Read only enough HEAD and base context to bracket
               each touched function with confidence.
+            - Function ranges within a single file should NOT overlap each other. A
+              "<module>" range (when present) must NOT overlap any function/method range
+              you also emit for that file.
 
           Output: JSON Lines. ONE JSON object per line. Nothing else. NO code fences, NO
           preamble, NO closing remarks, NO commentary, NO blank lines between objects.

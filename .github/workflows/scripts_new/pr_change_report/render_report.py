@@ -264,7 +264,7 @@ def _emit_file_section(book: _FileBookkeeping, attributed: list[_AttributedEntry
     if abs(added_drift) > 5 or abs(removed_drift) > 5:
         lines.append(
             f"{_GROUP_INDENT}# note: per-function +/- differs from file totals by "
-            f"+{added_drift} -{removed_drift}"
+            f"added_drift={added_drift:+d} removed_drift={removed_drift:+d}"
         )
     return lines, per_added, per_removed
 
