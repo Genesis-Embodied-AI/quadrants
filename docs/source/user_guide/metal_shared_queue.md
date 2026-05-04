@@ -10,10 +10,19 @@ The `external_metal_command_queue` option lets you pass PyTorch's command queue 
 import quadrants as qd
 
 queue_ptr = get_mps_command_queue()   # see below
-qd.init(arch=qd.metal, external_metal_command_queue=queue_ptr)
+qd.init(
+    arch=qd.metal,
+    external_metal_command_queue=queue_ptr,
+    external_metal_command_queue_is_torch_queue=True,
+)
 ```
 
-Once initialised this way:
+Two flags work together:
+
+- `external_metal_command_queue` — the raw `MTLCommandQueue*` pointer. Quadrants dispatches all GPU work on this queue instead of creating its own.
+- `external_metal_command_queue_is_torch_queue` — set to `True` when the queue comes from PyTorch MPS. This tells Quadrants that PyTorch shares the same queue, so the explicit interop syncs can be safely skipped. Defaults to `False`, which preserves the sync calls even when an external queue is provided (useful when the external queue belongs to a non-PyTorch framework).
+
+Once initialised with both flags:
 
 - `to_torch(copy=False)` no longer calls `qd.sync()` internally.
 - `to_torch(copy=True)` no longer calls `torch.mps.synchronize()` after the copy.
@@ -84,7 +93,11 @@ torch.zeros(1, device="mps")        # trigger MPS init
 
 import quadrants as qd
 queue_ptr = get_mps_command_queue()
-qd.init(arch=qd.metal, external_metal_command_queue=queue_ptr)
+qd.init(
+    arch=qd.metal,
+    external_metal_command_queue=queue_ptr,
+    external_metal_command_queue_is_torch_queue=True,
+)
 ```
 
 ## What changes with a shared queue
@@ -110,5 +123,9 @@ try:
 except (AssertionError, OSError):
     queue_ptr = 0   # 0 means "create a new queue" (the default)
 
-qd.init(arch=qd.metal, external_metal_command_queue=queue_ptr)
+qd.init(
+    arch=qd.metal,
+    external_metal_command_queue=queue_ptr,
+    external_metal_command_queue_is_torch_queue=queue_ptr != 0,
+)
 ```

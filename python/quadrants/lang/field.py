@@ -153,7 +153,9 @@ def _recompute_metal_interop_sync() -> None:
     """Recompute and cache the Metal interop sync flag from the current config."""
     global _metal_needs_interop_sync_cached
     cfg = impl.current_cfg()
-    _metal_needs_interop_sync_cached = cfg.arch == _ARCH_METAL and not cfg.external_metal_command_queue
+    _metal_needs_interop_sync_cached = cfg.arch == _ARCH_METAL and not (
+        cfg.external_metal_command_queue and cfg.external_metal_command_queue_is_torch_queue
+    )
 
 
 def _clear_metal_interop_cache() -> None:

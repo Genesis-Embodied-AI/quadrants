@@ -53,7 +53,7 @@ def _get_mps_command_queue() -> int:
     return queue_ptr
 
 
-def _reinit_with_shared_queue():
+def _reinit_with_shared_queue(is_torch_queue=True):
     """Reset and re-init Quadrants with PyTorch MPS's shared command queue."""
     import torch
 
@@ -61,7 +61,11 @@ def _reinit_with_shared_queue():
         pytest.skip("PyTorch MPS not available")
     queue_ptr = _get_mps_command_queue()
     qd.reset()
-    qd.init(arch=qd.metal, external_metal_command_queue=queue_ptr)
+    qd.init(
+        arch=qd.metal,
+        external_metal_command_queue=queue_ptr,
+        external_metal_command_queue_is_torch_queue=is_torch_queue,
+    )
     return queue_ptr
 
 
@@ -70,6 +74,7 @@ def test_init_with_external_queue():
     """Quadrants initializes successfully with an external Metal command queue."""
     queue_ptr = _reinit_with_shared_queue()
     assert qd.cfg.external_metal_command_queue == queue_ptr
+    assert qd.cfg.external_metal_command_queue_is_torch_queue is True
 
     x = qd.field(dtype=qd.f32, shape=(16,))
 
@@ -87,6 +92,7 @@ def test_init_with_external_queue():
 def test_init_without_external_queue():
     """Default init (no external queue) still works and config field is 0."""
     assert qd.cfg.external_metal_command_queue == 0
+    assert qd.cfg.external_metal_command_queue_is_torch_queue is False
 
     x = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -152,3 +158,39 @@ def test_sync_skipped_with_shared_queue():
 
         _mps_sync_if_metal()
         mock_mps_sync.assert_not_called()
+
+
+@test_utils.test(arch=[qd.metal])
+def test_sync_preserved_with_non_torch_external_queue():
+    """When external queue is provided but is_torch_queue=False, syncs still fire."""
+    from unittest.mock import MagicMock, patch
+
+    import torch  # noqa: F401
+
+    _reinit_with_shared_queue(is_torch_queue=False)
+    assert qd.cfg.external_metal_command_queue != 0
+    assert qd.cfg.external_metal_command_queue_is_torch_queue is False
+
+    x = qd.field(dtype=qd.f32, shape=(4,))
+
+    @qd.kernel
+    def fill():
+        for i in x:
+            x[i] = 1.0
+
+    fill()
+
+    from quadrants.lang import impl
+
+    runtime = impl.get_runtime()
+    original_sync = runtime.sync
+    mock_sync = MagicMock(side_effect=original_sync)
+    with patch.object(runtime, "sync", mock_sync):
+        x.to_torch(copy=False)
+        mock_sync.assert_called()
+
+    with patch("torch.mps.synchronize") as mock_mps_sync:
+        from quadrants.lang.field import _mps_sync_if_metal
+
+        _mps_sync_if_metal()
+        mock_mps_sync.assert_called()
