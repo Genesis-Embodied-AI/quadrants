@@ -476,18 +476,22 @@ class ScalarNdarray(Ndarray):
 
         Args:
             dtype: Optional numpy dtype to cast the result to. ``None`` keeps the native ndarray dtype.
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
-        if copy is False:
+        if copy is not True:
             from quadrants.lang.field import (  # pylint: disable=C0415
                 _try_zerocopy_numpy,
             )
 
-            arr = _try_zerocopy_numpy(self, copy=False, is_ndarray=True)
+            arr = _try_zerocopy_numpy(self, copy=copy, is_ndarray=True)
             if arr is not None:
                 if dtype is not None and arr.dtype != dtype:
-                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
-                return arr
+                    if copy is False:
+                        raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                    # copy=None: fall through to the copy path for dtype conversion
+                else:
+                    return arr
 
         arr = self._ndarray_to_numpy()
         if dtype is not None and arr.dtype != dtype:
@@ -507,14 +511,17 @@ class ScalarNdarray(Ndarray):
         view just like ``to_numpy()`` does.
 
         Args:
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
-        if copy is False:
+        if copy is not True:
             from quadrants.lang.field import (  # pylint: disable=C0415
                 _try_zerocopy_torch,
             )
 
-            return _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
+            result = _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
+            if result is not None:
+                return result
 
         import torch  # pylint: disable=C0415
 

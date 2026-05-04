@@ -79,12 +79,13 @@ Quadrants' zero-copy interop has been designed with **PyTorch as the first-class
 ```python
 f = qd.field(qd.f32, shape=(1024,))
 
-view  = f.to_torch(copy=False)  # zero-copy view: aliases f's memory
+view  = f.to_torch(copy=False)  # zero-copy view: aliases f's memory, or ValueError
+auto  = f.to_torch(copy=None)   # zero-copy if possible, otherwise copy
 clone = f.to_torch(copy=True)   # independent copy (default)
-auto  = f.to_torch()            # same as copy=True
+plain = f.to_torch()            # same as copy=True
 ```
 
-When using `copy=False`, modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated -- typically on `qd.init()` or `qd.reset()`, after which a fresh call to `to_torch(copy=False)` / `to_numpy(copy=False)` returns a new view.
+When using `copy=False` or `copy=None` (when zero-copy succeeds), modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated -- typically on `qd.init()` or `qd.reset()`, after which a fresh call to `to_torch(copy=False)` / `to_numpy(copy=False)` returns a new view.
 
 ### When zero-copy is available
 
@@ -105,9 +106,10 @@ On **NumPy >= 2.1**, `to_numpy(copy=False)` returns a **writable** array (via a 
 | Value | Behaviour |
 |---|---|
 | `True` (default) | Independent copy via kernel. |
+| `None` | Zero-copy view via DLPack when available, otherwise falls back to a copy silently. |
 | `False` | Zero-copy view via DLPack, or `ValueError` if zero-copy is unsupported for this backend/dtype. |
 
-The default `copy=True` always returns a buffer that is safe to mutate without affecting the field/ndarray.
+The default `copy=True` always returns a buffer that is safe to mutate without affecting the field/ndarray. Use `copy=None` when you want zero-copy as a best-effort optimisation without having to handle exceptions — it gives you a view when possible and a safe copy otherwise.
 
 ### Examples
 
@@ -306,8 +308,9 @@ print(x.grad[0])  # 4.0
 |--------|-------------|-------------------|---------------------|
 | `to_numpy()` / `from_numpy()` (default) | yes | yes | yes |
 | `to_torch()` / `from_torch()` (default) | yes | yes | yes |
+| `to_numpy(copy=None)` / `to_torch(copy=None)` | no when possible, yes otherwise | yes | yes |
 | `to_numpy(copy=False)` / `to_torch(copy=False)` | no (DLPack view) | yes | yes |
 | `to_dlpack()` | no (raw capsule) | yes | yes |
 | Direct pass-through | no | no | yes (as kernel arg) |
 
-The `copy` parameter is supported on `to_numpy()` and `to_torch()` for `ScalarField`, `MatrixField` (and `VectorField`), `StructField`, and all `Ndarray` types. See [Zero-copy interop via DLPack](#zero-copy-interop-via-dlpack) for the support matrix and lifetime rules.
+The `copy` parameter is supported on `to_numpy()` and `to_torch()` for `ScalarField`, `MatrixField` (and `VectorField`), `StructField`, `qd.Tensor`, and all `Ndarray` types. See [Zero-copy interop via DLPack](#zero-copy-interop-via-dlpack) for the support matrix and lifetime rules.
