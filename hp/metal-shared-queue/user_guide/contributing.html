@@ -536,6 +536,29 @@
 <p>Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the “wrong” place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.</p>
 <p>The agent reports up to 5 violations, each annotated with the host file’s hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
 </section>
+<section id="pr-change-report-pr-change-report-yml">
+<h3>PR change report (<code class="docutils literal notranslate"><span class="pre">pr_change_report.yml</span></code>)<a class="headerlink" href="#pr-change-report-pr-change-report-yml" title="Link to this heading">#</a></h3>
+<p>Posts a fresh PR comment on every push pointing at a GitHub Check whose page contains a per-file / per-function breakdown of code-line additions and removals. “Code lines” exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal — i.e. docstrings and continuation lines of multi-line strings. C/C++ <code class="docutils literal notranslate"><span class="pre">/*</span> <span class="pre">…</span> <span class="pre">*/</span></code> block comments are stripped before counting.</p>
+<p>Files are sorted by added lines descending. Within each file, functions are split into a <code class="docutils literal notranslate"><span class="pre">New:</span></code> group (added by this PR) and an <code class="docutils literal notranslate"><span class="pre">Existing:</span></code> group (modified or deleted), and within each group sorted by added lines descending. Sample shape:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">quadrants</span><span class="o">/</span><span class="n">program</span><span class="o">/</span><span class="n">program_stream</span><span class="o">.</span><span class="n">cpp</span> <span class="mi">151</span> <span class="o">+</span><span class="mi">151</span>
+    <span class="n">New</span><span class="p">:</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">create_event</span><span class="p">()</span>             <span class="n">NEW</span>      <span class="o">+</span><span class="mi">18</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">create_stream</span><span class="p">()</span>            <span class="n">NEW</span>      <span class="o">+</span><span class="mi">18</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">record_event</span><span class="p">()</span>             <span class="n">NEW</span>      <span class="o">+</span><span class="mi">15</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">destroy_event</span><span class="p">()</span>            <span class="n">NEW</span>      <span class="o">+</span><span class="mi">13</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">destroy_stream</span><span class="p">()</span>           <span class="n">NEW</span>      <span class="o">+</span><span class="mi">13</span>
+
+<span class="n">python</span><span class="o">/</span><span class="n">quadrants</span><span class="o">/</span><span class="n">lang</span><span class="o">/</span><span class="n">stream</span><span class="o">.</span><span class="n">py</span> <span class="mi">111</span> <span class="o">+</span><span class="mi">111</span>
+    <span class="n">New</span><span class="p">:</span>
+      <span class="n">Event</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>              <span class="n">NEW</span>       <span class="o">+</span><span class="mi">9</span>
+      <span class="n">Stream</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>             <span class="n">NEW</span>       <span class="o">+</span><span class="mi">9</span>
+      <span class="n">Event</span><span class="o">.</span><span class="n">_destroy_prog</span><span class="p">()</span>        <span class="n">NEW</span>       <span class="o">+</span><span class="mi">8</span>
+      <span class="n">Stream</span><span class="o">.</span><span class="n">_destroy_prog</span><span class="p">()</span>       <span class="n">NEW</span>       <span class="o">+</span><span class="mi">8</span>
+      <span class="n">Event</span><span class="o">.</span><span class="fm">__del__</span><span class="p">()</span>              <span class="n">NEW</span>       <span class="o">+</span><span class="mi">7</span>
+</pre></div>
+</div>
+<p>This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
 </section>
 </section>
 
@@ -602,6 +625,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deleted-comments-check-check-deleted-comments-yml">Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#test-coverage-check-check-test-coverage-yml">Test coverage check (<code class="docutils literal notranslate"><span class="pre">check_test_coverage.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#feature-factorization-check-check-feature-factorization-yml">Feature factorization check (<code class="docutils literal notranslate"><span class="pre">check_feature_factorization.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pr-change-report-pr-change-report-yml">PR change report (<code class="docutils literal notranslate"><span class="pre">pr_change_report.yml</span></code>)</a></li>
 </ul>
 </li>
 </ul>
