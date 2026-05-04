@@ -2,7 +2,7 @@ import numbers
 import threading
 import weakref
 from types import FunctionType, MethodType
-from typing import TYPE_CHECKING, Any, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence
 
 import numpy as np
 
@@ -586,12 +586,11 @@ def get_runtime() -> PyQuadrants:
     return pyquadrants
 
 
-_reset_hooks: list[callable] = []
+_reset_hooks: list[Callable[[], None]] = []
 
 
-def on_reset(hook: callable) -> None:
-    """Register a callback to be invoked on ``reset()``.  Subscribers use this
-    to invalidate module-level caches without ``impl.py`` knowing about them."""
+def on_reset(hook: Callable[[], None]) -> None:
+    """Register a callback to be invoked on ``reset()``.  Invalidates module-level caches without coupling."""
     _reset_hooks.append(hook)
 
 

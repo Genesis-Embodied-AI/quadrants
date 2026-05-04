@@ -1,14 +1,12 @@
 """Metal interop synchronisation helpers.
 
-When Quadrants and PyTorch MPS use separate Metal command queues, explicit CPU-side syncs
-(``qd.sync()`` and ``torch.mps.synchronize()``) are needed at every interop point to guarantee
-data visibility.  When both frameworks share a single command queue (via
-``external_metal_command_queue`` + ``external_metal_command_queue_is_torch_queue``), Metal's
+When Quadrants and PyTorch MPS use separate Metal command queues, explicit CPU-side syncs (``qd.sync()`` and
+``torch.mps.synchronize()``) are needed at every interop point to guarantee data visibility.  When both frameworks share
+a single command queue (via ``external_metal_command_queue`` + ``external_metal_command_queue_is_torch_queue``), Metal's
 sequential command buffer ordering makes these syncs unnecessary.
 
-This module caches the "do we need interop sync?" decision and exposes it to ``field.py``
-and other consumers.  The cache is lazily populated on first access and invalidated on
-``qd.reset()`` via the ``impl.on_reset`` hook.
+This module caches the "do we need interop sync?" decision and exposes it to ``field.py`` and other consumers.  The
+cache is lazily populated on first access and invalidated on ``qd.reset()`` via the ``impl.on_reset`` hook.
 """
 
 from __future__ import annotations
