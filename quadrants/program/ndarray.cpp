@@ -98,6 +98,10 @@ Ndarray::Ndarray(DeviceAllocation &devalloc,
 
 Ndarray::~Ndarray() {
   if (prog_) {
+    // Drop any cached `ndarray_data_gen` entry keyed by `&ndarray_alloc_` before the holder address can be reused
+    // by a future Ndarray allocation. Without this, a new Ndarray that happens to occupy the same heap address
+    // would pick up the destroyed ndarray's last generation counter and could falsely match a cache snapshot.
+    prog_->adstack_cache().erase_ndarray_data_gen(const_cast<DeviceAllocation *>(&ndarray_alloc_));
     ndarray_alloc_.device->dealloc_memory(ndarray_alloc_);
   }
 }

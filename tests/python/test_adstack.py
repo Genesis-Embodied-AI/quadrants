@@ -2151,47 +2151,85 @@ def test_adstack_inner_range_bounded_by_ndarray_read_at_outer_index(ndarray_kind
         assert x.grad[i] == pytest.approx(expected, rel=1e-5)
 
 
+@pytest.mark.parametrize(
+    "trip_count_source",
+    ["qd_ndarray", "field"],
+    ids=["qd_ndarray", "field"],
+)
 @test_utils.test(require=qd.extension.adstack)
-def test_adstack_metadata_cache_invalidates_on_qd_ndarray_host_mutation():
-    # Pins per-task adstack metadata cache invalidation against host-side ndarray writes. A reverse-mode kernel
-    # whose inner trip count is `range(n[i])` over a `qd.ndarray` populates the cache on the first launch with
-    # `max_size = n[i]` evaluated against the current ndarray contents. A subsequent host-side mutation via
-    # `Ndarray::write` (no kernel involvement) must bump `ndarray_data_gen` so the next launch evicts the cache
-    # entry and re-runs the sizer against the new values.
+def test_adstack_metadata_cache_invalidates_on_host_mutation(trip_count_source):
+    # Pins per-task adstack metadata cache invalidation against host-side mutation of the structure that supplies
+    # the inner trip count. A reverse-mode kernel whose inner range is `range(n[i])` populates the cache on the
+    # first launch with `max_size = n[i]` evaluated against the current contents. A subsequent host-side mutation
+    # via `Ndarray::write` (qd.ndarray case) or via the `SNodeRwAccessorsBank` writer kernel (field case) must
+    # bump the matching generation counter so the next launch evicts the entry and re-runs the sizer.
     #
-    # Internal details: the cache key on every backend is `(AdStackSizingInfo *, snode_write_gen, ndarray_data_gen)`.
-    # Without the host-mutation bump, the second launch sees the same key, returns the stale `max_size` for the
-    # previous ndarray contents, and the reverse pass walks the wrong number of inner iters per outer iteration.
-    # On Metal the symptom is heap reads from out-of-bounds slots that produce garbage gradients (e.g. `x.grad[k]`
-    # in the dozens instead of the analytical `0.8`); on CPU the host-eval path replays observed reads against the
-    # mutated ndarray and recovers without the explicit gen bump, so the test asserts gradient values rather than
-    # an overflow trap to catch the bug on every backend uniformly.
+    # Internal details: the cache key on every backend is `(AdStackSizingInfo *, snode_write_gen[snode_ids],
+    # ndarray_data_gen[devalloc])`. The qd.ndarray path goes through `ndarray_data_gen` keyed by the
+    # `DeviceAllocation` holder address; the field path goes through `snode_write_gen` keyed by `SNode::id`.
+    # Without the bump on either side the second launch sees the same key, returns the stale `max_size` for the
+    # previous contents, and the reverse pass walks the wrong number of inner iters per outer iteration. On Metal
+    # the symptom is heap reads from out-of-bounds slots that produce garbage gradients (e.g. `x.grad[k]` in the
+    # dozens instead of the analytical `0.8`); on CPU the host-eval path replays observed reads and recovers
+    # without the explicit gen bump, so the test asserts gradient values rather than an overflow trap to catch the
+    # bug on every backend uniformly.
     N = 4
     N_X = 16
 
     x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
     loss = qd.field(qd.f32, shape=(), needs_grad=True)
 
-    @qd.kernel
-    def compute(n: qd.types.ndarray(dtype=qd.i32, ndim=1)):
-        for i_e in range(n.shape[0]):
-            accum = 0.0
-            for j in range(n[i_e]):
-                accum = accum + x[j] * x[j]
-            loss[None] += accum
+    if trip_count_source == "qd_ndarray":
+        n_obj = qd.ndarray(qd.i32, shape=(N,))
 
-    n_arr = qd.ndarray(qd.i32, shape=(N,))
-    for i in range(N):
-        n_arr[i] = 8
+        @qd.kernel
+        def compute(n: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+            for i_e in range(n.shape[0]):
+                accum = 0.0
+                for j in range(n[i_e]):
+                    accum = accum + x[j] * x[j]
+                loss[None] += accum
 
+        def set_n(val):
+            for i in range(N):
+                n_obj[i] = val
+
+        def call_compute():
+            compute(n_obj)
+
+        def call_compute_grad():
+            compute.grad(n_obj)
+
+    else:
+        n_obj = qd.field(qd.i32, shape=(N,))
+
+        @qd.kernel
+        def compute():
+            for i_e in range(N):
+                accum = 0.0
+                for j in range(n_obj[i_e]):
+                    accum = accum + x[j] * x[j]
+                loss[None] += accum
+
+        def set_n(val):
+            for i in range(N):
+                n_obj[i] = val
+
+        def call_compute():
+            compute()
+
+        def call_compute_grad():
+            compute.grad()
+
+    set_n(8)
     for i in range(N_X):
         x[i] = 0.1
     loss[None] = 0.0
-    compute(n_arr)
+    call_compute()
     loss.grad[None] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
-    compute.grad(n_arr)
+    call_compute_grad()
     qd.sync()
     assert loss[None] == pytest.approx(N * 8 * 0.01, rel=1e-5)
     for k in range(8):
@@ -2199,17 +2237,15 @@ def test_adstack_metadata_cache_invalidates_on_qd_ndarray_host_mutation():
     for k in range(8, N_X):
         assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
 
-    for i in range(N):
-        n_arr[i] = 16
-
+    set_n(16)
     for i in range(N_X):
         x[i] = 0.1
     loss[None] = 0.0
-    compute(n_arr)
+    call_compute()
     loss.grad[None] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
-    compute.grad(n_arr)
+    call_compute_grad()
     qd.sync()
     assert loss[None] == pytest.approx(N * 16 * 0.01, rel=1e-5)
     for k in range(N_X):

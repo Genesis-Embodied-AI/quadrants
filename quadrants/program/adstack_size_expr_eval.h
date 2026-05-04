@@ -126,6 +126,13 @@ class AdStackCache {
   void bump_ndarray_data_gen(void *devalloc_ptr) {
     ++ndarray_data_gen_[devalloc_ptr];
   }
+  // Drop a per-DeviceAllocation entry. Called from `Ndarray::~Ndarray()` so the holder address can be reused by a
+  // future allocation without inheriting the destroyed ndarray's stale generation. Leftover snapshots in
+  // `per_task_ad_stack_cache_` / `llvm_per_task_ad_stack_cache_` referencing the dropped key fall back to gen=0
+  // on the next lookup (their stored snapshot will not match), which forces a fresh sizer dispatch and self-heals.
+  void erase_ndarray_data_gen(void *devalloc_ptr) {
+    ndarray_data_gen_.erase(devalloc_ptr);
+  }
 
  private:
   std::unordered_map<const SerializedSizeExpr *, SizeExprCacheEntry> size_expr_cache_;
