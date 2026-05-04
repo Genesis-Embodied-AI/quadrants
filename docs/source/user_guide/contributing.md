@@ -168,4 +168,4 @@ quadrants/transforms/auto_diff.cpp 2540 +363 -3
       ...
 ```
 
-The deterministic phase (`scripts_new/pr_change_report/build_inputs.py`) computes per-file totals + diffs + base/HEAD contents. An agent then identifies, for each file, the line ranges of functions whose body intersects a diff hunk; this is the only AI-driven step. The deterministic phase 2 (`render_report.py`) consumes the agent's JSONL output plus the pre-computed inputs to produce the final per-function counts and the report. The Check page holds the full report (heading + summary table + per-function breakdown); the PR comment is the compact summary table with a link to the Check page. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
