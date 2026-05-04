@@ -66,9 +66,17 @@ class ProgramImpl {
   virtual std::size_t get_snode_num_dynamically_allocated(SNode *snode, uint64 *result_buffer) = 0;
 
   /**
-   * Perform a backend synchronization.
+   * Drain the backend command queue. Does not raise.
    */
   virtual void synchronize() = 0;
+
+  /**
+   * Drain the queue and raise on any pending user-visible assert (e.g. adstack overflow). Override on
+   * backends that have such asserts.
+   */
+  virtual void synchronize_and_assert() {
+    synchronize();
+  }
 
   virtual StreamSemaphore flush() {
     synchronize();

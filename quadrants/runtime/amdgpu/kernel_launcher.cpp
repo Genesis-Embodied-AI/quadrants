@@ -149,7 +149,10 @@ bool KernelLauncher::on_amdgpu_device(void *ptr) {
 
 void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
-  auto launcher_ctx = contexts_[handle.get_launch_id()];
+  // Mutable reference: per-handle persistent buffers are lazy-allocated / grow on demand on the first launch of
+  // each kernel. Recursive launches from `publish_adstack_metadata`'s host-eval (snode-reader kernels) hit a
+  // *different* handle's `Context` and so cannot clobber the parent's `arg_buffer_dev_ptr` / `runtime_context_dev_ptr`.
+  auto &launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();
   auto *amdgpu_module = launcher_ctx.jit_module;
   const auto &parameters = *launcher_ctx.parameters;
@@ -171,7 +174,18 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   //   Memory access fault by GPU node-1 (Agent handle: 0xeda5ca0) on address
   //   (nil). Reason: Page not present or supervisor privilege.
   // if you don't allocate it.
-  AMDGPUDriver::get_instance().malloc((void **)&device_result_buffer, std::max(ctx.result_buffer_size, sizeof(uint64)));
+  // Launcher-global persistent `result_buffer`: see `kernel_launcher.h` for why this one stays shared across handles
+  // (kernels write it, host reads it back synchronously before any next reader runs).
+  const std::size_t needed_result = std::max(ctx.result_buffer_size, sizeof(uint64));
+  if (needed_result > persistent_result_buffer_capacity_) {
+    if (persistent_result_buffer_dev_ptr_ != nullptr) {
+      AMDGPUDriver::get_instance().mem_free_async(persistent_result_buffer_dev_ptr_, nullptr);
+    }
+    const std::size_t new_cap = std::max(needed_result, 2 * persistent_result_buffer_capacity_);
+    AMDGPUDriver::get_instance().malloc_async(&persistent_result_buffer_dev_ptr_, new_cap, nullptr);
+    persistent_result_buffer_capacity_ = new_cap;
+  }
+  device_result_buffer = static_cast<char *>(persistent_result_buffer_dev_ptr_);
 
   for (int i = 0; i < (int)parameters.size(); i++) {
     const auto &kv = parameters[i];
@@ -243,15 +257,26 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   }
   char *device_arg_buffer = nullptr;
   if (ctx.arg_buffer_size > 0) {
-    AMDGPUDriver::get_instance().malloc((void **)&device_arg_buffer, ctx.arg_buffer_size);
-    AMDGPUDriver::get_instance().memcpy_host_to_device(device_arg_buffer, ctx.get_context().arg_buffer,
-                                                       ctx.arg_buffer_size);
+    if (ctx.arg_buffer_size > launcher_ctx.arg_buffer_capacity) {
+      if (launcher_ctx.arg_buffer_dev_ptr != nullptr) {
+        AMDGPUDriver::get_instance().mem_free_async(launcher_ctx.arg_buffer_dev_ptr, nullptr);
+      }
+      const std::size_t new_cap = std::max<std::size_t>(ctx.arg_buffer_size, 2 * launcher_ctx.arg_buffer_capacity);
+      AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.arg_buffer_dev_ptr, new_cap, nullptr);
+      launcher_ctx.arg_buffer_capacity = new_cap;
+    }
+    device_arg_buffer = static_cast<char *>(launcher_ctx.arg_buffer_dev_ptr);
+    AMDGPUDriver::get_instance().memcpy_host_to_device_async(device_arg_buffer, ctx.get_context().arg_buffer,
+                                                             ctx.arg_buffer_size, nullptr);
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
-  void *context_pointer;
   int arg_size = sizeof(RuntimeContext *);
-  AMDGPUDriver::get_instance().malloc((void **)&context_pointer, sizeof(RuntimeContext));
-  AMDGPUDriver::get_instance().memcpy_host_to_device(context_pointer, &ctx.get_context(), sizeof(RuntimeContext));
+  if (launcher_ctx.runtime_context_dev_ptr == nullptr) {
+    AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext), nullptr);
+  }
+  void *context_pointer = launcher_ctx.runtime_context_dev_ptr;
+  AMDGPUDriver::get_instance().memcpy_host_to_device_async(context_pointer, &ctx.get_context(), sizeof(RuntimeContext),
+                                                           nullptr);
 
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
@@ -260,9 +285,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
   }
   QD_TRACE("Launching kernel");
-  if (ctx.arg_buffer_size > 0) {
-    AMDGPUDriver::get_instance().mem_free(device_arg_buffer);
-  }
+  // Persistent scratch: no per-launch free for arg_buffer. The scratch lives until the launcher is destroyed.
   if (ctx.result_buffer_size > 0) {
     AMDGPUDriver::get_instance().memcpy_device_to_host(host_result_buffer, device_result_buffer,
                                                        ctx.result_buffer_size);
@@ -276,16 +299,25 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       executor->deallocate_memory_on_device(itr->second.second);
     }
   }
-  // Since we always allocating above then we should always free
-  AMDGPUDriver::get_instance().mem_free(device_result_buffer);
-  // Free the per-launch `RuntimeContext` device allocation. `hipFree` synchronizes implicitly with pending
-  // kernels on the device, so this is safe even when the launches above were asynchronous. Done here rather
-  // than through `AMDGPUContext`'s deferred free list because that list used to be drained by
-  // `LlvmRuntimeExecutor::synchronize`, which is also called from `fetch_result_uint64` during
-  // `ensure_adstack_heap`'s field-pointer query -- that path would hipFree `context_pointer` mid-launch, and
-  // HIP could recycle the freed address for the adstack heap allocated right after, clobbering the
-  // `RuntimeContext` the next task still reads from.
-  AMDGPUDriver::get_instance().mem_free(context_pointer);
+  // Persistent scratch: no per-launch free for the per-handle `arg_buffer` / `runtime_context` or the launcher-global
+  // `result_buffer`. All three live until the launcher is destroyed; the dtor handles the final `mem_free_async`.
+}
+
+KernelLauncher::~KernelLauncher() {
+  // Free per-handle and launcher-global persistent scratch. `mem_free_async` queues behind any in-flight kernel
+  // reads on the default stream, so the bytes stay valid until the launcher actually goes away. Skipped when the
+  // buffer was never allocated (kernel was never launched).
+  for (auto &launcher_ctx : contexts_) {
+    if (launcher_ctx.arg_buffer_dev_ptr != nullptr) {
+      AMDGPUDriver::get_instance().mem_free_async(launcher_ctx.arg_buffer_dev_ptr, nullptr);
+    }
+    if (launcher_ctx.runtime_context_dev_ptr != nullptr) {
+      AMDGPUDriver::get_instance().mem_free_async(launcher_ctx.runtime_context_dev_ptr, nullptr);
+    }
+  }
+  if (persistent_result_buffer_dev_ptr_ != nullptr) {
+    AMDGPUDriver::get_instance().mem_free_async(persistent_result_buffer_dev_ptr_, nullptr);
+  }
 }
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::CompiledKernelData &compiled) {
