@@ -435,3 +435,80 @@ def test_to_torch_copy_none_zerocopy_when_available(backend):
     np.testing.assert_array_equal(out.numpy(), src)
     out[0] = 999.0
     assert t.to_numpy(copy=True)[0] == 999.0
+
+
+# ----------------------------------------------------------------------
+# copy=None on Matrix / Vector types
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_matrix_to_numpy_copy_none(backend):
+    """copy=None on MatrixField / MatrixNdarray returns correct data without raising."""
+    t = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,), backend=backend)
+    src = np.arange(12, dtype=np.float32).reshape(3, 2, 2)
+    t.from_numpy(src)
+    arr = t.to_numpy(copy=None)
+    np.testing.assert_array_equal(arr, src)
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_matrix_to_torch_copy_none(backend):
+    """copy=None on MatrixField / MatrixNdarray returns correct torch tensor."""
+    torch = pytest.importorskip("torch")
+    t = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,), backend=backend)
+    src = np.arange(12, dtype=np.float32).reshape(3, 2, 2)
+    t.from_numpy(src)
+    out = t.to_torch(copy=None)
+    np.testing.assert_array_equal(out.numpy(), src)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_matrix_to_numpy_copy_none_dtype_fallback(backend):
+    """copy=None with dtype on MatrixField / MatrixNdarray silently falls back."""
+    t = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,), backend=backend)
+    src = np.arange(12, dtype=np.float32).reshape(3, 2, 2)
+    t.from_numpy(src)
+    arr = t.to_numpy(dtype=np.float64, copy=None)
+    assert arr.dtype == np.float64
+    np.testing.assert_array_equal(arr, src.astype(np.float64))
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_vector_to_numpy_copy_none(backend):
+    """copy=None on VectorField / VectorNdarray returns correct data without raising."""
+    t = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=backend)
+    src = np.arange(12, dtype=np.float32).reshape(4, 3)
+    t.from_numpy(src)
+    arr = t.to_numpy(copy=None)
+    np.testing.assert_array_equal(arr, src)
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_vector_to_torch_copy_none(backend):
+    """copy=None on VectorField / VectorNdarray returns correct torch tensor."""
+    torch = pytest.importorskip("torch")
+    t = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=backend)
+    src = np.arange(12, dtype=np.float32).reshape(4, 3)
+    t.from_numpy(src)
+    out = t.to_torch(copy=None)
+    np.testing.assert_array_equal(out.numpy(), src)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_vector_to_numpy_copy_none_dtype_fallback(backend):
+    """copy=None with dtype on VectorField / VectorNdarray silently falls back."""
+    t = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=backend)
+    src = np.arange(12, dtype=np.float32).reshape(4, 3)
+    t.from_numpy(src)
+    arr = t.to_numpy(dtype=np.float64, copy=None)
+    assert arr.dtype == np.float64
+    np.testing.assert_array_equal(arr, src.astype(np.float64))
