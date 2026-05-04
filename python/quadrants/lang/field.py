@@ -204,12 +204,15 @@ def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False, is_ndarray: 
 def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = False, is_ndarray: bool = False):
     """Try to return a zero-copy torch tensor via DLPack.
 
-    Only called when ``copy is False``. Returns the tensor on success. Raises ``ValueError`` when zero-copy is not
-    available. Does NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the copy=True
-    (kernel-copy) path instead.
+    Returns the tensor on success. When ``copy is False``, raises ``ValueError`` if zero-copy is not available. When
+    ``copy is None``, returns ``None`` if zero-copy is not available (allowing the caller to fall back to a copy). Does
+    NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the copy=True (kernel-copy)
+    path instead.
     """
     if not _can_zerocopy_field(field, is_scalar=is_scalar, is_ndarray=is_ndarray):
-        raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
+        if copy is False:
+            raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
+        return None
 
     import torch  # pylint: disable=C0415
     import torch.utils.dlpack  # pylint: disable=C0415
@@ -217,7 +220,9 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
     try:
         tc = torch.utils.dlpack.from_dlpack(field.to_dlpack())
     except RuntimeError as e:
-        raise ValueError(f"Zero-copy not available: {e}") from None
+        if copy is False:
+            raise ValueError(f"Zero-copy not available: {e}") from None
+        return None
     if impl.current_cfg().arch == _ARCH_METAL:
         impl.get_runtime().sync()
 
@@ -228,9 +233,11 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
             requested.index is not None and tc.device.index is not None and tc.device.index != requested.index
         )
         if type_mismatch or index_mismatch:
-            raise ValueError(
-                f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})"
-            )
+            if copy is False:
+                raise ValueError(
+                    f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})"
+                )
+            return None
 
     return tc
 
@@ -431,7 +438,8 @@ class Field:
         """Converts `self` to a numpy array.
 
         Args:
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Returns:
             numpy.ndarray: The result numpy array.
@@ -444,7 +452,8 @@ class Field:
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Returns:
             torch.tensor: The result torch tensor.
@@ -604,14 +613,17 @@ class ScalarField(Field):
 
         Args:
             dtype: Optional target numpy dtype.
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
-        if copy is False:
-            arr = _try_zerocopy_numpy(self, copy=False, is_scalar=True)
+        if copy is not True:
+            arr = _try_zerocopy_numpy(self, copy=copy, is_scalar=True)
             if arr is not None:
                 if dtype is not None and arr.dtype != dtype:
-                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
-                return arr
+                    if copy is False:
+                        raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                else:
+                    return arr
 
         if self.parent()._snode.ptr.type == _qd_core.SNodeType.dynamic:
             warn(
@@ -634,10 +646,13 @@ class ScalarField(Field):
 
         Args:
             device: Optional torch device for the returned tensor.
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
-        if copy is False:
-            return _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
+        if copy is not True:
+            result = _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
+            if result is not None:
+                return result
 
         import torch  # pylint: disable=C0415
 
