@@ -158,14 +158,21 @@ Posts a fresh PR comment on every push pointing at a GitHub Check whose page con
 Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR) and an `Existing:` group (modified or deleted), and within each group sorted by added lines descending. Sample shape:
 
 ```
-quadrants/transforms/auto_diff.cpp 2540 +363 -3
+quadrants/program/program_stream.cpp 151 +151
     New:
-      EliminateRecomputableAdStackPushes::run_one_pass()  NEW  +262
-      RecomputableChainCloner::clone_at()                 NEW   +25
-      ...
-    Existing:
-      BackupSSA::generic_visit()                           42    +8   -2
-      ...
+      StreamManager::create_event()             NEW      +18
+      StreamManager::create_stream()            NEW      +18
+      StreamManager::record_event()             NEW      +15
+      StreamManager::destroy_event()            NEW      +13
+      StreamManager::destroy_stream()           NEW      +13
+
+python/quadrants/lang/stream.py 111 +111
+    New:
+      Event.destroy()              NEW       +9
+      Stream.destroy()             NEW       +9
+      Event._destroy_prog()        NEW       +8
+      Stream._destroy_prog()       NEW       +8
+      Event.__del__()              NEW       +7
 ```
 
 This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
