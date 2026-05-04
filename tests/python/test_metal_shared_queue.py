@@ -133,7 +133,7 @@ def test_zerocopy_with_shared_queue():
 
 @test_utils.test(arch=[qd.metal])
 def test_sync_skipped_with_shared_queue():
-    """When using a shared queue, _mps_sync_if_metal and _try_zerocopy_torch skip explicit sync."""
+    """When using a shared queue, mps_sync_if_metal and _try_zerocopy_torch skip explicit sync."""
     from unittest.mock import patch
 
     import torch  # noqa: F401
@@ -154,9 +154,9 @@ def test_sync_skipped_with_shared_queue():
         mock_sync.assert_not_called()
 
     with patch("torch.mps.synchronize") as mock_mps_sync:
-        from quadrants.lang.field import _mps_sync_if_metal
+        from quadrants.lang._metal_interop import mps_sync_if_metal
 
-        _mps_sync_if_metal()
+        mps_sync_if_metal()
         mock_mps_sync.assert_not_called()
 
 
@@ -190,7 +190,7 @@ def test_sync_preserved_with_non_torch_external_queue():
         mock_sync.assert_called()
 
     with patch("torch.mps.synchronize") as mock_mps_sync:
-        from quadrants.lang.field import _mps_sync_if_metal
+        from quadrants.lang._metal_interop import mps_sync_if_metal
 
-        _mps_sync_if_metal()
+        mps_sync_if_metal()
         mock_mps_sync.assert_called()

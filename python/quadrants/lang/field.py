@@ -9,6 +9,7 @@ from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._logging import warn
 from quadrants.lang import impl
+from quadrants.lang._metal_interop import metal_needs_interop_sync, mps_sync_if_metal
 from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.lang.util import (
     in_python_scope,
@@ -144,39 +145,6 @@ _ARCH_CPU = frozenset({_qd_core.Arch.x64, _qd_core.Arch.arm64})
 
 _DLPACK_SUPPORTED_DTYPES = frozenset({f32, f64, i32, i64, u1})
 
-# Cached flag: True when Metal is active with separate command queues (sync needed at interop points).
-# Set by _recompute_metal_interop_sync() after qd.init(); cleared by impl.reset() via _clear_metal_interop_cache().
-_metal_needs_interop_sync_cached: bool | None = None
-
-
-def _recompute_metal_interop_sync() -> None:
-    """Recompute and cache the Metal interop sync flag from the current config."""
-    global _metal_needs_interop_sync_cached
-    cfg = impl.current_cfg()
-    _metal_needs_interop_sync_cached = cfg.arch == _ARCH_METAL and not (
-        cfg.external_metal_command_queue and cfg.external_metal_command_queue_is_torch_queue
-    )
-
-
-def _clear_metal_interop_cache() -> None:
-    """Invalidate the cached flag. Registered as a reset hook."""
-    global _metal_needs_interop_sync_cached
-    _metal_needs_interop_sync_cached = None
-
-
-_metal_interop_hook_registered = False
-
-
-def _metal_needs_interop_sync() -> bool:
-    """Return True when explicit sync is needed between Quadrants and PyTorch MPS (separate Metal queues)."""
-    global _metal_interop_hook_registered
-    if not _metal_interop_hook_registered:
-        impl.on_reset(_clear_metal_interop_cache)
-        _metal_interop_hook_registered = True
-    if _metal_needs_interop_sync_cached is None:
-        _recompute_metal_interop_sync()
-    return _metal_needs_interop_sync_cached  # type: ignore[return-value]
-
 
 def _compute_torch_mps_supports_dlpack_bytes_offset() -> bool:
     try:
@@ -251,7 +219,7 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
         tc = torch.utils.dlpack.from_dlpack(field.to_dlpack())
     except RuntimeError as e:
         raise ValueError(f"Zero-copy not available: {e}") from None
-    if _metal_needs_interop_sync():
+    if metal_needs_interop_sync():
         impl.get_runtime().sync()
 
     if device is not None:
@@ -266,22 +234,6 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
             )
 
     return tc
-
-
-def _mps_sync_if_metal():
-    """Call ``torch.mps.synchronize()`` when running on the Metal backend with separate command queues.
-
-    When Quadrants and PyTorch MPS use separate Metal command queues, ``qd.sync()`` only guarantees Quadrants writes are
-    complete. A subsequent ``.clone()`` or kernel copy is queued on the MPS stream and may execute *after* the next
-    Quadrants kernel overwrites the source buffer. We must also synchronize MPS after the copy.
-
-    When a shared command queue is configured (``external_metal_command_queue != 0``), Metal's sequential command buffer
-    semantics guarantee ordering automatically and no sync is needed.
-    """
-    if _metal_needs_interop_sync():
-        import torch  # pylint: disable=C0415
-
-        torch.mps.synchronize()
 
 
 class _DLPackV1Adapter:
@@ -681,7 +633,7 @@ class ScalarField(Field):
 
         tensor_to_ext_arr(self, arr)
         quadrants.lang.runtime_ops.sync()  # type: ignore  # TODO: can we remove .runtime_ops here?
-        _mps_sync_if_metal()
+        mps_sync_if_metal()
         return arr
 
     @python_scope

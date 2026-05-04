@@ -6,6 +6,7 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang import _ndarray_pickle, impl
+from quadrants.lang._metal_interop import mps_sync_if_metal
 
 # Cache enum value at module level for fast lookup in hot paths
 _arch_metal = _qd_core.Arch.metal
@@ -289,9 +290,7 @@ class Ndarray:
         layout_is_aos = 1
         ndarray_matrix_to_ext_arr(self, out, layout_is_aos, as_vector)
         impl.get_runtime().sync()
-        from quadrants.lang.field import _mps_sync_if_metal  # pylint: disable=C0415
-
-        _mps_sync_if_metal()
+        mps_sync_if_metal()
         return out
 
     @python_scope
@@ -527,9 +526,7 @@ class ScalarNdarray(Ndarray):
 
         ndarray_to_ext_arr(self, out)
         impl.get_runtime().sync()
-        from quadrants.lang.field import _mps_sync_if_metal  # pylint: disable=C0415
-
-        _mps_sync_if_metal()
+        mps_sync_if_metal()
         return out
 
     @python_scope
