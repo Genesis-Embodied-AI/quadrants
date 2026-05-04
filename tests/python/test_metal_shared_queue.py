@@ -7,6 +7,8 @@ import quadrants as qd
 
 from tests import test_utils
 
+pytestmark = pytest.mark.needs_torch
+
 
 def _get_mps_command_queue() -> int:
     """Extract PyTorch MPS's MTLCommandQueue* as a Python int.
