@@ -442,6 +442,10 @@ void Program::fill_ndarray_fast_u32(Ndarray *ndarray, uint32_t val) {
   // This is a temporary solution to bypass device api. Should be moved to CommandList once available in CUDA.
   program_impl_->fill_ndarray(ndarray->ndarray_alloc_,
                               ndarray->get_nelement() * ndarray->get_element_size() / sizeof(uint32_t), val);
+  // Host-issued device fill mutates the ndarray contents without going through a quadrants kernel, so
+  // `bump_writes_for_kernel_*` will not cover it. Bump explicitly using the same `&ndarray_alloc_` key the
+  // kernel launchers use, so any cached adstack-sizer metadata depending on this ndarray is evicted.
+  adstack_cache_->bump_ndarray_data_gen(&ndarray->ndarray_alloc_);
 }
 
 std::pair<const StructType *, size_t> Program::get_struct_type_with_data_layout(const StructType *old_ty,

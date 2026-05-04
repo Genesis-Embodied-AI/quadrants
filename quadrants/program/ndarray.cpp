@@ -1,5 +1,6 @@
 #include <numeric>
 
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/ndarray.h"
 #include "quadrants/program/program.h"
 #include "fp16.h"
@@ -185,6 +186,10 @@ void Ndarray::write(const std::vector<int> &I, TypedConstant val) const {
   staging_buf_->device->memcpy_internal(this->ndarray_alloc_.get_ptr(index * size_), staging_buf_->get_ptr(), size_);
 
   prog_->synchronize();
+  // Host-side mutation of the ndarray contents: bump the per-DeviceAllocation generation so any cached
+  // adstack-sizer metadata that depended on `ExternalTensorRead` of this ndarray is evicted on next launch.
+  // Keyed by the same `&ndarray_alloc_` the kernel launchers use in `bump_writes_for_kernel_*`.
+  prog_->adstack_cache().bump_ndarray_data_gen(const_cast<DeviceAllocation *>(&ndarray_alloc_));
 }
 
 int64 Ndarray::read_int(const std::vector<int> &i) {

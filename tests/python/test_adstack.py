@@ -2152,6 +2152,71 @@ def test_adstack_inner_range_bounded_by_ndarray_read_at_outer_index(ndarray_kind
 
 
 @test_utils.test(require=qd.extension.adstack)
+def test_adstack_metadata_cache_invalidates_on_qd_ndarray_host_mutation():
+    # Pins per-task adstack metadata cache invalidation against host-side ndarray writes. A reverse-mode kernel
+    # whose inner trip count is `range(n[i])` over a `qd.ndarray` populates the cache on the first launch with
+    # `max_size = n[i]` evaluated against the current ndarray contents. A subsequent host-side mutation via
+    # `Ndarray::write` (no kernel involvement) must bump `ndarray_data_gen` so the next launch evicts the cache
+    # entry and re-runs the sizer against the new values.
+    #
+    # Internal details: the cache key on every backend is `(AdStackSizingInfo *, snode_write_gen, ndarray_data_gen)`.
+    # Without the host-mutation bump, the second launch sees the same key, returns the stale `max_size` for the
+    # previous ndarray contents, and the reverse pass walks the wrong number of inner iters per outer iteration.
+    # On Metal the symptom is heap reads from out-of-bounds slots that produce garbage gradients (e.g. `x.grad[k]`
+    # in the dozens instead of the analytical `0.8`); on CPU the host-eval path replays observed reads against the
+    # mutated ndarray and recovers without the explicit gen bump, so the test asserts gradient values rather than
+    # an overflow trap to catch the bug on every backend uniformly.
+    N = 4
+    N_X = 16
+
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(n: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i_e in range(n.shape[0]):
+            accum = 0.0
+            for j in range(n[i_e]):
+                accum = accum + x[j] * x[j]
+            loss[None] += accum
+
+    n_arr = qd.ndarray(qd.i32, shape=(N,))
+    for i in range(N):
+        n_arr[i] = 8
+
+    for i in range(N_X):
+        x[i] = 0.1
+    loss[None] = 0.0
+    compute(n_arr)
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad(n_arr)
+    qd.sync()
+    assert loss[None] == pytest.approx(N * 8 * 0.01, rel=1e-5)
+    for k in range(8):
+        assert x.grad[k] == pytest.approx(N * 2 * 0.1, rel=1e-5)
+    for k in range(8, N_X):
+        assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
+
+    for i in range(N):
+        n_arr[i] = 16
+
+    for i in range(N_X):
+        x[i] = 0.1
+    loss[None] = 0.0
+    compute(n_arr)
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad(n_arr)
+    qd.sync()
+    assert loss[None] == pytest.approx(N * 16 * 0.01, rel=1e-5)
+    for k in range(N_X):
+        assert x.grad[k] == pytest.approx(N * 2 * 0.1, rel=1e-5)
+
+
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_inner_range_bounded_by_multidim_ndarray_read():
     # Pins multi-axis stride handling in the `ExternalTensorRead` evaluator. The sizer routes a reverse-mode inner trip
     # count `range(a[i, j])` through `SizeExpr::ExternalTensorRead(a, [var_i, var_j])` for a 2-D ndarray `a`; the host
