@@ -420,10 +420,12 @@ class MetalCommandList final : public CommandList {
 class MetalStream final : public Stream {
  public:
   // `mtl_command_queue` should be already retained.
-  explicit MetalStream(const MetalDevice &device, MTLCommandQueue_id mtl_command_queue);
+  // If `owns_queue` is false the stream will NOT release the queue on destruction (caller retains ownership).
+  explicit MetalStream(const MetalDevice &device, MTLCommandQueue_id mtl_command_queue, bool owns_queue = true);
   ~MetalStream() override;
 
   static MetalStream *create(const MetalDevice &device);
+  static MetalStream *create_with_external_queue(const MetalDevice &device, MTLCommandQueue_id external_queue);
   void destroy();
 
   MTLCommandQueue_id mtl_command_queue() const {
@@ -440,6 +442,7 @@ class MetalStream final : public Stream {
   const MetalDevice *device_;
   MTLCommandQueue_id mtl_command_queue_;
   std::vector<MTLCommandBuffer_id> pending_cmdbufs_;
+  bool owns_queue_{true};
   bool is_destroyed_{false};
 };
 
@@ -487,7 +490,8 @@ constexpr auto kMetalVertFunctionName = "vert_function";
 class MetalDevice final : public GraphicsDevice {
  public:
   // `mtl_device` should be already retained.
-  explicit MetalDevice(MTLDevice_id mtl_device);
+  // If `external_command_queue` is non-null, it is used instead of creating a new one (caller retains ownership).
+  explicit MetalDevice(MTLDevice_id mtl_device, MTLCommandQueue_id external_command_queue = nullptr);
   ~MetalDevice() override;
 
   Arch arch() const override {
@@ -498,6 +502,7 @@ class MetalDevice final : public GraphicsDevice {
   }
 
   static MetalDevice *create();
+  static MetalDevice *create_with_external_queue(uint64_t external_queue_ptr);
   void destroy();
 
   std::unique_ptr<Surface> create_surface(const SurfaceConfig &config) override;

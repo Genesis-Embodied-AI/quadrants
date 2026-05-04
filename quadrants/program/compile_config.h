@@ -105,6 +105,10 @@ struct CompileConfig {
 
   size_t cuda_stack_limit{0};
 
+  // Metal backend: if non-zero, use this as an externally-owned MTLCommandQueue* instead of creating a new one.
+  // The caller retains ownership and must keep the queue alive for the lifetime of the Quadrants runtime.
+  uint64_t external_metal_command_queue{0};
+
   CompileConfig();
 
   void fit();

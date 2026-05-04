@@ -218,7 +218,7 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
         tc = torch.utils.dlpack.from_dlpack(field.to_dlpack())
     except RuntimeError as e:
         raise ValueError(f"Zero-copy not available: {e}") from None
-    if impl.current_cfg().arch == _ARCH_METAL:
+    if impl.current_cfg().arch == _ARCH_METAL and not impl.current_cfg().external_metal_command_queue:
         impl.get_runtime().sync()
 
     if device is not None:
@@ -236,14 +236,16 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
 
 
 def _mps_sync_if_metal():
-    """Call ``torch.mps.synchronize()`` when running on the Metal backend, no-op otherwise.
+    """Call ``torch.mps.synchronize()`` when running on the Metal backend with separate command queues.
 
-    Quadrants and PyTorch MPS use separate Metal command queues, so ``qd.sync()`` only guarantees Quadrants writes are
+    When Quadrants and PyTorch MPS use separate Metal command queues, ``qd.sync()`` only guarantees Quadrants writes are
     complete. A subsequent ``.clone()`` or kernel copy is queued on the MPS stream and may execute *after* the next
     Quadrants kernel overwrites the source buffer. We must also synchronize MPS after the copy.
+
+    When a shared command queue is configured (``external_metal_command_queue != 0``), Metal's sequential command buffer
+    semantics guarantee ordering automatically and no sync is needed.
     """
-    # FIXME: DLPack may return old values on Apple Metal if sync is not systematically called manually.
-    if impl.current_cfg().arch == _ARCH_METAL:
+    if impl.current_cfg().arch == _ARCH_METAL and not impl.current_cfg().external_metal_command_queue:
         import torch  # pylint: disable=C0415
 
         torch.mps.synchronize()
