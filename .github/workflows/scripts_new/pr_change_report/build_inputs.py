@@ -8,6 +8,7 @@ For each source file changed in the PR (.py / .c / .cc / .cpp / .h / .hpp / .cu)
   ``<output_dir>/report_header.md``    pre-formatted file-header lines (verbatim for the report)
   ``<output_dir>/report_comment.md``   compact PR-comment markdown (table + totals line)
   ``<output_dir>/diffs/<path>.diff``   per-file unified diff vs. merge-base
+  ``<output_dir>/head/<path>``         HEAD content of the file (always present)
   ``<output_dir>/base/<path>``         file content at merge-base (absent for newly added files)
 
 ``total`` is the number of code lines in the HEAD version of the file. ``added`` and ``removed`` are
@@ -203,15 +204,15 @@ def code_line_set(src: str, language: str) -> set[int]:
 HUNK_RE = re.compile(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
 
-def diff_added_removed(diff_text: str, head_codes: set[int], base_codes: set[int]) -> tuple[int, int]:
-    """Count code-line additions and removals in a unified diff.
+def diff_changed_line_numbers(diff_text: str) -> tuple[list[int], list[int]]:
+    """Walk a unified diff and return ``(added_new_line_nos, removed_old_line_nos)``.
 
-    For each ``+`` line, the line number in the new file must be in ``head_codes``; for each ``-``
-    line, the line number in the old file must be in ``base_codes``. This way block comments are
-    excluded correctly because the code-line sets were computed with full block-comment stripping.
+    Each list contains the 1-indexed line number that each ``+`` (or ``-``) line maps to in the
+    new (or old) file -- one entry per diff line. Hunk headers, file headers and the
+    ``\\ No newline at end of file`` marker are skipped.
     """
-    added = 0
-    removed = 0
+    added: list[int] = []
+    removed: list[int] = []
     new_no = 0
     old_no = 0
     in_hunk = False
@@ -230,12 +231,10 @@ def diff_added_removed(diff_text: str, head_codes: set[int], base_codes: set[int
         if not in_hunk:
             continue
         if line.startswith("+"):
-            if new_no in head_codes:
-                added += 1
+            added.append(new_no)
             new_no += 1
         elif line.startswith("-"):
-            if old_no in base_codes:
-                removed += 1
+            removed.append(old_no)
             old_no += 1
         elif line.startswith(" "):
             new_no += 1
@@ -243,6 +242,72 @@ def diff_added_removed(diff_text: str, head_codes: set[int], base_codes: set[int
         elif line.startswith("\\"):
             continue
     return added, removed
+
+
+def diff_added_removed(diff_text: str, head_codes: set[int], base_codes: set[int]) -> tuple[int, int]:
+    """Count code-line additions and removals in a unified diff.
+
+    A ``+`` line is counted if its new-file line number is in ``head_codes``; a ``-`` line is
+    counted if its old-file line number is in ``base_codes``. This excludes block-comment
+    content correctly because the code-line sets were computed with full comment stripping.
+    """
+    added_lines, removed_lines = diff_changed_line_numbers(diff_text)
+    added = sum(1 for ln in added_lines if ln in head_codes)
+    removed = sum(1 for ln in removed_lines if ln in base_codes)
+    return added, removed
+
+
+def diff_touched_ranges(diff_text: str) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    """Return the (head_ranges, base_ranges) covered by hunks of ``diff_text``.
+
+    Each range is ``(start_line, end_line)`` 1-indexed inclusive. The head ranges cover the
+    new-file line numbers spanned by each hunk's ``+``/context lines; base ranges cover the
+    old-file line numbers spanned by ``-``/context lines. Useful as a hint to the agent about
+    where to look for changed functions without scanning the whole file.
+    """
+    head_ranges: list[tuple[int, int]] = []
+    base_ranges: list[tuple[int, int]] = []
+    new_no = 0
+    old_no = 0
+    head_start = base_start = None
+    head_last = base_last = None
+    for line in diff_text.splitlines():
+        if line.startswith("+++") or line.startswith("---"):
+            continue
+        if line.startswith("@@"):
+            if head_start is not None:
+                head_ranges.append((head_start, head_last))
+            if base_start is not None:
+                base_ranges.append((base_start, base_last))
+            m = HUNK_RE.match(line)
+            if not m:
+                head_start = base_start = head_last = base_last = None
+                continue
+            old_no = int(m.group(1))
+            new_no = int(m.group(3))
+            head_start = new_no
+            base_start = old_no
+            head_last = new_no - 1
+            base_last = old_no - 1
+            continue
+        if line.startswith("+"):
+            head_last = new_no
+            new_no += 1
+        elif line.startswith("-"):
+            base_last = old_no
+            old_no += 1
+        elif line.startswith(" "):
+            head_last = new_no
+            base_last = old_no
+            new_no += 1
+            old_no += 1
+        elif line.startswith("\\"):
+            continue
+    if head_start is not None and head_last >= head_start:
+        head_ranges.append((head_start, head_last))
+    if base_start is not None and base_last >= base_start:
+        base_ranges.append((base_start, base_last))
+    return head_ranges, base_ranges
 
 
 @dataclass
@@ -306,6 +371,7 @@ def main() -> int:
 
     output_dir = Path(args.output_dir)
     diffs_dir = output_dir / "diffs"
+    head_dir = output_dir / "head"
     base_dir = output_dir / "base"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -342,6 +408,7 @@ def main() -> int:
         added, removed = diff_added_removed(diff_text, head_codes, base_codes)
 
         write_file(diffs_dir / f"{path}.diff", diff_text)
+        write_file(head_dir / path, head_content)
         if base_content:
             write_file(base_dir / path, base_content)
 
@@ -360,6 +427,15 @@ def main() -> int:
     (output_dir / "report_header.md").write_text(headers + ("\n" if headers else ""))
 
     (output_dir / "report_comment.md").write_text(render_comment_markdown(summaries, args.commit_hash))
+
+    touched_lines = []
+    for s in summaries:
+        diff_text = (diffs_dir / f"{s.path}.diff").read_text()
+        head_ranges, base_ranges = diff_touched_ranges(diff_text)
+        head_str = ", ".join(f"{a}-{b}" for a, b in head_ranges) or "(none)"
+        base_str = ", ".join(f"{a}-{b}" for a, b in base_ranges) or "(none)"
+        touched_lines.append(f"{s.path}\n  head hunks: {head_str}\n  base hunks: {base_str}")
+    (output_dir / "touched_ranges.txt").write_text("\n".join(touched_lines) + ("\n" if touched_lines else ""))
 
     print(f"Wrote summaries for {len(summaries)} file(s) to {output_dir}")
     if summaries:

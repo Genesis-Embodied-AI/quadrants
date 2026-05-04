@@ -61,61 +61,72 @@ jobs:
           curl https://cursor.com/install -fsS | bash
           echo "$HOME/.cursor/bin" >> $GITHUB_PATH
 
-      - name: Generate per-function breakdown with Cursor agent
+      - name: Identify changed function ranges with Cursor agent
         if: steps.inputs.outputs.skip != 'true'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_KEY_HUGH }}
         run: |
           agent -p "$(cat <<'PROMPT'
-          You are producing a PR change report. Inputs are under /tmp/pr_change_report/ :
-            - summary.json     : list of {"path","language","total","added","removed"} for each
-                                 changed source file. Numbers are NON-comment, NON-blank code
-                                 lines (Python multi-line strings and docstrings also excluded),
-                                 computed deterministically. Treat them as authoritative.
-            - report_header.md : exact file-header lines you must use verbatim, e.g.
-                                   foo.py 700 +63 -5
-                                   blah.cpp 2000 +45 -20
-            - file_list.txt    : changed paths, one per line, in the order you must emit.
-            - diffs/<path>.diff : per-file unified diff vs merge-base.
-            - base/<path>      : full base content of that file (missing if newly added).
-          The HEAD content of each file is in the workspace (current checkout) at the same path.
+          You are identifying which functions were touched by a PR. Line counts and +/-
+          attribution are computed deterministically AFTER your output, so do NOT count
+          lines yourself.
 
-          Your task: for each path in file_list.txt, in order, emit:
-            1. The exact file-header line from report_header.md, verbatim, on its own line.
-            2. Indented (4 spaces) per-function lines, one per function/method that was added
-               or modified by this PR. Format:
-                  <name>() NEW +<added>                 (function did not exist on base)
-                  <name>() <total> +<added>             (only added code lines)
-                  <name>() <total> -<removed>           (only removed code lines)
-                  <name>() <total> +<added> -<removed>  (both)
-               where:
-                 - <total>   = current LoC of the function in HEAD (NON-comment, NON-blank;
-                               for Python, also exclude docstrings and multi-line-string-only
-                               continuation lines).
-                 - <added>   = code lines this function gained.
-                 - <removed> = code lines this function lost.
-               For top-level statements that are not inside a function/class, group them
-               under the synthetic name `<module>()`.
-            3. After the last function line for a file, a single blank line before the next
-               file's header.
+          Inputs under /tmp/pr_change_report/ :
+            - file_list.txt        changed source paths (.py / .c / .cc / .cpp / .h / .hpp /
+                                   .cu), one per line.
+            - touched_ranges.txt   per-file, the line-number ranges in HEAD and base that the
+                                   diff hunks cover. This tells you exactly where to look --
+                                   you should only need to inspect lines inside (or close to)
+                                   these ranges, not the whole file.
+            - diffs/<path>.diff    per-file unified diff vs merge-base.
+            - head/<path>          full HEAD content of that file (also reachable from the
+                                   workspace at the same path).
+            - base/<path>          full base content (missing if the file is newly added).
 
-          Constraints:
-            - Use function names as they appear in source. C++ class methods are
-              "ClassName::method". Free functions are just "func". Lambdas inside another
-              function may be skipped or grouped under their enclosing function.
-            - Only list functions whose +/- counts are non-zero. Do not include unchanged
-              functions.
-            - Do not invent functions that do not exist in HEAD or base.
-            - Sums of per-function +/- counts SHOULD MATCH the file-level +/- counts in
-              report_header.md. Small drift (1-2 lines) is acceptable for unusual hunks
-              (e.g. straddling block-comment boundaries) but if drift exceeds 5 lines on
-              either side, add ONE line below that file's section, indented 4 spaces:
-                  # note: per-function +/- differs from file totals by +N -M
-            - Output ONLY the report. No preamble, no headings, no closing remarks, no
-              code fences, no explanations.
+          For each file in file_list.txt, identify every function or method whose body
+          contains at least one ``+`` or ``-`` line in the diff. Emit ONE JSON object per
+          such function on its own line, with these keys:
+            path : the file path, exactly as it appears in file_list.txt.
+            name : the function or method name. C++ class methods MUST be
+                   "ClassName::method"; free functions are just "func"; top-level statements
+                   that are not inside any function/class go under the synthetic name
+                   "<module>".
+            head : [start_line, end_line] in HEAD, both 1-indexed and inclusive (signature
+                   line through closing brace / dedent), or null if the function was
+                   DELETED by this PR.
+            base : [start_line, end_line] in the base version, or null if the function was
+                   NEWLY added by this PR.
+
+          Rules:
+            - Only emit functions that overlap a hunk in touched_ranges.txt. Skip every
+              other function in the file.
+            - For functions modified by this PR, both head and base are filled (their line
+              ranges may differ).
+            - Anonymous lambdas inside another function are NOT separate functions; their
+              touched lines belong to the enclosing function.
+            - The end_line of a function is the line of the closing brace (C/C++) or the
+              last indented body line (Python), inclusive.
+            - Use the touched_ranges.txt hints to narrow your reading -- you should not need
+              to read whole large files. Read only enough HEAD and base context to bracket
+              each touched function with confidence.
+
+          Output: JSON Lines. ONE JSON object per line. Nothing else. NO code fences, NO
+          preamble, NO closing remarks, NO commentary, NO blank lines between objects.
           PROMPT
-          )" --model claude-4.6-opus-high-thinking --mode ask --output-format text --trust \
-            > /tmp/pr_change_report/report.txt
+          )" --model claude-4.6-sonnet-thinking --mode ask --output-format text --trust \
+            > /tmp/pr_change_report/function_ranges.jsonl
+
+          echo "----- function_ranges.jsonl -----"
+          cat /tmp/pr_change_report/function_ranges.jsonl
+          echo "---------------------------------"
+
+      - name: Render report.txt deterministically
+        if: steps.inputs.outputs.skip != 'true'
+        run: |
+          python .github/workflows/scripts_new/pr_change_report/render_report.py \
+            --output-dir /tmp/pr_change_report \
+            --function-ranges /tmp/pr_change_report/function_ranges.jsonl \
+            --output /tmp/pr_change_report/report.txt
 
           echo "----- report.txt -----"
           cat /tmp/pr_change_report/report.txt
@@ -158,6 +169,8 @@ jobs:
             /tmp/pr_change_report/report_comment.md
             /tmp/pr_change_report/summary.json
             /tmp/pr_change_report/report_header.md
+            /tmp/pr_change_report/touched_ranges.txt
+            /tmp/pr_change_report/function_ranges.jsonl
 
       - name: Publish PR change report Check
         if: steps.inputs.outputs.skip != 'true' && github.event_name == 'pull_request'
