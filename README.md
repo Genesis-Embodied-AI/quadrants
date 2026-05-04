@@ -59,7 +59,7 @@ To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API
 
 ### Autodiff
 
-* **[Reverse-mode AD with dynamic loops](https://genesis-embodied-ai.github.io/quadrants/user_guide/autodiff.html)** — heap-backed adstack on all backends (LLVM + SPIR-V) with automatic launch-time sizing; no manual stack-size tuning required
+* [**Autodiff with dynamic loops**](https://genesis-embodied-ai.github.io/quadrants/user_guide/autodiff.html#autodiff-with-dynamic-loops) — computes the gradient of any kernel transparently using reverse-mode differentiation and runtime-based memory allocation
 * Forward-mode AD, custom gradients (`@qd.ad.grad_replaced`), `qd.ad.Tape`
 
 
