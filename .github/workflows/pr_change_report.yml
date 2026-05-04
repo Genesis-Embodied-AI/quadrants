@@ -21,9 +21,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Wait using dead-reckoning for builds to finish, before running, to save AI cost, if someone pushes many commits in a row
-        run: sleep 1800
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
