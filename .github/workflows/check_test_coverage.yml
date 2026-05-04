@@ -92,18 +92,14 @@ jobs:
             (a) Hardware-capability gating or other negative paths that require mocked device
                 state (e.g. a function that returns empty when a SPIR-V capability is missing) —
                 Python tests on real devices either skip or never enter the branch.
-            (b) Binary/IR-level assertions on generated artifacts (SPIR-V opcodes, capability
-                declarations, LLVM IR structure) that are not observable from Python.
-            (c) Internal IR transforms or codegen helpers with no public Python entry point,
-                where Python coverage would require a large indirect integration test.
-            (d) Parity with an existing C++ test for an analogous function (e.g. if foo_a has a
+            (b) Parity with an existing C++ test for an analogous function (e.g. if foo_a has a
                 C++ unit test and the PR adds foo_b of the same shape, mirror the test).
 
           What to flag:
           - New public functions/methods/classes with no test coverage at all
           - New modules/files with no corresponding test file
           - Significant behavior changes (new branches, new error handling) with no test for the new behavior
-          - C++ additions matching one of the (a)–(d) exceptions above with no C++ test
+          - C++ additions matching one of the (a)–(b) exceptions above with no C++ test
 
           What NOT to flag:
           - Pure refactors that don't change behavior (renames, moves, reformatting)
