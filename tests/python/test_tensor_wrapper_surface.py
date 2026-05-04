@@ -320,10 +320,14 @@ def test_to_numpy_copy_true(backend):
     np.testing.assert_array_equal(t.to_numpy(), src)
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_to_numpy_copy_false(backend):
-    """copy=False returns a zero-copy view (CPU backend supports this)."""
+    """copy=False returns a zero-copy view (CPU backend supports this).
+
+    Marked needs_torch because Field.to_numpy(copy=False) uses DLPack which requires torch.
+    """
     t = qd.tensor(qd.f32, shape=(4,), backend=backend)
     src = np.arange(4, dtype=np.float32)
     t.from_numpy(src)
@@ -333,6 +337,7 @@ def test_to_numpy_copy_false(backend):
     assert t.to_numpy(copy=True)[0] == 999.0
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_to_numpy_copy_false_with_dtype_raises(backend):
@@ -343,6 +348,7 @@ def test_to_numpy_copy_false_with_dtype_raises(backend):
         t.to_numpy(dtype=np.float64, copy=False)
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_to_torch_copy_true(backend):
@@ -357,6 +363,7 @@ def test_to_torch_copy_true(backend):
     np.testing.assert_array_equal(t.to_numpy(), src)
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_to_torch_copy_false(backend):
@@ -378,8 +385,20 @@ def test_to_torch_copy_false(backend):
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
+def test_to_numpy_copy_none_returns_correct_data(backend):
+    """copy=None never raises and returns correct data regardless of whether zero-copy is available."""
+    t = qd.tensor(qd.f32, shape=(4,), backend=backend)
+    src = np.arange(4, dtype=np.float32)
+    t.from_numpy(src)
+    arr = t.to_numpy(copy=None)
+    np.testing.assert_array_equal(arr, src)
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
 def test_to_numpy_copy_none_zerocopy_when_available(backend):
-    """copy=None returns a zero-copy view on CPU with a supported dtype."""
+    """copy=None returns a zero-copy view on CPU with torch installed and a supported dtype."""
     t = qd.tensor(qd.f32, shape=(4,), backend=backend)
     src = np.arange(4, dtype=np.float32)
     t.from_numpy(src)
@@ -403,6 +422,7 @@ def test_to_numpy_copy_none_with_dtype_falls_back(backend):
     np.testing.assert_array_equal(t.to_numpy(), src)
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_to_torch_copy_none_zerocopy_when_available(backend):
