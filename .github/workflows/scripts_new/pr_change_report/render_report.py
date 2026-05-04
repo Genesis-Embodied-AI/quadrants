@@ -67,8 +67,15 @@ class _FileBookkeeping:
 
 
 def _load_function_entries(jsonl_path: Path) -> dict[str, list[_FunctionEntry]]:
-    """Parse the agent's JSONL and group entries by file path. Malformed lines are skipped."""
+    """Parse the agent's JSONL and group entries by file path. Malformed lines are skipped.
+
+    Identical ``(path, name, head, base)`` tuples are deduplicated -- some agents (e.g.
+    composer-2) occasionally emit the entire JSONL stream twice, which would otherwise
+    cause the coalesce-by-name step to double the per-function counts.
+    """
     by_path: dict[str, list[_FunctionEntry]] = {}
+    seen: set[tuple] = set()
+    duplicates = 0
     if not jsonl_path.exists():
         return by_path
     for raw in jsonl_path.read_text().splitlines():
@@ -90,9 +97,16 @@ def _load_function_entries(jsonl_path: Path) -> dict[str, list[_FunctionEntry]]:
         if head_range is None and base_range is None:
             sys.stderr.write(f"warning: skipping JSONL entry with no head/base range: {obj!r}\n")
             continue
+        key = (path, name, head_range, base_range)
+        if key in seen:
+            duplicates += 1
+            continue
+        seen.add(key)
         by_path.setdefault(path, []).append(
             _FunctionEntry(name=name, head_range=head_range, base_range=base_range)
         )
+    if duplicates:
+        sys.stderr.write(f"info: deduplicated {duplicates} identical JSONL entry/entries\n")
     return by_path
 
 
