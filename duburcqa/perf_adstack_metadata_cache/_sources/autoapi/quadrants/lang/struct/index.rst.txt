@@ -254,7 +254,8 @@ Module Contents
 
       The dictionary may be nested when converting nested structs.
 
-      :param copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise (per member).
 
       :returns: The result NumPy array.
       :rtype: Dict[str, Union[numpy.ndarray, Dict]]
@@ -269,7 +270,8 @@ Module Contents
 
       :param device: The desired device of returned tensor.
       :type device: torch.device, optional
-      :param copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise (per member).
 
       :returns:
 

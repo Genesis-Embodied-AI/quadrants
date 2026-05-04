@@ -95,7 +95,8 @@ Module Contents
 
       Converts `self` to a numpy array.
 
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       :returns: The result numpy array.
       :rtype: numpy.ndarray
@@ -110,7 +111,8 @@ Module Contents
 
       :param device: The desired device of returned tensor.
       :type device: torch.device, optional
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       :returns: The result torch tensor.
       :rtype: torch.tensor
@@ -189,7 +191,8 @@ Module Contents
       Converts this field to a ``numpy.ndarray``.
 
       :param dtype: Optional target numpy dtype.
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
 
 
@@ -198,7 +201,8 @@ Module Contents
       Converts this field to a ``torch.Tensor``.
 
       :param device: Optional torch device for the returned tensor.
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
 
 
