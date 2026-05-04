@@ -199,6 +199,7 @@ void export_lang(py::module &m) {
       .def_readwrite("advanced_optimization", &CompileConfig::advanced_optimization)
       .def_readwrite("ad_stack_experimental_enabled", &CompileConfig::ad_stack_experimental_enabled)
       .def_readwrite("ad_stack_size", &CompileConfig::ad_stack_size)
+      .def_readwrite("ad_stack_sparse_threshold_bytes", &CompileConfig::ad_stack_sparse_threshold_bytes)
       .def_readwrite("flatten_if", &CompileConfig::flatten_if)
       .def_readwrite("make_thread_local", &CompileConfig::make_thread_local)
       .def_readwrite("make_block_local", &CompileConfig::make_block_local)
@@ -317,12 +318,15 @@ void export_lang(py::module &m) {
       .def(py::init<>())
       .def(
           "ndarray_to_dlpack",
-          [](Program *program, pybind11::object owner, Ndarray *ndarray, const std::vector<int> &layout) {
-            return ndarray_to_dlpack(program, owner, ndarray, layout);
+          [](Program *program, pybind11::object owner, Ndarray *ndarray, const std::vector<int> &layout,
+             bool versioned) { return ndarray_to_dlpack(program, owner, ndarray, layout, versioned); },
+          py::arg("owner"), py::arg("ndarray"), py::arg("layout") = std::vector<int>{}, py::arg("versioned") = false)
+      .def(
+          "field_to_dlpack",
+          [](Program *program, SNode *snode, int element_ndim, int n, int m, bool versioned) {
+            return field_to_dlpack(program, snode, element_ndim, n, m, versioned);
           },
-          py::arg("owner"), py::arg("ndarray"), py::arg("layout") = std::vector<int>{})
-      .def("field_to_dlpack", [](Program *program, SNode *snode, int element_ndim, int n,
-                                 int m) { return field_to_dlpack(program, snode, element_ndim, n, m); })
+          py::arg("snode"), py::arg("element_ndim"), py::arg("n"), py::arg("m"), py::arg("versioned") = false)
       .def("_get_num_ndarrays", &Program::get_num_ndarrays)
       .def("config", &Program::compile_config, py::return_value_policy::reference)
       .def("sync_kernel_profiler", [](Program *program) { program->profiler->sync(); })

@@ -618,6 +618,39 @@ int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog
   return evaluate_node(expr, static_cast<int32_t>(expr.nodes.size() - 1), empty_bound_vars, prog, ctx);
 }
 
+void clip_effective_rows_by_loop_trip_count(std::size_t &effective_rows,
+                                            const StaticAdStackBoundExpr &bound_expr,
+                                            std::size_t dispatched_threads_ceiling,
+                                            Program *prog,
+                                            LaunchContextBuilder *ctx) {
+  if (bound_expr.loop_iter_static > 0) {
+    // Compile-time trip count: integer compare, no per-launch eval cost. Constant `SizeExpr` shapes are
+    // already collapsed into this field by the analyzer so they short-circuit the runtime eval below.
+    const std::size_t loop_iter_static = static_cast<std::size_t>(bound_expr.loop_iter_static);
+    if (loop_iter_static <= dispatched_threads_ceiling) {
+      effective_rows = std::min<std::size_t>(effective_rows, loop_iter_static);
+    }
+    return;
+  }
+  if (bound_expr.loop_iter_size_expr.nodes.empty() || prog == nullptr || ctx == nullptr) {
+    // Runtime tree empty or no resolution context: the analyzer left this field unset for shapes the
+    // compile-time path could not cover (or the caller did not supply a `Program` / `LaunchContextBuilder`),
+    // so leave `effective_rows` alone and let the caller fall back to the unclipped reducer count.
+    return;
+  }
+  // Runtime-bounded clip: evaluate the captured trip-count `SizeExpr` only when the static field is unset
+  // (the analyzer leaves `loop_iter_static == 0` for shapes the compile-time path cannot cover, e.g.
+  // `for j in range(field[i])` / `for k in range(arr.shape[axis])`). Cost = one tree walk per launch,
+  // dominated by host scalar reads through `SNodeRwAccessorsBank` on `FieldLoad` / `ExternalTensorRead`
+  // nodes (CPU: a memory load; CUDA / AMDGPU: a 4-8 byte DtoH). The evaluator returns -1 when the tree
+  // references state that is not host-resolvable from `ctx`; in that case we leave `effective_rows`
+  // unclipped from this source.
+  const int64_t evaluated = evaluate_adstack_size_expr(bound_expr.loop_iter_size_expr, prog, ctx);
+  if (evaluated > 0 && static_cast<std::size_t>(evaluated) <= dispatched_threads_ceiling) {
+    effective_rows = std::min<std::size_t>(effective_rows, static_cast<std::size_t>(evaluated));
+  }
+}
+
 namespace {
 
 // Shared back-end for both encoder variants. Takes already-populated stack headers (with
@@ -772,7 +805,9 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizin
   for (std::size_t i = 0; i < n_stacks; ++i) {
     stack_headers[i].entry_size_bytes = static_cast<uint32_t>(ad_stack.allocas[i].entry_size_bytes);
     stack_headers[i].max_size_compile_time = static_cast<uint32_t>(ad_stack.allocas[i].max_size_compile_time);
-    stack_headers[i].heap_kind = 0;  // LLVM has a single unified heap; the SPIR-V-specific bit is unused here.
+    // Float allocas land on the lazy float heap, int allocas on the eager int heap. The encoding (`0` = float, `1` =
+    // int) matches the SPIR-V `AdStackHeapKind` so the offline-cache bytecode survives a backend swap.
+    stack_headers[i].heap_kind = (ad_stack.allocas[i].heap_kind == AdStackAllocaInfo::HeapKind::Float) ? 0u : 1u;
     if (i < ad_stack.size_exprs.size())
       exprs[i] = &ad_stack.size_exprs[i];
   }

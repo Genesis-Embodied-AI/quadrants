@@ -1,4 +1,8 @@
 #include "quadrants/runtime/gfx/runtime.h"
+
+#include <cstdio>
+#include <cstdlib>
+
 #include "quadrants/codegen/spirv/adstack_sizer_shader.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
@@ -178,10 +182,10 @@ class HostDeviceContextBlitter {
             readback_host_ptrs.push_back(host_ctx_.array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}]);
             readback_sizes.push_back(ext_arr_size.at(arg_id));
             require_sync = true;
-            // Grad readback is gated on the grad-slot WRITE bit from `grad_arr_access`, mirroring the
-            // host_to_device path's READ gate. A forward-only kernel with `arr_access.WRITE=1` but no grad
-            // touch would otherwise blit an uninitialised device grad buffer back over the user's host
-            // `.grad`, silently corrupting previously-initialised gradients.
+            // Grad readback is gated on the grad-slot WRITE bit from `grad_arr_access`, mirroring the host_to_device
+            // path's READ gate. A forward-only kernel with `arr_access.WRITE=1` but no grad touch would otherwise blit
+            // an uninitialised device grad buffer back over the user's host `.grad`, silently corrupting initialised
+            // gradients.
             auto grad_access_it =
                 std::find_if(ctx_attribs_->grad_arr_access.begin(), ctx_attribs_->grad_arr_access.end(),
                              [indices](const auto &pair) -> bool { return pair.first == indices; });
@@ -531,12 +535,26 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   // Device-side adstack SizeExpr evaluation: every task with adstack allocas has its per-alloca `max_size` /
   // `offset` metadata resolved by a dedicated compute shader (see `quadrants/runtime/gfx/adstack_sizer_launch.cpp`
-  // for the full mechanism). The shader reads the ndarray data pointer straight out of the kernel arg buffer via
-  // Physical Storage Buffer addressing and dereferences where the memory lives, which is the only way to resolve
-  // an `ExternalTensorRead` against a GPU-private `qd.ndarray` without round-tripping the entire ndarray through
-  // host memory.
+  // for the full mechanism). The helper internally early-returns (after seeding the per-task vector with
+  // compile-time strides) when no task has adstack allocas, so forward-only kernels pay only the cheap pre-populate
+  // pass; the actual sizer dispatch + `wait_idle()` only fires for reverse-mode kernels.
   std::vector<PerTaskAdStackRuntime> per_task_ad_stack = publish_adstack_metadata_spirv(
       host_ctx, args_buffer.get(), any_arrays, task_attribs, ti_kernel->ti_kernel_attribs().name);
+
+  // Static-IR-bound sparse-adstack-heap reducer dispatch. Gated on whether any task in this kernel has a captured
+  // `bound_expr` - the codegen routes such tasks through the lazy LCA-block atomic-rmw row claim that reads
+  // `AdStackBoundRowCapacity[task_id]`; without any such task the reducer would unconditionally `flush() +
+  // wait_idle()` an empty stream just to early-return. Forward-only and reverse-mode-without-bound-expr kernels
+  // therefore pay zero overhead here. Tasks with a captured `bound_expr` get a generic reducer compute shader
+  // dispatch that counts gate-passing threads; the count sizes the float adstack heap allocation exactly in the
+  // bind path below, instead of the dispatched-threads worst case.
+  const bool any_lazy_task = std::any_of(task_attribs.begin(), task_attribs.end(), [](const spirv::TaskAttributes &t) {
+    return t.ad_stack.bound_expr.has_value();
+  });
+  std::unordered_map<int, uint32_t> per_task_bound_count;
+  if (any_lazy_task) {
+    per_task_bound_count = dispatch_adstack_bound_reducers(host_ctx, args_buffer.get(), task_attribs);
+  }
 
   ensure_current_cmdlist();
 
@@ -544,20 +562,19 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     const auto &attribs = task_attribs[i];
     auto vp = ti_kernel->get_pipeline(i);
 
-    // Cap `advisory_total_num_threads` to the ACTUAL iteration count when the codegen was able to extract the range
-    // end as a product of ndarray-shape lookups (see `RangeForAttributes::end_shape_product`). Without this cap, a
-    // grad kernel whose range is runtime-determined (`const_end = false`) inherits `kMaxNumThreadsGridStrideLoop =
-    // 131072` from the codegen fallback, and the adstack-heap sizing below multiplies that by the per-thread stride
-    // to request (e.g.) 48 GB for a 1-iteration B=1 workload - exceeding Metal's `maxBufferLength` and producing a
-    // hard RHI error. The in-shader grid-stride loop handles any dispatched thread count >= 1 correctly; a tight cap
-    // just means each dispatched thread processes fewer strides of idle work.
+    // Cap `advisory_total_num_threads` to the ACTUAL iteration count when the codegen was able to extract the range end
+    // as a product of ndarray-shape lookups (see `RangeForAttributes::end_shape_product`). Without this cap, a grad
+    // kernel whose range is runtime-determined (`const_end = false`) inherits `kMaxNumThreadsGridStrideLoop = 131072`
+    // from the codegen fallback, and the adstack-heap sizing below multiplies that by the per-thread stride to request
+    // (e.g.) 48 GB for a 1-iteration B=1 workload - exceeding Metal's `maxBufferLength` and producing a hard RHI error.
+    // The in-shader grid-stride loop handles any dispatched thread count >= 1 correctly; a tight cap just means each
+    // dispatched thread processes fewer strides of idle work.
     int effective_advisory_threads = attribs.advisory_total_num_threads;
     if (attribs.range_for_attribs && !attribs.range_for_attribs->end_shape_product.empty()) {
       const auto &range = *attribs.range_for_attribs;
       // `const_begin` is asserted true at codegen whenever `end_stmt` is populated (see the
-      // `QD_ASSERT(stmt->const_begin)` in the `if (stmt->end_stmt)` branch of spirv_codegen.cpp,
-      // near line 1833 at time of writing), so `range.begin` is the literal begin value, not a
-      // gtmp offset.
+      // `QD_ASSERT(stmt->const_begin)` in the `if (stmt->end_stmt)` branch of `spirv_codegen.cpp`), so `range.begin` is
+      // the literal begin value, not a gtmp offset.
       int64_t iter_end = 1;
       for (const auto &ref : range.end_shape_product) {
         std::vector<int> indices = ref.arg_id;
@@ -568,6 +585,18 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       int64_t iter_count = std::max<int64_t>(0, iter_end - int64_t(range.begin));
       effective_advisory_threads =
           int(std::min<int64_t>(int64_t(effective_advisory_threads), std::max<int64_t>(1, iter_count)));
+    }
+    // Adstack-bearing tasks additionally cap at `kAdStackMaxConcurrentThreads`, matching the LLVM CUDA / AMDGPU
+    // launchers' `kAdStackMaxConcurrentThreads = 65536` advisory cap. The per-thread int / float adstack heap rows
+    // scale linearly with the dispatched thread count, so an uncapped 600k-thread MPM grid kernel would request
+    // ~2.5 GB just for the int heap (`linear_thread_idx * stride_int_bytes`) on every reverse-mode launch - the same
+    // kernel sizes to ~70 MB on LLVM thanks to that cap. SPIR-V's in-shader grid-stride loop handles the smaller
+    // dispatch correctly: each launched invocation walks `i += grid_dim() * block_dim()` until it has covered the
+    // full logical iteration count. Skip the cap on tasks without adstack allocas to keep forward-only and
+    // adstack-free kernels at saturating throughput.
+    constexpr int kAdStackMaxConcurrentThreads = 65536;
+    if (!attribs.ad_stack.allocas.empty() && effective_advisory_threads > kAdStackMaxConcurrentThreads) {
+      effective_advisory_threads = kAdStackMaxConcurrentThreads;
     }
     const int group_x = (effective_advisory_threads + attribs.advisory_num_threads_per_group - 1) /
                         attribs.advisory_num_threads_per_group;
@@ -589,9 +618,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         auto it = src.find(bind.buffer.root_id);
         bindings->rw_buffer(bind.binding, it != src.end() ? it->second : kDeviceNullAllocation);
       } else if (bind.buffer.type == BufferType::AdStackOverflow) {
-        // SPIR-V codegen writes a non-zero sentinel into this single-u32 buffer whenever an AdStackPushStmt hits
-        // the overflow branch. Allocate it lazily on first use and reuse across launches; synchronize() reads it,
-        // raises on non-zero, and zeros it for the next window.
+        // SPIR-V codegen writes a non-zero sentinel into this single-u32 buffer whenever an AdStackPushStmt hits the
+        // overflow branch. Allocate it lazily on first use and reuse across launches; synchronize() reads it, raises on
+        // non-zero, and zeros it for the next window.
         if (!adstack_overflow_buffer_) {
           auto [buf, res] = device_->allocate_memory_unique({sizeof(uint32_t), /*host_write=*/true, /*host_read=*/true,
                                                              /*export_sharing=*/false, AllocUsage::Storage});
@@ -601,26 +630,157 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           current_cmdlist_->buffer_barrier(*adstack_overflow_buffer_);
         }
         bindings->rw_buffer(bind.binding, *adstack_overflow_buffer_);
+      } else if (bind.buffer.type == BufferType::AdStackRowCounter) {
+        // Per-task atomic-counter array (`uint[num_tasks_in_kernel]`) that the SPIR-V codegen `OpAtomicIAdd`s into at
+        // the LCA-block claim site, slot `task_id_in_kernel`. Read back by the codegen-emitted defense-in-depth bounds
+        // clamp at the same LCA-block - never by the host - so each task's claim count must persist across all tasks in
+        // this kernel's task loop (i.e. across the inner `i in 0..task_attribs.size()` binds below). The buffer is
+        // cleared exactly once per kernel-launch (gated on `i == 0`, the first task) so the next kernel-launch starts
+        // from zero on every slot. Sized to fit `task_attribs.size()` slots and grown lazily on launches that exceed
+        // the prior allocation.
+        const size_t needed_size = std::max<size_t>(task_attribs.size(), 1) * sizeof(uint32_t);
+        if (!adstack_row_counter_buffer_ || adstack_row_counter_buffer_size_ < needed_size) {
+          auto [buf, res] = device_->allocate_memory_unique({needed_size, /*host_write=*/true, /*host_read=*/true,
+                                                             /*export_sharing=*/false, AllocUsage::Storage});
+          QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack row counter buffer (needed_size={})",
+                         needed_size);
+          adstack_row_counter_buffer_ = std::move(buf);
+          adstack_row_counter_buffer_size_ = needed_size;
+        }
+        if (i == 0) {
+          // First task of this kernel-launch: zero every slot so every per-task atomic counter starts at 0. Subsequent
+          // task binds in the same launch leave the buffer alone - this task's claim count must not be clobbered by a
+          // later task's bind, and the per-slot indexing in the codegen guarantees no cross-task collision.
+          current_cmdlist_->buffer_fill(adstack_row_counter_buffer_->get_ptr(0), kBufferSizeEntireSize, /*data=*/0);
+          current_cmdlist_->buffer_barrier(*adstack_row_counter_buffer_);
+        }
+        bindings->rw_buffer(bind.binding, *adstack_row_counter_buffer_);
+      } else if (bind.buffer.type == BufferType::AdStackBoundRowCapacity) {
+        // Per-task row capacity array populated by `dispatch_adstack_bound_reducers` before the main task bind loop
+        // opens (slot `ti` carries the reducer count for tasks with a captured `bound_expr`, UINT32_MAX otherwise). The
+        // codegen-emitted defense-in-depth bounds check at the float Lowest Common Ancestor (LCA) block reads this slot
+        // to detect a reducer / main divergence and signal UINT32_MAX into AdStackOverflow on mismatch; bindings here
+        // just route the existing buffer onto the descriptor without clearing or growing (those happen in the reducer
+        // launcher). Forward-only kernels never see an `AdStackBoundRowCapacity` binding because no float adstack push
+        // exists; defensive null bind keeps the RHI happy if the codegen ever requests this buffer without the launcher
+        // having populated it.
+        if (adstack_bound_row_capacity_buffer_) {
+          bindings->rw_buffer(bind.binding, *adstack_bound_row_capacity_buffer_);
+        } else {
+          bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
+        }
       } else if (bind.buffer.type == BufferType::AdStackHeapFloat) {
-        // SPIR-V adstack primal/adjoint storage for f32 adstacks. Sized for the actual dispatched thread count
-        // (`group_x * block_dim`, which rounds `advisory_total_num_threads` up to a workgroup multiple) rather
-        // than the advisory so threads past the advisory - which still own an `invoc_id * stride` slice - stay
-        // in-bounds even if they ever reach a push/pop. Grown on demand and reused across launches; contents do
-        // not need to persist across kernels. On empty fields (`dispatched_threads == 0`) no push/pop can
-        // actually execute, so bind a null allocation instead of asking the RHI for a zero-sized buffer (which
-        // trips `RHI_ASSERT(params.size > 0)` on Vulkan and fails similarly on Metal). The stride used here is
+        // SPIR-V adstack primal/adjoint storage for f32 adstacks. Sized for `effective_rows`: the count of threads the
+        // static-IR-bound reducer pre-counted as passing the captured gate, when the task has a captured `bound_expr`
+        // consumable by the reducer; otherwise the dispatched-threads worst case (which is `group_x * block_dim`, the
+        // advisory rounded up to a workgroup multiple, so threads past the advisory -which still own an `invoc_id *
+        // stride` slice on the eager fallback path - stay in-bounds even if they ever reach a push). Grown on demand
+        // and reused across launches; contents do not need to persist across kernels. On empty rows (`effective_rows ==
+        // 0`) no push/pop can execute, so bind a null allocation instead of asking the RHI for a zero-sized buffer
+        // (which trips `RHI_ASSERT(params.size > 0)` on Vulkan and fails similarly on Metal). The stride used here is
         // the per-launch value produced by `evaluate_adstack_size_expr` over every alloca (stored in
         // `ad_stack_stride_float`), not the compile-time `attribs.ad_stack.per_thread_stride_float_compile_time`.
         size_t dispatched_threads = size_t(group_x) * size_t(attribs.advisory_num_threads_per_group);
-        // The shader uses u64 index arithmetic for `invoc_id * stride + offset + count` when the device has
-        // Int64; without Int64 the shader falls back to u32 OpIMul, which silently wraps past 2^32 and aliases
-        // threads into one another's heap slice. Assert at launch time rather than emit silent corruption.
+        size_t effective_rows = dispatched_threads;
+        auto bound_count_it = per_task_bound_count.find(i);
+        if (bound_count_it != per_task_bound_count.end()) {
+          effective_rows = bound_count_it->second;
+          // Clip by the captured loop trip count. Each loop iteration claims at most one row at the LCA-block
+          // (one `atomic_add` per gating iteration), so the heap needs at most `trip_count` rows regardless of
+          // how many cells of the gating SNode the reducer counted; without this, an oversized SNode (1024-cell
+          // `selector` paired with a 64-iter loop) inflates the float heap to the SNode's cell count even
+          // though the loop can only claim 64 rows. Both trip-count sources are gated by the
+          // `dispatched_threads` ceiling so a `dynamic_gpu_range_for` that exceeds the SPIR-V dispatch cap and
+          // serialises iterations across threads (each thread reaches the LCA-block multiple times) does not
+          // accidentally undersize the heap. See `clip_effective_rows_by_loop_trip_count` in
+          // `program/adstack_size_expr_eval.cpp` for the shared implementation (LLVM mirrors the same call).
+          if (attribs.ad_stack.bound_expr.has_value()) {
+            clip_effective_rows_by_loop_trip_count(effective_rows, *attribs.ad_stack.bound_expr, dispatched_threads,
+                                                   program_impl_ != nullptr ? program_impl_->program : nullptr,
+                                                   &host_ctx);
+          }
+        } else if (attribs.ad_stack.bound_expr.has_value()) {
+          // Reaching here means the bound reducer skipped this `bound_expr`-captured task and `per_task_bound_count`
+          // has no entry for slot `i`. The reducer's skip paths in `dispatch_adstack_bound_reducers` are: PSB
+          // capability missing, Int64 capability missing, or the per-task f64-on-no-f64 filter at
+          // `adstack_bound_reducer_launch.cpp:165-170` dropping an f64-captured gate on a device without
+          // `spirv_has_float64`. Continuing past this point with a heuristic heap size (`ceil(last_observed * 1.5)`,
+          // possibly capped at `dispatched_threads` or at `lazy_claim_iter_count_upper_bound`) leaves a
+          // workload-uplift OOB hole: any launch whose actual LCA-block claim count exceeds the heuristic silently
+          // writes past the heap end, and the divergence overflow signal in `spirv_codegen.cpp`'s LCA-block claim
+          // emission cannot help (it reads the inert UINT32_MAX-default capacity slot, never trips). Hard-error here
+          // instead - every backend Quadrants targets advertises PSB, Int64, and Float64 today, so reaching this
+          // branch on a real device is either an internal-consistency bug in the reducer's filter or running on a
+          // hypothetical legacy device that this code does not support. The diagnostic prints which cap is missing
+          // so the failure mode is unambiguous.
+          QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer),
+                         "adstack heap-bind tertiary fallback for task '{}' on a device without "
+                         "spirv_has_physical_storage_buffer: the static-bound reducer skipped its dispatch and there "
+                         "is no safe heap-sizing path on this device. Adstack-bearing reverse-mode kernels require "
+                         "PSB, Int64, and (for f64-captured gates) Float64; this device is not supported.",
+                         attribs.name);
+          QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_int64),
+                         "adstack heap-bind tertiary fallback for task '{}' on a device without spirv_has_int64: "
+                         "the static-bound reducer skipped its dispatch and there is no safe heap-sizing path on "
+                         "this device. Adstack-bearing reverse-mode kernels require PSB, Int64, and (for "
+                         "f64-captured gates) Float64; this device is not supported.",
+                         attribs.name);
+          // f64 gate captured but the device lacks `spirv_has_float64` - the per-task filter at
+          // `adstack_bound_reducer_launch.cpp:165-170` drops these so the reducer never publishes a count, and
+          // there is no safe heap-sizing path. Codegen at `spirv_ir_builder.cpp` hard-errors when emitting an
+          // f64 type without the cap, so a kernel reaching this point on a no-f64 device implies an
+          // internal-consistency bug in the codegen/cap negotiation; surface it cleanly.
+          if (attribs.ad_stack.bound_expr->field_dtype_is_float && attribs.ad_stack.bound_expr->field_dtype_is_double) {
+            QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_float64),
+                           "adstack heap-bind tertiary fallback for task '{}' with an f64-captured gate on a "
+                           "device without spirv_has_float64: the static-bound reducer filtered out the f64 arm "
+                           "and there is no safe heap-sizing path. Adstack-bearing reverse-mode kernels with f64 "
+                           "gates require Float64; this device is not supported.",
+                           attribs.name);
+          }
+          QD_ERROR(
+              "adstack heap-bind tertiary fallback fired for task '{}' on a device that has PSB, Int64, and Float64. "
+              "The bound reducer should have matched this task; reaching here is an internal-consistency bug. File "
+              "an issue with `QD_DUMP_IR=1 ...` output attached.",
+              attribs.name);
+        }
+        // The shader uses u64 index arithmetic for `row_id * stride + offset + count` when the device has Int64;
+        // without Int64 the shader falls back to u32 OpIMul, which silently wraps past 2^32 and aliases threads into
+        // one another's heap slice. Assert at launch time rather than emit silent corruption. `effective_rows` is the
+        // upper bound on the row index the kernel will produce (because the lazy LCA-block atomic claim hands out row
+        // ids in [0, count) where count is exactly the value the reducer published into this task's slot before this
+        // dispatch starts).
         QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_int64) ||
-                           size_t(ad_stack_stride_float) * dispatched_threads <= std::numeric_limits<uint32_t>::max(),
+                           size_t(ad_stack_stride_float) * effective_rows <= std::numeric_limits<uint32_t>::max(),
                        "adstack f32 heap offset would overflow u32 on a device without Int64: "
-                       "stride={} dispatched_threads={}",
-                       ad_stack_stride_float, dispatched_threads);
-        size_t required = size_t(ad_stack_stride_float) * dispatched_threads * sizeof(float);
+                       "stride={} effective_rows={}",
+                       ad_stack_stride_float, effective_rows);
+        // Floor `effective_rows` at 1 when the codegen emitted a float-heap binding (`ad_stack_stride_float > 0`): the
+        // bound-expr reducer can legitimately count 0 threads passing the gate (e.g. on a workload that exercises a
+        // kernel whose gate never matches in the current scene), but Metal RHI rejects a null `DeviceAllocation` bind
+        // on a slot the descriptor set declares - and the codegen still emits the slot for every task with float
+        // adstacks, so we cannot route this through `kDeviceNullAllocation`. Allocating one unused row is correct: with
+        // `effective_rows == 0` no thread ever reaches the LCA-block claim, so the row stays idle and incurs only
+        // `stride_float * 4` bytes (typically a few hundred). For tasks without a float heap binding (`stride_float ==
+        // 0`), the codegen does not emit this branch and we never get here.
+        const size_t effective_rows_floored = std::max<size_t>(effective_rows, ad_stack_stride_float > 0 ? 1 : 0);
+        size_t required = size_t(ad_stack_stride_float) * effective_rows_floored * sizeof(float);
+        // `QD_DEBUG_ADSTACK=1` opt-in diagnostic. One line per task per launch describing the float heap-bind sizing
+        // decision: which sizing source fired (`reducer_count` for tasks with a captured `bound_expr` whose reducer
+        // populated `per_task_bound_count`, `worst_case_dispatched` otherwise) and the resulting required bytes.
+        // Persistent so memory regressions can be debugged without re-instrumenting.
+        if (std::getenv("QD_DEBUG_ADSTACK")) {
+          const char *src = "worst_case_dispatched";
+          if (bound_count_it != per_task_bound_count.end()) {
+            src = "reducer_count";
+          }
+          std::fprintf(stderr,
+                       "[adstack_heap] task='%s' kind=F src=%s effective_rows=%zu stride=%u required_bytes=%zu "
+                       "(%.2f MB)\n",
+                       attribs.name.c_str(), src, effective_rows, ad_stack_stride_float, required,
+                       double(required) / (1024.0 * 1024.0));
+          std::fflush(stderr);
+        }
         if (required == 0) {
           bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
         } else {
@@ -628,15 +788,15 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
             // Amortized doubling: mirrors `LlvmRuntimeExecutor::ensure_adstack_heap`. Without it, a sequence of
             // launches with monotonically increasing dispatch sizes (e.g. BFS / frontier expansion) between
             // `synchronize()` calls would reallocate on every launch and leave every displaced buffer sitting in
-            // `ctx_buffers_` until the next sync, accumulating O(K^2 * N) bytes of live-but-unused GPU memory.
-            // Doubling bounds the reallocations at O(log K) and the live memory at O(K * N).
+            // `ctx_buffers_` until the next sync, accumulating O(K^2 * N) bytes of live-but-unused GPU memory. Doubling
+            // bounds the reallocations at O(log K) and the live memory at O(K * N).
             size_t new_size = std::max(required, 2 * adstack_heap_buffer_float_size_);
             auto [buf, res] = device_->allocate_memory_unique(
                 {new_size, /*host_write=*/false, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
-            // Fallback when the amortized-doubling size overshoots a device limit (e.g. Metal's
-            // `maxBufferLength` capping `2 * old_size` even when `required` alone would fit): retry at exactly
-            // `required` bytes before aborting the process. Trade-off is losing amortization on the retry path;
-            // still correct because the next grow will reset amortization against the new, smaller base.
+            // Fallback when the amortized-doubling size overshoots a device limit (e.g. Metal's `maxBufferLength`
+            // capping `2 * old_size` even when `required` alone would fit): retry at exactly `required` bytes before
+            // aborting the process. Trade-off is losing amortization on the retry path; still correct because the next
+            // grow will reset amortization against the new, smaller base.
             if (res != RhiResult::success && new_size > required) {
               new_size = required;
               std::tie(buf, res) = device_->allocate_memory_unique(
@@ -668,6 +828,14 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
                        "stride={} dispatched_threads={}",
                        ad_stack_stride_int, dispatched_threads);
         size_t required = size_t(ad_stack_stride_int) * dispatched_threads * sizeof(int32_t);
+        if (std::getenv("QD_DEBUG_ADSTACK")) {
+          std::fprintf(stderr,
+                       "[adstack_heap] task='%s' kind=I src=worst_case_dispatched dispatched_threads=%zu "
+                       "stride=%u required_bytes=%zu (%.2f MB)\n",
+                       attribs.name.c_str(), dispatched_threads, ad_stack_stride_int, required,
+                       double(required) / (1024.0 * 1024.0));
+          std::fflush(stderr);
+        }
         if (required == 0) {
           bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
         } else {
@@ -806,11 +974,11 @@ void GfxRuntime::synchronize() {
   ctx_buffers_.clear();
   ndarrays_in_use_.clear();
   pending_launches_since_sync_ = 0;
-  // Async adstack-overflow report: every launch in this sync window that overflowed wrote a non-zero sentinel into
-  // the shared flag buffer. Read it now, raise if any kernel overflowed, and zero it so the next sync window starts
-  // clean. This mirrors the CUDA async-error pattern: the error surfaces on the next synchronize() rather than per
-  // launch. The map() here must stay after the `wait_idle()` above; otherwise a future refactor could reorder and
-  // we would race against pending GPU writes.
+  // Async adstack-overflow report: every launch in this sync window that overflowed wrote a non-zero sentinel into the
+  // shared flag buffer. Read it now, raise if any kernel overflowed, and zero it so the next sync window starts clean.
+  // This mirrors the CUDA async-error pattern: the error surfaces on the next synchronize() rather than per launch. The
+  // map() here must stay after the `wait_idle()` above; otherwise a future refactor could reorder and we would race
+  // against pending GPU writes.
   if (adstack_overflow_buffer_ && !finalizing_) {
     uint32_t flag_val = 0;
     void *mapped = nullptr;
@@ -820,6 +988,19 @@ void GfxRuntime::synchronize() {
       *reinterpret_cast<uint32_t *>(mapped) = 0;
     }
     device_->unmap(*adstack_overflow_buffer_);
+    // UINT32_MAX is the dedicated sentinel the codegen-emitted defense-in-depth bounds check at the float Lowest
+    // Common Ancestor (LCA) block writes via OpAtomicUMax when `claimed_row >= bound_row_capacity` for a captured
+    // `bound_expr`. The bound is the exact reducer count (see `adstack_bound_reducer_launch.cpp`), so on a correct
+    // codegen this branch is never taken; reaching it indicates the reducer's count diverged from the main pass's
+    // actual LCA-block-reaching thread count - an internal-consistency bug, not a user-recoverable condition. Surface
+    // a distinct actionable diagnostic so the failure is attributable to this exact mechanism rather than getting
+    // confused with the per-stack `stack_id+1` overflow signal below (whose sentinel range tops out at `num_ad_stacks`
+    // and cannot collide with UINT32_MAX in any realistic kernel).
+    QD_ERROR_IF(flag_val == std::numeric_limits<uint32_t>::max(),
+                "Internal: static-IR-bound sparse-adstack-heap reducer count diverged from main pass's actual "
+                "LCA-block claim count. The bound is supposed to be exact by construction; reaching this signal "
+                "means the reducer and the main pass observed different threads passing the captured gating "
+                "predicate. File a bug with the kernel IR via `QD_DUMP_IR=1` and a minimal repro.");
     QD_ERROR_IF(flag_val != 0,
                 "Adstack overflow (offending stack_id={}): a reverse-mode autodiff kernel pushed more elements "
                 "than the adstack capacity allows. Raised at the next qd.sync() rather than at the offending "
@@ -837,10 +1018,10 @@ StreamSemaphore GfxRuntime::flush() {
   if (current_cmdlist_) {
     sema = device_->get_compute_stream()->submit(current_cmdlist_.get());
     current_cmdlist_ = nullptr;
-    // Do NOT clear ctx_buffers_ here: submit() returns as soon as the cmdlist is queued, not when the GPU has
-    // finished executing. The deferred-free buffers in ctx_buffers_ (e.g. the old adstack heap buffer left over
-    // after a grow-on-demand resize) may still be referenced by commands in flight. Only `synchronize()` clears
-    // the vector, after `wait_idle()` has drained the stream.
+    // Do NOT clear ctx_buffers_ here: submit() returns as soon as the cmdlist is queued, not when the GPU has finished
+    // executing. The deferred-free buffers in ctx_buffers_ (e.g. the old adstack heap buffer left over after a
+    // grow-on-demand resize) may still be referenced by commands in flight. Only `synchronize()` clears the vector,
+    // after `wait_idle()` has drained the stream.
   } else {
     auto [cmdlist, res] = device_->get_compute_stream()->new_command_list_unique();
     QD_ASSERT(res == RhiResult::success);
@@ -865,9 +1046,8 @@ void GfxRuntime::ensure_current_cmdlist() {
 }
 
 void GfxRuntime::submit_current_cmdlist_if_timeout() {
-  // If we have accumulated some work but does not require sync
-  // and if the accumulated cmdlist has been pending for some time
-  // launch the cmdlist to start processing.
+  // If we have accumulated some work but does not require sync and if the accumulated cmdlist has been pending for some
+  // time launch the cmdlist to start processing.
   if (current_cmdlist_) {
     constexpr uint64_t max_pending_time = 2000;  // 2000us = 2ms
     auto duration = high_res_clock::now() - current_cmdlist_pending_since_;

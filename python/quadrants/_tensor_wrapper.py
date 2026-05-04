@@ -189,24 +189,26 @@ class Tensor:
     # Interop forwards (layout-aware on both impls already)
     # ------------------------------------------------------------------
 
-    def to_numpy(self, dtype: typing.Any = None) -> typing.Any:
-        if dtype is None:
-            return self._impl.to_numpy()
-        return self._impl.to_numpy(dtype=dtype)
+    def to_numpy(self, dtype: typing.Any = None, *, copy: typing.Optional[bool] = True) -> typing.Any:
+        kw: dict[str, typing.Any] = {"copy": copy}
+        if dtype is not None:
+            kw["dtype"] = dtype
+        return self._impl.to_numpy(**kw)
 
     def from_numpy(self, arr: typing.Any) -> None:
         self._impl.from_numpy(arr)
 
-    def to_torch(self, device: typing.Any = None) -> typing.Any:
-        if device is None:
-            return self._impl.to_torch()
-        return self._impl.to_torch(device=device)
+    def to_torch(self, device: typing.Any = None, *, copy: typing.Optional[bool] = True) -> typing.Any:
+        kw: dict[str, typing.Any] = {"copy": copy}
+        if device is not None:
+            kw["device"] = device
+        return self._impl.to_torch(**kw)
 
     def from_torch(self, arr: typing.Any) -> None:
         self._impl.from_torch(arr)
 
-    def to_dlpack(self) -> typing.Any:
-        return self._impl.to_dlpack()
+    def to_dlpack(self, versioned: bool = False) -> typing.Any:
+        return self._impl.to_dlpack(versioned=versioned)
 
     def fill(self, value: typing.Any) -> None:
         self._impl.fill(value)

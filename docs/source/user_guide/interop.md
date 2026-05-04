@@ -79,14 +79,13 @@ Quadrants' zero-copy interop has been designed with **PyTorch as the first-class
 ```python
 f = qd.field(qd.f32, shape=(1024,))
 
-view  = f.to_torch(copy=False)  # zero-copy view: aliases f's memory
+view  = f.to_torch(copy=False)  # zero-copy view: aliases f's memory, or ValueError
+auto  = f.to_torch(copy=None)   # zero-copy if possible, otherwise copy
 clone = f.to_torch(copy=True)   # independent copy (default)
-auto  = f.to_torch()            # same as copy=True
+plain = f.to_torch()            # same as copy=True
 ```
 
-When using `to_torch(copy=False)`, the returned tensor shares memory with the field. Modifications via the tensor are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated -- typically on `qd.init()` or `qd.reset()`, after which a fresh call to `to_torch(copy=False)` returns a new view.
-
-`to_numpy(copy=False)` also shares memory, but the returned array is **read-only** on NumPy >= 2.0 (NumPy flags arrays imported via DLPack v0 capsules as non-writable). Use `to_torch(copy=False)` if you need a writable zero-copy view.
+When using `copy=False` or `copy=None` (when zero-copy succeeds), modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated -- typically on `qd.init()` or `qd.reset()`, after which a fresh call to `to_torch(copy=False)` / `to_numpy(copy=False)` returns a new view.
 
 ### When zero-copy is available
 
@@ -100,14 +99,17 @@ Zero-copy uses [DLPack](https://github.com/dmlc/dlpack) and requires:
 
 Zero-copy `to_numpy()` additionally requires a CPU backend, because numpy arrays cannot reference GPU memory. Note: `Field.to_numpy(copy=False)` and `MatrixField.to_numpy(copy=False)` currently require torch to be installed, because the C++ `field_to_dlpack` checks the torch version internally. `Ndarray.to_numpy(copy=False)` does not require torch.
 
+On **NumPy >= 2.1**, `to_numpy(copy=False)` returns a **writable** array (via a DLPack v1 capsule). On NumPy 1.26–2.0, the returned array is **read-only** because those versions only consume DLPack v0 capsules, which lack writability metadata. If you need writable zero-copy numpy views, upgrade to NumPy >= 2.1.
+
 ### Semantics of `copy`
 
 | Value | Behaviour |
 |---|---|
 | `True` (default) | Independent copy via kernel. |
+| `None` | Zero-copy view via DLPack when available, otherwise falls back to a copy silently. |
 | `False` | Zero-copy view via DLPack, or `ValueError` if zero-copy is unsupported for this backend/dtype. |
 
-The default `copy=True` always returns a buffer that is safe to mutate without affecting the field/ndarray.
+The default `copy=True` always returns a buffer that is safe to mutate without affecting the field/ndarray. Use `copy=None` when you want zero-copy as a best-effort optimisation without having to handle exceptions — it gives you a view when possible and a safe copy otherwise.
 
 ### Examples
 
@@ -126,7 +128,7 @@ qd.sync()             # not strictly required; safe pattern
 print(f[0])           # 2.0
 ```
 
-Read-only view with NumPy on a CPU backend:
+Round-trip with NumPy on a CPU backend:
 
 ```python
 qd.init(arch=qd.cpu)
@@ -134,9 +136,9 @@ qd.init(arch=qd.cpu)
 a = qd.ndarray(qd.i32, shape=(8,))
 a.from_numpy(np.arange(8, dtype=np.int32))
 
-view = a.to_numpy(copy=False)   # read-only zero-copy view
-print(view[0])                  # 0 -- reads directly from a's memory
-print(view.flags.writeable)     # False (NumPy >= 2.0, DLPack v0 capsule)
+view = a.to_numpy(copy=False)
+view[0] = 100  # Requires NumPy >= 2.1 for the assignment to succeed
+print(a.to_numpy()[0])   # 100
 ```
 
 ### Caching
@@ -207,6 +209,30 @@ S_soa = qd.Struct.field({"pos": qd.f32, "vel": qd.f32}, shape=(16,),
 d_soa = S_soa.to_torch(copy=False)                                      # dict of zero-copy views
 d_soa["pos"][0] = 1.0                                                   # writes through to S_soa.pos
 ```
+
+### Raw DLPack export with `to_dlpack()`
+
+All field and ndarray types expose a `to_dlpack()` method that returns a raw [DLPack](https://github.com/dmlc/dlpack) `PyCapsule`. This is the low-level primitive that `to_torch(copy=False)` and `to_numpy(copy=False)` are built on; use it when you need to feed Quadrants data into a framework that speaks DLPack directly (e.g. JAX, CuPy, or a custom C extension).
+
+```python
+qd.init(arch=qd.cpu)
+f = qd.field(qd.f32, shape=(8,))
+f.fill(1.0)
+
+capsule = f.to_dlpack()                                   # v0 capsule ("dltensor")
+t = torch.utils.dlpack.from_dlpack(capsule)                # zero-copy torch tensor
+```
+
+For NumPy, prefer `to_numpy(copy=False)` which handles the DLPack protocol adapter internally. If you need a raw v1 capsule for another consumer, use `f.to_dlpack(versioned=True)`. Note that `np.from_dlpack` does not accept raw `PyCapsule` objects — it requires an object exposing `__dlpack__()` and `__dlpack_device__()`, which `to_numpy(copy=False)` provides via an internal adapter.
+
+The `versioned` parameter selects the DLPack protocol version:
+
+| `versioned` | Capsule type | Capsule name | Use case |
+|---|---|---|---|
+| `False` (default) | `DLManagedTensor` (v0) | `"dltensor"` | `torch.utils.dlpack.from_dlpack`, CuPy, JAX, and other v0 consumers. |
+| `True` | `DLManagedTensorVersioned` (v1) | `"dltensor_versioned"` | `np.from_dlpack` on NumPy >= 2.1 (v0 capsules produce read-only arrays on NumPy >= 2.0; v1 consumer support requires >= 2.1). |
+
+The same backend, dtype, and layout restrictions that apply to `to_torch(copy=False)` / `to_numpy(copy=False)` apply here — `to_dlpack()` is the underlying mechanism. The caller is responsible for calling `qd.sync()` between modifying the field and consuming the capsule.
 
 ## Direct torch tensor pass-through
 
@@ -280,7 +306,9 @@ print(x.grad[0])  # 4.0
 |--------|-------------|-------------------|---------------------|
 | `to_numpy()` / `from_numpy()` (default) | yes | yes | yes |
 | `to_torch()` / `from_torch()` (default) | yes | yes | yes |
+| `to_numpy(copy=None)` / `to_torch(copy=None)` | no when possible, yes otherwise | yes | yes |
 | `to_numpy(copy=False)` / `to_torch(copy=False)` | no (DLPack view) | yes | yes |
+| `to_dlpack()` | no (raw capsule) | yes | yes |
 | Direct pass-through | no | no | yes (as kernel arg) |
 
-The `copy` parameter is supported on `to_numpy()` and `to_torch()` for `ScalarField`, `MatrixField` (and `VectorField`), `StructField`, and all `Ndarray` types. See [Zero-copy interop via DLPack](#zero-copy-interop-via-dlpack) for the support matrix and lifetime rules.
+The `copy` parameter is supported on `to_numpy()` and `to_torch()` for `ScalarField`, `MatrixField` (and `VectorField`), `StructField`, `qd.Tensor`, and all `Ndarray` types. See [Zero-copy interop via DLPack](#zero-copy-interop-via-dlpack) for the support matrix and lifetime rules.

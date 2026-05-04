@@ -305,8 +305,10 @@ def test_adstack_nan_propagation(op_name, x_val):
 
 
 @pytest.mark.xfail(
-    reason="Reverse-mode NaN/Inf poisoning semantics is TBD (f64 variant). Same divergence as the f32 case: PyTorch "
-    "propagates NaN in the backward graph; Quadrants runs `1 / operand` verbatim and returns a finite number.",
+    reason=(
+        "Reverse-mode NaN/Inf poisoning semantics is TBD (f64 variant). Same divergence as the f32 case: PyTorch "
+        "propagates NaN in the backward graph; Quadrants runs `1 / operand` verbatim and returns a finite number."
+    ),
     strict=True,
 )
 @pytest.mark.parametrize("op_name,x_val", [("log", -0.3)])
@@ -1050,10 +1052,9 @@ def test_adstack_heap_backed_exceeds_old_threadstack_budget():
     # Now both arches allocate the slice inside `runtime->adstack_heap_buffer` (LLVM) or the per-dispatch
     # SSBO (SPIR-V) and the kernel runs to completion with a correct gradient on every arch.
     #
-    # `offline_cache=False` is load-bearing for the unfixed-tree check: with the cache on, a run that previously
-    # succeeded against a heap-backed runtime would still produce the right gradient via the cached bitcode even
-    # after the codegen changes are reverted. The test must force a fresh compile every run so the `QD_ERROR_IF`
-    # on the unfixed tree actually fires and terminates the process.
+    # `offline_cache=False` is load-bearing: a cached compile from one run could mask a regression that flipped the
+    # codegen back to the function-scope path; the test must force a fresh compile every run so the `QD_ERROR_IF` on a
+    # regressed tree actually fires and terminates the process.
     #
     # Internal details: each outer element `i` drives eight independent recurrences `a_k = a_k * 0.9 + x[i]` at
     # the same trip count (`n_iter`). The reverse pass pushes once for the initial value plus once per iteration,
@@ -1473,14 +1474,13 @@ def test_adstack_sibling_for_loops_reverse_order():
     #
     # Internal details: MakeAdjoint runs per-IB, and for this shape both sibling fors' bodies are their own IBs
     # (innermost loops with global ops). The reverse-mode transform therefore never visits the container block that
-    # holds them, so nothing flips their order. ReverseOuterLoops flips each loop's `reversed` iteration direction but
-    # historically left sibling order alone; the fix adds a pairwise swap of sibling for-loops inside every non-IB
-    # container block the pass walks through. Non-loop statements (range-bound loads, alloca, etc.) stay at their
-    # original positions so SSA operands still dominate both swapped fors. The outer `for _ in range(1)` dummy is the
-    # smallest shape that places the two siblings inside a non-IB container (the frontend rejects a bare sequence of
-    # top-level for-loops as "mixed usage of for-loops and statements without looping"); `n[None]` from a field forces
-    # the inner ranges to be dynamic so the bug manifests (static-unrolled ranges go through a different path that
-    # already works).
+    # holds them, so nothing flips their order. ReverseOuterLoops flips each loop's `reversed` iteration direction and
+    # also pairwise-swaps sibling for-loops inside every non-IB container block the pass walks through. Non-loop
+    # statements (range-bound loads, alloca, etc.) stay at their original positions so SSA operands still dominate both
+    # swapped fors. The outer `for _ in range(1)` dummy is the smallest shape that places the two siblings inside a
+    # non-IB container (the frontend rejects a bare sequence of top-level for-loops as "mixed usage of for-loops and
+    # statements without looping"); `n[None]` from a field forces the inner ranges to be dynamic so the bug manifests
+    # (static-unrolled ranges go through a different path that already works).
     size = 3
     n = qd.field(qd.i32, shape=())
 
@@ -1640,28 +1640,24 @@ def test_adstack_vector_subscript_selfop_no_warnings(tmp_path):
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=4096)
 def test_adstack_ndrange_over_ndarray_shape_does_not_oversize_heap():
-    # Regression test: a grad kernel whose range is derived at launch time from an ndarray shape (e.g.
-    # `qd.ndrange(arr.shape[0], arr.shape[1])`) used to inherit `advisory_total_num_threads =
-    # kMaxNumThreadsGridStrideLoop = 131072` from the SPIR-V codegen fallback, and the runtime sized the
-    # per-dispatch adstack heap as `131072 * per_thread_stride * sizeof(float)`. For this kernel's ten
-    # loop-carried f32 variables at `ad_stack_size=4096`, that is `131072 * 10 * 2 * 4096 * 4 bytes = 40
-    # GiB`. Apple Silicon's `MTLDevice.maxBufferLength` is ~75% of unified memory (e.g. ~28 GiB on an M4 Max
-    # with 48 GiB unified, smaller on lower-end configs), so the allocation failed. Before the RHI layer
-    # checked for nil, that failure was silently wrapped as `RhiResult::success` with a nil MTLBuffer; every
-    # downstream `setBuffer:atIndex:2` bound nil, writes dropped and reads returned 0, and the backward
-    # produced NaN gradients without any error. With the fix, the codegen records the shape-lookup product
-    # backing the runtime-resolved `end_stmt` into `RangeForAttributes::end_shape_product`, the runtime
-    # `launch_kernel` reads each shape from the `LaunchContextBuilder` args buffer and tightens
-    # `advisory_total_num_threads` to `actual_iter_count = rows * cols = 6`, so only ~240 KB of adstack heap
-    # is allocated and the gradient is correct.
+    # Asserts that a grad kernel whose range is derived at launch time from an ndarray shape (e.g.
+    # `qd.ndrange(arr.shape[0], arr.shape[1])`) sizes the per-dispatch adstack heap from the actual launch-time iter
+    # count rather than from the SPIR-V codegen's grid-stride advisory cap (`kMaxNumThreadsGridStrideLoop = 131072`).
+    # Sizing from the cap on a small workload would request `131072 * per_thread_stride * sizeof(float)` (e.g. ~40 GiB
+    # at 10 f32 vars and `ad_stack_size=4096`), exceeding Apple Silicon's `MTLDevice.maxBufferLength` (~28 GiB on a 48
+    # GiB-unified M4 Max), and the Metal RHI's nil-buffer fallback would silently bind nil at `setBuffer:atIndex:2` so
+    # writes drop, reads return 0, and the backward NaNs. The codegen records the shape-lookup product backing the
+    # runtime-resolved `end_stmt` into `RangeForAttributes::end_shape_product`; the runtime `launch_kernel` reads each
+    # shape from the `LaunchContextBuilder` args buffer and tightens `advisory_total_num_threads` to `actual_iter_count
+    # = rows * cols = 6`, so only ~240 KB of adstack heap is allocated.
     #
-    # Internal details: `ad_stack_size=4096` + ten loop-carried f32 variables is tuned so that the pre-fix
-    # 131072-thread allocation request crosses the smallest plausible Apple Silicon `maxBufferLength` - the
-    # test would otherwise silently pass on hardware with large unified memory. The original oversize symptom
-    # only surfaced on the SPIR-V heap-backed adstack path whose per-dispatch sizing depends on the advisory
-    # thread count; the LLVM path sizes the adstack slab once per runtime against `num_cpu_threads` and cannot
-    # exhibit the same nil-buffer regression. The test still runs on every backend so the finite-difference
-    # cross-check catches a future regression in the grad computation regardless of which path it lives in.
+    # Internal details: `ad_stack_size=4096` + ten loop-carried f32 variables is tuned so that the cap-fallback
+    # 131072-thread allocation request crosses the smallest plausible Apple Silicon `maxBufferLength` - the test would
+    # otherwise silently pass on hardware with large unified memory. The oversize symptom only surfaces on the SPIR-V
+    # heap-backed adstack path whose per-dispatch sizing depends on the advisory thread count; the LLVM path sizes the
+    # adstack slab once per runtime against `num_cpu_threads` and cannot exhibit the same nil-buffer regression. The
+    # test still runs on every backend so the finite-difference cross-check catches a regression in the grad computation
+    # regardless of which path it lives in.
     rows, cols = 2, 3
 
     @qd.kernel
@@ -1926,7 +1922,6 @@ def test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read():
 
 
 @pytest.mark.xfail(
-    strict=True,
     reason=(
         "Cross-kernel sibling of `test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read`. When a "
         "reverse-mode kernel uses `a[i_e]` as a loop trip count on a `qd.ndarray` and a separate kernel "
@@ -1935,6 +1930,7 @@ def test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read():
         "forward pushed and accumulates gradient at indices the forward never visited. Documented as a "
         "known limitation in `docs/source/user_guide/autodiff.md`."
     ),
+    strict=True,
 )
 @test_utils.test(require=qd.extension.adstack)
 def test_adstack_sizer_trip_count_qd_ndarray_mutated_by_separate_kernel():
@@ -2238,10 +2234,10 @@ def test_adstack_field_ptr_indexed_by_stashed_outer_loop_var():
     # quadrants fields `link_start[i_outer]` / `link_end[i_outer]` as the bounds of an inner range-for, where `i_outer`
     # is an outer parallel-for index that `ad_stack_experimental_enabled=True` stashes onto a dedicated adstack for the
     # reverse pass. Every downstream `link_start[i_outer]` then lowers to `GlobalPtrStmt(<field>,
-    # [AdStackLoadTopStmt])`. Before the fix, the pre-pass's `GlobalPtrStmt` branch rejected any non-const index and the
-    # reverse-mode adstack bound would hard-error as "unresolved after Bellman-Ford + structural pre-pass"; the fix
-    # walks the index through the same stash chase the `ExternalPtrStmt` branch uses and falls back to the snode's
-    # `shape_along_axis(axis)` as a safe upper bound when the stash has no single loop-index push.
+    # [AdStackLoadTopStmt])`. The pre-pass's `GlobalPtrStmt` branch must walk the index through the same stash chase the
+    # `ExternalPtrStmt` branch uses and fall back to the snode's `shape_along_axis(axis)` as a safe upper bound when the
+    # stash has no single loop-index push, otherwise the reverse-mode adstack bound hard-errors as "unresolved after
+    # Bellman-Ford + structural pre-pass".
     #
     # Internal details: runs on every backend - LLVM evaluates the stash-backed `SizeExpr` through
     # `publish_adstack_metadata`, SPIR-V through `GfxRuntime::launch_kernel`'s `AdStackMetadata` upload. The inner
@@ -2372,9 +2368,9 @@ def test_adstack_triangular_ndrange_self_referential_push_idempotency():
     src_offset[0] = 0
     dst_offset[0] = 0
 
-    # Pre-fix the grad compile raises RuntimeError("stash data-flow cycle ..."); post-fix it must compile cleanly and
-    # run to completion. The assertion is the absence of that RuntimeError - no gradient value is checked because the
-    # minimal-shape fields have a single element and the bug is purely a compile-time cycle-detection regression.
+    # The grad compile must complete without raising RuntimeError("stash data-flow cycle ..."). The assertion is the
+    # absence of that RuntimeError - no gradient value is checked because the minimal-shape fields have a single element
+    # and the regression is purely compile-time cycle detection.
     compute.grad(
         batch_probe,
         dst_vec_buf,
@@ -2607,11 +2603,10 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
     # `x[0..7]` is reached by the kernel under correct sizing, so `x_unused_val` does not affect the expected loss /
     # gradient at all and the assertions are identical across parametrizations. The `amplified_unused_x` variant
     # (`x_unused_val=100.0`) exists so that any regression that mis-routes a stack push / pop to a slot outside the
-    # intended index range surfaces as a multi-order-of-magnitude gradient delta (e.g. a single spurious visit to
-    # `x[8]` produces `x.grad[8]=200.0` instead of the `0.2` an `x_unused_val=0.1` setup would produce), so the
-    # failure cannot be misread as a tolerance issue. The original `uniform_x` (`x_unused_val=0.1`) parametrization
-    # preserves the historical loss / gradient magnitudes for direct continuity with the prior fixed-fixture form of
-    # this test.
+    # intended index range surfaces as a multi-order-of-magnitude gradient delta (e.g. a single spurious visit to `x[8]`
+    # produces `x.grad[8]=200.0` instead of the `0.2` an `x_unused_val=0.1` setup would produce), so the failure cannot
+    # be misread as a tolerance issue. The `uniform_x` (`x_unused_val=0.1`) parametrization keeps the baseline loss /
+    # gradient magnitudes that the rest of the kernel was originally tuned against.
     N = 4
     N_X = 16
 
@@ -2655,15 +2650,15 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_spirv_metadata_per_task_buffer():
-    # SPIR-V launcher used to share a single grow-on-demand `AdStackMetadata` device buffer across every task in a
-    # kernel. Per-task `(stride_float, stride_int, offset_i, max_size_i, ...)` tables were host-memcpy'd into that
-    # buffer inside the cmdlist record loop, and the `bindings` descriptor for each task's dispatch captured the same
-    # buffer handle. Record is host-synchronous but execute is deferred, so by submit time the buffer holds only the
-    # LAST task's metadata and every dispatch in the cmdlist reads those bytes. Earlier tasks then see shorter sibling
-    # stacks' `max_size` where their own should be - e.g. a stack whose sizer wrote `max_size=9` observes a runtime
-    # `max_size=3`, its first guarded push trips the `count < max_size` check at `count=3`, the overflow flag flips, and
-    # `qd.sync()` raises even though the kernel's actual per-thread push count fits the per-stack bound the sizer
-    # computed.
+    # The SPIR-V launcher must allocate a fresh `AdStackMetadata` device buffer per task inside the cmdlist record loop,
+    # not share a single grow-on-demand buffer across every task in a kernel. With a shared buffer, per-task
+    # `(stride_float, stride_int, offset_i, max_size_i, ...)` tables host-memcpy'd into it would be overwritten by later
+    # tasks' metadata before the deferred dispatch executes (record is host-synchronous, execute is deferred), so by
+    # submit time the buffer holds only the LAST task's metadata and every dispatch in the cmdlist reads those bytes.
+    # Earlier tasks then see shorter sibling stacks' `max_size` where their own should be - e.g. a stack whose sizer
+    # wrote `max_size=9` observes a runtime `max_size=3`, its first guarded push trips the `count < max_size` check at
+    # `count=3`, the overflow flag flips, and `qd.sync()` raises even though the kernel's actual per-thread push count
+    # fits the per-stack bound the sizer computed.
     #
     # Internal details: `cfg_optimization=False` is load-bearing - with it enabled, the CFG pass sinks / merges the
     # bind-and-dispatch pair in a way that masks the cross-task buffer reuse on this kernel shape; with it disabled the
@@ -2700,10 +2695,10 @@ def test_adstack_spirv_metadata_per_task_buffer():
                         acc = acc + (tri_mat[1, i_pr, k_pr, i_b] * tri_mat[1, j_pr, k_pr, i_b])
                     tri_mat[1, i_pr, j_pr, i_b] = acc
 
-    # Pre-fix: raises `Adstack overflow (offending stack_id=0)` at `qd.sync()` because the first offload's
-    # metadata buffer was overwritten by the second offload's host memcpy before the cmdlist ran, so the
-    # first offload's f32 stack 0 saw `max_size=3` (the second offload's int stack 0 value) instead of its
-    # own sizer-computed 9. Post-fix: finishes cleanly because each task gets its own metadata buffer.
+    # The grad call must finish cleanly: a regression that shares one metadata buffer across tasks would have the first
+    # offload's metadata overwritten by the second offload's host memcpy before the cmdlist ran, so the first offload's
+    # f32 stack 0 would see `max_size=3` (the second offload's int stack 0 value) instead of its own sizer-computed 9,
+    # and `qd.sync()` would raise `Adstack overflow (offending stack_id=0)`.
     kernel_two_offloads_with_tri_reduce.grad()
     qd.sync()
 
@@ -3006,3 +3001,1266 @@ def test_adstack_min_loop_carried_serial_range_for(n_inner):
     assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
     for i in range(n):
         assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-4)
+
+
+@pytest.mark.parametrize("gated_fraction", [0.0, 0.05, 0.5, 1.0])
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_ndarray_gate_grad_correct(gated_fraction):
+    # Asserts gradient correctness for reverse-mode kernels of shape `for i in range(n): if selector[i] > eps:
+    # <adstack-using gradient work>` where `selector` is an ndarray argument. Parametrised over the gate-pass fraction
+    # (0%, 5%, 50%, 100%) so the savings path (sparse), the half-claim row mapping, the dispatch-equivalent fallback
+    # (full), and the empty-reducer-count edge case are all exercised against an analytic gradient oracle; a
+    # wrong-but-non-NaN gradient (the failure mode when row-claim and heap-sizing disagree) trips the assertion.
+    #
+    # Internal details: the codegen pattern matcher captures the gating predicate as a `StaticBoundExpr` carrying the
+    # ndarray's `arg_id` and the comparison `> eps`; the runtime walks the gating ndarray (host-side on CPU,
+    # single-thread reducer kernel on CUDA / AMDGPU, compute-shader reducer on SPIR-V), counts threads with `selector[i]
+    # > eps`, and sizes the float adstack heap to that count. The lazy LCA-block atomic claim then maps each gated
+    # thread to a unique row in `[0, count)`. `ad_stack_size=32` keeps per-stack max_size small so the worst-case heap
+    # allocation is much larger than the gated subset actually consumes - amplifying the savings ratio so a regression
+    # that breaks the reducer dispatch and silently falls back to worst-case sizing still produces a passing test, while
+    # a regression that corrupts the row mapping fails on the gradient oracle. The kernel places the gate immediately
+    # above the inner range-for so the LCA pre-pass places the float-LCA inside the gate, the precondition for the
+    # bound_expr capture. `n=256` is deliberately larger than a typical CPU worker pool (~8 threads) so the CPU host
+    # reducer must walk the full ndarray to count gate-passing iterations, not just the worker-pool prefix; a reducer
+    # that walks `[0, num_cpu_threads)` undercounts in the sparse case and aliases every later iteration's claimed row
+    # into a single slot. `gated_fraction=0.5` is the tightest catch for that class of bug because the count mismatch
+    # then aliases ~128 iterations into a handful of rows, overwhelming the per-row stack's `max_size=32` headroom and
+    # tripping the bounds-checked overflow on the debug build.
+    n = 256
+    n_iter = 8
+    eps = 1e-9
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if selector[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[0] += v
+
+    np.random.seed(0)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    n_gated = int(round(gated_fraction * n))
+    selector_np = np.zeros(n, dtype=np.float32)
+    if n_gated > 0:
+        gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+        selector_np[gated_indices] = 1.0
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"static-bound-expr grad returned NaN: {got_grad}"
+
+    # Analytic oracle. For gated i, the inner recurrence `v = v*c + d` over `n_iter` steps is linear in v with slope
+    # `c^n_iter`, where `c = 1.05`. So `d(out[0])/d(x[i]) = c^n_iter` for gated i, 0 otherwise. `gated_fraction == 0` is
+    # the per-task-reducer-count-zero edge case: every dispatched thread misses the gate, the reducer publishes capacity
+    # = 0, the codegen-emitted clamp at the LCA-block claim site has to keep the row id at 0 (a naive `capacity - 1`
+    # underflow to UINT32_MAX leaves the clamp inert and a divergent over-claim writes past the float-heap end).
+    # Float-heap allocation is floored at one row precisely so the single-row fallback is always backed by real storage.
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    expected = np.where(selector_np > eps, np.float32(expected_per_gated), np.float32(0.0))
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(
+    require=[qd.extension.adstack, qd.extension.data64], ad_stack_size=32, ad_stack_sparse_threshold_bytes=0
+)
+def test_adstack_static_bound_expr_f64_gate_grad_correct():
+    # Asserts gradient correctness for reverse-mode kernels with an f64-typed gating ndarray (`if selector_f64[i] >
+    # 0.5`) above f32 adstack pushes. The reducer must dispatch through the f64 comparison arm; routing f64-captured
+    # gates through the f32 arm misreads the source ndarray and produces wrong-but-non-NaN gradients on every gated
+    # index where the bit pattern flips the bitcast comparison's outcome against the misdecoded threshold.
+    #
+    # Internal details: the captured `StaticAdStackBoundExpr` carries `field_dtype_is_float = True` AND
+    # `field_dtype_is_double = True` plus the threshold in `literal_f64`. The SPIR-V reducer reads
+    # `field_dtype_is_double` to select the 8-byte u64 PSB load (two 4-byte u32 loads at offsets 0 and 4 from `elem_idx
+    # * 8`, reassembled into a u64 in registers because PSB requires Aligned 8 for a single 8-byte load), then
+    # OpFOrd*-compares against the high+low threshold pair. `require=qd.extension.data64` skips on backends without f64
+    # (e.g. Metal: Apple silicon does not advertise SPIR-V `Float64`, and the kernel codegen rejects the f64 ndarray at
+    # the IR pre-pass). f32-push-only on the adstack heap because SPIR-V's adstack heap is a typed Array<f32> SSBO and
+    # rejects f64 AdStackAllocaStmts; LLVM accepts both but the test stays on f32 push + f64 gate for backend parity.
+    # Selector layout: non-gated cells at 0.25, gated cells at 1.0, threshold = 0.5. A misdecoded threshold of 0.0 would
+    # spuriously include the 0.25 cells, doubling the gate-passing count - the per-i oracle fails on every non-gated
+    # cell because the codegen clamps the over-claimed rows onto valid heap slots and the adjoint's reverse pop reads
+    # back zeros (bootstrap-init slot) instead of the primal value.
+    n = 256
+    n_iter = 8
+    threshold = 0.5
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f64, shape=(n,))
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if selector[i] > threshold:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[0] += v
+
+    np.random.seed(0)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = np.full(n, 0.25, dtype=np.float64)
+    gated_indices = np.sort(np.random.choice(n, size=n // 2, replace=False))
+    selector_np[gated_indices] = 1.0
+
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"f64-gate static-bound-expr grad returned NaN: {got_grad}"
+
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    expected = np.where(selector_np > threshold, np.float32(expected_per_gated), np.float32(0.0))
+    for i in range(n):
+        assert got_grad[i] == pytest.approx(expected[i], rel=1e-6, abs=1e-7)
+
+
+@pytest.mark.parametrize("alloca_outside_gate", [False, True])
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, debug=True, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_ndarray_gate_debug_build_grad_correct(alloca_outside_gate):
+    # Asserts gradient correctness for reverse-mode kernels with a captured ndarray-backed gate under `debug=True`. The
+    # debug build routes every adstack push / pop / load-top through the runtime helpers (`stack_push`,
+    # `stack_top_primal`, ...) instead of the release build's inline emission, and those helpers read the count u64
+    # prefix word from the heap row itself, so the lazy-row codegen has to keep the per-row count header consistent
+    # across both alloca placements (inside vs above the gate). Parametrised over `alloca_outside_gate` to cover both
+    # placements; either should produce gradients that match the analytic oracle.
+    #
+    # Internal details: each lazy float alloca needs its row's count header initialised to 0 BEFORE the first push and
+    # AFTER the LCA-block atomic-rmw stores the per-thread claimed row id into `row_id_var`; emitting `stack_init` at
+    # the alloca visit site (mirroring the eager path's `linear_thread_idx * stride + offset`) would dereference
+    # `row_id_var` while it still holds its entry-block UINT32_MAX sentinel, writing the count u64 to `heap_float +
+    # UINT32_MAX * stride_float + offset` (~64 GB past the heap base). The fix emits `stack_init` at the LCA block. The
+    # `alloca_outside_gate` parametrisation covers both codegen shapes: `False` puts the `AdStackAllocaStmt` and the
+    # autodiff bootstrap push in the if-true block (below the LCA) so the bootstrap push's `stack_push` runs after the
+    # row claim and `row_id_var` is already valid; `True` puts them at the offload root (above the LCA) and requires the
+    # bootstrap-skip guard at the push site to fire on the debug build, otherwise the runtime-helper `stack_push` runs
+    # at the offload root with `row_id_var = UINT32_MAX` and writes the count u64 ~TB past the heap base, crashing the
+    # worker with SIGSEGV / CUDA_ERROR_ILLEGAL_ADDRESS / hipErrorIllegalAddress at the first `compute.grad()`. Kernel
+    # shape otherwise mirrors `test_adstack_static_bound_expr_ndarray_gate_grad_correct`; only delta is `debug=True`
+    # flipping both the bounds-check codepath and the runtime-helper push / pop emission. `gated_fraction=0.5` places
+    # ~half the LCA reaches on non-trivial rows in `[0, count)` so the row mapping must be correct (a regression that
+    # always claims row 0 would still pass the 100% case) while keeping the test fast enough to run on every backend
+    # without a parametrize sweep on the fraction axis.
+    n = 256
+    n_iter = 8
+    eps = 1e-9
+    gated_fraction = 0.5
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f32, shape=(n,))
+
+    if alloca_outside_gate:
+
+        @qd.kernel
+        def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+            for i in range(n):
+                v = qd.cast(0.0, qd.f32)
+                if selector[i] > eps:
+                    v = x[i]
+                    for _ in range(n_iter):
+                        v = v * 1.05 + 0.05
+                out[0] += v
+
+    else:
+
+        @qd.kernel
+        def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+            for i in range(n):
+                if selector[i] > eps:
+                    v = x[i]
+                    for _ in range(n_iter):
+                        v = v * 1.05 + 0.05
+                    out[0] += v
+
+    np.random.seed(2)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    n_gated = max(1, int(round(gated_fraction * n)))
+    selector_np = np.zeros(n, dtype=np.float32)
+    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+    selector_np[gated_indices] = 1.0
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"debug-build static-bound-expr grad returned NaN: {got_grad}"
+
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    expected = np.where(selector_np > eps, np.float32(expected_per_gated), np.float32(0.0))
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@pytest.mark.parametrize("gated_fraction", [0.05, 0.5, 1.0])
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
+    # Asserts gradient correctness for reverse-mode kernels of shape `for i in selector: if selector[i] > eps:
+    # <adstack-using gradient work>` where `selector` is a `qd.field(...)` placed under `qd.root.dense(...)` -the layout
+    # most sparse-grid workloads use. SNode counterpart to `test_adstack_static_bound_expr_ndarray_gate_grad_correct`;
+    # parametrised over the gate-pass fraction (5%, 50%, 100%) so a regression in the SNode root-buffer load path or the
+    # byte-offset precomputation surfaces as a wrong gradient.
+    #
+    # Internal details: the codegen pattern matcher captures the gating predicate as a `StaticBoundExpr` carrying the
+    # leaf snode id plus the precomputed `(byte_base_offset, byte_cell_stride, iter_count)` triple the runtime needs to
+    # walk the field at dispatch time without re-emitting the SNode lookup chain. The runtime then dispatches the
+    # bound-reducer compute shader against the bound root buffer, counts threads whose `selector[i] > eps`, and sizes
+    # the float adstack heap to that count.
+    n = 256
+    n_iter = 8
+    eps = 1e-9
+
+    selector = qd.field(qd.f32, shape=(n,))
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in selector:
+            if selector[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(1)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    n_gated = max(1, int(round(gated_fraction * n)))
+    selector_np = np.zeros(n, dtype=np.float32)
+    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+    selector_np[gated_indices] = 1.0
+    for i in range(n):
+        x[i] = float(x_np[i])
+        selector[i] = float(selector_np[i])
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+
+    compute()
+    compute.grad()
+    qd.sync()
+
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    expected = np.where(selector_np > eps, np.float32(expected_per_gated), np.float32(0.0))
+    got_grad = np.array([x.grad[i] for i in range(n)], dtype=np.float32)
+    assert not np.isnan(got_grad).any(), f"static-bound-expr snode grad returned NaN: {got_grad}"
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_ndarray_gate_compound_index_grad_correct():
+    # Pins gradient correctness when an ndarray-backed gating array is indexed by a compound expression
+    # (`selector[i % K]` with K < n). The ndarray arm of `match_field_source` validates per-axis that every
+    # `ExternalPtrStmt::indices[axis]` is a `LoopIndexStmt`; compound indices like `i % K` are
+    # `BinaryOpStmt(mod, ...)` so the validation rejects the capture and the runtime falls back to
+    # dispatched-threads worst-case sizing on every backend. The reverse-mode gradient comes out correct because
+    # the float adstack heap is sized for the full thread count and there is no LCA-block claim aliasing.
+    n = 256
+    K = 64
+    n_iter = 8
+    eps = 1e-9
+
+    selector = qd.ndarray(qd.f32, shape=(K,))
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if selector[i % K] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[0] += v
+
+    np.random.seed(3)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = (np.random.rand(K) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    gated_per_iter = selector_np[np.arange(n) % K] > eps
+    expected = np.where(gated_per_iter, np.float32(expected_per_gated), np.float32(0.0))
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"compound-index ndarray grad returned NaN: {got_grad}"
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "gate_shape",
+    [
+        "compound_mod",
+        "affine_div",
+        "constant_index",
+        "dynamic_load_index",
+        "folding_two_axis_decomp",
+    ],
+)
+@test_utils.test(
+    arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal],
+    require=qd.extension.adstack,
+    ad_stack_size=32,
+    ad_stack_sparse_threshold_bytes=0,
+)
+def test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct(gate_shape):
+    # Pins gradient correctness on parallel-dispatched backends for `qd.field`-backed gates whose index expression
+    # is not a per-iteration bijection with the SNode cell space. Five shapes exercised:
+    #   * `compound_mod`:        `selector[i % K]` with K < n               (loop hits each cell n/K times)
+    #   * `affine_div`:          `selector[i / 2]`                          (pairs of iterations alias onto one cell)
+    #   * `constant_index`:      `selector[K // 2]`                         (every iteration hits the same cell)
+    #   * `dynamic_load_index`:  `selector[idx_field[i]]`                   (axis is a runtime load, not loop-derivable)
+    #   * `folding_two_axis_decomp`:
+    #                            `selector[i % 8, (i // 8) % 8]` with `loop_iter > 64` and an oversized SNode
+    #                                                                       (axes are value-distinct so the same_value
+    #                                                                        dedup admits them and `loop_iter <=
+    #                                                                        snode_iter_count` because the SNode is
+    #                                                                        large, but the joint axis space is
+    #                                                                        8 * 8 = 64 and folds n iterations onto
+    #                                                                        that subspace; the joint-axis-product
+    #                                                                        check refuses capture)
+    # In all five the SNode arm of `match_field_source` must refuse capture so the runtime falls back to the
+    # dispatched-threads worst-case heap. With cross-row aliasing on a wrongly-captured heap, the reverse pass
+    # reads a different thread's gate bool from the boolean adstack - the wrong set of `i` values contributes
+    # to the gradient and the per-`i` mismatch is detectable even with a linear inner recurrence (the body's
+    # chain rule may not need the primal, but the gate's boolean adstack does). CPU is excluded from `arch=`
+    # because its dispatch thread count is small enough that the alias rarely fires. The companion bijective
+    # multi-axis decomposition `selector[i // K, i % K]` is covered by
+    # `test_adstack_static_bound_expr_snode_gate_bijective_decomposed_index_grad_correct`.
+    n = 256
+    K = 64
+    n_iter = 8
+    eps = 1e-9
+
+    affine_div_size = n  # snode size = n keeps `loop_iter <= snode_iter_count`, so the iter-count check passes
+    fold_axis = 8  # `folding_two_axis_decomp` joint space is `fold_axis * fold_axis = 64 < n = 256`
+    if gate_shape == "affine_div":
+        selector_shape = (affine_div_size,)
+    elif gate_shape == "folding_two_axis_decomp":
+        selector_shape = (fold_axis, fold_axis)
+    else:
+        selector_shape = (K,)
+    selector = qd.field(qd.f32, shape=selector_shape)
+    idx_field = qd.field(qd.i32, shape=(n,))
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in range(n):
+            gate_idx = (
+                (i % K,)
+                if qd.static(gate_shape == "compound_mod")
+                else (
+                    (i // 2,)
+                    if qd.static(gate_shape == "affine_div")
+                    else (
+                        (K // 2,)
+                        if qd.static(gate_shape == "constant_index")
+                        else (
+                            (i % fold_axis, (i // fold_axis) % fold_axis)
+                            if qd.static(gate_shape == "folding_two_axis_decomp")
+                            else (idx_field[i],)
+                        )
+                    )
+                )
+            )
+            if selector[gate_idx] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(2)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = (np.random.rand(*selector_shape) < 0.3).astype(np.float32)
+    idx_field_np = (np.arange(n) % K).astype(np.int32)
+    selector.from_numpy(selector_np)
+    for i in range(n):
+        x[i] = float(x_np[i])
+        idx_field[i] = int(idx_field_np[i])
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+
+    compute()
+    compute.grad()
+    qd.sync()
+
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    if gate_shape == "compound_mod":
+        gated_per_iter = selector_np[np.arange(n) % K] > eps
+    elif gate_shape == "affine_div":
+        gated_per_iter = selector_np[np.arange(n) // 2] > eps
+    elif gate_shape == "constant_index":
+        gated_per_iter = np.full(n, bool(selector_np[K // 2] > eps))
+    elif gate_shape == "folding_two_axis_decomp":
+        idx = np.arange(n)
+        gated_per_iter = selector_np[idx % fold_axis, (idx // fold_axis) % fold_axis] > eps
+    else:
+        gated_per_iter = selector_np[idx_field_np] > eps
+    expected = np.where(gated_per_iter, np.float32(expected_per_gated), np.float32(0.0))
+    got_grad = np.array([x.grad[i] for i in range(n)], dtype=np.float32)
+    assert not np.isnan(got_grad).any(), f"non-bijective-index snode grad returned NaN ({gate_shape}): {got_grad}"
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_bijective_decomposed_index_grad_correct():
+    # Bijective multi-axis gate decomposed from a single flat loop variable: `for i in range(n): if
+    # selector[i // K, i % K] > eps:`. Each iteration visits a unique cell because `(i // K, i % K)` is the
+    # canonical bijection from `[0, n_rows * K)` to `[0, n_rows) x [0, K)`. The two axes share their root
+    # `LoopIndexStmt`, but `same_value`-based deduplication recognises `i // K` and `i % K` as having
+    # different values, so the SNode arm captures and shrinks the float adstack heap to the gate-passing
+    # iteration count. Companion to `test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct`,
+    # which pins the rejected shapes on the same `for i in range(n)` loop.
+    K = 8
+    n_rows = 32
+    n = n_rows * K
+    n_iter = 8
+    eps = 1e-9
+
+    selector = qd.field(qd.f32, shape=(n_rows, K))
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in range(n):
+            if selector[i // K, i % K] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(11)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = (np.random.rand(n_rows, K) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+    compute()
+    compute.grad()
+    qd.sync()
+    idx = np.arange(n)
+    gated_per_iter = selector_np[idx // K, idx % K] > eps
+    expected = np.where(gated_per_iter, np.float32(1.05**n_iter), np.float32(0.0))
+    got = x.grad.to_numpy()
+    assert not np.isnan(got).any(), f"bijective decomposed-index snode grad returned NaN: {got}"
+    np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_bijective_linear_range_grad_correct():
+    # Bijective single-axis gate: `for i in range(n): if field[i] > eps:`. The gate's index is a bare `LoopIndexStmt`,
+    # every iteration visits a unique cell, the SNode arm accepts capture and the backward grad matches `1.05^n_iter`
+    # on every gated cell.
+    n = 256
+    n_iter = 8
+    eps = 1e-9
+    field = qd.field(qd.f32, shape=(n,))
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in range(n):
+            if field[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(7)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    field_np = (np.random.rand(n) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    field.from_numpy(field_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+    compute()
+    compute.grad()
+    qd.sync()
+    expected = np.where(field_np > eps, np.float32(1.05**n_iter), np.float32(0.0))
+    got = x.grad.to_numpy()
+    assert not np.isnan(got).any(), f"linear-range bijective grad returned NaN: {got}"
+    np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_bijective_multi_axis_structfor_grad_correct():
+    # Bijective multi-axis StructFor gate: `for I, J, K in field3d: if field3d[I, J, K] > eps:`. Each axis is a distinct
+    # bare `LoopIndexStmt` (one per StructFor axis), so the joint mapping is bijective and the SNode arm captures.
+    n = 16
+    n_iter = 8
+    eps = 1e-9
+    field3d = qd.field(qd.f32, shape=(n, n, n))
+    x = qd.field(qd.f32, shape=(n, n, n), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for I, J, K in field3d:
+            if field3d[I, J, K] > eps:
+                v = x[I, J, K]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(7)
+    x_np = (0.1 + 0.001 * np.arange(n**3).reshape(n, n, n)).astype(np.float32)
+    field_np = (np.random.rand(n, n, n) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    field3d.from_numpy(field_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+    compute()
+    compute.grad()
+    qd.sync()
+    expected = np.where(field_np > eps, np.float32(1.05**n_iter), np.float32(0.0))
+    got = x.grad.to_numpy()
+    assert not np.isnan(got).any(), f"multi-axis StructFor bijective grad returned NaN: {got}"
+    np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_bijective_multi_axis_ndrange_grad_correct():
+    # Bijective multi-axis ndrange gate: `for ii, jj, kk in qd.ndrange(n, n, n): if grid[ii, jj, kk] > eps:`. Each
+    # iteration visits a unique cell. After `lower_access` rewrites the linearised offset into a `floordiv` /
+    # `mod` / `sub` arithmetic tree over a single `LoopIndexStmt`, the per-axis components hold structurally
+    # different values, so `same_value`-based deduplication of the iterating axes admits the joint-bijective
+    # decomposition uniformly across LLVM and SPIR-V backends.
+    n = 16
+    n_iter = 8
+    eps = 1e-9
+    grid = qd.field(qd.f32, shape=(n, n, n))
+    x = qd.field(qd.f32, shape=(n, n, n), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for ii, jj, kk in qd.ndrange(n, n, n):
+            if grid[ii, jj, kk] > eps:
+                v = x[ii, jj, kk]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(7)
+    x_np = (0.1 + 0.001 * np.arange(n**3).reshape(n, n, n)).astype(np.float32)
+    grid_np = (np.random.rand(n, n, n) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    grid.from_numpy(grid_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+    compute()
+    compute.grad()
+    qd.sync()
+    expected = np.where(grid_np > eps, np.float32(1.05**n_iter), np.float32(0.0))
+    got = x.grad.to_numpy()
+    assert not np.isnan(got).any(), f"multi-axis ndrange bijective grad returned NaN: {got}"
+    np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_bijective_slice_with_iter_grad_correct():
+    # Bijective gate with one iterating axis plus a constant slice: `for i in range(n): if grid[i, 0] > eps:`. The
+    # first axis varies with the loop (bijective), the second axis is a literal constant (slice). The SNode arm
+    # accepts capture; the reducer over-counts by the slice factor (it walks all `cols` cells per row) but
+    # over-allocation is safe.
+    n = 256
+    cols = 4
+    n_iter = 8
+    eps = 1e-9
+    grid = qd.field(qd.f32, shape=(n, cols))
+    x = qd.field(qd.f32, shape=(n, cols), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in range(n):
+            if grid[i, 0] > eps:
+                v = x[i, 0]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(7)
+    x_np = (0.1 + 0.001 * np.arange(n * cols).reshape(n, cols)).astype(np.float32)
+    grid_np = (np.random.rand(n, cols) < 0.3).astype(np.float32)
+    x.from_numpy(x_np)
+    grid.from_numpy(grid_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+    compute()
+    compute.grad()
+    qd.sync()
+    expected = np.zeros_like(x_np)
+    expected[:, 0] = np.where(grid_np[:, 0] > eps, np.float32(1.05**n_iter), np.float32(0.0))
+    got = x.grad.to_numpy()
+    assert not np.isnan(got).any(), f"slice-with-iter bijective grad returned NaN: {got}"
+    np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_multi_axis_ndrange_with_arg_index_grad_correct():
+    # Pins SNode-arm bound-expr capture for the canonical sparse-grid kernel shape: `for ii, jj, kk, ib in
+    # qd.ndrange(...): if grid[f, ii, jj, kk, ib] > eps:`. The leading axis `f` is a kernel `qd.i32` argument that
+    # slices the SNode space without folding iterations together; the four iterating axes cover the loop's flat
+    # index range exactly once. The capture must engage (the analysis sees `loop_iter <= snode_iter_count` and at
+    # least one `LinearizeStmt::input` containing a `LoopIndexStmt`), and gradients must match the analytic
+    # backward of the inner recurrence. Companion regression test for `mpm_grid_op` in Genesis MPM, where this
+    # shape with `len(f) > 1` previously lost capture under an over-strict bare-`LoopIndexStmt` check.
+    F = 2
+    n = 4
+    B = 1
+    n_iter = 4
+    eps = 1e-9
+
+    grid = qd.field(qd.f32, shape=(F, n, n, n, B))
+    x = qd.field(qd.f32, shape=(F, n, n, n, B), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(f: qd.i32) -> None:
+        for ii, jj, kk, ib in qd.ndrange(n, n, n, B):
+            if grid[f, ii, jj, kk, ib] > eps:
+                v = x[f, ii, jj, kk, ib]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[None] += v
+
+    np.random.seed(3)
+    x_np = (0.1 + 0.001 * np.arange(F * n * n * n * B).reshape(F, n, n, n, B)).astype(np.float32)
+    grid_np = (np.random.rand(F, n, n, n, B) < 0.4).astype(np.float32)
+    grid.from_numpy(grid_np)
+    x.from_numpy(x_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    f_active = 0
+    compute(f_active)
+    compute.grad(f_active)
+    qd.sync()
+
+    coeff = 1.05
+    expected_per_gated = coeff**n_iter
+    expected = np.zeros_like(x_np)
+    expected[f_active] = np.where(grid_np[f_active] > eps, np.float32(expected_per_gated), np.float32(0.0))
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"multi-axis ndrange grad returned NaN: {got_grad}"
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=0, debug=False, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_snode_gate_primal_dependent_grad_correct():
+    # Asserts gradient correctness on the LLVM CPU host reducer for SNode-backed gates with a primal-dependent inner
+    # recurrence. The CPU host reducer must walk the SNode field and publish the gate-passing count so the float adstack
+    # heap can be sized to that count; without the walk, the heap falls back to `num_cpu_threads * stride_float` while
+    # the codegen-emitted LCA-block atomic-rmw produces row ids `0..n_gated-1`, and the over-claimed rows OOB into
+    # unmapped memory or alias adjacent buffers.
+    #
+    # Internal details: the SNode-backed `selector` field (placed under `qd.root.dense(...)`) makes the analysis pass
+    # capture the gating predicate as a `StaticBoundExpr` carrying the SNode descriptor triple (`byte_base_offset`,
+    # `byte_cell_stride`, `iter_count`). The host reducer in `publish_per_task_bound_count_cpu`
+    # (`runtime/llvm/llvm_runtime_executor.cpp`) walks the SNode at `bound_count_length = snode_iter_count` and writes
+    # the count into the per-task capacity slot. The inner recurrence `v = v * v + 0.05` is primal-dependent so any
+    # cross-row aliasing would re-read a different thread's pushed primal and surface as a wrong gradient even when the
+    # OOB write happens to land within the heap allocation's over-allocated tail. `ad_stack_size = 0` lets the sizer
+    # pick the per-thread stride; with 8 cpu threads and `n_gated = 2048` the row counter advances well past the
+    # eight-row fallback so the OOB write reliably escapes the page mapped by the heap allocation guard.
+    n = 4096
+    n_iter = 8
+    eps = 1e-9
+
+    selector = qd.field(qd.f32, shape=(n,))
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in selector:
+            if selector[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * v + 0.05
+                out[None] += v
+
+    np.random.seed(1)
+    x_np = (0.001 * np.ones(n)).astype(np.float32)
+    n_gated = max(1, n // 2)
+    selector_np = np.zeros(n, dtype=np.float32)
+    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+    selector_np[gated_indices] = 1.0
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    x.grad.from_numpy(np.zeros(n, dtype=np.float32))
+
+    compute()
+    compute.grad()
+    qd.sync()
+
+    expected = np.zeros(n, dtype=np.float32)
+    for i in range(n):
+        if selector_np[i] <= eps:
+            continue
+        v = float(x_np[i])
+        primals = [v]
+        for _ in range(n_iter):
+            v = v * v + 0.05
+            primals.append(v)
+        d = 1.0
+        for k in range(n_iter):
+            d = d * (2.0 * primals[n_iter - 1 - k])
+        expected[i] = np.float32(d)
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any()
+    assert not np.isinf(got_grad).any()
+    for i in range(n):
+        assert got_grad[i] == pytest.approx(expected[i], rel=1e-5, abs=1e-7)
+
+
+@test_utils.test(
+    require=[qd.extension.adstack, qd.extension.data64], ad_stack_size=0, debug=False, ad_stack_sparse_threshold_bytes=0
+)
+def test_adstack_static_bound_expr_snode_gate_multileaf_dense_grad_correct():
+    # Asserts gradient correctness on the LLVM static-bound-expr SNode resolver for dense parents with multiple
+    # mixed-size leaves. The resolver must read each leaf's byte offset in declaration order (matching the LLVM struct
+    # compiler's layout); reading from a size-sorted source would walk the wrong leaf's bytes during the reducer
+    # dispatch and over-count gate-passing cells.
+    #
+    # Internal details: the dense parent `qd.root.dense(qd.i, n).place(field_f64, field_f32)` has two leaves of sizes 8
+    # and 4 bytes; the LLVM struct compiler lays them out in declaration order (f64 at offset 0, f32 at offset 8) while
+    # a size-sorted layout would place the f32 leaf at offset 0 and the f64 leaf at offset 8. The captured gating
+    # predicate `field_f32[i] > eps` rides through the LLVM static-bound-expr resolver: a size-sorted resolver makes the
+    # runtime reducer walk the field at offset 0 (the f64 leaf's low-half bytes) every cell-stride bytes. With the f64
+    # leaf seeded to `1.0` everywhere, a misread at the f64 leaf's offset comparison-passes for every cell (the bit
+    # pattern of the f64 1.0 low half is non-zero and greater than the f32 eps when reinterpreted), the reducer reports
+    # `n` gate-passing cells while the main kernel's actual gated pass count is `n_gated`, the float adstack heap is
+    # mis-sized and the codegen-emitted clamp aliases legitimate gated iterations onto wrong rows. The non-linear
+    # recurrence `v = v * v + 0.05` makes the per-iteration gradient primal-dependent so any cross-row aliasing surfaces
+    # as a wrong gradient. The f32 selector layout puts non-gated cells at 0.0 and gated cells at 1.0 with `eps = 1e-9`.
+    # `arch=[qd.cpu, qd.cuda, qd.amdgpu]` because this test targets the LLVM snode_resolver specifically; SPIR-V
+    # backends use the SPIR-V struct compiler natively for both the reducer and the main kernel so they agree on the
+    # size-sorted offsets and are unaffected.
+    n = 256
+    n_iter = 6
+    eps = 1e-9
+
+    field_f64 = qd.field(qd.f64)
+    field_f32 = qd.field(qd.f32)
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.field(qd.f32, shape=(), needs_grad=True)
+    qd.root.dense(qd.i, n).place(field_f64, field_f32)
+
+    @qd.kernel
+    def compute() -> None:
+        for i in field_f32:
+            if field_f32[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * v + 0.05
+                out[None] += v
+
+    np.random.seed(1)
+    # `x` varies with `i` so any cross-row aliasing under a mis-sized adstack heap surfaces as a gradient mismatch (the
+    # reverse pop reads back a different thread's primal). A constant `x` would mask aliasing because every gated thread
+    # pushes the same primal sequence and the pop comes back identical.
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    n_gated = max(1, n // 2)
+    selector_np = np.zeros(n, dtype=np.float32)
+    gated_indices = np.sort(np.random.choice(n, size=n_gated, replace=False))
+    selector_np[gated_indices] = 1.0
+    for i in range(n):
+        x[i] = float(x_np[i])
+        field_f32[i] = float(selector_np[i])
+        field_f64[i] = 1.0
+    out[None] = 0.0
+    out.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+
+    compute()
+    compute.grad()
+    qd.sync()
+
+    expected = np.zeros(n, dtype=np.float32)
+    for i in range(n):
+        if selector_np[i] <= eps:
+            continue
+        v = float(x_np[i])
+        primals = [v]
+        for _ in range(n_iter):
+            v = v * v + 0.05
+            primals.append(v)
+        d = 1.0
+        for k in range(n_iter):
+            d = d * (2.0 * primals[n_iter - 1 - k])
+        expected[i] = np.float32(d)
+
+    got_grad = np.array([x.grad[i] for i in range(n)], dtype=np.float32)
+    assert not np.isnan(got_grad).any()
+    assert not np.isinf(got_grad).any()
+    for i in range(n):
+        assert got_grad[i] == pytest.approx(expected[i], rel=1e-5, abs=1e-7)
+
+
+@pytest.mark.parametrize("bound_shape", ["int_const", "scalar_field", "ndarray_shape", "ndarray_read", "two_arg_range"])
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=128)
+def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
+    # Asserts gradient correctness across every loop-bound shape the autodiff sizer documents as supported
+    # (`docs/source/user_guide/autodiff.md::Appendix A`) when the kernel uses a captured gating predicate above
+    # adstack-using inner work. Each shape resolves to the same `n` iteration count at launch time so the analytic
+    # oracle is identical across cases; a regression that drops shape-product / scalar-field / two-arg-range support
+    # from `determine_ad_stack_size` or from the `analyze_adstack_static_bounds` pre-pass surfaces as a wrong gradient
+    # on exactly the shape that broke.
+    #
+    # Internal details: the codegen pattern matcher must recognise `field[i] cmp literal` immediately above the
+    # adstack-using inner work; the runtime then sizes the float adstack heap to the gate-passing iteration count
+    # instead of `dispatched_threads * stride * sizeof(elem)`. The kernel body is a non-linear recurrence in `x[i]` (`v
+    # = x[i] * x[i]; v = v * 1.05 + 0.05; ...`) so the analytic per-iteration gradient `2 * x[i] * 1.05^n_iter` varies
+    # with `i`; a regression that under-sizes the float heap (reducer count diverging from main-pass claim count) clamps
+    # multiple gated iterations into the same heap row, the row's stored primal comes from whichever iteration last
+    # pushed it, and the reverse pass attributes that primal's chain-rule contribution to a different `i` than the one
+    # that wrote it. The per-`i` analytic oracle catches that aliasing as a wrong gradient on the affected indices.
+    n = 256
+    n_iter = 16
+    eps = 1e-9
+
+    np.random.seed(0)
+    x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = np.zeros(n, dtype=np.float32)
+    selector_np[: max(1, int(round(0.5 * n)))] = 1.0
+    np.random.shuffle(selector_np)
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f32, shape=(n,))
+    bound_arr = qd.ndarray(qd.i32, shape=(n,))
+    n_field = qd.field(qd.i32, shape=())
+    start_arr = qd.ndarray(qd.i32, shape=(1,))
+    stop_arr = qd.ndarray(qd.i32, shape=(1,))
+    n_field[None] = n
+    bound_arr.from_numpy(np.full(n, n, dtype=np.int32))
+    start_arr.from_numpy(np.array([0], dtype=np.int32))
+    stop_arr.from_numpy(np.array([n], dtype=np.int32))
+
+    @qd.kernel
+    def compute(
+        x: qd.types.NDArray,
+        selector: qd.types.NDArray,
+        out: qd.types.NDArray,
+        bound_arr: qd.types.NDArray,
+        start_arr: qd.types.NDArray,
+        stop_arr: qd.types.NDArray,
+    ) -> None:
+        # `qd.static(bound_shape == ...)` evaluates the comparison at kernel-compile time (`bound_shape` is a Python
+        # closure constant), so the AST that reaches the codegen has only one of the five `range` forms surviving - no
+        # helper has to materialise per parametrisation.
+        for i in (
+            range(n)
+            if qd.static(bound_shape == "int_const")
+            else (
+                range(n_field[None])
+                if qd.static(bound_shape == "scalar_field")
+                else (
+                    range(selector.shape[0])
+                    if qd.static(bound_shape == "ndarray_shape")
+                    else (
+                        range(bound_arr[0])
+                        if qd.static(bound_shape == "ndarray_read")
+                        else range(start_arr[0], stop_arr[0])
+                    )
+                )
+            )
+        ):
+            if selector[i] > eps:
+                v = x[i] * x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[0] += v
+
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out, bound_arr, start_arr, stop_arr)
+    compute.grad(x, selector, out, bound_arr, start_arr, stop_arr)
+    qd.sync()
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"sparse-adstack-heap [{bound_shape}] grad returned NaN: {got_grad}"
+    coeff = 1.05
+    # `v = x[i] * x[i]` then `v = v * 1.05 + 0.05` repeated n_iter times. v_final = x[i]^2 * c^n + S where S is a
+    # constant. d(v_final)/d(x[i]) = 2 * x[i] * c^n. Gated only.
+    expected = np.where(selector_np > eps, np.float32(2.0 * x_np * coeff**n_iter), np.float32(0.0))
+    np.testing.assert_allclose(got_grad, expected, rtol=1e-4, atol=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=64, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_primal_dependent_inner_recurrence_grad_correct():
+    # Asserts gradient correctness for reverse-mode kernels with a captured ndarray-backed gate above a primal-dependent
+    # inner recurrence (`v = qd.sin(v) + 0.01`, whose chain rule `d(sin(v))/dv = cos(v)` depends on the stored primal).
+    # Slot-aliasing companion to `test_adstack_static_bound_expr_memory_savings_runs_clean`: any regression that
+    # under-sizes the float adstack heap aliases multiple gated iterations onto the same row, the reverse pass evaluates
+    # `cos(slot)` against the wrong iteration's `v`, and the per-`i` gradient diverges from the analytic oracle by a
+    # primal-dependent factor.
+    #
+    # Internal details: a regression that derives the reducer length from `array_runtime_sizes / sizeof(int32_t)` while
+    # the launcher receives an element-count-unit value from `set_args_ndarray` undercounts by `sizeof(elem)`x for
+    # `qd.ndarray` arguments and triggers exactly this aliasing. The `v = x[i]; for _: v = sin(v) + 0.01; out += v`
+    # recurrence is strictly nonlinear so the per-`i` gradient is computed offline via numpy on the same recurrence. `n`
+    # is chosen so that capacity-vs-claims under any under-sized reducer length aliases multiple gated iterations into
+    # the last reachable row; the divergence between the codegen output and the numpy reference scales linearly with the
+    # number of aliased iterations, so the assertion catches the regression on every backend that under-sizes.
+    n = 512
+    n_iter = 4
+    eps = 1e-9
+
+    np.random.seed(0)
+    x_np = (0.05 + 0.001 * np.arange(n)).astype(np.float32)
+    selector_np = np.ones(n, dtype=np.float32)
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if selector[i] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = qd.sin(v) + 0.01
+                out[0] += v
+
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    # numpy reference: chain rule for `v_k = sin(v_{k-1}) + 0.01` is `cos(v_{k-1})`. d(v_n)/d(x[i]) is the product of
+    # `cos(v_k)` for k = 0..n_iter-1, where the v_k sequence is generated forward from x[i].
+    v_np = x_np.copy()
+    grad_np = np.ones(n, dtype=np.float64)
+    for _ in range(n_iter):
+        grad_np *= np.cos(v_np.astype(np.float64))
+        v_np = np.sin(v_np) + np.float32(0.01)
+    expected = grad_np.astype(np.float32)
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"primal-dependent inner-recurrence grad returned NaN: {got_grad}"
+    np.testing.assert_allclose(got_grad, expected, rtol=2e-4, atol=2e-6)
+
+
+@test_utils.test(require=[qd.extension.adstack, qd.extension.data64], default_fp=qd.f64, ad_stack_size=32)
+def test_adstack_static_bound_expr_non_loop_var_index_falls_back_to_worst_case():
+    # Asserts gradient correctness for reverse-mode kernels whose gating predicate uses a non-`LoopIndexStmt` index
+    # expression (e.g. `selector[i % K]`, `selector[const]`, `selector[i + 1]`, `selector[other_field[i]]`). The
+    # static-bound-expr capture must reject such gates so the heap-sizing path falls back to the dispatched-threads
+    # worst case for that task, rather than walking `selector[0..length)` against a divergent claim-count basis and
+    # aliasing iterations into the last reachable row.
+    #
+    # Internal details: the reducer walks the gating ndarray as `selector[0..length)` and counts gate-passing cells; the
+    # main-kernel LCA-block atomic-rmw fires once per gated iteration of the actual index. A captured gate with a
+    # non-loop-index index makes the two counts diverge, the codegen-emitted clamp aliases multiple gated iterations
+    # into the last reachable row, and the result is silent gradient corruption on LLVM / hard overflow on SPIR-V. The
+    # kernel below uses `selector[i % K]` so the same 4 selector cells are read `n / K = 16` times each but only
+    # `n_gated = 4` of those reads pass the gate; without the rejection the reducer counts at most 4 gate-passing cells
+    # in `selector[0..n)`, the float heap is sized for 4 rows while 16 gated LCA reaches happen on each row, and rows
+    # 1..15 of every iteration's claim alias into row 0/1/2/3. `match_field_source`'s `LoopIndexStmt`-only check rejects
+    # the gate capture for this task only (this `OffloadedStmt` / outer parallel-for); the rest of the kernel's tasks
+    # still capture their gates if their index is the loop's own `LoopIndexStmt`. The rejected task falls back to the
+    # worst-case `dispatched_threads * stride_float` heap sizing - safe (no aliasing), at the cost of the savings the
+    # bound-reducer path would have given for that one task.
+    n = 64
+    K = 4
+    n_iter = 8
+    eps = 1e-12
+
+    np.random.seed(0)
+    # Spread `x` widely across the f64 representable range so per-`i` `cos(x[i])` differs by O(0.1) between adjacent
+    # indices; under f64 precision the multi-thread CPU race produces a clearly observable drift in the per-`i`
+    # chain-rule product when the gate-capture pretends `selector[i % K]` is loop-index-shaped.
+    x_np = (0.5 + 0.05 * np.arange(n)).astype(np.float64)
+    selector_np = np.zeros(n, dtype=np.float64)
+    selector_np[:K] = 1.0  # first K cells gated; rest zero
+
+    x = qd.ndarray(qd.f64, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f64, shape=(1,), needs_grad=True)
+    selector = qd.ndarray(qd.f64, shape=(n,))
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if selector[i % K] > eps:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = qd.sin(v) + 0.01
+                out[0] += v
+
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float64))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float64))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    # `v = sin(v) + c` has a primal-dependent chain rule `cos(v_{k-1})`. Each iteration's reverse pass multiplies
+    # adjoints by `cos(stored_primal)`, so a slot read corrupted by a different iteration's push produces a
+    # primal-dependent wrong factor. With selector[:K] = 1.0 every iteration is gated; numpy reference computes the
+    # chain forward then products `cos(v_k)` for k = 0..n_iter-1.
+    v_np = x_np.copy()
+    grad_np = np.ones(n, dtype=np.float64)
+    for _ in range(n_iter):
+        grad_np *= np.cos(v_np)
+        v_np = np.sin(v_np) + 0.01
+
+    got_grad = x.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"non-loop-var-index grad returned NaN: {got_grad}"
+    np.testing.assert_allclose(got_grad, grad_np, rtol=1e-12, atol=1e-14)
+
+
+@test_utils.test(
+    arch=[qd.cuda, qd.amdgpu],
+    require=[qd.extension.adstack, qd.extension.data64],
+    default_fp=qd.f64,
+    ad_stack_size=2048,
+)
+def test_adstack_gpu_dispatch_cap_uses_floor_division():
+    # Asserts gradient correctness for CUDA / AMDGPU adstack-bearing kernels whose `block_dim` does not divide
+    # `kAdStackMaxConcurrentThreads = 65536` evenly. The launcher must cap such kernels' grid using floor division so
+    # the dispatched thread count stays within the float heap row count; ceiling division would over-dispatch the last
+    # block and OOB-write past the heap end, manifesting as `cudaErrorIllegalAddress` (CUDA) / `hipErrorIllegalAddress`
+    # (AMDGPU) at sync.
+    #
+    # Internal details: the launcher caps adstack-bearing tasks at `cap_blocks * block_dim` threads. With `block_dim =
+    # 192` floor division gives `cap_blocks = floor(65536/192) = 341`, dispatched = `341 * 192 = 65472`; ceiling
+    # division gives `342`, dispatched = `342 * 192 = 65664` - 128 threads past the heap row count.
+    # `resolve_num_threads` floors at 65536 and the non-bound_expr float heap is sized at `n_threads * stride_float` for
+    # `n_threads = 65536`, so any thread with `linear_thread_idx in [65536, 65664)` would index past the heap end. The
+    # kernel has 65700 iterations so each dispatched thread reaches at least one `i` past 65536; with
+    # `ad_stack_size=2048` the per-thread stride is ~16 KB at f64 so a misdispatch's OOB write lands in unmapped device
+    # memory rather than aliasing into another adjacent buffer. arch=[qd.cuda, qd.amdgpu] only because Metal requires
+    # `block_dim` to be a power of two. default_fp=qd.f64 because CUDA's libdevice `__nv_sinf` / `__nv_cosf` carry ~3
+    # ULP error in f32 and a 6-deep sin/cos composition compounds to ~1.5e-5 relative drift against numpy's libm
+    # reference, right at the rtol boundary; f64 transcendentals are ~1 ULP on both libdevice and rocm libm so the drift
+    # drops to ~6e-15 relative and the tolerance can stay tight, and the f64 stride (8 B vs 4 B) doubles the per-thread
+    # heap footprint, making OOB bugs strictly easier to detect.
+    n = 65700
+    block_dim = 192
+    n_inner = 6
+
+    x_np = (0.5 + 0.001 * np.arange(n)).astype(np.float64)
+
+    x = qd.ndarray(qd.f64, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f64, shape=(1,), needs_grad=True)
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        qd.loop_config(block_dim=block_dim)
+        for i in range(n):
+            v = x[i]
+            for _ in range(n_inner):
+                v = qd.sin(v) + 0.01
+            out[0] += v
+
+    x.from_numpy(x_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float64))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float64))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, out)
+    compute.grad(x, out)
+    qd.sync()
+
+    v_np = x_np.copy()
+    grad_ref = np.ones(n, dtype=np.float64)
+    for _ in range(n_inner):
+        grad_ref *= np.cos(v_np)
+        v_np = np.sin(v_np) + 0.01
+
+    got_grad = x.grad.to_numpy()
+    np.testing.assert_allclose(got_grad, grad_ref, rtol=1e-12, atol=1e-14)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=0, debug=False)
+def test_adstack_static_bound_expr_device_sizer_per_kind_offsets_grad_correct():
+    # Asserts gradient correctness on CUDA / AMDGPU for kernels that interleave float and int adstack allocas in source
+    # order, when the SizeExpr contains an ExternalTensorRead leaf (so the device sizer runs instead of the host-eval
+    # path). The device sizer must write per-kind running offsets into `adstack_offsets[stack_id]`, not the combined
+    # prefix sum across all stacks; a combined prefix sum makes the codegen address each alloca's tape using a byte
+    # offset that includes the other kind's strides, landing the tape inside an adjacent thread's slice and producing
+    # wrong gradients on the cross-thread primal reload.
+    #
+    # Internal details: the codegen reads `adstack_offsets[stack_id]` as an offset within the per-kind slice (float
+    # allocas: `heap_float + linear_tid * stride_float + offsets[i]`; int / u1 allocas: `heap_int + linear_tid *
+    # stride_int + offsets[i]`). The kernel below interleaves two f32 allocas (`v0`, `v1`) and one i32 alloca (`j`) in
+    # source order so the IR pre-scan in `init_offloaded_task_function` assigns stack ids 0 (float), 1 (int), 2 (float).
+    # Under a combined prefix sum, `out_offsets[2] = step_v0 + step_j` - non-zero - which the codegen interprets as a
+    # byte offset within `heap_float`'s slice for `v1`. With `stride_float = step_v0 + step_v1` and `step_v0 + step_j >
+    # step_v0`, `v1`'s tape for thread `t` lands inside thread `(t+1)`'s float slice; thread `t`'s reverse pass then
+    # reads `v1`'s saved primal that thread `(t+1)` wrote, which is x[(t+1)]'s tape. Restricted to LLVM CUDA / AMDGPU
+    # because (a) CPU goes through `use_host_eval=true` and uses the host-eval branch of `publish_adstack_metadata`
+    # whose per-kind write is correct, (b) Metal / Vulkan use the SPIR-V sizer compute shader
+    # (`codegen/spirv/adstack_sizer_shader.cpp`) which already does per-kind offsets correctly. `ad_stack_size=0` lets
+    # the SizeExpr's launch-time evaluator pick the per-launch bound; `debug=False` keeps the release-build inline push
+    # / pop emit path so the tape addressing math goes through `get_ad_stack_base_llvm` rather than the runtime
+    # helper-call path which would also exercise the bug but takes a different code path through `stack_init`.
+    n_outer = 8
+    a_np = np.array([2, 3, 1, 2, 3, 1, 2, 3], dtype=np.int32)
+
+    x = qd.field(qd.f32, shape=(n_outer,), needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in x:
+            v0 = x[i] * 1.0
+            j = 0
+            v1 = x[i] * 2.0
+            n = a[i]
+            for _ in range(n):
+                v0 = v0 * 0.95 + 0.01
+                j = j + 1
+                v1 = v1 * 0.9 + 0.02
+            y[None] += v0 + v1 + qd.cast(j, qd.f32) * 0.0
+
+    for i in range(n_outer):
+        x[i] = 0.1 + 0.05 * i
+
+    compute(a_np)
+    y.grad[None] = 1.0
+    for i in range(n_outer):
+        x.grad[i] = 0.0
+    compute.grad(a_np)
+    qd.sync()
+
+    for i in range(n_outer):
+        # d(v0_n + v1_n) / dx[i] = 1.0 * 0.95**a[i] + 2.0 * 0.9**a[i].
+        expected = 1.0 * (0.95 ** int(a_np[i])) + 2.0 * (0.9 ** int(a_np[i]))
+        assert x.grad[i] == pytest.approx(expected, rel=1e-5)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=0, ad_stack_sparse_threshold_bytes=0)
+def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
+    # Asserts gradient correctness on Metal / Vulkan when an adstack-bearing kernel's gating ndarray is larger than the
+    # SPIR-V grid-stride advisory cap (`kMaxNumThreadsGridStrideLoop = 131072`) and all gated cells live past the cap.
+    # The launcher's reducer must walk the full flat element product of the gating ndarray (not just the first 131072
+    # cells) so the float adstack heap is sized for every gated iteration; capping the walk at the advisory would size
+    # the heap to zero rows on workloads whose gates only fire past index 131072 and silently corrupt gradients on every
+    # gated index.
+    #
+    # Internal details: the kernel places all gated cells at indices [131072, 131072+n_gated_past_cap) and runs the
+    # inner recurrence `v = v * 1.05 + 0.05` so the autodiff transform actually pushes loop-carried primals onto the
+    # float adstack (a single `qd.sin(x[i])` would not - sin's adjoint reloads `x[i]` directly without consulting the
+    # adstack). A reducer that walks only `selector[0..131072)` counts 0 gate-passing cells, the float heap is floored
+    # at 1 row, and every gated iteration's `OpAtomicIAdd` on the row counter clamps back to row 0 via the
+    # codegen-emitted `select(capacity == 0, 0, capacity - 1)` upper-bound; all n_gated_past_cap forward push streams
+    # alias onto row 0 and the reverse pop reads back whichever iteration's primal landed last, producing one common
+    # gradient value for every gated index instead of the per-i `1.05 ** n_iter` the analytic oracle expects.
+    # arch=[qd.metal, qd.vulkan] because CPU and CUDA / AMDGPU launchers have their own `bound_count_length` derivation
+    # paths whose advisory-cap shape is exercised by separate tests.
+    n_gated_past_cap = 64  # enough to alias multiple iterations into a single row if the heap mis-sizes to one row
+    advisory_cap = 131072  # SPIR-V kMaxNumThreadsGridStrideLoop
+    n = advisory_cap + n_gated_past_cap
+    n_iter = 4
+
+    selector = qd.ndarray(qd.f32, shape=(n,))
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+
+    @qd.kernel
+    def compute(x: qd.types.NDArray, selector: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            if selector[i] > 1e-9:
+                v = x[i]
+                for _ in range(n_iter):
+                    v = v * 1.05 + 0.05
+                out[0] += v
+
+    x_np = (0.001 * np.arange(n) + 0.1).astype(np.float32)
+    selector_np = np.zeros(n, dtype=np.float32)
+    selector_np[advisory_cap : advisory_cap + n_gated_past_cap] = 1.0  # all gated cells past the advisory cap
+    x.from_numpy(x_np)
+    selector.from_numpy(selector_np)
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+    x.grad.from_numpy(np.zeros_like(x_np))
+
+    compute(x, selector, out)
+    compute.grad(x, selector, out)
+    qd.sync()
+
+    got = x.grad.to_numpy()
+    expected_per_gated = np.float32(1.05**n_iter)
+    expected = np.where(selector_np > 1e-9, expected_per_gated, np.float32(0.0)).astype(np.float32)
+    assert not np.isnan(got).any(), f"resolve_length grad returned NaN: {got[advisory_cap:advisory_cap + 8]}"
+    for i in range(advisory_cap, advisory_cap + n_gated_past_cap):
+        assert got[i] == pytest.approx(expected[i], rel=1e-5, abs=1e-7), (
+            f"gated index {i} (past advisory_total_num_threads={advisory_cap}) gradient diverged: "
+            f"got={got[i]} expected={expected[i]}"
+        )
