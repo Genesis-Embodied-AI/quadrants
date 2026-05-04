@@ -31,6 +31,7 @@ parallelization
 :titlesonly:
 
 interop
+metal_shared_queue
 ```
 
 ```{toctree}

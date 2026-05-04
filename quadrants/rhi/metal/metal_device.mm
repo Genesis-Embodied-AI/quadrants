@@ -1016,17 +1016,18 @@ void MetalCommandList::blit_image(DeviceAllocation dst_img,
 MTLCommandBuffer_id MetalCommandList::finalize() { return cmdbuf_; }
 
 MetalStream::MetalStream(const MetalDevice &device,
-                         MTLCommandQueue_id mtl_command_queue,
-                         bool owns_queue)
-    : device_(&device), mtl_command_queue_(mtl_command_queue), owns_queue_(owns_queue) {}
+                         MTLCommandQueue_id mtl_command_queue, bool owns_queue)
+    : device_(&device), mtl_command_queue_(mtl_command_queue),
+      owns_queue_(owns_queue) {}
 MetalStream::~MetalStream() { destroy(); }
 
 MetalStream *MetalStream::create(const MetalDevice &device) {
   MTLCommandQueue_id compute_queue = [device.mtl_device() newCommandQueue];
   return new MetalStream(device, compute_queue, /*owns_queue=*/true);
 }
-MetalStream *MetalStream::create_with_external_queue(const MetalDevice &device,
-                                                     MTLCommandQueue_id external_queue) {
+MetalStream *
+MetalStream::create_with_external_queue(const MetalDevice &device,
+                                        MTLCommandQueue_id external_queue) {
   [external_queue retain];
   return new MetalStream(device, external_queue, /*owns_queue=*/false);
 }
@@ -1224,8 +1225,8 @@ MetalDevice::MetalDevice(MTLDevice_id mtl_device,
                          MTLCommandQueue_id external_command_queue)
     : mtl_device_(mtl_device) {
   if (external_command_queue != nil) {
-    compute_stream_ =
-        std::unique_ptr<MetalStream>(MetalStream::create_with_external_queue(*this, external_command_queue));
+    compute_stream_ = std::unique_ptr<MetalStream>(
+        MetalStream::create_with_external_queue(*this, external_command_queue));
   } else {
     compute_stream_ = std::unique_ptr<MetalStream>(MetalStream::create(*this));
   }
@@ -1241,7 +1242,8 @@ MetalDevice *MetalDevice::create() {
   MTLDevice_id mtl_device = MTLCreateSystemDefaultDevice();
   return new MetalDevice(mtl_device);
 }
-MetalDevice *MetalDevice::create_with_external_queue(uint64_t external_queue_ptr) {
+MetalDevice *
+MetalDevice::create_with_external_queue(uint64_t external_queue_ptr) {
   MTLDevice_id mtl_device = MTLCreateSystemDefaultDevice();
   auto *queue = reinterpret_cast<MTLCommandQueue_id>(external_queue_ptr);
   return new MetalDevice(mtl_device, queue);

@@ -1,11 +1,10 @@
 """Tests for the external Metal command queue feature (``external_metal_command_queue``)."""
 
-import platform
-
 import numpy as np
 import pytest
 
 import quadrants as qd
+
 from tests import test_utils
 
 
