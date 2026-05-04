@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.matrix &#8212; Quadrants 0.7.5 documentation</title>
+    <title>quadrants.lang.matrix &#8212; Quadrants 0.7.6 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../_static/documentation_options.js?v=a674670e"></script>
+    <script src="../../../../_static/documentation_options.js?v=918ced64"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.kernel_impl" href="../kernel_impl/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.5" />
+  <meta name="docsearch:version" content="0.7.6" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.5 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
   
 </a></div>
     
@@ -1213,7 +1213,8 @@ matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix
 keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a 4x1
 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.</p></li>
 <li><p><strong>dtype</strong> (<em>DataType</em><em>, </em><em>optional</em>) – The desired data type of returned numpy array.</p></li>
-<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -1235,7 +1236,8 @@ or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.</p
 <li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – The desired device of returned tensor.</p></li>
 <li><p><strong>keep_dims</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to keep the dimension after conversion.
 See <code class="xref py py-meth docutils literal notranslate"><span class="pre">to_numpy()</span></code> for more detailed explanation.</p></li>
-<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -1323,7 +1325,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <dd><p>Converts this ndarray to a <code class="docutils literal notranslate"><span class="pre">numpy.ndarray</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
+<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p>
 </dd>
 </dl>
 <p>Example:</p>
@@ -1357,7 +1360,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <p>Mirrors <a class="reference internal" href="#quadrants.lang.matrix.MatrixField.to_torch" title="quadrants.lang.matrix.MatrixField.to_torch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">MatrixField.to_torch()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
+<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1427,7 +1431,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <dd><p>Converts this vector ndarray to a <code class="docutils literal notranslate"><span class="pre">numpy.ndarray</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
+<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p>
 </dd>
 </dl>
 <p>Example:</p>
@@ -1463,7 +1468,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <p>Mirrors <a class="reference internal" href="#quadrants.lang.matrix.MatrixField.to_torch" title="quadrants.lang.matrix.MatrixField.to_torch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">MatrixField.to_torch()</span></code></a> on the vector code path.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
+<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p>
 </dd>
 </dl>
 </dd></dl>
