@@ -12,6 +12,7 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
+  checks: write
 jobs:
   pr-change-report:
     name: PR change report
@@ -30,16 +31,20 @@ jobs:
         id: inputs
         env:
           BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          SHORT_SHA=$(echo "${HEAD_SHA:-$(git rev-parse HEAD)}" | cut -c1-9)
           python .github/workflows/scripts_new/pr_change_report/build_inputs.py \
             --base-ref "$BASE_REF" \
-            --output-dir /tmp/pr_change_report
+            --output-dir /tmp/pr_change_report \
+            --commit-hash "$SHORT_SHA"
 
           if [ ! -s /tmp/pr_change_report/file_list.txt ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "No source files changed."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
             echo "Files in report:"
             cat /tmp/pr_change_report/file_list.txt
             echo
@@ -62,7 +67,8 @@ jobs:
           You are producing a PR change report. Inputs are under /tmp/pr_change_report/ :
             - summary.json     : list of {"path","language","total","added","removed"} for each
                                  changed source file. Numbers are NON-comment, NON-blank code
-                                 lines, computed deterministically. Treat them as authoritative.
+                                 lines (Python multi-line strings and docstrings also excluded),
+                                 computed deterministically. Treat them as authoritative.
             - report_header.md : exact file-header lines you must use verbatim, e.g.
                                    foo.py 700 +63 -5
                                    blah.cpp 2000 +45 -20
@@ -74,17 +80,21 @@ jobs:
           Your task: for each path in file_list.txt, in order, emit:
             1. The exact file-header line from report_header.md, verbatim, on its own line.
             2. Indented (4 spaces) per-function lines, one per function/method that was added
-               or modified by this PR. One line per function, format:
+               or modified by this PR. Format:
                   <name>() NEW +<added>                 (function did not exist on base)
                   <name>() <total> +<added>             (only added code lines)
                   <name>() <total> -<removed>           (only removed code lines)
                   <name>() <total> +<added> -<removed>  (both)
                where:
-                 - <total>   = current LoC of the function in HEAD (NON-comment, NON-blank).
+                 - <total>   = current LoC of the function in HEAD (NON-comment, NON-blank;
+                               for Python, also exclude docstrings and multi-line-string-only
+                               continuation lines).
                  - <added>   = code lines this function gained.
                  - <removed> = code lines this function lost.
                For top-level statements that are not inside a function/class, group them
                under the synthetic name `<module>()`.
+            3. After the last function line for a file, a single blank line before the next
+               file's header.
 
           Constraints:
             - Use function names as they appear in source. C++ class methods are
@@ -108,44 +118,93 @@ jobs:
           cat /tmp/pr_change_report/report.txt
           echo "----------------------"
 
-      - name: Write report to job summary
+      - name: Assemble Check-page markdown
         if: steps.inputs.outputs.skip != 'true'
+        env:
+          SHORT_SHA: ${{ steps.inputs.outputs.short_sha }}
         run: |
           {
-            echo "## PR change report"
+            echo "## PR change report (\`${SHORT_SHA}\`)"
             echo
-            echo "Per-file totals + per-function breakdown of code lines (excluding blank lines and comment-only lines)."
+            echo "Per-file totals + per-function breakdown of code-line additions and removals."
+            echo "Code lines exclude blank lines, comment-only lines, and Python multi-line strings."
             echo
-            echo "Header line format: \`<file> <total_LoC_at_HEAD> +<added> -<removed>\`."
-            echo "Per-function lines (indented) follow the same format, with \`NEW\` instead of \`<total>\` for newly-introduced functions."
+            # Reuse the table from report_comment.md (skip its leading heading + intro lines).
+            sed -n '/^| File /,/^\*\*Total\*\*/p' /tmp/pr_change_report/report_comment.md
+            echo
+            echo "### Per-function breakdown"
             echo
             echo '```text'
             cat /tmp/pr_change_report/report.txt
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } > /tmp/pr_change_report/report_check.md
 
-      - name: Post PR comment linking to the report
+          echo "----- report_check.md (head) -----"
+          head -40 /tmp/pr_change_report/report_check.md
+          echo "..."
+          echo "size: $(wc -c < /tmp/pr_change_report/report_check.md) bytes"
+
+      - name: Upload report artifacts
+        if: steps.inputs.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-change-report
+          path: |
+            /tmp/pr_change_report/report.txt
+            /tmp/pr_change_report/report_check.md
+            /tmp/pr_change_report/report_comment.md
+            /tmp/pr_change_report/summary.json
+            /tmp/pr_change_report/report_header.md
+
+      - name: Publish PR change report Check
         if: steps.inputs.outputs.skip != 'true' && github.event_name == 'pull_request'
+        id: publish_check
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            let body = fs.readFileSync('/tmp/pr_change_report/report_check.md', 'utf8');
+            const MAX_TEXT = 65000;
+            let truncated = false;
+            if (body.length > MAX_TEXT) {
+              body = body.substring(0, MAX_TEXT) +
+                '\n\n---\n*Report truncated. Download the full report from the workflow artifacts.*';
+              truncated = true;
+            }
+            const summary = truncated
+              ? 'Per-file totals + per-function breakdown (truncated — see artifacts for full report).'
+              : 'Per-file totals + per-function breakdown of code-line additions and removals.';
+            const check = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head_sha: context.payload.pull_request.head.sha,
+              name: 'PR change report',
+              status: 'completed',
+              conclusion: 'success',
+              output: {
+                title: 'PR change report',
+                summary: summary,
+                text: body,
+              },
+            });
+            core.setOutput('check-url', check.data.html_url);
+
+      - name: Post PR comment
+        if: steps.inputs.outputs.skip != 'true' && github.event_name == 'pull_request'
+        uses: actions/github-script@v8
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          RUN_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
-          if [ -n "${RUN_ATTEMPT}" ]; then
-            RUN_URL="${RUN_URL}/attempts/${RUN_ATTEMPT}"
-          fi
-          cat > /tmp/pr_change_report/comment.md <<EOF
-          **PR change report**
-
-          A per-file / per-function breakdown of code-line additions and removals (excluding blank lines and comment-only lines) has been generated for this run.
-
-          Open the GitHub Check **PR change report** for the full report:
-
-          - [View the report on the run summary](${RUN_URL}#summary)
-
-          A new comment is posted on every run.
-          EOF
-          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body-file /tmp/pr_change_report/comment.md
+          REPORT_URL: ${{ steps.publish_check.outputs.check-url }}
+        with:
+          script: |
+            const fs = require('fs');
+            let body = fs.readFileSync('/tmp/pr_change_report/report_comment.md', 'utf8');
+            const url = process.env.REPORT_URL;
+            if (url) {
+              body += `\n\n[Full per-function report](${url})`;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: body,
+            });
