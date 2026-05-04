@@ -586,6 +586,15 @@ def get_runtime() -> PyQuadrants:
     return pyquadrants
 
 
+_reset_hooks: list[callable] = []
+
+
+def on_reset(hook: callable) -> None:
+    """Register a callback to be invoked on ``reset()``.  Subscribers use this
+    to invalidate module-level caches without ``impl.py`` knowing about them."""
+    _reset_hooks.append(hook)
+
+
 def reset():
     global pyquadrants
     old_ndarrays = pyquadrants.ndarrays
@@ -600,6 +609,9 @@ def reset():
     from quadrants.lang._func_base import _frozen_dc_plans  # pylint: disable=C0415
 
     _frozen_dc_plans.clear()
+
+    for hook in _reset_hooks:
+        hook()
 
 
 @quadrants_scope

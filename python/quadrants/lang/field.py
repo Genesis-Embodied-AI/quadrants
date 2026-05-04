@@ -144,6 +144,37 @@ _ARCH_CPU = frozenset({_qd_core.Arch.x64, _qd_core.Arch.arm64})
 
 _DLPACK_SUPPORTED_DTYPES = frozenset({f32, f64, i32, i64, u1})
 
+# Cached flag: True when Metal is active with separate command queues (sync needed at interop points).
+# Set by _recompute_metal_interop_sync() after qd.init(); cleared by impl.reset() via _clear_metal_interop_cache().
+_metal_needs_interop_sync_cached: bool | None = None
+
+
+def _recompute_metal_interop_sync() -> None:
+    """Recompute and cache the Metal interop sync flag from the current config."""
+    global _metal_needs_interop_sync_cached
+    cfg = impl.current_cfg()
+    _metal_needs_interop_sync_cached = cfg.arch == _ARCH_METAL and not cfg.external_metal_command_queue
+
+
+def _clear_metal_interop_cache() -> None:
+    """Invalidate the cached flag. Registered as a reset hook."""
+    global _metal_needs_interop_sync_cached
+    _metal_needs_interop_sync_cached = None
+
+
+_metal_interop_hook_registered = False
+
+
+def _metal_needs_interop_sync() -> bool:
+    """Return True when explicit sync is needed between Quadrants and PyTorch MPS (separate Metal queues)."""
+    global _metal_interop_hook_registered
+    if not _metal_interop_hook_registered:
+        impl.on_reset(_clear_metal_interop_cache)
+        _metal_interop_hook_registered = True
+    if _metal_needs_interop_sync_cached is None:
+        _recompute_metal_interop_sync()
+    return _metal_needs_interop_sync_cached  # type: ignore[return-value]
+
 
 def _compute_torch_mps_supports_dlpack_bytes_offset() -> bool:
     try:
@@ -218,7 +249,7 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
         tc = torch.utils.dlpack.from_dlpack(field.to_dlpack())
     except RuntimeError as e:
         raise ValueError(f"Zero-copy not available: {e}") from None
-    if impl.current_cfg().arch == _ARCH_METAL and not impl.current_cfg().external_metal_command_queue:
+    if _metal_needs_interop_sync():
         impl.get_runtime().sync()
 
     if device is not None:
@@ -245,7 +276,7 @@ def _mps_sync_if_metal():
     When a shared command queue is configured (``external_metal_command_queue != 0``), Metal's sequential command buffer
     semantics guarantee ordering automatically and no sync is needed.
     """
-    if impl.current_cfg().arch == _ARCH_METAL and not impl.current_cfg().external_metal_command_queue:
+    if _metal_needs_interop_sync():
         import torch  # pylint: disable=C0415
 
         torch.mps.synchronize()
