@@ -502,7 +502,7 @@
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">f.to_numpy()</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> (always needed for CPU readback)</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> (still needed)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> (still needed — the kernel-copy path is Quadrants-internal, not routed through MPS)</p></td>
 </tr>
 </tbody>
 </table>

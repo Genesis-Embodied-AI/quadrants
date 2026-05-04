@@ -905,6 +905,15 @@
     <span class="k">return</span> <span class="n">pyquadrants</span>
 
 
+<span class="n">_reset_hooks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">callable</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">on_reset</span><span class="p">(</span><span class="n">hook</span><span class="p">:</span> <span class="nb">callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a callback to be invoked on ``reset()``.  Subscribers use this</span>
+<span class="sd">    to invalidate module-level caches without ``impl.py`` knowing about them.&quot;&quot;&quot;</span>
+    <span class="n">_reset_hooks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">hook</span><span class="p">)</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">():</span>
     <span class="k">global</span> <span class="n">pyquadrants</span>
     <span class="n">old_ndarrays</span> <span class="o">=</span> <span class="n">pyquadrants</span><span class="o">.</span><span class="n">ndarrays</span>
@@ -916,9 +925,9 @@
     <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">old_kernels</span><span class="p">:</span>
         <span class="n">k</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
     <span class="n">_qd_core</span><span class="o">.</span><span class="n">reset_default_compile_config</span><span class="p">()</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._func_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">_frozen_dc_plans</span>  <span class="c1"># pylint: disable=C0415</span>
 
-    <span class="n">_frozen_dc_plans</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">hook</span> <span class="ow">in</span> <span class="n">_reset_hooks</span><span class="p">:</span>
+        <span class="n">hook</span><span class="p">()</span>
 
 
 <span class="nd">@quadrants_scope</span>

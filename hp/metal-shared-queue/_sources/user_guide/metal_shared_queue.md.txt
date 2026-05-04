@@ -94,7 +94,7 @@ qd.init(arch=qd.metal, external_metal_command_queue=queue_ptr)
 | `f.to_torch(copy=False)` | `qd.sync()` called internally | no sync needed |
 | `f.to_torch(copy=True)` | `qd.sync()` + `torch.mps.synchronize()` | no sync needed |
 | Quadrants kernel after torch write | manual `torch.mps.synchronize()` required | automatic (same queue) |
-| `f.to_numpy()` | `qd.sync()` (always needed for CPU readback) | `qd.sync()` (still needed) |
+| `f.to_numpy()` | `qd.sync()` (always needed for CPU readback) | `qd.sync()` (still needed — the kernel-copy path is Quadrants-internal, not routed through MPS) |
 
 ## Lifetime and ownership
 

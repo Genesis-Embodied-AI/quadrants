@@ -463,6 +463,37 @@
 
 <span class="n">_DLPACK_SUPPORTED_DTYPES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">f32</span><span class="p">,</span> <span class="n">f64</span><span class="p">,</span> <span class="n">i32</span><span class="p">,</span> <span class="n">i64</span><span class="p">,</span> <span class="n">u1</span><span class="p">})</span>
 
+<span class="c1"># Cached flag: True when Metal is active with separate command queues (sync needed at interop points).</span>
+<span class="c1"># Set by _recompute_metal_interop_sync() after qd.init(); cleared by impl.reset() via _clear_metal_interop_cache().</span>
+<span class="n">_metal_needs_interop_sync_cached</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_recompute_metal_interop_sync</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Recompute and cache the Metal interop sync flag from the current config.&quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">_metal_needs_interop_sync_cached</span>
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span>
+    <span class="n">_metal_needs_interop_sync_cached</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_ARCH_METAL</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">cfg</span><span class="o">.</span><span class="n">external_metal_command_queue</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_clear_metal_interop_cache</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Invalidate the cached flag. Registered as a reset hook.&quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">_metal_needs_interop_sync_cached</span>
+    <span class="n">_metal_needs_interop_sync_cached</span> <span class="o">=</span> <span class="kc">None</span>
+
+
+<span class="n">_metal_interop_hook_registered</span> <span class="o">=</span> <span class="kc">False</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_metal_needs_interop_sync</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return True when explicit sync is needed between Quadrants and PyTorch MPS (separate Metal queues).&quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">_metal_interop_hook_registered</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_metal_interop_hook_registered</span><span class="p">:</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">on_reset</span><span class="p">(</span><span class="n">_clear_metal_interop_cache</span><span class="p">)</span>
+        <span class="n">_metal_interop_hook_registered</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">if</span> <span class="n">_metal_needs_interop_sync_cached</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_recompute_metal_interop_sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">_metal_needs_interop_sync_cached</span>  <span class="c1"># type: ignore[return-value]</span>
+
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_compute_torch_mps_supports_dlpack_bytes_offset</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
     <span class="k">try</span><span class="p">:</span>
@@ -537,7 +568,7 @@
         <span class="n">tc</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">dlpack</span><span class="o">.</span><span class="n">from_dlpack</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">to_dlpack</span><span class="p">())</span>
     <span class="k">except</span> <span class="ne">RuntimeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Zero-copy not available: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_ARCH_METAL</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">external_metal_command_queue</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">_metal_needs_interop_sync</span><span class="p">():</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
 
     <span class="k">if</span> <span class="n">device</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -564,7 +595,7 @@
 <span class="sd">    When a shared command queue is configured (``external_metal_command_queue != 0``), Metal&#39;s sequential command buffer</span>
 <span class="sd">    semantics guarantee ordering automatically and no sync is needed.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_ARCH_METAL</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">external_metal_command_queue</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">_metal_needs_interop_sync</span><span class="p">():</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">torch</span><span class="o">.</span><span class="n">mps</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
