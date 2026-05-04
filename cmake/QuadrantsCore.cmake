@@ -69,6 +69,7 @@ file(GLOB QUADRANTS_CORE_SOURCE
     "quadrants/struct/*"
     "quadrants/system/*"
     "quadrants/transforms/*"
+    "quadrants/transforms/auto_diff/*"
     "quadrants/platform/cuda/*" "quadrants/platform/amdgpu/*"
     "quadrants/platform/mac/*" "quadrants/platform/windows/*"
     "quadrants/codegen/*.cpp" "quadrants/codegen/*.h"
