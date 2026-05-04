@@ -180,7 +180,34 @@ def _attribute_all(entries: list[_FunctionEntry], book: _FileBookkeeping) -> lis
         if added == 0 and removed == 0:
             continue
         out.append(_AttributedEntry(entry, total, added, removed, is_new, is_deleted))
-    return out
+    return _coalesce_by_name(out)
+
+
+def _coalesce_by_name(attributed: list[_AttributedEntry]) -> list[_AttributedEntry]:
+    """Merge attributed entries that share the same ``name`` by summing counts.
+
+    The agent legitimately emits multiple ``<module>`` entries when module-level changes
+    are scattered between function definitions; collapsing them into one row per file is
+    cleaner than showing the same name several times. Counts are summed (assumes the
+    agent's ranges within a file are disjoint, per the prompt's overlap rule).
+    """
+    by_name: dict[str, _AttributedEntry] = {}
+    order: list[str] = []
+    for a in attributed:
+        existing = by_name.get(a.entry.name)
+        if existing is None:
+            by_name[a.entry.name] = a
+            order.append(a.entry.name)
+            continue
+        by_name[a.entry.name] = _AttributedEntry(
+            entry=existing.entry,
+            total=existing.total + a.total,
+            added=existing.added + a.added,
+            removed=existing.removed + a.removed,
+            is_new=existing.is_new and a.is_new,
+            is_deleted=existing.is_deleted and a.is_deleted,
+        )
+    return [by_name[n] for n in order]
 
 
 def _impact_sort_key(a: _AttributedEntry) -> tuple[int, int, str]:
