@@ -55,3 +55,35 @@ class ASTResolver:
                 return False
         # The name ``scope`` here could be a bit confusing
         return scope is wanted
+
+    @staticmethod
+    def resolve_value(node, scope):
+        """Resolve an AST Name/Attribute node to a Python object.
+
+        Same traversal as resolve_to but returns the resolved object (or None) instead of comparing against a wanted
+        value.
+        """
+        if isinstance(node, ast.Name):
+            return scope.get(node.id) if isinstance(scope, dict) else None
+
+        if not isinstance(node, ast.Attribute):
+            return None
+
+        v = node.value
+        chain = [node.attr]
+        while isinstance(v, ast.Attribute):
+            chain.append(v.attr)
+            v = v.value
+        if not isinstance(v, ast.Name):
+            return None
+        chain.append(v.id)
+
+        for attr in reversed(chain):
+            try:
+                if isinstance(scope, dict):
+                    scope = scope[attr]
+                else:
+                    scope = getattr(scope, attr)
+            except (KeyError, AttributeError):
+                return None
+        return scope

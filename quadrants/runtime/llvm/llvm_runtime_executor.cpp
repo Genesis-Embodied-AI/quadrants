@@ -196,13 +196,15 @@ void LlvmRuntimeExecutor::print_list_manager_info(void *list_manager, uint64 *re
 void LlvmRuntimeExecutor::synchronize() {
   if (config_.arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
-    CUDADriver::get_instance().stream_synchronize(nullptr);
+    CUDAContext::get_instance().make_current();
+    CUDADriver::get_instance().context_synchronize();
 #else
     QD_ERROR("No CUDA support");
 #endif
   } else if (config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
-    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+    AMDGPUContext::get_instance().make_current();
+    AMDGPUDriver::get_instance().device_synchronize();
 #else
     QD_ERROR("No AMDGPU support");
 #endif
