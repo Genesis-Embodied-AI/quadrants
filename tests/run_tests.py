@@ -39,7 +39,7 @@ def _test_python(args, default_dir="python"):
     try:
         if args.coverage:
             os.environ.setdefault("QD_KERNEL_COVERAGE", "1")
-            os.environ.setdefault("_QD_KCOV_ARC", "1")
+            os.environ["_QD_KCOV_ARC"] = "1"
             _spec = importlib.util.find_spec("quadrants")
             assert _spec is not None and _spec.origin is not None, "quadrants package not found"
             _cov_src = os.path.dirname(_spec.origin)
