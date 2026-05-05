@@ -285,14 +285,11 @@ def _emit_file_section(book: _FileBookkeeping, attributed: list[_AttributedEntry
 
     new_group = sorted([a for a in attributed if a.is_new], key=_impact_sort_key)
     deleted_group = sorted([a for a in attributed if a.is_deleted], key=_impact_sort_key)
-    existing_group = sorted(
-        [a for a in attributed if not a.is_new and not a.is_deleted],
-        key=_impact_sort_key)
+    existing_group = sorted([a for a in attributed if not a.is_new and not a.is_deleted], key=_impact_sort_key)
 
     # Pad function names to the longest name across ALL groups so the New: / Existing: /
     # Deleted: subsections line up with each other.
-    all_names = [_function_label(a.entry.name)
-                 for a in new_group + existing_group + deleted_group]
+    all_names = [_function_label(a.entry.name) for a in new_group + existing_group + deleted_group]
     name_width = max((len(n) for n in all_names), default=0)
 
     if new_group:

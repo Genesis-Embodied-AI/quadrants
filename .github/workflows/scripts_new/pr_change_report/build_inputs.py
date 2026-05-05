@@ -347,8 +347,10 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
     if not summaries:
         lines.append("No source files (.py, .c, .cc, .cpp, .h, .hpp, .cu) changed in this PR.")
         return "\n".join(lines) + "\n"
-    lines.append("LoC = code lines in the file BEFORE this PR (0 for newly-added files). "
-                 "Excludes blank lines, comment-only lines, and Python multi-line strings.")
+    lines.append(
+        "LoC = code lines in the file BEFORE this PR (0 for newly-added files). "
+        "Excludes blank lines, comment-only lines, and Python multi-line strings."
+    )
     lines.append("")
     lines.append("| File | LoC | Added | Removed |")
     lines.append("|------|-----|-------|---------|")
@@ -423,9 +425,11 @@ def main() -> int:
         if base_content:
             write_file(base_dir / path, base_content)
 
-        summaries.append(FileSummary(
-            path=path, language=lang, total=len(base_codes),
-            added=added, removed=removed, is_deleted=is_deleted))
+        summaries.append(
+            FileSummary(
+                path=path, language=lang, total=len(base_codes), added=added, removed=removed, is_deleted=is_deleted
+            )
+        )
 
     # Sort files by descending lines added, then descending lines removed, then path. This is the
     # order used for every downstream artifact (summary.json, file_list.txt, report_header.md,
@@ -433,8 +437,14 @@ def main() -> int:
     summaries.sort(key=lambda s: (-s.added, -s.removed, s.path))
 
     summary_dicts = [
-        {"path": s.path, "language": s.language, "total": s.total,
-         "added": s.added, "removed": s.removed, "is_deleted": s.is_deleted}
+        {
+            "path": s.path,
+            "language": s.language,
+            "total": s.total,
+            "added": s.added,
+            "removed": s.removed,
+            "is_deleted": s.is_deleted,
+        }
         for s in summaries
     ]
     (output_dir / "summary.json").write_text(json.dumps(summary_dicts, indent=2) + "\n")
