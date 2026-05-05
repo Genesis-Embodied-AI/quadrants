@@ -11,11 +11,12 @@ For each source file changed in the PR (.py / .c / .cc / .cpp / .h / .hpp / .cu)
   ``<output_dir>/head/<path>``         HEAD content of the file (always present)
   ``<output_dir>/base/<path>``         file content at merge-base (absent for newly added files)
 
-``total`` is the number of code lines in the HEAD version of the file. ``added`` and ``removed`` are
-the number of code lines added or removed by this PR (vs. merge-base). A "code line" excludes blank
-lines, lines whose only non-whitespace content is a comment, and (in Python) lines whose only token
-content is a string literal -- i.e. docstrings and continuation lines of multi-line strings. C/C++
-``/* ... */`` block comments are stripped before counting.
+``total`` is the number of code lines in the BASE (pre-PR, merge-base) version of the file -- the
+size of the file before this PR's changes. For newly-added files this is 0. ``added`` and
+``removed`` are the number of code lines added or removed by this PR (vs. merge-base). A "code
+line" excludes blank lines, lines whose only non-whitespace content is a comment, and (in Python)
+lines whose only token content is a string literal -- i.e. docstrings and continuation lines of
+multi-line strings. C/C++ ``/* ... */`` block comments are stripped before counting.
 
 The agent consumes these inputs to produce the per-function breakdown.
 """
@@ -344,7 +345,8 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
     if not summaries:
         lines.append("No source files (.py, .c, .cc, .cpp, .h, .hpp, .cu) changed in this PR.")
         return "\n".join(lines) + "\n"
-    lines.append("Code lines (excluding blank lines, comment-only lines, and Python multi-line strings).")
+    lines.append("LoC = code lines in the file BEFORE this PR (0 for newly-added files). "
+                 "Excludes blank lines, comment-only lines, and Python multi-line strings.")
     lines.append("")
     lines.append("| File | LoC | Added | Removed |")
     lines.append("|------|-----|-------|---------|")
@@ -412,7 +414,7 @@ def main() -> int:
         if base_content:
             write_file(base_dir / path, base_content)
 
-        summaries.append(FileSummary(path=path, language=lang, total=len(head_codes), added=added, removed=removed))
+        summaries.append(FileSummary(path=path, language=lang, total=len(base_codes), added=added, removed=removed))
 
     # Sort files by descending lines added, then descending lines removed, then path. This is the
     # order used for every downstream artifact (summary.json, file_list.txt, report_header.md,
