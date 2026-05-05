@@ -173,6 +173,12 @@ class LaunchContextBuilder {
   std::unordered_map<int, DevAllocType> device_allocation_type;
 
   std::unordered_map<ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher> array_ptrs;
+  // Per-arg ndarray shape, populated by `set_arg_external_array_with_shape` / `set_arg_ndarray*`. Mirrors what
+  // is already encoded into `arg_buffer_` via `set_struct_arg(std::array{arg_id, 0, axis}, shape[axis])`, but
+  // exposed as a flat vector here so the diagnose path (`Program::capture_diagnose_snapshot`) does not have to
+  // walk `args_type` element offsets. The args-type walk would emit spurious "Cannot treat as TensorType"
+  // diagnostics on out-of-rank axis lookups; mirroring shapes once at set-time is both cheaper and quieter.
+  std::unordered_map<int, std::vector<int>> ndarray_shapes;
 };
 
 }  // namespace quadrants::lang

@@ -1387,11 +1387,16 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
         qd.sync()
     if exc_info is not None:
         msg = str(exc_info.value)
+        # The diagnose-time evaluator (`evaluate_adstack_size_expr_for_diagnose`) resolves the ndarray-bound
+        # `range(n_arr[0])` leaf via `Device::map` against the captured launch snapshot, so the classifier
+        # confirms DLPack-bypass with `required (64-ish) > allocated (1)`. The body reflects the confirmed
+        # cause: DLPack hint is present; the "Quadrants bug" alternative is not (it only surfaces when the
+        # classifier could not resolve the bound or proved the sizer undersized).
         assert "DLPack" in msg, f"missing DLPack-bypass cause hint in: {msg}"
-        assert "Quadrants bug" in msg, f"missing Quadrants-bug cause hint in: {msg}"
         assert "Restart" in msg, f"missing recovery flow in: {msg}"
         assert "Offending task" in msg, f"missing identity block in: {msg}"
         assert "compute" in msg, f"missing kernel name in: {msg}"
+        assert "Synchronous sizer rerun: required max_size = [" in msg, f"missing sync-sizer-rerun line in: {msg}"
 
     # Step 4: auto-recovery. If the previous launch overflowed, the raise site bulk-invalidated the
     # adstack-sizer caches when the synchronous sizer rerun confirmed a stale-cache cause. The next

@@ -164,6 +164,11 @@ CompileResult Program::compile_kernel(const CompileConfig &compile_config,
 }
 
 void Program::launch_kernel(const CompiledKernelData &compiled_kernel_data, LaunchContextBuilder &ctx) {
+  // Snapshot ndarray pointers / shapes / DevAllocType BEFORE forwarding to the launcher. The CPU launcher's
+  // `set_host_accessible_ndarray_ptrs` overwrites `array_ptrs[(arg_id, DATA_PTR_POS)]` from the original
+  // `DeviceAllocation *` handle to a raw host pointer; capturing earlier preserves the handle so the diagnose
+  // path's `Device::map(*alloc, ...)` lookup is uniform across CPU / CUDA / AMDGPU / Vulkan / Metal.
+  capture_diagnose_snapshot(ctx);
   num_offloaded_tasks_on_last_call_ = compiled_kernel_data.num_tasks();
   program_impl_->get_kernel_launcher().launch_kernel(compiled_kernel_data, ctx);
   if (compile_config().debug && arch_uses_llvm(compiled_kernel_data.arch())) {
@@ -367,9 +372,19 @@ Program::AdStackOverflowDiagnosis Program::diagnose_adstack_overflow(uint32_t ta
             // are the only kinds that touch ctx and we filtered them out.
             SizeExprLaunchScope scope;
             v = evaluate_adstack_size_expr(expr, const_cast<Program *>(this), nullptr);
+          } else if (!expr.nodes.empty()) {
+            // Tree contains `ExternalTensorRead` / `ExternalTensorShape` leaves. Try the diagnose-time evaluator
+            // which resolves them against the captured launch snapshot (`Device::map`-based ndarray reads, see
+            // `Program::DiagnoseLaunchSnapshot`'s comment for the design rationale). On any leaf-resolution
+            // failure (no snapshot yet, allocation cannot be mapped, unsupported dtype) the helper returns -1
+            // and we fall through to the `?` placeholder.
+            int64_t diag = evaluate_adstack_size_expr_for_diagnose(expr, const_cast<Program *>(this));
+            if (diag >= 0) {
+              v = diag;
+            }
           }
           required_sizes.push_back(v);
-          required_known.push_back(host_resolvable && !expr.nodes.empty() && v > 0);
+          required_known.push_back(!expr.nodes.empty() && v >= 0);
           if (required_known.back() && static_cast<size_t>(v) > entry.allocated_max_sizes[i]) {
             ++any_grew;
           }
@@ -382,18 +397,30 @@ Program::AdStackOverflowDiagnosis Program::diagnose_adstack_overflow(uint32_t ta
         } else if (any_unknown == 0 && total > 0) {
           cause = Cause::QuadrantsBug;
         }
-        disambiguation_block = "  Synchronous sizer rerun: required max_size = [";
-        for (size_t i = 0; i < required_sizes.size(); ++i) {
-          if (i != 0) {
-            disambiguation_block += ", ";
+        // Only print the rerun line when at least one stack's bound resolves to a real value. With every
+        // leaf unresolved the line would be `required = [?, ?, ...]` which adds zero signal beyond the
+        // dual-cause body that follows; the omission keeps the message focused on actionable content.
+        if (any_unknown < total) {
+          disambiguation_block = "  Synchronous sizer rerun: required max_size = [";
+          for (size_t i = 0; i < required_sizes.size(); ++i) {
+            if (i != 0) {
+              disambiguation_block += ", ";
+            }
+            if (required_known[i]) {
+              disambiguation_block += std::to_string(required_sizes[i]);
+            } else {
+              disambiguation_block += "?";
+            }
           }
-          if (required_known[i]) {
-            disambiguation_block += std::to_string(required_sizes[i]);
-          } else {
-            disambiguation_block += "?";
+          disambiguation_block += "].";
+          if (any_unknown > 0) {
+            // Only annotate the placeholder if at least one stack actually fell back to it.
+            disambiguation_block +=
+                " (`?` = sizer rerun could not resolve this stack's bound against the captured "
+                "launch state).";
           }
+          disambiguation_block += "\n";
         }
-        disambiguation_block += "] (`?` = ndarray-bound expression, not host-resolvable post-launch).\n";
       }
     }
   }
@@ -450,6 +477,34 @@ Program::AdStackOverflowDiagnosis Program::diagnose_adstack_overflow(uint32_t ta
   // next launch reruns the sizer (a few extra microseconds on the error path).
   result.confirmed_invalid_cache = (cause != Cause::QuadrantsBug);
   return result;
+}
+
+void Program::capture_diagnose_snapshot(const LaunchContextBuilder &ctx) {
+  std::lock_guard<std::mutex> lk(diagnose_snapshot_mutex_);
+  diagnose_snapshot_.data_ptrs.clear();
+  diagnose_snapshot_.dev_alloc_types.clear();
+  diagnose_snapshot_.shapes.clear();
+  // Pull just the data-pointer slot for each arg; the grad-pointer slot is irrelevant to size_expr leaves.
+  for (const auto &kv : ctx.array_ptrs) {
+    if (kv.first.ptr_type == TypeFactory::DATA_PTR_POS_IN_NDARRAY) {
+      diagnose_snapshot_.data_ptrs[kv.first.arg_id] = kv.second;
+    }
+  }
+  diagnose_snapshot_.dev_alloc_types = ctx.device_allocation_type;
+  // Mirror the per-arg shape vectors `LaunchContextBuilder` populated alongside the args-buffer writes. Going
+  // through this side map rather than `args_type->get_element_offset` avoids the spurious "Cannot treat as
+  // TensorType" diagnostics emitted when an axis lookup overruns the actual rank, and keeps the diagnose path
+  // independent of `args_type` lifetime.
+  for (const auto &kv : ctx.ndarray_shapes) {
+    std::vector<int32_t> shape32(kv.second.begin(), kv.second.end());
+    diagnose_snapshot_.shapes[kv.first] = std::move(shape32);
+  }
+  diagnose_snapshot_.valid = true;
+}
+
+const Program::DiagnoseLaunchSnapshot *Program::get_diagnose_snapshot() const {
+  std::lock_guard<std::mutex> lk(diagnose_snapshot_mutex_);
+  return diagnose_snapshot_.valid ? &diagnose_snapshot_ : nullptr;
 }
 
 StreamSemaphore Program::flush() {

@@ -164,6 +164,16 @@ class AdStackCache {
 // expression is empty (no symbolic bound captured), signalling to the caller to use the compile-time fallback.
 int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx);
 
+// Diagnose-time variant that evaluates the same `SerializedSizeExpr` against the captured
+// `Program::DiagnoseLaunchSnapshot` rather than a live `LaunchContextBuilder`. Used by
+// `Program::diagnose_adstack_overflow` to resolve `ExternalTensorRead` / `ExternalTensorShape` leaves at error
+// time against the live (potentially mutated) ndarray contents, without needing the launch ctx that is gone by
+// sync time on async backends. The cross-backend `Device::map(*allocation, &host_ptr)` path is the design
+// pivot - see `Program::DiagnoseLaunchSnapshot`'s comment for the rationale (vs. re-dispatching the on-device
+// sizer). Returns -1 if any leaf cannot be resolved (e.g. an arg_id missing from the snapshot, or an
+// allocation whose `Device::map` fails); callers fall back to the static dual-cause body in that case.
+int64_t evaluate_adstack_size_expr_for_diagnose(const SerializedSizeExpr &expr, Program *prog);
+
 // RAII guard opening a thread-local read-cache scope. Every nested `evaluate_adstack_size_expr` running inside the
 // scope shares one cache, so repeated `(snode_id, indices)` reads share a single reader-kernel dispatch. Place around
 // any block that calls `evaluate_adstack_size_expr` more than once back-to-back.

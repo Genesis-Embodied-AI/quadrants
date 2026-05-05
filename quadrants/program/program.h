@@ -280,6 +280,39 @@ class QD_DLL_EXPORT Program {
   // also act on the confirmed-cause signal.
   std::string diagnose_adstack_overflow_message(uint32_t task_id) const;
 
+  // Snapshot of the most recent launch's context fields needed by `diagnose_adstack_overflow` to resolve
+  // ndarray-bound `SizeExpr` leaves (`ExternalTensorRead` / `ExternalTensorShape`) at error time, when the
+  // original `LaunchContextBuilder` is gone. Captured at the top of `Program::launch_kernel` BEFORE the
+  // launcher rewrites `array_ptrs` (the CPU launcher's `set_host_accessible_ndarray_ptrs` overwrites the
+  // `DeviceAllocation *` entry with a raw host pointer; capturing earlier keeps the original handle so the
+  // diagnose path can use the unified `Device::map` API instead of trusting backend-specific semantics).
+  //
+  // Design choice (vs. re-dispatching the on-device sizer at diagnose time): `Device::map` is virtual on
+  // every backend (CPU / CUDA / AMDGPU / Vulkan / Metal), so this snapshot-plus-map approach gets backend
+  // parity for free without re-entering the launcher's pipeline-setup machinery (compute pipelines /
+  // descriptor sets / command buffers / sync fences). The diagnose path stays out of the launch lifecycle.
+  struct DiagnoseLaunchSnapshot {
+    bool valid{false};
+    // arg_id -> ctx->array_ptrs[(arg_id, DATA_PTR_POS_IN_NDARRAY)]. For `kNone` numpy passthrough this is a
+    // raw host pointer. For `kNdarray` (qd.ndarray) this is a `DeviceAllocation *` handle the diagnose path
+    // dereferences via `Device::map`. Captured before the CPU launcher's `set_host_accessible_ndarray_ptrs`
+    // overwrite so the handle is uniform across backends.
+    std::unordered_map<int, void *> data_ptrs;
+    std::unordered_map<int, LaunchContextBuilder::DevAllocType> dev_alloc_types;
+    // Pre-extracted ndarray shapes (`ctx->get_struct_arg_host<int32_t>({arg_id, SHAPE_POS, axis})`) so the
+    // diagnose evaluator does not need a live `LaunchContextBuilder` to resolve `ExternalTensorShape` or
+    // multi-axis `ExternalTensorRead` strides.
+    std::unordered_map<int, std::vector<int32_t>> shapes;
+  };
+  // Capture the per-launch fields the diagnose evaluator needs (see `DiagnoseLaunchSnapshot`'s definition for
+  // the design rationale and field-by-field semantics). Called from the top of `Program::launch_kernel`,
+  // before the launcher forwards into the backend-specific launcher that might rewrite `array_ptrs`.
+  void capture_diagnose_snapshot(const LaunchContextBuilder &ctx);
+  // Read-only accessor for the latest snapshot, used by `diagnose_adstack_overflow` to resolve ndarray-bound
+  // size_expr leaves. Returns `nullptr` when no launch has happened yet (e.g. a freshly constructed `Program`
+  // hits `synchronize` during teardown without a prior kernel launch).
+  const DiagnoseLaunchSnapshot *get_diagnose_snapshot() const;
+
   /**
    * Destroys a new SNode tree.
    *
@@ -426,6 +459,10 @@ class QD_DLL_EXPORT Program {
   std::vector<AdStackSizingInfoEntry> adstack_sizing_info_registry_{AdStackSizingInfoEntry{}};
   std::unordered_map<const void *, uint32_t> adstack_sizing_info_id_by_ptr_;
   mutable std::mutex adstack_sizing_info_registry_mutex_;
+
+  // See public `DiagnoseLaunchSnapshot` declaration above for design rationale; the storage stays private.
+  DiagnoseLaunchSnapshot diagnose_snapshot_;
+  mutable std::mutex diagnose_snapshot_mutex_;
   std::stack<int> free_snode_tree_ids_;
 
   std::vector<std::unique_ptr<Function>> functions_;
