@@ -19,7 +19,7 @@ from quadrants import (
     ad,
     algorithms,
     experimental,
-    interop,
+    interop,  # noqa: F401
     linalg,
     math,
     sparse,
