@@ -42,27 +42,45 @@ jobs:
             --output-dir /tmp/pr_change_report \
             --commit-hash "$SHORT_SHA"
 
-          if [ ! -s /tmp/pr_change_report/file_list.txt ]; then
+          # Primary skip gate: any source-file change at all (modifications, additions, OR
+          # deletions). summary.json is the full set; file_list.txt is the agent-input subset
+          # that excludes deletions, so gating on file_list.txt would silently drop
+          # deletion-only PRs.
+          NUM_FILES=$(jq 'length' /tmp/pr_change_report/summary.json)
+          if [ "$NUM_FILES" -eq 0 ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "No source files changed."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
             echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
-            echo "Files in report:"
-            cat /tmp/pr_change_report/file_list.txt
+            echo "Files in summary.json: $NUM_FILES"
             echo
             echo "Pre-computed file headers:"
             cat /tmp/pr_change_report/report_header.md
+
+            # Secondary skip gate: per-function attribution requires at least one non-deleted
+            # file (the agent reads HEAD content). For deletion-only PRs there is nothing for
+            # the agent to do, so skip the Cursor CLI install and agent invocation.
+            if [ -s /tmp/pr_change_report/file_list.txt ]; then
+              echo "skip_agent=false" >> "$GITHUB_OUTPUT"
+              echo
+              echo "Files for agent attribution:"
+              cat /tmp/pr_change_report/file_list.txt
+            else
+              echo "skip_agent=true" >> "$GITHUB_OUTPUT"
+              echo
+              echo "All changed source files are deletions; skipping per-function agent step."
+            fi
           fi
 
       - name: Install Cursor CLI
-        if: steps.inputs.outputs.skip != 'true'
+        if: steps.inputs.outputs.skip != 'true' && steps.inputs.outputs.skip_agent != 'true'
         run: |
           curl https://cursor.com/install -fsS | bash
           echo "$HOME/.cursor/bin" >> $GITHUB_PATH
 
       - name: Identify changed function ranges with Cursor agent
-        if: steps.inputs.outputs.skip != 'true'
+        if: steps.inputs.outputs.skip != 'true' && steps.inputs.outputs.skip_agent != 'true'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_KEY_HUGH }}
         run: |
