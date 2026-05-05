@@ -401,7 +401,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   void *device_context_ptr = nullptr;
   if (needs_sizer_device_ctx) {
     if (launcher_ctx.runtime_context_dev_ptr == nullptr) {
-      CUDADriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext), active_stream);
+      CUDADriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext),
+                                              active_stream);
     }
     device_context_ptr = launcher_ctx.runtime_context_dev_ptr;
     CUDADriver::get_instance().memcpy_host_to_device_async(device_context_ptr, &ctx.get_context(),

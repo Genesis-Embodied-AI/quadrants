@@ -324,7 +324,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   }
   int arg_size = sizeof(RuntimeContext *);
   if (launcher_ctx.runtime_context_dev_ptr == nullptr) {
-    AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext), active_stream);
+    AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext),
+                                              active_stream);
   }
   void *context_pointer = launcher_ctx.runtime_context_dev_ptr;
   AMDGPUDriver::get_instance().memcpy_host_to_device_async(context_pointer, &ctx.get_context(), sizeof(RuntimeContext),
