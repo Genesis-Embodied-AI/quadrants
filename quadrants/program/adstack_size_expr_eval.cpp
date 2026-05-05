@@ -1869,10 +1869,9 @@ void bump_writes_for_kernel_llvm(Program *prog,
     // tracking is invisible to the metadata cache without an explicit bump. Mirrors the SPIR-V `kone_h2d_blit`
     // rule in `bump_writes_for_kernel_spirv`.
     for (int arg_id : task.arr_reads) {
-      if (static_cast<size_t>(arg_id) >= ctx->device_allocation_type.size()) {
-        continue;
-      }
-      if (ctx->device_allocation_type[arg_id] != LaunchContextBuilder::DevAllocType::kNone) {
+      auto type_it = ctx->device_allocation_type.find(arg_id);
+      if (type_it == ctx->device_allocation_type.end() ||
+          type_it->second != LaunchContextBuilder::DevAllocType::kNone) {
         continue;
       }
       bump_data_ptr(arg_id);
@@ -1910,10 +1909,9 @@ void bump_writes_for_kernel_llvm(Program *prog,
   // capture per-task arr_reads); skip the loop without raising.
   for (const auto &task_args : arr_reads_per_task) {
     for (int arg_id : task_args) {
-      if (static_cast<size_t>(arg_id) >= ctx->device_allocation_type.size()) {
-        continue;
-      }
-      if (ctx->device_allocation_type[arg_id] != LaunchContextBuilder::DevAllocType::kNone) {
+      auto type_it = ctx->device_allocation_type.find(arg_id);
+      if (type_it == ctx->device_allocation_type.end() ||
+          type_it->second != LaunchContextBuilder::DevAllocType::kNone) {
         continue;
       }
       bump_data_ptr(arg_id);

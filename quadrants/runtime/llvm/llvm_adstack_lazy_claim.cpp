@@ -691,17 +691,6 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
   if (n_stacks == 0 || num_threads == 0) {
     return 0;
   }
-  // Refresh the registry entry's `size_exprs` snapshot from the live (post-push_back, stable)
-  // ad_stack. The codegen-time registration filled `size_exprs` from `&current_task->ad_stack` but
-  // that pointer's underlying `unique_ptr<OffloadedTask>` heap was freed by the launcher's
-  // `current_task = nullptr` after `offloaded_tasks.push_back(*current_task)`; the registry's
-  // snapshot is now backed by its own heap-owned copy, so this refresh just keeps it in sync with
-  // any post-codegen mutations a backend might apply to `ad_stack.size_exprs`. Idempotent and
-  // bounded-cost: copies one `std::vector<SerializedSizeExpr>` per launch per task with adstacks.
-  if (program_impl_ != nullptr && program_impl_->program != nullptr && ad_stack.registry_id != 0) {
-    program_impl_->program->adstack_cache().update_adstack_sizing_info_size_exprs(ad_stack.registry_id,
-                                                                                  ad_stack.size_exprs);
-  }
   auto align_up_8 = [](std::size_t n) -> std::size_t { return (n + 7u) & ~std::size_t{7u}; };
   // Allocate / grow the two device-side metadata arrays. Capacity is in u64 entries, kept at or above n_stacks.
   // On GPU these buffers are written exclusively by the device-side sizer kernel (`runtime_eval_adstack_size_expr`);
