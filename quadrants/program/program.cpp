@@ -362,10 +362,9 @@ Program::AdStackOverflowDiagnosis Program::diagnose_adstack_overflow(uint32_t ta
           }
           int64_t v = -1;
           if (host_resolvable && !expr.nodes.empty()) {
-            // `evaluate_adstack_size_expr` reads the live SNode state via `SNodeRwAccessorsBank` and
-            // const-folds the rest in plain C++. `ctx == nullptr` is safe because every leaf we kept
-            // is host-resolvable; ETS / ETR are the only kinds that touch ctx and we filtered them
-            // out.
+            // `evaluate_adstack_size_expr` reads the live SNode state via `SNodeRwAccessorsBank` and const-folds the
+            // rest in plain C++. `ctx == nullptr` is safe because every leaf we kept is host-resolvable; ETS / ETR
+            // are the only kinds that touch ctx and we filtered them out.
             SizeExprLaunchScope scope;
             v = evaluate_adstack_size_expr(expr, const_cast<Program *>(this), nullptr);
           }

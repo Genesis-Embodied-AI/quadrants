@@ -21,10 +21,9 @@ class KernelLauncher : public LLVM::KernelLauncher {
     // serial), so no launch-time gtmp resolution is needed on this backend.
     std::vector<AdStackSizingInfo> ad_stacks;
     std::vector<std::size_t> num_threads_per_task;
-    // Per-task snode-write set / arg-write set, copied off `OffloadedTask::snode_writes` /
-    // `arr_writes` at register time. Used by `launch_llvm_kernel` to bump
-    // `Program::snode_write_gen_` / `ndarray_data_gen_` before each launch so the per-task adstack
-    // metadata cache invalidates when this kernel mutates a SNode / ndarray a downstream
+    // Per-task snode-write set / arg-write set, copied off `OffloadedTask::snode_writes` / `arr_writes` at register
+    // time. Used by `launch_llvm_kernel` to bump `Program::snode_write_gen_` / `ndarray_data_gen_` before each launch
+    // so the per-task adstack metadata cache invalidates when this kernel mutates a SNode / ndarray a downstream
     // `size_expr` reads.
     std::vector<std::vector<int>> snode_writes_per_task;
     std::vector<std::vector<int>> arr_writes_per_task;

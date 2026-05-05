@@ -1288,10 +1288,9 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
     #   3. The next reverse launch reads cached `max_size = 2`, pushes 64, overflows. The host poll
     #      raises with the enriched diagnostic naming kernel + offload-task index. The raise site
     #      ALSO bulk-invalidates the adstack-sizer caches on its way out.
-    #   4. The user catches the exception. They do NOT need to manually adjust `ad_stack_size`. On
-    #      the NEXT reverse launch, the sizer reruns from scratch (cache invalidated), reads the
-    #      mutated `n[0] = 64`, sizes capacity to 64, and the kernel runs to completion with the
-    #      correct gradient.
+    #   4. The user catches the exception. They do NOT need to manually adjust `ad_stack_size`. On the NEXT reverse
+    #      launch, the sizer reruns from scratch (cache invalidated), reads the mutated `n[0] = 64`, sizes capacity
+    #      to 64, and the kernel runs to completion with the correct gradient.
     #
     # This auto-recovery contract is what lets the user's training-loop code recover from a
     # transient cache-staleness window without per-iteration retries: the offending data has
@@ -1348,8 +1347,8 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
     # LLVM-CPU the host-eval branch always re-evaluates the size expression per launch via
     # `try_size_expr_cache_hit`, which observes the live ndarray read and self-invalidates on
     # mismatch - that path never raises here, so the second compute.grad call returns cleanly. The
-    # `pytest.raises if shortcut else nullcontext` pattern handles both paths uniformly without
-    # arch-narrowing the test.
+    # `pytest.raises if shortcut else nullcontext` pattern handles both paths uniformly without arch-narrowing the
+    # test.
     y[None] = 0.0
     compute(n)
     y.grad[None] = 1.0

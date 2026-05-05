@@ -10,8 +10,8 @@ namespace quadrants::lang {
 TEST(DiagnoseAdstackOverflow, RegistryAndLookup) {
   Program prog(host_arch());
 
-  // Two distinct sizing infos. The pointer is just an identity key for `Program::register_*` -
-  // the test does not deref.
+  // Two distinct sizing infos. The pointer is just an identity key for `Program::register_*` - the test does not
+  // deref.
   int dummy_a = 0;
   int dummy_b = 0;
   uint32_t id_a = prog.register_adstack_sizing_info(static_cast<const void *>(&dummy_a), "kernel_a", /*task=*/0,

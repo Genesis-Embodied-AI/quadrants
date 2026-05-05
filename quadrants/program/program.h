@@ -235,12 +235,11 @@ class QD_DLL_EXPORT Program {
   // Identity-key for idempotent re-registration. The diagnose path NEVER dereferences this pointer;
   // it stores all size-expression data inline (`size_exprs`) so the entry is self-contained and
   // immune to lifetime issues from the underlying `AdStackSizingInfo` (LLVM) /
-  // `AdStackSizingAttribs` (SPIR-V) struct moves. Two structs because LLVM and SPIR-V backends store
-  // launch-time strides differently (byte-indexed vs element-indexed) and SPIR-V doesn't carry the
-  // dynamic-range-for fields LLVM needs - unifying them would be a backend-pipeline refactor far
-  // outside this PR's scope. Inlining `size_exprs` into the registry is the cheapest way to make
-  // the registry uniform across both backends without touching the launchers' on-the-hot-path
-  // structs.
+  // `AdStackSizingAttribs` (SPIR-V) struct moves. Two structs because LLVM and SPIR-V backends store launch-time
+  // strides differently (byte-indexed vs element-indexed) and SPIR-V doesn't carry the dynamic-range-for fields LLVM
+  // needs - unifying them would be a backend-pipeline refactor far outside this PR's scope. Inlining `size_exprs`
+  // into the registry is the cheapest way to make the registry uniform across both backends without touching the
+  // launchers' on-the-hot-path structs.
   struct AdStackSizingInfoEntry {
     const void *identity_key{nullptr};
     std::string kernel_name;
@@ -253,10 +252,9 @@ class QD_DLL_EXPORT Program {
                                         int task_id_in_kernel,
                                         std::vector<int> allocated_max_sizes,
                                         std::vector<SerializedSizeExpr> size_exprs);
-  // Refresh just the `size_exprs` snapshot in an existing registry entry. Used by the LLVM launcher
-  // on the first launch of a task whose codegen-time registration could not capture size_exprs (the
-  // codegen-time `current_task->ad_stack` had not yet been finalized). No-op for `id == 0` and ids
-  // outside the registry range.
+  // Refresh just the `size_exprs` snapshot in an existing registry entry. Used by the LLVM launcher on the first
+  // launch of a task whose codegen-time registration could not capture size_exprs (the codegen-time
+  // `current_task->ad_stack` had not yet been finalized). No-op for `id == 0` and ids outside the registry range.
   void update_adstack_sizing_info_size_exprs(uint32_t id, std::vector<SerializedSizeExpr> size_exprs);
   // Returns a *copy* of the registry entry (not a pointer into the underlying vector) so the caller can
   // safely hold the data across operations that might trigger another `register_adstack_sizing_info` and
@@ -278,9 +276,8 @@ class QD_DLL_EXPORT Program {
     bool confirmed_invalid_cache{false};
   };
   AdStackOverflowDiagnosis diagnose_adstack_overflow(uint32_t task_id) const;
-  // Convenience wrapper retained for the C++ unit test surface that exercises just the message
-  // formatting; production code uses `diagnose_adstack_overflow` to also act on the confirmed-cause
-  // signal.
+  // Convenience wrapper that returns just the message string; production code uses `diagnose_adstack_overflow` to
+  // also act on the confirmed-cause signal.
   std::string diagnose_adstack_overflow_message(uint32_t task_id) const;
 
   /**

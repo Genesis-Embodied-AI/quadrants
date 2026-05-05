@@ -642,11 +642,10 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
   if (flag == 0) {
     return;
   }
-  // Drain the companion task-id slot in the same poll. Both slots cleared so the next overflow records
-  // a fresh identity. `task_id == 0` means the kernel that overflowed pre-dates the registry wiring or
-  // its `ad_stack.registry_id` was unset for any reason (e.g. a deserialised offline-cache task that has
-  // not yet been re-registered); the diagnose helper falls through to the generic dual-cause message in
-  // that case.
+  // Drain the companion task-id slot in the same poll. Both slots cleared so the next overflow records a fresh
+  // identity. `task_id == 0` means the kernel that overflowed pre-dates the registry wiring or its
+  // `ad_stack.registry_id` was unset for any reason (e.g. a deserialised offline-cache task that has not yet been
+  // re-registered); the diagnose helper falls through to the generic dual-cause message in that case.
   uint32_t task_id = 0;
   if (adstack_overflow_task_id_host_ptr_ != nullptr) {
     int64_t recorded = __atomic_exchange_n(adstack_overflow_task_id_host_ptr_, (int64_t)0, __ATOMIC_RELAXED);
@@ -667,8 +666,8 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
     }
   } else {
     diagnostic =
-        "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack "
-        "capacity allows.";
+        "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
+        "allows.";
   }
   throw QuadrantsAssertionError(
       "Adstack overflow: a reverse-mode autodiff kernel pushed more elements "
