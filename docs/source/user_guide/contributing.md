@@ -160,16 +160,26 @@ The number columns on the Check page (without a `+` or `-` sign) are code-line c
 Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR), an `Existing:` group (modified by this PR), and a `Deleted:` group (removed by this PR), and within each group sorted by added lines descending, then removed lines descending. Files that are deleted in their entirety appear as a single per-file row (so the totals stay accurate) but skip the per-function breakdown. Sample shape:
 
 ```
-src/lib.py 12 +8 -4
+quadrants/program/program_stream.cpp 0 +151
     New:
-      brand_new()       0       +4
-    Existing:
-      to_modify()       5       +3       -1
-    Deleted:
-      to_delete()       3                -3
+      StreamManager::create_event()             0     +18
+      StreamManager::create_stream()            0     +18
+      StreamManager::record_event()             0     +15
+      StreamManager::destroy_event()            0     +13
+      StreamManager::destroy_stream()           0     +13
 
-src/doomed.py 6 -6
+python/quadrants/lang/stream.py 0 +111
+    New:
+      Event.destroy()             0      +9
+      Stream.destroy()            0      +9
+      Event._destroy_prog()       0      +8
+      Stream._destroy_prog()      0      +8
+      Event.__del__()             0      +7
+
+quadrants/program/legacy_stream.cpp 42 -42
     # entire file deleted (per-function breakdown skipped)
 ```
+
+The `0` in the LoC column for the two new files reflects that both files did not exist before this PR (their pre-PR code-line count is 0). The `42 -42` row for `legacy_stream.cpp` is a fully-deleted file: 42 code lines existed before this PR and all 42 were removed.
 
 This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
