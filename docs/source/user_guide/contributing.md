@@ -126,7 +126,7 @@ You can run these locally with `pre-commit run -a` after `pip install pre-commit
 - **check-markup-links** (`check_markup_links.yml`) — validates links in documentation
 - **linux / macosx / win** — build and test on each platform
 - **test-gpu** — GPU-specific tests
-- **coverage report** — a diff coverage summary is posted as a PR comment on each push, with a link to the full annotated report. This includes kernel-level branch coverage. See [Kernel code coverage](kernel_coverage.md) for details.
+- **coverage report** — a one-line diff coverage summary is posted as a PR comment on each push, linking to the full annotated report. This includes kernel-level branch coverage. See [Kernel code coverage](kernel_coverage.md) for details.
 
 ### Line wrapping check (`check_wrapping.yml`)
 

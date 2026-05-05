@@ -94,7 +94,7 @@ Coverage probes change the compiled kernel, so the offline cache will see them a
 
 ## CI integration
 
-The CI workflow posts a compact coverage summary as a PR comment on each push, showing per-file coverage percentages and missing line ranges. The full annotated report (with per-line hit/miss markers) is published as a GitHub Check — the PR comment includes a link to it. A **new comment** is created each time (rather than editing the previous one) so that the PR timeline shows a clear chronological sequence of commits and their corresponding coverage results.
+The CI workflow posts a one-line coverage summary as a PR comment on each push (e.g. "Diff coverage: 80% · 624 lines, 126 missing"), linking to the full annotated report published as a GitHub Check. A **new comment** is created each time (rather than editing the previous one) so that the PR timeline shows a clear chronological sequence of commits and their corresponding coverage results.
 
 The report covers only Python files (`.py`) and only lines added or modified in the PR diff — unchanged lines are not reported. C++ files are not included in the coverage report.
 
