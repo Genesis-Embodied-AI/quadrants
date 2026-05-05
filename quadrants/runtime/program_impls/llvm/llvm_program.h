@@ -169,6 +169,12 @@ class LlvmProgramImpl : public ProgramImpl {
     }
   }
 
+  void check_adstack_overflow_and_assert() override {
+    if (!finalizing_) {
+      runtime_exec_->check_adstack_overflow();
+    }
+  }
+
   LLVMRuntime *get_llvm_runtime() {
     return runtime_exec_->get_llvm_runtime();
   }

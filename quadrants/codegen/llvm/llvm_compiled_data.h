@@ -73,6 +73,14 @@ struct AdStackSizingInfo {
   // the actual gate-passing thread count; `nullopt` falls through to dispatched-threads worst-case sizing (no behavior
   // change versus a kernel without this metadata).
   std::optional<StaticAdStackBoundExpr> bound_expr;
+  // Identity in `Program::adstack_sizing_info_registry_`. Assigned at `finalize_offloaded_task_function`
+  // time after the registry idempotently maps `&this` to a u32 id. Baked as an immediate into the
+  // codegen-emitted lazy-claim `cmpxchg(0, registry_id)` so the host raise site can name the offending
+  // kernel + task in its diagnostic message. `0` means "not registered" - the lazy-claim emit short-
+  // circuits the cmpxchg in that case (no information to record). NOT serialised to the offline cache:
+  // ids are assigned per `Program` lifetime, not per-kernel-content; a deserialised task re-registers
+  // itself at the next launch.
+  uint32_t registry_id{0};
   QD_IO_DEF(per_thread_stride,
             per_thread_stride_float,
             per_thread_stride_int,
@@ -95,12 +103,32 @@ class OffloadedTask {
   int dynamic_shared_array_bytes{0};
   AdStackSizingInfo ad_stack{};
 
+  // Snode IDs this task writes to (read-modify-write counts as a write). Computed at codegen time
+  // by walking the offloaded IR with `gather_snode_read_writes`. Consumed at launch time: each id
+  // here bumps `Program::snode_write_gen_[id]` so the per-task adstack metadata cache invalidates
+  // whenever a kernel that ran since the cache was recorded mutated a SNode a downstream
+  // `size_expr::FieldLoad` may read. Mirrors the SPIR-V `TaskAttributes::snode_writes` field.
+  std::vector<int> snode_writes;
+  // Argument arg_ids this task writes to (WRITE bit set in `irpass::detect_external_ptr_access_in_task`).
+  // Consumed at launch time to bump `Program::ndarray_data_gen_` for the bound DeviceAllocation so
+  // the per-task adstack metadata cache invalidates when a kernel that ran since the cache was
+  // recorded mutated an ndarray a downstream `size_expr::ExternalTensorRead` reads. Mirrors the
+  // SPIR-V `KernelContextAttributes::arr_access` WRITE-bit set, but stored per-task here because
+  // LLVM codegen does not aggregate `arr_access` to the kernel level.
+  std::vector<int> arr_writes;
+  // Argument arg_ids this task reads (READ bit set in `irpass::detect_external_ptr_access_in_task`). Consumed at
+  // launch time only on backends with an H2D blit per launch (LLVM-GPU CUDA / AMDGPU `DevAllocType::kNone`) and on
+  // CPU LLVM with `DevAllocType::kNone` host args: the data pointer is stable across launches, so the cache key by
+  // data ptr cannot detect content mutations the user performed outside Quadrants's tracking. Mirrors the SPIR-V
+  // `KernelContextAttributes::arr_access` READ-bit set.
+  std::vector<int> arr_reads;
+
   explicit OffloadedTask(const std::string &name = "",
                          int block_dim = 0,
                          int grid_dim = 0,
                          int dynamic_shared_array_bytes = 0)
       : name(name), block_dim(block_dim), grid_dim(grid_dim), dynamic_shared_array_bytes(dynamic_shared_array_bytes) {};
-  QD_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes, ad_stack);
+  QD_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes, ad_stack, snode_writes, arr_writes, arr_reads);
 };
 
 struct LLVMCompiledTask {

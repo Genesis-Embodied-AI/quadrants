@@ -86,10 +86,11 @@ Default `False`. Turns on every available correctness check. Use while iterating
 
 Enables:
 - field-bounds check on tensor indexing (out-of-range index raises `RuntimeError`);
-- adstack-overflow check on reverse-mode autodiff (overflow raises `RuntimeError` on the next `qd.sync()`);
 - kernel `assert` statements;
 - integer-overflow guards on arithmetic;
 - IR verification after every compiler pass.
+
+The adstack-overflow check on reverse-mode autodiff runs unconditionally on every backend regardless of `debug`; see [Autodiff -> What can go wrong](autodiff.md) for the contract.
 
 **Cost.** Significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
 
@@ -101,23 +102,22 @@ Default `False`. Enables the field-bounds check on tensor indexing - an out-of-r
 
 Interaction with `debug`:
 
-| Flags | Field bounds | Adstack overflow | Other `debug` checks |
-|-------|--------------|------------------|----------------------|
-| neither | off | off | off |
-| `check_out_of_bound=True` only | on | off | off |
-| `debug=True` | on | on | on |
+| Flags | Field bounds | Other `debug` checks |
+|-------|--------------|----------------------|
+| neither | off | off |
+| `check_out_of_bound=True` only | on | off |
+| `debug=True` | on | on |
 
 - `debug=True` always implies `check_out_of_bound=True` (the field-bounds check fires whenever debug mode is on).
-- The adstack-overflow check on reverse-mode autodiff (a push past the per-stack capacity raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`) is on its own gate, controlled by `debug` - it is not enabled by `check_out_of_bound` alone.
 
 Per-backend support:
 
-| Backend | Field bounds check | Adstack overflow check |
-|---------|--------------------|------------------------|
-| CPU | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
-| CUDA | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
-| AMDGPU | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
-| Metal | never (no in-kernel assertion mechanism) | with `debug=True` |
-| Vulkan | never (no in-kernel assertion mechanism) | with `debug=True` |
+| Backend | Field bounds check |
+|---------|--------------------|
+| CPU | with `check_out_of_bound=True` or `debug=True` |
+| CUDA | with `check_out_of_bound=True` or `debug=True` |
+| AMDGPU | with `check_out_of_bound=True` or `debug=True` |
+| Metal | never (no in-kernel assertion mechanism) |
+| Vulkan | never (no in-kernel assertion mechanism) |
 
-Metal and Vulkan lack the assertion extension that the field-bounds check relies on; `check_out_of_bound=True` is silently reset to `False` on those backends at `qd.init` time and a warning is logged. The adstack-overflow check is gated independently of the assertion extension, so `debug=True` activates it on every backend including Metal and Vulkan.
+Metal and Vulkan lack the assertion extension that the field-bounds check relies on; `check_out_of_bound=True` is silently reset to `False` on those backends at `qd.init` time and a warning is logged.

@@ -24,6 +24,7 @@ from quadrants.lang.exception import (
     QuadrantsRuntimeError,
     QuadrantsSyntaxError,
     QuadrantsTypeError,
+    handle_exception_from_cpp,
 )
 from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field, ScalarField
@@ -576,7 +577,13 @@ class PyQuadrants:
             return
         self.materialize()
         assert self._prog is not None
-        self._prog.synchronize()
+        try:
+            self._prog.synchronize()
+        except Exception as e:
+            wrapped = handle_exception_from_cpp(e)
+            if wrapped is e:
+                raise
+            raise wrapped from None
 
 
 pyquadrants = PyQuadrants()

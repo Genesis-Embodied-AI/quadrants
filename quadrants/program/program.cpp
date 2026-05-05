@@ -2,8 +2,14 @@
 
 #include "program.h"
 
+#include <mutex>
+
+#include "quadrants/ir/adstack_size_expr.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/ir/statements.h"
+#include "quadrants/ir/type_factory.h"
 #include "quadrants/program/extension.h"
+#include "quadrants/program/launch_context_builder.h"
 #include "quadrants/codegen/cpu/codegen_cpu.h"
 #include "quadrants/struct/struct.h"
 #include "quadrants/runtime/program_impls/metal/metal_program.h"
@@ -37,12 +43,12 @@
 namespace quadrants::lang {
 std::atomic<int> Program::num_instances_;
 
-Program::Program(Arch desired_arch) : snode_rw_accessors_bank_(this) {
+Program::Program(Arch desired_arch)
+    : snode_rw_accessors_bank_(this), adstack_cache_(std::make_unique<AdStackCache>(this)) {
   QD_TRACE("Program initializing...");
 
-  // For performance considerations and correctness of QuantFloatType
-  // operations, we force floating-point operations to flush to zero on all
-  // backends (including CPUs).
+  // For performance considerations and correctness of QuantFloatType operations, we force floating-point operations to
+  // flush to zero on all backends (including CPUs).
 #if defined(_M_X64) || defined(__x86_64)
   _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 #endif  // defined(_M_X64) || defined(__x86_64)
@@ -159,10 +165,37 @@ CompileResult Program::compile_kernel(const CompileConfig &compile_config,
 }
 
 void Program::launch_kernel(const CompiledKernelData &compiled_kernel_data, LaunchContextBuilder &ctx) {
+  // Diagnose-snapshot capture strategy depends on when the overflow check fires relative to ctx lifetime:
+  //   - SPIR-V backends poll the overflow flag at `synchronize()` time, by which point the launch ctx is
+  //     long gone; capture eagerly here, before the CPU launcher's `set_host_accessible_ndarray_ptrs`
+  //     overwrites `array_ptrs[(arg_id, DATA_PTR_POS)]` from the original `DeviceAllocation *` handle.
+  //   - LLVM backends poll the overflow flag in `check_adstack_overflow_and_assert` below, while ctx is
+  //     still in scope. Stash the pointer; the diagnose path captures lazily on the rare overflow case.
+  const bool defer_to_overflow_path = arch_uses_llvm(compiled_kernel_data.arch());
+  if (defer_to_overflow_path) {
+    adstack_cache_->set_pending_launch_ctx(&ctx);
+  } else {
+    adstack_cache_->capture_diagnose_snapshot(ctx);
+  }
   num_offloaded_tasks_on_last_call_ = compiled_kernel_data.num_tasks();
   program_impl_->get_kernel_launcher().launch_kernel(compiled_kernel_data, ctx);
   if (compile_config().debug && arch_uses_llvm(compiled_kernel_data.arch())) {
     program_impl_->check_runtime_error(result_buffer);
+  }
+  // Free per-launch poll on the pinned-host adstack overflow flag. Catches DLPack-bypass mutations and
+  // pre-pass undersizing within one Quadrants Python entry of the offending launch, including in async
+  // release loops that never call `qd.sync()`. SPIR-V backends' poll stays in `synchronize_and_assert()`
+  // because their overflow buffer needs `wait_idle()` to be coherent.
+  try {
+    program_impl_->check_adstack_overflow_and_assert();
+  } catch (...) {
+    if (defer_to_overflow_path) {
+      adstack_cache_->set_pending_launch_ctx(nullptr);
+    }
+    throw;
+  }
+  if (defer_to_overflow_path) {
+    adstack_cache_->set_pending_launch_ctx(nullptr);
   }
 }
 
@@ -183,15 +216,12 @@ static void remove_rw_accessor_cache(SNode *parent_snode, SNodeRwAccessorsBank *
 void Program::destroy_snode_tree(SNodeTree *snode_tree) {
   QD_ASSERT(arch_uses_llvm(compile_config().arch) || compile_config().arch == Arch::vulkan);
 
-  // When accessing a ti.field at Python scope, SNodeRwAccessorsBank creates
-  // a Quadrants Kernel to read/write the field in a JIT manner, which caches
-  // the compiled JIT Kernel so as to avoid recompilation when accessing the
-  // same field.
+  // When accessing a ti.field at Python scope, SNodeRwAccessorsBank creates a Quadrants Kernel to read/write the field
+  // in a JIT manner, which caches the compiled JIT Kernel so as to avoid recompilation when accessing the same field.
 
-  // This cache uses the place-SNode's address (SNode*) as the key,
-  // which becomes unsafe once the SNodeTree gets destroyed and that
-  // place-SNode's address gets reused by another SNode. We have to remove all
-  // cached kernels upon SNodeTree destruction.
+  // This cache uses the place-SNode's address (SNode*) as the key, which becomes unsafe once the SNodeTree gets
+  // destroyed and that place-SNode's address gets reused by another SNode. We have to remove all cached kernels upon
+  // SNodeTree destruction.
   SNode *root = snode_tree->root();
 
   // Traverse SNodeTree to remove all cached RWAccessor kernels
@@ -235,10 +265,8 @@ void Program::synchronize_and_assert() {
   program_impl_->synchronize_and_assert();
 }
 
-void Program::record_size_expr_eval(const SerializedSizeExpr *expr_key,
-                                    int64_t result,
-                                    std::vector<SizeExprReadObservation> reads) {
-  size_expr_cache_[expr_key] = SizeExprCacheEntry{result, std::move(reads)};
+void Program::check_adstack_overflow_and_assert() {
+  program_impl_->check_adstack_overflow_and_assert();
 }
 
 StreamSemaphore Program::flush() {
@@ -356,8 +384,8 @@ void Program::finalize() {
   }
 
   // Notify the backend that teardown has started before the two teardown syncs below. On LLVM this flips
-  // `LlvmProgramImpl::finalizing_` so `check_adstack_overflow()` short-circuits: otherwise a pending overflow
-  // flag from a kernel the user never synced explicitly would throw into the Program destructor path.
+  // `LlvmProgramImpl::finalizing_` so `check_adstack_overflow()` short-circuits: otherwise a pending overflow flag from
+  // a kernel the user never synced explicitly would throw into the Program destructor path.
   program_impl_->pre_finalize();
 
   synchronize();
@@ -422,18 +450,13 @@ Ndarray *Program::create_ndarray(const DataType type,
 }
 
 void Program::delete_ndarray(Ndarray *ndarray) {
-  // [Note] Ndarray memory deallocation
-  // Ndarray's memory allocation is managed by Quadrants and Python can control
-  // this via Quadrants indirectly. For example, when an ndarray is GC-ed in
-  // Python, it signals Quadrants to free its memory allocation. But Quadrants
-  // will make sure **no pending kernels to be executed needs the ndarray**
-  // before it actually frees the memory. When `ti.reset()` is called, all
-  // ndarrays allocated in this program should be gone and no longer valid in
-  // Python. This isn't the best implementation, ndarrays should be managed by
-  // quadrants runtime instead of this giant program and it should be freed
-  // when:
-  // - Python GC signals quadrants that it's no longer useful
-  // - All kernels using it are executed.
+  // [Note] Ndarray memory deallocation Ndarray's memory allocation is managed by Quadrants and Python can control this
+  // via Quadrants indirectly. For example, when an ndarray is GC-ed in Python, it signals Quadrants to free its memory
+  // allocation. But Quadrants will make sure **no pending kernels to be executed needs the ndarray** before it actually
+  // frees the memory. When `ti.reset()` is called, all ndarrays allocated in this program should be gone and no longer
+  // valid in Python. This isn't the best implementation, ndarrays should be managed by quadrants runtime instead of
+  // this giant program and it should be freed when: - Python GC signals quadrants that it's no longer useful - All
+  // kernels using it are executed.
   if (ndarrays_.count(ndarray) && !program_impl_->used_in_kernel(ndarray->ndarray_alloc_.alloc_id)) {
     ndarrays_.erase(ndarray);
   }
@@ -451,10 +474,13 @@ intptr_t Program::get_ndarray_data_ptr_as_int(const Ndarray *ndarray) {
 }
 
 void Program::fill_ndarray_fast_u32(Ndarray *ndarray, uint32_t val) {
-  // This is a temporary solution to bypass device api.
-  // Should be moved to CommandList once available in CUDA.
+  // This is a temporary solution to bypass device api. Should be moved to CommandList once available in CUDA.
   program_impl_->fill_ndarray(ndarray->ndarray_alloc_,
                               ndarray->get_nelement() * ndarray->get_element_size() / sizeof(uint32_t), val);
+  // Host-issued device fill mutates the ndarray contents without going through a quadrants kernel, so
+  // `bump_writes_for_kernel_*` will not cover it. Bump explicitly using the same `&ndarray_alloc_` key the
+  // kernel launchers use, so any cached adstack-sizer metadata depending on this ndarray is evicted.
+  adstack_cache_->bump_ndarray_data_gen(&ndarray->ndarray_alloc_);
 }
 
 std::pair<const StructType *, size_t> Program::get_struct_type_with_data_layout(const StructType *old_ty,
@@ -467,9 +493,7 @@ Program::~Program() {
 }
 
 DeviceCapabilityConfig translate_devcaps(const std::vector<std::string> &device_caps) {
-  // Each device capability assignment is named like this:
-  // - `spirv_version=1.3`
-  // - `spirv_has_int8`
+  // Each device capability assignment is named like this: - `spirv_version=1.3` - `spirv_has_int8`
   DeviceCapabilityConfig cfg{};
   for (const std::string &cap : device_caps) {
     std::string_view key;

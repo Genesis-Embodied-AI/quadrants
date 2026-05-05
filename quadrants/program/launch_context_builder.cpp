@@ -39,6 +39,7 @@ void LaunchContextBuilder::copy(const LaunchContextBuilder &other) {
   array_runtime_sizes = other.array_runtime_sizes;
   device_allocation_type = other.device_allocation_type;
   array_ptrs = other.array_ptrs;
+  ndarray_shapes = other.ndarray_shapes;
 }
 
 void LaunchContextBuilder::set_arg_float(int arg_id, float64 d) {
@@ -301,6 +302,8 @@ void LaunchContextBuilder::set_arg_external_array_with_shape(int arg_id,
   }
   set_array_runtime_size(arg_id, size);
   set_array_device_allocation_type(arg_id, DevAllocType::kNone);
+  std::vector<int> shape_int(shape.begin(), shape.end());
+  ndarray_shapes[arg_id] = shape_int;
   for (int i = 0; i < shape.size(); i++) {
     set_struct_arg(std::array{arg_id, 0, i}, (int32)shape[i]);
   }
@@ -329,6 +332,7 @@ void LaunchContextBuilder::set_args_ndarray(const std::vector<int> &args_id, con
     array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}] = (void *)ptr;
     set_array_device_allocation_type(arg_id, DevAllocType::kNdarray);
     const std::vector<int> &shape = arr.shape;
+    ndarray_shapes[arg_id] = shape;
     size_t total_size = 1;
     for (int32 i = 0; i < shape.size(); i++) {
       set_struct_arg(std::array{arg_id, 0, i}, (int32)shape[i]);
@@ -369,6 +373,7 @@ void LaunchContextBuilder::set_arg_ndarray_impl(int arg_id,
   // Set device allocation type and runtime size
   set_array_device_allocation_type(arg_id, DevAllocType::kNdarray);
   QD_ASSERT(shape.size() <= quadrants_max_num_indices);
+  ndarray_shapes[arg_id] = shape;
   size_t total_size = 1;
   for (int i = 0; i < shape.size(); i++) {
     set_struct_arg(std::array{arg_id, 0, i}, (int32)shape[i]);
