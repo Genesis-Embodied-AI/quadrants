@@ -9,10 +9,10 @@
 #include <stack>
 #include <shared_mutex>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #define QD_RUNTIME_HOST
+#include "quadrants/ir/adstack_size_expr.h"
 #include "quadrants/ir/frontend_ir.h"
 #include "quadrants/ir/ir.h"
 #include "quadrants/ir/type_factory.h"
@@ -232,28 +232,32 @@ class QD_DLL_EXPORT Program {
   // task index, and per-stack metadata for an enriched error message. Pointer ownership stays with
   // `OffloadedTask`; entries are added but not removed - the registry size is bounded by the number of
   // adstack-bearing tasks compiled in the program's lifetime, typically dozens.
+  // Identity-key for idempotent re-registration. The diagnose path NEVER dereferences this pointer;
+  // it stores all size-expression data inline (`size_exprs`) so the entry is self-contained and
+  // immune to lifetime issues from the underlying `AdStackSizingInfo` (LLVM) /
+  // `AdStackSizingAttribs` (SPIR-V) struct moves. Two structs because LLVM and SPIR-V backends store
+  // launch-time strides differently (byte-indexed vs element-indexed) and SPIR-V doesn't carry the
+  // dynamic-range-for fields LLVM needs - unifying them would be a backend-pipeline refactor far
+  // outside this PR's scope. Inlining `size_exprs` into the registry is the cheapest way to make
+  // the registry uniform across both backends without touching the launchers' on-the-hot-path
+  // structs.
   struct AdStackSizingInfoEntry {
-    const void *ad_stack_ptr{nullptr};
+    const void *identity_key{nullptr};
     std::string kernel_name;
     int task_id_in_kernel{0};
     std::vector<int> allocated_max_sizes;
+    std::vector<SerializedSizeExpr> size_exprs;
   };
-  uint32_t register_adstack_sizing_info(const void *ad_stack_ptr,
+  uint32_t register_adstack_sizing_info(const void *identity_key,
                                         const std::string &kernel_name,
                                         int task_id_in_kernel,
-                                        std::vector<int> allocated_max_sizes);
-  // Re-bind the registry entry's `ad_stack_ptr` to the live address of the `AdStackSizingInfo` in the
-  // backend launcher's stable storage (`OffloadedTask::ad_stack` after the launcher's `offloaded_tasks.
-  // push_back(*current_task)` moves the task into a vector that survives the codegen-time `unique_ptr`
-  // cleanup; SPIR-V `task_attribs.ad_stack` analogously). The codegen-time pointer first registered via
-  // `register_adstack_sizing_info` points into the temporary `unique_ptr` heap that is freed once
-  // `current_task = nullptr` runs in the launcher's per-task wrap-up; derefs from the synchronous
-  // sizer rerun in `diagnose_adstack_overflow_message` would otherwise land in poisoned memory
-  // (verified via instrumentation: `num_size_exprs = 0xAAAAAAAAAAAAAAAD`). Each backend launcher calls
-  // this once on the per-launch host-side adstack publish so the registered pointer always tracks a
-  // live, stable address before the diagnose path reads it. No-op for `id == 0` and for ids outside
-  // the registry range.
-  void set_adstack_sizing_info_pointer(uint32_t id, const void *ad_stack_ptr);
+                                        std::vector<int> allocated_max_sizes,
+                                        std::vector<SerializedSizeExpr> size_exprs);
+  // Refresh just the `size_exprs` snapshot in an existing registry entry. Used by the LLVM launcher
+  // on the first launch of a task whose codegen-time registration could not capture size_exprs (the
+  // codegen-time `current_task->ad_stack` had not yet been finalized). No-op for `id == 0` and ids
+  // outside the registry range.
+  void update_adstack_sizing_info_size_exprs(uint32_t id, std::vector<SerializedSizeExpr> size_exprs);
   // Returns a *copy* of the registry entry (not a pointer into the underlying vector) so the caller can
   // safely hold the data across operations that might trigger another `register_adstack_sizing_info` and
   // grow / reallocate the registry vector (e.g. `evaluate_adstack_size_expr` dispatching a reader kernel
@@ -409,13 +413,6 @@ class QD_DLL_EXPORT Program {
   // idempotent across re-launches of the same kernel.
   std::vector<AdStackSizingInfoEntry> adstack_sizing_info_registry_{AdStackSizingInfoEntry{}};
   std::unordered_map<const void *, uint32_t> adstack_sizing_info_id_by_ptr_;
-  // Set of registry ids whose `ad_stack_ptr` has been rebound to a stable post-launcher-push_back
-  // address (LLVM `&offloaded_tasks[i].ad_stack` or SPIR-V `&task_attribs.ad_stack`) by
-  // `set_adstack_sizing_info_pointer`. The synchronous sizer rerun in
-  // `diagnose_adstack_overflow_message` only dereferences `ad_stack_ptr` when its id is in this set;
-  // pre-rebind the codegen-time pointer points at freed unique_ptr heap and a deref would return
-  // garbage (`num_size_exprs = 0xAAAAAAAAAAAAAAAD` poisoned-memory pattern).
-  std::unordered_set<uint32_t> adstack_sizing_info_pointer_live_;
   mutable std::mutex adstack_sizing_info_registry_mutex_;
   std::stack<int> free_snode_tree_ids_;
 

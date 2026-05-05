@@ -178,6 +178,33 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
                  "encode AdStack SizeExpr bytecode. Ensure GfxProgramImpl passes `program_impl = this` "
                  "into `GfxRuntime::Params`.");
 
+  // Register each adstack-bearing task with the Program-side identity registry so the host raise site
+  // can name the offending kernel + task in its diagnostic message. Idempotent: re-registration of the
+  // same `&task_attribs[ti].ad_stack` returns the same id and just refreshes the metadata. The
+  // `task_attribs` vector lives inside the cached compiled kernel handle, so the address is stable
+  // across launches. The id is written into `task_attribs[ti].ad_stack.registry_id` so the
+  // synchronous sizer rerun in `Program::diagnose_adstack_overflow_message` can find the live
+  // pointer; `set_adstack_sizing_info_pointer` flips the pointer-live sentinel that gates the deref.
+  // The `task_attribs` parameter is passed `const` here so we cast away constness for the in-place
+  // id stash; the cached compiled kernel owns the storage and outlives the launch.
+  for (size_t k = 0; k < adstack_task_indices.size(); ++k) {
+    size_t ti = adstack_task_indices[k];
+    auto &mutable_attribs =
+        const_cast<quadrants::lang::spirv::TaskAttributes::AdStackSizingAttribs &>(task_attribs[ti].ad_stack);
+    std::vector<int> allocated_max_sizes;
+    std::vector<SerializedSizeExpr> size_exprs;
+    allocated_max_sizes.reserve(mutable_attribs.allocas.size());
+    size_exprs.reserve(mutable_attribs.allocas.size());
+    for (const auto &a : mutable_attribs.allocas) {
+      allocated_max_sizes.push_back(static_cast<int>(a.max_size_compile_time));
+      size_exprs.push_back(a.size_expr);
+    }
+    uint32_t id = program_impl_->program->register_adstack_sizing_info(
+        static_cast<const void *>(&mutable_attribs), kernel_name, static_cast<int>(ti), std::move(allocated_max_sizes),
+        std::move(size_exprs));
+    mutable_attribs.registry_id = id;
+  }
+
   // Fast path: when no SizeExpr in any adstack-bearing task contains an `ExternalTensorRead` leaf, every
   // capacity bound is host-resolvable through `evaluate_adstack_size_expr`, and the entire GPU sizer pipeline
   // (sizer-bytecode upload, per-task metadata-buffer alloc, `flush()` + `device_->wait_idle()` to force PSB

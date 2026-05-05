@@ -246,56 +246,46 @@ void Program::check_adstack_overflow_and_assert() {
   program_impl_->check_adstack_overflow_and_assert();
 }
 
-uint32_t Program::register_adstack_sizing_info(const void *ad_stack_ptr,
+uint32_t Program::register_adstack_sizing_info(const void *identity_key,
                                                const std::string &kernel_name,
                                                int task_id_in_kernel,
-                                               std::vector<int> allocated_max_sizes) {
+                                               std::vector<int> allocated_max_sizes,
+                                               std::vector<SerializedSizeExpr> size_exprs) {
   std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
-  // Idempotent re-registration: same `ad_stack_ptr` yields the same id across re-compiles. The pointer is
-  // task-stable for the kernel's lifetime; if a kernel is destroyed and a new one happens to hit the same
-  // address, the previous entry's metadata is overwritten - acceptable because the diagnostic message reads
-  // metadata at the same instant as the lookup, and the new entry's `kernel_name` / `allocated_max_sizes`
-  // describe the live kernel.
-  auto it = adstack_sizing_info_id_by_ptr_.find(ad_stack_ptr);
+  // Idempotent re-registration: same `identity_key` yields the same id across re-compiles and updates
+  // the entry's metadata + size_exprs in place. The key is just an opaque dedup token - the registry
+  // never dereferences it; all data needed by the diagnose path is copied into the entry below. This
+  // sidesteps the lifetime issue we hit with deref-based registries (the codegen-time
+  // `&current_task->ad_stack` is freed by the launcher's `current_task = nullptr` after a by-value
+  // `offloaded_tasks.push_back(*current_task)`, leaving the registered pointer staring at poisoned
+  // unique_ptr heap; verified via instrumentation: `0xAAAAAAAAAAAAAAAD` marker on the next deref).
+  auto it = adstack_sizing_info_id_by_ptr_.find(identity_key);
   if (it != adstack_sizing_info_id_by_ptr_.end()) {
     auto &entry = adstack_sizing_info_registry_[it->second];
     entry.kernel_name = kernel_name;
     entry.task_id_in_kernel = task_id_in_kernel;
     entry.allocated_max_sizes = std::move(allocated_max_sizes);
+    entry.size_exprs = std::move(size_exprs);
     return it->second;
   }
   uint32_t id = static_cast<uint32_t>(adstack_sizing_info_registry_.size());
   AdStackSizingInfoEntry entry;
-  entry.ad_stack_ptr = ad_stack_ptr;
+  entry.identity_key = identity_key;
   entry.kernel_name = kernel_name;
   entry.task_id_in_kernel = task_id_in_kernel;
   entry.allocated_max_sizes = std::move(allocated_max_sizes);
+  entry.size_exprs = std::move(size_exprs);
   adstack_sizing_info_registry_.push_back(std::move(entry));
-  adstack_sizing_info_id_by_ptr_.emplace(ad_stack_ptr, id);
+  adstack_sizing_info_id_by_ptr_.emplace(identity_key, id);
   return id;
 }
 
-void Program::set_adstack_sizing_info_pointer(uint32_t id, const void *ad_stack_ptr) {
+void Program::update_adstack_sizing_info_size_exprs(uint32_t id, std::vector<SerializedSizeExpr> size_exprs) {
   std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
   if (id == 0 || id >= adstack_sizing_info_registry_.size()) {
     return;
   }
-  // Update the reverse map too: the codegen-time pointer is now stale (its `unique_ptr` heap was freed
-  // when the launcher cleared `current_task`). Drop the old key so a future malloc that happens to
-  // land on the same freed address does not get aliased to this id.
-  const void *old_ptr = adstack_sizing_info_registry_[id].ad_stack_ptr;
-  if (old_ptr != ad_stack_ptr) {
-    auto old_it = adstack_sizing_info_id_by_ptr_.find(old_ptr);
-    if (old_it != adstack_sizing_info_id_by_ptr_.end() && old_it->second == id) {
-      adstack_sizing_info_id_by_ptr_.erase(old_it);
-    }
-    adstack_sizing_info_id_by_ptr_[ad_stack_ptr] = id;
-    adstack_sizing_info_registry_[id].ad_stack_ptr = ad_stack_ptr;
-  }
-  // Mark the entry's pointer as live: the synchronous sizer rerun in
-  // `diagnose_adstack_overflow_message` only dereferences after this flag is set, ensuring the deref
-  // never lands on freed unique_ptr heap.
-  adstack_sizing_info_pointer_live_.insert(id);
+  adstack_sizing_info_registry_[id].size_exprs = std::move(size_exprs);
 }
 
 std::optional<Program::AdStackSizingInfoEntry> Program::lookup_adstack_sizing_info(uint32_t id) const {
@@ -345,20 +335,19 @@ std::string Program::diagnose_adstack_overflow_message(uint32_t task_id) const {
       // kernel's lifetime. The codegen-time pointer is rebound on the FIRST launch; before that the
       // entry's `ad_stack_ptr` still points at freed unique_ptr heap, so the deref below is gated on a
       // sentinel-tag check the launcher writes when it rebinds (see `set_adstack_sizing_info_pointer`).
-      const auto *ad_stack_info = static_cast<const AdStackSizingInfo *>(entry.ad_stack_ptr);
-      bool pointer_is_live = false;
-      if (ad_stack_info != nullptr) {
-        std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
-        pointer_is_live = adstack_sizing_info_pointer_live_.count(task_id) != 0;
-      }
-      if (ad_stack_info != nullptr && pointer_is_live) {
+      // The registry entry's `size_exprs` are heap-owned copies of the per-alloca size-expression
+      // trees, copied at `register_adstack_sizing_info` time. Walking them is safe regardless of the
+      // backend's storage layout (LLVM `AdStackSizingInfo::size_exprs` parallel-to-allocas vs SPIR-V
+      // `AdStackSizingAttribs::allocas[i].size_expr` inline) and immune to launcher-side struct
+      // moves that would invalidate raw pointers into the original kernel data.
+      if (!entry.size_exprs.empty()) {
         std::vector<int64_t> required_sizes;
         std::vector<bool> required_known;
         size_t any_grew = 0;
         size_t any_unknown = 0;
-        size_t total = std::min(ad_stack_info->size_exprs.size(), entry.allocated_max_sizes.size());
+        size_t total = std::min(entry.size_exprs.size(), entry.allocated_max_sizes.size());
         for (size_t i = 0; i < total; ++i) {
-          const auto &expr = ad_stack_info->size_exprs[i];
+          const auto &expr = entry.size_exprs[i];
           bool host_resolvable = true;
           for (const auto &node : expr.nodes) {
             auto k = static_cast<SizeExpr::Kind>(node.kind);
