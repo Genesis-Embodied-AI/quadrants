@@ -7,11 +7,9 @@ The `external_metal_command_queue` option lets you pass PyTorch's command queue 
 ## Quick start
 
 ```python
-import torch
 import quadrants as qd
 from quadrants.interop import get_mps_command_queue
 
-torch.zeros(1, device="mps")  # ensure MPS is initialised
 queue_ptr = get_mps_command_queue()
 qd.init(
     arch=qd.metal,
@@ -43,20 +41,17 @@ from quadrants.interop import get_mps_command_queue
 queue_ptr = get_mps_command_queue()  # returns int (raw pointer), or 0 on failure
 ```
 
-The function returns the `MTLCommandQueue*` as a Python `int`. It returns `0` if extraction fails (e.g. non-macOS platform, PyTorch not installed, or unsupported PyTorch build). The underlying C++ symbol (`_ZN2at3mps19getDefaultMPSStreamEv`) has been stable since PyTorch 1.13.
+The function initialises PyTorch MPS if needed, then returns the `MTLCommandQueue*` as a Python `int`. It returns `0` if extraction fails (e.g. non-macOS platform, PyTorch not installed, MPS not available, or unsupported PyTorch build). The underlying C++ symbol (`_ZN2at3mps19getDefaultMPSStreamEv`) has been stable since PyTorch 1.13.
 
 ## Init ordering
 
-PyTorch MPS must be initialised **before** `qd.init()` so that the command queue exists when Quadrants starts:
+`get_mps_command_queue()` handles PyTorch MPS initialisation internally, so you can call it before `qd.init()` without any manual setup:
 
 ```python
-import torch
-torch.zeros(1, device="mps")        # trigger MPS init
-
 import quadrants as qd
 from quadrants.interop import get_mps_command_queue
 
-queue_ptr = get_mps_command_queue()
+queue_ptr = get_mps_command_queue()  # initialises MPS if needed
 qd.init(
     arch=qd.metal,
     external_metal_command_queue=queue_ptr,

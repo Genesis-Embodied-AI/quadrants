@@ -36,6 +36,12 @@ def get_mps_command_queue() -> int:
     if torch.__file__ is None:
         return 0
 
+    if not hasattr(torch.backends, "mps") or not torch.backends.mps.is_available():
+        return 0
+
+    # Ensure MPS runtime is initialised (creates the device and default stream).
+    torch.zeros(1, device="mps")
+
     try:
         torch_lib = os.path.join(os.path.dirname(torch.__file__), "lib", "libtorch_cpu.dylib")
         handle = ctypes.CDLL(torch_lib)._handle

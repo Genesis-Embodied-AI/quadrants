@@ -12,9 +12,6 @@ pytestmark = pytest.mark.needs_torch
 
 def _get_mps_command_queue() -> int:
     """Extract PyTorch MPS's MTLCommandQueue* via ``qd.interop``."""
-    import torch
-
-    torch.zeros(1, device="mps")
     queue_ptr = qd.interop.get_mps_command_queue()
     if not queue_ptr:
         pytest.skip("qd.interop.get_mps_command_queue() returned 0")
@@ -139,7 +136,6 @@ def test_interop_get_mps_command_queue():
 
     if not hasattr(torch.backends, "mps") or not torch.backends.mps.is_available():
         pytest.skip("PyTorch MPS not available")
-    torch.zeros(1, device="mps")
     ptr = qd.interop.get_mps_command_queue()
     assert isinstance(ptr, int)
     assert ptr != 0
