@@ -230,10 +230,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   const std::size_t needed_result = std::max(ctx.result_buffer_size, sizeof(uint64));
   if (needed_result > persistent_result_buffer_capacity_) {
     if (persistent_result_buffer_dev_ptr_ != nullptr) {
-      AMDGPUDriver::get_instance().mem_free_async(persistent_result_buffer_dev_ptr_, active_stream);
+      AMDGPUDriver::get_instance().mem_free_async(persistent_result_buffer_dev_ptr_, nullptr);
     }
     const std::size_t new_cap = std::max(needed_result, 2 * persistent_result_buffer_capacity_);
-    AMDGPUDriver::get_instance().malloc_async(&persistent_result_buffer_dev_ptr_, new_cap, active_stream);
+    AMDGPUDriver::get_instance().malloc_async(&persistent_result_buffer_dev_ptr_, new_cap, nullptr);
     persistent_result_buffer_capacity_ = new_cap;
   }
   device_result_buffer = static_cast<char *>(persistent_result_buffer_dev_ptr_);
@@ -311,10 +311,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   if (ctx.arg_buffer_size > 0) {
     if (ctx.arg_buffer_size > launcher_ctx.arg_buffer_capacity) {
       if (launcher_ctx.arg_buffer_dev_ptr != nullptr) {
-        AMDGPUDriver::get_instance().mem_free_async(launcher_ctx.arg_buffer_dev_ptr, active_stream);
+        AMDGPUDriver::get_instance().mem_free_async(launcher_ctx.arg_buffer_dev_ptr, nullptr);
       }
       const std::size_t new_cap = std::max<std::size_t>(ctx.arg_buffer_size, 2 * launcher_ctx.arg_buffer_capacity);
-      AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.arg_buffer_dev_ptr, new_cap, active_stream);
+      AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.arg_buffer_dev_ptr, new_cap, nullptr);
       launcher_ctx.arg_buffer_capacity = new_cap;
     }
     device_arg_buffer = static_cast<char *>(launcher_ctx.arg_buffer_dev_ptr);
@@ -324,8 +324,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   }
   int arg_size = sizeof(RuntimeContext *);
   if (launcher_ctx.runtime_context_dev_ptr == nullptr) {
-    AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext),
-                                              active_stream);
+    AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext), nullptr);
   }
   void *context_pointer = launcher_ctx.runtime_context_dev_ptr;
   AMDGPUDriver::get_instance().memcpy_host_to_device_async(context_pointer, &ctx.get_context(), sizeof(RuntimeContext),
