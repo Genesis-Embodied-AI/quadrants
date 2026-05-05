@@ -289,7 +289,7 @@ The evaluation happens in different places depending on the backend, but the res
 
 Either way, the per-thread stride and each adstack's offset / max-size land in a small buffer the main kernel reads on every push. The backing heap grows on demand to match the largest size any launch has needed so far, and is reused across subsequent launches - you do not need to reserve memory up front.
 
-The sized result is cached per task and reused while the formula's inputs are unchanged. Although changing loop bounds at runtime is possible, it comes with some limitations for performance reasons. See [What can go wrong](#what-can-go-wrong) for details.
+The sized result is cached per task and reused while the loop bounds are unchanged. Although changing loop bounds at runtime is possible, it comes with some limitations for performance reasons. See [What can go wrong](#what-can-go-wrong) for details.
 
 The on-device sizer relies on two common hardware features (64-bit integer arithmetic and raw-pointer storage-buffer access). Every mainstream GPU from late 2018 onward supports both.
 
