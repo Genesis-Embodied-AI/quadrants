@@ -69,6 +69,7 @@ class _FileBookkeeping:
     base_codes: set[int]
     added_line_nos: list[int]
     removed_line_nos: list[int]
+    is_deleted: bool = False
 
 
 def _load_function_entries(jsonl_path: Path) -> dict[str, list[_FunctionEntry]]:
@@ -149,6 +150,7 @@ def _build_file_bookkeeping(summary: dict, output_dir: Path) -> _FileBookkeeping
         base_codes=base_codes,
         added_line_nos=added_line_nos,
         removed_line_nos=removed_line_nos,
+        is_deleted=bool(summary.get("is_deleted", False)),
     )
 
 
@@ -273,6 +275,9 @@ def _emit_file_section(book: _FileBookkeeping, attributed: list[_AttributedEntry
     appended by the caller, not here.
     """
     lines: list[str] = [format_header(_HeaderProxy(book))]
+    if book.is_deleted:
+        lines.append(f"{_GROUP_INDENT}# entire file deleted (per-function breakdown skipped)")
+        return lines, 0, 0
     if not attributed:
         if book.added or book.removed:
             lines.append(f"{_GROUP_INDENT}# note: no per-function attribution available")

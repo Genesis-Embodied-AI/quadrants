@@ -157,7 +157,7 @@ Posts a fresh PR comment on every push consisting of a single line — the total
 
 The number columns on the Check page (without a `+` or `-` sign) are code-line counts in the BASE (pre-PR) version: file size before this PR (0 for newly-added files), function body size before this PR (0 for new functions; original body size for deleted functions). `+<n>` / `-<n>` are code lines added / removed by this PR.
 
-Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR), an `Existing:` group (modified by this PR), and a `Deleted:` group (removed by this PR), and within each group sorted by added lines descending, then removed lines descending. Sample shape:
+Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR), an `Existing:` group (modified by this PR), and a `Deleted:` group (removed by this PR), and within each group sorted by added lines descending, then removed lines descending. Files that are deleted in their entirety appear as a single per-file row (so the totals stay accurate) but skip the per-function breakdown. Sample shape:
 
 ```
 src/lib.py 12 +8 -4
@@ -167,6 +167,9 @@ src/lib.py 12 +8 -4
       to_modify()       5       +3       -1
     Deleted:
       to_delete()       3                -3
+
+src/doomed.py 6 -6
+    # entire file deleted (per-function breakdown skipped)
 ```
 
 This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.

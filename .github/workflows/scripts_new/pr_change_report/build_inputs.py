@@ -3,8 +3,9 @@
 
 For each source file changed in the PR (.py / .c / .cc / .cpp / .h / .hpp / .cu) this writes:
 
-  ``<output_dir>/summary.json``        list of ``{path, language, total, added, removed}``
-  ``<output_dir>/file_list.txt``       one path per line (same order as ``summary.json``)
+  ``<output_dir>/summary.json``        list of ``{path, language, total, added, removed, is_deleted}``
+  ``<output_dir>/file_list.txt``       one path per line; SAME order as ``summary.json`` but EXCLUDES
+                                       deleted files (they have no HEAD content for the agent to attribute)
   ``<output_dir>/report_header.md``    pre-formatted file-header lines (verbatim for the report)
   ``<output_dir>/report_comment.md``   compact PR-comment markdown (table + totals line)
   ``<output_dir>/diffs/<path>.diff``   per-file unified diff vs. merge-base
@@ -318,6 +319,7 @@ class FileSummary:
     total: int
     added: int
     removed: int
+    is_deleted: bool = False
 
 
 def write_file(path: Path, content: str) -> None:
@@ -390,8 +392,7 @@ def main() -> int:
             continue
         parts = line.split("\t")
         status = parts[0]
-        if status.startswith("D"):
-            continue
+        is_deleted = status.startswith("D")
         # For renames / copies the new path is the last field; for plain modifications it is the only path.
         path = parts[-1]
         lang = language_for(path)
@@ -402,19 +403,29 @@ def main() -> int:
         if not diff_text.strip():
             continue
 
-        head_content = run_git(["show", f"{args.head_ref}:{path}"], check=False)
-        base_content = run_git(["show", f"{merge_base}:{path}"], check=False)
-
-        head_codes = code_line_set(head_content, lang)
-        base_codes = code_line_set(base_content, lang) if base_content else set()
-        added, removed = diff_added_removed(diff_text, head_codes, base_codes)
+        if is_deleted:
+            head_content = ""
+            base_content = run_git(["show", f"{merge_base}:{path}"], check=False)
+            head_codes: set[int] = set()
+            base_codes = code_line_set(base_content, lang) if base_content else set()
+            added = 0
+            removed = len(base_codes)
+        else:
+            head_content = run_git(["show", f"{args.head_ref}:{path}"], check=False)
+            base_content = run_git(["show", f"{merge_base}:{path}"], check=False)
+            head_codes = code_line_set(head_content, lang)
+            base_codes = code_line_set(base_content, lang) if base_content else set()
+            added, removed = diff_added_removed(diff_text, head_codes, base_codes)
 
         write_file(diffs_dir / f"{path}.diff", diff_text)
-        write_file(head_dir / path, head_content)
+        if head_content:
+            write_file(head_dir / path, head_content)
         if base_content:
             write_file(base_dir / path, base_content)
 
-        summaries.append(FileSummary(path=path, language=lang, total=len(base_codes), added=added, removed=removed))
+        summaries.append(FileSummary(
+            path=path, language=lang, total=len(base_codes),
+            added=added, removed=removed, is_deleted=is_deleted))
 
     # Sort files by descending lines added, then descending lines removed, then path. This is the
     # order used for every downstream artifact (summary.json, file_list.txt, report_header.md,
@@ -422,12 +433,16 @@ def main() -> int:
     summaries.sort(key=lambda s: (-s.added, -s.removed, s.path))
 
     summary_dicts = [
-        {"path": s.path, "language": s.language, "total": s.total, "added": s.added, "removed": s.removed}
+        {"path": s.path, "language": s.language, "total": s.total,
+         "added": s.added, "removed": s.removed, "is_deleted": s.is_deleted}
         for s in summaries
     ]
     (output_dir / "summary.json").write_text(json.dumps(summary_dicts, indent=2) + "\n")
 
-    file_list = "\n".join(s.path for s in summaries)
+    # file_list.txt and touched_ranges.txt feed the agent. Deleted files have no HEAD content
+    # and no per-function attribution to compute, so they are excluded from both. They still
+    # appear in summary.json / report_comment.md / report.txt with correct totals.
+    file_list = "\n".join(s.path for s in summaries if not s.is_deleted)
     (output_dir / "file_list.txt").write_text(file_list + ("\n" if file_list else ""))
 
     headers = "\n".join(format_header(s) for s in summaries)
@@ -437,6 +452,8 @@ def main() -> int:
 
     touched_lines = []
     for s in summaries:
+        if s.is_deleted:
+            continue
         diff_text = (diffs_dir / f"{s.path}.diff").read_text()
         head_ranges, base_ranges = diff_touched_ranges(diff_text)
         head_str = ", ".join(f"{a}-{b}" for a, b in head_ranges) or "(none)"
