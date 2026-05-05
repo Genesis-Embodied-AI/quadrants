@@ -39,10 +39,22 @@ def _test_python(args, default_dir="python"):
     try:
         if args.coverage:
             os.environ.setdefault("QD_KERNEL_COVERAGE", "1")
+            os.environ["_QD_KCOV_ARC"] = "1"
             _spec = importlib.util.find_spec("quadrants")
             assert _spec is not None and _spec.origin is not None, "quadrants package not found"
             _cov_src = os.path.dirname(_spec.origin)
-            pytest_args += ["--cov-branch", f"--cov={_cov_src}", f"--cov={test_dir}"]
+            # Disable the quadrants pytest plugin (pytest11 entry point) during coverage runs.  Loading the plugin
+            # forces Python to import the quadrants parent package before pytest-cov starts measuring, so module-level
+            # code (imports, def lines, etc.) appears uncovered.  The plugin is still useful for *external* users who
+            # run `pytest --cov` on their own code — they don't measure quadrants' own coverage.  We replicate the
+            # plugin's env-var setup (QD_KERNEL_COVERAGE, _QD_KCOV_ARC) above.
+            pytest_args += [
+                "--cov-branch",
+                f"--cov={_cov_src}",
+                f"--cov={test_dir}",
+                "-p",
+                "no:quadrants",
+            ]
         if args.cov_append:
             pytest_args += ["--cov-append"]
         if args.keys:
