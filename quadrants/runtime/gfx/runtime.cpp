@@ -624,12 +624,17 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         auto it = src.find(bind.buffer.root_id);
         bindings->rw_buffer(bind.binding, it != src.end() ? it->second : kDeviceNullAllocation);
       } else if (bind.buffer.type == BufferType::AdStackOverflow) {
-        // SPIR-V codegen writes a non-zero sentinel into this single-u32 buffer whenever an AdStackPushStmt hits the
-        // overflow branch. Allocate it lazily on first use and reuse across launches; synchronize() reads it, raises on
-        // non-zero, and zeros it for the next window.
+        // Two-slot u32 buffer: [overflow_signal, task_registry_id]. The SPIR-V codegen task-end emit
+        // writes a non-zero `stack_id + 1` into slot 0 via OpAtomicUMax whenever any push site overflowed
+        // its `max_size`, and `cmpxchg(0, registry_id)` into slot 1 to record the offending
+        // `AdStackSizingInfo`'s `Program::adstack_sizing_info_registry_` id (only the FIRST overflowing
+        // task's id sticks; subsequent threads' cmpxchg fails harmlessly). Host `synchronize()` reads
+        // both slots, raises with `Program::diagnose_adstack_overflow_message(task_id)`, and zeros both
+        // for the next window.
         if (!adstack_overflow_buffer_) {
-          auto [buf, res] = device_->allocate_memory_unique({sizeof(uint32_t), /*host_write=*/true, /*host_read=*/true,
-                                                             /*export_sharing=*/false, AllocUsage::Storage});
+          auto [buf, res] =
+              device_->allocate_memory_unique({2 * sizeof(uint32_t), /*host_write=*/true, /*host_read=*/true,
+                                               /*export_sharing=*/false, AllocUsage::Storage});
           QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack overflow buffer");
           adstack_overflow_buffer_ = std::move(buf);
           current_cmdlist_->buffer_fill(adstack_overflow_buffer_->get_ptr(0), kBufferSizeEntireSize, /*data=*/0);
@@ -987,11 +992,15 @@ void GfxRuntime::synchronize() {
   // against pending GPU writes.
   if (adstack_overflow_buffer_ && !finalizing_) {
     uint32_t flag_val = 0;
+    uint32_t task_id_val = 0;
     void *mapped = nullptr;
     QD_ASSERT(device_->map(*adstack_overflow_buffer_, &mapped) == RhiResult::success);
-    flag_val = *reinterpret_cast<const uint32_t *>(mapped);
+    auto *slots = reinterpret_cast<uint32_t *>(mapped);
+    flag_val = slots[0];
+    task_id_val = slots[1];
     if (flag_val != 0) {
-      *reinterpret_cast<uint32_t *>(mapped) = 0;
+      slots[0] = 0;
+      slots[1] = 0;
     }
     device_->unmap(*adstack_overflow_buffer_);
     // UINT32_MAX is the dedicated sentinel the codegen-emitted defense-in-depth bounds check at the float Lowest
@@ -1007,24 +1016,14 @@ void GfxRuntime::synchronize() {
                 "LCA-block claim count. The bound is supposed to be exact by construction; reaching this signal "
                 "means the reducer and the main pass observed different threads passing the captured gating "
                 "predicate. File a bug with the kernel IR via `QD_DUMP_IR=1` and a minimal repro.");
-    QD_ERROR_IF(flag_val != 0,
-                "Adstack overflow (offending stack_id={}): a reverse-mode autodiff kernel pushed more "
-                "elements than the adstack capacity allows. Raised at the next `qd.sync()`. Two possible "
-                "causes:\n"
-                "  1. A tensor backing a data-dependent loop bound was mutated outside Quadrants's tracking "
-                "(typically a DLPack zero-copy mutation through a torch tensor sharing storage with a "
-                "Quadrants ndarray, or a raw pointer write through a non-torch DLPack consumer). The cached "
-                "adstack capacity was sized against the value before the mutation. Recovery: route the "
-                "mutation through Quadrants APIs (`Ndarray.write` / `fill` / kernel writes) so the cache "
-                "invalidates correctly, OR set a generous initial cap if a workload-change milestone "
-                "genuinely grew capacity. Restart the iteration / training loop from a clean state.\n"
-                "  2. (Quadrants bug) the pre-pass resolved the alloca to a bound tighter than the actual "
-                "runtime push count - the enclosing loop shape is outside the current `SizeExpr` grammar, "
-                "or the Bellman-Ford analyzer undercounted the forward-pass accumulation. Please file with "
-                "the kernel IR (`QD_DUMP_IR=1`).\n"
-                "Note: kernel state may be inconsistent post-overflow; do not retry the same step without "
-                "addressing the cause and restarting from a clean state.",
-                flag_val - 1);
+    if (flag_val != 0) {
+      Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
+      std::string diagnostic = (prog != nullptr) ? prog->diagnose_adstack_overflow_message(task_id_val) : std::string();
+      QD_ERROR(
+          "Adstack overflow (offending stack_id={}): a reverse-mode autodiff kernel pushed more "
+          "elements than the adstack capacity allows. Raised at the next `qd.sync()`.\n{}",
+          flag_val - 1, diagnostic);
+    }
   }
   fflush(stdout);
 }

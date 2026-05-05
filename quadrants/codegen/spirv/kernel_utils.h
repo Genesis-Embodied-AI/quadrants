@@ -208,6 +208,14 @@ struct TaskAttributes {
     uint32_t per_thread_stride_int_compile_time{0};
     std::vector<AdStackAllocaAttribs> allocas;
     std::optional<StaticBoundExpr> bound_expr;
+    // Identity in `Program::adstack_sizing_info_registry_`. Assigned at SPIR-V codegen time after the
+    // Program registry idempotently maps `&this` to a u32 id. Baked as an immediate into the codegen-
+    // emitted task-end overflow path's `cmpxchg(0, registry_id)` against slot 1 of the AdStackOverflow
+    // buffer so the host raise site can name the offending kernel + task in its diagnostic message. `0`
+    // means "not registered" - the codegen short-circuits the cmpxchg in that case. NOT serialised to the
+    // offline cache: ids are assigned per `Program` lifetime; a deserialised task re-registers itself at
+    // the next launch.
+    uint32_t registry_id{0};
     QD_IO_DEF(per_thread_stride_float_compile_time, per_thread_stride_int_compile_time, allocas, bound_expr);
   };
   AdStackSizingAttribs ad_stack;

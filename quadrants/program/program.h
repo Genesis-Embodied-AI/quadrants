@@ -109,6 +109,13 @@ class QD_DLL_EXPORT Program {
   // Drain the queue and raise on any pending user-visible assert (e.g. adstack overflow). Bound to `qd.sync()`.
   void synchronize_and_assert();
 
+  // Per-Quadrants-Python-entry poll for any pending adstack overflow signal. Unlike `synchronize_and_assert`
+  // this does NOT drain the queue: it only reads the pinned-host overflow flag (cheap host atomic load) and
+  // raises if set. Wired at every host-read entry point (`Ndarray::read`, `SNodeRwAccessorsBank` reads via
+  // `Program::launch_kernel`'s built-in poll) so a DLPack-bypass overflow surfaces within one entry of the
+  // offending launch even when the user never calls `qd.sync()`.
+  void check_adstack_overflow_and_assert();
+
   StreamSemaphore flush();
 
   /**

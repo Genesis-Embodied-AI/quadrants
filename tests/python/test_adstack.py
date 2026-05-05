@@ -1269,6 +1269,47 @@ def test_adstack_overflow_caught_then_clean_teardown(tmp_path, force_sync):
         )
 
 
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=4, debug=True)
+def test_adstack_overflow_diagnostic_dual_cause_body():
+    # Cross-backend regression for the always-on overflow detection + diagnostic shipped on this branch. A
+    # reverse-mode kernel with a fixed `ad_stack_size=4` is launched against a static 8-iteration inner
+    # range; the per-launch overflow flag fires on every push past slot 4. The host poll at the next
+    # Quadrants Python entry (the explicit `qd.sync()` here) raises with a dual-cause body that names
+    # both possible causes (untracked tensor mutation between launches; sizer under-estimate Quadrants
+    # bug) plus the recovery flow. Every backend (CPU LLVM, CUDA / AMDGPU LLVM-GPU, Metal / Vulkan
+    # SPIR-V) wires the overflow detection through to the host raise site.
+    #
+    # Internal details: the LLVM raise route additionally enriches the message with the offending
+    # kernel + offload-task index via the codegen-emitted `cmpxchg(0, registry_id)` against a pinned-host
+    # slot. SPIR-V backends emit only the dual-cause body until the AdStackOverflow buffer grows the
+    # registry-id slot in a follow-up PR. The cross-backend assertions in this test pin only what every
+    # backend exposes today: the raise itself and the dual-cause body. The per-backend identity-block
+    # enrichment is exercised by the LLVM-side C++ unit test in `tests/cpp/program/`.
+    x = qd.field(qd.f32, shape=(1,), needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def overflowing_kernel():
+        for i in x:
+            v = x[i]
+            for _ in range(8):
+                y[None] += qd.sin(v)
+                v = v + 1.0
+
+    x[0] = 0.1
+    y[None] = 0.0
+    overflowing_kernel()
+    y.grad[None] = 1.0
+    x.grad[0] = 0.0
+    with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow") as exc_info:
+        overflowing_kernel.grad()
+        qd.sync()
+    msg = str(exc_info.value)
+    assert "DLPack" in msg, f"missing DLPack-bypass cause hint in: {msg}"
+    assert "Quadrants bug" in msg, f"missing Quadrants-bug cause hint in: {msg}"
+    assert "Restart" in msg, f"missing recovery flow in: {msg}"
+
+
 @pytest.mark.parametrize("n_iter", [30, 100])
 @test_utils.test(require=qd.extension.adstack)
 def test_adstack_near_capacity(n_iter):
