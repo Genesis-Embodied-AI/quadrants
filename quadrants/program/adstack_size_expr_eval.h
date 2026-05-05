@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -136,6 +137,30 @@ class AdStackCache {
     llvm_per_task_ad_stack_cache_.clear();
   }
 
+  // Per-spec output cache for the option-D max reducer. Keyed by `(registry_id, stack_id, mor_node_idx)` packed into a
+  // 64-bit key (low 32 bits = `registry_id`, mid 16 bits = `stack_id`, high 16 bits = `mor_node_idx`). Stage 1 grammar
+  // caps both `stack_id` and `mor_node_idx` well below 2^16 (per-task adstack count and per-stack node count are both
+  // O(10s)), so the packing is collision-free. Same observation-walk dependency tracking as `try_size_expr_cache_hit`:
+  // entries record the body's `ExternalTensorRead` reads plus the `begin` / `end` subtree's leaves; the next launch
+  // re-walks observations and short-circuits on a generation match.
+  struct MaxReducerCacheEntry {
+    int64_t result;
+    std::vector<SizeExprReadObservation> reads;
+  };
+  bool try_max_reducer_cache_hit(uint32_t registry_id,
+                                 int32_t stack_id,
+                                 int32_t mor_node_idx,
+                                 LaunchContextBuilder *ctx,
+                                 int64_t &out_result);
+  void record_max_reducer_eval(uint32_t registry_id,
+                               int32_t stack_id,
+                               int32_t mor_node_idx,
+                               int64_t result,
+                               std::vector<SizeExprReadObservation> reads);
+  void invalidate_max_reducer() {
+    max_reducer_cache_.clear();
+  }
+
   // Bulk-invalidate just the per-task adstack metadata caches on the overflow raise path. The
   // `size_expr_cache_` and `spirv_bytecode_cache_` are intentionally NOT cleared: they self-validate via per-read
   // observation walks on the next lookup, so a DLPack-bypass mutation surfaces there as a normal observation
@@ -143,10 +168,12 @@ class AdStackCache {
   // force-drop because their gen-counter snapshots match when the user's mutation bypassed our tracking.
   // Invalidation is bulk (every task) rather than targeted (just the offender) because a single shared DLPack /
   // torch view can back multiple tasks in the same kernel queue: targeted invalidation would let the next launch
-  // hit a stale entry on a different task that reads the same now-mutated tensor and overflow again.
+  // hit a stale entry on a different task that reads the same now-mutated tensor and overflow again. Also evicts
+  // the option-D max-reducer cache so a stale-cache overflow auto-recovers across all four cache layers.
   void invalidate_all_per_task() {
     invalidate_per_task_ad_stack();
     invalidate_llvm_per_task_ad_stack();
+    invalidate_max_reducer();
   }
 
   uint64_t snode_write_gen(int snode_id) const {
@@ -270,6 +297,10 @@ class AdStackCache {
   std::unordered_map<const void *, SpirvBytecodeCacheEntry> spirv_bytecode_cache_;
   std::unordered_map<const void *, PerTaskAdStackCacheEntry> per_task_ad_stack_cache_;
   std::unordered_map<const void *, LlvmPerTaskAdStackCacheEntry> llvm_per_task_ad_stack_cache_;
+  // Option-D max-reducer per-spec output cache. Key encoding: low 32 bits = `registry_id`, mid 16 bits =
+  // `stack_id`, high 16 bits = `mor_node_idx`. See `try_max_reducer_cache_hit` for the contract and
+  // `pack_max_reducer_key` in `adstack_size_expr_eval.cpp` for the packing helper.
+  std::unordered_map<uint64_t, MaxReducerCacheEntry> max_reducer_cache_;
   std::unordered_map<int, uint64_t> snode_write_gen_;
   std::unordered_map<void *, uint64_t> ndarray_data_gen_;
 
@@ -365,6 +396,36 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
     const spirv::TaskAttributes::AdStackSizingAttribs &ad_stack,
     Program *prog,
     LaunchContextBuilder *ctx);
+
+// Stage 1.4 of `quadrants_adstack_max_reducer_plan.md`: extract a captured `MaxOverRange`'s body subtree from
+// `expr` and emit it as a flat `[AdStackSizeExprDeviceNode x body_node_count][int32 x indices_count]` bytecode blob
+// plus a parallel `[uint8_t]` byte buffer ready to upload to a device storage buffer. Reachable nodes are walked in
+// post-order from `body_node_idx` and renumbered to dense `[0, body_node_count)` indices; referenced indices entries
+// from `expr.indices_table` (the `idx_raw, elem_stride` pairs `kExternalTensorRead` reads) are copied into the same
+// flat buffer at `body_node_count * sizeof(AdStackSizeExprDeviceNode)`. Returns the raw bytes plus
+// `body_node_count` and `indices_count` so the caller can populate the matching `AdStackMaxReducerParams` /
+// `LlvmAdStackMaxReducerDeviceParams` fields. Stage 1 grammar guarantees the body subtree contains no
+// `kMaxOverRange` / `kFieldLoad`, so the body interpreter only needs the small grammar set the SPIR-V max-reducer
+// shader and the LLVM `runtime_eval_adstack_max_reduce` runtime function both implement.
+//
+// `arg_buffer_offset_resolver` resolves `(arg_id_path) -> byte_offset_in_arg_buffer` for `kExternalTensorRead` leaves.
+// On the gfx caller path this is a closure over `LaunchContextBuilder::args_type::get_element_offset` (same path the
+// SizeExpr device-bytecode encoder uses). On the LLVM caller path the resolver mirrors the per-task adstack sizer's
+// arg-buffer-offset precomputation. Returns `-1` on resolution failure (caller should hard-error or skip the spec).
+struct EncodedMaxReducerBody {
+  std::vector<uint8_t> bytes;
+  uint32_t body_node_count{0};
+  uint32_t indices_count{0};
+  // Reads observed during encoding: one entry per body leaf (`kExternalTensorRead`) and per begin/end leaf the caller
+  // resolved separately. Used by `AdStackCache::record_max_reducer_eval` so the next launch can short-circuit on a
+  // generation match. Caller fills in the begin/end observations and appends body observations from this list.
+  std::vector<AdStackCache::SizeExprReadObservation> body_reads;
+};
+EncodedMaxReducerBody encode_max_reducer_body_bytecode(
+    const SerializedSizeExpr &expr,
+    int32_t body_node_idx,
+    int32_t bound_var_id,
+    const std::function<int32_t(const std::vector<int32_t> &arg_id_path)> &arg_buffer_offset_resolver);
 
 // Stage 1 of `quadrants_adstack_max_reducer_plan.md`: walk every per-stack `SerializedSizeExpr` in `size_exprs`
 // post-order and return the list of `MaxOverRange` nodes the runtime can reduce in parallel via a dedicated

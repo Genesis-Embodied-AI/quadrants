@@ -845,6 +845,47 @@ void AdStackCache::record_size_expr_eval(const SerializedSizeExpr *expr_key,
   size_expr_cache_[expr_key] = SizeExprCacheEntry{result, std::move(reads)};
 }
 
+namespace {
+// Pack a `(registry_id, stack_id, mor_node_idx)` triple into a single 64-bit map key. Stage 1 caps both `stack_id`
+// and `mor_node_idx` at O(10s) per task (per-task adstack count and per-stack node count are both small), well within
+// 16 bits each, so the packed encoding never collides. `registry_id` uses the full 32 bits since the program-side
+// registry can grow to thousands of entries across a long-running session.
+inline uint64_t pack_max_reducer_key(uint32_t registry_id, int32_t stack_id, int32_t mor_node_idx) {
+  return (static_cast<uint64_t>(registry_id) & 0xFFFFFFFFull) | ((static_cast<uint64_t>(stack_id) & 0xFFFFull) << 32) |
+         ((static_cast<uint64_t>(mor_node_idx) & 0xFFFFull) << 48);
+}
+}  // namespace
+
+bool AdStackCache::try_max_reducer_cache_hit(uint32_t registry_id,
+                                             int32_t stack_id,
+                                             int32_t mor_node_idx,
+                                             LaunchContextBuilder *ctx,
+                                             int64_t &out_result) {
+  auto it = max_reducer_cache_.find(pack_max_reducer_key(registry_id, stack_id, mor_node_idx));
+  if (it == max_reducer_cache_.end()) {
+    return false;
+  }
+  const auto &entry = it->second;
+  for (const auto &obs : entry.reads) {
+    int64_t now = replay_one_observation(obs, prog_, ctx);
+    if (now != obs.observed_value) {
+      max_reducer_cache_.erase(it);
+      return false;
+    }
+  }
+  out_result = entry.result;
+  return true;
+}
+
+void AdStackCache::record_max_reducer_eval(uint32_t registry_id,
+                                           int32_t stack_id,
+                                           int32_t mor_node_idx,
+                                           int64_t result,
+                                           std::vector<SizeExprReadObservation> reads) {
+  max_reducer_cache_[pack_max_reducer_key(registry_id, stack_id, mor_node_idx)] =
+      MaxReducerCacheEntry{result, std::move(reads)};
+}
+
 bool AdStackCache::try_spirv_bytecode_cache_hit(Program *prog,
                                                 const void *attribs_key,
                                                 LaunchContextBuilder *ctx,
@@ -1624,6 +1665,140 @@ std::vector<StaticAdStackMaxReducerSpec> recognize_adstack_max_reducer_specs(
     }
   }
   return specs;
+}
+
+EncodedMaxReducerBody encode_max_reducer_body_bytecode(
+    const SerializedSizeExpr &expr,
+    int32_t body_node_idx,
+    int32_t bound_var_id,
+    const std::function<int32_t(const std::vector<int32_t> &arg_id_path)> &arg_buffer_offset_resolver) {
+  EncodedMaxReducerBody out;
+  if (body_node_idx < 0 || static_cast<std::size_t>(body_node_idx) >= expr.nodes.size()) {
+    return out;
+  }
+  // Post-order DFS to collect reachable node indices from `body_node_idx`. Stage 1 grammar guarantees no
+  // `kMaxOverRange` / `kFieldLoad` in the body subtree, so we only need to follow `operand_a` / `operand_b`
+  // (binary ops) and `kExternalTensorRead` (no operands beyond indices). The resulting `post_order` vector is
+  // sorted such that any node's operands precede the node itself.
+  std::vector<int32_t> post_order;
+  std::unordered_map<int32_t, int32_t> old_to_new;  // old idx -> dense [0, body_node_count)
+  std::function<void(int32_t)> visit = [&](int32_t idx) {
+    if (idx < 0 || old_to_new.count(idx) != 0) {
+      return;
+    }
+    const auto &n = expr.nodes[idx];
+    auto kind = static_cast<SizeExpr::Kind>(n.kind);
+    if (kind == SizeExpr::Kind::Add || kind == SizeExpr::Kind::Sub || kind == SizeExpr::Kind::Mul ||
+        kind == SizeExpr::Kind::Max) {
+      visit(n.operand_a);
+      visit(n.operand_b);
+    }
+    // `kConst`, `kBoundVariable`, `kExternalTensorRead` are leaves (`indices` are constants or bound-var refs).
+    int32_t new_idx = static_cast<int32_t>(post_order.size());
+    old_to_new[idx] = new_idx;
+    post_order.push_back(idx);
+  };
+  visit(body_node_idx);
+
+  out.body_node_count = static_cast<uint32_t>(post_order.size());
+
+  // Build the flat indices table for any `kExternalTensorRead` leaves. Each leaf carries `indices_count` axes;
+  // each axis contributes one `(idx_raw, elem_stride)` pair. `idx_raw` mirrors the host SerializedSizeExprNode
+  // encoding (`-(var_id + 1)` for bound-var refs, non-negative for constants) - the encoder remaps `bound_var_id`
+  // refs to `-(0 + 1) = -1` since the device-side scope has only one bound variable per spec. `elem_stride` is
+  // resolved to the per-axis element stride (in elements, not bytes) by the caller via the same convention the
+  // adstack sizer encoder uses.
+  std::vector<int32_t> indices_table;
+  // Build `AdStackSizeExprDeviceNode`s in post-order. We only emit fields the device interpreter reads for the
+  // Stage 1 grammar; unused fields stay at their default values.
+  std::vector<AdStackSizeExprDeviceNode> device_nodes(post_order.size());
+  for (std::size_t i = 0; i < post_order.size(); ++i) {
+    const auto &src = expr.nodes[post_order[i]];
+    auto &dst = device_nodes[i];
+    dst.kind = src.kind;
+    dst.var_id = -1;
+    auto kind = static_cast<SizeExpr::Kind>(src.kind);
+    switch (kind) {
+      case SizeExpr::Kind::Const:
+        dst.const_value = src.const_value;
+        break;
+      case SizeExpr::Kind::BoundVariable:
+        // Device-side scope holds the bound variable at slot 0 (only one per spec). The runtime function pre-
+        // populates `scope.values[var_id]`; the SPIR-V max-reducer shader substitutes `iter_var` directly.
+        dst.var_id = 0;
+        break;
+      case SizeExpr::Kind::ExternalTensorRead: {
+        dst.prim_dt = static_cast<int32_t>(src.const_value);
+        // Resolve `arg_buffer_offset` from `arg_id_path` via the caller's resolver.
+        std::vector<int32_t> path = src.arg_id_path;
+        const int32_t arg_buf_off = arg_buffer_offset_resolver(path);
+        if (arg_buf_off < 0) {
+          return EncodedMaxReducerBody{};  // resolver failed; signal empty result
+        }
+        dst.arg_buffer_offset = arg_buf_off;
+        // Indices table: emit `(idx_raw, elem_stride=1)` per axis. Stage 1 grammar restricts to single-axis reads
+        // indexed by the bound variable (encoded as `-(this_var_id + 1)` in the host tree); the device-side scope
+        // remaps that to slot 0, so we re-encode as `-1` (= `-(0 + 1)`). Element stride is 1 because the body's
+        // ndarray is treated as a flat 1D buffer; multi-axis support is future work.
+        const int32_t indices_off = static_cast<int32_t>(indices_table.size());
+        for (std::size_t a = 0; a < src.indices.size(); ++a) {
+          int64_t raw = src.indices[a];
+          int32_t emit_raw;
+          if (raw >= 0) {
+            emit_raw = static_cast<int32_t>(raw);
+          } else if (-(raw + 1) == bound_var_id) {
+            emit_raw = -1;  // -(0 + 1)
+          } else {
+            // Body grammar guarantees only the spec's bound var appears; reaching here is an analyzer bug.
+            return EncodedMaxReducerBody{};
+          }
+          indices_table.push_back(emit_raw);
+          indices_table.push_back(1);  // elem_stride
+        }
+        dst.indices_offset = indices_off;
+        dst.indices_count = static_cast<int32_t>(src.indices.size());
+
+        // Record a body observation entry so the caller can populate the cache's read list. The caller fills in
+        // `observed_value` and `observed_gen` post-eval (we do not have the live ctx here).
+        AdStackCache::SizeExprReadObservation obs{};
+        obs.kind = AdStackCache::SizeExprReadObservation::ExternalReadObs;
+        obs.snode_id = -1;
+        obs.arg_id_path = std::vector<int>(src.arg_id_path.begin(), src.arg_id_path.end());
+        obs.prim_dt = static_cast<int>(src.const_value);
+        out.body_reads.push_back(std::move(obs));
+        break;
+      }
+      case SizeExpr::Kind::Add:
+      case SizeExpr::Kind::Sub:
+      case SizeExpr::Kind::Mul:
+      case SizeExpr::Kind::Max: {
+        auto map_op = [&](int32_t old) -> int32_t {
+          auto it = old_to_new.find(old);
+          return it == old_to_new.end() ? -1 : it->second;
+        };
+        dst.operand_a = map_op(src.operand_a);
+        dst.operand_b = map_op(src.operand_b);
+        break;
+      }
+      default:
+        // Out-of-grammar kind reached the encoder; the caller should have filtered via
+        // `recognize_adstack_max_reducer_specs`. Return empty to signal failure.
+        return EncodedMaxReducerBody{};
+    }
+  }
+
+  out.indices_count = static_cast<uint32_t>(indices_table.size());
+  // Concatenate `[device_nodes][indices_table]` into the output bytes buffer.
+  const std::size_t nodes_bytes = device_nodes.size() * sizeof(AdStackSizeExprDeviceNode);
+  const std::size_t indices_bytes = indices_table.size() * sizeof(int32_t);
+  out.bytes.resize(nodes_bytes + indices_bytes);
+  if (nodes_bytes > 0) {
+    std::memcpy(out.bytes.data(), device_nodes.data(), nodes_bytes);
+  }
+  if (indices_bytes > 0) {
+    std::memcpy(out.bytes.data() + nodes_bytes, indices_table.data(), indices_bytes);
+  }
+  return out;
 }
 
 void clip_effective_rows_by_loop_trip_count(std::size_t &effective_rows,
