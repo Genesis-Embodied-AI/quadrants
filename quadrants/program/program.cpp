@@ -297,6 +297,10 @@ std::optional<Program::AdStackSizingInfoEntry> Program::lookup_adstack_sizing_in
 }
 
 std::string Program::diagnose_adstack_overflow_message(uint32_t task_id) const {
+  return diagnose_adstack_overflow(task_id).message;
+}
+
+Program::AdStackOverflowDiagnosis Program::diagnose_adstack_overflow(uint32_t task_id) const {
   std::string identity_block;
   std::string disambiguation_block;
   // Cause classifier: when the synchronous re-run produces required > allocated for ANY stack, the
@@ -429,9 +433,24 @@ std::string Program::diagnose_adstack_overflow_message(uint32_t task_id) const {
         "the Bellman-Ford analyzer undercounted the forward-pass accumulation. Please file with the "
         "kernel IR (`QD_DUMP_IR=1`).\n";
   }
-  return identity_block + disambiguation_block + body +
-         "Note: kernel state may be inconsistent post-overflow; do not retry the same step without "
-         "addressing the cause and restarting from a clean state.";
+  AdStackOverflowDiagnosis result;
+  result.message = identity_block + disambiguation_block + body +
+                   "Note: kernel state may be inconsistent post-overflow; do not retry the same "
+                   "step without addressing the cause and restarting from a clean state.";
+  // Flag the cache as confirmed-invalid for every cause EXCEPT Quadrants-bug (host-resolvable
+  // sync rerun that found `required <= allocated` on every stack). The classifier only confirms
+  // Quadrants-bug when every leaf is host-resolvable AND the freshly-computed required size does
+  // NOT exceed allocated - that combination is solid evidence the pre-pass undersized, and
+  // invalidating the cache there would mask the bug (the next launch reruns the same wrong sizer
+  // and would still produce the same wrong bound, just slower). DLPack-bypass and Unknown both
+  // benefit from invalidation: DLPack-bypass auto-recovers because the next launch's sizer reads
+  // the live state, and Unknown (ndarray-bound size_expr that is not host-resolvable) is the
+  // dominant DLPack-bypass scenario in production - tightening the gate to only Confirmed
+  // DLPackBypass would leave production users stuck with stale-cache errors that auto-recovery
+  // could have cleared. The cost of an unwarranted Unknown-triggered invalidate is minimal: the
+  // next launch reruns the sizer (a few extra microseconds on the error path).
+  result.confirmed_invalid_cache = (cause != Cause::QuadrantsBug);
+  return result;
 }
 
 StreamSemaphore Program::flush() {

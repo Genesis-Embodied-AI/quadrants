@@ -1033,7 +1033,17 @@ void GfxRuntime::synchronize() {
                 "predicate. File a bug with the kernel IR via `QD_DUMP_IR=1` and a minimal repro.");
     if (flag_val != 0) {
       Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
-      std::string diagnostic = (prog != nullptr) ? prog->diagnose_adstack_overflow_message(task_id_val) : std::string();
+      std::string diagnostic;
+      if (prog != nullptr) {
+        auto diag = prog->diagnose_adstack_overflow(task_id_val);
+        diagnostic = std::move(diag.message);
+        // See `LlvmRuntimeExecutor::check_adstack_overflow` for the rationale; only invalidate when
+        // the sizer rerun confirmed a stale cache (DLPack-bypass) so a Quadrants pre-pass bug is
+        // not silently masked.
+        if (diag.confirmed_invalid_cache) {
+          prog->adstack_cache().invalidate_all();
+        }
+      }
       QD_ERROR(
           "Adstack overflow (offending stack_id={}): a reverse-mode autodiff kernel pushed more "
           "elements than the adstack capacity allows. Raised at the next `qd.sync()`.\n{}",

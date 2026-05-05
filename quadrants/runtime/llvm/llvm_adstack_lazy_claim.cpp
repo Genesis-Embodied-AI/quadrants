@@ -653,10 +653,23 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
     task_id = static_cast<uint32_t>(recorded);
   }
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
-  std::string diagnostic = (prog != nullptr) ? prog->diagnose_adstack_overflow_message(task_id)
-                                             : std::string(
-                                                   "Adstack overflow: a reverse-mode autodiff kernel pushed more "
-                                                   "elements than the adstack capacity allows.");
+  std::string diagnostic;
+  if (prog != nullptr) {
+    auto diag = prog->diagnose_adstack_overflow(task_id);
+    diagnostic = std::move(diag.message);
+    // Auto-invalidate the adstack-sizer caches when the synchronous sizer rerun confirmed the cache
+    // is stale (DLPack-bypass cause). The current run is corrupted (we are about to raise), but the
+    // next launch's sizer will recompute max_size against the live (mutated) state and the kernel
+    // will run to completion without further user intervention. Unknown / Quadrants-bug cases skip
+    // the invalidation so a real sizer bug is not masked by silent recompute.
+    if (diag.confirmed_invalid_cache) {
+      prog->adstack_cache().invalidate_all();
+    }
+  } else {
+    diagnostic =
+        "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack "
+        "capacity allows.";
+  }
   throw QuadrantsAssertionError(
       "Adstack overflow: a reverse-mode autodiff kernel pushed more elements "
       "than the adstack capacity allows. Raised at the next Quadrants Python "

@@ -45,7 +45,7 @@ class AdStackCache {
   void record_size_expr_eval(const SerializedSizeExpr *expr_key,
                              int64_t result,
                              std::vector<SizeExprReadObservation> reads);
-  void invalidate_size_expr_cache() {
+  void invalidate_size_expr() {
     size_expr_cache_.clear();
   }
 
@@ -62,7 +62,7 @@ class AdStackCache {
   void record_spirv_bytecode_eval(const void *attribs_key,
                                   std::vector<uint8_t> bytecode,
                                   std::vector<SizeExprReadObservation> reads);
-  void invalidate_spirv_bytecode_cache() {
+  void invalidate_spirv_bytecode() {
     spirv_bytecode_cache_.clear();
   }
 
@@ -83,7 +83,7 @@ class AdStackCache {
                                 uint32_t stride_int,
                                 std::vector<std::pair<int, uint64_t>> snode_gens,
                                 std::vector<std::tuple<int, void *, uint64_t>> arg_gens);
-  void invalidate_per_task_ad_stack_cache() {
+  void invalidate_per_task_ad_stack() {
     per_task_ad_stack_cache_.clear();
   }
 
@@ -108,8 +108,19 @@ class AdStackCache {
                                      uint64_t stride_int,
                                      std::vector<std::pair<int, uint64_t>> snode_gens,
                                      std::vector<std::tuple<int, void *, uint64_t>> arg_gens);
-  void invalidate_llvm_per_task_ad_stack_cache() {
+  void invalidate_llvm_per_task_ad_stack() {
     llvm_per_task_ad_stack_cache_.clear();
+  }
+
+  // Bulk-invalidate every adstack-sizer cache. Used on the overflow raise path so the next launch
+  // reruns the sizer from scratch against the live SNode / ndarray state, auto-recovering from a
+  // stale-cache window introduced by a DLPack-bypass mutation that grew the data-dependent capacity.
+  // Cheap on the error path; trivial cost on the next clean launch (one fresh sizer run per task).
+  void invalidate_all() {
+    invalidate_size_expr();
+    invalidate_spirv_bytecode();
+    invalidate_per_task_ad_stack();
+    invalidate_llvm_per_task_ad_stack();
   }
 
   uint64_t snode_write_gen(int snode_id) const {

@@ -263,9 +263,24 @@ class QD_DLL_EXPORT Program {
   // grow / reallocate the registry vector (e.g. `evaluate_adstack_size_expr` dispatching a reader kernel
   // that compiles a fresh task). Returns `std::nullopt` for the sentinel id `0` and for out-of-range ids.
   std::optional<AdStackSizingInfoEntry> lookup_adstack_sizing_info(uint32_t id) const;
-  // Format a diagnostic message for an overflow signal. `task_id` is the value read from the pinned-host
-  // task-id slot (0 if no thread overflowed; otherwise the registry id of the first overflowing task).
-  // Returns the dual-cause message body to embed in the `QuadrantsAssertionError` raised at the poll site.
+  // Format a diagnostic message for an overflow signal. `task_id` is the value read from the pinned-
+  // host task-id slot (0 if no thread overflowed; otherwise the registry id of the first overflowing
+  // task). The `message` field is embedded into the `QuadrantsAssertionError` raised at the poll
+  // site. The `confirmed_invalid_cache` field is true only when the synchronous sizer rerun clearly
+  // identified the failure as a stale-cache / DLPack-bypass case (`required > allocated` for at
+  // least one stack with every leaf host-resolvable); the caller (LLVM `check_adstack_overflow` /
+  // SPIR-V `GfxRuntime::synchronize`) uses it to decide whether to bulk-invalidate the adstack-sizer
+  // caches so the next launch auto-recovers. We deliberately do NOT invalidate on Unknown / Quadrants-
+  // bug because invalidating would mask sizer bugs (next launch would still produce the same wrong
+  // bound) and the user would lose the loud signal that something is genuinely off.
+  struct AdStackOverflowDiagnosis {
+    std::string message;
+    bool confirmed_invalid_cache{false};
+  };
+  AdStackOverflowDiagnosis diagnose_adstack_overflow(uint32_t task_id) const;
+  // Convenience wrapper retained for the C++ unit test surface that exercises just the message
+  // formatting; production code uses `diagnose_adstack_overflow` to also act on the confirmed-cause
+  // signal.
   std::string diagnose_adstack_overflow_message(uint32_t task_id) const;
 
   /**
