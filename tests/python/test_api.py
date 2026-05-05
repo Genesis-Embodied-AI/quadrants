@@ -162,6 +162,7 @@ user_api[qd] = [
     "ikl",
     "il",
     "init",
+    "interop",
     "int16",
     "int32",
     "int64",
@@ -454,6 +455,7 @@ user_api[qd.VectorNdarray] = [
     "to_numpy",
     "to_torch",
 ]
+user_api[qd.interop] = ["get_mps_command_queue"]
 user_api[qd.sparse] = ["grid", "usage"]
 
 
