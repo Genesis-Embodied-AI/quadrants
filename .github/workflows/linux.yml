@@ -197,10 +197,10 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            let body = fs.readFileSync('coverage-comment.md', 'utf8');
+            let body = fs.readFileSync('coverage-comment.md', 'utf8').trim();
             const url = process.env.REPORT_URL;
             if (url) {
-              body += `\n\n[Full annotated report](${url})`;
+              body = `[${body}](${url})`;
             }
             await github.rest.issues.createComment({
               owner: context.repo.owner,
