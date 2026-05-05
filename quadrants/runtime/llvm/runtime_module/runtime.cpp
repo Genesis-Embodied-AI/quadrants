@@ -26,6 +26,7 @@
 #include "quadrants/inc/cuda_kernel_utils.inc.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/ir/static_adstack_bound_reducer_device.h"
+#include "quadrants/ir/static_adstack_max_reducer_device.h"
 #include "quadrants/math/arithmetic.h"
 
 struct RuntimeContext;
@@ -647,6 +648,15 @@ struct LLVMRuntime {
   u32 *adstack_bound_row_capacities = nullptr;
   u64 adstack_bound_row_capacities_capacity = 0;
 
+  // Per-spec output slot for the option-D max reducer (Stage 1.3). One i64 per captured
+  // `StaticAdStackMaxReducerSpec`, written by `runtime_eval_adstack_max_reduce` during the per-launch dispatch and
+  // read by the host launcher to substitute the value as a `Const` into the per-stack `SerializedSizeExpr` tree
+  // before any LLVM eval path walks it. Sized / grown by the LlvmRuntimeExecutor lazy-allocate path on the first
+  // launch that has captured specs; cleared to INT64_MIN before each dispatch so the running-max sentinel is
+  // well-defined when `length == 0` (returns INT64_MIN; the caller floors at 0 + clamps to compile-time).
+  i64 *adstack_max_reducer_outputs = nullptr;
+  u64 adstack_max_reducer_outputs_capacity = 0;
+
   Ptr result_buffer;
   i32 allocator_lock;
 
@@ -693,6 +703,7 @@ STRUCT_FIELD(LLVMRuntime, adstack_offsets);
 STRUCT_FIELD(LLVMRuntime, adstack_max_sizes);
 STRUCT_FIELD(LLVMRuntime, adstack_row_counters);
 STRUCT_FIELD(LLVMRuntime, adstack_bound_row_capacities);
+STRUCT_FIELD(LLVMRuntime, adstack_max_reducer_outputs);
 STRUCT_FIELD(LLVMRuntime, adstack_overflow_flag_dev_ptr);
 STRUCT_FIELD(LLVMRuntime, adstack_overflow_task_id_dev_ptr);
 
@@ -1167,6 +1178,53 @@ void runtime_eval_static_bound_count(LLVMRuntime *runtime, RuntimeContext *ctx, 
   }
 
   runtime->adstack_bound_row_capacities[params->task_index] = count;
+}
+
+// Option D, Stage 1.3: per-launch parallel-max evaluator over the body of a captured
+// `StaticAdStackMaxReducerSpec`'s `MaxOverRange` node. Single-thread serial walk on every backend (CPU host thread,
+// CUDA / AMDGPU single-thread JIT-launched device function), mirroring `runtime_eval_static_bound_count`. The body
+// bytecode reuses the existing `AdStackSizeExprDeviceNode` POD format already shared between the host encoder and
+// the LLVM device sizer interpreter (`device_eval_node`); the Stage 1 grammar restricts body kinds to
+// `kConst / kBoundVariable / kExternalTensorRead / kAdd / kSub / kMul / kMax`, so the recursive walk never recurses
+// through `kMaxOverRange` or `kFieldLoad` and the iteration stays linear in `params->length`.
+//
+// Per-iteration: bind `scope.values[var_id] = begin + i`, evaluate `device_eval_node(body_root_idx, &scope, ...)`,
+// update running max. Result is written to `runtime->adstack_max_reducer_outputs[output_slot]`. Caller clears the
+// slot to INT64_MIN before the dispatch so an empty range (`length == 0`) leaves the sentinel for the host launcher
+// to detect and floor at zero.
+void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr params_blob, Ptr body_bytecode) {
+  using quadrants::lang::AdStackSizeExprDeviceNode;
+  using quadrants::lang::LlvmAdStackMaxReducerDeviceParams;
+
+  const auto *params = reinterpret_cast<const LlvmAdStackMaxReducerDeviceParams *>(params_blob);
+  const auto *nodes = reinterpret_cast<const AdStackSizeExprDeviceNode *>(body_bytecode);
+  const auto *indices = reinterpret_cast<const i32 *>(reinterpret_cast<const char *>(nodes) +
+                                                      sizeof(AdStackSizeExprDeviceNode) * params->body_node_count);
+
+  const char *arg_buffer = ctx->arg_buffer;
+  DeviceEvalScope scope;
+  for (i32 k = 0; k < kDeviceBoundVarCap; ++k) {
+    scope.values[k] = 0;
+  }
+
+  // Sentinel start: INT64_MIN so the first body value always wins over an empty `length == 0` slot. Caller normalises
+  // the empty case (writes 0 / floors at compile-time) when reading the slot back.
+  i64 running_max = (i64)0x8000000000000000ll;
+  const i64 begin = params->begin;
+  const u32 length = params->length;
+  const i32 var_id = params->var_id;
+  const i32 root_idx = params->body_root_node_idx;
+  const bool var_in_range = var_id >= 0 && var_id < kDeviceBoundVarCap;
+  for (u32 i = 0; i < length; ++i) {
+    if (var_in_range) {
+      scope.values[var_id] = begin + (i64)i;
+    }
+    i64 v = device_eval_node(nodes, indices, root_idx, &scope, arg_buffer);
+    if (v > running_max) {
+      running_max = v;
+    }
+  }
+  runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
 }
 
 void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr bytecode) {
