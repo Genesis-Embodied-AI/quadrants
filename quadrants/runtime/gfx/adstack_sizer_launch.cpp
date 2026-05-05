@@ -191,6 +191,14 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     size_t ti = adstack_task_indices[k];
     auto &mutable_attribs =
         const_cast<quadrants::lang::spirv::TaskAttributes::AdStackSizingAttribs &>(task_attribs[ti].ad_stack);
+    // Skip re-registration once the registry has the entry. `task_attribs` lives inside the cached compiled-kernel
+    // handle and its allocas / size_exprs / max_size_compile_time are codegen-time immutable; a fresh compile would
+    // use a new `mutable_attribs` address with `registry_id == 0`, so this is the natural one-shot guard.
+    // Re-registering on every launch was costing ~2% of wallclock on the Metal rigid-step bench (vector copies for
+    // allocated_max_sizes + size_exprs, plus a deep copy of the kernel_name string into the entry).
+    if (mutable_attribs.registry_id != 0) {
+      continue;
+    }
     std::vector<int> allocated_max_sizes;
     std::vector<SerializedSizeExpr> size_exprs;
     allocated_max_sizes.reserve(mutable_attribs.allocas.size());
