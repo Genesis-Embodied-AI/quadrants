@@ -315,6 +315,18 @@ def _emit_file_section(book: _FileBookkeeping, attributed: list[_AttributedEntry
     return lines, per_added, per_removed
 
 
+_FOOTER = (
+    "Notes:\n"
+    "  * The number columns (without a + or - sign) are code-line counts in the "
+    "BASE (pre-PR) version: file size before this PR (0 for newly-added files), "
+    "function body size before this PR (0 for new functions; original body size "
+    "for deleted functions).\n"
+    "  * +<n> / -<n> are code lines added / removed by this PR.\n"
+    "  * Code lines exclude blank lines, comment-only lines, and Python "
+    "multi-line strings."
+)
+
+
 def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
     summaries: list[dict] = json.loads(summary_json.read_text())
     by_path = _load_function_entries(jsonl_path)
@@ -328,6 +340,9 @@ def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
         out_lines.append("")
     while out_lines and out_lines[-1] == "":
         out_lines.pop()
+    if out_lines:
+        out_lines.append("")
+        out_lines.append(_FOOTER)
     return "\n".join(out_lines) + ("\n" if out_lines else "")
 
 
