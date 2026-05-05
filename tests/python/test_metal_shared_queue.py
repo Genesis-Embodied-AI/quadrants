@@ -11,45 +11,13 @@ pytestmark = pytest.mark.needs_torch
 
 
 def _get_mps_command_queue() -> int:
-    """Extract PyTorch MPS's MTLCommandQueue* as a Python int.
-
-    Uses dlsym + ObjC runtime to reach into PyTorch's C++ internals without any build-time dependency.
-    """
-    import ctypes
-    import os
-
+    """Extract PyTorch MPS's MTLCommandQueue* via ``qd.interop``."""
     import torch
 
     torch.zeros(1, device="mps")
-
-    torch_lib = os.path.join(os.path.dirname(torch.__file__), "lib", "libtorch_cpu.dylib")
-    handle = ctypes.CDLL(torch_lib)._handle
-
-    libdl = ctypes.CDLL(None)
-    dlsym = libdl.dlsym
-    dlsym.restype = ctypes.c_void_p
-    dlsym.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-
-    func_addr = dlsym(handle, b"_ZN2at3mps19getDefaultMPSStreamEv")
-    if func_addr is None:
-        pytest.skip("Cannot find getDefaultMPSStream symbol")
-    stream_ptr = ctypes.CFUNCTYPE(ctypes.c_void_p)(func_addr)()
-
-    cb_addr = dlsym(handle, b"_ZN2at3mps9MPSStream13commandBufferEv")
-    if cb_addr is None:
-        pytest.skip("Cannot find MPSStream::commandBuffer symbol")
-    cb_ptr = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p)(cb_addr)(stream_ptr)
-
-    objc = ctypes.CDLL("/usr/lib/libobjc.A.dylib")
-    sel_reg = objc.sel_registerName
-    sel_reg.restype = ctypes.c_void_p
-    sel_reg.argtypes = [ctypes.c_char_p]
-    msg_send = objc.objc_msgSend
-    msg_send.restype = ctypes.c_void_p
-    msg_send.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-
-    queue_ptr = msg_send(cb_ptr, sel_reg(b"commandQueue"))
-    assert queue_ptr, "Failed to extract MTLCommandQueue from PyTorch MPS"
+    queue_ptr = qd.interop.get_mps_command_queue()
+    if not queue_ptr:
+        pytest.skip("qd.interop.get_mps_command_queue() returned 0")
     return queue_ptr
 
 
@@ -162,6 +130,19 @@ def test_sync_skipped_with_shared_queue():
 
         mps_sync_if_metal()
         mock_mps_sync.assert_not_called()
+
+
+@test_utils.test(arch=[qd.metal])
+def test_interop_get_mps_command_queue():
+    """qd.interop.get_mps_command_queue() returns a non-zero pointer on MPS-capable machines."""
+    import torch
+
+    if not hasattr(torch.backends, "mps") or not torch.backends.mps.is_available():
+        pytest.skip("PyTorch MPS not available")
+    torch.zeros(1, device="mps")
+    ptr = qd.interop.get_mps_command_queue()
+    assert isinstance(ptr, int)
+    assert ptr != 0
 
 
 @test_utils.test(arch=[qd.metal])

@@ -19,6 +19,7 @@ from quadrants import (
     ad,
     algorithms,
     experimental,
+    interop,
     linalg,
     math,
     sparse,
