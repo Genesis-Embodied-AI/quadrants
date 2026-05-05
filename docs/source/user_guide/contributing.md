@@ -150,3 +150,29 @@ Uses an AI agent to verify that new or modified source code in a PR has correspo
 Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the "wrong" place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.
 
 The agent reports up to 5 violations, each annotated with the host file's hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
+### PR change report (`pr_change_report.yml`)
+
+Posts a fresh PR comment on every push pointing at a GitHub Check whose page contains a per-file / per-function breakdown of code-line additions and removals. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal — i.e. docstrings and continuation lines of multi-line strings. C/C++ `/* … */` block comments are stripped before counting.
+
+Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR) and an `Existing:` group (modified or deleted), and within each group sorted by added lines descending. Sample shape:
+
+```
+quadrants/program/program_stream.cpp 151 +151
+    New:
+      StreamManager::create_event()             NEW      +18
+      StreamManager::create_stream()            NEW      +18
+      StreamManager::record_event()             NEW      +15
+      StreamManager::destroy_event()            NEW      +13
+      StreamManager::destroy_stream()           NEW      +13
+
+python/quadrants/lang/stream.py 111 +111
+    New:
+      Event.destroy()              NEW       +9
+      Stream.destroy()             NEW       +9
+      Event._destroy_prog()        NEW       +8
+      Stream._destroy_prog()       NEW       +8
+      Event.__del__()              NEW       +7
+```
+
+This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.

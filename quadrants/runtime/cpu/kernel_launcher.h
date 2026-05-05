@@ -1,5 +1,7 @@
 #pragma once
 
+#include <deque>
+
 #include "quadrants/codegen/llvm/compiled_kernel_data.h"
 #include "quadrants/runtime/llvm/kernel_launcher.h"
 
@@ -38,7 +40,8 @@ class KernelLauncher : public LLVM::KernelLauncher {
                                             const std::vector<AdStackSizingInfo> &ad_stacks,
                                             const std::vector<std::size_t> &num_threads_per_task);
 
-  std::vector<Context> contexts_;
+  // `std::deque` so references to existing entries survive an `emplace_back` from a nested launch.
+  std::deque<Context> contexts_;
 };
 
 }  // namespace cpu
