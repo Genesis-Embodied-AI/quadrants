@@ -1387,11 +1387,10 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
         qd.sync()
     if exc_info is not None:
         msg = str(exc_info.value)
-        # The diagnose-time evaluator (`evaluate_adstack_size_expr_for_diagnose`) resolves the ndarray-bound
-        # `range(n_arr[0])` leaf via `Device::map` against the captured launch snapshot, so the classifier
-        # confirms DLPack-bypass with `required (64-ish) > allocated (1)`. The body reflects the confirmed
-        # cause: DLPack hint is present; the "Quadrants bug" alternative is not (it only surfaces when the
-        # classifier could not resolve the bound or proved the sizer undersized).
+        # When the inner range is bounded by an ndarray read, the user sees the actual mutated size in the
+        # error (e.g. allocated=[1], required=[64]) and a recovery flow pointing at the tensor mutation
+        # performed outside Quadrants's tracking. The generic "this might also be a Quadrants bug"
+        # alternative only appears when the diagnostic cannot pin the cause down.
         assert "DLPack" in msg, f"missing DLPack-bypass cause hint in: {msg}"
         assert "Restart" in msg, f"missing recovery flow in: {msg}"
         assert "Offending task" in msg, f"missing identity block in: {msg}"
