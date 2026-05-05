@@ -442,6 +442,26 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
 std::vector<StaticAdStackMaxReducerSpec> recognize_adstack_max_reducer_specs(
     const std::vector<SerializedSizeExpr> &size_exprs);
 
+// Type alias for the option-D max-reducer result map. Keyed by `(registry_id, stack_id, mor_node_idx)` packed via
+// the same `pack_max_reducer_key` encoding `AdStackCache::try_max_reducer_cache_hit` uses, so a single map shared
+// between the dispatch path and the substitution helper avoids re-packing at every lookup.
+using MaxReducerResultMap = std::unordered_map<uint64_t, int64_t>;
+
+// Stage 1.6 of `quadrants_adstack_max_reducer_plan.md`: walk `expr.nodes`, replace every captured `MaxOverRange`
+// node whose `(registry_id, stack_id, mor_node_idx)` is in `results` with a `Const` carrying the dispatched value.
+// Other nodes (and their `operand_a` / `operand_b` / `body_node_idx` references) are copied through verbatim. The
+// returned `SerializedSizeExpr` has `nodes.size() == expr.nodes.size()` (in-place substitution); operand indices in
+// non-substituted nodes remain valid because the count is unchanged.
+//
+// Empty-input fast path: when no captured spec matches this `(registry_id, stack_id)` (computed by checking
+// `results` against every `MaxOverRange` node in `expr`), return `expr` unchanged (the caller's reference into the
+// per-stack tree stays valid). Use `SerializedSizeExpr` by value as the return so the caller can transparently swap
+// the reference depending on whether substitution fired.
+SerializedSizeExpr substitute_precomputed_max_over_range(const SerializedSizeExpr &expr,
+                                                         uint32_t registry_id,
+                                                         int32_t stack_id,
+                                                         const MaxReducerResultMap &results);
+
 // Apply the captured per-task loop trip-count clip to `effective_rows`. Each loop iteration of an adstack
 // task claims at most one row at the LCA-block, so the heap needs at most `trip_count` rows regardless of
 // how many cells of an oversized gating SNode/ndarray the reducer counted. Two trip-count sources, picked

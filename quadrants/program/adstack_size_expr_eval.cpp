@@ -1801,6 +1801,57 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
   return out;
 }
 
+SerializedSizeExpr substitute_precomputed_max_over_range(const SerializedSizeExpr &expr,
+                                                         uint32_t registry_id,
+                                                         int32_t stack_id,
+                                                         const MaxReducerResultMap &results) {
+  if (results.empty()) {
+    return expr;
+  }
+  auto pack_key = [&](std::size_t n) {
+    return (static_cast<uint64_t>(registry_id) & 0xFFFFFFFFull) |
+           ((static_cast<uint64_t>(stack_id) & 0xFFFFull) << 32) | ((static_cast<uint64_t>(n) & 0xFFFFull) << 48);
+  };
+  // Cheap precheck: any `MaxOverRange` node in this expr with a key in `results`? If not, return verbatim.
+  bool any_match = false;
+  for (std::size_t n = 0; n < expr.nodes.size(); ++n) {
+    if (static_cast<SizeExpr::Kind>(expr.nodes[n].kind) != SizeExpr::Kind::MaxOverRange) {
+      continue;
+    }
+    if (results.count(pack_key(n)) != 0) {
+      any_match = true;
+      break;
+    }
+  }
+  if (!any_match) {
+    return expr;
+  }
+  // Build a copy with substitution applied to matching MaxOverRange nodes. Node count is unchanged so operand
+  // indices in non-substituted nodes stay valid; substituted nodes become `kConst` leaves whose `const_value` is
+  // the dispatched max-reducer result.
+  SerializedSizeExpr out = expr;
+  for (std::size_t n = 0; n < out.nodes.size(); ++n) {
+    auto &node = out.nodes[n];
+    if (static_cast<SizeExpr::Kind>(node.kind) != SizeExpr::Kind::MaxOverRange) {
+      continue;
+    }
+    auto it = results.find(pack_key(n));
+    if (it == results.end()) {
+      continue;
+    }
+    node.kind = static_cast<int32_t>(SizeExpr::Kind::Const);
+    node.const_value = it->second;
+    // Defensive cleanup: the host evaluator's `kConst` arm reads only `const_value`. Reset operand / body /
+    // var_id slots to -1 so any future reader that does not branch on `kind` produces a deterministic failure
+    // rather than reading stale indices.
+    node.operand_a = -1;
+    node.operand_b = -1;
+    node.body_node_idx = -1;
+    node.var_id = -1;
+  }
+  return out;
+}
+
 void clip_effective_rows_by_loop_trip_count(std::size_t &effective_rows,
                                             const StaticAdStackBoundExpr &bound_expr,
                                             std::size_t dispatched_threads_ceiling,
