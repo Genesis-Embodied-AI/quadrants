@@ -16,16 +16,22 @@ Output ``report.txt`` shape::
 
   <path> <total> +<added> -<removed>
       New:
-        <func>()                                   NEW    +<added>
+        <func>()                              <total>  +<added>
         ...
       Existing:
-        <func>()                              <total>     +<added>   -<removed>
+        <func>()                              <total>  +<added>  -<removed>
+        ...
+      Deleted:
+        <func>()                              <total>            -<removed>
         ...
 
-Within each file, functions are split into a ``New:`` group (added by this PR) and an
-``Existing:`` group (modified or deleted by this PR), and within each group sorted by added
-lines descending, then removed lines descending. Function-name and numeric columns are
-padded with spaces so the columns line up within a file.
+The ``<total>`` column at every level is the BASE (pre-PR) code-line count: file size before
+the PR (or 0 for newly-added files); function body size before the PR (or 0 for new functions;
+the original body size for deleted functions). Within each file, functions are split into a
+``New:`` group (added by this PR), an ``Existing:`` group (modified by this PR), and a
+``Deleted:`` group (removed by this PR), and within each group sorted by added lines descending,
+then removed lines descending. Function-name and numeric columns are padded with spaces so the
+columns line up within a file.
 """
 
 from __future__ import annotations
@@ -149,20 +155,22 @@ def _build_file_bookkeeping(summary: dict, output_dir: Path) -> _FileBookkeeping
 def _attribute_function(entry: _FunctionEntry, book: _FileBookkeeping) -> tuple[int, int, int, bool, bool]:
     """Return ``(total, added, removed, is_new, is_deleted)`` for a single function entry.
 
-    ``total`` is the number of code lines in the function's HEAD body. ``added`` / ``removed``
-    are the number of ``+`` / ``-`` diff lines that fall inside the function's HEAD / base range
-    AND are themselves code lines (excluding comments / blank lines / Python multi-line strings).
+    ``total`` is the number of code lines in the function's BASE (pre-PR) body -- i.e. how big
+    this function was before this PR. For NEW functions (no base body) this is 0. ``added`` /
+    ``removed`` are the number of ``+`` / ``-`` diff lines that fall inside the function's
+    HEAD / base range AND are themselves code lines (excluding comments / blank lines / Python
+    multi-line strings).
     """
     total = 0
     added = 0
     removed = 0
-    if entry.head_range is not None:
-        a, b = entry.head_range
-        total = sum(1 for ln in book.head_codes if a <= ln <= b)
-        added = sum(1 for ln in book.added_line_nos if a <= ln <= b and ln in book.head_codes)
     if entry.base_range is not None:
         c, d = entry.base_range
+        total = sum(1 for ln in book.base_codes if c <= ln <= d)
         removed = sum(1 for ln in book.removed_line_nos if c <= ln <= d and ln in book.base_codes)
+    if entry.head_range is not None:
+        a, b = entry.head_range
+        added = sum(1 for ln in book.added_line_nos if a <= ln <= b and ln in book.head_codes)
     is_new = entry.head_range is not None and entry.base_range is None
     is_deleted = entry.head_range is None and entry.base_range is not None
     return total, added, removed, is_new, is_deleted
@@ -223,9 +231,9 @@ def _impact_sort_key(a: _AttributedEntry) -> tuple[int, int, str]:
 
 
 # Column widths chosen to fit the longest expected token in each column without crowding adjacent
-# columns. ``DELETED`` is 7 chars (the longest total token); five-digit ``+``/``-`` counts are
-# the longest expected numeric tokens.
-_TOTAL_WIDTH = 8
+# columns. Five-digit ``+``/``-`` counts are the longest expected numeric tokens; the total
+# column holds a base (pre-PR) line count so it never exceeds a few digits in practice.
+_TOTAL_WIDTH = 6
 _ADDED_WIDTH = 7
 _REMOVED_WIDTH = 7
 _FUNC_INDENT = "      "
@@ -233,10 +241,6 @@ _GROUP_INDENT = "    "
 
 
 def _format_total(a: _AttributedEntry) -> str:
-    if a.is_deleted:
-        return "DELETED"
-    if a.is_new:
-        return "NEW"
     return str(a.total)
 
 
@@ -275,11 +279,15 @@ def _emit_file_section(book: _FileBookkeeping, attributed: list[_AttributedEntry
         return lines, 0, 0
 
     new_group = sorted([a for a in attributed if a.is_new], key=_impact_sort_key)
-    existing_group = sorted([a for a in attributed if not a.is_new], key=_impact_sort_key)
+    deleted_group = sorted([a for a in attributed if a.is_deleted], key=_impact_sort_key)
+    existing_group = sorted(
+        [a for a in attributed if not a.is_new and not a.is_deleted],
+        key=_impact_sort_key)
 
-    # Pad function names to the longest name across BOTH groups so the New: and Existing:
-    # subsections line up with each other.
-    all_names = [_function_label(a.entry.name) for a in new_group + existing_group]
+    # Pad function names to the longest name across ALL groups so the New: / Existing: /
+    # Deleted: subsections line up with each other.
+    all_names = [_function_label(a.entry.name)
+                 for a in new_group + existing_group + deleted_group]
     name_width = max((len(n) for n in all_names), default=0)
 
     if new_group:
@@ -289,6 +297,10 @@ def _emit_file_section(book: _FileBookkeeping, attributed: list[_AttributedEntry
     if existing_group:
         lines.append(f"{_GROUP_INDENT}Existing:")
         for a in existing_group:
+            lines.append(_format_aligned_function(a, name_width))
+    if deleted_group:
+        lines.append(f"{_GROUP_INDENT}Deleted:")
+        for a in deleted_group:
             lines.append(_format_aligned_function(a, name_width))
 
     per_added = sum(a.added for a in attributed)
