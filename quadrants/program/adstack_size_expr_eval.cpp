@@ -72,6 +72,9 @@ int64_t evaluate_field_load(const SerializedSizeExprNode &node,
     obs.arg_shape_axis = 0;
     obs.prim_dt = 0;
     obs.observed_value = v;
+    // Snapshot the SNode's write gen so the next replay can fast-skip when no kernel has written this SNode
+    // since record time (the dominant case for a steady-state reverse-mode loop with stable bounds).
+    obs.observed_gen = prog->adstack_cache().snode_write_gen(node.snode_id);
     reads->push_back(std::move(obs));
   }
   return v;
@@ -79,6 +82,7 @@ int64_t evaluate_field_load(const SerializedSizeExprNode &node,
 
 int64_t evaluate_external_tensor_read(const SerializedSizeExprNode &node,
                                       std::unordered_map<int32_t, int64_t> &bound_vars,
+                                      Program *prog,
                                       LaunchContextBuilder *ctx,
                                       ReadSink *reads) {
   QD_ASSERT_INFO(ctx != nullptr,
@@ -165,6 +169,13 @@ int64_t evaluate_external_tensor_read(const SerializedSizeExprNode &node,
     obs.arg_shape_axis = 0;
     obs.prim_dt = static_cast<int>(prim_dt);
     obs.observed_value = v;
+    obs.observed_devalloc = data_ptr;
+    if (prog != nullptr) {
+      // Snapshot the ndarray's data gen so the next replay can fast-skip when no kernel / Ndarray API write
+      // has touched the underlying buffer since record time. Mirrors the FieldLoad fast-skip; covers the same
+      // steady-state hot path for ndarray-bounded reverse-mode loops.
+      obs.observed_gen = prog->adstack_cache().ndarray_data_gen(data_ptr);
+    }
     reads->push_back(std::move(obs));
   }
   return v;
@@ -268,7 +279,7 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
     case SizeExpr::Kind::ExternalTensorShape:
       return evaluate_external_tensor_shape(node, ctx, reads);
     case SizeExpr::Kind::ExternalTensorRead:
-      return evaluate_external_tensor_read(node, bound_vars, ctx, reads);
+      return evaluate_external_tensor_read(node, bound_vars, prog, ctx, reads);
   }
   QD_ERROR("unreachable SerializedSizeExpr kind {}", node.kind);
   return 0;
@@ -730,6 +741,13 @@ int64_t replay_one_observation(const AdStackCache::SizeExprReadObservation &obs,
   using Obs = AdStackCache::SizeExprReadObservation;
   switch (obs.kind) {
     case Obs::FieldLoadObs: {
+      // Gen-counter fast skip: when no kernel has bumped this SNode's write generation since record time,
+      // the underlying field value cannot have changed and we can return the recorded `observed_value`
+      // without dispatching a reader kernel. The dispatch is the dominant per-launch cost on the hot path
+      // for steady-state reverse-mode loops with stable bounds.
+      if (prog != nullptr && prog->adstack_cache().snode_write_gen(obs.snode_id) == obs.observed_gen) {
+        return obs.observed_value;
+      }
       int64_t v = read_field_with_launch_cache(obs.snode_id, obs.indices, prog);
       if (v == std::numeric_limits<int64_t>::min()) {
         return obs.observed_value + 1;  // force a mismatch if SNode disappeared
@@ -756,6 +774,14 @@ int64_t replay_one_observation(const AdStackCache::SizeExprReadObservation &obs,
         return obs.observed_value + 1;
       }
       void *data_ptr = it->second;
+      // Gen-counter fast skip: when the data pointer is the same `DeviceAllocation *` we observed at record
+      // time AND its data generation has not been bumped since (no kernel write, no host-side `Ndarray.write`
+      // / `fill`), the underlying scalar cannot have changed and we can return the recorded value without
+      // dereferencing the device pointer (which on GPU would be a DtoH copy, on CPU a host load).
+      if (prog != nullptr && data_ptr == obs.observed_devalloc &&
+          prog->adstack_cache().ndarray_data_gen(data_ptr) == obs.observed_gen) {
+        return obs.observed_value;
+      }
       int64_t linear = 0;
       int64_t stride = 1;
       for (std::size_t i = obs.indices.size(); i > 0; --i) {

@@ -41,6 +41,11 @@ class AdStackCache {
 
   // One input read observed during a `evaluate_adstack_size_expr` walk. The cache entry records these so a subsequent
   // lookup re-reads the same inputs and compares to `observed_value`; a single mismatch forces a full re-walk.
+  // `observed_gen` snapshots `snode_write_gen` (FieldLoadObs) or `ndarray_data_gen` (ExternalReadObs) at record
+  // time. The replay walk uses it as a fast-path short-circuit: if the gen counter has not advanced, the value
+  // cannot have changed and the dispatch (reader kernel for SNode reads, device-pointer deref for ndarray reads)
+  // is skipped. ExternalShapeObs reads the args buffer per launch (cheap host memory access), so it does not need
+  // a gen and leaves this field at 0.
   struct SizeExprReadObservation {
     enum Kind : uint8_t { FieldLoadObs, ExternalShapeObs, ExternalReadObs };
     Kind kind;
@@ -50,6 +55,8 @@ class AdStackCache {
     int arg_shape_axis;
     int prim_dt;
     int64_t observed_value;
+    uint64_t observed_gen{0};
+    void *observed_devalloc{nullptr};
   };
   struct SizeExprCacheEntry {
     int64_t result;
