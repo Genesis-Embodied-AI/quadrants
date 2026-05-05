@@ -225,93 +225,8 @@ class QD_DLL_EXPORT Program {
     return *adstack_cache_;
   }
 
-  // Identity registry for adstack-sizer info. Codegen registers each `OffloadedTask::ad_stack` once per
-  // kernel compilation and bakes the assigned id as an immediate into the lazy-claim overflow path; on
-  // overflow the codegen emits `cmpxchg(0, id)` against the pinned-host task-id slot. The host raise site
-  // reads the slot and routes through `diagnose_adstack_overflow_message(id)` to look up the kernel name,
-  // task index, and per-stack metadata for an enriched error message. Pointer ownership stays with
-  // `OffloadedTask`; entries are added but not removed - the registry size is bounded by the number of
-  // adstack-bearing tasks compiled in the program's lifetime, typically dozens.
-  // Identity-key for idempotent re-registration. The diagnose path NEVER dereferences this pointer;
-  // it stores all size-expression data inline (`size_exprs`) so the entry is self-contained and
-  // immune to lifetime issues from the underlying `AdStackSizingInfo` (LLVM) /
-  // `AdStackSizingAttribs` (SPIR-V) struct moves. Two structs because LLVM and SPIR-V backends store launch-time
-  // strides differently (byte-indexed vs element-indexed) and SPIR-V doesn't carry the dynamic-range-for fields LLVM
-  // needs - unifying them would be a backend-pipeline refactor far outside this PR's scope. Inlining `size_exprs`
-  // into the registry is the cheapest way to make the registry uniform across both backends without touching the
-  // launchers' on-the-hot-path structs.
-  struct AdStackSizingInfoEntry {
-    const void *identity_key{nullptr};
-    std::string kernel_name;
-    int task_id_in_kernel{0};
-    std::vector<int> allocated_max_sizes;
-    std::vector<SerializedSizeExpr> size_exprs;
-  };
-  uint32_t register_adstack_sizing_info(const void *identity_key,
-                                        const std::string &kernel_name,
-                                        int task_id_in_kernel,
-                                        std::vector<int> allocated_max_sizes,
-                                        std::vector<SerializedSizeExpr> size_exprs);
-  // Refresh just the `size_exprs` snapshot in an existing registry entry. Used by the LLVM launcher on the first
-  // launch of a task whose codegen-time registration could not capture size_exprs (the codegen-time
-  // `current_task->ad_stack` had not yet been finalized). No-op for `id == 0` and ids outside the registry range.
-  void update_adstack_sizing_info_size_exprs(uint32_t id, std::vector<SerializedSizeExpr> size_exprs);
-  // Returns a *copy* of the registry entry (not a pointer into the underlying vector) so the caller can
-  // safely hold the data across operations that might trigger another `register_adstack_sizing_info` and
-  // grow / reallocate the registry vector (e.g. `evaluate_adstack_size_expr` dispatching a reader kernel
-  // that compiles a fresh task). Returns `std::nullopt` for the sentinel id `0` and for out-of-range ids.
-  std::optional<AdStackSizingInfoEntry> lookup_adstack_sizing_info(uint32_t id) const;
-  // Format a diagnostic message for an overflow signal. `task_id` is the value read from the pinned-
-  // host task-id slot (0 if no thread overflowed; otherwise the registry id of the first overflowing
-  // task). The `message` field is embedded into the `QuadrantsAssertionError` raised at the poll
-  // site. The `confirmed_invalid_cache` field is true only when the synchronous sizer rerun clearly
-  // identified the failure as a stale-cache / DLPack-bypass case (`required > allocated` for at
-  // least one stack with every leaf host-resolvable); the caller (LLVM `check_adstack_overflow` /
-  // SPIR-V `GfxRuntime::synchronize`) uses it to decide whether to bulk-invalidate the adstack-sizer
-  // caches so the next launch auto-recovers. We deliberately do NOT invalidate on Unknown / Quadrants-
-  // bug because invalidating would mask sizer bugs (next launch would still produce the same wrong
-  // bound) and the user would lose the loud signal that something is genuinely off.
-  struct AdStackOverflowDiagnosis {
-    std::string message;
-    bool confirmed_invalid_cache{false};
-  };
-  AdStackOverflowDiagnosis diagnose_adstack_overflow(uint32_t task_id) const;
-  // Convenience wrapper that returns just the message string; production code uses `diagnose_adstack_overflow` to
-  // also act on the confirmed-cause signal.
-  std::string diagnose_adstack_overflow_message(uint32_t task_id) const;
-
-  // Snapshot of the most recent launch's context fields needed by `diagnose_adstack_overflow` to resolve
-  // ndarray-bound `SizeExpr` leaves (`ExternalTensorRead` / `ExternalTensorShape`) at error time, when the
-  // original `LaunchContextBuilder` is gone. Captured at the top of `Program::launch_kernel` BEFORE the
-  // launcher rewrites `array_ptrs` (the CPU launcher's `set_host_accessible_ndarray_ptrs` overwrites the
-  // `DeviceAllocation *` entry with a raw host pointer; capturing earlier keeps the original handle so the
-  // diagnose path can use the unified `Device::map` API instead of trusting backend-specific semantics).
-  //
-  // Design choice (vs. re-dispatching the on-device sizer at diagnose time): `Device::map` is virtual on
-  // every backend (CPU / CUDA / AMDGPU / Vulkan / Metal), so this snapshot-plus-map approach gets backend
-  // parity for free without re-entering the launcher's pipeline-setup machinery (compute pipelines /
-  // descriptor sets / command buffers / sync fences). The diagnose path stays out of the launch lifecycle.
-  struct DiagnoseLaunchSnapshot {
-    bool valid{false};
-    // arg_id -> ctx->array_ptrs[(arg_id, DATA_PTR_POS_IN_NDARRAY)]. For `kNone` numpy passthrough this is a
-    // raw host pointer. For `kNdarray` (qd.ndarray) this is a `DeviceAllocation *` handle the diagnose path
-    // dereferences via `Device::map`. Captured before the CPU launcher's `set_host_accessible_ndarray_ptrs`
-    // overwrite so the handle is uniform across backends.
-    std::unordered_map<int, void *> data_ptrs;
-    std::unordered_map<int, LaunchContextBuilder::DevAllocType> dev_alloc_types;
-    // Pre-extracted ndarray shapes (`ctx->get_struct_arg_host<int32_t>({arg_id, SHAPE_POS, axis})`) so the
-    // diagnose evaluator does not need a live `LaunchContextBuilder` to resolve `ExternalTensorShape` or
-    // multi-axis `ExternalTensorRead` strides.
-    std::unordered_map<int, std::vector<int32_t>> shapes;
-  };
-  // Capture the per-launch fields the diagnose evaluator needs (see `DiagnoseLaunchSnapshot`'s definition for
-  // the design rationale and field-by-field semantics). Called from the top of `Program::launch_kernel`,
-  // before the launcher forwards into the backend-specific launcher that might rewrite `array_ptrs`.
-  void capture_diagnose_snapshot(const LaunchContextBuilder &ctx);
-  // Read-only accessor for the latest snapshot, used by `diagnose_adstack_overflow` to resolve ndarray-bound
-  // size_expr leaves. Returns `nullptr` when no launch has happened yet (e.g. a freshly constructed `Program`
-  // hits `synchronize` during teardown without a prior kernel launch).
-  const DiagnoseLaunchSnapshot *get_diagnose_snapshot() const;
+  // Adstack-overflow identity registry, diagnostic classifier, and per-launch snapshot all live on
+  // `AdStackCache`. Callers route through `prog->adstack_cache().method(...)`.
 
   /**
    * Destroys a new SNode tree.
@@ -448,21 +363,10 @@ class QD_DLL_EXPORT Program {
   std::vector<std::unique_ptr<SNodeTree>> snode_trees_;
   // Lazy cache for `get_snode_by_id`. Invalidated by `add_snode_tree` and `destroy_snode_tree`.
   std::unordered_map<int, SNode *> snode_id_cache_;
-  // Adstack caching state (per-task metadata, bytecode, size-expr results, generation counters). All adstack-specific
-  // surface lives in `program/adstack_size_expr_eval.{h,cpp}`; routed through `adstack_cache()` getter.
+  // Adstack-specific state (per-task metadata caches, bytecode cache, size-expr results, generation counters,
+  // identity registry, diagnose-time launch snapshot). All adstack-specific surface lives in
+  // `program/adstack_size_expr_eval.{h,cpp}`; routed through `adstack_cache()` getter.
   std::unique_ptr<AdStackCache> adstack_cache_;
-
-  // Adstack-sizing-info identity registry. See `register_adstack_sizing_info`. Index 0 is reserved as the
-  // "no overflow" sentinel so the codegen-emitted `cmpxchg(0, id)` cleanly distinguishes "task id recorded"
-  // from "slot still clean". Reverse lookup map keyed by `ad_stack_ptr` keeps `register_adstack_sizing_info`
-  // idempotent across re-launches of the same kernel.
-  std::vector<AdStackSizingInfoEntry> adstack_sizing_info_registry_{AdStackSizingInfoEntry{}};
-  std::unordered_map<const void *, uint32_t> adstack_sizing_info_id_by_ptr_;
-  mutable std::mutex adstack_sizing_info_registry_mutex_;
-
-  // See public `DiagnoseLaunchSnapshot` declaration above for design rationale; the storage stays private.
-  DiagnoseLaunchSnapshot diagnose_snapshot_;
-  mutable std::mutex diagnose_snapshot_mutex_;
   std::stack<int> free_snode_tree_ids_;
 
   std::vector<std::unique_ptr<Function>> functions_;

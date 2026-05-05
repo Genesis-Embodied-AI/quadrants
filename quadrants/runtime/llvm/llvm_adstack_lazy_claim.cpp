@@ -661,7 +661,7 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
   std::string diagnostic;
   if (prog != nullptr) {
-    auto diag = prog->diagnose_adstack_overflow(task_id);
+    auto diag = prog->adstack_cache().diagnose_adstack_overflow(task_id);
     diagnostic = std::move(diag.message);
     // Auto-invalidate the per-task metadata caches when the synchronous sizer rerun confirmed the cache is stale
     // (DLPack-bypass cause). The current run is corrupted (we are about to raise), but the next launch's sizer
@@ -699,7 +699,8 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
   // any post-codegen mutations a backend might apply to `ad_stack.size_exprs`. Idempotent and
   // bounded-cost: copies one `std::vector<SerializedSizeExpr>` per launch per task with adstacks.
   if (program_impl_ != nullptr && program_impl_->program != nullptr && ad_stack.registry_id != 0) {
-    program_impl_->program->update_adstack_sizing_info_size_exprs(ad_stack.registry_id, ad_stack.size_exprs);
+    program_impl_->program->adstack_cache().update_adstack_sizing_info_size_exprs(ad_stack.registry_id,
+                                                                                  ad_stack.size_exprs);
   }
   auto align_up_8 = [](std::size_t n) -> std::size_t { return (n + 7u) & ~std::size_t{7u}; };
   // Allocate / grow the two device-side metadata arrays. Capacity is in u64 entries, kept at or above n_stacks.

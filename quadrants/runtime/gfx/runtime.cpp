@@ -1036,7 +1036,7 @@ void GfxRuntime::synchronize() {
       Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
       std::string diagnostic;
       if (prog != nullptr) {
-        auto diag = prog->diagnose_adstack_overflow(task_id_val);
+        auto diag = prog->adstack_cache().diagnose_adstack_overflow(task_id_val);
         diagnostic = std::move(diag.message);
         // See `LlvmRuntimeExecutor::check_adstack_overflow` for the rationale; only invalidate when the sizer rerun
         // confirmed a stale cache (DLPack-bypass) so a Quadrants pre-pass bug is not silently masked.

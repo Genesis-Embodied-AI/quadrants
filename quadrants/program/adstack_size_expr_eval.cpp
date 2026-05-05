@@ -992,7 +992,7 @@ int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog
 namespace {
 
 // Diagnose-time leaf reader: resolves an `ExternalTensorRead` against the captured
-// `Program::DiagnoseLaunchSnapshot` and the program's `Device::map` interface. Returns -1 on any failure
+// `AdStackCache::DiagnoseLaunchSnapshot` and the program's `Device::map` interface. Returns -1 on any failure
 // (missing arg in snapshot, unrecognised primitive type, mapping failure) so the caller can substitute the
 // `?` placeholder for that stack while keeping the rest of the message intact.
 //
@@ -1004,7 +1004,7 @@ namespace {
 int64_t read_diagnose_external_tensor(const SerializedSizeExprNode &node,
                                       const std::vector<int64_t> &resolved_indices,
                                       Program *prog,
-                                      const Program::DiagnoseLaunchSnapshot &snapshot) {
+                                      const AdStackCache::DiagnoseLaunchSnapshot &snapshot) {
   if (node.arg_id_path.empty()) {
     return -1;
   }
@@ -1124,7 +1124,7 @@ int64_t evaluate_node_for_diagnose(const SerializedSizeExpr &expr,
                                    int32_t node_idx,
                                    std::unordered_map<int32_t, int64_t> &bound_vars,
                                    Program *prog,
-                                   const Program::DiagnoseLaunchSnapshot &snapshot) {
+                                   const AdStackCache::DiagnoseLaunchSnapshot &snapshot) {
   if (node_idx < 0 || static_cast<std::size_t>(node_idx) >= expr.nodes.size()) {
     return -1;
   }
@@ -1257,12 +1257,240 @@ int64_t evaluate_adstack_size_expr_for_diagnose(const SerializedSizeExpr &expr, 
   if (expr.nodes.empty() || prog == nullptr) {
     return -1;
   }
-  const Program::DiagnoseLaunchSnapshot *snapshot = prog->get_diagnose_snapshot();
+  const AdStackCache::DiagnoseLaunchSnapshot *snapshot = prog->adstack_cache().get_diagnose_snapshot();
   if (snapshot == nullptr) {
     return -1;
   }
   std::unordered_map<int32_t, int64_t> bound_vars;
   return evaluate_node_for_diagnose(expr, static_cast<int32_t>(expr.nodes.size() - 1), bound_vars, prog, *snapshot);
+}
+
+uint32_t AdStackCache::register_adstack_sizing_info(const void *identity_key,
+                                                    const std::string &kernel_name,
+                                                    int task_id_in_kernel,
+                                                    std::vector<int> allocated_max_sizes,
+                                                    std::vector<SerializedSizeExpr> size_exprs) {
+  std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
+  // Idempotent re-registration: same `identity_key` yields the same id across re-compiles and updates the
+  // entry's metadata + size_exprs in place. The key is just an opaque dedup token - the registry never
+  // dereferences it; all data needed by the diagnose path is copied into the entry below.
+  auto it = adstack_sizing_info_id_by_ptr_.find(identity_key);
+  if (it != adstack_sizing_info_id_by_ptr_.end()) {
+    auto &entry = adstack_sizing_info_registry_[it->second];
+    entry.kernel_name = kernel_name;
+    entry.task_id_in_kernel = task_id_in_kernel;
+    entry.allocated_max_sizes = std::move(allocated_max_sizes);
+    entry.size_exprs = std::move(size_exprs);
+    return it->second;
+  }
+  uint32_t id = static_cast<uint32_t>(adstack_sizing_info_registry_.size());
+  AdStackSizingInfoEntry entry;
+  entry.identity_key = identity_key;
+  entry.kernel_name = kernel_name;
+  entry.task_id_in_kernel = task_id_in_kernel;
+  entry.allocated_max_sizes = std::move(allocated_max_sizes);
+  entry.size_exprs = std::move(size_exprs);
+  adstack_sizing_info_registry_.push_back(std::move(entry));
+  adstack_sizing_info_id_by_ptr_.emplace(identity_key, id);
+  return id;
+}
+
+void AdStackCache::update_adstack_sizing_info_size_exprs(uint32_t id, std::vector<SerializedSizeExpr> size_exprs) {
+  std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
+  if (id == 0 || id >= adstack_sizing_info_registry_.size()) {
+    return;
+  }
+  adstack_sizing_info_registry_[id].size_exprs = std::move(size_exprs);
+}
+
+std::optional<AdStackCache::AdStackSizingInfoEntry> AdStackCache::lookup_adstack_sizing_info(uint32_t id) const {
+  std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
+  if (id == 0 || id >= adstack_sizing_info_registry_.size()) {
+    return std::nullopt;
+  }
+  return adstack_sizing_info_registry_[id];
+}
+
+std::string AdStackCache::diagnose_adstack_overflow_message(uint32_t task_id) const {
+  return diagnose_adstack_overflow(task_id).message;
+}
+
+AdStackCache::AdStackOverflowDiagnosis AdStackCache::diagnose_adstack_overflow(uint32_t task_id) const {
+  std::string identity_block;
+  std::string disambiguation_block;
+  // Cause classifier: when the synchronous re-run produces required > allocated for ANY stack, the most likely
+  // cause is an untracked tensor mutation (DLPack-bypass etc.). When all required <= allocated, the pre-pass
+  // undersized the bound (Quadrants bug). When we cannot re-evaluate (e.g. no captured launch snapshot, or a
+  // leaf type the diagnose evaluator does not support) we fall through to the static dual-cause body.
+  enum class Cause { Unknown, DLPackBypass, QuadrantsBug };
+  Cause cause = Cause::Unknown;
+
+  if (task_id != 0) {
+    auto entry_opt = lookup_adstack_sizing_info(task_id);
+    if (entry_opt.has_value()) {
+      const auto &entry = *entry_opt;
+      identity_block = "  Offending task: kernel `" + entry.kernel_name + "` offload task #" +
+                       std::to_string(entry.task_id_in_kernel) + "; per-stack allocated max_size = [";
+      for (size_t i = 0; i < entry.allocated_max_sizes.size(); ++i) {
+        if (i != 0) {
+          identity_block += ", ";
+        }
+        identity_block += std::to_string(entry.allocated_max_sizes[i]);
+      }
+      identity_block += "].\n";
+
+      // Synchronous sizer rerun: walk each stack's `SerializedSizeExpr` and evaluate against the live host /
+      // SNode state. Stacks whose tree contains an `ExternalTensorShape` or `ExternalTensorRead` leaf go
+      // through the snapshot-based `evaluate_adstack_size_expr_for_diagnose` (see its declaration for the
+      // `Device::map` design rationale). Pure host-resolvable trees go through the standard host evaluator.
+      // The disambiguation is best-effort: if every stack's tree resolves we get a precise classification;
+      // otherwise we report what we have and fall back to the static dual-cause hint.
+      if (!entry.size_exprs.empty()) {
+        std::vector<int64_t> required_sizes;
+        std::vector<bool> required_known;
+        size_t any_grew = 0;
+        size_t any_unknown = 0;
+        size_t total = std::min(entry.size_exprs.size(), entry.allocated_max_sizes.size());
+        for (size_t i = 0; i < total; ++i) {
+          const auto &expr = entry.size_exprs[i];
+          bool host_resolvable = true;
+          for (const auto &node : expr.nodes) {
+            auto k = static_cast<SizeExpr::Kind>(node.kind);
+            if (k == SizeExpr::Kind::ExternalTensorShape || k == SizeExpr::Kind::ExternalTensorRead) {
+              host_resolvable = false;
+              break;
+            }
+          }
+          int64_t v = -1;
+          if (host_resolvable && !expr.nodes.empty()) {
+            // Pure host-resolvable: SNode field loads, constants, arithmetic. `ctx == nullptr` is safe because
+            // every leaf we kept is host-resolvable; ETS / ETR are the only kinds that touch ctx and we
+            // filtered them out.
+            SizeExprLaunchScope scope;
+            v = evaluate_adstack_size_expr(expr, prog_, nullptr);
+          } else if (!expr.nodes.empty()) {
+            // Tree contains ETR / ETS leaves. The diagnose evaluator resolves them through the captured launch
+            // snapshot (`Device::map`-based ndarray reads). On failure (no snapshot, allocation cannot be
+            // mapped, unsupported dtype) the helper returns -1 and we fall through to the `?` placeholder.
+            int64_t diag = evaluate_adstack_size_expr_for_diagnose(expr, prog_);
+            if (diag >= 0) {
+              v = diag;
+            }
+          }
+          required_sizes.push_back(v);
+          required_known.push_back(!expr.nodes.empty() && v >= 0);
+          if (required_known.back() && static_cast<size_t>(v) > entry.allocated_max_sizes[i]) {
+            ++any_grew;
+          }
+          if (!required_known.back()) {
+            ++any_unknown;
+          }
+        }
+        if (any_grew > 0) {
+          cause = Cause::DLPackBypass;
+        } else if (any_unknown == 0 && total > 0) {
+          cause = Cause::QuadrantsBug;
+        }
+        // Only print the rerun line when at least one stack's bound resolves to a real value. With every leaf
+        // unresolved the line would be `required = [?, ?, ...]` which adds zero signal beyond the dual-cause
+        // body that follows; the omission keeps the message focused on actionable content.
+        if (any_unknown < total) {
+          disambiguation_block = "  Synchronous sizer rerun: required max_size = [";
+          for (size_t i = 0; i < required_sizes.size(); ++i) {
+            if (i != 0) {
+              disambiguation_block += ", ";
+            }
+            if (required_known[i]) {
+              disambiguation_block += std::to_string(required_sizes[i]);
+            } else {
+              disambiguation_block += "?";
+            }
+          }
+          disambiguation_block += "].";
+          if (any_unknown > 0) {
+            disambiguation_block +=
+                " (`?` = sizer rerun could not resolve this stack's bound against the captured "
+                "launch state).";
+          }
+          disambiguation_block += "\n";
+        }
+      }
+    }
+  }
+
+  std::string body;
+  if (cause == Cause::DLPackBypass) {
+    body =
+        "Cause (sync sizer rerun): a tensor backing a data-dependent loop bound was mutated outside "
+        "Quadrants's tracking - typically a DLPack zero-copy mutation through a torch tensor sharing "
+        "storage with a Quadrants ndarray, or a raw pointer write through a non-torch DLPack consumer. "
+        "The cached adstack capacity was sized against the value before the mutation. Recovery: route "
+        "the mutation through Quadrants APIs (`Ndarray.write` / `fill` / kernel writes) so the cache "
+        "invalidates correctly, OR set a generous initial cap if a workload-change milestone genuinely "
+        "grew capacity. Restart the iteration / training loop from a clean state.\n";
+  } else if (cause == Cause::QuadrantsBug) {
+    body =
+        "Cause (sync sizer rerun): the freshly-computed required size does not exceed the allocated "
+        "size for any stack - this is a Quadrants bug. The pre-pass resolved the alloca to a bound "
+        "tighter than the actual runtime push count: either the enclosing loop shape is outside the "
+        "current `SizeExpr` grammar, or the Bellman-Ford analyzer undercounted the forward-pass "
+        "accumulation. Please file with the kernel IR (`QD_DUMP_IR=1`).\n";
+  } else {
+    body =
+        "Two possible causes (synchronous sizer rerun was not conclusive - some `SizeExpr` trees "
+        "depend on ndarray contents that are not host-resolvable without a per-launch context, or the "
+        "task-id slot was empty so the registry pointer could not be confirmed live):\n"
+        "  1. A tensor backing a data-dependent loop bound was mutated outside Quadrants's tracking "
+        "(typically a DLPack zero-copy mutation through a torch tensor sharing storage with a "
+        "Quadrants ndarray, or a raw pointer write through a non-torch DLPack consumer). The cached "
+        "adstack capacity was sized against the value before the mutation. Recovery: route the "
+        "mutation through Quadrants APIs (`Ndarray.write` / `fill` / kernel writes) so the cache "
+        "invalidates correctly, OR set a generous initial cap if a workload-change milestone "
+        "genuinely grew capacity. Restart the iteration / training loop from a clean state.\n"
+        "  2. (Quadrants bug) the pre-pass resolved the alloca to a bound tighter than the actual "
+        "runtime push count - the enclosing loop shape is outside the current `SizeExpr` grammar, or "
+        "the Bellman-Ford analyzer undercounted the forward-pass accumulation. Please file with the "
+        "kernel IR (`QD_DUMP_IR=1`).\n";
+  }
+  AdStackOverflowDiagnosis result;
+  result.message = identity_block + disambiguation_block + body +
+                   "Note: kernel state may be inconsistent post-overflow; do not retry the same "
+                   "step without addressing the cause and restarting from a clean state.";
+  // Flag the cache as confirmed-invalid only when the sync rerun positively identified DLPack-bypass (`required
+  // > allocated` for at least one stack with every leaf resolved against the live snapshot). Unknown is a rare
+  // fallback now that the snapshot-based evaluator handles ndarray-bound leaves; treating it as
+  // confirmed-bypass would silently retry against a possibly-broken cache. Quadrants-bug is excluded for the
+  // same reason - the next launch would re-run the same wrong sizer and produce the same wrong bound.
+  result.confirmed_invalid_cache = (cause == Cause::DLPackBypass);
+  return result;
+}
+
+void AdStackCache::capture_diagnose_snapshot(const LaunchContextBuilder &ctx) {
+  std::lock_guard<std::mutex> lk(diagnose_snapshot_mutex_);
+  diagnose_snapshot_.data_ptrs.clear();
+  diagnose_snapshot_.dev_alloc_types.clear();
+  diagnose_snapshot_.shapes.clear();
+  // Pull just the data-pointer slot for each arg; the grad-pointer slot is irrelevant to size_expr leaves.
+  for (const auto &kv : ctx.array_ptrs) {
+    if (kv.first.ptr_type == TypeFactory::DATA_PTR_POS_IN_NDARRAY) {
+      diagnose_snapshot_.data_ptrs[kv.first.arg_id] = kv.second;
+    }
+  }
+  diagnose_snapshot_.dev_alloc_types = ctx.device_allocation_type;
+  // Mirror the per-arg shape vectors `LaunchContextBuilder` populated alongside the args-buffer writes. Going
+  // through this side map rather than `args_type->get_element_offset` avoids the spurious "Cannot treat as
+  // TensorType" diagnostics emitted when an axis lookup overruns the actual rank, and keeps the diagnose path
+  // independent of `args_type` lifetime.
+  for (const auto &kv : ctx.ndarray_shapes) {
+    std::vector<int32_t> shape32(kv.second.begin(), kv.second.end());
+    diagnose_snapshot_.shapes[kv.first] = std::move(shape32);
+  }
+  diagnose_snapshot_.valid = true;
+}
+
+const AdStackCache::DiagnoseLaunchSnapshot *AdStackCache::get_diagnose_snapshot() const {
+  std::lock_guard<std::mutex> lk(diagnose_snapshot_mutex_);
+  return diagnose_snapshot_.valid ? &diagnose_snapshot_ : nullptr;
 }
 
 void clip_effective_rows_by_loop_trip_count(std::size_t &effective_rows,

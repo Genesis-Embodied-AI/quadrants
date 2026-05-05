@@ -199,7 +199,7 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
       allocated_max_sizes.push_back(static_cast<int>(a.max_size_compile_time));
       size_exprs.push_back(a.size_expr);
     }
-    uint32_t id = program_impl_->program->register_adstack_sizing_info(
+    uint32_t id = program_impl_->program->adstack_cache().register_adstack_sizing_info(
         static_cast<const void *>(&mutable_attribs), kernel_name, static_cast<int>(ti), std::move(allocated_max_sizes),
         std::move(size_exprs));
     mutable_attribs.registry_id = id;

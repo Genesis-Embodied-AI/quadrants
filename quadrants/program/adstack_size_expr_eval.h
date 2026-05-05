@@ -2,6 +2,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
+#include <optional>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -16,12 +19,26 @@ namespace quadrants::lang {
 class LaunchContextBuilder;
 class Program;
 
-// Adstack-specific caching state. Owns the per-task adstack-sizer metadata caches (SPIR-V + LLVM-GPU), the encoded
-// SPIR-V bytecode cache, the per-launch SizeExpr-eval result cache, and the per-snode / per-DeviceAllocation generation
-// counters that drive precise invalidation. Held by `Program` via a unique_ptr; all callers route through
-// `program->adstack_cache().method(...)`. Lifecycle matches `Program`.
+// Adstack-specific state owned by `Program` and routed through `program->adstack_cache().method(...)`. Holds two
+// orthogonal pieces:
+//   1. The per-task adstack-sizer metadata caches (SPIR-V + LLVM-GPU), the encoded SPIR-V bytecode cache, the
+//      per-launch SizeExpr-eval result cache, and the per-snode / per-DeviceAllocation generation counters that
+//      drive precise invalidation.
+//   2. The adstack-overflow identity registry + diagnostic classifier that the codegen-emitted overflow path
+//      reads through (`Program::launch_kernel` populates `DiagnoseLaunchSnapshot`; the registry maps task ids
+//      to kernel + offload-task identities + per-stack capacities, and `diagnose_adstack_overflow` runs the
+//      synchronous sizer rerun against the captured snapshot to classify the failure mode).
+// Both pieces are adstack-internal and lived in `Program` historically; consolidating them here keeps the
+// `Program` surface focused on cross-feature program state.
 class AdStackCache {
  public:
+  // Back-reference to `Program` is used by the diagnose path to reach `evaluate_adstack_size_expr` /
+  // `evaluate_adstack_size_expr_for_diagnose` (free functions that take `Program *`) and by the registry methods
+  // to access `get_compute_device()` for `Device::map`-based ndarray reads. Stored as a raw pointer because
+  // `AdStackCache` is owned by `Program` and shares its lifetime - the back-ref cannot dangle.
+  explicit AdStackCache(Program *prog) : prog_(prog) {
+  }
+
   // One input read observed during a `evaluate_adstack_size_expr` walk. The cache entry records these so a subsequent
   // lookup re-reads the same inputs and compares to `observed_value`; a single mismatch forces a full re-walk.
   struct SizeExprReadObservation {
@@ -147,13 +164,111 @@ class AdStackCache {
     ndarray_data_gen_.erase(devalloc_ptr);
   }
 
+  // -----------------------------------------------------------------------------------------------------------
+  // Adstack-overflow identity registry + diagnostic classifier
+  // -----------------------------------------------------------------------------------------------------------
+  // Codegen registers each `OffloadedTask::ad_stack` once per kernel compilation and bakes the assigned id as
+  // an immediate into the lazy-claim overflow path; on overflow the codegen emits `cmpxchg(0, id)` against the
+  // pinned-host task-id slot. The host raise site reads the slot and routes through
+  // `diagnose_adstack_overflow_message(id)` to look up the kernel name, task index, and per-stack metadata for
+  // an enriched error message. Pointer ownership stays with `OffloadedTask`; entries are added but not removed
+  // - the registry size is bounded by the number of adstack-bearing tasks compiled in the program's lifetime,
+  // typically dozens. The diagnose path NEVER dereferences `identity_key`; all size-expression data is stored
+  // inline (`size_exprs`) so the entry is self-contained and immune to lifetime issues from the underlying
+  // `AdStackSizingInfo` (LLVM) / `AdStackSizingAttribs` (SPIR-V) struct moves.
+  struct AdStackSizingInfoEntry {
+    const void *identity_key{nullptr};
+    std::string kernel_name;
+    int task_id_in_kernel{0};
+    std::vector<int> allocated_max_sizes;
+    std::vector<SerializedSizeExpr> size_exprs;
+  };
+  uint32_t register_adstack_sizing_info(const void *identity_key,
+                                        const std::string &kernel_name,
+                                        int task_id_in_kernel,
+                                        std::vector<int> allocated_max_sizes,
+                                        std::vector<SerializedSizeExpr> size_exprs);
+  // Refresh just the `size_exprs` snapshot in an existing registry entry. Used by the LLVM launcher on the first
+  // launch of a task whose codegen-time registration could not capture size_exprs (the codegen-time
+  // `current_task->ad_stack` had not yet been finalized). No-op for `id == 0` and ids outside the registry range.
+  void update_adstack_sizing_info_size_exprs(uint32_t id, std::vector<SerializedSizeExpr> size_exprs);
+  // Returns a *copy* of the registry entry (not a pointer into the underlying vector) so the caller can safely
+  // hold the data across operations that might trigger another `register_adstack_sizing_info` and grow / reallocate
+  // the registry vector (e.g. `evaluate_adstack_size_expr` dispatching a reader kernel that compiles a fresh
+  // task). Returns `std::nullopt` for the sentinel id `0` and for out-of-range ids.
+  std::optional<AdStackSizingInfoEntry> lookup_adstack_sizing_info(uint32_t id) const;
+  // Format a diagnostic message for an overflow signal. `task_id` is the value read from the pinned-host task-id
+  // slot (0 if no thread overflowed; otherwise the registry id of the first overflowing task). The `message`
+  // field is embedded into the `QuadrantsAssertionError` raised at the poll site. The `confirmed_invalid_cache`
+  // field is true only when the synchronous sizer rerun classified the failure as a stale-cache /
+  // DLPack-bypass case (`required > allocated` for at least one stack with every leaf resolved against the
+  // captured launch snapshot); the caller (LLVM `check_adstack_overflow` / SPIR-V `GfxRuntime::synchronize`)
+  // uses it to decide whether to bulk-invalidate the per-task metadata caches so the next launch auto-recovers.
+  // We deliberately do NOT invalidate on Unknown / Quadrants-bug because invalidating would mask sizer bugs and
+  // could let a never-confirmed cause silently retry against a possibly-broken cache.
+  struct AdStackOverflowDiagnosis {
+    std::string message;
+    bool confirmed_invalid_cache{false};
+  };
+  AdStackOverflowDiagnosis diagnose_adstack_overflow(uint32_t task_id) const;
+  // Convenience wrapper that returns just the message string; production code uses `diagnose_adstack_overflow`
+  // to also act on the confirmed-cause signal.
+  std::string diagnose_adstack_overflow_message(uint32_t task_id) const;
+
+  // Snapshot of the most recent launch's context fields needed by `diagnose_adstack_overflow` to resolve
+  // ndarray-bound `SizeExpr` leaves (`ExternalTensorRead` / `ExternalTensorShape`) at error time, when the
+  // original `LaunchContextBuilder` is gone. Captured at the top of `Program::launch_kernel` BEFORE the
+  // launcher rewrites `array_ptrs` (the CPU launcher's `set_host_accessible_ndarray_ptrs` overwrites the
+  // `DeviceAllocation *` entry with a raw host pointer; capturing earlier keeps the original handle so the
+  // diagnose path can use the unified `Device::map` API instead of trusting backend-specific semantics).
+  //
+  // Design choice (vs. re-dispatching the on-device sizer at diagnose time): `Device::map` is virtual on
+  // every backend (CPU / CUDA / AMDGPU / Vulkan / Metal), so this snapshot-plus-map approach gets backend
+  // parity for free without re-entering the launcher's pipeline-setup machinery (compute pipelines /
+  // descriptor sets / command buffers / sync fences). The diagnose path stays out of the launch lifecycle.
+  struct DiagnoseLaunchSnapshot {
+    bool valid{false};
+    // arg_id -> ctx->array_ptrs[(arg_id, DATA_PTR_POS_IN_NDARRAY)]. For `kNone` numpy passthrough this is a
+    // raw host pointer. For `kNdarray` (qd.ndarray) this is a `DeviceAllocation *` handle the diagnose path
+    // dereferences via `Device::map`. Captured before the CPU launcher's `set_host_accessible_ndarray_ptrs`
+    // overwrite so the handle is uniform across backends.
+    std::unordered_map<int, void *> data_ptrs;
+    std::unordered_map<int, LaunchContextBuilder::DevAllocType> dev_alloc_types;
+    // Pre-extracted ndarray shapes (`ctx->get_struct_arg_host<int32_t>({arg_id, SHAPE_POS, axis})`) so the
+    // diagnose evaluator does not need a live `LaunchContextBuilder` to resolve `ExternalTensorShape` or
+    // multi-axis `ExternalTensorRead` strides.
+    std::unordered_map<int, std::vector<int32_t>> shapes;
+  };
+  // Capture the per-launch fields the diagnose evaluator needs (see `DiagnoseLaunchSnapshot`'s definition for
+  // the design rationale and field-by-field semantics). Called from the top of `Program::launch_kernel`,
+  // before the launcher forwards into the backend-specific launcher that might rewrite `array_ptrs`.
+  void capture_diagnose_snapshot(const LaunchContextBuilder &ctx);
+  // Read-only accessor for the latest snapshot, used by `diagnose_adstack_overflow` to resolve ndarray-bound
+  // size_expr leaves. Returns `nullptr` when no launch has happened yet (e.g. a freshly constructed `Program`
+  // hits `synchronize` during teardown without a prior kernel launch).
+  const DiagnoseLaunchSnapshot *get_diagnose_snapshot() const;
+
  private:
+  Program *prog_{nullptr};
   std::unordered_map<const SerializedSizeExpr *, SizeExprCacheEntry> size_expr_cache_;
   std::unordered_map<const void *, SpirvBytecodeCacheEntry> spirv_bytecode_cache_;
   std::unordered_map<const void *, PerTaskAdStackCacheEntry> per_task_ad_stack_cache_;
   std::unordered_map<const void *, LlvmPerTaskAdStackCacheEntry> llvm_per_task_ad_stack_cache_;
   std::unordered_map<int, uint64_t> snode_write_gen_;
   std::unordered_map<void *, uint64_t> ndarray_data_gen_;
+
+  // Adstack-overflow identity registry storage. Index 0 is reserved as the "no overflow" sentinel so the
+  // codegen-emitted `cmpxchg(0, id)` cleanly distinguishes "task id recorded" from "slot still clean". The
+  // reverse lookup map (keyed by `identity_key`) keeps `register_adstack_sizing_info` idempotent across
+  // re-launches of the same kernel.
+  std::vector<AdStackSizingInfoEntry> adstack_sizing_info_registry_{AdStackSizingInfoEntry{}};
+  std::unordered_map<const void *, uint32_t> adstack_sizing_info_id_by_ptr_;
+  mutable std::mutex adstack_sizing_info_registry_mutex_;
+  // Latest captured launch context snapshot for the diagnose path's ndarray-bound leaf resolution. See
+  // `DiagnoseLaunchSnapshot`'s comment above for why we capture in `Program::launch_kernel` before the launcher
+  // forwards.
+  DiagnoseLaunchSnapshot diagnose_snapshot_;
+  mutable std::mutex diagnose_snapshot_mutex_;
 };
 
 // Evaluates a compile-time captured `SerializedSizeExpr` against the current field state of `prog` and the
@@ -165,13 +280,13 @@ class AdStackCache {
 int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx);
 
 // Diagnose-time variant that evaluates the same `SerializedSizeExpr` against the captured
-// `Program::DiagnoseLaunchSnapshot` rather than a live `LaunchContextBuilder`. Used by
-// `Program::diagnose_adstack_overflow` to resolve `ExternalTensorRead` / `ExternalTensorShape` leaves at error
-// time against the live (potentially mutated) ndarray contents, without needing the launch ctx that is gone by
-// sync time on async backends. The cross-backend `Device::map(*allocation, &host_ptr)` path is the design
-// pivot - see `Program::DiagnoseLaunchSnapshot`'s comment for the rationale (vs. re-dispatching the on-device
-// sizer). Returns -1 if any leaf cannot be resolved (e.g. an arg_id missing from the snapshot, or an
-// allocation whose `Device::map` fails); callers fall back to the static dual-cause body in that case.
+// `AdStackCache::DiagnoseLaunchSnapshot` rather than a live `LaunchContextBuilder`. Used by
+// `AdStackCache::diagnose_adstack_overflow` to resolve `ExternalTensorRead` / `ExternalTensorShape` leaves at
+// error time against the live (potentially mutated) ndarray contents, without needing the launch ctx that is
+// gone by sync time on async backends. The cross-backend `Device::map(*allocation, &host_ptr)` path is the
+// design pivot - see `AdStackCache::DiagnoseLaunchSnapshot`'s comment for the rationale (vs. re-dispatching
+// the on-device sizer). Returns -1 if any leaf cannot be resolved (e.g. an arg_id missing from the snapshot,
+// or an allocation whose `Device::map` fails); callers fall back to the static dual-cause body in that case.
 int64_t evaluate_adstack_size_expr_for_diagnose(const SerializedSizeExpr &expr, Program *prog);
 
 // RAII guard opening a thread-local read-cache scope. Every nested `evaluate_adstack_size_expr` running inside the

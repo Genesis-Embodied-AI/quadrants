@@ -11,6 +11,7 @@
 #include "quadrants/ir/snode.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/extension.h"
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 #include "quadrants/codegen/llvm/struct_llvm.h"
@@ -1950,9 +1951,9 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     // visited. Metadata + size_exprs are filled in at `finalize_offloaded_task_function` time below
     // (idempotent re-registration on the same identity_key updates the entry in place). Identity
     // key here is the raw `&current_task->ad_stack` address; the registry never derefs it.
-    uint32_t id = prog->register_adstack_sizing_info(static_cast<const void *>(&current_task->ad_stack), kernel_name,
-                                                     task_codegen_id, /*allocated_max_sizes=*/{},
-                                                     /*size_exprs=*/{});
+    uint32_t id = prog->adstack_cache().register_adstack_sizing_info(
+        static_cast<const void *>(&current_task->ad_stack), kernel_name, task_codegen_id, /*allocated_max_sizes=*/{},
+        /*size_exprs=*/{});
     current_task->ad_stack.registry_id = id;
   }
 
@@ -2046,9 +2047,9 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
       // into the registry so the diagnose path can walk them without dereferencing the launcher's
       // unstable `OffloadedTask::ad_stack` pointer (freed by `current_task = nullptr` after
       // by-value `offloaded_tasks.push_back(*current_task)`).
-      uint32_t id = prog->register_adstack_sizing_info(static_cast<const void *>(&current_task->ad_stack), kernel_name,
-                                                       task_codegen_id, std::move(allocated_max_sizes),
-                                                       current_task->ad_stack.size_exprs);
+      uint32_t id = prog->adstack_cache().register_adstack_sizing_info(
+          static_cast<const void *>(&current_task->ad_stack), kernel_name, task_codegen_id,
+          std::move(allocated_max_sizes), current_task->ad_stack.size_exprs);
       current_task->ad_stack.registry_id = id;
     }
   }
