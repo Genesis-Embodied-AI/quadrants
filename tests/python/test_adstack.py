@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants.lang.exception import QuadrantsAssertionError
 from quadrants.lang.misc import is_extension_supported
 
 from tests import test_utils
@@ -1070,7 +1071,7 @@ def test_adstack_overflow_raises():
     # On LLVM the runtime raises QuadrantsAssertionError (subclass of AssertionError) from
     # check_adstack_overflow; on SPIR-V the gfx runtime raises RuntimeError via QD_ERROR. We accept either,
     # matching only the message prefix.
-    with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
+    with pytest.raises(QuadrantsAssertionError, match=r"[Aa]dstack overflow"):
         compute.grad()
         qd.sync()
 
@@ -1082,7 +1083,7 @@ def test_adstack_overflow_flag_resets_after_catch():
     # stale overflow exception every time they sync after the first one, which makes diagnosis and recovery
     # impossible. `debug=True` keeps the per-push bounds check live.
     compute, _, _ = _overflowing_compute()
-    with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
+    with pytest.raises(QuadrantsAssertionError, match=r"[Aa]dstack overflow"):
         compute.grad()
         qd.sync()
     # No new grad launch here - the flag must already be back to zero.
@@ -1175,7 +1176,7 @@ def test_adstack_overflow_multithreaded():
     # keeps the per-push bounds check live (release-build codegen elides it - see `test_adstack_overflow_raises`
     # for the rationale).
     compute, _, _ = _overflowing_compute(n_elements=16)
-    with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
+    with pytest.raises(QuadrantsAssertionError, match=r"[Aa]dstack overflow"):
         compute.grad()
         qd.sync()
 
@@ -1214,6 +1215,7 @@ def test_adstack_overflow_caught_then_clean_teardown(tmp_path, force_sync):
 
         import pytest
         import quadrants as qd
+        from quadrants.lang.exception import QuadrantsAssertionError
 
         qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=32, debug=True)
 
@@ -1244,7 +1246,7 @@ def test_adstack_overflow_caught_then_clean_teardown(tmp_path, force_sync):
         force_sync = {force_sync}
 
         def raises_overflow():
-            return pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow")
+            return pytest.raises(QuadrantsAssertionError, match=r"[Aa]dstack overflow")
 
         with raises_overflow() if is_sync_backend else nullcontext():
             compute.grad()
@@ -1379,7 +1381,7 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
     y.grad[None] = 1.0
     x.grad[0] = 0.0
     backend_uses_per_task_cache_shortcut = qd.lang.impl.get_runtime().prog.config().arch != qd.cpu
-    raises_overflow = pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow")
+    raises_overflow = pytest.raises(QuadrantsAssertionError, match=r"[Aa]dstack overflow")
     with raises_overflow if backend_uses_per_task_cache_shortcut else nullcontext() as exc_info:
         compute.grad(n)
         qd.sync()
