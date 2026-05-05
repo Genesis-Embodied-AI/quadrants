@@ -112,13 +112,15 @@ class AdStackCache {
     llvm_per_task_ad_stack_cache_.clear();
   }
 
-  // Bulk-invalidate every adstack-sizer cache. Used on the overflow raise path so the next launch
-  // reruns the sizer from scratch against the live SNode / ndarray state, auto-recovering from a
-  // stale-cache window introduced by a DLPack-bypass mutation that grew the data-dependent capacity.
-  // Cheap on the error path; trivial cost on the next clean launch (one fresh sizer run per task).
-  void invalidate_all() {
-    invalidate_size_expr();
-    invalidate_spirv_bytecode();
+  // Bulk-invalidate just the per-task adstack metadata caches on the overflow raise path. The
+  // `size_expr_cache_` and `spirv_bytecode_cache_` are intentionally NOT cleared: they self-validate via per-read
+  // observation walks on the next lookup, so a DLPack-bypass mutation surfaces there as a normal observation
+  // mismatch and triggers a fresh evaluation without explicit eviction. The per-task metadata caches need a
+  // force-drop because their gen-counter snapshots match when the user's mutation bypassed our tracking.
+  // Invalidation is bulk (every task) rather than targeted (just the offender) because a single shared DLPack /
+  // torch view can back multiple tasks in the same kernel queue: targeted invalidation would let the next launch
+  // hit a stale entry on a different task that reads the same now-mutated tensor and overflow again.
+  void invalidate_all_per_task() {
     invalidate_per_task_ad_stack();
     invalidate_llvm_per_task_ad_stack();
   }
@@ -252,12 +254,14 @@ void clip_effective_rows_by_loop_trip_count(std::size_t &effective_rows,
 void bump_writes_for_kernel_llvm(Program *prog,
                                  LaunchContextBuilder *ctx,
                                  const std::vector<OffloadedTask> &offloaded_tasks);
-// CPU launcher overload: per-task snode_writes / arr_writes are stored as separate parallel vectors on the launcher
-// `Context` rather than as `OffloadedTask` clones, for legacy reasons documented in the CPU `Context` struct.
+// CPU launcher overload: per-task snode_writes / arr_writes / arr_reads are stored as separate parallel vectors on
+// the launcher `Context` rather than as `OffloadedTask` clones, for legacy reasons documented in the CPU `Context`
+// struct.
 void bump_writes_for_kernel_llvm(Program *prog,
                                  LaunchContextBuilder *ctx,
                                  const std::vector<std::vector<int>> &snode_writes_per_task,
-                                 const std::vector<std::vector<int>> &arr_writes_per_task);
+                                 const std::vector<std::vector<int>> &arr_writes_per_task,
+                                 const std::vector<std::vector<int>> &arr_reads_per_task);
 void bump_writes_for_kernel_spirv(
     Program *prog,
     LaunchContextBuilder *ctx,

@@ -30,6 +30,7 @@
 #include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/program.h"
 
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -629,16 +630,21 @@ void LlvmRuntimeExecutor::ensure_adstack_heap_float(std::size_t needed_bytes) {
 void LlvmRuntimeExecutor::check_adstack_overflow() {
   // Called from `synchronize()` on every sync, plus other Quadrants Python entry points wired in
   // `Program::check_adstack_overflow_and_raise`. The flag lives in pinned host memory (allocated at
-  // `materialize_runtime`); polling is a plain `__atomic_exchange_n` on the cached host pointer - no DtoH,
-  // no JIT call, no sync drain. Available on all backends because the pinned-host memory is in the
-  // host process address space regardless of where the kernel that wrote it ran.
+  // `materialize_runtime`); polling is a relaxed atomic exchange on the cached host pointer via
+  // `std::atomic<int64_t>` reinterpret_cast - no DtoH, no JIT call, no sync drain. Available on all backends because
+  // the pinned-host memory is in the host process address space regardless of where the kernel that wrote it ran.
+  // The reinterpret_cast is portable because `std::atomic<int64_t>` is layout-compatible with `int64_t` on every
+  // target (verified by the static_assert below); see also Itanium ABI / MSVC ABI lock-free guarantees.
   //
   // Returns early when the slot has not been allocated yet (e.g. a C++ test that constructs Program without
   // materializing the runtime and then triggers `Program::finalize -> synchronize`).
+  static_assert(std::atomic<int64_t>::is_always_lock_free,
+                "std::atomic<int64_t> must be lock-free for the reinterpret_cast pattern below to be portable");
   if (adstack_overflow_flag_host_ptr_ == nullptr) {
     return;
   }
-  int64_t flag = __atomic_exchange_n(adstack_overflow_flag_host_ptr_, (int64_t)0, __ATOMIC_RELAXED);
+  int64_t flag =
+      reinterpret_cast<std::atomic<int64_t> *>(adstack_overflow_flag_host_ptr_)->exchange(0, std::memory_order_relaxed);
   if (flag == 0) {
     return;
   }
@@ -648,7 +654,8 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
   // re-registered); the diagnose helper falls through to the generic dual-cause message in that case.
   uint32_t task_id = 0;
   if (adstack_overflow_task_id_host_ptr_ != nullptr) {
-    int64_t recorded = __atomic_exchange_n(adstack_overflow_task_id_host_ptr_, (int64_t)0, __ATOMIC_RELAXED);
+    int64_t recorded = reinterpret_cast<std::atomic<int64_t> *>(adstack_overflow_task_id_host_ptr_)
+                           ->exchange(0, std::memory_order_relaxed);
     task_id = static_cast<uint32_t>(recorded);
   }
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
@@ -656,13 +663,13 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
   if (prog != nullptr) {
     auto diag = prog->diagnose_adstack_overflow(task_id);
     diagnostic = std::move(diag.message);
-    // Auto-invalidate the adstack-sizer caches when the synchronous sizer rerun confirmed the cache
-    // is stale (DLPack-bypass cause). The current run is corrupted (we are about to raise), but the
-    // next launch's sizer will recompute max_size against the live (mutated) state and the kernel
-    // will run to completion without further user intervention. Unknown / Quadrants-bug cases skip
-    // the invalidation so a real sizer bug is not masked by silent recompute.
+    // Auto-invalidate the per-task metadata caches when the synchronous sizer rerun confirmed the cache is stale
+    // (DLPack-bypass cause). The current run is corrupted (we are about to raise), but the next launch's sizer
+    // reruns from scratch against the live (mutated) state and the kernel runs to completion without further
+    // user intervention. Unknown / Quadrants-bug cases skip the invalidation so a real sizer bug is not masked
+    // by silent recompute.
     if (diag.confirmed_invalid_cache) {
-      prog->adstack_cache().invalidate_all();
+      prog->adstack_cache().invalidate_all_per_task();
     }
   } else {
     diagnostic =

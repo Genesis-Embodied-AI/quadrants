@@ -1515,6 +1515,7 @@ void runtime_initialize(Ptr result_buffer,
   runtime->adstack_bound_row_capacities = nullptr;
   runtime->adstack_bound_row_capacities_capacity = 0;
   runtime->adstack_overflow_flag_dev_ptr = nullptr;
+  runtime->adstack_overflow_task_id_dev_ptr = nullptr;
 
   runtime->temporaries = (Ptr)runtime->allocate_aligned(runtime->runtime_objects_chunk,
                                                         quadrants_global_tmp_buffer_size, quadrants_page_size);

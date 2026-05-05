@@ -127,7 +127,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   }
   // Adstack-cache invalidation bump - see `bump_writes_for_kernel_llvm` in `program/adstack_size_expr_eval.{h,cpp}`.
   bump_writes_for_kernel_llvm(executor->get_program(), &ctx, launcher_ctx.snode_writes_per_task,
-                              launcher_ctx.arr_writes_per_task);
+                              launcher_ctx.arr_writes_per_task, launcher_ctx.arr_reads_per_task);
 
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
@@ -157,11 +157,13 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     std::vector<std::size_t> num_threads_per_task;
     std::vector<std::vector<int>> snode_writes_per_task;
     std::vector<std::vector<int>> arr_writes_per_task;
+    std::vector<std::vector<int>> arr_reads_per_task;
     task_funcs.reserve(data.tasks.size());
     ad_stacks.reserve(data.tasks.size());
     num_threads_per_task.reserve(data.tasks.size());
     snode_writes_per_task.reserve(data.tasks.size());
     arr_writes_per_task.reserve(data.tasks.size());
+    arr_reads_per_task.reserve(data.tasks.size());
     for (auto &task : data.tasks) {
       auto *func_ptr = jit_module->lookup_function(task.name);
       QD_ASSERT_INFO(func_ptr, "Offloaded datum function {} not found", task.name);
@@ -174,6 +176,7 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
       num_threads_per_task.push_back(task.ad_stack.static_num_threads);
       snode_writes_per_task.push_back(task.snode_writes);
       arr_writes_per_task.push_back(task.arr_writes);
+      arr_reads_per_task.push_back(task.arr_reads);
     }
 
     // Populate ctx
@@ -183,6 +186,7 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     ctx.num_threads_per_task = std::move(num_threads_per_task);
     ctx.snode_writes_per_task = std::move(snode_writes_per_task);
     ctx.arr_writes_per_task = std::move(arr_writes_per_task);
+    ctx.arr_reads_per_task = std::move(arr_reads_per_task);
 
     // Precompute the array-typed parameter `arg_id`s so `launch_llvm_kernel` does not have to walk the
     // full parameters list and re-check `is_array` on every invocation.

@@ -116,13 +116,19 @@ class OffloadedTask {
   // SPIR-V `KernelContextAttributes::arr_access` WRITE-bit set, but stored per-task here because
   // LLVM codegen does not aggregate `arr_access` to the kernel level.
   std::vector<int> arr_writes;
+  // Argument arg_ids this task reads (READ bit set in `irpass::detect_external_ptr_access_in_task`). Consumed at
+  // launch time only on backends with an H2D blit per launch (LLVM-GPU CUDA / AMDGPU `DevAllocType::kNone`) and on
+  // CPU LLVM with `DevAllocType::kNone` host args: the data pointer is stable across launches, so the cache key by
+  // data ptr cannot detect content mutations the user performed outside Quadrants's tracking. Mirrors the SPIR-V
+  // `KernelContextAttributes::arr_access` READ-bit set.
+  std::vector<int> arr_reads;
 
   explicit OffloadedTask(const std::string &name = "",
                          int block_dim = 0,
                          int grid_dim = 0,
                          int dynamic_shared_array_bytes = 0)
       : name(name), block_dim(block_dim), grid_dim(grid_dim), dynamic_shared_array_bytes(dynamic_shared_array_bytes) {};
-  QD_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes, ad_stack, snode_writes, arr_writes);
+  QD_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes, ad_stack, snode_writes, arr_writes, arr_reads);
 };
 
 struct LLVMCompiledTask {

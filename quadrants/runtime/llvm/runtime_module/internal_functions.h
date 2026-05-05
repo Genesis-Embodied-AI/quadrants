@@ -45,8 +45,10 @@ i32 test_internal_func_args(RuntimeContext *context, float32 i, float32 j, int32
 i32 test_stack(RuntimeContext *context) {
   auto *runtime = context->runtime;
   // Header u64 `n` + max_num_elements * 2 * element_size for primal+adjoint slot pairs. Allocate generously for
-  // the guard-case subtests below.
-  auto stack = new u8[8 + 16 * 2 * 4];
+  // the guard-case subtests below. Stack-allocated rather than `new u8[...]` to keep the JIT bitcode free of
+  // `operator new[]` / `operator delete[]` references that some Linux JIT linker configurations cannot resolve.
+  u8 stack_storage[8 + 16 * 2 * 4];
+  u8 *stack = stack_storage;
   stack_init(stack);
 
   // Stash any prior overflow-flag pointer the host has installed and point the runtime at a local slot for
@@ -95,8 +97,6 @@ i32 test_stack(RuntimeContext *context) {
 
   // Restore the prior flag pointer so subsequent tests in the same fixture are not poisoned by our local slot.
   runtime->adstack_overflow_flag_dev_ptr = prev_flag_dev_ptr;
-
-  delete[] stack;
   return 0;
 }
 

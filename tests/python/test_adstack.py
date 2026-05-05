@@ -1317,6 +1317,31 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
     compute.grad(n)
     qd.sync()
 
+    # Step 1.5: Python-side mutation through `Ndarray.write` (`n[0] = 8`). The setter routes through Quadrants's
+    # tracking and bumps `ndarray_data_gen_` for the bound DeviceAllocation, so the per-task adstack metadata
+    # cache invalidates cleanly: the next launch reruns the sizer with `n[0] = 8`, sizes capacity to 8, and the
+    # kernel runs to completion without raising. This pins the clean-invalidation contract on every backend
+    # (no DLPack involvement, no overflow, no recovery exception).
+    n[0] = 8
+    y[None] = 0.0
+    compute(n)
+    y.grad[None] = 1.0
+    x.grad[0] = 0.0
+    compute.grad(n)
+    qd.sync()
+    expected_after_clean_grow = sum(math.cos(0.1 + k) for k in range(8))
+    assert x.grad[0] == pytest.approx(expected_after_clean_grow, rel=1e-4)
+
+    # Reset state for the DLPack-bypass scenario: bring `n[0]` back down to 2 through the Quadrants-tracked
+    # setter so the next cached `max_size` is the small value the bypass mutation will outgrow.
+    n[0] = 2
+    y[None] = 0.0
+    compute(n)
+    y.grad[None] = 1.0
+    x.grad[0] = 0.0
+    compute.grad(n)
+    qd.sync()
+
     # The DLPack-bypass scenario below requires `to_torch(copy=False)` which is unsupported on
     # Vulkan because Quadrants and torch do not currently share a command queue there
     # (`_can_zerocopy_field` returns false on i32 ndarrays and the export raises

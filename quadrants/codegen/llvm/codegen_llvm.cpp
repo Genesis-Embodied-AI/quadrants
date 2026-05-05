@@ -2014,16 +2014,23 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
       // is keyed by (via the bound DeviceAllocation).
       auto arr_access = irpass::detect_external_ptr_access_in_task(current_offload);
       for (const auto &kv : arr_access) {
-        if ((static_cast<uint32_t>(kv.second) & static_cast<uint32_t>(irpass::ExternalPtrAccess::WRITE)) == 0) {
+        if (kv.first.empty()) {
           continue;
         }
-        if (!kv.first.empty()) {
+        const uint32_t access_bits = static_cast<uint32_t>(kv.second);
+        if ((access_bits & static_cast<uint32_t>(irpass::ExternalPtrAccess::WRITE)) != 0) {
           current_task->arr_writes.push_back(kv.first.front());
+        }
+        if ((access_bits & static_cast<uint32_t>(irpass::ExternalPtrAccess::READ)) != 0) {
+          current_task->arr_reads.push_back(kv.first.front());
         }
       }
       std::sort(current_task->arr_writes.begin(), current_task->arr_writes.end());
       current_task->arr_writes.erase(std::unique(current_task->arr_writes.begin(), current_task->arr_writes.end()),
                                      current_task->arr_writes.end());
+      std::sort(current_task->arr_reads.begin(), current_task->arr_reads.end());
+      current_task->arr_reads.erase(std::unique(current_task->arr_reads.begin(), current_task->arr_reads.end()),
+                                    current_task->arr_reads.end());
     }
     // Register the per-task AdStackSizingInfo with the Program-side identity registry. The id is baked
     // into the lazy-claim overflow path's `cmpxchg(0, id)` so the host raise site can name the offending

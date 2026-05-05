@@ -9,6 +9,7 @@
 #include "quadrants/program/program.h"
 #include "quadrants/program/launch_context_builder.h"
 #include "quadrants/ir/type_factory.h"
+#include "quadrants/common/exceptions.h"
 #include "quadrants/common/filesystem.hpp"
 
 #include <cstring>
@@ -1040,13 +1041,14 @@ void GfxRuntime::synchronize() {
         // See `LlvmRuntimeExecutor::check_adstack_overflow` for the rationale; only invalidate when the sizer rerun
         // confirmed a stale cache (DLPack-bypass) so a Quadrants pre-pass bug is not silently masked.
         if (diag.confirmed_invalid_cache) {
-          prog->adstack_cache().invalidate_all();
+          prog->adstack_cache().invalidate_all_per_task();
         }
       }
-      QD_ERROR(
-          "Adstack overflow (offending stack_id={}): a reverse-mode autodiff kernel pushed more "
-          "elements than the adstack capacity allows. Raised at the next `qd.sync()`.\n{}",
-          flag_val - 1, diagnostic);
+      throw QuadrantsAssertionError(
+          fmt::format("Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack "
+                      "capacity allows. Raised at the next Quadrants Python entry rather than at the offending "
+                      "kernel launch. Offending adstack index within the task: {}.\n{}",
+                      flag_val - 1, diagnostic));
     }
   }
   fflush(stdout);

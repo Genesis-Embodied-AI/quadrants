@@ -1345,16 +1345,33 @@ void bump_writes_for_kernel_llvm(Program *prog,
   if (prog == nullptr) {
     return;
   }
+  auto bump_data_ptr = [&](int arg_id) {
+    ArgArrayPtrKey data_key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+    auto it = ctx->array_ptrs.find(data_key);
+    if (it != ctx->array_ptrs.end() && it->second != nullptr) {
+      prog->adstack_cache().bump_ndarray_data_gen(it->second);
+    }
+  };
   for (const auto &task : offloaded_tasks) {
     for (int snode_id : task.snode_writes) {
       prog->adstack_cache().bump_snode_write_gen(snode_id);
     }
     for (int arg_id : task.arr_writes) {
-      ArgArrayPtrKey data_key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
-      auto it = ctx->array_ptrs.find(data_key);
-      if (it != ctx->array_ptrs.end() && it->second != nullptr) {
-        prog->adstack_cache().bump_ndarray_data_gen(it->second);
+      bump_data_ptr(arg_id);
+    }
+    // Read-only `DevAllocType::kNone` args also need a bump: the user's host array is either H2D-blitted to a
+    // temporary device buffer (CUDA / AMDGPU) or read directly (CPU), and in both cases the data pointer used as
+    // the cache key is stable across launches, so a content mutation the user performed outside Quadrants's
+    // tracking is invisible to the metadata cache without an explicit bump. Mirrors the SPIR-V `kone_h2d_blit`
+    // rule in `bump_writes_for_kernel_spirv`.
+    for (int arg_id : task.arr_reads) {
+      if (static_cast<size_t>(arg_id) >= ctx->device_allocation_type.size()) {
+        continue;
       }
+      if (ctx->device_allocation_type[arg_id] != LaunchContextBuilder::DevAllocType::kNone) {
+        continue;
+      }
+      bump_data_ptr(arg_id);
     }
   }
 }
@@ -1362,10 +1379,18 @@ void bump_writes_for_kernel_llvm(Program *prog,
 void bump_writes_for_kernel_llvm(Program *prog,
                                  LaunchContextBuilder *ctx,
                                  const std::vector<std::vector<int>> &snode_writes_per_task,
-                                 const std::vector<std::vector<int>> &arr_writes_per_task) {
+                                 const std::vector<std::vector<int>> &arr_writes_per_task,
+                                 const std::vector<std::vector<int>> &arr_reads_per_task) {
   if (prog == nullptr) {
     return;
   }
+  auto bump_data_ptr = [&](int arg_id) {
+    ArgArrayPtrKey data_key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+    auto it = ctx->array_ptrs.find(data_key);
+    if (it != ctx->array_ptrs.end() && it->second != nullptr) {
+      prog->adstack_cache().bump_ndarray_data_gen(it->second);
+    }
+  };
   for (const auto &task_snodes : snode_writes_per_task) {
     for (int snode_id : task_snodes) {
       prog->adstack_cache().bump_snode_write_gen(snode_id);
@@ -1373,11 +1398,21 @@ void bump_writes_for_kernel_llvm(Program *prog,
   }
   for (const auto &task_args : arr_writes_per_task) {
     for (int arg_id : task_args) {
-      ArgArrayPtrKey data_key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
-      auto it = ctx->array_ptrs.find(data_key);
-      if (it != ctx->array_ptrs.end() && it->second != nullptr) {
-        prog->adstack_cache().bump_ndarray_data_gen(it->second);
+      bump_data_ptr(arg_id);
+    }
+  }
+  // Read-only `DevAllocType::kNone` args: see the comment in the CUDA / AMDGPU overload for why CPU LLVM also
+  // needs the bump. Empty `arr_reads_per_task` is the legal cache-miss path (offline-cache load that did not
+  // capture per-task arr_reads); skip the loop without raising.
+  for (const auto &task_args : arr_reads_per_task) {
+    for (int arg_id : task_args) {
+      if (static_cast<size_t>(arg_id) >= ctx->device_allocation_type.size()) {
+        continue;
       }
+      if (ctx->device_allocation_type[arg_id] != LaunchContextBuilder::DevAllocType::kNone) {
+        continue;
+      }
+      bump_data_ptr(arg_id);
     }
   }
 }
