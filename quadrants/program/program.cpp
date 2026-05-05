@@ -463,19 +463,16 @@ Program::AdStackOverflowDiagnosis Program::diagnose_adstack_overflow(uint32_t ta
   result.message = identity_block + disambiguation_block + body +
                    "Note: kernel state may be inconsistent post-overflow; do not retry the same "
                    "step without addressing the cause and restarting from a clean state.";
-  // Flag the cache as confirmed-invalid for every cause EXCEPT Quadrants-bug (host-resolvable
-  // sync rerun that found `required <= allocated` on every stack). The classifier only confirms
-  // Quadrants-bug when every leaf is host-resolvable AND the freshly-computed required size does
-  // NOT exceed allocated - that combination is solid evidence the pre-pass undersized, and
-  // invalidating the cache there would mask the bug (the next launch reruns the same wrong sizer
-  // and would still produce the same wrong bound, just slower). DLPack-bypass and Unknown both
-  // benefit from invalidation: DLPack-bypass auto-recovers because the next launch's sizer reads
-  // the live state, and Unknown (ndarray-bound size_expr that is not host-resolvable) is the
-  // dominant DLPack-bypass scenario in production - tightening the gate to only Confirmed
-  // DLPackBypass would leave production users stuck with stale-cache errors that auto-recovery
-  // could have cleared. The cost of an unwarranted Unknown-triggered invalidate is minimal: the
-  // next launch reruns the sizer (a few extra microseconds on the error path).
-  result.confirmed_invalid_cache = (cause != Cause::QuadrantsBug);
+  // Flag the cache as confirmed-invalid only when the sync rerun positively identified DLPack-bypass
+  // (`required > allocated` for at least one stack with every leaf resolved against the live snapshot).
+  // The diagnose-time evaluator can now resolve ndarray-bound leaves through the captured launch snapshot
+  // (`Device::map`-based reads), so `Unknown` is a rare fallback - either no launch has happened yet
+  // (snapshot not populated), or a `Device::map` call failed, or a leaf type is unsupported by the
+  // diagnose evaluator. None of these correspond to a high-confidence DLPack-bypass, so we conservatively
+  // skip invalidation and let the loud overflow surface to the user instead of silently retrying against
+  // a possibly-broken cache. Quadrants-bug is excluded for the same reason invalidation would be unsafe
+  // (next launch would re-run the same wrong sizer and produce the same wrong bound).
+  result.confirmed_invalid_cache = (cause == Cause::DLPackBypass);
   return result;
 }
 
