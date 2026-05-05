@@ -30,7 +30,8 @@ You only need to regenerate the fatbin if:
 
 ## Prerequisites
 
-- CUDA toolkit with `nvcc` (12.8 or later, required for SM 120 support).
+- CUDA toolkit with `nvcc` (13.0 or later, required for SM 110 support;
+  earlier toolkits will fail with `Unsupported gpu architecture 'compute_110'`).
 - The `nvcc` binary must be on your `PATH`, or set `CUDA_HOME`.
 
 ## Regenerating
