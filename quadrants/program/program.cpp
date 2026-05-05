@@ -275,6 +275,29 @@ uint32_t Program::register_adstack_sizing_info(const void *ad_stack_ptr,
   return id;
 }
 
+void Program::set_adstack_sizing_info_pointer(uint32_t id, const void *ad_stack_ptr) {
+  std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
+  if (id == 0 || id >= adstack_sizing_info_registry_.size()) {
+    return;
+  }
+  // Update the reverse map too: the codegen-time pointer is now stale (its `unique_ptr` heap was freed
+  // when the launcher cleared `current_task`). Drop the old key so a future malloc that happens to
+  // land on the same freed address does not get aliased to this id.
+  const void *old_ptr = adstack_sizing_info_registry_[id].ad_stack_ptr;
+  if (old_ptr != ad_stack_ptr) {
+    auto old_it = adstack_sizing_info_id_by_ptr_.find(old_ptr);
+    if (old_it != adstack_sizing_info_id_by_ptr_.end() && old_it->second == id) {
+      adstack_sizing_info_id_by_ptr_.erase(old_it);
+    }
+    adstack_sizing_info_id_by_ptr_[ad_stack_ptr] = id;
+    adstack_sizing_info_registry_[id].ad_stack_ptr = ad_stack_ptr;
+  }
+  // Mark the entry's pointer as live: the synchronous sizer rerun in
+  // `diagnose_adstack_overflow_message` only dereferences after this flag is set, ensuring the deref
+  // never lands on freed unique_ptr heap.
+  adstack_sizing_info_pointer_live_.insert(id);
+}
+
 std::optional<Program::AdStackSizingInfoEntry> Program::lookup_adstack_sizing_info(uint32_t id) const {
   std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
   if (id == 0 || id >= adstack_sizing_info_registry_.size()) {
@@ -284,16 +307,15 @@ std::optional<Program::AdStackSizingInfoEntry> Program::lookup_adstack_sizing_in
 }
 
 std::string Program::diagnose_adstack_overflow_message(uint32_t task_id) const {
-  // The registry entry stores stable, owned metadata (`kernel_name` / `task_id_in_kernel` /
-  // `allocated_max_sizes`). The `ad_stack_ptr` is a non-owning pointer registered at codegen time and is
-  // intentionally NOT dereferenced here: the underlying `OffloadedTask` is moved by value into the
-  // backend launchers' `offloaded_tasks` vector after registration, leaving the registered address
-  // pointing into freed unique_ptr heap. A future PR will fix the lifetime (re-register against the
-  // post-move address from the launcher) and re-introduce a synchronous sizer rerun on top of the live
-  // pointer; for now the registry-id pathway only delivers the static identity block, which already
-  // names the offending kernel + task + allocated capacity for both DLPack-bypass and Quadrants-bug
-  // failure modes.
   std::string identity_block;
+  std::string disambiguation_block;
+  // Cause classifier: when the synchronous re-run produces required > allocated for ANY stack, the
+  // most likely cause is an untracked tensor mutation (DLPack-bypass etc.). When all required <=
+  // allocated, the pre-pass undersized the bound (Quadrants bug). When we cannot re-evaluate
+  // (ndarray-bound size_expr; no launch ctx in hand) we fall through to the static dual-cause body.
+  enum class Cause { Unknown, DLPackBypass, QuadrantsBug };
+  Cause cause = Cause::Unknown;
+
   if (task_id != 0) {
     auto entry_opt = lookup_adstack_sizing_info(task_id);
     if (entry_opt.has_value()) {
@@ -307,22 +329,118 @@ std::string Program::diagnose_adstack_overflow_message(uint32_t task_id) const {
         identity_block += std::to_string(entry.allocated_max_sizes[i]);
       }
       identity_block += "].\n";
+
+      // Synchronous sizer rerun: walk each stack's `SerializedSizeExpr` and evaluate against the live
+      // host / SNode state. Skip stacks whose tree contains an `ExternalTensorShape` or
+      // `ExternalTensorRead` leaf - those need the per-launch `LaunchContextBuilder` which is no longer
+      // available at this point. The disambiguation is best-effort: if every stack's tree is host-
+      // resolvable we get a precise classification; otherwise we report what we have and the caller
+      // falls back to the static dual-cause hint. The eval path itself goes through
+      // `SNodeRwAccessorsBank` for `FieldLoad` leaves, which dispatches its own reader kernel; the
+      // diagnose path only fires on the error branch so the extra dispatches are not on any hot path.
+      //
+      // Lifetime: the registry's `ad_stack_ptr` is rebound by each backend launcher via
+      // `Program::set_adstack_sizing_info_pointer` to the post-`push_back` address in
+      // `offloaded_tasks` (LLVM) or `task_attribs.ad_stack` (SPIR-V), which is stable for the cached
+      // kernel's lifetime. The codegen-time pointer is rebound on the FIRST launch; before that the
+      // entry's `ad_stack_ptr` still points at freed unique_ptr heap, so the deref below is gated on a
+      // sentinel-tag check the launcher writes when it rebinds (see `set_adstack_sizing_info_pointer`).
+      const auto *ad_stack_info = static_cast<const AdStackSizingInfo *>(entry.ad_stack_ptr);
+      bool pointer_is_live = false;
+      if (ad_stack_info != nullptr) {
+        std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
+        pointer_is_live = adstack_sizing_info_pointer_live_.count(task_id) != 0;
+      }
+      if (ad_stack_info != nullptr && pointer_is_live) {
+        std::vector<int64_t> required_sizes;
+        std::vector<bool> required_known;
+        size_t any_grew = 0;
+        size_t any_unknown = 0;
+        size_t total = std::min(ad_stack_info->size_exprs.size(), entry.allocated_max_sizes.size());
+        for (size_t i = 0; i < total; ++i) {
+          const auto &expr = ad_stack_info->size_exprs[i];
+          bool host_resolvable = true;
+          for (const auto &node : expr.nodes) {
+            auto k = static_cast<SizeExpr::Kind>(node.kind);
+            if (k == SizeExpr::Kind::ExternalTensorShape || k == SizeExpr::Kind::ExternalTensorRead) {
+              host_resolvable = false;
+              break;
+            }
+          }
+          int64_t v = -1;
+          if (host_resolvable && !expr.nodes.empty()) {
+            // `evaluate_adstack_size_expr` reads the live SNode state via `SNodeRwAccessorsBank` and
+            // const-folds the rest in plain C++. `ctx == nullptr` is safe because every leaf we kept
+            // is host-resolvable; ETS / ETR are the only kinds that touch ctx and we filtered them
+            // out.
+            SizeExprLaunchScope scope;
+            v = evaluate_adstack_size_expr(expr, const_cast<Program *>(this), nullptr);
+          }
+          required_sizes.push_back(v);
+          required_known.push_back(host_resolvable && !expr.nodes.empty() && v > 0);
+          if (required_known.back() && static_cast<size_t>(v) > entry.allocated_max_sizes[i]) {
+            ++any_grew;
+          }
+          if (!required_known.back()) {
+            ++any_unknown;
+          }
+        }
+        if (any_grew > 0) {
+          cause = Cause::DLPackBypass;
+        } else if (any_unknown == 0 && total > 0) {
+          cause = Cause::QuadrantsBug;
+        }
+        disambiguation_block = "  Synchronous sizer rerun: required max_size = [";
+        for (size_t i = 0; i < required_sizes.size(); ++i) {
+          if (i != 0) {
+            disambiguation_block += ", ";
+          }
+          if (required_known[i]) {
+            disambiguation_block += std::to_string(required_sizes[i]);
+          } else {
+            disambiguation_block += "?";
+          }
+        }
+        disambiguation_block += "] (`?` = ndarray-bound expression, not host-resolvable post-launch).\n";
+      }
     }
   }
 
-  return identity_block +
-         "Two possible causes:\n"
-         "  1. A tensor backing a data-dependent loop bound was mutated outside Quadrants's tracking "
-         "(typically a DLPack zero-copy mutation through a torch tensor sharing storage with a Quadrants "
-         "ndarray, or a raw pointer write through a non-torch DLPack consumer). The cached adstack "
-         "capacity was sized against the value before the mutation. Recovery: route the mutation through "
-         "Quadrants APIs (`Ndarray.write` / `fill` / kernel writes) so the cache invalidates correctly, "
-         "OR set a generous initial cap if a workload-change milestone genuinely grew capacity. Restart "
-         "the iteration / training loop from a clean state.\n"
-         "  2. (Quadrants bug) the pre-pass resolved the alloca to a bound tighter than the actual "
-         "runtime push count - the enclosing loop shape is outside the current `SizeExpr` grammar, or "
-         "the Bellman-Ford analyzer undercounted the forward-pass accumulation. Please file with the "
-         "kernel IR (`QD_DUMP_IR=1`).\n"
+  std::string body;
+  if (cause == Cause::DLPackBypass) {
+    body =
+        "Cause (sync sizer rerun): a tensor backing a data-dependent loop bound was mutated outside "
+        "Quadrants's tracking - typically a DLPack zero-copy mutation through a torch tensor sharing "
+        "storage with a Quadrants ndarray, or a raw pointer write through a non-torch DLPack consumer. "
+        "The cached adstack capacity was sized against the value before the mutation. Recovery: route "
+        "the mutation through Quadrants APIs (`Ndarray.write` / `fill` / kernel writes) so the cache "
+        "invalidates correctly, OR set a generous initial cap if a workload-change milestone genuinely "
+        "grew capacity. Restart the iteration / training loop from a clean state.\n";
+  } else if (cause == Cause::QuadrantsBug) {
+    body =
+        "Cause (sync sizer rerun): the freshly-computed required size does not exceed the allocated "
+        "size for any stack - this is a Quadrants bug. The pre-pass resolved the alloca to a bound "
+        "tighter than the actual runtime push count: either the enclosing loop shape is outside the "
+        "current `SizeExpr` grammar, or the Bellman-Ford analyzer undercounted the forward-pass "
+        "accumulation. Please file with the kernel IR (`QD_DUMP_IR=1`).\n";
+  } else {
+    body =
+        "Two possible causes (synchronous sizer rerun was not conclusive - some `SizeExpr` trees "
+        "depend on ndarray contents that are not host-resolvable without a per-launch context, or the "
+        "task-id slot was empty so the registry pointer could not be confirmed live):\n"
+        "  1. A tensor backing a data-dependent loop bound was mutated outside Quadrants's tracking "
+        "(typically a DLPack zero-copy mutation through a torch tensor sharing storage with a "
+        "Quadrants ndarray, or a raw pointer write through a non-torch DLPack consumer). The cached "
+        "adstack capacity was sized against the value before the mutation. Recovery: route the "
+        "mutation through Quadrants APIs (`Ndarray.write` / `fill` / kernel writes) so the cache "
+        "invalidates correctly, OR set a generous initial cap if a workload-change milestone "
+        "genuinely grew capacity. Restart the iteration / training loop from a clean state.\n"
+        "  2. (Quadrants bug) the pre-pass resolved the alloca to a bound tighter than the actual "
+        "runtime push count - the enclosing loop shape is outside the current `SizeExpr` grammar, or "
+        "the Bellman-Ford analyzer undercounted the forward-pass accumulation. Please file with the "
+        "kernel IR (`QD_DUMP_IR=1`).\n";
+  }
+  return identity_block + disambiguation_block + body +
          "Note: kernel state may be inconsistent post-overflow; do not retry the same step without "
          "addressing the cause and restarting from a clean state.";
 }
