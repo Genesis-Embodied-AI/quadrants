@@ -219,11 +219,15 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            let body = fs.readFileSync('/tmp/pr_change_report/report_comment.md', 'utf8');
+            const summary = JSON.parse(
+              fs.readFileSync('/tmp/pr_change_report/summary.json', 'utf8'));
+            const numFiles = summary.length;
+            const totalAdded = summary.reduce((acc, s) => acc + s.added, 0);
+            const totalRemoved = summary.reduce((acc, s) => acc + s.removed, 0);
+            const text = `Total: ${numFiles} file(s) changed, ` +
+              `+${totalAdded} -${totalRemoved} code lines.`;
             const url = process.env.REPORT_URL;
-            if (url) {
-              body += `\n\n[Full per-function report](${url})`;
-            }
+            const body = url ? `[${text}](${url})` : text;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
