@@ -241,7 +241,11 @@ class QD_DLL_EXPORT Program {
                                         const std::string &kernel_name,
                                         int task_id_in_kernel,
                                         std::vector<int> allocated_max_sizes);
-  const AdStackSizingInfoEntry *lookup_adstack_sizing_info(uint32_t id) const;
+  // Returns a *copy* of the registry entry (not a pointer into the underlying vector) so the caller can
+  // safely hold the data across operations that might trigger another `register_adstack_sizing_info` and
+  // grow / reallocate the registry vector (e.g. `evaluate_adstack_size_expr` dispatching a reader kernel
+  // that compiles a fresh task). Returns `std::nullopt` for the sentinel id `0` and for out-of-range ids.
+  std::optional<AdStackSizingInfoEntry> lookup_adstack_sizing_info(uint32_t id) const;
   // Format a diagnostic message for an overflow signal. `task_id` is the value read from the pinned-host
   // task-id slot (0 if no thread overflowed; otherwise the registry id of the first overflowing task).
   // Returns the dual-cause message body to embed in the `QuadrantsAssertionError` raised at the poll site.
