@@ -247,9 +247,18 @@ class AdStackCache {
     std::unordered_map<int, std::vector<int32_t>> shapes;
   };
   // Capture the per-launch fields the diagnose evaluator needs (see `DiagnoseLaunchSnapshot`'s definition for
-  // the design rationale and field-by-field semantics). Called from the top of `Program::launch_kernel`,
-  // before the launcher forwards into the backend-specific launcher that might rewrite `array_ptrs`.
+  // the design rationale and field-by-field semantics). Called eagerly from `Program::launch_kernel` only on
+  // backends where the launch ctx is gone by the time overflow is detected (SPIR-V at `synchronize`); on LLVM
+  // backends the per-launch overflow poll runs while ctx is still in scope, so we stash the ctx pointer with
+  // `set_pending_launch_ctx` and let `diagnose_adstack_overflow` capture lazily on the (rare) overflow path.
   void capture_diagnose_snapshot(const LaunchContextBuilder &ctx);
+  // Lazy-capture handoff: `Program::launch_kernel` on LLVM backends sets this to the in-scope ctx before
+  // forwarding into the launcher and clears it after the per-launch overflow poll returns. If the poll fires,
+  // `diagnose_adstack_overflow` reads the pointer and captures the snapshot just in time. Stored as a raw
+  // pointer because it is transient per-launch and never outlives the call frame that set it.
+  void set_pending_launch_ctx(const LaunchContextBuilder *ctx) {
+    pending_launch_ctx_ = ctx;
+  }
   // Read-only accessor for the latest snapshot, used by `diagnose_adstack_overflow` to resolve ndarray-bound
   // size_expr leaves. Returns `nullptr` when no launch has happened yet (e.g. a freshly constructed `Program`
   // hits `synchronize` during teardown without a prior kernel launch).
@@ -274,8 +283,13 @@ class AdStackCache {
   // Latest captured launch context snapshot for the diagnose path's ndarray-bound leaf resolution. See
   // `DiagnoseLaunchSnapshot`'s comment above for why we capture in `Program::launch_kernel` before the launcher
   // forwards.
+  // Single-threaded by construction: `capture_diagnose_snapshot` runs from `Program::launch_kernel` (Python
+  // launcher thread) and `get_diagnose_snapshot` runs from `diagnose_adstack_overflow` on the same thread; no
+  // mutex needed. The codegen-time identity registry above keeps its mutex because it is hit from compilation
+  // worker threads.
   DiagnoseLaunchSnapshot diagnose_snapshot_;
-  mutable std::mutex diagnose_snapshot_mutex_;
+  // Transient ctx handoff for the lazy LLVM capture path. See `set_pending_launch_ctx`.
+  const LaunchContextBuilder *pending_launch_ctx_{nullptr};
 };
 
 // Evaluates a compile-time captured `SerializedSizeExpr` against the current field state of `prog` and the

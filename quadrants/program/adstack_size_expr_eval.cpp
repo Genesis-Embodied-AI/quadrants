@@ -1342,6 +1342,12 @@ std::string AdStackCache::diagnose_adstack_overflow_message(uint32_t task_id) co
 }
 
 AdStackCache::AdStackOverflowDiagnosis AdStackCache::diagnose_adstack_overflow(uint32_t task_id) const {
+  // Lazy LLVM capture: if the launcher stashed a pending ctx pointer for this launch (LLVM defers eager
+  // capture to avoid the per-launch snapshot cost), capture now before walking size_exprs. SPIR-V already
+  // captured eagerly at launch, so `pending_launch_ctx_` is null there.
+  if (pending_launch_ctx_ != nullptr) {
+    const_cast<AdStackCache *>(this)->capture_diagnose_snapshot(*pending_launch_ctx_);
+  }
   std::string identity_block;
   std::string disambiguation_block;
   // Cause classifier: when the synchronous re-run produces required > allocated for ANY stack, the most likely
@@ -1492,7 +1498,6 @@ AdStackCache::AdStackOverflowDiagnosis AdStackCache::diagnose_adstack_overflow(u
 }
 
 void AdStackCache::capture_diagnose_snapshot(const LaunchContextBuilder &ctx) {
-  std::lock_guard<std::mutex> lk(diagnose_snapshot_mutex_);
   diagnose_snapshot_.data_ptrs.clear();
   diagnose_snapshot_.dev_alloc_types.clear();
   diagnose_snapshot_.shapes.clear();
@@ -1515,7 +1520,6 @@ void AdStackCache::capture_diagnose_snapshot(const LaunchContextBuilder &ctx) {
 }
 
 const AdStackCache::DiagnoseLaunchSnapshot *AdStackCache::get_diagnose_snapshot() const {
-  std::lock_guard<std::mutex> lk(diagnose_snapshot_mutex_);
   return diagnose_snapshot_.valid ? &diagnose_snapshot_ : nullptr;
 }
 

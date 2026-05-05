@@ -165,11 +165,18 @@ CompileResult Program::compile_kernel(const CompileConfig &compile_config,
 }
 
 void Program::launch_kernel(const CompiledKernelData &compiled_kernel_data, LaunchContextBuilder &ctx) {
-  // Snapshot ndarray pointers / shapes / DevAllocType BEFORE forwarding to the launcher. The CPU launcher's
-  // `set_host_accessible_ndarray_ptrs` overwrites `array_ptrs[(arg_id, DATA_PTR_POS)]` from the original
-  // `DeviceAllocation *` handle to a raw host pointer; capturing earlier preserves the handle so the diagnose
-  // path's `Device::map(*alloc, ...)` lookup is uniform across CPU / CUDA / AMDGPU / Vulkan / Metal.
-  adstack_cache_->capture_diagnose_snapshot(ctx);
+  // Diagnose-snapshot capture strategy depends on when the overflow check fires relative to ctx lifetime:
+  //   - SPIR-V backends poll the overflow flag at `synchronize()` time, by which point the launch ctx is
+  //     long gone; capture eagerly here, before the CPU launcher's `set_host_accessible_ndarray_ptrs`
+  //     overwrites `array_ptrs[(arg_id, DATA_PTR_POS)]` from the original `DeviceAllocation *` handle.
+  //   - LLVM backends poll the overflow flag in `check_adstack_overflow_and_assert` below, while ctx is
+  //     still in scope. Stash the pointer; the diagnose path captures lazily on the rare overflow case.
+  const bool defer_to_overflow_path = arch_uses_llvm(compiled_kernel_data.arch());
+  if (defer_to_overflow_path) {
+    adstack_cache_->set_pending_launch_ctx(&ctx);
+  } else {
+    adstack_cache_->capture_diagnose_snapshot(ctx);
+  }
   num_offloaded_tasks_on_last_call_ = compiled_kernel_data.num_tasks();
   program_impl_->get_kernel_launcher().launch_kernel(compiled_kernel_data, ctx);
   if (compile_config().debug && arch_uses_llvm(compiled_kernel_data.arch())) {
@@ -179,7 +186,17 @@ void Program::launch_kernel(const CompiledKernelData &compiled_kernel_data, Laun
   // pre-pass undersizing within one Quadrants Python entry of the offending launch, including in async
   // release loops that never call `qd.sync()`. SPIR-V backends' poll stays in `synchronize_and_assert()`
   // because their overflow buffer needs `wait_idle()` to be coherent.
-  program_impl_->check_adstack_overflow_and_assert();
+  try {
+    program_impl_->check_adstack_overflow_and_assert();
+  } catch (...) {
+    if (defer_to_overflow_path) {
+      adstack_cache_->set_pending_launch_ctx(nullptr);
+    }
+    throw;
+  }
+  if (defer_to_overflow_path) {
+    adstack_cache_->set_pending_launch_ctx(nullptr);
+  }
 }
 
 void Program::materialize_runtime() {
