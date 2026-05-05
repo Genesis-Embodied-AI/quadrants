@@ -180,7 +180,7 @@ my_kernel(f)                     # now safe
 
 This is intentional: forcing a sync on every Quadrants kernel that touches a previously-zerocopied field would be very expensive in workloads that batch many torch ops and many kernels back-to-back. If you mutate fields from torch and then read them from a Quadrants kernel on Metal, call `torch.mps.synchronize()` once between the torch ops and the kernels.
 
-**Shared command queue.** The synchronisation overhead above can be eliminated entirely by passing PyTorch MPS's `MTLCommandQueue` to Quadrants at init time via `external_metal_command_queue`. When both frameworks share the same queue, Metal guarantees command buffer ordering automatically. See [Shared Metal command queue](./metal_shared_queue.md) for the setup guide.
+**Shared command queue.** The synchronisation overhead above can be eliminated entirely by passing PyTorch MPS's `MTLCommandQueue` to Quadrants at init time via `external_metal_command_queue`. Quadrants provides `quadrants.interop.get_mps_command_queue()` to extract the queue pointer at runtime. When both frameworks share the same queue, Metal guarantees command buffer ordering automatically. See [Shared Metal command queue](./metal_shared_queue.md) for the setup guide.
 
 ### Lifetime caveats
 

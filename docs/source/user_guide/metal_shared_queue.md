@@ -7,9 +7,12 @@ The `external_metal_command_queue` option lets you pass PyTorch's command queue 
 ## Quick start
 
 ```python
+import torch
 import quadrants as qd
+from quadrants.interop import get_mps_command_queue
 
-queue_ptr = get_mps_command_queue()   # see below
+torch.zeros(1, device="mps")  # ensure MPS is initialised
+queue_ptr = get_mps_command_queue()
 qd.init(
     arch=qd.metal,
     external_metal_command_queue=queue_ptr,
@@ -32,56 +35,15 @@ You can still call `qd.sync()` when you need to read results back to the CPU (e.
 
 ## Extracting PyTorch's MTLCommandQueue
 
-PyTorch does not expose its MPS command queue through a public Python API. The following helper extracts it at runtime using `ctypes` and the Objective-C runtime, with no build-time PyTorch dependency:
+PyTorch does not expose its MPS command queue through a public Python API. Quadrants provides a built-in helper that extracts it at runtime using `ctypes` and the Objective-C runtime:
 
 ```python
-import ctypes
-import os
-import torch
+from quadrants.interop import get_mps_command_queue
 
-
-def get_mps_command_queue() -> int:
-    """Return PyTorch MPS's MTLCommandQueue* as a Python int."""
-    # Ensure MPS is initialised
-    torch.zeros(1, device="mps")
-
-    torch_lib = os.path.join(
-        os.path.dirname(torch.__file__), "lib", "libtorch_cpu.dylib"
-    )
-    handle = ctypes.CDLL(torch_lib)._handle
-
-    libdl = ctypes.CDLL(None)
-    dlsym = libdl.dlsym
-    dlsym.restype = ctypes.c_void_p
-    dlsym.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-
-    # at::mps::getDefaultMPSStream() -> MPSStream*
-    func_addr = dlsym(handle, b"_ZN2at3mps19getDefaultMPSStreamEv")
-    assert func_addr, "Cannot find getDefaultMPSStream — check PyTorch version"
-    stream_ptr = ctypes.CFUNCTYPE(ctypes.c_void_p)(func_addr)()
-
-    # MPSStream::commandBuffer() -> id<MTLCommandBuffer>
-    cb_addr = dlsym(handle, b"_ZN2at3mps9MPSStream13commandBufferEv")
-    assert cb_addr, "Cannot find MPSStream::commandBuffer"
-    cb_ptr = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p)(cb_addr)(
-        stream_ptr
-    )
-
-    # [commandBuffer commandQueue] via ObjC runtime
-    objc = ctypes.CDLL("/usr/lib/libobjc.A.dylib")
-    sel_reg = objc.sel_registerName
-    sel_reg.restype = ctypes.c_void_p
-    sel_reg.argtypes = [ctypes.c_char_p]
-    msg_send = objc.objc_msgSend
-    msg_send.restype = ctypes.c_void_p
-    msg_send.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-
-    queue_ptr = msg_send(cb_ptr, sel_reg(b"commandQueue"))
-    assert queue_ptr, "Failed to extract MTLCommandQueue"
-    return queue_ptr
+queue_ptr = get_mps_command_queue()  # returns int (raw pointer), or 0 on failure
 ```
 
-The C++ symbol `_ZN2at3mps19getDefaultMPSStreamEv` has been stable since PyTorch 1.13.
+The function returns the `MTLCommandQueue*` as a Python `int`. It returns `0` if extraction fails (e.g. non-macOS platform, PyTorch not installed, or unsupported PyTorch build). The underlying C++ symbol (`_ZN2at3mps19getDefaultMPSStreamEv`) has been stable since PyTorch 1.13.
 
 ## Init ordering
 
@@ -92,6 +54,8 @@ import torch
 torch.zeros(1, device="mps")        # trigger MPS init
 
 import quadrants as qd
+from quadrants.interop import get_mps_command_queue
+
 queue_ptr = get_mps_command_queue()
 qd.init(
     arch=qd.metal,
@@ -115,17 +79,17 @@ The caller (your application) owns the command queue. Quadrants borrows the poin
 
 ## Fallback
 
-If extracting the queue fails (e.g. on an older PyTorch version or a non-Apple system), fall back to the default separate-queue path:
+`get_mps_command_queue()` returns `0` on failure (non-macOS, missing PyTorch, unsupported build) rather than raising. You can use this to fall back to the default separate-queue path:
 
 ```python
-try:
-    queue_ptr = get_mps_command_queue()
-except (AssertionError, OSError):
-    queue_ptr = 0   # 0 means "create a new queue" (the default)
+from quadrants.interop import get_mps_command_queue
 
+queue_ptr = get_mps_command_queue()
 qd.init(
     arch=qd.metal,
-    external_metal_command_queue=queue_ptr,
+    external_metal_command_queue=queue_ptr or None,
     external_metal_command_queue_is_torch_queue=queue_ptr != 0,
 )
 ```
+
+When `external_metal_command_queue` is `0` (or omitted), Quadrants creates its own queue and the explicit sync path is used as before.
