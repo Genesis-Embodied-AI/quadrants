@@ -39,6 +39,9 @@ std::string TaskAttributes::buffers_name(BufferInfo b) {
   if (b.type == BufferType::AdStackBoundRowCapacity) {
     return "AdStackBoundRowCapacity";
   }
+  if (b.type == BufferType::AdStackTaskRegistryId) {
+    return "AdStackTaskRegistryId";
+  }
   if (b.type == BufferType::AdStackHeapFloat) {
     return "AdStackHeapFloat";
   }

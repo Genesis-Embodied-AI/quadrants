@@ -279,6 +279,16 @@ class QD_DLL_EXPORT GfxRuntime {
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_row_capacity_buffer_;
   size_t adstack_bound_row_capacity_buffer_size_{0};
 
+  // Per-kernel `BufferType::AdStackTaskRegistryId` (`uint[num_tasks_in_kernel]`). Written by
+  // `publish_adstack_metadata_spirv` immediately after registering each adstack-bearing task with the
+  // Program-side identity registry: slot `ti` holds that task's registry id (0 for tasks without
+  // adstacks). The codegen task-end overflow check reads `slot[task_id_in_kernel_]` and
+  // `OpAtomicCompareExchange`'s it into `AdStackOverflow[1]` on overflow so the host raise site can
+  // name the offending kernel + task. Allocated and grown lazily on demand following the same
+  // pattern as `adstack_bound_row_capacity_buffer_`.
+  std::unique_ptr<DeviceAllocationGuard> adstack_task_registry_id_buffer_;
+  size_t adstack_task_registry_id_buffer_size_{0};
+
   // Owning `ProgramImpl` back-reference; propagated from `Params::program_impl`. See the comment on
   // `Params::program_impl` for the contract.
   ProgramImpl *program_impl_{nullptr};

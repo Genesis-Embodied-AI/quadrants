@@ -680,6 +680,21 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         } else {
           bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
         }
+      } else if (bind.buffer.type == BufferType::AdStackTaskRegistryId) {
+        // Per-task `Program::adstack_sizing_info_registry_` ids written by the SPIR-V launcher in
+        // `publish_adstack_metadata_spirv` immediately after registering each adstack-bearing task; slot
+        // `ti` holds the registry id for that task (0 for tasks without adstacks). The codegen-emitted
+        // task-end overflow check reads slot `task_id_in_kernel_` and `OpAtomicCompareExchange`'s the
+        // value into `AdStackOverflow[1]` when the latter is still 0 - recording the FIRST overflowing
+        // task's identity. The codegen-side gate on `task_has_adstack_push_` ensures forward-only tasks
+        // never request this binding, so the buffer is always allocated by `publish_adstack_metadata_
+        // spirv` whenever it is requested. The defensive null bind keeps the assertion path intact if
+        // a future codegen path requests the binding without the launcher having allocated.
+        if (adstack_task_registry_id_buffer_) {
+          bindings->rw_buffer(bind.binding, *adstack_task_registry_id_buffer_);
+        } else {
+          bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
+        }
       } else if (bind.buffer.type == BufferType::AdStackHeapFloat) {
         // SPIR-V adstack primal/adjoint storage for f32 adstacks. Sized for `effective_rows`: the count of threads the
         // static-IR-bound reducer pre-counted as passing the captured gate, when the task has a captured `bound_expr`

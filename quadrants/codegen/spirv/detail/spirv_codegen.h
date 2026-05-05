@@ -317,6 +317,14 @@ class TaskCodegen : public IRVisitor {
   // Lazy-allocated by the first `AdStackPushStmt` visitor; nullptr when the task has no adstack pushes (no
   // task-end emit needed). Reset to {} per task in `generate_*_kernel`.
   spirv::Value any_overflow_signal_var_;
+  // Set to true when the task body contains at least one `AdStackPushStmt` visit. Read by
+  // `emit_adstack_task_end_overflow_check` to decide whether to emit the task-end overflow check and
+  // its AdStackOverflow / AdStackTaskRegistryId buffer accesses. Forward-only tasks never set this and
+  // therefore never request the AdStack-side buffer binds, which keeps the SPIR-V launcher's bind
+  // path from null-binding `AdStackTaskRegistryId` on a Program that has not allocated it
+  // (allocation only fires inside `publish_adstack_metadata_spirv` for kernels with at least one
+  // adstack-bearing task; null-binding would crash Metal's `rw_buffer` device-equality assertion).
+  bool task_has_adstack_push_{false};
   // Function-scope OpVariable<u32> initialized to UINT32_MAX at task entry; overwritten with the atomically claimed row
   // index when codegen visits `ad_stack_lca_block_float_`. `get_ad_stack_heap_thread_base_float()` loads this variable
   // and multiplies against the runtime float stride to produce the per-thread heap base, replacing the prior `invoc_id

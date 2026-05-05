@@ -38,6 +38,7 @@ constexpr char kExtArrBufferName[] = "ext_arr_buffer";
 constexpr char kAdStackOverflowBufferName[] = "adstack_overflow_buffer";
 constexpr char kAdStackRowCounterBufferName[] = "adstack_row_counter_buffer";
 constexpr char kAdStackBoundRowCapacityBufferName[] = "adstack_bound_row_capacity_buffer";
+constexpr char kAdStackTaskRegistryIdBufferName[] = "adstack_task_registry_id_buffer";
 constexpr char kAdStackHeapFloatBufferName[] = "adstack_heap_float_buffer";
 constexpr char kAdStackHeapIntBufferName[] = "adstack_heap_int_buffer";
 constexpr char kAdStackMetadataBufferName[] = "adstack_metadata_buffer";
@@ -68,6 +69,8 @@ std::string buffer_instance_name(BufferInfo b) {
       return kAdStackRowCounterBufferName;
     case BufferType::AdStackBoundRowCapacity:
       return kAdStackBoundRowCapacityBufferName;
+    case BufferType::AdStackTaskRegistryId:
+      return kAdStackTaskRegistryIdBufferName;
     case BufferType::AdStackHeapFloat:
       return kAdStackHeapFloatBufferName;
     case BufferType::AdStackHeapInt:
@@ -2679,7 +2682,12 @@ spirv::Value TaskCodegen::ensure_any_overflow_signal_var() {
 // HOST_VISIBLE | HOST_COHERENT), so the host polls slot 0 directly without any DtoH or sync drain. No-op
 // when the task has no adstack push sites (the var is unallocated).
 void TaskCodegen::emit_adstack_task_end_overflow_check() {
-  if (any_overflow_signal_var_.id == 0) {
+  // Skip the entire emit (including the AdStackOverflow / AdStackTaskRegistryId buffer accesses) when
+  // the task body never visited an `AdStackPushStmt`. Forward-only tasks would otherwise force the
+  // launcher's bind path to wire AdStackTaskRegistryId for kernels where
+  // `publish_adstack_metadata_spirv` never allocated the buffer (no task in the kernel has adstacks),
+  // crashing Metal's `rw_buffer` device-equality assertion on the kDeviceNullAllocation fallback.
+  if (!task_has_adstack_push_ || any_overflow_signal_var_.id == 0) {
     return;
   }
   spirv::Value zero = ir_->uint_immediate_number(ir_->u32_type(), 0);
@@ -2692,11 +2700,27 @@ void TaskCodegen::emit_adstack_task_end_overflow_check() {
   ir_->start_label(then_label);
   {
     spirv::Value overflow_buffer = get_buffer_value(BufferType::AdStackOverflow, PrimitiveType::u32);
-    spirv::Value overflow_ptr =
+    spirv::Value overflow_signal_ptr =
         ir_->struct_array_access(ir_->u32_type(), overflow_buffer, ir_->uint_immediate_number(ir_->i32_type(), 0));
-    ir_->make_value(spv::OpAtomicUMax, ir_->u32_type(), overflow_ptr,
+    ir_->make_value(spv::OpAtomicUMax, ir_->u32_type(), overflow_signal_ptr,
                     /*scope=*/ir_->const_i32_one_,
                     /*semantics=*/ir_->const_i32_zero_, cur);
+    // Record the offending task's `Program::adstack_sizing_info_registry_` id into slot 1 via
+    // `cmpxchg(0, registry_id)`. The launcher pre-writes the registry id into
+    // `AdStackTaskRegistryId[task_id_in_kernel]` per task; the codegen reads that slot at the
+    // task-end emit and atomically swaps it into AdStackOverflow[1] when the latter is still 0
+    // (i.e. this is the FIRST overflowing thread across all tasks in the dispatch). The host
+    // raise site reads slot 1 and routes through `Program::diagnose_adstack_overflow_message` to
+    // produce a kernel-name + offload-task-index identity block.
+    spirv::Value task_registry_buffer = get_buffer_value(BufferType::AdStackTaskRegistryId, PrimitiveType::u32);
+    spirv::Value task_registry_ptr = ir_->struct_array_access(
+        ir_->u32_type(), task_registry_buffer, ir_->uint_immediate_number(ir_->i32_type(), task_id_in_kernel_));
+    spirv::Value registry_id = ir_->load_variable(task_registry_ptr, ir_->u32_type());
+    spirv::Value overflow_task_id_ptr =
+        ir_->struct_array_access(ir_->u32_type(), overflow_buffer, ir_->uint_immediate_number(ir_->i32_type(), 1));
+    ir_->make_value(spv::OpAtomicCompareExchange, ir_->u32_type(), overflow_task_id_ptr,
+                    /*scope=*/ir_->const_i32_one_, /*sem_eq=*/ir_->const_i32_zero_,
+                    /*sem_neq=*/ir_->const_i32_zero_, registry_id, /*comparator=*/zero);
     ir_->make_inst(spv::OpBranch, merge_label);
   }
   ir_->start_label(merge_label);
@@ -2829,6 +2853,7 @@ spirv::SType TaskCodegen::ad_stack_backing_type(const AdStackSpirv &info) const 
 }
 
 void TaskCodegen::visit(AdStackPushStmt *stmt) {
+  task_has_adstack_push_ = true;
   auto &info = ad_stacks_.at(stmt->stack);
   ensure_ad_stack_metadata_loaded(info);
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());

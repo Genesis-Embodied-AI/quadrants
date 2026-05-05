@@ -59,6 +59,16 @@ struct TaskAttributes {
     // internal bug, not user-recoverable), and `synchronize()` surfaces it as a clear actionable error rather than
     // letting it silently corrupt gradients via OOB writes.
     AdStackBoundRowCapacity,
+    // Per-kernel StorageBuffer holding the `Program::adstack_sizing_info_registry_` id per task
+    // (`uint[num_tasks_in_kernel]`). Populated by the SPIR-V launcher in
+    // `GfxRuntime::publish_adstack_metadata_spirv` immediately after registering each adstack-bearing
+    // task with the Program-side identity registry; slot `task_id_in_kernel` carries the registry id
+    // for that task (0 for tasks without adstacks). The codegen task-end emit reads slot
+    // `task_id_in_kernel` and `OpAtomicCompareExchange`'s it into `AdStackOverflow[1]` on overflow,
+    // recording the FIRST overflowing task's registry id for the host raise site to look up
+    // kernel name + offload task index in its diagnostic message. Allocated and grown on demand
+    // following the same pattern as `AdStackBoundRowCapacity`.
+    AdStackTaskRegistryId,
   };
 
   struct BufferInfo {

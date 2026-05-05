@@ -205,6 +205,41 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     mutable_attribs.registry_id = id;
   }
 
+  // Populate the per-task `BufferType::AdStackTaskRegistryId` buffer with the registry id assigned in
+  // the loop above. The codegen task-end overflow check reads slot `task_id_in_kernel_` and
+  // `OpAtomicCompareExchange`'s it into `AdStackOverflow[1]` when the latter is still 0 (the FIRST
+  // overflowing task across the dispatch records its identity). Slots for forward-only tasks default
+  // to 0; the codegen short-circuits the cmpxchg when the loaded id is 0 anyway, but the explicit fill
+  // keeps the buffer deterministic across launches and survives the offline-cache reload path.
+  // Allocation policy mirrors `adstack_bound_row_capacity_buffer_` in
+  // `adstack_bound_reducer_launch.cpp`: `host_write=true` SSBO, grow on amortised doubling, displaced
+  // buffer parked in `ctx_buffers_` for in-flight cmdlist safety.
+  {
+    const size_t needed_bytes = std::max<size_t>(task_attribs.size(), 1) * sizeof(uint32_t);
+    if (!adstack_task_registry_id_buffer_ || adstack_task_registry_id_buffer_size_ < needed_bytes) {
+      size_t new_size = std::max(needed_bytes, 2 * adstack_task_registry_id_buffer_size_);
+      auto [buf, res] = device_->allocate_memory_unique({new_size,
+                                                         /*host_write=*/true,
+                                                         /*host_read=*/false,
+                                                         /*export_sharing=*/false, AllocUsage::Storage});
+      QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack task registry id buffer (size={})",
+                     new_size);
+      if (adstack_task_registry_id_buffer_) {
+        ctx_buffers_.push_back(std::move(adstack_task_registry_id_buffer_));
+      }
+      adstack_task_registry_id_buffer_ = std::move(buf);
+      adstack_task_registry_id_buffer_size_ = new_size;
+    }
+    void *mapped = nullptr;
+    RhiResult map_res = device_->map_range(adstack_task_registry_id_buffer_->get_ptr(0), needed_bytes, &mapped);
+    QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack task registry id buffer");
+    uint32_t *slots = reinterpret_cast<uint32_t *>(mapped);
+    for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
+      slots[ti] = task_attribs[ti].ad_stack.registry_id;
+    }
+    device_->unmap(*adstack_task_registry_id_buffer_);
+  }
+
   // Fast path: when no SizeExpr in any adstack-bearing task contains an `ExternalTensorRead` leaf, every
   // capacity bound is host-resolvable through `evaluate_adstack_size_expr`, and the entire GPU sizer pipeline
   // (sizer-bytecode upload, per-task metadata-buffer alloc, `flush()` + `device_->wait_idle()` to force PSB
