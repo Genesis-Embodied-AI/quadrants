@@ -153,26 +153,20 @@ The agent reports up to 5 violations, each annotated with the host file's hotnes
 
 ### PR change report (`pr_change_report.yml`)
 
-Posts a fresh PR comment on every push pointing at a GitHub Check whose page contains a per-file / per-function breakdown of code-line additions and removals. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal — i.e. docstrings and continuation lines of multi-line strings. C/C++ `/* … */` block comments are stripped before counting.
+Posts a fresh PR comment on every push consisting of a single line — the totals (file count, code lines added, code lines removed) formatted as a markdown link to a GitHub Check whose page contains the full per-file / per-function breakdown. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal — i.e. docstrings and continuation lines of multi-line strings. C/C++ `/* … */` block comments are stripped before counting.
 
-Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR) and an `Existing:` group (modified or deleted), and within each group sorted by added lines descending. Sample shape:
+The number columns on the Check page (without a `+` or `-` sign) are code-line counts in the BASE (pre-PR) version: file size before this PR (0 for newly-added files), function body size before this PR (0 for new functions; original body size for deleted functions). `+<n>` / `-<n>` are code lines added / removed by this PR.
+
+Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR), an `Existing:` group (modified by this PR), and a `Deleted:` group (removed by this PR), and within each group sorted by added lines descending, then removed lines descending. Sample shape:
 
 ```
-quadrants/program/program_stream.cpp 151 +151
+src/lib.py 12 +8 -4
     New:
-      StreamManager::create_event()             NEW      +18
-      StreamManager::create_stream()            NEW      +18
-      StreamManager::record_event()             NEW      +15
-      StreamManager::destroy_event()            NEW      +13
-      StreamManager::destroy_stream()           NEW      +13
-
-python/quadrants/lang/stream.py 111 +111
-    New:
-      Event.destroy()              NEW       +9
-      Stream.destroy()             NEW       +9
-      Event._destroy_prog()        NEW       +8
-      Stream._destroy_prog()       NEW       +8
-      Event.__del__()              NEW       +7
+      brand_new()       0       +4
+    Existing:
+      to_modify()       5       +3       -1
+    Deleted:
+      to_delete()       3                -3
 ```
 
 This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
