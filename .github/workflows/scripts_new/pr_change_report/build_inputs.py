@@ -12,12 +12,12 @@ For each source file changed in the PR (.py / .c / .cc / .cpp / .h / .hpp / .cu)
   ``<output_dir>/head/<path>``         HEAD content of the file (always present)
   ``<output_dir>/base/<path>``         file content at merge-base (absent for newly added files)
 
-``total`` is the number of code lines in the BASE (pre-PR, merge-base) version of the file -- the
-size of the file before this PR's changes. For newly-added files this is 0. ``added`` and
+``total`` is the number of code lines in the BASE (pre-PR, merge-base) version of the file, i.e.
+the size of the file before this PR's changes. For newly-added files this is 0. ``added`` and
 ``removed`` are the number of code lines added or removed by this PR (vs. merge-base). A "code
 line" excludes blank lines, lines whose only non-whitespace content is a comment, and (in Python)
-lines whose only token content is a string literal -- i.e. docstrings and continuation lines of
-multi-line strings. C/C++ ``/* ... */`` block comments are stripped before counting.
+lines whose only token content is a string literal (i.e. docstrings and continuation lines of
+multi-line strings). C/C++ ``/* ... */`` block comments are stripped before counting.
 
 The agent consumes these inputs to produce the per-function breakdown.
 """

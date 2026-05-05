@@ -157,7 +157,7 @@ def _build_file_bookkeeping(summary: dict, output_dir: Path) -> _FileBookkeeping
 def _attribute_function(entry: _FunctionEntry, book: _FileBookkeeping) -> tuple[int, int, int, bool, bool]:
     """Return ``(total, added, removed, is_new, is_deleted)`` for a single function entry.
 
-    ``total`` is the number of code lines in the function's BASE (pre-PR) body -- i.e. how big
+    ``total`` is the number of code lines in the function's BASE (pre-PR) body, i.e. how big
     this function was before this PR. For NEW functions (no base body) this is 0. ``added`` /
     ``removed`` are the number of ``+`` / ``-`` diff lines that fall inside the function's
     HEAD / base range AND are themselves code lines (excluding comments / blank lines / Python
