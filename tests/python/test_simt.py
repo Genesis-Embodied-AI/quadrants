@@ -513,6 +513,35 @@ def test_grid_memfence():
         assert a[i] == i + 1
 
 
+# Regression test for GH #636: `qd.simt.block.mem_sync()` on CUDA used to map to
+# `block_barrier` (== `__syncthreads()`), so calling it from a divergent branch
+# (e.g. `if tid == 0`) deadlocked the GPU. The correct mapping is a block-scope
+# memory fence (`__threadfence_block()` / `nvvm_membar_cta`), which has no
+# thread-convergence requirement and so is safe inside divergent control flow.
+@test_utils.test(arch=qd.cuda)
+def test_block_mem_sync_in_divergent_branch():
+    BLOCK_SIZE = 32
+    a = qd.field(dtype=qd.i32, shape=BLOCK_SIZE)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=BLOCK_SIZE)
+        for i in range(BLOCK_SIZE):
+            tid = i % BLOCK_SIZE
+            if tid == 0:
+                # Single-thread fence: must NOT require all threads in the block
+                # to converge here, otherwise the kernel deadlocks on the
+                # following block-wide barrier.
+                qd.simt.block.mem_sync()
+            qd.simt.block.sync()
+            a[i] = tid
+
+    foo()
+
+    for i in range(BLOCK_SIZE):
+        assert a[i] == i
+
+
 # The old SPIR-V-only no-arg subgroup reductions (`subgroup.reduce_add` / `reduce_mul` / `reduce_min`
 # / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`) and their Vulkan-specific tests have
 # been removed.  See `test_subgroup_reduce_add` / `test_subgroup_reduce_all_add` below for the
