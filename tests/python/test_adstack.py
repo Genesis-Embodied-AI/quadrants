@@ -4873,7 +4873,7 @@ def test_max_reducer_grammar_fallback():
         assert x.grad[i] == pytest.approx(expected, rel=1e-5)
 
 
-@test_utils.test(arch=[qd.cpu, qd.vulkan, qd.metal], require=qd.extension.adstack, cfg_optimization=False)
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_above_cap_out_of_grammar_kernel_raises():
     # A reverse-mode kernel whose inner `range(...)` trip count is bound to an out-of-grammar `MaxOverRange` body and
     # whose iteration count exceeds the `1<<24` adstack-sizer cap surfaces a `QuadrantsAssertionError` at `qd.sync()`.
@@ -4888,8 +4888,7 @@ def test_above_cap_out_of_grammar_kernel_raises():
     # single-thread on-device dispatch stays within the driver's TDR window; the cap-hit then surfaces indirectly
     # via the existing `stack_push` overflow infrastructure on a subsequent main-kernel launch, and the resulting
     # diagnostic message attribution depends on the kernel layout. That indirect path is covered by
-    # `test_adstack_overflow_diagnostic_and_auto_recovery`, so this test pins the explicit device-sizer tripwires
-    # only.
+    # `test_adstack_overflow_diagnostic_and_auto_recovery`.
     N_X = 4
     shape = (1 << 24) + 1
     a_data = np.zeros((shape, 2), dtype=np.int32)
