@@ -896,13 +896,6 @@ struct DeviceEvalScope {
   // device code, so a buggy tree is caught through wrong max_size values and an overflow at `stack_push` rather
   // than a fatal trap here.
   i64 values[kDeviceBoundVarCap];
-  // Sticky flag set by `device_eval_node`'s `kMaxOverRange` arm when a non-recognized shape exceeds the
-  // `1<<24` iteration cap. The runtime function (`runtime_eval_adstack_size_expr` /
-  // `runtime_eval_adstack_max_reduce`) inspects this after the walk completes and forwards the bit into
-  // `runtime->adstack_overflow_flag_dev_ptr` (the shared pinned-host overflow slot) so the host's per-launch
-  // poll catches the cap-hit at the next `qd.sync()` and routes through `diagnose_adstack_overflow_message`.
-  // Initialised to 0 by every fresh `DeviceEvalScope`; never reset by the interpreter.
-  i32 overflow_observed;
 };
 
 i64 device_load_element(const char *data_ptr, i64 linear, i32 prim_dt) {
@@ -965,18 +958,11 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
       i64 end = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
       // Iteration guard. Recognized `MaxOverRange` shapes are dispatched in parallel by the max-reducer and
       // substituted to a `Const` before the sizer interpreter walks the tree, so the only way to land in this
-      // branch with a delta above the cap is an out-of-grammar shape. The cap-hit signals through the scope's
-      // `overflow_observed` slot; the caller (`runtime_eval_adstack_size_expr` / `runtime_eval_adstack_max_reduce`)
-      // forwards the bit into `runtime->adstack_overflow_flag_dev_ptr` after the walk, and the host's per-launch
-      // poll raises a `QuadrantsAssertionError` at the next `qd.sync()` via the diagnose path. Matches the host
-      // evaluator's `QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node`.
+      // branch with a delta above the cap is an out-of-grammar shape. Skip the walk and return 0 to keep the
+      // single-thread on-device dispatch within the driver's TDR window; the host's `evaluate_node` re-runs
+      // the same tree synchronously during the diagnose path and raises via its `QD_ERROR_IF` then.
       constexpr i64 kMaxOverRangeIterations = i64{1} << 24;
-      if (end > begin && end - begin > kMaxOverRangeIterations && scope != nullptr) {
-        // Cap-hit: skip the walk entirely (running 16M iterations of body interpretation on a single GPU thread
-        // would trip the driver TDR before the host's overflow-flag poll runs). The cached `max_size` falls
-        // through to its compile-time floor; the host's post-launch poll picks up the flag and raises before the
-        // main kernel launches.
-        scope->overflow_observed = 1;
+      if (end > begin && end - begin > kMaxOverRangeIterations) {
         return 0;
       }
       i64 result = 0;
@@ -1229,7 +1215,6 @@ void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime, RuntimeContext *ctx, 
   for (i32 k = 0; k < kDeviceBoundVarCap; ++k) {
     scope.values[k] = 0;
   }
-  scope.overflow_observed = 0;
 
   // Sentinel start: INT64_MIN so the first body value always wins over an empty `length == 0` slot. Caller normalises
   // the empty case (writes 0 / floors at compile-time) when reading the slot back.
@@ -1249,13 +1234,6 @@ void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime, RuntimeContext *ctx, 
     }
   }
   runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
-  // Forward an in-walk cap-hit into the shared overflow flag pinned-host slot. The host's per-launch poll
-  // raises a `QuadrantsAssertionError` at the next `qd.sync()` and routes through the diagnose path. The cap is
-  // structurally unreachable for max-reducer-recognized shapes (those are pure parallel walks at any length); the
-  // signal here keeps the contract uniform across all three eval paths.
-  if (scope.overflow_observed != 0 && runtime->adstack_overflow_flag_dev_ptr != nullptr) {
-    __atomic_store_n(runtime->adstack_overflow_flag_dev_ptr, (i64)1, __ATOMIC_RELAXED);
-  }
 }
 
 void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr bytecode) {
@@ -1288,7 +1266,6 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
   DeviceEvalScope scope;
   for (i32 k = 0; k < kDeviceBoundVarCap; ++k)
     scope.values[k] = 0;
-  scope.overflow_observed = 0;
 
   // Per-kind running offsets for the unconditional split-heap codegen path. Float allocas address via `row_id_var *
   // stride_float + float_offset_within_float_slice`; int / u1 allocas address via `linear_tid * stride_int +
@@ -1339,14 +1316,6 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
   runtime->adstack_per_thread_stride = running_offset_int;
   runtime->adstack_per_thread_stride_float = running_offset_float;
   runtime->adstack_per_thread_stride_int = running_offset_int;
-  // Forward an in-walk cap-hit on a non-recognized `MaxOverRange` shape into the shared overflow flag pinned-host
-  // slot. The host's per-launch poll raises a `QuadrantsAssertionError` at the next `qd.sync()` and routes through
-  // the diagnose path. Recognized shapes are dispatched in parallel and substituted as `Const` before the sizer
-  // walks the tree, so this path is reachable only for out-of-grammar shapes - the same ones the host evaluator's
-  // `QD_ERROR_IF` in `evaluate_node` raises on.
-  if (scope.overflow_observed != 0 && runtime->adstack_overflow_flag_dev_ptr != nullptr) {
-    __atomic_store_n(runtime->adstack_overflow_flag_dev_ptr, (i64)1, __ATOMIC_RELAXED);
-  }
 }
 
 void runtime_retrieve_and_reset_error_code(LLVMRuntime *runtime) {
