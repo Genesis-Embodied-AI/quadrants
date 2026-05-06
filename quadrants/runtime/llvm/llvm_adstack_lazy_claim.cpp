@@ -38,7 +38,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/ir/static_adstack_bound_reducer_device.h"
+#include "quadrants/ir/static_adstack_max_reducer_device.h"
 #include "quadrants/ir/stmt_op_types.h"
 #include "quadrants/ir/type_factory.h"
 #include "quadrants/program/launch_context_builder.h"
@@ -403,6 +405,240 @@ void LlvmRuntimeExecutor::ensure_adstack_heap_int(std::size_t needed_bytes) {
 
   adstack_heap_alloc_int_ = std::move(new_guard);
   adstack_heap_size_int_ = new_size;
+}
+
+std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers_for_tasks(
+    const std::vector<AdStackSizingInfo> &ad_stacks,
+    LaunchContextBuilder *ctx,
+    void *device_runtime_context_ptr) {
+  using quadrants::lang::AdStackSizeExprDeviceNode;
+  using quadrants::lang::EncodedMaxReducerBody;
+  using quadrants::lang::LlvmAdStackMaxReducerDeviceParams;
+  using quadrants::lang::MaxReducerResultMap;
+
+  // Reset the per-launch transient before every dispatch so a kernel with no captured specs sees an empty map.
+  current_max_reducer_results_.clear();
+  MaxReducerResultMap result;
+  if (ctx == nullptr || ctx->args_type == nullptr) {
+    return result;
+  }
+  Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
+  AdStackCache *cache = (prog != nullptr) ? &prog->adstack_cache() : nullptr;
+
+  // First pass: per-spec cache lookup. Hits drop straight into the result map; misses queue up host-resolved begin /
+  // end + encoded body bytecode for the dispatch loop. Mirrors the gfx variant's two-phase structure so the cache
+  // hit path stays free of any device traffic.
+  struct PendingMaxReducerDispatch {
+    uint64_t cache_key;
+    uint32_t registry_id;
+    int32_t stack_id;
+    int32_t mor_node_idx;
+    LlvmAdStackMaxReducerDeviceParams params;
+    std::vector<uint8_t> body_bytecode;
+    std::vector<AdStackCache::SizeExprReadObservation> reads;
+  };
+  std::vector<PendingMaxReducerDispatch> pending;
+  for (std::size_t ti = 0; ti < ad_stacks.size(); ++ti) {
+    const auto &ad_stack = ad_stacks[ti];
+    if (ad_stack.max_reducer_specs.empty()) {
+      continue;
+    }
+    // The LLVM `AdStackSizingInfo::registry_id` is populated by codegen at finalize-time; if for some reason it
+    // is still 0 (unregistered task), skip - the spec cannot be cache-keyed reliably without a stable id.
+    const uint32_t registry_id = ad_stack.registry_id;
+    if (registry_id == 0) {
+      continue;
+    }
+    for (const auto &spec : ad_stack.max_reducer_specs) {
+      const uint64_t key = (static_cast<uint64_t>(registry_id) & 0xFFFFFFFFull) |
+                           ((static_cast<uint64_t>(spec.stack_id) & 0xFFFFull) << 32) |
+                           ((static_cast<uint64_t>(spec.mor_node_idx) & 0xFFFFull) << 48);
+      if (cache != nullptr) {
+        int64_t cached;
+        if (cache->try_max_reducer_cache_hit(registry_id, spec.stack_id, spec.mor_node_idx, ctx, cached)) {
+          result[key] = cached;
+          continue;
+        }
+      }
+      const SerializedSizeExpr &expr = ad_stack.size_exprs[spec.stack_id];
+      const int64_t begin_val = evaluate_adstack_size_expr_at_node(expr, spec.begin_node_idx, prog, ctx);
+      const int64_t end_val = evaluate_adstack_size_expr_at_node(expr, spec.end_node_idx, prog, ctx);
+      if (begin_val < 0 || end_val < 0 || end_val <= begin_val) {
+        continue;
+      }
+      const int64_t length_i64 = end_val - begin_val;
+      if (length_i64 > std::numeric_limits<uint32_t>::max()) {
+        continue;
+      }
+      auto arg_buffer_offset_resolver = [&](const std::vector<int32_t> &arg_id_path) -> int32_t {
+        std::vector<int> path(arg_id_path.begin(), arg_id_path.end());
+        path.push_back(TypeFactory::DATA_PTR_POS_IN_NDARRAY);
+        const std::size_t byte_off = ctx->args_type->get_element_offset(path);
+        if (byte_off > std::numeric_limits<int32_t>::max()) {
+          return -1;
+        }
+        return static_cast<int32_t>(byte_off);
+      };
+      EncodedMaxReducerBody encoded =
+          encode_max_reducer_body_bytecode(expr, spec.body_node_idx, spec.var_id, arg_buffer_offset_resolver);
+      if (encoded.body_node_count == 0) {
+        continue;
+      }
+      PendingMaxReducerDispatch p{};
+      p.cache_key = key;
+      p.registry_id = registry_id;
+      p.stack_id = spec.stack_id;
+      p.mor_node_idx = spec.mor_node_idx;
+      p.params.output_slot = 0;  // assigned per pending below
+      p.params.length = static_cast<uint32_t>(length_i64);
+      p.params.begin = begin_val;
+      p.params.body_node_count = encoded.body_node_count;
+      p.params.body_root_node_idx = static_cast<int32_t>(encoded.body_node_count) - 1;
+      p.params.var_id = 0;  // device-side scope holds the bound var at slot 0 (renumbered by the encoder)
+      p.body_bytecode = std::move(encoded.bytes);
+      p.reads = std::move(encoded.body_reads);
+      pending.push_back(std::move(p));
+    }
+  }
+  if (pending.empty()) {
+    return result;
+  }
+
+  // Lazy-resolve the runtime-field address for `adstack_max_reducer_outputs` once per program lifetime.
+  if (runtime_adstack_max_reducer_outputs_field_ptr_ == nullptr) {
+    auto *const runtime_jit = get_runtime_jit_module();
+    runtime_jit->call<void *>("runtime_get_adstack_max_reducer_field_ptr", llvm_runtime_);
+    runtime_adstack_max_reducer_outputs_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
+  }
+
+  auto copy_h2d = [&](void *dst, const void *src, std::size_t bytes) {
+    if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+      CUDADriver::get_instance().memcpy_host_to_device(dst, const_cast<void *>(src), bytes);
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+      AMDGPUDriver::get_instance().memcpy_host_to_device(dst, const_cast<void *>(src), bytes);
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else {
+      std::memcpy(dst, src, bytes);
+    }
+  };
+  auto copy_d2h = [&](void *dst, const void *src, std::size_t bytes) {
+    if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+      CUDADriver::get_instance().memcpy_device_to_host(dst, const_cast<void *>(src), bytes);
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+      AMDGPUDriver::get_instance().memcpy_device_to_host(dst, const_cast<void *>(src), bytes);
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else {
+      std::memcpy(dst, src, bytes);
+    }
+  };
+
+  // Lazy-grow the output buffer to fit `pending.size()` i64 slots. Reused across launches; amortised doubling.
+  const std::size_t needed_output_bytes = pending.size() * sizeof(int64_t);
+  if (needed_output_bytes > adstack_max_reducer_outputs_capacity_) {
+    Device::AllocParams alloc_params{};
+    alloc_params.size = std::max<std::size_t>(needed_output_bytes, 2 * adstack_max_reducer_outputs_capacity_);
+    alloc_params.host_read = false;
+    alloc_params.host_write = true;
+    alloc_params.export_sharing = false;
+    alloc_params.usage = AllocUsage::Storage;
+    DeviceAllocation new_alloc;
+    RhiResult res = llvm_device()->allocate_memory(alloc_params, &new_alloc);
+    QD_ERROR_IF(res != RhiResult::success,
+                "Failed to allocate {} bytes for adstack max reducer outputs buffer (err: {})", alloc_params.size,
+                int(res));
+    adstack_max_reducer_outputs_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+    adstack_max_reducer_outputs_capacity_ = alloc_params.size;
+  }
+  void *outputs_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_outputs_alloc_);
+  // Publish the (possibly grown) buffer pointer into `runtime->adstack_max_reducer_outputs`.
+  copy_h2d(runtime_adstack_max_reducer_outputs_field_ptr_, &outputs_dev_ptr, sizeof(void *));
+
+  // Per-pending dispatch: assign `output_slot`, h2d the params + body bytecode into the lazy-grow scratch buffers,
+  // invoke the runtime function. The runtime function is single-threaded on every backend; on CUDA / AMDGPU the
+  // JIT module launches it as a single-thread kernel, on CPU it's a direct host call.
+  auto *const runtime_jit = get_runtime_jit_module();
+  void *runtime_context_ptr_for_reducer =
+      device_runtime_context_ptr != nullptr ? device_runtime_context_ptr : static_cast<void *>(&ctx->get_context());
+  for (std::size_t k = 0; k < pending.size(); ++k) {
+    pending[k].params.output_slot = static_cast<uint32_t>(k);
+    // Params buffer.
+    const std::size_t needed_params_bytes = sizeof(LlvmAdStackMaxReducerDeviceParams);
+    if (needed_params_bytes > adstack_max_reducer_params_capacity_) {
+      Device::AllocParams alloc_params{};
+      alloc_params.size = std::max<std::size_t>(needed_params_bytes, 2 * adstack_max_reducer_params_capacity_);
+      alloc_params.host_read = false;
+      alloc_params.host_write = true;
+      alloc_params.export_sharing = false;
+      alloc_params.usage = AllocUsage::Storage;
+      DeviceAllocation new_alloc;
+      RhiResult res = llvm_device()->allocate_memory(alloc_params, &new_alloc);
+      QD_ERROR_IF(res != RhiResult::success,
+                  "Failed to allocate {} bytes for adstack max reducer params buffer (err: {})", alloc_params.size,
+                  int(res));
+      adstack_max_reducer_params_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+      adstack_max_reducer_params_capacity_ = alloc_params.size;
+    }
+    void *params_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_params_alloc_);
+    copy_h2d(params_dev_ptr, &pending[k].params, needed_params_bytes);
+
+    // Body bytecode buffer.
+    const std::size_t needed_bytecode_bytes = pending[k].body_bytecode.size();
+    if (needed_bytecode_bytes > adstack_max_reducer_bytecode_capacity_) {
+      Device::AllocParams alloc_params{};
+      alloc_params.size = std::max<std::size_t>(needed_bytecode_bytes, 2 * adstack_max_reducer_bytecode_capacity_);
+      alloc_params.host_read = false;
+      alloc_params.host_write = true;
+      alloc_params.export_sharing = false;
+      alloc_params.usage = AllocUsage::Storage;
+      DeviceAllocation new_alloc;
+      RhiResult res = llvm_device()->allocate_memory(alloc_params, &new_alloc);
+      QD_ERROR_IF(res != RhiResult::success,
+                  "Failed to allocate {} bytes for adstack max reducer bytecode buffer (err: {})", alloc_params.size,
+                  int(res));
+      adstack_max_reducer_bytecode_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+      adstack_max_reducer_bytecode_capacity_ = alloc_params.size;
+    }
+    void *bytecode_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_bytecode_alloc_);
+    copy_h2d(bytecode_dev_ptr, pending[k].body_bytecode.data(), needed_bytecode_bytes);
+
+    runtime_jit->call<void *, void *, void *, void *>("runtime_eval_adstack_max_reduce", llvm_runtime_,
+                                                      runtime_context_ptr_for_reducer, params_dev_ptr,
+                                                      bytecode_dev_ptr);
+  }
+
+  // Read back the per-spec output slots. Single contiguous d2h.
+  std::vector<int64_t> outputs_host(pending.size(), 0);
+  copy_d2h(outputs_host.data(), outputs_dev_ptr, needed_output_bytes);
+  for (std::size_t k = 0; k < pending.size(); ++k) {
+    int64_t v = outputs_host[k];
+    if (v == std::numeric_limits<int64_t>::min()) {
+      v = 0;  // empty-range sentinel from the runtime function; normalise to zero
+    }
+    result[pending[k].cache_key] = v;
+    if (cache != nullptr) {
+      cache->record_max_reducer_eval(pending[k].registry_id, pending[k].stack_id, pending[k].mor_node_idx, v,
+                                     std::move(pending[k].reads));
+    }
+  }
+
+  // Stash the result map on the executor so `publish_adstack_metadata` reads it for substitution per task.
+  current_max_reducer_results_ = result;
+  return result;
 }
 
 void LlvmRuntimeExecutor::ensure_per_task_float_heap_post_reducer(std::size_t task_index,
@@ -1072,12 +1308,13 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     if (!llvm_metadata_cache_hit) {
       std::vector<uint8_t> bytecode;
       if (program_impl_ != nullptr && program_impl_->program != nullptr) {
-        bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, program_impl_->program, ctx);
+        bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, program_impl_->program, ctx,
+                                                            current_max_reducer_results_);
       } else {
         // No program attached (rare: C++-only tests that construct Program without a full runtime). Fall through
         // to compile-time bounds by emitting an empty-tree bytecode - the device interpreter sees
         // `root_node_idx == -1` for every stack and routes to `max_size_compile_time`.
-        bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, nullptr, ctx);
+        bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, nullptr, ctx, current_max_reducer_results_);
       }
       // Grow the scratch buffer if the bytecode outgrew the cached capacity. Amortised doubling keeps the
       // allocation traffic O(log max_bytecode_bytes) across a run.

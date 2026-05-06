@@ -124,10 +124,9 @@ void eval_per_task_metadata_on_host(const std::vector<size_t> &adstack_task_indi
         // Match the shader's `max(max_size_compile_time, 1)` lower clamp.
         max_size = std::max<uint32_t>(a.max_size_compile_time, 1u);
       } else {
-        // Stage 1.6 of the option-D plan: substitute any captured `MaxOverRange` whose result the max-reducer
-        // dispatched into a `Const` before the host evaluator walks the tree. When `max_reducer_results` is
-        // empty (no captured specs in this kernel) or no spec matches `(registry_id, i)`, the helper returns
-        // `expr` unchanged and the eval path is identical to before option D.
+        // Substitute any captured `MaxOverRange` whose result the max-reducer dispatched into a `Const` before the
+        // host evaluator walks the tree. When `max_reducer_results` is empty (no captured specs in this kernel) or no
+        // spec matches `(registry_id, i)`, the helper returns `expr` unchanged.
         const SerializedSizeExpr substituted = substitute_precomputed_max_over_range(
             a.size_expr, registry_id, static_cast<int32_t>(i), max_reducer_results);
         int64_t evaluated = evaluate_adstack_size_expr(substituted, prog, &host_ctx);

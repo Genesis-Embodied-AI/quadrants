@@ -177,7 +177,7 @@ class QD_DLL_EXPORT GfxRuntime {
       DeviceAllocationGuard *args_buffer,
       const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs);
 
-  // Option-D max-reducer dispatch (Stage 1.4). For each captured `StaticAdStackMaxReducerSpec` across every task
+  // Max-reducer dispatch. For each captured `StaticAdStackMaxReducerSpec` across every task
   // in `task_attribs`, hits `AdStackCache::try_max_reducer_cache_hit` first; on miss dispatches
   // `adstack_max_reducer_pipeline_` over `[0, length)` and atomic-SMaxes the body's per-thread result into the
   // shared output buffer. The returned map is keyed by `(registry_id, stack_id, mor_node_idx)` packed via the same
@@ -285,7 +285,7 @@ class QD_DLL_EXPORT GfxRuntime {
   // Metal / MoltenVK by the same RHI rule the slot-3 placeholder above guards against.
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_args_placeholder_buffer_;
 
-  // Option-D max-reducer (Stage 1.4) per-`GfxRuntime` plumbing. Built once on the first launch that contains a
+  // Max-reducer per-`GfxRuntime` plumbing. Built once on the first launch that contains a
   // task with non-empty `max_reducer_specs`, reused across every such launch afterwards. Null on backends without
   // `spirv_has_physical_storage_buffer + spirv_has_int64`; in that case the runtime falls back to the existing
   // capped path on the per-thread sizer eval (silent truncation at `1<<24` on the device sizer side; user-visible

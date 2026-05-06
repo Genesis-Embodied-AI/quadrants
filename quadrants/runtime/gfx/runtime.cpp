@@ -540,13 +540,12 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
                                  ti_kernel->ti_kernel_attribs().ctx_attribs.arr_access);
   }
 
-  // Option-D max-reducer dispatch (Stage 1.4). For each captured `MaxOverRange` whose body matches the Stage 1
-  // grammar, dispatches a generic parallel-max compute shader over the captured iteration range and writes the
-  // result into a per-spec slot. The returned map is consumed by the substitution helper inside the per-task
-  // sizer (host fast path) and the device sizer encoder (`encode_adstack_size_expr_device_bytecode_for_spirv`),
-  // collapsing each captured `MaxOverRange` to a `Const` BEFORE any of the three eval paths walks the tree. Empty
-  // map on cap-missing devices or kernels with no captured specs; the per-thread sizer then falls through to the
-  // existing capped path. Must precede `publish_adstack_metadata_spirv` so the substitution lands before the
+  // Max-reducer dispatch. For each captured `MaxOverRange` whose body matches the recognizer grammar, dispatches a
+  // generic parallel-max compute shader over the captured iteration range and writes the result into a per-spec slot.
+  // The returned map is consumed by the substitution helper inside the per-task sizer (host fast path) and the device
+  // sizer encoder (`encode_adstack_size_expr_device_bytecode_for_spirv`), collapsing each captured `MaxOverRange` to a
+  // `Const` before any eval path walks the tree. Empty map on kernels with no captured specs; the per-thread sizer
+  // then walks the tree as written. Must precede `publish_adstack_metadata_spirv` so the substitution lands before the
   // sizer's tree walk.
   const bool any_max_reducer_spec =
       std::any_of(task_attribs.begin(), task_attribs.end(),

@@ -846,10 +846,10 @@ void AdStackCache::record_size_expr_eval(const SerializedSizeExpr *expr_key,
 }
 
 namespace {
-// Pack a `(registry_id, stack_id, mor_node_idx)` triple into a single 64-bit map key. Stage 1 caps both `stack_id`
-// and `mor_node_idx` at O(10s) per task (per-task adstack count and per-stack node count are both small), well within
-// 16 bits each, so the packed encoding never collides. `registry_id` uses the full 32 bits since the program-side
-// registry can grow to thousands of entries across a long-running session.
+// Pack a `(registry_id, stack_id, mor_node_idx)` triple into a 64-bit map key. The recognizer caps both `stack_id` and
+// `mor_node_idx` at O(10s) per task (per-task adstack count and per-stack node count are both small), well within 16
+// bits each, so the packed encoding never collides. `registry_id` uses the full 32 bits since the program-side registry
+// can grow to thousands of entries across a long-running session.
 inline uint64_t pack_max_reducer_key(uint32_t registry_id, int32_t stack_id, int32_t mor_node_idx) {
   return (static_cast<uint64_t>(registry_id) & 0xFFFFFFFFull) | ((static_cast<uint64_t>(stack_id) & 0xFFFFull) << 32) |
          ((static_cast<uint64_t>(mor_node_idx) & 0xFFFFull) << 48);
@@ -1063,7 +1063,7 @@ int64_t evaluate_adstack_size_expr_at_node(const SerializedSizeExpr &expr,
   if (node_idx < 0 || static_cast<std::size_t>(node_idx) >= expr.nodes.size()) {
     return -1;
   }
-  // Stage 1 grammar guarantees the subtree at `node_idx` is closed (no outer-scope `BoundVariable` references),
+  // The recognizer grammar guarantees the subtree at `node_idx` is closed (no outer-scope `BoundVariable` references),
   // so an empty bound-vars map is sufficient. Read observations are not recorded - the caller (max-reducer
   // launcher) does its own observation tracking via `AdStackCache::record_max_reducer_eval` against the spec key,
   // not the per-`SerializedSizeExpr` key the cache uses for `evaluate_adstack_size_expr`.
@@ -1583,7 +1583,7 @@ const AdStackCache::DiagnoseLaunchSnapshot *AdStackCache::get_diagnose_snapshot(
 namespace {
 
 // True iff the body subtree rooted at `node_idx` references only `Const`, `ExternalTensorRead(arg,
-// [BoundVariable(expected_var_id)])`, and `Add` / `Sub` / `Mul` / `Max` of those (Stage 1 grammar of the
+// [BoundVariable(expected_var_id)])`, and `Add` / `Sub` / `Mul` / `Max` of those (The recognizer grammar of the
 // max-reducer plan). Single-axis ndarray reads only; the index slot must be exactly `-(expected_var_id + 1)`
 // per the `SerializedSizeExprNode::indices` encoding (negative entries reference an enclosing
 // `MaxOverRange`'s bound variable). Returns false on any out-of-grammar node.
@@ -1692,7 +1692,7 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
   if (body_node_idx < 0 || static_cast<std::size_t>(body_node_idx) >= expr.nodes.size()) {
     return out;
   }
-  // Post-order DFS to collect reachable node indices from `body_node_idx`. Stage 1 grammar guarantees no
+  // Post-order DFS to collect reachable node indices from `body_node_idx`. The recognizer grammar guarantees no
   // `kMaxOverRange` / `kFieldLoad` in the body subtree, so we only need to follow `operand_a` / `operand_b`
   // (binary ops) and `kExternalTensorRead` (no operands beyond indices). The resulting `post_order` vector is
   // sorted such that any node's operands precede the node itself.
@@ -1726,7 +1726,7 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
   // adstack sizer encoder uses.
   std::vector<int32_t> indices_table;
   // Build `AdStackSizeExprDeviceNode`s in post-order. We only emit fields the device interpreter reads for the
-  // Stage 1 grammar; unused fields stay at their default values.
+  // recognized grammar; unused fields stay at their default values.
   std::vector<AdStackSizeExprDeviceNode> device_nodes(post_order.size());
   for (std::size_t i = 0; i < post_order.size(); ++i) {
     const auto &src = expr.nodes[post_order[i]];
@@ -1752,10 +1752,10 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
           return EncodedMaxReducerBody{};  // resolver failed; signal empty result
         }
         dst.arg_buffer_offset = arg_buf_off;
-        // Indices table: emit `(idx_raw, elem_stride=1)` per axis. Stage 1 grammar restricts to single-axis reads
+        // Indices table: emit `(idx_raw, elem_stride=1)` per axis. The recognizer restricts to single-axis reads
         // indexed by the bound variable (encoded as `-(this_var_id + 1)` in the host tree); the device-side scope
-        // remaps that to slot 0, so we re-encode as `-1` (= `-(0 + 1)`). Element stride is 1 because the body's
-        // ndarray is treated as a flat 1D buffer; multi-axis support is future work.
+        // remaps that to slot 0, so we re-encode as `-1` (= `-(0 + 1)`). Element stride is 1 because the body's ndarray
+        // is treated as a flat 1D buffer; multi-axis support is future work.
         const int32_t indices_off = static_cast<int32_t>(indices_table.size());
         for (std::size_t a = 0; a < src.indices.size(); ++a) {
           int64_t raw = src.indices[a];
@@ -2049,18 +2049,30 @@ std::vector<uint8_t> encode_bytecode_common(std::vector<AdStackSizeExprDeviceSta
 
 std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizingInfo &ad_stack,
                                                               Program *prog,
-                                                              LaunchContextBuilder *ctx) {
+                                                              LaunchContextBuilder *ctx,
+                                                              const MaxReducerResultMap &max_reducer_results) {
   const std::size_t n_stacks = ad_stack.allocas.size();
   std::vector<AdStackSizeExprDeviceStackHeader> stack_headers(n_stacks);
   std::vector<const SerializedSizeExpr *> exprs(n_stacks, nullptr);
+  // Per-stack substituted trees: if the max-reducer dispatched a value for any
+  // captured `MaxOverRange`, swap it in as a `Const` BEFORE the device interpreter walks the tree. Storage owns
+  // the substituted copies so `exprs[i]` (a pointer) remains valid through `encode_bytecode_common`.
+  std::vector<SerializedSizeExpr> substituted_storage(n_stacks);
   for (std::size_t i = 0; i < n_stacks; ++i) {
     stack_headers[i].entry_size_bytes = static_cast<uint32_t>(ad_stack.allocas[i].entry_size_bytes);
     stack_headers[i].max_size_compile_time = static_cast<uint32_t>(ad_stack.allocas[i].max_size_compile_time);
     // Float allocas land on the lazy float heap, int allocas on the eager int heap. The encoding (`0` = float, `1` =
     // int) matches the SPIR-V `AdStackHeapKind` so the offline-cache bytecode survives a backend swap.
     stack_headers[i].heap_kind = (ad_stack.allocas[i].heap_kind == AdStackAllocaInfo::HeapKind::Float) ? 0u : 1u;
-    if (i < ad_stack.size_exprs.size())
-      exprs[i] = &ad_stack.size_exprs[i];
+    if (i < ad_stack.size_exprs.size()) {
+      if (!max_reducer_results.empty()) {
+        substituted_storage[i] = substitute_precomputed_max_over_range(ad_stack.size_exprs[i], ad_stack.registry_id,
+                                                                       static_cast<int32_t>(i), max_reducer_results);
+        exprs[i] = &substituted_storage[i];
+      } else {
+        exprs[i] = &ad_stack.size_exprs[i];
+      }
+    }
   }
   // LLVM path: default-constructed emitter routes every FieldLoad through the host-fold (via `read_int`). That
   // is safe on CPU / CUDA / AMDGPU where a nested accessor kernel launch does not conflict with the enclosing
@@ -2142,7 +2154,7 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
   const std::size_t n_stacks = ad_stack.allocas.size();
   std::vector<AdStackSizeExprDeviceStackHeader> stack_headers(n_stacks);
   std::vector<const SerializedSizeExpr *> exprs(n_stacks, nullptr);
-  // Per-stack substituted trees. Stage 1.6 of the option-D plan: when the max-reducer dispatched a value for
+  // Per-stack substituted trees. when the max-reducer dispatched a value for
   // a captured `MaxOverRange` node, substitute it as a `Const` BEFORE the device sizer encoder walks the tree.
   // Storage owns the substituted copies so `exprs[i]` (a pointer) stays valid through `encode_bytecode_common`.
   std::vector<SerializedSizeExpr> substituted_storage(n_stacks);

@@ -1,4 +1,4 @@
-// Device-side parameter blob for the LLVM static-adstack max reducer (option D, Stage 1.3). The host
+// Device-side parameter blob for the LLVM static-adstack max reducer. The host
 // (`LlvmRuntimeExecutor`) fills this struct on each launch with one captured `StaticAdStackMaxReducerSpec`'s
 // dispatch parameters, memcpys it (plus the body bytecode trailing blob) into a small device buffer, and calls
 // `runtime_eval_adstack_max_reduce(runtime, ctx, params_blob, body_bytecode)` as a single-thread serial function
@@ -42,9 +42,9 @@ struct LlvmAdStackMaxReducerDeviceParams {
   // `body_root_node_idx == body_node_count - 1`). Cached here so the runtime function does not need to subtract.
   int32_t body_root_node_idx;
   // Bound-variable id this spec's `MaxOverRange` introduced. The runtime function pre-populates
-  // `scope.values[var_id] = begin + i` before each iteration; any body leaf encoded as `-(var_id + 1)` resolves to
-  // that value via the existing `device_eval_node` path. Stage 1 grammar guarantees a single bound variable per spec,
-  // so a single scope slot suffices.
+  // `scope.values[var_id] = begin + i` before each iteration; any body leaf encoded as `-(var_id + 1)` resolves to that
+  // value via the existing `device_eval_node` path. The recognizer guarantees a single bound variable per spec, so a
+  // single scope slot suffices.
   int32_t var_id;
   // Padding to keep the struct aligned to 8 bytes. Future stages may use this for additional flags (e.g. body dtype
   // when the encoder ever needs to widen beyond i64-as-internal).

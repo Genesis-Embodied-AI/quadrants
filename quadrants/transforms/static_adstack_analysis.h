@@ -131,8 +131,8 @@ struct StaticAdStackBoundExpr {
             loop_iter_size_expr);
 };
 
-// Captured `MaxOverRange` reducible by a dedicated parallel max-reducer dispatch at launch time. Stage 1 grammar
-// (option-D plan): `MaxOverRange(begin, end, body)` where `begin` and `end` evaluate to closed-form scalars after
+// Captured `MaxOverRange` reducible by a dedicated parallel max-reducer dispatch at launch time. The recognized grammar
+// `MaxOverRange(begin, end, body)` where `begin` and `end` evaluate to closed-form scalars after
 // recursive substitution of any deeper captured `MaxOverRange`s, and `body` is integer-typed arithmetic
 // (`Const`, `ExternalTensorRead(arg, [BoundVar(this_var)])`, `Add` / `Sub` / `Mul` / `Max` of those). The runtime
 // dispatches one reducer per spec in dependency order (deepest first); the per-launch result is substituted as a
@@ -149,8 +149,8 @@ struct StaticAdStackMaxReducerSpec {
   // dispatch time (after recursive substitution); the runtime walks them via `evaluate_adstack_size_expr`.
   int32_t begin_node_idx{-1};
   int32_t end_node_idx{-1};
-  // Body subtree root. Walked at launch time to extract the arg-id paths the reducer reads from. Stage 1 keeps the
-  // body tree itself in the captured spec so the runtime can evaluate Const/Sub/Add/Mul/Max combinations of
+  // Body subtree root. Walked at launch time to extract the arg-id paths the reducer reads from. The recognizer keeps
+  // the body tree itself in the captured spec so the runtime can evaluate Const/Sub/Add/Mul/Max combinations of
   // ExternalTensorRead leaves without re-walking the analyzer.
   int32_t body_node_idx{-1};
   // Bound variable id introduced by this `MaxOverRange`. Body-leaf `ExternalTensorRead` indices encoded as

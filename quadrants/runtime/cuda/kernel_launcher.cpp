@@ -81,6 +81,17 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // the cleared counter and UINT32_MAX-defaulted capacity arrays.
     executor->publish_adstack_lazy_claim_buffers(offloaded_tasks.size());
   }
+  // Max-reducer dispatch: build the AdStackSizingInfo view, then dispatch any captured spec
+  // before the per-task loop so the result map is available for substitution inside each `publish_adstack_metadata`
+  // encoder call. The result is stashed on the executor (`current_max_reducer_results_`).
+  {
+    std::vector<AdStackSizingInfo> ad_stacks_view;
+    ad_stacks_view.reserve(offloaded_tasks.size());
+    for (const auto &t : offloaded_tasks) {
+      ad_stacks_view.push_back(t.ad_stack);
+    }
+    executor->dispatch_max_reducers_for_tasks(ad_stacks_view, &ctx, device_context_ptr);
+  }
   std::size_t task_index = 0;
   for (const auto &task : offloaded_tasks) {
     int effective_grid_dim = task.grid_dim;
