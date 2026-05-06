@@ -132,34 +132,42 @@ struct StaticAdStackBoundExpr {
 };
 
 // Captured `MaxOverRange` reducible by a dedicated parallel max-reducer dispatch at launch time. The recognized grammar
-// `MaxOverRange(begin, end, body)` where `begin` and `end` evaluate to closed-form scalars after
-// recursive substitution of any deeper captured `MaxOverRange`s, and `body` is integer-typed arithmetic
-// (`Const`, `ExternalTensorRead(arg, [BoundVar(this_var)])`, `Add` / `Sub` / `Mul` / `Max` of those). The runtime
-// dispatches one reducer per spec in dependency order (deepest first); the per-launch result is substituted as a
-// `Const` into the SizeExpr tree so the per-thread sizer never walks the iteration domain. Anything outside the
-// grammar is left for the existing capped path (silent truncation today; tracked as future work).
+// `MaxOverRange(begin, end, body)` where `begin` and `end` evaluate to closed-form scalars after recursive substitution
+// of any deeper captured `MaxOverRange`s, and `body` is integer-typed arithmetic (`Const`, `ExternalTensorRead(arg,
+// [BoundVar(this_var)])`, `Add` / `Sub` / `Mul` / `Max` of those). The runtime dispatches one reducer per spec in
+// dependency order (deepest first); the per-launch result is substituted as a `Const` into the SizeExpr tree so the
+// per-thread sizer never walks the iteration domain. Anything outside the grammar is left for the existing capped path
+// (silent truncation today; tracked as future work).
 struct StaticAdStackMaxReducerSpec {
   // Index of the alloca within `AdStackSizingAttribs::allocas` (same indexing the per-thread sizer uses).
   int32_t stack_id{-1};
-  // Index of the `MaxOverRange` node in this alloca's `size_expr.nodes`. The runtime keys results by
-  // `(task_id_in_kernel, stack_id, mor_node_idx)` and the substitution helper replaces `nodes[mor_node_idx]` with
-  // a `Const` carrying the dispatched reducer's output.
+  // Index of the OUTERMOST `MaxOverRange` node in this alloca's `size_expr.nodes`. The runtime keys results by
+  // `(task_id_in_kernel, stack_id, mor_node_idx)` and the substitution helper replaces `nodes[mor_node_idx]` with a
+  // `Const` carrying the dispatched reducer's output. When a chain of nested `MaxOverRange`s is captured as a single
+  // multi-axis spec, this is the outermost node (axis 0); the inner nodes collapse into the per-axis arrays below and
+  // are not separately substituted.
   int32_t mor_node_idx{-1};
-  // Indices into `size_expr.nodes` for the `MaxOverRange`'s `[begin, end)`. Both must evaluate closed-form at
-  // dispatch time (after recursive substitution); the runtime walks them via `evaluate_adstack_size_expr`.
-  int32_t begin_node_idx{-1};
-  int32_t end_node_idx{-1};
-  // Body subtree root. Walked at launch time to extract the arg-id paths the reducer reads from. The recognizer keeps
-  // the body tree itself in the captured spec so the runtime can evaluate Const/Sub/Add/Mul/Max combinations of
-  // ExternalTensorRead leaves without re-walking the analyzer.
+  // Body subtree root (the innermost `MaxOverRange`'s body for multi-axis specs). Walked at launch time to extract the
+  // arg-id paths the reducer reads from. The body may reference any of the `axis_var_ids` below as bound variables; the
+  // encoder remaps each to a dense device-scope slot in `[0, axis_var_ids.size())`.
   int32_t body_node_idx{-1};
-  // Bound variable id introduced by this `MaxOverRange`. Body-leaf `ExternalTensorRead` indices encoded as
-  // `-(var_id + 1)` must match this id; any other bound-var reference rejects the spec.
-  int32_t var_id{-1};
+  // Per-axis iteration ranges and bound-variable ids, ORDERED outermost-first (axis 0 = the spec's outermost
+  // `MaxOverRange`, axis N-1 = the innermost). The dispatch iterates the cross-product of these ranges; each `[begin,
+  // end)` must evaluate closed-form at dispatch time (after recursive substitution of any deeper captured
+  // `MaxOverRange` ancestors). Single-axis specs have one entry per vector.
+  std::vector<int32_t> axis_begin_node_idxs;
+  std::vector<int32_t> axis_end_node_idxs;
+  std::vector<int32_t> axis_var_ids;
   // Indices into `size_expr.nodes` that are deeper captured `MaxOverRange` specs this one depends on. The runtime
   // dispatches in topological order so all dependencies have been substituted before this spec's body is read.
   std::vector<int32_t> dependent_mor_node_idxs;
-  QD_IO_DEF(stack_id, mor_node_idx, begin_node_idx, end_node_idx, body_node_idx, var_id, dependent_mor_node_idxs);
+  QD_IO_DEF(stack_id,
+            mor_node_idx,
+            body_node_idx,
+            axis_begin_node_idxs,
+            axis_end_node_idxs,
+            axis_var_ids,
+            dependent_mor_node_idxs);
 };
 
 // SNode descriptor info the analysis needs to capture an SNode-backed gate. The resolver returns `std::nullopt` when

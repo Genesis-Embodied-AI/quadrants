@@ -415,9 +415,12 @@ void export_lang(py::module &m) {
       .def("get_num_offloaded_tasks_on_last_call", &Program::get_num_offloaded_tasks_on_last_call)
       .def("get_graph_num_nodes_on_last_call", &Program::get_graph_num_nodes_on_last_call)
       .def("get_graph_total_builds", &Program::get_graph_total_builds)
-      .def("get_max_reducer_dispatch_count",
+      // Test-only introspection on the max-reducer dispatch counter. Leading underscore signals "internal, not part of
+      // the public Python API"; quadrants tests reach these via `impl.get_runtime().prog`. They are intentionally not
+      // surfaced on the user-facing `qd.*` namespace and not documented under `docs/`.
+      .def("_get_max_reducer_dispatch_count",
            [](Program *program) { return program->adstack_cache().max_reducer_dispatch_count(); })
-      .def("reset_max_reducer_dispatch_count",
+      .def("_reset_max_reducer_dispatch_count",
            [](Program *program) { program->adstack_cache().reset_max_reducer_dispatch_count(); });
 
   py::class_<CompileResult>(m, "CompileResult")

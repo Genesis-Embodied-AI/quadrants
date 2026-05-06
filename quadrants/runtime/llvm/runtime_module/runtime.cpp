@@ -648,12 +648,12 @@ struct LLVMRuntime {
   u32 *adstack_bound_row_capacities = nullptr;
   u64 adstack_bound_row_capacities_capacity = 0;
 
-  // Per-spec output slot for the max reducer. One i64 per captured
-  // `StaticAdStackMaxReducerSpec`, written by `runtime_eval_adstack_max_reduce` during the per-launch dispatch and
-  // read by the host launcher to substitute the value as a `Const` into the per-stack `SerializedSizeExpr` tree
-  // before any LLVM eval path walks it. Sized / grown by the LlvmRuntimeExecutor lazy-allocate path on the first
-  // launch that has captured specs; cleared to INT64_MIN before each dispatch so the running-max sentinel is
-  // well-defined when `length == 0` (returns INT64_MIN; the caller floors at 0 + clamps to compile-time).
+  // Per-spec output slot for the max reducer. One i64 per captured `StaticAdStackMaxReducerSpec`, written by
+  // `runtime_eval_adstack_max_reduce` during the per-launch dispatch and read by the host launcher to substitute the
+  // value as a `Const` into the per-stack `SerializedSizeExpr` tree before any LLVM eval path walks it. Sized / grown
+  // by the LlvmRuntimeExecutor lazy-allocate path on the first launch that has captured specs; cleared to INT64_MIN
+  // before each dispatch so the running-max sentinel is well-defined when `length == 0` (returns INT64_MIN; the caller
+  // floors at 0 + clamps to compile-time).
   i64 *adstack_max_reducer_outputs = nullptr;
   u64 adstack_max_reducer_outputs_capacity = 0;
 
@@ -851,10 +851,10 @@ void runtime_get_adstack_lazy_claim_field_ptrs(LLVMRuntime *runtime) {
   runtime->set_result(quadrants_result_buffer_ret_value_id + 1, (u64)(void *)&runtime->adstack_bound_row_capacities);
 }
 
-// Companion to `runtime_get_adstack_lazy_claim_field_ptrs` for the max-reducer outputs. The
-// output buffer is per-launch-allocated host-side and the field-address is cached once so the per-launch publish
-// only writes the new array pointer (when the buffer grows) and the read-back per-spec slot reads through the
-// runtime's stable address. Single field, single result slot.
+// Companion to `runtime_get_adstack_lazy_claim_field_ptrs` for the max-reducer outputs. The output buffer is
+// per-launch-allocated host-side and the field-address is cached once so the per-launch publish only writes the new
+// array pointer (when the buffer grows) and the read-back per-spec slot reads through the runtime's stable address.
+// Single field, single result slot.
 void runtime_get_adstack_max_reducer_field_ptr(LLVMRuntime *runtime) {
   runtime->set_result(quadrants_result_buffer_ret_value_id, (u64)(void *)&runtime->adstack_max_reducer_outputs);
 }
@@ -956,11 +956,11 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
     case K::kMaxOverRange: {
       i64 begin = device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer);
       i64 end = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
-      // Iteration guard. Recognized `MaxOverRange` shapes are dispatched in parallel by the max-reducer and
-      // substituted to a `Const` before the sizer interpreter walks the tree, so the only way to land in this
-      // branch with a delta above the cap is an out-of-grammar shape. Skip the walk and return 0 to keep the
-      // single-thread on-device dispatch within the driver's TDR window; the host's `evaluate_node` re-runs
-      // the same tree synchronously during the diagnose path and raises via its `QD_ERROR_IF` then.
+      // Iteration guard. Recognized `MaxOverRange` shapes are dispatched in parallel by the max-reducer and substituted
+      // to a `Const` before the sizer interpreter walks the tree, so the only way to land in this branch with a delta
+      // above the cap is an out-of-grammar shape. Skip the walk and return 0 to keep the single-thread on-device
+      // dispatch within the driver's TDR window; the host's `evaluate_node` re-runs the same tree synchronously during
+      // the diagnose path and raises via its `QD_ERROR_IF` then.
       constexpr i64 kMaxOverRangeIterations = i64{1} << 24;
       if (end > begin && end - begin > kMaxOverRangeIterations) {
         return 0;
@@ -1189,20 +1189,22 @@ void runtime_eval_static_bound_count(LLVMRuntime *runtime, RuntimeContext *ctx, 
   runtime->adstack_bound_row_capacities[params->task_index] = count;
 }
 
-// per-launch per-launch parallel-max evaluator over the body of a captured
-// `StaticAdStackMaxReducerSpec`'s `MaxOverRange` node. Single-thread serial walk on every backend (CPU host thread,
-// CUDA / AMDGPU single-thread JIT-launched device function), mirroring `runtime_eval_static_bound_count`. The body
-// bytecode reuses the existing `AdStackSizeExprDeviceNode` POD format already shared between the host encoder and
-// the LLVM device sizer interpreter (`device_eval_node`); The recognizer grammar restricts body kinds to
-// `kConst / kBoundVariable / kExternalTensorRead / kAdd / kSub / kMul / kMax`, so the recursive walk never recurses
-// through `kMaxOverRange` or `kFieldLoad` and the iteration stays linear in `params->length`.
+// per-launch per-launch parallel-max evaluator over the body of a captured `StaticAdStackMaxReducerSpec`'s
+// `MaxOverRange` node. Single-thread serial walk on every backend (CPU host thread, CUDA / AMDGPU single-thread
+// JIT-launched device function), mirroring `runtime_eval_static_bound_count`. The body bytecode reuses the existing
+// `AdStackSizeExprDeviceNode` POD format already shared between the host encoder and the LLVM device sizer interpreter
+// (`device_eval_node`); The recognizer grammar restricts body kinds to `kConst / kBoundVariable / kExternalTensorRead /
+// kAdd / kSub / kMul / kMax`, so the recursive walk never recurses through `kMaxOverRange` or `kFieldLoad` and the
+// iteration stays linear in the cross-product of every captured axis.
 //
-// Per-iteration: bind `scope.values[var_id] = begin + i`, evaluate `device_eval_node(body_root_idx, &scope, ...)`,
-// update running max. Result is written to `runtime->adstack_max_reducer_outputs[output_slot]`. Caller clears the
-// slot to INT64_MIN before the dispatch so an empty range (`length == 0`) leaves the sentinel for the host launcher
-// to detect and floor at zero.
+// Multi-axis: walks the cross-product of `params->per_axis_length[0..num_axes)` outermost-first. Per-iteration the
+// runtime pre-populates `scope.values[per_axis_var_id[a]] = per_axis_begin[a] + axis_idx_a` for every axis, then
+// evaluates `device_eval_node(body_root_idx, &scope, ...)` and updates the running max. Result is written to
+// `runtime->adstack_max_reducer_outputs[output_slot]`. Caller clears the slot before the dispatch so an empty range
+// leaves the sentinel for the host launcher to detect and floor at zero.
 void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr params_blob, Ptr body_bytecode) {
   using quadrants::lang::AdStackSizeExprDeviceNode;
+  using quadrants::lang::kAdStackMaxReducerMaxAxes;
   using quadrants::lang::LlvmAdStackMaxReducerDeviceParams;
 
   const auto *params = reinterpret_cast<const LlvmAdStackMaxReducerDeviceParams *>(params_blob);
@@ -1216,17 +1218,38 @@ void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime, RuntimeContext *ctx, 
     scope.values[k] = 0;
   }
 
-  // Sentinel start: INT64_MIN so the first body value always wins over an empty `length == 0` slot. Caller normalises
-  // the empty case (writes 0 / floors at compile-time) when reading the slot back.
+  // Sentinel start: INT64_MIN so the first body value always wins over an empty cross-product. Caller normalises the
+  // empty case (writes 0 / floors at compile-time) when reading the slot back.
   i64 running_max = (i64)0x8000000000000000ll;
-  const i64 begin = params->begin;
-  const u32 length = params->length;
-  const i32 var_id = params->var_id;
   const i32 root_idx = params->body_root_node_idx;
-  const bool var_in_range = var_id >= 0 && var_id < kDeviceBoundVarCap;
-  for (u32 i = 0; i < length; ++i) {
-    if (var_in_range) {
-      scope.values[var_id] = begin + (i64)i;
+  const u32 num_axes = params->num_axes;
+  if (num_axes == 0 || num_axes > (u32)kAdStackMaxReducerMaxAxes) {
+    runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
+    return;
+  }
+  // Compute the total cross-product length up front; bail on a zero-length axis to keep the linear walk's mod / div
+  // decomposition well-defined.
+  u64 total_length = 1;
+  for (u32 a = 0; a < num_axes; ++a) {
+    if (params->per_axis_length[a] == 0u) {
+      runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
+      return;
+    }
+    total_length *= (u64)params->per_axis_length[a];
+  }
+  // Walk a single linear counter `i` over `[0, total_length)` and decompose into per-axis indices outermost-first (axis
+  // 0 is the slowest-varying = highest stride). The host launcher caps `total_length` at u32 max in the dispatch site
+  // so the linear counter fits in u32 and the per-axis math stays in i64.
+  for (u64 i = 0; i < total_length; ++i) {
+    u64 rem = i;
+    for (u32 a = num_axes; a-- > 0;) {
+      const u32 len_a = params->per_axis_length[a];
+      const u64 idx_a = rem % (u64)len_a;
+      rem = rem / (u64)len_a;
+      const i32 var_id = params->per_axis_var_id[a];
+      if (var_id >= 0 && var_id < kDeviceBoundVarCap) {
+        scope.values[var_id] = params->per_axis_begin[a] + (i64)idx_a;
+      }
     }
     i64 v = device_eval_node(nodes, indices, root_idx, &scope, arg_buffer);
     if (v > running_max) {

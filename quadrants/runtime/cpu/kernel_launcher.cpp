@@ -29,10 +29,10 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
   }
   // Span every task's `publish_adstack_metadata` call below with one shared read cache.
   SizeExprLaunchScope launch_scope;
-  // Max-reducer dispatch. Runs before the per-task `publish_adstack_metadata` loop so the
-  // dispatched values are available to substitute into per-stack `SerializedSizeExpr` trees inside each per-task
-  // encoder call. Stashed on the executor (`current_max_reducer_results_`); `publish_adstack_metadata` reads it.
-  // Empty map on kernels with no captured specs - no per-launch overhead in that case.
+  // Max-reducer dispatch. Runs before the per-task `publish_adstack_metadata` loop so the dispatched values are
+  // available to substitute into per-stack `SerializedSizeExpr` trees inside each per-task encoder call. Stashed on the
+  // executor (`current_max_reducer_results_`); `publish_adstack_metadata` reads it. Empty map on kernels with no
+  // captured specs - no per-launch overhead in that case.
   executor->dispatch_max_reducers_for_tasks(ad_stacks, &ctx, /*device_runtime_context_ptr=*/nullptr);
   for (size_t i = 0; i < task_funcs.size(); ++i) {
     if (!ad_stacks[i].allocas.empty()) {

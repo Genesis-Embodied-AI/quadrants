@@ -203,9 +203,9 @@ TaskCodegen::Result TaskCodegen::run() {
 
   task_attribs_.ad_stack.per_thread_stride_float_compile_time = ad_stack_heap_per_thread_stride_float_;
   task_attribs_.ad_stack.per_thread_stride_int_compile_time = ad_stack_heap_per_thread_stride_int_;
-  // recognize `MaxOverRange` nodes the runtime can reduce in
-  // parallel via the dedicated max-reducer dispatch instead of letting the per-thread sizer enumerate. Indexing
-  // matches `task_attribs_.ad_stack.allocas` (each entry's `size_expr` is the per-stack tree captured above).
+  // recognize `MaxOverRange` nodes the runtime can reduce in parallel via the dedicated max-reducer dispatch instead of
+  // letting the per-thread sizer enumerate. Indexing matches `task_attribs_.ad_stack.allocas` (each entry's `size_expr`
+  // is the per-stack tree captured above).
   {
     std::vector<SerializedSizeExpr> per_stack_size_exprs;
     per_stack_size_exprs.reserve(task_attribs_.ad_stack.allocas.size());
