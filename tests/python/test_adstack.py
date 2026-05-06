@@ -4873,17 +4873,23 @@ def test_max_reducer_grammar_fallback():
         assert x.grad[i] == pytest.approx(expected, rel=1e-5)
 
 
-@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+@test_utils.test(arch=[qd.cpu, qd.vulkan, qd.metal], require=qd.extension.adstack, cfg_optimization=False)
 def test_above_cap_out_of_grammar_kernel_raises():
     # A reverse-mode kernel whose inner `range(...)` trip count is bound to an out-of-grammar `MaxOverRange` body and
     # whose iteration count exceeds the `1<<24` adstack-sizer cap surfaces a `QuadrantsAssertionError` at `qd.sync()`.
     #
     # Internal details: the recognizer's body grammar restricts to single-axis `ExternalTensorRead(arg,
     # [BoundVariable(var_id)])` plus arithmetic combinators; a multi-axis read like `a[i_e, 0]` exits that subset, so
-    # the per-task sizer walks the `MaxOverRange` itself. With `a.shape[0] > 1<<24` the cap fires on every
-    # adstack-sizer eval path: the host evaluator's `QD_ERROR_IF` in `evaluate_node` on CPU, the LLVM device sizer's
-    # overflow flag write into `runtime->adstack_overflow_flag_dev_ptr` on CUDA / AMDGPU LLVM-GPU, and the SPIR-V
-    # on-device sizer's metadata-trailing overflow-flag slot on Metal / Vulkan.
+    # the per-task sizer walks the `MaxOverRange` itself. With `a.shape[0] > 1<<24` the cap fires on the host evaluator
+    # (`QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node`, raised as `RuntimeError` on the CPU host fast
+    # path) and on the SPIR-V on-device sizer (the trailing overflow-flag slot of the metadata buffer, raised as
+    # `QuadrantsAssertionError` from the host post-readback in `publish_adstack_metadata_spirv`). The CUDA and AMDGPU
+    # LLVM-GPU sizer short-circuits the walk and returns 0 from `device_eval_node`'s `kMaxOverRange` arm so the
+    # single-thread on-device dispatch stays within the driver's TDR window; the cap-hit then surfaces indirectly
+    # via the existing `stack_push` overflow infrastructure on a subsequent main-kernel launch, and the resulting
+    # diagnostic message attribution depends on the kernel layout. That indirect path is covered by
+    # `test_adstack_overflow_diagnostic_and_auto_recovery`, so this test pins the explicit device-sizer tripwires
+    # only.
     N_X = 4
     shape = (1 << 24) + 1
     a_data = np.zeros((shape, 2), dtype=np.int32)
