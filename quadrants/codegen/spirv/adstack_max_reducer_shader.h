@@ -33,13 +33,18 @@ namespace quadrants::lang::spirv {
 //
 // Required device capabilities: `spirv_has_physical_storage_buffer` + `spirv_has_int64`. The first is needed because
 // every body leaf reads through the ndarray data pointer the kernel arg buffer carries (PSB load path, mirroring the
-// main kernel's ndarray access); the second is needed for u64 atomic-max into the output buffer. On devices missing
-// either capability the function returns an empty vector and the runtime hard-errors at dispatch-time
-// (`adstack_max_reducer_launch.cpp`'s `QD_ERROR_IF` gate). Silently falling through to the per-thread sizer's capped
-// path would corrupt reverse-mode gradients (the captured `MaxOverRange`'s 1<<24-truncated result undersizes the
-// heap), so failing loud is strictly safer. Quadrants's official Vulkan target is `VK_API_VERSION_1_3`, which
-// promotes both `VK_KHR_buffer_device_address` and `VK_KHR_shader_atomic_int64` into core; Metal's
-// `MTLArgumentBuffersTier::Tier2` (macOS 11+) advertises both caps too. The empty-return branch is forward-looking.
+// main kernel's ndarray access); the second is needed for non-atomic i64 arithmetic inside the body interpreter
+// (recognized bodies operate on i32 ndarray reads but the running scalar widens to i64 to match the host evaluator's
+// overflow semantics). The output atomic itself is u32 - the shader stores a `u32` max plus a `u32` overflow flag
+// per spec, atom-max'd / atom-or'd respectively, so spirv-cross's MSL backend (which rejects 64-bit atomics at
+// `MSL currently does not support 64-bit atomics`) translates cleanly through to Metal / Vulkan-via-MoltenVK. On
+// devices missing PSB or i64 support the function returns an empty vector and the runtime hard-errors at
+// dispatch-time (`adstack_max_reducer_launch.cpp`'s `QD_ERROR_IF` gate). Silently falling through to the per-thread
+// sizer's capped path would corrupt reverse-mode gradients (the captured `MaxOverRange`'s 1<<24-truncated result
+// undersizes the heap), so failing loud is strictly safer. Quadrants's official Vulkan target is
+// `VK_API_VERSION_1_3`, which promotes both `VK_KHR_buffer_device_address` and `VK_KHR_shader_int64` (the
+// underlying Vulkan caps) into core. The empty-return branch is forward-looking for any non-Vulkan-1.3 device that
+// might still surface here.
 std::vector<uint32_t> build_adstack_max_reducer_spirv(Arch arch, const DeviceCapabilityConfig *caps);
 
 // Compute-shader workgroup size (x dimension; y and z are 1). Power-of-two and a multiple of typical subgroup widths

@@ -339,7 +339,7 @@ Value interpret_body(IRBuilder &ir,
   // kExternalTensorRead: PSB-load the body ndarray's element at the computed linear index.
   ir.start_label(case_etr);
   {
-    Value arg_word_offset = load_buf_i32(
+    Value arg_byte_offset = load_buf_i32(
         ir, bytecode_buf, ir.add(slot_base, ir.uint_immediate_number(ir.u32_type(), kNodeWordArgBufferOffset)));
     Value prim_dt =
         load_buf_i32(ir, bytecode_buf, ir.add(slot_base, ir.uint_immediate_number(ir.u32_type(), kNodeWordPrimDt)));
@@ -349,8 +349,13 @@ Value interpret_body(IRBuilder &ir,
         ir, bytecode_buf, ir.add(slot_base, ir.uint_immediate_number(ir.u32_type(), kNodeWordIndicesCount)));
     Value linear_i32 = compute_external_read_elem_index(ir, bytecode_buf, body_indices_offset_words, indices_offset,
                                                         indices_count, iter_var_i32);
-    Value arg_word_offset_u32 = ir.make_value(spv::OpBitcast, ir.u32_type(), arg_word_offset);
-    Value data_ptr_u64 = load_arg_buf_u64_ptr(ir, args_buf, arg_word_offset_u32);
+    // The host encoder writes `arg_buffer_offset` in bytes (it's the byte offset of the ndarray's `data_ptr` slot
+    // within the kernel arg buffer). The shader reads `args_buf` as u32[], so divide by 4 to land at the right
+    // u32 word index. Mirrors `adstack_sizer_shader.cpp`'s same conversion.
+    Value arg_word_i32 = ir.make_value(spv::OpShiftRightArithmetic, ir.i32_type(), arg_byte_offset,
+                                       ir.uint_immediate_number(ir.u32_type(), 2u));
+    Value arg_word_u32 = ir.cast(ir.u32_type(), arg_word_i32);
+    Value data_ptr_u64 = load_arg_buf_u64_ptr(ir, args_buf, arg_word_u32);
     Value loaded_i64 = emit_psb_load_i64_int_only(ir, data_ptr_u64, linear_i32, prim_dt);
     ir.store_variable(computed_var, loaded_i64);
     ir.make_inst(spv::OpBranch, kind_merge);
@@ -442,9 +447,13 @@ std::vector<uint32_t> build_adstack_max_reducer_spirv(Arch arch, const DeviceCap
   IRBuilder ir(arch, caps);
   ir.init_header();
 
-  // Storage-buffer bindings (set 0).
+  // Storage-buffer bindings (set 0). The output buffer holds two u32 slots per spec: even index = u32 atomic-max
+  // running max, odd index = u32 atomic-or overflow flag (0 = max fits in u32, non-zero = at least one thread
+  // observed a body i64 value above `UINT32_MAX` and the host should fall back to host eval). u32 atomics are
+  // universally translated through spirv-cross's MSL backend whereas i64 atomic-max is not, which is what unlocks
+  // the Metal / Vulkan-via-MoltenVK paths.
   Value args_buf = ir.buffer_argument(ir.u32_type(), 0, 0, "adstack_max_reducer_args");
-  Value output_buf = ir.buffer_argument(ir.u64_type(), 0, 1, "adstack_max_reducer_output");
+  Value output_buf = ir.buffer_argument(ir.u32_type(), 0, 1, "adstack_max_reducer_output");
   Value params_buf = ir.buffer_argument(ir.u32_type(), 0, 2, "adstack_max_reducer_params");
   Value bytecode_buf = ir.buffer_argument(ir.u32_type(), 0, 3, "adstack_max_reducer_bytecode");
 
@@ -473,47 +482,140 @@ std::vector<uint32_t> build_adstack_max_reducer_spirv(Arch arch, const DeviceCap
       load_buf_u32(ir, params_buf,
                    ir.uint_immediate_number(ir.u32_type(), AdStackMaxReducerParams::kWordOffsetBodyIndicesOffsetWords));
 
-  // Trailing-workgroup bounds check. `gid >= length` threads early-return; remaining threads run the body.
-  Label active_block = ir.new_label();
-  Label early_return = ir.new_label();
-  Label active_merge = ir.new_label();
-  Value in_range = ir.lt(gid_u32, length);
-  ir.make_inst(spv::OpSelectionMerge, active_merge, spv::SelectionControlMaskNone);
-  ir.make_inst(spv::OpBranchConditional, in_range, active_block, early_return);
+  // Per-thread strided iteration: each thread walks `kElementsPerThread` elements at stride `total_threads` before
+  // atomic-maxing the per-thread running max into the output slot. The host launcher caps `num_workgroups_x` at the
+  // Vulkan / Metal `maxComputeWorkGroupCount[0]` minimum of 65535; striding by `total_threads` lets the dispatch
+  // cover spec lengths up to `kElementsPerThread * 128 * 65535 = ~536M` elements without dropping any cell.
+  constexpr uint32_t kElementsPerThread = 64u;
 
-  ir.start_label(active_block);
+  // Reassemble `begin` as i64 once for the strided loop body to add to the per-iteration index.
+  Value lo64 = ir.cast(ir.u64_type(), begin_lo);
+  Value hi64 = ir.cast(ir.u64_type(), begin_hi);
+  Value shift = ir.uint_immediate_number(ir.u64_type(), 32u);
+  Value hi_shifted = ir.make_value(spv::OpShiftLeftLogical, ir.u64_type(), hi64, shift);
+  Value begin_u64 = ir.make_value(spv::OpBitwiseOr, ir.u64_type(), lo64, hi_shifted);
+  Value begin_i64 = ir.make_value(spv::OpBitcast, ir.i64_type(), begin_u64);
+
+  Value body_node_count_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), body_node_count_u32);
+
+  // Per-thread running max + overflow flag, materialised in Function-scope variables and folded into the
+  // global output buffer at the end of the strided loop with a single `OpAtomicUMax` / `OpAtomicOr`.
+  Value local_max_var = ir.alloca_variable(ir.u32_type());
+  ir.store_variable(local_max_var, ir.uint_immediate_number(ir.u32_type(), 0u));
+  Value local_overflow_var = ir.alloca_variable(ir.u32_type());
+  ir.store_variable(local_overflow_var, ir.uint_immediate_number(ir.u32_type(), 0u));
+
+  // Strided loop: for k in [0, kElementsPerThread), idx = (gid + k * total_threads). `total_threads = num_
+  // workgroups_x * workgroup_size_x` matches what the host computed when sizing the dispatch.
+  Value workgroup_size_v = ir.uint_immediate_number(ir.u32_type(), kAdStackMaxReducerWorkgroupSize);
+  Value num_wg_x = ir.get_num_work_groups(0);
+  Value total_threads = ir.mul(num_wg_x, workgroup_size_v);
+
+  Value k_var = ir.alloca_variable(ir.u32_type());
+  ir.store_variable(k_var, ir.uint_immediate_number(ir.u32_type(), 0u));
+  Label k_head = ir.new_label();
+  Label k_body = ir.new_label();
+  Label k_cont = ir.new_label();
+  Label k_merge = ir.new_label();
+  ir.make_inst(spv::OpBranch, k_head);
+
+  ir.start_label(k_head);
+  Value k_now = ir.load_variable(k_var, ir.u32_type());
+  Value k_in_range = ir.lt(k_now, ir.uint_immediate_number(ir.u32_type(), kElementsPerThread));
+  ir.make_inst(spv::OpLoopMerge, k_merge, k_cont, spv::LoopControlMaskNone);
+  ir.make_inst(spv::OpBranchConditional, k_in_range, k_body, k_merge);
+
+  ir.start_label(k_body);
   {
-    // Reassemble `begin` as i64 and compute the per-thread bound variable: `iter_var = (i32)(gid + begin)`.
-    // The recognizer grammar caps `begin + length` at i32 max (the encoder rejects specs whose closed-form bound
-    // exceeds 2^31), so a 32-bit add is safe and matches the existing sizer's per-thread index width.
-    Value lo64 = ir.cast(ir.u64_type(), begin_lo);
-    Value hi64 = ir.cast(ir.u64_type(), begin_hi);
-    Value shift = ir.uint_immediate_number(ir.u64_type(), 32u);
-    Value hi_shifted = ir.make_value(spv::OpShiftLeftLogical, ir.u64_type(), hi64, shift);
-    Value begin_u64 = ir.make_value(spv::OpBitwiseOr, ir.u64_type(), lo64, hi_shifted);
-    Value begin_i64 = ir.make_value(spv::OpBitcast, ir.i64_type(), begin_u64);
-    Value gid_i64 = ir.cast(ir.i64_type(), gid_u32);
-    Value iter_var_i64 = ir.add(gid_i64, begin_i64);
-    Value iter_var_i32 = ir.cast(ir.i32_type(), iter_var_i64);
+    Value stride_off = ir.mul(k_now, total_threads);
+    Value idx_u32 = ir.add(gid_u32, stride_off);
+    Label do_block = ir.new_label();
+    Label skip_block = ir.new_label();
+    Label idx_merge = ir.new_label();
+    Value idx_in_range = ir.lt(idx_u32, length);
+    ir.make_inst(spv::OpSelectionMerge, idx_merge, spv::SelectionControlMaskNone);
+    ir.make_inst(spv::OpBranchConditional, idx_in_range, do_block, skip_block);
 
-    Value body_node_count_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), body_node_count_u32);
-    Value result_i64 = interpret_body(ir, args_buf, bytecode_buf, body_bytecode_offset_words, body_indices_offset_words,
-                                      body_node_count_i32, iter_var_i32);
+    ir.start_label(do_block);
+    {
+      // The recognizer grammar caps `begin + length` at i32 max (the encoder rejects specs whose closed-form
+      // bound exceeds 2^31), so a 32-bit truncation of the per-iteration index is safe and matches the
+      // existing sizer's per-thread index width.
+      Value idx_i64 = ir.cast(ir.i64_type(), idx_u32);
+      Value iter_var_i64 = ir.add(idx_i64, begin_i64);
+      Value iter_var_i32 = ir.cast(ir.i32_type(), iter_var_i64);
 
-    // Atomic-max into `output_buf[output_slot]`. SPIR-V requires `OpAtomicSMax` on i64; per-launch host clears the
-    // slot to `INT64_MIN` (so the first matching thread wins). Memory scope = Device, semantics = Relaxed (the value
-    // is consumed by the host post-`wait_idle`, no in-shader fence required).
-    Value slot_ptr = ir.struct_array_access(ir.i64_type(), output_buf, output_slot);
-    ir.make_value(spv::OpAtomicSMax, ir.i64_type(), slot_ptr, /*scope=*/ir.const_i32_one_,
-                  /*semantics=*/ir.const_i32_zero_, result_i64);
+      Value result_i64 = interpret_body(ir, args_buf, bytecode_buf, body_bytecode_offset_words,
+                                        body_indices_offset_words, body_node_count_i32, iter_var_i32);
 
-    ir.make_inst(spv::OpBranch, active_merge);
+      // Clamp negative body values to 0; the recognized grammar's leaves are integer ndarray reads + integer
+      // arithmetic that can dip below zero through a `Sub` clamp (the device interpreter's `kSub` returns 0
+      // on negative diffs to match the host evaluator). Once non-negative, branch on whether the value fits
+      // in `UINT32_MAX`: if it does, fold into `local_max`; if it does not, set `local_overflow` (the host
+      // falls back to direct host-eval for that spec).
+      Value zero_i64 = ir.int_immediate_number(ir.i64_type(), 0);
+      Value u32_max_i64 = ir.int_immediate_number(ir.i64_type(), static_cast<int64_t>(0xFFFFFFFFll));
+      Value is_neg = ir.make_value(spv::OpSLessThan, ir.bool_type(), result_i64, zero_i64);
+      Value clamped_pos = ir.make_value(spv::OpSelect, ir.i64_type(), is_neg, zero_i64, result_i64);
+      Value overflow_cond = ir.make_value(spv::OpSGreaterThan, ir.bool_type(), clamped_pos, u32_max_i64);
+
+      Label of_then = ir.new_label();
+      Label of_else = ir.new_label();
+      Label of_merge = ir.new_label();
+      ir.make_inst(spv::OpSelectionMerge, of_merge, spv::SelectionControlMaskNone);
+      ir.make_inst(spv::OpBranchConditional, overflow_cond, of_then, of_else);
+
+      ir.start_label(of_then);
+      {
+        ir.store_variable(local_overflow_var, ir.uint_immediate_number(ir.u32_type(), 1u));
+        ir.make_inst(spv::OpBranch, of_merge);
+      }
+
+      ir.start_label(of_else);
+      {
+        Value value_u32 = ir.cast(ir.u32_type(), clamped_pos);
+        Value local_max_now = ir.load_variable(local_max_var, ir.u32_type());
+        Value bigger = ir.make_value(spv::OpUGreaterThan, ir.bool_type(), value_u32, local_max_now);
+        Value new_local_max = ir.make_value(spv::OpSelect, ir.u32_type(), bigger, value_u32, local_max_now);
+        ir.store_variable(local_max_var, new_local_max);
+        ir.make_inst(spv::OpBranch, of_merge);
+      }
+
+      ir.start_label(of_merge);
+      ir.make_inst(spv::OpBranch, idx_merge);
+    }
+
+    ir.start_label(skip_block);
+    ir.make_inst(spv::OpBranch, idx_merge);
+
+    ir.start_label(idx_merge);
+    ir.make_inst(spv::OpBranch, k_cont);
   }
 
-  ir.start_label(early_return);
-  ir.make_inst(spv::OpBranch, active_merge);
+  ir.start_label(k_cont);
+  Value k_next = ir.add(k_now, ir.uint_immediate_number(ir.u32_type(), 1u));
+  ir.store_variable(k_var, k_next);
+  ir.make_inst(spv::OpBranch, k_head);
 
-  ir.start_label(active_merge);
+  ir.start_label(k_merge);
+  {
+    // Two u32 slots per spec: `output_buf[2 * output_slot] = u32 atomic-max running value`,
+    // `output_buf[2 * output_slot + 1] = u32 atomic-or overflow flag`. Per-launch host clears both to 0 so
+    // the first matching thread wins the max-or; on a second or later launch the slots have been re-zeroed
+    // in the launcher's pre-dispatch clear. Threads whose `local_max == 0` skip the atomic-max to save the
+    // bus contention on the all-zero workload.
+    Value slot_idx_value = ir.mul(output_slot, ir.uint_immediate_number(ir.u32_type(), 2u));
+    Value slot_idx_overflow = ir.add(slot_idx_value, ir.uint_immediate_number(ir.u32_type(), 1u));
+    Value value_ptr = ir.struct_array_access(ir.u32_type(), output_buf, slot_idx_value);
+    Value overflow_ptr = ir.struct_array_access(ir.u32_type(), output_buf, slot_idx_overflow);
+
+    Value local_max_final = ir.load_variable(local_max_var, ir.u32_type());
+    ir.make_value(spv::OpAtomicUMax, ir.u32_type(), value_ptr, /*scope=*/ir.const_i32_one_,
+                  /*semantics=*/ir.const_i32_zero_, local_max_final);
+    Value local_overflow_final = ir.load_variable(local_overflow_var, ir.u32_type());
+    ir.make_value(spv::OpAtomicOr, ir.u32_type(), overflow_ptr, /*scope=*/ir.const_i32_one_,
+                  /*semantics=*/ir.const_i32_zero_, local_overflow_final);
+  }
   ir.make_inst(spv::OpReturn);
   ir.make_inst(spv::OpFunctionEnd);
 

@@ -160,6 +160,23 @@ class AdStackCache {
   void invalidate_max_reducer() {
     max_reducer_cache_.clear();
   }
+  // Read-only accessor for the observations recorded for a captured spec. Returns `nullptr` when the spec is not
+  // currently in the cache. Used by the bytecode encoder to thread the max-reducer body reads into the
+  // `spirv_bytecode_cache_` entry's observation list, so a mutation to the gating ndarray invalidates the
+  // bytecode cache (the encoder walks the post-substitution tree where the body is already a `Const` and would
+  // otherwise miss the underlying ndarray dependency).
+  const std::vector<SizeExprReadObservation> *lookup_max_reducer_reads(uint32_t registry_id,
+                                                                       int32_t stack_id,
+                                                                       int32_t mor_node_idx) const;
+  // Monotone counter, incremented once per `record_max_reducer_eval` call. Reset only by the surrounding test
+  // harness via `reset_max_reducer_dispatch_count`. Used by the regression tests to pin the cache short-circuit:
+  // a second launch with unchanged inputs must not advance the counter, and a host mutation must.
+  uint64_t max_reducer_dispatch_count() const {
+    return max_reducer_dispatch_count_;
+  }
+  void reset_max_reducer_dispatch_count() {
+    max_reducer_dispatch_count_ = 0;
+  }
 
   // Bulk-invalidate just the per-task adstack metadata caches on the overflow raise path. The
   // `size_expr_cache_` and `spirv_bytecode_cache_` are intentionally NOT cleared: they self-validate via per-read
@@ -301,6 +318,9 @@ class AdStackCache {
   // `stack_id`, high 16 bits = `mor_node_idx`. See `try_max_reducer_cache_hit` for the contract and
   // `pack_max_reducer_key` in `adstack_size_expr_eval.cpp` for the packing helper.
   std::unordered_map<uint64_t, MaxReducerCacheEntry> max_reducer_cache_;
+  // See `max_reducer_dispatch_count` for the contract. Bumped at every `record_max_reducer_eval` call (i.e. once
+  // per cache miss that fired a real dispatch); cache hits do not bump it.
+  uint64_t max_reducer_dispatch_count_{0};
   std::unordered_map<int, uint64_t> snode_write_gen_;
   std::unordered_map<void *, uint64_t> ndarray_data_gen_;
 
@@ -330,6 +350,12 @@ class AdStackCache {
 // enumerates its range and takes the max of the body expression across the bound variable. Returns -1 when the
 // expression is empty (no symbolic bound captured), signalling to the caller to use the compile-time fallback.
 int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx);
+// Variant of `evaluate_adstack_size_expr` that bypasses `size_expr_cache_`. Used by the host-eval branch of the
+// per-task sizer when feeding a stack-local substituted tree (the `size_expr_cache_` is keyed by `SerializedSizeExpr
+// *`, so a transient stack address would alias unrelated cache entries across launches and return wrong cached values).
+// Callers that need cache-warmed evaluation should use `evaluate_adstack_size_expr` with the original tree's stable
+// pointer.
+int64_t evaluate_adstack_size_expr_no_cache(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx);
 
 // Sub-tree variant of `evaluate_adstack_size_expr`: evaluates the subtree rooted at `node_idx` instead of the full
 // tree's root. Used by the max-reducer launcher to host-resolve a captured spec's `begin` / `end`
@@ -444,6 +470,18 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
     int32_t body_node_idx,
     int32_t bound_var_id,
     const std::function<int32_t(const std::vector<int32_t> &arg_id_path)> &arg_buffer_offset_resolver);
+
+// Snapshot the live ndarray data pointer + generation counter into each `ExternalReadObs` record. The encoder emits
+// the observation skeleton (kind / arg_id_path / prim_dt) but cannot fill in the runtime-resolved `data_ptr` /
+// `observed_gen` / `observed_value` because it has no `LaunchContextBuilder`. This helper closes that gap right
+// before the max-reducer dispatch site calls `AdStackCache::record_max_reducer_eval`, so the next launch's
+// `try_max_reducer_cache_hit` replay can fast-skip on a matching `ndarray_data_gen`. `observed_value` is recorded
+// as `INT64_MIN` so the replay's gen-mismatch dereference path returns a value strictly greater than the recorded
+// sentinel and forces the cache to invalidate; the cached max itself is stored in `MaxReducerCacheEntry::result`,
+// not in any per-leaf observation.
+void populate_max_reducer_body_observations(std::vector<AdStackCache::SizeExprReadObservation> &reads,
+                                            LaunchContextBuilder *ctx,
+                                            AdStackCache *cache);
 
 // walk every per-stack `SerializedSizeExpr` in `size_exprs`
 // post-order and return the list of `MaxOverRange` nodes the runtime can reduce in parallel via a dedicated

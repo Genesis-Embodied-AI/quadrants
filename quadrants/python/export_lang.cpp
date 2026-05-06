@@ -16,6 +16,7 @@
 #include "quadrants/ir/expression_ops.h"
 #include "quadrants/ir/frontend_ir.h"
 #include "quadrants/ir/statements.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/extension.h"
 #include "quadrants/program/ndarray.h"
 #include "quadrants/rhi/device_capability.h"
@@ -413,7 +414,11 @@ void export_lang(py::module &m) {
       .def("get_graph_cache_used_on_last_call", &Program::get_graph_cache_used_on_last_call)
       .def("get_num_offloaded_tasks_on_last_call", &Program::get_num_offloaded_tasks_on_last_call)
       .def("get_graph_num_nodes_on_last_call", &Program::get_graph_num_nodes_on_last_call)
-      .def("get_graph_total_builds", &Program::get_graph_total_builds);
+      .def("get_graph_total_builds", &Program::get_graph_total_builds)
+      .def("get_max_reducer_dispatch_count",
+           [](Program *program) { return program->adstack_cache().max_reducer_dispatch_count(); })
+      .def("reset_max_reducer_dispatch_count",
+           [](Program *program) { program->adstack_cache().reset_max_reducer_dispatch_count(); });
 
   py::class_<CompileResult>(m, "CompileResult")
       .def_property_readonly(

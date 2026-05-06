@@ -408,6 +408,18 @@ void LlvmRuntimeExecutor::ensure_adstack_heap_int(std::size_t needed_bytes) {
 }
 
 std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers_for_tasks(
+    const std::vector<OffloadedTask> &tasks,
+    LaunchContextBuilder *ctx,
+    void *device_runtime_context_ptr) {
+  std::vector<AdStackSizingInfo> ad_stacks_view;
+  ad_stacks_view.reserve(tasks.size());
+  for (const auto &t : tasks) {
+    ad_stacks_view.push_back(t.ad_stack);
+  }
+  return dispatch_max_reducers_for_tasks(ad_stacks_view, ctx, device_runtime_context_ptr);
+}
+
+std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers_for_tasks(
     const std::vector<AdStackSizingInfo> &ad_stacks,
     LaunchContextBuilder *ctx,
     void *device_runtime_context_ptr) {
@@ -631,6 +643,7 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
     }
     result[pending[k].cache_key] = v;
     if (cache != nullptr) {
+      populate_max_reducer_body_observations(pending[k].reads, ctx, cache);
       cache->record_max_reducer_eval(pending[k].registry_id, pending[k].stack_id, pending[k].mor_node_idx, v,
                                      std::move(pending[k].reads));
     }
@@ -1198,7 +1211,18 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
       const SerializedSizeExpr *expr = (i < ad_stack.size_exprs.size()) ? &ad_stack.size_exprs[i] : nullptr;
       int64_t v = -1;
       if (expr != nullptr && !expr->nodes.empty() && prog != nullptr) {
-        v = evaluate_adstack_size_expr(*expr, prog, ctx);
+        // Substitute any captured `MaxOverRange` whose result the max-reducer dispatched into a `Const` before the host
+        // evaluator walks the tree. Mirrors `eval_per_task_metadata_on_host` on the SPIR-V side. The empty-results fast
+        // path passes the live `expr` pointer directly so `size_expr_cache_` (keyed by `SerializedSizeExpr *`) stays
+        // warm across launches; the non-empty branch builds a stack-local substituted tree and routes through
+        // `evaluate_adstack_size_expr_no_cache` so the transient pointer never aliases unrelated cache entries.
+        if (current_max_reducer_results_.empty()) {
+          v = evaluate_adstack_size_expr(*expr, prog, ctx);
+        } else {
+          const SerializedSizeExpr substituted = substitute_precomputed_max_over_range(
+              *expr, ad_stack.registry_id, static_cast<int32_t>(i), current_max_reducer_results_);
+          v = evaluate_adstack_size_expr_no_cache(substituted, prog, ctx);
+        }
       }
       if (v < 0) {
         v = static_cast<int64_t>(ad_stack.allocas[i].max_size_compile_time);

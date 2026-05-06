@@ -2,8 +2,9 @@
 // `adstack_bound_reducer_launch.cpp` is - keeps `GfxRuntime::launch_kernel` focused on the main-kernel
 // record/submit flow. Conditional on at least one task in the kernel having a non-empty
 // `TaskAttributes::AdStackSizingAttribs::max_reducer_specs`. Returns an empty map on devices missing PSB+Int64
-// caps or on kernels with no captured specs; the caller falls through to the existing per-thread sizer eval
-// (which silently truncates at `1<<24` on the device sizer side and hard-errors on the host eval debug path).
+// caps or on kernels with no captured specs; the caller falls through to the per-thread sizer eval, whose
+// `1<<24` cap then surfaces as a hard error via the device sizer's overflow-flag slot if the iteration count
+// exceeds the cap.
 //
 // Per-spec mechanism:
 // 1. Pack the cache key `(registry_id, stack_id, mor_node_idx)` and query `AdStackCache::try_max_reducer_cache_hit`.
@@ -222,9 +223,13 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
     per_spec_bytecode_word_offsets[k] = static_cast<uint32_t>(total_bytecode_bytes / sizeof(uint32_t));
     total_bytecode_bytes += pending[k].body_bytecode.size();
   }
-  // Output buffer: one i64 per pending spec, cleared to INT64_MIN before dispatch so the first matching thread's
-  // atomic-SMax wins. Caller reads back per-spec slots after `submit_synced`.
-  const size_t output_bytes = pending.size() * sizeof(int64_t);
+  // Output buffer: two u32 slots per pending spec (`[value, overflow_flag]`), cleared to {0, 0} before dispatch.
+  // Threads `OpAtomicUMax` into the value slot for body values that fit in `UINT32_MAX`, and `OpAtomicOr 1` into
+  // the overflow flag for body values above that. The two-slot layout sidesteps spirv-cross's MSL backend gap on
+  // i64 atomics (`MSL currently does not support 64-bit atomics`), unlocking Metal / Vulkan-via-MoltenVK paths
+  // that would otherwise fail at pipeline-create. The host (`map` + read below) detects overflow per spec and
+  // falls back to direct host-eval for that spec via `evaluate_adstack_size_expr_at_node`.
+  const size_t output_bytes = pending.size() * 2 * sizeof(uint32_t);
 
   auto grow_buffer = [&](std::unique_ptr<DeviceAllocationGuard> &buf, size_t &capacity, size_t needed, bool host_write,
                          bool host_read, const char *label) {
@@ -290,9 +295,9 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
     void *mapped = nullptr;
     RhiResult map_res = device_->map_range(adstack_max_reducer_output_buffer_->get_ptr(0), output_bytes, &mapped);
     QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack max reducer output buffer for clear");
-    int64_t *slots = reinterpret_cast<int64_t *>(mapped);
-    for (size_t k = 0; k < pending.size(); ++k) {
-      slots[k] = std::numeric_limits<int64_t>::min();
+    uint32_t *slots = reinterpret_cast<uint32_t *>(mapped);
+    for (size_t k = 0; k < pending.size() * 2; ++k) {
+      slots[k] = 0u;
     }
     device_->unmap(*adstack_max_reducer_output_buffer_);
   }
@@ -331,8 +336,19 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
     QD_ERROR_IF(bind_res != RhiResult::success, "adstack max reducer resource binding error: RhiResult({})",
                 int(bind_res));
 
-    const uint32_t group_x =
-        (pending[k].length + spirv::kAdStackMaxReducerWorkgroupSize - 1) / spirv::kAdStackMaxReducerWorkgroupSize;
+    // Each thread walks `kElementsPerThread` elements via a strided loop inside the shader, so the host can cap
+    // workgroup count well below the Vulkan / Metal `maxComputeWorkGroupCount[0]` minimum (65535) without dropping any
+    // elements. With workgroup_size = 128 and elements_per_thread = 64 the dispatch covers up to 65535 * 128 * 64 =
+    // ~536M elements per spec, two orders of magnitude above any reverse-mode workload the recognizer captures in
+    // practice. Keep the constant in sync with `kElementsPerThread` in `adstack_max_reducer_shader.cpp`.
+    constexpr uint32_t kElementsPerThread = 64u;
+    constexpr uint32_t kMaxWorkgroupCountX = 65535u;
+    const uint32_t threads_per_workgroup = spirv::kAdStackMaxReducerWorkgroupSize;
+    const uint32_t elements_per_workgroup = threads_per_workgroup * kElementsPerThread;
+    uint32_t group_x = (pending[k].length + elements_per_workgroup - 1) / elements_per_workgroup;
+    if (group_x > kMaxWorkgroupCountX) {
+      group_x = kMaxWorkgroupCountX;
+    }
     if (group_x == 0) {
       // Empty range; record 0 directly. Caller's substitute helper treats 0 as the dispatched value (per-thread
       // sizer's `kConst 0` evaluator floors at 1 downstream). RHI rejects 0x1x1 dispatches on most backends.
@@ -346,21 +362,48 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
   }
   device_->get_compute_stream()->submit_synced(cmdlist.get());
 
-  // Read back per-spec output slots. Empty-range specs already wrote 0 directly above; the readback overrides
-  // them with the (still INT64_MIN sentinel) post-dispatch value, which we normalise to 0 along with any other
-  // "no thread won the atomic" cases.
+  // Read back per-spec output slots: `slots[2*k]` = u32 max, `slots[2*k + 1]` = overflow flag. Overflow specs
+  // fall back to direct host-eval over the `MaxOverRange` node; the host evaluator's `1<<24` cap surfaces the
+  // hard error path on out-of-grammar shapes that exceed both u32 (body value) and the cap (iteration count).
   {
     void *mapped = nullptr;
     RhiResult map_res = device_->map(*adstack_max_reducer_output_buffer_, &mapped);
     QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack max reducer output buffer for readback");
-    const int64_t *slots = reinterpret_cast<const int64_t *>(mapped);
+    const uint32_t *slots = reinterpret_cast<const uint32_t *>(mapped);
     for (size_t k = 0; k < pending.size(); ++k) {
-      int64_t v = slots[k];
-      if (v == std::numeric_limits<int64_t>::min()) {
-        v = 0;  // empty-range fallback; matches the pre-dispatch shortcut above
+      const uint32_t value_u32 = slots[2 * k];
+      const uint32_t overflow_flag = slots[2 * k + 1];
+      int64_t v;
+      if (overflow_flag != 0) {
+        // Host eval over the captured `MaxOverRange` node. Re-resolve `expr` from the per-task attribs by
+        // matching `(stack_id, mor_node_idx)` against the recognized specs; on the gfx side we look up
+        // `task_attribs[ti]->ad_stack.size_exprs[stack_id]` indirectly via the cache key triplet.
+        const SerializedSizeExpr *expr = nullptr;
+        for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
+          if (task_attribs[ti].ad_stack.registry_id != pending[k].registry_id) {
+            continue;
+          }
+          const auto &allocas = task_attribs[ti].ad_stack.allocas;
+          if (pending[k].stack_id < 0 || static_cast<size_t>(pending[k].stack_id) >= allocas.size()) {
+            continue;
+          }
+          expr = &allocas[pending[k].stack_id].size_expr;
+          break;
+        }
+        if (expr != nullptr) {
+          v = evaluate_adstack_size_expr_at_node(*expr, pending[k].mor_node_idx, prog, &host_ctx);
+          if (v < 0) {
+            v = 0;
+          }
+        } else {
+          v = 0;  // unrecoverable; leave as zero so the per-task sizer floors at 1
+        }
+      } else {
+        v = static_cast<int64_t>(value_u32);
       }
       result[pending[k].cache_key] = v;
       if (cache != nullptr) {
+        populate_max_reducer_body_observations(pending[k].reads, &host_ctx, cache);
         cache->record_max_reducer_eval(pending[k].registry_id, pending[k].stack_id, pending[k].mor_node_idx, v,
                                        std::move(pending[k].reads));
       }

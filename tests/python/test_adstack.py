@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsAssertionError
 from quadrants.lang.misc import is_extension_supported
 
@@ -4710,3 +4711,208 @@ def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
             f"gated index {i} (past advisory_total_num_threads={advisory_cap}) gradient diverged: "
             f"got={got[i]} expected={expected[i]}"
         )
+
+
+def _adstack_cache_prog():
+    return impl.get_runtime().prog
+
+
+@pytest.mark.parametrize(
+    "shape",
+    # The smaller shape stays well under the `1<<24` host-eval cap; the larger shape crosses it. The max-reducer
+    # dispatches once per launch, the result substitutes for the `MaxOverRange` node before the per-task sizer walks
+    # the tree, and the per-thread heap is sized to the actual maximum of the ndarray axis (= N_X in this kernel)
+    # independent of `arr.shape[0]`. Both shape variants exercise the same dispatch + substitution pipeline; the
+    # above-cap variant additionally pins the contract that a recognized spec ranges over an arbitrarily large axis.
+    [256, (1 << 24) + 1],
+    ids=["small", "above_cap"],
+)
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+def test_max_reducer_pins_stride_for_oversized_axis(shape):
+    # Pins the max-reducer dispatch + substitution end-to-end. The kernel pattern (parallel-for over an ndarray axis,
+    # inner range-for whose trip count is `a[i]`) lowers reverse-mode to a `MaxOverRange(0, a.shape[0], a[var])`
+    # size-expression. The recognizer captures the spec; the launcher dispatches once before the per-task sizer; the
+    # dispatched value substitutes into the per-stack tree as a `Const`. The above-cap shape variant places the only
+    # non-zero cell at `arr_np[-1] = N_X` so heap-stride correctness depends on the dispatch walking every element of
+    # the axis rather than relying on a partial host-eval walk.
+    N_X = 4
+    arr_np = np.zeros(shape, dtype=np.int32)
+    arr_np[-1] = N_X
+    # `qd.ndarray` rather than the numpy passthrough so the underlying device buffer is host-managed by Quadrants;
+    # numpy passthrough (`kNone` H2D-blit) caps the device-side mirror at backend-specific limits on macOS Metal for
+    # arrays above ~32 MB, which would prevent the dispatch from observing the cell at `arr_np[-1]` in the above-cap
+    # variant.
+    arr = qd.ndarray(qd.i32, shape=(shape,))
+    arr.from_numpy(arr_np)
+
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i_e in range(a.shape[0]):
+            accum = 0.0
+            for j in range(a[i_e]):
+                accum = accum + x[j] * x[j]
+            loss[None] += accum
+
+    for i in range(N_X):
+        x[i] = 0.1
+
+    prog = _adstack_cache_prog()
+    prog.reset_max_reducer_dispatch_count()
+
+    compute(arr)
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad(arr)
+    qd.sync()
+
+    # Only the last outer iteration walks the inner loop; every other iteration contributes nothing. The max-reducer
+    # dispatch covers every element of `arr` so the heap stride lands at the actual maximum (= N_X), and
+    # `compute.grad(arr)` plus `qd.sync()` runs to completion. The expected per-slot gradient is `2 * x[k]` since each
+    # surviving inner iteration contributes `2 * x[k]` to the reverse pass.
+    assert prog.get_max_reducer_dispatch_count() >= 1
+    for k in range(N_X):
+        assert x.grad[k] == pytest.approx(2 * 0.1, rel=1e-5)
+
+
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+def test_max_reducer_dispatch_counts_advance_on_input_mutation():
+    # Pins the dispatch + cache invalidation pipeline. The first launch must fire at least one max-reducer dispatch (the
+    # kernel's `MaxOverRange(0, a.shape[0], a[var])` matches the recognizer grammar so the recognizer captures the spec;
+    # the launcher dispatches once and bumps `Program.max_reducer_dispatch_count`). A subsequent host mutation of the
+    # gating ndarray must bump `ndarray_data_gen` and force the next launch to re-dispatch, advancing the counter beyond
+    # its post-first-launch value. Steady-state cache short-circuit on an unchanged ndarray is backend-dependent (the
+    # CPU launcher's `set_host_accessible_ndarray_ptrs` path converts qd.ndarray reads to `kNone` semantics and
+    # `bump_writes_for_kernel_llvm` then bumps the gen on every read; the SPIR-V launchers preserve the qd.ndarray
+    # dev-alloc-type and only bump on writes), so this test asserts only the mutation-triggers-redispatch contract that
+    # holds uniformly.
+    N = 4
+
+    x = qd.field(qd.f32, shape=(N,), needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(a.shape[0]):
+            v = x[i]
+            n = a[i]
+            for _ in range(n):
+                v = v * 0.95 + 0.01
+            y[None] += v
+
+    a = qd.ndarray(qd.i32, shape=(N,))
+    a.from_numpy(np.array([2, 3, 1, 2], dtype=np.int32))
+    for i in range(N):
+        x[i] = 0.1
+
+    prog = _adstack_cache_prog()
+    prog.reset_max_reducer_dispatch_count()
+
+    compute(a)
+    y.grad[None] = 1.0
+    for i in range(N):
+        x.grad[i] = 0.0
+    compute.grad(a)
+    qd.sync()
+    after_first = prog.get_max_reducer_dispatch_count()
+    assert after_first >= 1
+
+    a.from_numpy(np.array([3, 3, 1, 2], dtype=np.int32))
+    pre_mutation = prog.get_max_reducer_dispatch_count()
+    compute(a)
+    y.grad[None] = 1.0
+    for i in range(N):
+        x.grad[i] = 0.0
+    compute.grad(a)
+    qd.sync()
+    assert prog.get_max_reducer_dispatch_count() > pre_mutation
+
+
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+def test_max_reducer_grammar_fallback():
+    # Pins the recognizer's grammar gate. A reverse-mode kernel whose inner trip count is a compile-time constant (no
+    # `MaxOverRange` wrapper in the resulting `SizeExpr`) does not match the recognizer grammar and there is no spec for
+    # `recognize_adstack_max_reducer_specs` to capture. The launcher's pre-publish dispatch finds an empty
+    # `max_reducer_specs` list, fires no max-reducer dispatch, and the per-task sizer's existing host / device evaluator
+    # handles the constant trip count via its `Const` leaf path. The dispatch counter must stay at zero and the
+    # analytical gradient must still match. Pins the "any kernel outside the captured grammar runs unchanged" contract
+    # so future grammar broadening cannot silently drop the fallback path.
+    N = 4
+    K = 3
+
+    x = qd.field(qd.f32, shape=(N,), needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in range(N):
+            v = x[i]
+            for _ in range(K):
+                v = v * 0.95 + 0.01
+            y[None] += v
+
+    for i in range(N):
+        x[i] = 0.1
+
+    prog = _adstack_cache_prog()
+    prog.reset_max_reducer_dispatch_count()
+
+    compute()
+    y.grad[None] = 1.0
+    for i in range(N):
+        x.grad[i] = 0.0
+    compute.grad()
+    qd.sync()
+
+    assert prog.get_max_reducer_dispatch_count() == 0
+    expected = 0.95**K
+    for i in range(N):
+        assert x.grad[i] == pytest.approx(expected, rel=1e-5)
+
+
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+def test_above_cap_out_of_grammar_kernel_raises():
+    # A reverse-mode kernel whose inner `range(...)` trip count is bound to an out-of-grammar `MaxOverRange` body and
+    # whose iteration count exceeds the `1<<24` adstack-sizer cap surfaces a `QuadrantsAssertionError` at `qd.sync()`.
+    #
+    # Internal details: the recognizer's body grammar restricts to single-axis `ExternalTensorRead(arg,
+    # [BoundVariable(var_id)])` plus arithmetic combinators; a multi-axis read like `a[i_e, 0]` exits that subset, so
+    # the per-task sizer walks the `MaxOverRange` itself. With `a.shape[0] > 1<<24` the cap fires on every
+    # adstack-sizer eval path: the host evaluator's `QD_ERROR_IF` in `evaluate_node` on CPU, the LLVM device sizer's
+    # overflow flag write into `runtime->adstack_overflow_flag_dev_ptr` on CUDA / AMDGPU LLVM-GPU, and the SPIR-V
+    # on-device sizer's metadata-trailing overflow-flag slot on Metal / Vulkan.
+    N_X = 4
+    shape = (1 << 24) + 1
+    a_data = np.zeros((shape, 2), dtype=np.int32)
+    a_data[-1, 0] = 2
+    a = qd.ndarray(qd.i32, shape=(shape, 2))
+    a.from_numpy(a_data)
+
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=2)):
+        for i_e in range(a.shape[0]):
+            n = a[i_e, 0]
+            accum = 0.0
+            for j in range(n):
+                accum = accum + x[j] * x[j]
+            loss[None] += accum
+
+    for i in range(N_X):
+        x[i] = 0.1
+
+    # The host evaluator on CPU raises `RuntimeError` directly from `prog.launch_kernel` (the `QD_ERROR_IF` path
+    # surfaces as `RuntimeError` to Python); the device sizers raise `QuadrantsAssertionError` from `qd.sync()` once
+    # the overflow flag is polled. The match-set covers both backends uniformly.
+    with pytest.raises((QuadrantsAssertionError, RuntimeError)):
+        compute(a)
+        loss.grad[None] = 1.0
+        for i in range(N_X):
+            x.grad[i] = 0.0
+        compute.grad(a)
+        qd.sync()

@@ -540,20 +540,10 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
                                  ti_kernel->ti_kernel_attribs().ctx_attribs.arr_access);
   }
 
-  // Max-reducer dispatch. For each captured `MaxOverRange` whose body matches the recognizer grammar, dispatches a
-  // generic parallel-max compute shader over the captured iteration range and writes the result into a per-spec slot.
-  // The returned map is consumed by the substitution helper inside the per-task sizer (host fast path) and the device
-  // sizer encoder (`encode_adstack_size_expr_device_bytecode_for_spirv`), collapsing each captured `MaxOverRange` to a
-  // `Const` before any eval path walks the tree. Empty map on kernels with no captured specs; the per-thread sizer
-  // then walks the tree as written. Must precede `publish_adstack_metadata_spirv` so the substitution lands before the
-  // sizer's tree walk.
-  const bool any_max_reducer_spec =
-      std::any_of(task_attribs.begin(), task_attribs.end(),
-                  [](const spirv::TaskAttributes &t) { return !t.ad_stack.max_reducer_specs.empty(); });
-  quadrants::lang::MaxReducerResultMap max_reducer_results;
-  if (any_max_reducer_spec) {
-    max_reducer_results = dispatch_max_reducers(host_ctx, args_buffer.get(), task_attribs);
-  }
+  // Max-reducer dispatch. Must precede `publish_adstack_metadata_spirv` so the per-spec substitution lands before
+  // the sizer's tree walk. Implementation lives in `runtime/gfx/adstack_max_reducer_launch.cpp`; that file early-
+  // returns an empty map on kernels with no captured specs so the call below is cheap in the common case.
+  const auto max_reducer_results = dispatch_max_reducers(host_ctx, args_buffer.get(), task_attribs);
 
   // Device-side adstack SizeExpr evaluation: every task with adstack allocas has its per-alloca `max_size` /
   // `offset` metadata resolved by a dedicated compute shader (see `quadrants/runtime/gfx/adstack_sizer_launch.cpp`

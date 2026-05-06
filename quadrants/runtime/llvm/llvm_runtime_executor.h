@@ -195,6 +195,12 @@ class LlvmRuntimeExecutor {
   std::unordered_map<uint64_t, int64_t> dispatch_max_reducers_for_tasks(const std::vector<AdStackSizingInfo> &ad_stacks,
                                                                         LaunchContextBuilder *ctx,
                                                                         void *device_runtime_context_ptr);
+  // Convenience overload that extracts each task's `ad_stack` and forwards to the primary entry point. Lets the
+  // CUDA / AMDGPU per-arch launchers call into the dispatcher with the `OffloadedTask` list they already hold,
+  // without each launcher copy-pasting the per-task `ad_stack` extraction loop.
+  std::unordered_map<uint64_t, int64_t> dispatch_max_reducers_for_tasks(const std::vector<OffloadedTask> &tasks,
+                                                                        LaunchContextBuilder *ctx,
+                                                                        void *device_runtime_context_ptr);
 
   // Return (and lazily cache) the device pointer to `runtime->temporaries`, the global temporary buffer backing
   // `GlobalTemporaryStmt` loads and stores. GPU kernel launchers use this to read back dynamic range_for bounds (begin

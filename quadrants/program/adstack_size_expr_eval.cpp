@@ -877,6 +877,45 @@ bool AdStackCache::try_max_reducer_cache_hit(uint32_t registry_id,
   return true;
 }
 
+void populate_max_reducer_body_observations(std::vector<AdStackCache::SizeExprReadObservation> &reads,
+                                            LaunchContextBuilder *ctx,
+                                            AdStackCache *cache) {
+  if (ctx == nullptr) {
+    return;
+  }
+  for (auto &obs : reads) {
+    if (obs.kind != AdStackCache::SizeExprReadObservation::ExternalReadObs || obs.arg_id_path.empty()) {
+      continue;
+    }
+    int arg_id = obs.arg_id_path[0];
+    ArgArrayPtrKey key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+    auto it = ctx->array_ptrs.find(key);
+    if (it == ctx->array_ptrs.end()) {
+      continue;
+    }
+    obs.observed_devalloc = it->second;
+    // Pick an `observed_value` that no in-range ndarray scalar can equal (`INT64_MIN`). The replay code returns
+    // `obs.observed_value` verbatim when `ndarray_data_gen` still matches the recorded snapshot, so an `INT64_MIN`
+    // record is a self-equal cache hit. On gen mismatch the replay re-dereferences `data[0]` instead, which
+    // (under any sub-i64 prim_dt the recognizer admits) widens to an i64 strictly greater than `INT64_MIN` and
+    // forces the cache to invalidate. The dispatched max itself lives in `MaxReducerCacheEntry::result`; this
+    // observation only gates whether the cache stays warm.
+    obs.observed_value = std::numeric_limits<int64_t>::min();
+    if (cache != nullptr) {
+      obs.observed_gen = cache->ndarray_data_gen(it->second);
+    }
+  }
+}
+
+const std::vector<AdStackCache::SizeExprReadObservation> *
+AdStackCache::lookup_max_reducer_reads(uint32_t registry_id, int32_t stack_id, int32_t mor_node_idx) const {
+  auto it = max_reducer_cache_.find(pack_max_reducer_key(registry_id, stack_id, mor_node_idx));
+  if (it == max_reducer_cache_.end()) {
+    return nullptr;
+  }
+  return &it->second.reads;
+}
+
 void AdStackCache::record_max_reducer_eval(uint32_t registry_id,
                                            int32_t stack_id,
                                            int32_t mor_node_idx,
@@ -884,6 +923,7 @@ void AdStackCache::record_max_reducer_eval(uint32_t registry_id,
                                            std::vector<SizeExprReadObservation> reads) {
   max_reducer_cache_[pack_max_reducer_key(registry_id, stack_id, mor_node_idx)] =
       MaxReducerCacheEntry{result, std::move(reads)};
+  ++max_reducer_dispatch_count_;
 }
 
 bool AdStackCache::try_spirv_bytecode_cache_hit(Program *prog,
@@ -1027,6 +1067,16 @@ SizeExprLaunchScope::~SizeExprLaunchScope() {
   if (owns_) {
     t_launch_read_cache = nullptr;
   }
+}
+
+int64_t evaluate_adstack_size_expr_no_cache(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx) {
+  if (expr.nodes.empty()) {
+    return -1;
+  }
+  SizeExprLaunchScope local_scope;
+  std::unordered_map<int32_t, int64_t> empty_bound_vars;
+  std::vector<AdStackCache::SizeExprReadObservation> reads;
+  return evaluate_node(expr, static_cast<int32_t>(expr.nodes.size() - 1), empty_bound_vars, prog, ctx, &reads);
 }
 
 int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx) {
@@ -1731,19 +1781,26 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
   for (std::size_t i = 0; i < post_order.size(); ++i) {
     const auto &src = expr.nodes[post_order[i]];
     auto &dst = device_nodes[i];
-    dst.kind = src.kind;
     dst.var_id = -1;
     auto kind = static_cast<SizeExpr::Kind>(src.kind);
+    // Map the host `SizeExpr::Kind` enum into the device-side `AdStackSizeExprDeviceKind` enum: the two enums use
+    // different integer values (e.g. host `ExternalTensorRead = 9` vs. device `kExternalTensorRead = 7`), so a raw
+    // assignment lands every body node in the device interpreter's switch default and returns 0 on every walk.
+    // Mirror the explicit translation the per-task adstack-sizer encoder does (search `AdStackSizeExprDeviceKind::`
+    // in this TU for the canonical pattern); the max-reducer body grammar narrows to the subset listed below.
     switch (kind) {
       case SizeExpr::Kind::Const:
+        dst.kind = static_cast<int32_t>(AdStackSizeExprDeviceKind::kConst);
         dst.const_value = src.const_value;
         break;
       case SizeExpr::Kind::BoundVariable:
         // Device-side scope holds the bound variable at slot 0 (only one per spec). The runtime function pre-
         // populates `scope.values[var_id]`; the SPIR-V max-reducer shader substitutes `iter_var` directly.
+        dst.kind = static_cast<int32_t>(AdStackSizeExprDeviceKind::kBoundVariable);
         dst.var_id = 0;
         break;
       case SizeExpr::Kind::ExternalTensorRead: {
+        dst.kind = static_cast<int32_t>(AdStackSizeExprDeviceKind::kExternalTensorRead);
         dst.prim_dt = static_cast<int32_t>(src.const_value);
         // Resolve `arg_buffer_offset` from `arg_id_path` via the caller's resolver.
         std::vector<int32_t> path = src.arg_id_path;
@@ -1788,6 +1845,15 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
       case SizeExpr::Kind::Sub:
       case SizeExpr::Kind::Mul:
       case SizeExpr::Kind::Max: {
+        if (kind == SizeExpr::Kind::Add) {
+          dst.kind = static_cast<int32_t>(AdStackSizeExprDeviceKind::kAdd);
+        } else if (kind == SizeExpr::Kind::Sub) {
+          dst.kind = static_cast<int32_t>(AdStackSizeExprDeviceKind::kSub);
+        } else if (kind == SizeExpr::Kind::Mul) {
+          dst.kind = static_cast<int32_t>(AdStackSizeExprDeviceKind::kMul);
+        } else {
+          dst.kind = static_cast<int32_t>(AdStackSizeExprDeviceKind::kMax);
+        }
         auto map_op = [&](int32_t old) -> int32_t {
           auto it = old_to_new.find(old);
           return it == old_to_new.end() ? -1 : it->second;
@@ -2235,7 +2301,21 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
   std::vector<AdStackCache::SizeExprReadObservation> reads;
   std::vector<uint8_t> bytecode = encode_bytecode_common(std::move(stack_headers), exprs, prog, ctx, fl_emitter,
                                                          spirv::kAdStackSizerMaxNodesPerStack, &reads);
+  // Thread the max-reducer body's read observations into the bytecode cache entry so a mutation to the gating
+  // ndarray invalidates the cached bytecode (the encoder walked the post-substitution tree where each captured
+  // `MaxOverRange` has collapsed to a `Const`, so the body's `ExternalTensorRead` leaves are not in `reads`).
+  // The observations were populated by the dispatch site via `populate_max_reducer_body_observations` and
+  // recorded into the `max_reducer_cache_` alongside the dispatched value. On a subsequent launch the bytecode
+  // cache replays them; gen-mismatch paths hit the dereference branch in `replay_one_observation` which returns
+  // a value other than the recorded `INT64_MIN` sentinel and forces invalidation.
   if (prog != nullptr) {
+    for (const auto &spec : ad_stack.max_reducer_specs) {
+      const auto *spec_reads =
+          prog->adstack_cache().lookup_max_reducer_reads(ad_stack.registry_id, spec.stack_id, spec.mor_node_idx);
+      if (spec_reads != nullptr) {
+        reads.insert(reads.end(), spec_reads->begin(), spec_reads->end());
+      }
+    }
     prog->adstack_cache().record_spirv_bytecode_eval(static_cast<const void *>(&ad_stack), bytecode, std::move(reads));
   }
   return bytecode;
