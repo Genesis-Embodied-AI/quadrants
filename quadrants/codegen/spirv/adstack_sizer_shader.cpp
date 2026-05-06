@@ -760,18 +760,22 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
       // scope[var_id] = begin
       store_scope_at(ir, st, var_id_i32, begin_i64);
       // Push pending frame: pending[sp] = {...}; sp += 1.
-      // `pending_end_arr` is clamped to `min(end, begin + kMaxOverRangeIterations)` so the advance loop stops after the
-      // cap and the dispatch stays bounded; the cap-hit then writes 1 into the trailing overflow-flag slot of
-      // `metadata_buf`. The host post-readback raises a `QuadrantsAssertionError` when the slot is non-zero, matching
-      // the host evaluator's `QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node` and the LLVM device sizer's
-      // `scope.overflow_observed` path. Recognized `MaxOverRange` shapes are dispatched in parallel by the max-reducer
-      // and substituted to a `Const` before the sizer walks the tree, so this path is reachable only for out-of-
-      // grammar shapes whose iteration count exceeds the cap.
+      // `pending_end_arr` is clamped to `begin` when the iteration count exceeds the cap, so the advance loop walks
+      // zero iterations and the dispatch returns within bounded time even on the worst-case shape; the cap-hit also
+      // writes 1 into the trailing overflow-flag slot of `metadata_buf`, and the host post-readback raises a
+      // `QuadrantsAssertionError` when the slot is non-zero. Matches the host evaluator's `QD_ERROR_IF` in
+      // `adstack_size_expr_eval.cpp::evaluate_node` and the LLVM device sizer's `scope.overflow_observed` path.
+      // Recognized `MaxOverRange` shapes are dispatched in parallel by the max-reducer and substituted to a `Const`
+      // before the sizer walks the tree, so this path is reachable only for out-of-grammar shapes whose iteration
+      // count exceeds the cap.
       constexpr int64_t kMaxOverRangeIterations = int64_t{1} << 24;
       Value cap_delta = ir.int_immediate_number(ir.i64_type(), kMaxOverRangeIterations);
       Value cap_end = ir.add(begin_i64, cap_delta);
       Value end_gt_cap = ir.gt(end_i64, cap_end);
-      Value effective_end = ir.select(end_gt_cap, cap_end, end_i64);
+      // Cap-hit collapses the walk: `effective_end = begin` so no iterations run. The overflow flag below is the
+      // signal the host actually consumes; the cached `max_size` value falls through to its `max(_, 1)` floor and
+      // the heap is never used because the host raises before the main kernel launches.
+      Value effective_end = ir.select(end_gt_cap, begin_i64, end_i64);
 
       // Cap-hit overflow signal. Single-threaded dispatch, so a plain store rather than an atomic suffices. The slot is
       // initialised to 0 by the host before dispatch; the value sticks at 1 for the remainder of the dispatch once any

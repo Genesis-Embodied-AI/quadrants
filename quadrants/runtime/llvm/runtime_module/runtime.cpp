@@ -972,15 +972,16 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
       // evaluator's `QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node`.
       constexpr i64 kMaxOverRangeIterations = i64{1} << 24;
       if (end > begin && end - begin > kMaxOverRangeIterations && scope != nullptr) {
+        // Cap-hit: skip the walk entirely (running 16M iterations of body interpretation on a single GPU thread
+        // would trip the driver TDR before the host's overflow-flag poll runs). The cached `max_size` falls
+        // through to its compile-time floor; the host's post-launch poll picks up the flag and raises before the
+        // main kernel launches.
         scope->overflow_observed = 1;
+        return 0;
       }
       i64 result = 0;
       const i32 var = node.var_id;
       for (i64 i = begin; i < end; ++i) {
-        if (i - begin > kMaxOverRangeIterations) {
-          break;  // bounded walk on cap-hit; the overflow flag set above is what the host raises on. Without the
-                  // break the sizer would run on-device until the driver TDR fires.
-        }
         if (var >= 0 && var < kDeviceBoundVarCap) {
           scope->values[var] = i;
         }
