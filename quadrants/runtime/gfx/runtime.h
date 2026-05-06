@@ -161,7 +161,8 @@ class QD_DLL_EXPORT GfxRuntime {
       DeviceAllocationGuard *args_buffer,
       const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
       const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
-      const std::string &kernel_name);
+      const std::string &kernel_name,
+      const quadrants::lang::MaxReducerResultMap &max_reducer_results = quadrants::lang::MaxReducerResultMap{});
 
   // Static-IR-bound sparse-adstack-heap reducer dispatch. For each task with a captured ndarray-backed `bound_expr`,
   // dispatches the generic reducer compute shader (see `quadrants/codegen/spirv/adstack_bound_reducer_shader.{h,cpp}`)

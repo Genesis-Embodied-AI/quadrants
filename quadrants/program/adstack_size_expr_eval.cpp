@@ -2137,10 +2137,15 @@ bool compute_dense_snode_strides(SNode *leaf, std::vector<int32_t> *out_elem_str
 std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
     const spirv::TaskAttributes::AdStackSizingAttribs &ad_stack,
     Program *prog,
-    LaunchContextBuilder *ctx) {
+    LaunchContextBuilder *ctx,
+    const MaxReducerResultMap &max_reducer_results) {
   const std::size_t n_stacks = ad_stack.allocas.size();
   std::vector<AdStackSizeExprDeviceStackHeader> stack_headers(n_stacks);
   std::vector<const SerializedSizeExpr *> exprs(n_stacks, nullptr);
+  // Per-stack substituted trees. Stage 1.6 of the option-D plan: when the max-reducer dispatched a value for
+  // a captured `MaxOverRange` node, substitute it as a `Const` BEFORE the device sizer encoder walks the tree.
+  // Storage owns the substituted copies so `exprs[i]` (a pointer) stays valid through `encode_bytecode_common`.
+  std::vector<SerializedSizeExpr> substituted_storage(n_stacks);
   for (std::size_t i = 0; i < n_stacks; ++i) {
     const auto &a = ad_stack.allocas[i];
     // The SPIR-V heaps are element-indexed (f32 / i32), so `entry_size_bytes` in the device header would be
@@ -2153,7 +2158,13 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
     stack_headers[i].entry_size_bytes = 1;
     stack_headers[i].max_size_compile_time = a.max_size_compile_time;
     stack_headers[i].heap_kind = static_cast<uint32_t>(a.heap_kind);  // Float = 0, Int = 1
-    exprs[i] = &a.size_expr;
+    if (!max_reducer_results.empty()) {
+      substituted_storage[i] = substitute_precomputed_max_over_range(a.size_expr, ad_stack.registry_id,
+                                                                     static_cast<int32_t>(i), max_reducer_results);
+      exprs[i] = &substituted_storage[i];
+    } else {
+      exprs[i] = &a.size_expr;
+    }
   }
   // SPIR-V path: emit `FieldLoad` as `kFieldLoad` device nodes so the sizer shader can PSB-load the field value
   // in place. This avoids `SNodeRwAccessorsBank::Accessors::read_int`, whose nested accessor-kernel launch

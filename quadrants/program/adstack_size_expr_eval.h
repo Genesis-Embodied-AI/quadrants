@@ -383,6 +383,11 @@ class SizeExprLaunchScope {
 //      a direct `*(void **)(arg_buffer + offset)` to fetch the ndarray pointer at launch time - no map
 //      lookup, no `LaunchContextBuilder` touches from device code.
 //
+// Type alias for the option-D max-reducer result map. Keyed by `(registry_id, stack_id, mor_node_idx)` packed via
+// the same `pack_max_reducer_key` encoding `AdStackCache::try_max_reducer_cache_hit` uses, so a single map shared
+// between the dispatch path and the substitution helper avoids re-packing at every lookup.
+using MaxReducerResultMap = std::unordered_map<uint64_t, int64_t>;
+
 // Mixed subtrees that contain both an `ExternalTensorRead` and a `FieldLoad` are rejected with a hard error:
 // the device interpreter does not support on-device SNode access, so a `FieldLoad` that cannot be lifted out
 // to a host-resolvable `Const` has nowhere to run. The grammar today does not emit this combination and no
@@ -405,7 +410,8 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizin
 std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
     const spirv::TaskAttributes::AdStackSizingAttribs &ad_stack,
     Program *prog,
-    LaunchContextBuilder *ctx);
+    LaunchContextBuilder *ctx,
+    const MaxReducerResultMap &max_reducer_results = MaxReducerResultMap{});
 
 // Stage 1.4 of `quadrants_adstack_max_reducer_plan.md`: extract a captured `MaxOverRange`'s body subtree from
 // `expr` and emit it as a flat `[AdStackSizeExprDeviceNode x body_node_count][int32 x indices_count]` bytecode blob
@@ -451,11 +457,6 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
 // capped path (host hard-error when `QD_DEBUG_ADSTACK=1`, silent truncation otherwise).
 std::vector<StaticAdStackMaxReducerSpec> recognize_adstack_max_reducer_specs(
     const std::vector<SerializedSizeExpr> &size_exprs);
-
-// Type alias for the option-D max-reducer result map. Keyed by `(registry_id, stack_id, mor_node_idx)` packed via
-// the same `pack_max_reducer_key` encoding `AdStackCache::try_max_reducer_cache_hit` uses, so a single map shared
-// between the dispatch path and the substitution helper avoids re-packing at every lookup.
-using MaxReducerResultMap = std::unordered_map<uint64_t, int64_t>;
 
 // Stage 1.6 of `quadrants_adstack_max_reducer_plan.md`: walk `expr.nodes`, replace every captured `MaxOverRange`
 // node whose `(registry_id, stack_id, mor_node_idx)` is in `results` with a `Const` carrying the dispatched value.

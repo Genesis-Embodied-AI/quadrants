@@ -34,10 +34,12 @@ namespace quadrants::lang::spirv {
 // Required device capabilities: `spirv_has_physical_storage_buffer` + `spirv_has_int64`. The first is needed because
 // every body leaf reads through the ndarray data pointer the kernel arg buffer carries (PSB load path, mirroring the
 // main kernel's ndarray access); the second is needed for u64 atomic-max into the output buffer. On devices missing
-// either capability the function returns an empty vector and the runtime falls back to the existing capped path
-// (silent truncation at `1<<24` on the device sizer side; the user-visible bug surfaces only with `QD_DEBUG_ADSTACK=1`
-// on the host eval path). Both caps are advertised on every backend the gfx runtime supports today; the empty-return
-// branch is defensive future-proofing.
+// either capability the function returns an empty vector and the runtime hard-errors at dispatch-time
+// (`adstack_max_reducer_launch.cpp`'s `QD_ERROR_IF` gate). Silently falling through to the per-thread sizer's capped
+// path would corrupt reverse-mode gradients (the captured `MaxOverRange`'s 1<<24-truncated result undersizes the
+// heap), so failing loud is strictly safer. Quadrants's official Vulkan target is `VK_API_VERSION_1_3`, which
+// promotes both `VK_KHR_buffer_device_address` and `VK_KHR_shader_atomic_int64` into core; Metal's
+// `MTLArgumentBuffersTier::Tier2` (macOS 11+) advertises both caps too. The empty-return branch is forward-looking.
 std::vector<uint32_t> build_adstack_max_reducer_spirv(Arch arch, const DeviceCapabilityConfig *caps);
 
 // Compute-shader workgroup size (x dimension; y and z are 1). Power-of-two and a multiple of typical subgroup widths

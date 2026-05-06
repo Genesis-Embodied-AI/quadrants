@@ -87,15 +87,22 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
                                                       const std::vector<spirv::TaskAttributes> &task_attribs) {
   MaxReducerResultMap result;
 
-  // Capability gate. The shader builder returns an empty SPIR-V binary on devices missing PSB+Int64; without these
-  // caps the dispatch can't run, so fall through to the existing capped path. Every backend the gfx runtime targets
-  // today advertises both caps - this branch is defensive future-proofing.
-  if (!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer)) {
-    return result;
-  }
-  if (!device_->get_caps().get(DeviceCapability::spirv_has_int64)) {
-    return result;
-  }
+  // Capability requirement: option D's correctness depends on this dispatch running. Silently falling through to
+  // the existing capped path on cap-missing devices would route every captured spec into the `1<<24`-truncating
+  // sizer paths, which silently corrupts gradients (the deeper-MOR captured value comes back smaller than reality
+  // and the heap is undersized). Hard-error so a hypothetical future backend without PSB+Int64 is a clean build /
+  // runtime failure rather than a silent regression. Quadrants's official Vulkan target is `VK_API_VERSION_1_3`
+  // (`quadrants/rhi/vulkan/vulkan_utils.h::k_api_version`), which promotes both `VK_KHR_buffer_device_address` and
+  // `VK_KHR_shader_atomic_int64` into core, so every conforming 1.3 implementation already advertises both caps;
+  // Metal's `MTLArgumentBuffersTier::Tier2` (macOS 11+) does too. The asserts are forward-looking, not a routine
+  // path.
+  QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer),
+              "adstack max reducer requires spirv_has_physical_storage_buffer; the captured `MaxOverRange` "
+              "would otherwise silently truncate at 1<<24 and corrupt reverse-mode gradients");
+  QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_int64),
+              "adstack max reducer requires spirv_has_int64 for the per-spec atomic-SMax output slot; the "
+              "captured `MaxOverRange` would otherwise silently truncate at 1<<24 and corrupt reverse-mode "
+              "gradients");
 
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
   AdStackCache *cache = (prog != nullptr) ? &prog->adstack_cache() : nullptr;

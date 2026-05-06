@@ -161,6 +161,17 @@ Value emit_psb_load_i64_int_only(IRBuilder &ir, Value data_ptr_u64, Value linear
   return ir.load_variable(result_var, ir.i64_type());
 }
 
+// Dynamic-index access into a Function-scope array (OpVariable with array type, allocated via `alloca_variable`).
+// `IRBuilder::struct_array_access` is a buffer-only helper (asserts `kStructArrayPtr`); for Function-scope
+// arrays we emit `OpAccessChain` directly with the per-element pointer type. Returns a pointer-to-element that
+// can be passed to `load_variable` / `store_variable`.
+Value alloca_array_access(IRBuilder &ir, Value arr_var, const SType &elem_type, Value index_i32) {
+  SType elem_ptr_type = ir.get_pointer_type(elem_type, spv::StorageClassFunction);
+  Value elem_ptr = ir.new_value(elem_ptr_type, ValueKind::kVariablePtr);
+  ir.make_inst(spv::OpAccessChain, elem_ptr_type, elem_ptr, arr_var, index_i32);
+  return elem_ptr;
+}
+
 // Compute the element index for a `kExternalTensorRead` node body leaf. The Stage 1 grammar restricts the indices
 // table to a single axis whose raw value is `-(this_var_id + 1)` (referencing the enclosing `MaxOverRange`'s bound
 // variable), but the loop is general - it walks `indices[node.indices_offset .. node.indices_offset + 2 *
@@ -351,7 +362,7 @@ Value interpret_body(IRBuilder &ir,
   auto load_val_at = [&](uint32_t word_off) -> Value {
     Value op_idx_i32 =
         load_buf_i32(ir, bytecode_buf, ir.add(slot_base, ir.uint_immediate_number(ir.u32_type(), word_off)));
-    Value ptr = ir.struct_array_access(ir.i64_type(), vals_var, op_idx_i32);
+    Value ptr = alloca_array_access(ir, vals_var, ir.i64_type(), op_idx_i32);
     return ir.load_variable(ptr, ir.i64_type());
   };
 
@@ -402,7 +413,7 @@ Value interpret_body(IRBuilder &ir,
   ir.start_label(kind_merge);
   Value computed = ir.load_variable(computed_var, ir.i64_type());
   // Store into vals[i].
-  Value vals_slot_ptr = ir.struct_array_access(ir.i64_type(), vals_var, i_now);
+  Value vals_slot_ptr = alloca_array_access(ir, vals_var, ir.i64_type(), i_now);
   ir.store_variable(vals_slot_ptr, computed);
   ir.make_inst(spv::OpBranch, cont);
 
@@ -414,7 +425,7 @@ Value interpret_body(IRBuilder &ir,
   ir.start_label(merge);
   // Root index = body_node_count - 1.
   Value root_idx = ir.sub(body_node_count_i32, ir.int_immediate_number(ir.i32_type(), 1));
-  Value root_ptr = ir.struct_array_access(ir.i64_type(), vals_var, root_idx);
+  Value root_ptr = alloca_array_access(ir, vals_var, ir.i64_type(), root_idx);
   return ir.load_variable(root_ptr, ir.i64_type());
 }
 

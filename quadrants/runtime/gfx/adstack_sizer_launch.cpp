@@ -103,12 +103,14 @@ void eval_per_task_metadata_on_host(const std::vector<size_t> &adstack_task_indi
                                     const std::vector<spirv::TaskAttributes> &task_attribs,
                                     Program *prog,
                                     LaunchContextBuilder &host_ctx,
-                                    std::vector<PerTaskAdStackRuntime> &per_task_ad_stack) {
+                                    std::vector<PerTaskAdStackRuntime> &per_task_ad_stack,
+                                    const MaxReducerResultMap &max_reducer_results) {
   using HeapKind = spirv::TaskAttributes::AdStackAllocaAttribs::HeapKind;
   // Span the per-task `evaluate_adstack_size_expr` calls below with one shared read cache.
   SizeExprLaunchScope launch_scope;
   for (size_t ti : adstack_task_indices) {
     const auto &allocas = task_attribs[ti].ad_stack.allocas;
+    const uint32_t registry_id = task_attribs[ti].ad_stack.registry_id;
     auto &rt = per_task_ad_stack[ti];
     const size_t n_stacks = allocas.size();
     rt.metadata.assign(2 + 2 * n_stacks, 0);
@@ -122,7 +124,13 @@ void eval_per_task_metadata_on_host(const std::vector<size_t> &adstack_task_indi
         // Match the shader's `max(max_size_compile_time, 1)` lower clamp.
         max_size = std::max<uint32_t>(a.max_size_compile_time, 1u);
       } else {
-        int64_t evaluated = evaluate_adstack_size_expr(a.size_expr, prog, &host_ctx);
+        // Stage 1.6 of the option-D plan: substitute any captured `MaxOverRange` whose result the max-reducer
+        // dispatched into a `Const` before the host evaluator walks the tree. When `max_reducer_results` is
+        // empty (no captured specs in this kernel) or no spec matches `(registry_id, i)`, the helper returns
+        // `expr` unchanged and the eval path is identical to before option D.
+        const SerializedSizeExpr substituted = substitute_precomputed_max_over_range(
+            a.size_expr, registry_id, static_cast<int32_t>(i), max_reducer_results);
+        int64_t evaluated = evaluate_adstack_size_expr(substituted, prog, &host_ctx);
         // `evaluate_adstack_size_expr` returns -1 only when `expr.nodes` is empty (handled above) or hits
         // an internal hard error; clamp to the same `max(_, 1)` lower bound the shader applies.
         if (evaluated < 1) {
@@ -156,7 +164,8 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     DeviceAllocationGuard *args_buffer,
     const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
     const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
-    const std::string &kernel_name) {
+    const std::string &kernel_name,
+    const MaxReducerResultMap &max_reducer_results) {
   std::vector<PerTaskAdStackRuntime> per_task_ad_stack(task_attribs.size());
   for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
     per_task_ad_stack[ti].stride_float = task_attribs[ti].ad_stack.per_thread_stride_float_compile_time;
@@ -259,7 +268,7 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
   // memory) still need the on-device sizer below.
   if (all_size_exprs_host_resolvable(adstack_task_indices, task_attribs)) {
     eval_per_task_metadata_on_host(adstack_task_indices, task_attribs, program_impl_->program, host_ctx,
-                                   per_task_ad_stack);
+                                   per_task_ad_stack, max_reducer_results);
     return per_task_ad_stack;
   }
 
@@ -365,8 +374,8 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
   SizeExprLaunchScope launch_scope;
   for (size_t k = 0; k < adstack_task_indices.size(); ++k) {
     size_t ti = adstack_task_indices[k];
-    per_task_bytecodes[k] = encode_adstack_size_expr_device_bytecode_for_spirv(task_attribs[ti].ad_stack,
-                                                                               program_impl_->program, &host_ctx);
+    per_task_bytecodes[k] = encode_adstack_size_expr_device_bytecode_for_spirv(
+        task_attribs[ti].ad_stack, program_impl_->program, &host_ctx, max_reducer_results);
     per_task_bytecode_offsets[k] = align_up(total_bytecode_bytes, kDescriptorOffsetAlignment);
     total_bytecode_bytes = per_task_bytecode_offsets[k] + per_task_bytecodes[k].size();
     per_task_metadata_bytes[k] = (2u + 2u * task_attribs[ti].ad_stack.allocas.size()) * sizeof(uint32_t);
