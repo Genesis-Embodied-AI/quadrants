@@ -540,9 +540,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
                                  ti_kernel->ti_kernel_attribs().ctx_attribs.arr_access);
   }
 
-  // Max-reducer dispatch. Must precede `publish_adstack_metadata_spirv` so the per-spec substitution lands before
-  // the sizer's tree walk. Implementation lives in `runtime/gfx/adstack_max_reducer_launch.cpp`; that file early-
-  // returns an empty map on kernels with no captured specs so the call below is cheap in the common case.
+  // Max-reducer dispatch. Must precede `publish_adstack_metadata_spirv` so the per-spec substitution lands before the
+  // sizer's tree walk. Implementation lives in `runtime/gfx/adstack_max_reducer_launch.cpp`; that file early- returns
+  // an empty map on kernels with no captured specs so the call below is cheap in the common case.
   const auto max_reducer_results = dispatch_max_reducers(host_ctx, args_buffer.get(), task_attribs);
 
   // Device-side adstack SizeExpr evaluation: every task with adstack allocas has its per-alloca `max_size` /

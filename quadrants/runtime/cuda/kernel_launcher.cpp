@@ -81,9 +81,9 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // the cleared counter and UINT32_MAX-defaulted capacity arrays.
     executor->publish_adstack_lazy_claim_buffers(offloaded_tasks.size());
   }
-  // Max-reducer dispatch. Runs before the per-task loop so each `publish_adstack_metadata` call sees the result map
-  // via the executor's `current_max_reducer_results_` and can substitute captured `MaxOverRange`s inside its encoder.
-  // Empty map (and zero per-launch overhead) when no task has captured specs.
+  // Max-reducer dispatch. Runs before the per-task loop so each `publish_adstack_metadata` call sees the result map via
+  // the executor's `current_max_reducer_results_` and can substitute captured `MaxOverRange`s inside its encoder. Empty
+  // map (and zero per-launch overhead) when no task has captured specs.
   executor->dispatch_max_reducers_for_tasks(offloaded_tasks, &ctx, device_context_ptr);
   std::size_t task_index = 0;
   for (const auto &task : offloaded_tasks) {

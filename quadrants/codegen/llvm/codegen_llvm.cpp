@@ -1994,9 +1994,9 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
     current_task->ad_stack.allocas = ad_stack_allocas_info_;
     current_task->ad_stack.size_exprs = ad_stack_size_exprs_;
     current_task->ad_stack.bound_expr = ad_stack_static_bound_expr_;
-    // recognize `MaxOverRange` nodes that the runtime can
-    // reduce in parallel via the dedicated max-reducer dispatch instead of letting the per-thread sizer
-    // enumerate. Indexing matches `ad_stack_size_exprs_` (same iteration order as the pre-scan above).
+    // recognize `MaxOverRange` nodes that the runtime can reduce in parallel via the dedicated max-reducer dispatch
+    // instead of letting the per-thread sizer enumerate. Indexing matches `ad_stack_size_exprs_` (same iteration order
+    // as the pre-scan above).
     current_task->ad_stack.max_reducer_specs = recognize_adstack_max_reducer_specs(ad_stack_size_exprs_);
     // Snodes the task body mutates. Persisted on `OffloadedTask::snode_writes` so the LLVM
     // launcher can invalidate the per-task adstack metadata cache when a kernel that runs in

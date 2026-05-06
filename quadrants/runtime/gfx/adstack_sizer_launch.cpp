@@ -194,8 +194,8 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
                  "encode AdStack SizeExpr bytecode. Ensure GfxProgramImpl passes `program_impl = this` "
                  "into `GfxRuntime::Params`.");
 
-  // Reverse-mode autodiff with adstacks requires Vulkan 1.3 (or Metal at MTLArgumentBuffersTier::Tier2) on this
-  // device. Older drivers cannot run the sizer paths correctly; the per-helper cap gates downstream
+  // Reverse-mode autodiff with adstacks requires Vulkan 1.3 (or Metal at MTLArgumentBuffersTier::Tier2) on this device.
+  // Older drivers cannot run the sizer paths correctly; the per-helper cap gates downstream
   // (`dispatch_adstack_bound_reducers`, `dispatch_max_reducers`) rely on this single check and skip their own.
   QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer),
               "Reverse-mode autodiff with adstacks needs Vulkan 1.3 (or Metal Argument Buffers Tier 2); this "
@@ -551,8 +551,8 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     // Cap-hit tripwire. The on-device sizer writes 1 into the trailing overflow-flag slot when it observes a
     // `MaxOverRange` whose iteration count exceeds the `1<<24` cap; the hard error here surfaces the failure at
     // `qd.sync()` with a clean attribution. Recognized `MaxOverRange` shapes are dispatched in parallel by the
-    // max-reducer and substituted to `Const` before the sizer interpreter sees them, so this path is reachable only
-    // for out-of-grammar shapes; broadening the recognizer grammar moves more shapes onto the loud path automatically.
+    // max-reducer and substituted to `Const` before the sizer interpreter sees them, so this path is reachable only for
+    // out-of-grammar shapes; broadening the recognizer grammar moves more shapes onto the loud path automatically.
     const size_t overflow_word_idx = 2u + 2u * task_attribs[ti].ad_stack.allocas.size();
     QD_ERROR_IF(overflow_word_idx < rt.metadata.size() && rt.metadata[overflow_word_idx] != 0,
                 "Adstack on-device sizer hit a `MaxOverRange` whose iteration count exceeds the {} cap. The recognized "

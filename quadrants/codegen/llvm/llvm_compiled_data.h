@@ -81,10 +81,10 @@ struct AdStackSizingInfo {
   // ids are assigned per `Program` lifetime, not per-kernel-content; a deserialised task re-registers
   // itself at the next launch.
   uint32_t registry_id{0};
-  // Per-task list of `MaxOverRange` nodes the runtime reduces in parallel via a dedicated max-reducer dispatch (see
-  // the max-reducer recognizer). Empty when no captured `size_expr` contains a recognized
-  // shape. Each entry references one alloca's `size_expr` by `(stack_id, mor_node_idx)`; the runtime substitutes
-  // the dispatched value as a `Const` into the tree before the per-thread sizer walks it.
+  // Per-task list of `MaxOverRange` nodes the runtime reduces in parallel via a dedicated max-reducer dispatch (see the
+  // max-reducer recognizer). Empty when no captured `size_expr` contains a recognized shape. Each entry references one
+  // alloca's `size_expr` by `(stack_id, mor_node_idx)`; the runtime substitutes the dispatched value as a `Const` into
+  // the tree before the per-thread sizer walks it.
   std::vector<StaticAdStackMaxReducerSpec> max_reducer_specs;
   QD_IO_DEF(per_thread_stride,
             per_thread_stride_float,

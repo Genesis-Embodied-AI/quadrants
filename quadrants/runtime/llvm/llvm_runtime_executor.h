@@ -183,21 +183,21 @@ class LlvmRuntimeExecutor {
                                                std::size_t num_threads,
                                                LaunchContextBuilder *ctx);
 
-  // Max-reducer dispatch on LLVM. For each captured `StaticAdStackMaxReducerSpec` across every
-  // task in `tasks`, hits `AdStackCache::try_max_reducer_cache_hit` first; on miss h2d-copies the params blob + body
-  // bytecode and invokes `runtime_eval_adstack_max_reduce` via the runtime JIT. Single dispatch path covers CPU
-  // (host call), CUDA, and AMDGPU. The returned map is keyed by `(registry_id, stack_id, mor_node_idx)` packed via
-  // the same encoding the gfx variant uses, so `substitute_precomputed_max_over_range` works backend-agnostically.
-  // Caller invokes this BEFORE the per-task `publish_adstack_metadata` loop and passes the result map down to each
-  // per-task `publish` call so the encoder substitutes captured `MaxOverRange`s before walking the tree.
-  // `MaxReducerResultMap` is defined in `quadrants/program/adstack_size_expr_eval.h`; declared inline here to avoid
-  // pulling that header into every translation unit that includes `llvm_runtime_executor.h`.
+  // Max-reducer dispatch on LLVM. For each captured `StaticAdStackMaxReducerSpec` across every task in `tasks`, hits
+  // `AdStackCache::try_max_reducer_cache_hit` first; on miss h2d-copies the params blob + body bytecode and invokes
+  // `runtime_eval_adstack_max_reduce` via the runtime JIT. Single dispatch path covers CPU (host call), CUDA, and
+  // AMDGPU. The returned map is keyed by `(registry_id, stack_id, mor_node_idx)` packed via the same encoding the gfx
+  // variant uses, so `substitute_precomputed_max_over_range` works backend-agnostically. Caller invokes this BEFORE the
+  // per-task `publish_adstack_metadata` loop and passes the result map down to each per-task `publish` call so the
+  // encoder substitutes captured `MaxOverRange`s before walking the tree. `MaxReducerResultMap` is defined in
+  // `quadrants/program/adstack_size_expr_eval.h`; declared inline here to avoid pulling that header into every
+  // translation unit that includes `llvm_runtime_executor.h`.
   std::unordered_map<uint64_t, int64_t> dispatch_max_reducers_for_tasks(const std::vector<AdStackSizingInfo> &ad_stacks,
                                                                         LaunchContextBuilder *ctx,
                                                                         void *device_runtime_context_ptr);
-  // Convenience overload that extracts each task's `ad_stack` and forwards to the primary entry point. Lets the
-  // CUDA / AMDGPU per-arch launchers call into the dispatcher with the `OffloadedTask` list they already hold,
-  // without each launcher copy-pasting the per-task `ad_stack` extraction loop.
+  // Convenience overload that extracts each task's `ad_stack` and forwards to the primary entry point. Lets the CUDA /
+  // AMDGPU per-arch launchers call into the dispatcher with the `OffloadedTask` list they already hold, without each
+  // launcher copy-pasting the per-task `ad_stack` extraction loop.
   std::unordered_map<uint64_t, int64_t> dispatch_max_reducers_for_tasks(const std::vector<OffloadedTask> &tasks,
                                                                         LaunchContextBuilder *ctx,
                                                                         void *device_runtime_context_ptr);
@@ -345,16 +345,16 @@ class LlvmRuntimeExecutor {
   // allocation.
   void *runtime_adstack_row_counters_field_ptr_{nullptr};
   void *runtime_adstack_bound_row_capacities_field_ptr_{nullptr};
-  // Cached address of `LLVMRuntime::adstack_max_reducer_outputs` (a `i64 *` field). Resolved once per program
-  // lifetime via `runtime_get_adstack_max_reducer_field_ptr`; the per-launch dispatch writes the (possibly grown)
-  // device buffer pointer to this address so `runtime_eval_adstack_max_reduce` deref's the live allocation.
+  // Cached address of `LLVMRuntime::adstack_max_reducer_outputs` (a `i64 *` field). Resolved once per program lifetime
+  // via `runtime_get_adstack_max_reducer_field_ptr`; the per-launch dispatch writes the (possibly grown) device buffer
+  // pointer to this address so `runtime_eval_adstack_max_reduce` deref's the live allocation.
   void *runtime_adstack_max_reducer_outputs_field_ptr_{nullptr};
 
   // Per-launch transient: the `MaxReducerResultMap` populated by `dispatch_max_reducers_for_tasks` and read by
-  // `publish_adstack_metadata`. Owned by the executor across the per-task
-  // publish loop within a single kernel launch; cleared at the top of every `dispatch_max_reducers_for_tasks`
-  // call so a kernel without captured specs sees an empty map. Keeping the map on the executor avoids threading
-  // it through `publish_adstack_metadata`'s call sites in three per-arch launchers.
+  // `publish_adstack_metadata`. Owned by the executor across the per-task publish loop within a single kernel launch;
+  // cleared at the top of every `dispatch_max_reducers_for_tasks` call so a kernel without captured specs sees an empty
+  // map. Keeping the map on the executor avoids threading it through `publish_adstack_metadata`'s call sites in three
+  // per-arch launchers.
   std::unordered_map<uint64_t, int64_t> current_max_reducer_results_;
 
   // Host-owned storage for the per-kernel lazy-claim arrays: `adstack_row_counters_alloc_`: u32[num_tasks] atomic
@@ -402,17 +402,17 @@ class LlvmRuntimeExecutor {
   DeviceAllocationUnique adstack_sizer_bytecode_alloc_ = nullptr;
   std::size_t adstack_sizer_bytecode_capacity_{0};
 
-  // Per-launch scratch buffers for the max-reducer dispatch. One holds a single
-  // `LlvmAdStackMaxReducerDeviceParams` blob per call (the runtime function is dispatched per spec); the other
-  // holds the body bytecode (concatenated `AdStackSizeExprDeviceNode` array followed by indices). Both grow
-  // amortised-doubling and are reused across specs within a launch and across launches. Unused on CPU when the
-  // runtime function is invoked directly host-side without staging.
+  // Per-launch scratch buffers for the max-reducer dispatch. One holds a single `LlvmAdStackMaxReducerDeviceParams`
+  // blob per call (the runtime function is dispatched per spec); the other holds the body bytecode (concatenated
+  // `AdStackSizeExprDeviceNode` array followed by indices). Both grow amortised-doubling and are reused across specs
+  // within a launch and across launches. Unused on CPU when the runtime function is invoked directly host-side without
+  // staging.
   DeviceAllocationUnique adstack_max_reducer_params_alloc_ = nullptr;
   std::size_t adstack_max_reducer_params_capacity_{0};
   DeviceAllocationUnique adstack_max_reducer_bytecode_alloc_ = nullptr;
   std::size_t adstack_max_reducer_bytecode_capacity_{0};
-  // Per-launch output buffer the runtime function writes into (`runtime->adstack_max_reducer_outputs[output_slot]`
-  // = i64 dispatched value). Sized to fit the kernel's spec count; grown amortised-doubling. Backed by the runtime
+  // Per-launch output buffer the runtime function writes into (`runtime->adstack_max_reducer_outputs[output_slot]` =
+  // i64 dispatched value). Sized to fit the kernel's spec count; grown amortised-doubling. Backed by the runtime
   // module's `adstack_max_reducer_outputs` field via `runtime_LLVMRuntime_set_adstack_max_reducer_outputs`.
   DeviceAllocationUnique adstack_max_reducer_outputs_alloc_ = nullptr;
   std::size_t adstack_max_reducer_outputs_capacity_{0};

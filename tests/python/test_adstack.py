@@ -4718,41 +4718,80 @@ def _adstack_cache_prog():
 
 
 @pytest.mark.parametrize(
-    "shape",
-    # The smaller shape stays well under the `1<<24` host-eval cap; the larger shape crosses it. The max-reducer
-    # dispatches once per launch, the result substitutes for the `MaxOverRange` node before the per-task sizer walks
-    # the tree, and the per-thread heap is sized to the actual maximum of the ndarray axis (= N_X in this kernel)
-    # independent of `arr.shape[0]`. Both shape variants exercise the same dispatch + substitution pipeline; the
-    # above-cap variant additionally pins the contract that a recognized spec ranges over an arbitrarily large axis.
-    [256, (1 << 24) + 1],
-    ids=["small", "above_cap"],
+    "shape, body_kind",
+    # `shape` selects whether the per-task sizer's `1<<24` host-eval cap fires; the smaller shape stays well below the
+    # cap, the larger one crosses it. `body_kind` selects which body-leaf and combinator mix the recognizer must accept
+    # and the encoder must lower correctly before the device walk. Each `(shape, body_kind)` combination is designed so
+    # the body's max value over the captured ndarray is always `N_X`, keeping the asserted gradient identical across the
+    # matrix.
+    [
+        (256, "extread"),
+        ((1 << 24) + 1, "extread"),
+        ((1 << 24) + 1, "shape_in_body"),
+        ((1 << 24) + 1, "field_in_body"),
+        ((1 << 24) + 1, "arith_combine"),
+    ],
+    ids=[
+        "small_extread",
+        "above_cap_extread",
+        "above_cap_shape_in_body",
+        "above_cap_field_in_body",
+        "above_cap_arith_combine",
+    ],
 )
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
-def test_max_reducer_pins_stride_for_oversized_axis(shape):
-    # Pins the max-reducer dispatch + substitution end-to-end. The kernel pattern (parallel-for over an ndarray axis,
-    # inner range-for whose trip count is `a[i]`) lowers reverse-mode to a `MaxOverRange(0, a.shape[0], a[var])`
-    # size-expression. The recognizer captures the spec; the launcher dispatches once before the per-task sizer; the
-    # dispatched value substitutes into the per-stack tree as a `Const`. The above-cap shape variant places the only
-    # non-zero cell at `arr_np[-1] = N_X` so heap-stride correctness depends on the dispatch walking every element of
-    # the axis rather than relying on a partial host-eval walk.
+def test_max_reducer_pins_stride_for_oversized_axis(shape, body_kind):
+    # A reverse-mode kernel with a parallel-for over an arbitrarily large ndarray axis and an inner range-for bound to a
+    # recognizer-accepted trip-count expression sizes its adstack at launch time and computes the right gradient,
+    # without the per-task sizer's `1<<24` cap firing.
+    #
+    # Internal details: the kernel lowers to `MaxOverRange(0, a.shape[0], <body>)` in the per-stack `SizeExpr`.
+    # `recognize_adstack_max_reducer_specs` captures the spec; the launcher dispatches the parallel max-reducer before
+    # the per-task sizer walks the tree; `substitute_precomputed_max_over_range` rewrites the captured `MaxOverRange` to
+    # `Const`. The above-cap variants place the only non-zero cell at `arr_np[-1] = N_X` so heap-stride correctness
+    # depends on the dispatch walking every element of the axis rather than relying on a partial host-eval walk. The
+    # `shape_in_body` / `field_in_body` variants additionally pin that closed leaves (`ExternalTensorShape`,
+    # `FieldLoad`) host-fold to `kConst` at encode time and never reach the device interpreter; `arith_combine`
+    # exercises every binary combinator (`Add`, `Sub`, `Mul`, `Max`) and `Const` leaf in a single body expression that
+    # algebraically reduces to `a[i_e]`.
     N_X = 4
     arr_np = np.zeros(shape, dtype=np.int32)
     arr_np[-1] = N_X
-    # `qd.ndarray` rather than the numpy passthrough so the underlying device buffer is host-managed by Quadrants;
-    # numpy passthrough (`kNone` H2D-blit) caps the device-side mirror at backend-specific limits on macOS Metal for
-    # arrays above ~32 MB, which would prevent the dispatch from observing the cell at `arr_np[-1]` in the above-cap
-    # variant.
+    # `qd.ndarray` rather than the numpy passthrough so the underlying device buffer is host-managed by Quadrants; numpy
+    # passthrough (`kNone` H2D-blit) caps the device-side mirror at backend-specific limits on macOS Metal for arrays
+    # above ~32 MB, which would prevent the dispatch from observing the cell at `arr_np[-1]` in the above-cap variant.
     arr = qd.ndarray(qd.i32, shape=(shape,))
     arr.from_numpy(arr_np)
 
     x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
     loss = qd.field(qd.f32, shape=(), needs_grad=True)
+    # Closed `FieldLoad` leaf for the `field_in_body` variant. Set to zero so the body's max value remains `N_X`
+    # regardless of the body kind, keeping the asserted gradient uniform across the parametrized matrix.
+    gate = qd.field(qd.i32, shape=())
+    gate[None] = 0
 
     @qd.kernel
     def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
         for i_e in range(a.shape[0]):
+            # `qd.static(...)` selects the body shape at kernel compile time so each parametrization compiles a
+            # single-branch kernel; every form has algebraic max value `a[i_e]`. The `arith_combine` form exercises
+            # `Add` / `Sub` / `Mul` / `Max` / `Const` together: outer `Max` of the two equal sub-expressions `a[i_e] +
+            # 0` (`Add` + `Const`) and `a[i_e] * 1 - 0` (`Mul` + `Sub` + `Const`).
+            n = (
+                a[i_e]
+                if qd.static(body_kind == "extread")
+                else (
+                    a[i_e] + (a.shape[0] - a.shape[0])
+                    if qd.static(body_kind == "shape_in_body")
+                    else (
+                        max(a[i_e], gate[None])
+                        if qd.static(body_kind == "field_in_body")
+                        else max(a[i_e] + 0, a[i_e] * 1 - 0)
+                    )
+                )
+            )
             accum = 0.0
-            for j in range(a[i_e]):
+            for j in range(n):
                 accum = accum + x[j] * x[j]
             loss[None] += accum
 
@@ -4760,7 +4799,7 @@ def test_max_reducer_pins_stride_for_oversized_axis(shape):
         x[i] = 0.1
 
     prog = _adstack_cache_prog()
-    prog.reset_max_reducer_dispatch_count()
+    prog._reset_max_reducer_dispatch_count()
 
     compute(arr)
     loss.grad[None] = 1.0
@@ -4773,7 +4812,7 @@ def test_max_reducer_pins_stride_for_oversized_axis(shape):
     # dispatch covers every element of `arr` so the heap stride lands at the actual maximum (= N_X), and
     # `compute.grad(arr)` plus `qd.sync()` runs to completion. The expected per-slot gradient is `2 * x[k]` since each
     # surviving inner iteration contributes `2 * x[k]` to the reverse pass.
-    assert prog.get_max_reducer_dispatch_count() >= 1
+    assert prog._get_max_reducer_dispatch_count() >= 1
     for k in range(N_X):
         assert x.grad[k] == pytest.approx(2 * 0.1, rel=1e-5)
 
@@ -4809,7 +4848,7 @@ def test_max_reducer_dispatch_counts_advance_on_input_mutation():
         x[i] = 0.1
 
     prog = _adstack_cache_prog()
-    prog.reset_max_reducer_dispatch_count()
+    prog._reset_max_reducer_dispatch_count()
 
     compute(a)
     y.grad[None] = 1.0
@@ -4817,18 +4856,18 @@ def test_max_reducer_dispatch_counts_advance_on_input_mutation():
         x.grad[i] = 0.0
     compute.grad(a)
     qd.sync()
-    after_first = prog.get_max_reducer_dispatch_count()
+    after_first = prog._get_max_reducer_dispatch_count()
     assert after_first >= 1
 
     a.from_numpy(np.array([3, 3, 1, 2], dtype=np.int32))
-    pre_mutation = prog.get_max_reducer_dispatch_count()
+    pre_mutation = prog._get_max_reducer_dispatch_count()
     compute(a)
     y.grad[None] = 1.0
     for i in range(N):
         x.grad[i] = 0.0
     compute.grad(a)
     qd.sync()
-    assert prog.get_max_reducer_dispatch_count() > pre_mutation
+    assert prog._get_max_reducer_dispatch_count() > pre_mutation
 
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
@@ -4858,7 +4897,7 @@ def test_max_reducer_grammar_fallback():
         x[i] = 0.1
 
     prog = _adstack_cache_prog()
-    prog.reset_max_reducer_dispatch_count()
+    prog._reset_max_reducer_dispatch_count()
 
     compute()
     y.grad[None] = 1.0
@@ -4867,7 +4906,7 @@ def test_max_reducer_grammar_fallback():
     compute.grad()
     qd.sync()
 
-    assert prog.get_max_reducer_dispatch_count() == 0
+    assert prog._get_max_reducer_dispatch_count() == 0
     expected = 0.95**K
     for i in range(N):
         assert x.grad[i] == pytest.approx(expected, rel=1e-5)
@@ -4878,35 +4917,46 @@ def test_above_cap_out_of_grammar_kernel_raises():
     # A reverse-mode kernel whose inner `range(...)` trip count is bound to an out-of-grammar `MaxOverRange` body and
     # whose iteration count exceeds the `1<<24` adstack-sizer cap surfaces a `QuadrantsAssertionError` at `qd.sync()`.
     #
-    # Internal details: the recognizer's body grammar restricts to single-axis `ExternalTensorRead(arg,
-    # [BoundVariable(var_id)])` plus arithmetic combinators; a multi-axis read like `a[i_e, 0]` exits that subset, so
-    # the per-task sizer walks the `MaxOverRange` itself. With `a.shape[0] > 1<<24` the cap fires on the host evaluator
-    # (`QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node`, raised as `RuntimeError` on the CPU host fast
-    # path) and on the SPIR-V on-device sizer (the trailing overflow-flag slot of the metadata buffer, raised as
+    # Internal details: the recognizer's chain capture (`recognize_adstack_max_reducer_specs`) descends through nested
+    # `MaxOverRange`s only while every inner `[begin, end)` is closed-form (`Const`, `ExternalTensorShape`, or
+    # already-captured deeper MORs). A ragged inner range like `for j_e in range(a[i_e])` reads its bound from an
+    # `ExternalTensorRead` indexed by the OUTER chain's bound var, which `max_reducer_bound_is_closed` rejects, so the
+    # chain stops at the outer `MaxOverRange` and the body recognizer then sees an inner `MaxOverRange` node which is
+    # not in the accepted body grammar (`Const / ExternalTensorRead / Add / Sub / Mul / Max`). The whole spec is dropped
+    # and the per-task sizer walks the outer `MaxOverRange` itself. With `a.shape[0] > 1<<24` the cap fires on the host
+    # evaluator (`QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node`, raised as `RuntimeError` on the CPU host
+    # fast path) and on the SPIR-V on-device sizer (the trailing overflow-flag slot of the metadata buffer, raised as
     # `QuadrantsAssertionError` from the host post-readback in `publish_adstack_metadata_spirv`). The CUDA and AMDGPU
     # LLVM-GPU sizer short-circuits the walk and returns 0 from `device_eval_node`'s `kMaxOverRange` arm so the
-    # single-thread on-device dispatch stays within the driver's TDR window; the cap-hit then surfaces indirectly
-    # via the existing `stack_push` overflow infrastructure on a subsequent main-kernel launch, and the resulting
-    # diagnostic message attribution depends on the kernel layout. That indirect path is covered by
+    # single-thread on-device dispatch stays within the driver's TDR window; the cap-hit then surfaces indirectly via
+    # the existing `stack_push` overflow infrastructure on a subsequent main-kernel launch, and the resulting diagnostic
+    # message attribution depends on the kernel layout. That indirect path is covered by
     # `test_adstack_overflow_diagnostic_and_auto_recovery`.
     N_X = 4
     shape = (1 << 24) + 1
-    a_data = np.zeros((shape, 2), dtype=np.int32)
-    a_data[-1, 0] = 2
-    a = qd.ndarray(qd.i32, shape=(shape, 2))
+    # All-zero gating ndarray keeps the forward kernel's actual inner-loop work at zero on every thread; the cap-hit is
+    # purely a property of the symbolic `MaxOverRange` iteration count, so we do not need any cell to be non-zero for
+    # the per-task sizer's walk to overflow the guard.
+    a_data = np.zeros(shape, dtype=np.int32)
+    a = qd.ndarray(qd.i32, shape=(shape,))
     a.from_numpy(a_data)
 
     x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
     loss = qd.field(qd.f32, shape=(), needs_grad=True)
 
     @qd.kernel
-    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=2)):
+    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
         for i_e in range(a.shape[0]):
-            n = a[i_e, 0]
-            accum = 0.0
-            for j in range(n):
-                accum = accum + x[j] * x[j]
-            loss[None] += accum
+            # `range(a[i_e])` makes the inner `MaxOverRange`'s `[begin, end)` depend on the outer chain's bound
+            # variable, which the recognizer's `max_reducer_bound_is_closed` rejects. The per-task sizer walks
+            # the outer `MaxOverRange(0, shape[0], ...)` itself, hits the `1<<24` cap, and raises on every
+            # backend.
+            for j_e in range(a[i_e]):
+                n = a[j_e]
+                accum = 0.0
+                for k in range(n):
+                    accum = accum + x[k] * x[k]
+                loss[None] += accum
 
     for i in range(N_X):
         x[i] = 0.1

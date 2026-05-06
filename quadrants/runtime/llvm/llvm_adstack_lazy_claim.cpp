@@ -438,8 +438,8 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
   AdStackCache *cache = (prog != nullptr) ? &prog->adstack_cache() : nullptr;
 
   // First pass: per-spec cache lookup. Hits drop straight into the result map; misses queue up host-resolved begin /
-  // end + encoded body bytecode for the dispatch loop. Mirrors the gfx variant's two-phase structure so the cache
-  // hit path stays free of any device traffic.
+  // end + encoded body bytecode for the dispatch loop. Mirrors the gfx variant's two-phase structure so the cache hit
+  // path stays free of any device traffic.
   struct PendingMaxReducerDispatch {
     uint64_t cache_key;
     uint32_t registry_id;
@@ -455,8 +455,8 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
     if (ad_stack.max_reducer_specs.empty()) {
       continue;
     }
-    // The LLVM `AdStackSizingInfo::registry_id` is populated by codegen at finalize-time; if for some reason it
-    // is still 0 (unregistered task), skip - the spec cannot be cache-keyed reliably without a stable id.
+    // The LLVM `AdStackSizingInfo::registry_id` is populated by codegen at finalize-time; if for some reason it is
+    // still 0 (unregistered task), skip - the spec cannot be cache-keyed reliably without a stable id.
     const uint32_t registry_id = ad_stack.registry_id;
     if (registry_id == 0) {
       continue;
@@ -473,13 +473,34 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
         }
       }
       const SerializedSizeExpr &expr = ad_stack.size_exprs[spec.stack_id];
-      const int64_t begin_val = evaluate_adstack_size_expr_at_node(expr, spec.begin_node_idx, prog, ctx);
-      const int64_t end_val = evaluate_adstack_size_expr_at_node(expr, spec.end_node_idx, prog, ctx);
-      if (begin_val < 0 || end_val < 0 || end_val <= begin_val) {
+      // Multi-axis chain support: evaluate `[begin, end)` per captured axis and accumulate the total cross-product
+      // length. Any axis whose begin / end fails to host-resolve, or whose product overflows u32, drops the spec (the
+      // per-thread sizer's capped path absorbs it). The recognizer guarantees axes are ordered outermost-first so the
+      // cross-product index decomposes via stride-major math in the runtime function below.
+      const std::size_t num_axes = spec.axis_var_ids.size();
+      if (num_axes == 0 || num_axes > static_cast<std::size_t>(kAdStackMaxReducerMaxAxes)) {
         continue;
       }
-      const int64_t length_i64 = end_val - begin_val;
-      if (length_i64 > std::numeric_limits<uint32_t>::max()) {
+      std::vector<int64_t> per_axis_begin(num_axes, 0);
+      std::vector<int64_t> per_axis_length(num_axes, 0);
+      bool axes_ok = true;
+      uint64_t total_length = 1;
+      for (std::size_t a = 0; a < num_axes; ++a) {
+        const int64_t bv = evaluate_adstack_size_expr_at_node(expr, spec.axis_begin_node_idxs[a], prog, ctx);
+        const int64_t ev = evaluate_adstack_size_expr_at_node(expr, spec.axis_end_node_idxs[a], prog, ctx);
+        if (bv < 0 || ev < 0 || ev <= bv) {
+          axes_ok = false;
+          break;
+        }
+        per_axis_begin[a] = bv;
+        per_axis_length[a] = ev - bv;
+        total_length *= static_cast<uint64_t>(per_axis_length[a]);
+        if (total_length > std::numeric_limits<uint32_t>::max()) {
+          axes_ok = false;
+          break;
+        }
+      }
+      if (!axes_ok) {
         continue;
       }
       auto arg_buffer_offset_resolver = [&](const std::vector<int32_t> &arg_id_path) -> int32_t {
@@ -491,8 +512,8 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
         }
         return static_cast<int32_t>(byte_off);
       };
-      EncodedMaxReducerBody encoded =
-          encode_max_reducer_body_bytecode(expr, spec.body_node_idx, spec.var_id, arg_buffer_offset_resolver);
+      EncodedMaxReducerBody encoded = encode_max_reducer_body_bytecode(expr, spec.body_node_idx, spec.axis_var_ids,
+                                                                       arg_buffer_offset_resolver, ctx, prog);
       if (encoded.body_node_count == 0) {
         continue;
       }
@@ -501,12 +522,18 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       p.registry_id = registry_id;
       p.stack_id = spec.stack_id;
       p.mor_node_idx = spec.mor_node_idx;
+      p.params = LlvmAdStackMaxReducerDeviceParams{};
       p.params.output_slot = 0;  // assigned per pending below
-      p.params.length = static_cast<uint32_t>(length_i64);
-      p.params.begin = begin_val;
+      p.params.num_axes = static_cast<uint32_t>(num_axes);
       p.params.body_node_count = encoded.body_node_count;
       p.params.body_root_node_idx = static_cast<int32_t>(encoded.body_node_count) - 1;
-      p.params.var_id = 0;  // device-side scope holds the bound var at slot 0 (renumbered by the encoder)
+      for (std::size_t a = 0; a < num_axes; ++a) {
+        p.params.per_axis_length[a] = static_cast<uint32_t>(per_axis_length[a]);
+        p.params.per_axis_begin[a] = per_axis_begin[a];
+        // The encoder dense-remaps each chain bound-var id to slot `a` in `[0, num_axes)`; the runtime uses the same
+        // slot to populate `scope.values[a]` for axis `a`. Encode that slot directly here.
+        p.params.per_axis_var_id[a] = static_cast<int32_t>(a);
+      }
       p.body_bytecode = std::move(encoded.bytes);
       p.reads = std::move(encoded.body_reads);
       pending.push_back(std::move(p));
@@ -581,8 +608,8 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
   copy_h2d(runtime_adstack_max_reducer_outputs_field_ptr_, &outputs_dev_ptr, sizeof(void *));
 
   // Per-pending dispatch: assign `output_slot`, h2d the params + body bytecode into the lazy-grow scratch buffers,
-  // invoke the runtime function. The runtime function is single-threaded on every backend; on CUDA / AMDGPU the
-  // JIT module launches it as a single-thread kernel, on CPU it's a direct host call.
+  // invoke the runtime function. The runtime function is single-threaded on every backend; on CUDA / AMDGPU the JIT
+  // module launches it as a single-thread kernel, on CPU it's a direct host call.
   auto *const runtime_jit = get_runtime_jit_module();
   void *runtime_context_ptr_for_reducer =
       device_runtime_context_ptr != nullptr ? device_runtime_context_ptr : static_cast<void *>(&ctx->get_context());
@@ -1206,6 +1233,14 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
     // Span the per-stack `evaluate_adstack_size_expr` calls below with one shared read cache.
     SizeExprLaunchScope launch_scope;
+    // Snapshot the dispatched-results map for this kernel before the per-stack walk. The body of any captured
+    // `MaxOverRange` may host-resolve a `FieldLoad` leaf via `read_field_with_launch_cache`, which dispatches a
+    // snode-reader kernel that reenters `dispatch_max_reducers_for_tasks` and clears `current_max_reducer_results_`.
+    // Reading the live executor field per stack would let that recursive clear turn `stack_id == 0` 's substitution
+    // branch into `stack_id == 1` 's empty-map fallback - whose host walk then trips the per-task sizer's `1<<24` cap
+    // on out-of-grammar shapes that the recognizer DID capture. Pin the snapshot by-value so the substitution loop
+    // stays self-consistent.
+    const auto local_max_reducer_results = current_max_reducer_results_;
     std::vector<uint64_t> host_max_sizes(n_stacks);
     for (std::size_t i = 0; i < n_stacks; ++i) {
       const SerializedSizeExpr *expr = (i < ad_stack.size_exprs.size()) ? &ad_stack.size_exprs[i] : nullptr;
@@ -1216,11 +1251,11 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
         // path passes the live `expr` pointer directly so `size_expr_cache_` (keyed by `SerializedSizeExpr *`) stays
         // warm across launches; the non-empty branch builds a stack-local substituted tree and routes through
         // `evaluate_adstack_size_expr_no_cache` so the transient pointer never aliases unrelated cache entries.
-        if (current_max_reducer_results_.empty()) {
+        if (local_max_reducer_results.empty()) {
           v = evaluate_adstack_size_expr(*expr, prog, ctx);
         } else {
           const SerializedSizeExpr substituted = substitute_precomputed_max_over_range(
-              *expr, ad_stack.registry_id, static_cast<int32_t>(i), current_max_reducer_results_);
+              *expr, ad_stack.registry_id, static_cast<int32_t>(i), local_max_reducer_results);
           v = evaluate_adstack_size_expr_no_cache(substituted, prog, ctx);
         }
       }

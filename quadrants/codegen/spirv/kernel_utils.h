@@ -227,10 +227,10 @@ struct TaskAttributes {
     // offline cache: ids are assigned per `Program` lifetime; a deserialised task re-registers itself at
     // the next launch.
     uint32_t registry_id{0};
-    // per-task list of `MaxOverRange` nodes the runtime reduces
-    // in parallel via a dedicated max-reducer dispatch instead of letting the per-thread sizer enumerate. Empty
-    // when no captured `size_expr` contains a recognized shape; in that case every `MaxOverRange` falls through to
-    // the existing capped path (host: `QD_DEBUG_ADSTACK` tripwire; device: silent truncation).
+    // per-task list of `MaxOverRange` nodes the runtime reduces in parallel via a dedicated max-reducer dispatch
+    // instead of letting the per-thread sizer enumerate. Empty when no captured `size_expr` contains a recognized
+    // shape; in that case every `MaxOverRange` falls through to the existing capped path (host: `QD_DEBUG_ADSTACK`
+    // tripwire; device: silent truncation).
     std::vector<MaxReducerSpec> max_reducer_specs;
     QD_IO_DEF(per_thread_stride_float_compile_time,
               per_thread_stride_int_compile_time,
