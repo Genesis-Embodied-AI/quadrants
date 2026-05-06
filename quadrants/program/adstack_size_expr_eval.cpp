@@ -1056,6 +1056,22 @@ int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog
   return result;
 }
 
+int64_t evaluate_adstack_size_expr_at_node(const SerializedSizeExpr &expr,
+                                           int32_t node_idx,
+                                           Program *prog,
+                                           LaunchContextBuilder *ctx) {
+  if (node_idx < 0 || static_cast<std::size_t>(node_idx) >= expr.nodes.size()) {
+    return -1;
+  }
+  // Stage 1 grammar guarantees the subtree at `node_idx` is closed (no outer-scope `BoundVariable` references),
+  // so an empty bound-vars map is sufficient. Read observations are not recorded - the caller (max-reducer
+  // launcher) does its own observation tracking via `AdStackCache::record_max_reducer_eval` against the spec key,
+  // not the per-`SerializedSizeExpr` key the cache uses for `evaluate_adstack_size_expr`.
+  SizeExprLaunchScope local_scope;
+  std::unordered_map<int32_t, int64_t> empty_bound_vars;
+  return evaluate_node(expr, node_idx, empty_bound_vars, prog, ctx, /*reads=*/nullptr);
+}
+
 namespace {
 
 // Diagnose-time leaf reader: resolves an `ExternalTensorRead` against the captured

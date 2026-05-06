@@ -331,6 +331,16 @@ class AdStackCache {
 // expression is empty (no symbolic bound captured), signalling to the caller to use the compile-time fallback.
 int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx);
 
+// Sub-tree variant of `evaluate_adstack_size_expr`: evaluates the subtree rooted at `node_idx` instead of the full
+// tree's root. Used by the option-D max-reducer launcher to host-resolve a captured spec's `begin` / `end`
+// subtrees against the live ctx (Stage 1 grammar guarantees both subtrees are closed-form, so the recursive
+// evaluator never re-enters a `MaxOverRange`). Returns -1 when `node_idx` is out of range; -1 from a deeper
+// host-eval failure propagates the same way as in the full-tree variant.
+int64_t evaluate_adstack_size_expr_at_node(const SerializedSizeExpr &expr,
+                                           int32_t node_idx,
+                                           Program *prog,
+                                           LaunchContextBuilder *ctx);
+
 // Diagnose-time variant that evaluates the same `SerializedSizeExpr` against the captured
 // `AdStackCache::DiagnoseLaunchSnapshot` rather than a live `LaunchContextBuilder`. Used by
 // `AdStackCache::diagnose_adstack_overflow` to resolve `ExternalTensorRead` / `ExternalTensorShape` leaves at
