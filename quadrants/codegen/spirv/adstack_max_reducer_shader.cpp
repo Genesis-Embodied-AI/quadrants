@@ -23,7 +23,7 @@ static_assert(sizeof(AdStackSizeExprDeviceNode) % 4u == 0u,
 constexpr uint32_t kNodeWordKind = 0;
 constexpr uint32_t kNodeWordOperandA = 1;
 constexpr uint32_t kNodeWordOperandB = 2;
-// `kNodeWordVarId = 4` is reserved by the device-node POD for `kBoundVariable` resolution; the Stage 1 max-reducer
+// `kNodeWordVarId = 4` is reserved by the device-node POD for `kBoundVariable` resolution; the max-reducer
 // substitutes its single bound variable directly without consulting `var_id` so the slot is unused here. Listed in
 // this comment instead of as a `constexpr` to keep the symbol clean (`-Werror=unused-const-variable`).
 constexpr uint32_t kNodeWordPrimDt = 5;
@@ -95,9 +95,9 @@ Value psb_load_scalar_at_byte_off(IRBuilder &ir,
   return scalar;
 }
 
-// Switch on `prim_dt` (a `PrimitiveTypeID` value) and emit the matching PSB load + sign/zero-extend to i64. Stage 1
-// only emits integer leaves (`recognize_adstack_max_reducer_specs` rejects float-typed bodies), so the float arms are
-// `unreachable` and not emitted. Element index is in elements (not bytes); the per-dtype load multiplies by the
+// Switch on `prim_dt` (a `PrimitiveTypeID` value) and emit the matching PSB load + sign/zero-extend to i64. The
+// recognizer only emits integer leaves (`recognize_adstack_max_reducer_specs` rejects float-typed bodies), so the float
+// arms are unreachable and not emitted. Element index is in elements (not bytes); the per-dtype load multiplies by the
 // element size internally.
 Value emit_psb_load_i64_int_only(IRBuilder &ir, Value data_ptr_u64, Value linear_i32, Value prim_dt_i32) {
   Label merge = ir.new_label();
@@ -172,14 +172,14 @@ Value alloca_array_access(IRBuilder &ir, Value arr_var, const SType &elem_type, 
   return elem_ptr;
 }
 
-// Compute the element index for a `kExternalTensorRead` node body leaf. The Stage 1 grammar restricts the indices
+// Compute the element index for a `kExternalTensorRead` node body leaf. The recognizer grammar restricts the indices
 // table to a single axis whose raw value is `-(this_var_id + 1)` (referencing the enclosing `MaxOverRange`'s bound
 // variable), but the loop is general - it walks `indices[node.indices_offset .. node.indices_offset + 2 *
 // node.indices_count)` as `(idx_raw, elem_stride)` pairs and accumulates `v * stride` where `v` is the resolved
 // integer index. `iter_var_i32` is the value to substitute for any `BoundVariable` reference (encoded as a negative
-// `idx_raw` per the `SerializedSizeExprNode::indices` convention shared with the host evaluator). Stage 1 only ever
+// `idx_raw` per the `SerializedSizeExprNode::indices` convention shared with the host evaluator). The recognizer only
 // references the immediately-enclosing `MaxOverRange`'s bound var so a single substitution variable suffices; future
-// stages may need a small scope array.
+// grammar extensions may need a small scope array.
 Value compute_external_read_elem_index(IRBuilder &ir,
                                        Value bytecode_buf,
                                        Value indices_base_word,
@@ -214,10 +214,10 @@ Value compute_external_read_elem_index(IRBuilder &ir,
   Value stride_i32 = load_buf_i32(ir, bytecode_buf, stride_word_u32);
 
   // Resolve the raw index. `idx_raw >= 0` means a constant axis index baked at encode time; `idx_raw < 0` means a
-  // bound-variable reference encoded as `-(var_id + 1)` and we substitute `iter_var_i32`. The Stage 1 grammar accepts
-  // only one bound variable per spec (the enclosing `MaxOverRange`'s var_id) so any negative `idx_raw` resolves to
-  // the same `iter_var_i32` value; we do not bother validating the encoded var_id here (the host encoder asserts it
-  // matches before emitting bytecode).
+  // bound-variable reference encoded as `-(var_id + 1)` and we substitute `iter_var_i32`. The recognizer accepts only
+  // one bound variable per spec (the enclosing `MaxOverRange`'s var_id) so any negative `idx_raw` resolves to the same
+  // `iter_var_i32` value; we do not bother validating the encoded var_id here (the host encoder asserts it matches
+  // before emitting bytecode).
   Label const_lbl = ir.new_label();
   Label var_lbl = ir.new_label();
   Label sel_merge = ir.new_label();
@@ -327,7 +327,7 @@ Value interpret_body(IRBuilder &ir,
     ir.make_inst(spv::OpBranch, kind_merge);
   }
 
-  // kBoundVariable: substitute `iter_var_i32` (extended to i64). Stage 1 grammar binds exactly one var per body
+  // kBoundVariable: substitute `iter_var_i32` (extended to i64). The recognizer grammar binds exactly one var per body
   // (the enclosing `MaxOverRange`'s bound variable), so we do not consult `var_id` and just return `iter_var`.
   ir.start_label(case_bv);
   {
@@ -484,7 +484,7 @@ std::vector<uint32_t> build_adstack_max_reducer_spirv(Arch arch, const DeviceCap
   ir.start_label(active_block);
   {
     // Reassemble `begin` as i64 and compute the per-thread bound variable: `iter_var = (i32)(gid + begin)`.
-    // The Stage 1 grammar caps `begin + length` at i32 max (the encoder rejects specs whose closed-form bound
+    // The recognizer grammar caps `begin + length` at i32 max (the encoder rejects specs whose closed-form bound
     // exceeds 2^31), so a 32-bit add is safe and matches the existing sizer's per-thread index width.
     Value lo64 = ir.cast(ir.u64_type(), begin_lo);
     Value hi64 = ir.cast(ir.u64_type(), begin_hi);

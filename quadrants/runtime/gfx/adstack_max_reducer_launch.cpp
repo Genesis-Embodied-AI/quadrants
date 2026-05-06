@@ -1,4 +1,4 @@
-// Option-D max-reducer dispatch for SPIR-V backends. Extracted out of `runtime.cpp` for the same reason
+// Max-reducer dispatch for SPIR-V backends. Extracted out of `runtime.cpp` for the same reason
 // `adstack_bound_reducer_launch.cpp` is - keeps `GfxRuntime::launch_kernel` focused on the main-kernel
 // record/submit flow. Conditional on at least one task in the kernel having a non-empty
 // `TaskAttributes::AdStackSizingAttribs::max_reducer_specs`. Returns an empty map on devices missing PSB+Int64
@@ -9,7 +9,7 @@
 // 1. Pack the cache key `(registry_id, stack_id, mor_node_idx)` and query `AdStackCache::try_max_reducer_cache_hit`.
 //    On hit, record the cached value in the result map and skip the dispatch.
 // 2. On miss, host-evaluate the captured `begin` and `end` subtrees via `evaluate_adstack_size_expr_at_node`
-//    (Stage 1 grammar guarantees both subtrees are closed-form). Skip with -1 length on resolution failure.
+//    (The recognizer grammar guarantees both subtrees are closed-form). Skip with -1 length on resolution failure.
 // 3. Encode the body subtree into the shared bytecode buffer via `encode_max_reducer_body_bytecode`. The encoder
 //    extracts reachable nodes in post-order, renumbers to dense `[0, body_node_count)` indices, copies referenced
 //    indices entries, and resolves each `kExternalTensorRead` leaf's `arg_buffer_offset` via the closure passed
@@ -135,7 +135,7 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
           continue;
         }
       }
-      // Host-evaluate begin / end against the live ctx. Stage 1 grammar guarantees both subtrees are closed; -1
+      // Host-evaluate begin / end against the live ctx. The recognizer grammar guarantees both subtrees are closed; -1
       // signals a leaf the host can't resolve, in which case we skip the spec and the caller's substitution helper
       // simply passes the `MaxOverRange` through to the per-thread sizer (which falls back to the capped path).
       const SerializedSizeExpr &expr = attribs.ad_stack.allocas[spec.stack_id].size_expr;
@@ -146,9 +146,9 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
       }
       const int64_t length_i64 = end_val - begin_val;
       if (length_i64 > std::numeric_limits<uint32_t>::max()) {
-        // Out-of-grammar magnitude; skip rather than risk u32 overflow in the dispatch params. The caller's
-        // substitution miss path leaves the original `MaxOverRange` in place (which will then trip the capped
-        // path on host eval and silently truncate on the device sizer - same behaviour as without option D).
+        // Out-of-grammar magnitude; skip rather than risk u32 overflow in the dispatch params. The substitution miss
+        // path leaves the original `MaxOverRange` in place; the per-thread sizer's `1<<24` cap then truncates host-
+        // side or hard-errors via the diagnose path.
         continue;
       }
 

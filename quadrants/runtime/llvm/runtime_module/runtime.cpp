@@ -648,7 +648,7 @@ struct LLVMRuntime {
   u32 *adstack_bound_row_capacities = nullptr;
   u64 adstack_bound_row_capacities_capacity = 0;
 
-  // Per-spec output slot for the option-D max reducer (Stage 1.3). One i64 per captured
+  // Per-spec output slot for the max reducer. One i64 per captured
   // `StaticAdStackMaxReducerSpec`, written by `runtime_eval_adstack_max_reduce` during the per-launch dispatch and
   // read by the host launcher to substitute the value as a `Const` into the per-stack `SerializedSizeExpr` tree
   // before any LLVM eval path walks it. Sized / grown by the LlvmRuntimeExecutor lazy-allocate path on the first
@@ -849,6 +849,14 @@ void runtime_get_adstack_metadata_field_ptrs(LLVMRuntime *runtime) {
 void runtime_get_adstack_lazy_claim_field_ptrs(LLVMRuntime *runtime) {
   runtime->set_result(quadrants_result_buffer_ret_value_id, (u64)(void *)&runtime->adstack_row_counters);
   runtime->set_result(quadrants_result_buffer_ret_value_id + 1, (u64)(void *)&runtime->adstack_bound_row_capacities);
+}
+
+// Companion to `runtime_get_adstack_lazy_claim_field_ptrs` for the max-reducer outputs. The
+// output buffer is per-launch-allocated host-side and the field-address is cached once so the per-launch publish
+// only writes the new array pointer (when the buffer grows) and the read-back per-spec slot reads through the
+// runtime's stable address. Single field, single result slot.
+void runtime_get_adstack_max_reducer_field_ptr(LLVMRuntime *runtime) {
+  runtime->set_result(quadrants_result_buffer_ret_value_id, (u64)(void *)&runtime->adstack_max_reducer_outputs);
 }
 
 // Device-resident adstack SizeExpr interpreter. Runs on whatever backend the LLVM runtime JIT-compiles this
@@ -1180,11 +1188,11 @@ void runtime_eval_static_bound_count(LLVMRuntime *runtime, RuntimeContext *ctx, 
   runtime->adstack_bound_row_capacities[params->task_index] = count;
 }
 
-// Option D, Stage 1.3: per-launch parallel-max evaluator over the body of a captured
+// per-launch per-launch parallel-max evaluator over the body of a captured
 // `StaticAdStackMaxReducerSpec`'s `MaxOverRange` node. Single-thread serial walk on every backend (CPU host thread,
 // CUDA / AMDGPU single-thread JIT-launched device function), mirroring `runtime_eval_static_bound_count`. The body
 // bytecode reuses the existing `AdStackSizeExprDeviceNode` POD format already shared between the host encoder and
-// the LLVM device sizer interpreter (`device_eval_node`); the Stage 1 grammar restricts body kinds to
+// the LLVM device sizer interpreter (`device_eval_node`); The recognizer grammar restricts body kinds to
 // `kConst / kBoundVariable / kExternalTensorRead / kAdd / kSub / kMul / kMax`, so the recursive walk never recurses
 // through `kMaxOverRange` or `kFieldLoad` and the iteration stays linear in `params->length`.
 //

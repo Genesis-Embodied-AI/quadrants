@@ -12,7 +12,7 @@ namespace quadrants::lang::spirv {
 
 // Builds the SPIR-V compute shader that evaluates a captured `StaticAdStackMaxReducerSpec`'s body subtree over a thread
 // range and atomic-maxes the result into a per-spec slot of `BufferType::AdStackMaxReducerOutput`. Dispatched once per
-// captured `MaxOverRange` node before the main task on the option-D max-reducer path; the resulting per-spec value is
+// captured `MaxOverRange` node before the main task on the max-reducer path; the resulting per-spec value is
 // substituted as a `Const` into the per-stack `SerializedSizeExpr` tree by `substitute_precomputed_max_over_range`
 // before any of the three eval paths (host fast path, SPIR-V on-device sizer, LLVM device sizer) walks it.
 //
@@ -49,11 +49,11 @@ std::vector<uint32_t> build_adstack_max_reducer_spirv(Arch arch, const DeviceCap
 constexpr uint32_t kAdStackMaxReducerWorkgroupSize = 128;
 
 // Maximum number of `AdStackSizeExprDeviceNode`s a single spec's body bytecode may contain. The shader's per-thread
-// post-order interpreter stores per-node i64 values in a Function-scope array sized by this constant; bumping it
-// raises the per-thread stack footprint by 8 bytes/node. The Stage 1 grammar bodies observed on the canonical Genesis
-// repro have 3-5 nodes; setting the cap at 64 leaves several orders of magnitude of headroom while keeping the
-// per-thread stack at 512 bytes (well below Metal's 4 KiB per-invocation private-memory budget). The host encoder
-// hard-errors when a body subtree exceeds this cap so the shader's array bounds are statically known.
+// post-order interpreter stores per-node i64 values in a Function-scope array sized by this constant; bumping it raises
+// the per-thread stack footprint by 8 bytes/node. Recognizer-grammar bodies observed in practice have 3-5 nodes; the
+// 64-node cap leaves several orders of magnitude of headroom while keeping the per-thread stack at 512 bytes (well
+// below Metal's 4 KiB per-invocation private-memory budget). The host encoder hard-errors when a body subtree exceeds
+// this cap so the shader's array bounds are statically known.
 constexpr uint32_t kAdStackMaxReducerMaxBodyNodes = 64;
 
 // Layout of the parameter blob the host writes into binding 2 before each dispatch. POD; keep field order in sync
