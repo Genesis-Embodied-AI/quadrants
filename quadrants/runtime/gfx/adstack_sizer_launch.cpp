@@ -187,6 +187,16 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
                  "encode AdStack SizeExpr bytecode. Ensure GfxProgramImpl passes `program_impl = this` "
                  "into `GfxRuntime::Params`.");
 
+  // Reverse-mode autodiff with adstacks requires Vulkan 1.3 (or Metal at MTLArgumentBuffersTier::Tier2) on this
+  // device. Older drivers cannot run the sizer paths correctly; the per-helper cap gates downstream
+  // (`dispatch_adstack_bound_reducers`, `dispatch_max_reducers`) rely on this single check and skip their own.
+  QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer),
+              "Reverse-mode autodiff with adstacks needs Vulkan 1.3 (or Metal Argument Buffers Tier 2); this "
+              "device does not advertise `spirv_has_physical_storage_buffer`.");
+  QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_int64),
+              "Reverse-mode autodiff with adstacks needs Vulkan 1.3 (or Metal Argument Buffers Tier 2); this "
+              "device does not advertise `spirv_has_int64`.");
+
   // Register each adstack-bearing task with the Program-side identity registry so the host raise site
   // can name the offending kernel + task in its diagnostic message. Idempotent: re-registration of the
   // same `&task_attribs[ti].ad_stack` returns the same id and just refreshes the metadata. The

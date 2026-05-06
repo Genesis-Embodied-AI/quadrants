@@ -87,22 +87,8 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
                                                       const std::vector<spirv::TaskAttributes> &task_attribs) {
   MaxReducerResultMap result;
 
-  // Capability requirement: option D's correctness depends on this dispatch running. Silently falling through to
-  // the existing capped path on cap-missing devices would route every captured spec into the `1<<24`-truncating
-  // sizer paths, which silently corrupts gradients (the deeper-MOR captured value comes back smaller than reality
-  // and the heap is undersized). Hard-error so a hypothetical future backend without PSB+Int64 is a clean build /
-  // runtime failure rather than a silent regression. Quadrants's official Vulkan target is `VK_API_VERSION_1_3`
-  // (`quadrants/rhi/vulkan/vulkan_utils.h::k_api_version`), which promotes both `VK_KHR_buffer_device_address` and
-  // `VK_KHR_shader_atomic_int64` into core, so every conforming 1.3 implementation already advertises both caps;
-  // Metal's `MTLArgumentBuffersTier::Tier2` (macOS 11+) does too. The asserts are forward-looking, not a routine
-  // path.
-  QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer),
-              "adstack max reducer requires spirv_has_physical_storage_buffer; the captured `MaxOverRange` "
-              "would otherwise silently truncate at 1<<24 and corrupt reverse-mode gradients");
-  QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_int64),
-              "adstack max reducer requires spirv_has_int64 for the per-spec atomic-SMax output slot; the "
-              "captured `MaxOverRange` would otherwise silently truncate at 1<<24 and corrupt reverse-mode "
-              "gradients");
+  // PSB + Int64 caps are guaranteed satisfied by `publish_adstack_metadata_spirv`'s entry-point gate (every
+  // reverse-mode adstack-bearing kernel goes through that path before reaching here). No per-call check needed.
 
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
   AdStackCache *cache = (prog != nullptr) ? &prog->adstack_cache() : nullptr;
