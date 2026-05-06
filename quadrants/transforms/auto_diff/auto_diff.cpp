@@ -37,13 +37,14 @@ void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_
         replace_local_var_with_stacks(ib, config.ad_stack_size);
         type_check(root, config);
 
-        // Disabled: `RecomputableChainAnalyzer` admits `GlobalLoadStmt` as a recomputable interior node without
-        // verifying SNode read-only-ness. When the chain reaches a `GlobalLoadStmt` of an SNode written elsewhere in
-        // the same kernel execution, `BackupSSA`'s reverse-side re-clone reads post-write state instead of the iter-k
-        // value the original `AdStackLoadTopStmt` would have returned, silently corrupting gradients on MPM-style
-        // kernels that mix per-particle reads with grid writes. Re-enable once the chain analyzer rejects
-        // mutated-SNode loads (or the cost model gates on read-only-verified leaves).
-        // eliminate_recomputable_ad_stack_pushes(ib);
+        // Drop AdStackAllocas whose pushed value is recomputable from already-stack-backed allocas + args + const +
+        // loop-index. Trades forward-pass adstack memory traffic (one push + one load per iter per intermediate spill)
+        // for cloned arithmetic in the reverse scope, which `BackupSSA::generic_visit` generates on demand via the same
+        // RecomputableChainCloner path. Must run after `replace_local_var_with_stacks` (so the analyzer sees the
+        // AdStackAlloca shape, not the alloca-with-store shape promote_ssa_to_local_var emits) and before
+        // `make_adjoint` (so the reverse pass is generated against the cleaned forward IR with no spurious push/load
+        // scaffolding).
+        eliminate_recomputable_ad_stack_pushes(ib);
         type_check(root, config);
 
         make_adjoint(ib);

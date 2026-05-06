@@ -87,6 +87,10 @@ class EliminateRecomputableAdStackPushes {
       stacks.push_back(s->as<AdStackAllocaStmt>());
     }
 
+    // SNodes written in the IB; gates `GlobalLoadStmt` chain leaves in `is_recomputable`. The pass body only erases
+    // adstack stmts, so the write-stmt set is invariant across one outer iteration and we can recompute it per pass.
+    auto mutated_snodes = RecomputableChainAnalyzer::collect_mutated_snodes(ib);
+
     bool modified = false;
     std::unordered_map<Stmt *, bool> recomputable_cache;
 
@@ -158,7 +162,7 @@ class EliminateRecomputableAdStackPushes {
       }
 
       Stmt *pushed_val = body_push->v;
-      if (!RecomputableChainAnalyzer::is_recomputable(pushed_val, recomputable_cache)) {
+      if (!RecomputableChainAnalyzer::is_recomputable(pushed_val, recomputable_cache, mutated_snodes)) {
         continue;
       }
       // Loop-carried self-reference: when the pushed value's transitive operand DAG includes an AdStackLoadTopStmt of
@@ -238,80 +242,42 @@ class EliminateRecomputableAdStackPushes {
         continue;
       }
 
-      // Reverse-position correctness for chain leaves pushed in the same block as S.
+      // Reverse-position correctness for chain leaves.
       //
-      // After elimination, every reverse stmt that consumed `load_top(S)` instead consumes the chain (cloned by
-      // `BackupSSA::generic_visit` at the consumer's reverse position). The cloned chain reads `load_top(T)` for each
-      // chain leaf T, where the read happens at the consumer's reverse cursor.
+      // Each chain leaf `AdStackLoadTopStmt(T)` is re-cloned by `BackupSSA::generic_visit` at the consumer's reverse
+      // position; the cloned `load_top(T)` reads `T`'s top at that reverse cursor, which must equal what the original
+      // load_top read in forward iter k. `MakeAdjoint` emits `T`'s pop for each forward push at the reverse cursor
+      // mirroring that push's forward position, so by consumer-reverse only the pops for `T`-pushes with forward
+      // position > P_cons have fired. The reverse top therefore equals `T`'s last forward push at-or-before P_cons,
+      // while the forward chain at the load_top's own forward position P_lt reads `T`'s last forward push
+      // at-or-before P_lt. They match iff no `T`-push falls strictly between P_lt and P_cons in document order.
       //
-      // `MakeAdjoint` visits forward stmts in REVERSE order, emitting at a cursor that advances per visit. For a
-      // forward stmt at position P, its reverse emissions land "later" in reverse block iff P is smaller. T's pop is
-      // emitted when `MakeAdjoint` visits T's body push at position P_T. The cloned chain at the consumer's reverse
-      // position reads `load_top(T)` POST-pop iff T's pop has fired by then, i.e. iff visit(P_T) precedes visit(C_pos),
-      // i.e. iff P_T > C_pos for every consumer C of S's load_tops.
-      //
-      // Forward chain evaluates at S's push position P_S, before any of T's same-block body pushes (since we already
-      // required P_T > P_S via the dominance check above for S's loads). So forward chain reads T's pre-iter-k-push
-      // value. Reverse clone post-pop also returns T's pre-iter-k-push value (= iter k INPUT for loop-carried T).
-      // Match.
-      //
-      // Without this check, the canonical Fibonacci-style shape (`p, q = q, p + q; b[q] += a[q]`) where S stores `p +
-      // q` and chain leaves p_stack / q_stack are pushed AFTER S but BEFORE the GlobalPtr index consumer would silently
-      // corrupt gradients: the reverse clone at the GlobalPtr's adjoint emission reads p_stack and q_stack PRE-pop
-      // (iter k POST-push values), summing to a different value than the forward chain at P_S used.
-      //
-      // Chain leaves T whose stacks have NO body push in S's containing block are stable within the iter (their tops do
-      // not change during the iter), so neither forward nor reverse evaluation order shifts their values. Excluded from
-      // this check.
-      auto find_consumers_of_load_tops = [&](std::vector<int> &out_positions) {
-        std::function<void(Block *, int)> walk = [&](Block *b, int container_pos_in_push_block) {
-          for (size_t i = 0; i < b->statements.size(); i++) {
-            Stmt *s = b->statements[i].get();
-            int effective_pos = (b == push_block) ? static_cast<int>(i) : container_pos_in_push_block;
-            for (auto *op : s->get_operands()) {
-              if (op == nullptr)
-                continue;
-              for (auto *lt : load_tops) {
-                if (op == lt) {
-                  out_positions.push_back(effective_pos);
-                  break;
-                }
-              }
-            }
-            if (auto *if_s = s->cast<IfStmt>()) {
-              if (if_s->true_statements)
-                walk(if_s->true_statements.get(), effective_pos);
-              if (if_s->false_statements)
-                walk(if_s->false_statements.get(), effective_pos);
-            } else if (auto *rf = s->cast<RangeForStmt>()) {
-              if (rf->body)
-                walk(rf->body.get(), effective_pos);
-            } else if (auto *sf = s->cast<StructForStmt>()) {
-              if (sf->body)
-                walk(sf->body.get(), effective_pos);
-            }
-          }
-        };
-        walk(push_block, -1);
-      };
-      std::vector<int> consumer_positions;
-      find_consumers_of_load_tops(consumer_positions);
-      int max_consumer_pos = -1;
-      for (int p : consumer_positions) {
-        if (p > max_consumer_pos)
-          max_consumer_pos = p;
+      // A single preorder index over the IB lets the check compare positions across nested blocks in one integer
+      // compare; pushes inside `IfStmt`, `RangeForStmt`, and `StructForStmt` bodies are reached via the visitor walk
+      // and slot in between the container's preorder and the next sibling's preorder.
+      std::unordered_map<Stmt *, int> preorder;
+      {
+        auto all = irpass::analysis::gather_statements(ib, [](Stmt *) { return true; });
+        preorder.reserve(all.size());
+        for (size_t i = 0; i < all.size(); i++)
+          preorder[all[i]] = static_cast<int>(i);
       }
+      auto preorder_of = [&](Stmt *s) -> int {
+        auto it = preorder.find(s);
+        return it == preorder.end() ? -1 : it->second;
+      };
 
-      // Collect all distinct AdStackAllocaStmt referenced via AdStackLoadTopStmt leaves in pushed_val's chain.
-      std::unordered_set<AdStackAllocaStmt *> chain_leaf_stacks;
+      // Collect every `AdStackLoadTopStmt` reachable from `pushed_val`'s recomputable chain. Each one has its own
+      // forward position P_lt - the position at which the cloned chain in reverse will read its target stack's top
+      // for the corresponding forward iter - so the check is per-load_top, not per-stack.
+      std::vector<AdStackLoadTopStmt *> chain_load_tops;
       std::unordered_set<Stmt *> walked_for_leaves;
       std::function<void(Stmt *)> collect_leaves = [&](Stmt *s) {
         if (walked_for_leaves.count(s))
           return;
         walked_for_leaves.insert(s);
         if (auto *lt = s->cast<AdStackLoadTopStmt>()) {
-          if (auto *as = lt->stack->cast<AdStackAllocaStmt>())
-            chain_leaf_stacks.insert(as);
+          chain_load_tops.push_back(lt);
           return;
         }
         if (s->is<AdStackAllocaStmt>() || s->is<ArgLoadStmt>() || s->is<ConstStmt>())
@@ -323,20 +289,40 @@ class EliminateRecomputableAdStackPushes {
       };
       collect_leaves(pushed_val);
 
+      int max_consumer_preorder = -1;
+      auto consumer_users = irpass::analysis::gather_statements(ib, [&](Stmt *s) {
+        for (auto *op : s->get_operands()) {
+          for (auto *lt : load_tops) {
+            if (op == lt)
+              return true;
+          }
+        }
+        return false;
+      });
+      for (auto *u : consumer_users) {
+        int p = preorder_of(u);
+        if (p > max_consumer_preorder)
+          max_consumer_preorder = p;
+      }
+
       bool reverse_safe = true;
-      for (auto *T : chain_leaf_stacks) {
-        // Find T's body pushes (non-init) in push_block. Only same-block pushes can interfere: pushes in outer blocks
-        // happen once per outer iteration, so their tops are stable across the inner iter.
+      for (auto *lt : chain_load_tops) {
+        auto *T = lt->stack ? lt->stack->cast<AdStackAllocaStmt>() : nullptr;
+        if (T == nullptr) {
+          reverse_safe = false;
+          break;
+        }
+        int lt_pre = preorder_of(lt);
         AdStackPushStmt *T_init = find_init_push(T);
-        for (size_t i = 0; i < push_block->statements.size(); i++) {
-          Stmt *s = push_block->statements[i].get();
-          if (auto *p = s->cast<AdStackPushStmt>()) {
-            if (p->stack == T && p != T_init) {
-              if (static_cast<int>(i) <= max_consumer_pos) {
-                reverse_safe = false;
-                break;
-              }
-            }
+        auto T_pushes = irpass::analysis::gather_statements(ib, [&](Stmt *s) {
+          auto *p = s->cast<AdStackPushStmt>();
+          return p != nullptr && p->stack == T && p != T_init;
+        });
+        for (auto *p : T_pushes) {
+          int p_pre = preorder_of(p);
+          if (p_pre > lt_pre && p_pre <= max_consumer_preorder) {
+            reverse_safe = false;
+            break;
           }
         }
         if (!reverse_safe)

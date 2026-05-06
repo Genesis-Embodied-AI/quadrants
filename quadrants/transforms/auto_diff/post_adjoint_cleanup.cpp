@@ -20,8 +20,11 @@ class BackupSSA : public BasicStmtVisitor {
 
   Block *independent_block;
   std::map<Stmt *, Stmt *> backup_alloca;
+  std::unordered_set<SNode *> mutated_snodes_;
 
-  explicit BackupSSA(Block *independent_block) : independent_block(independent_block) {
+  explicit BackupSSA(Block *independent_block)
+      : independent_block(independent_block),
+        mutated_snodes_(RecomputableChainAnalyzer::collect_mutated_snodes(independent_block)) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
     compute_forward_preorder();
@@ -55,15 +58,11 @@ class BackupSSA : public BasicStmtVisitor {
       if (std::find(leaf_to_root.begin(), leaf_to_root.end(), op->parent) == leaf_to_root.end() &&
           !op->is<AllocaStmt>()) {
         if (op->is<AdStackLoadTopStmt>()) {
-          // Cloning an AdStackLoadTopStmt at the reverse cursor reads the live top of `op->stack` at the cursor
-          // position. Correct iff between L's forward execution and the cloned read, every subsequent forward push
-          // has had its matching reverse pop fire first - which holds whenever the push lives in a block at the
-          // same scope level as the consumer (the per-iter / per-branch pop that `MakeAdjoint::visit(AdStackPushStmt)`
-          // emits sits in the reverse mirror of the push's parent block, so it fires before the consumer's reverse
-          // emission within that same scope). The unsafe case is a push whose parent block strictly contains the
-          // consumer's parent block: the pop lands AFTER the consumer's enclosing scope finishes, so the clone reads
-          // the post-push top instead of L's forward-time value. `is_load_top_safe_for_consumer` runs that check on
-          // the IB preorder snapshot taken at construction; on rejection, fall back to the per-IB alloca spill.
+          // Cloning an AdStackLoadTopStmt at the reverse cursor reads the stack's live top there. Correct iff every
+          // subsequent forward push to the same stack has had its matching reverse pop fire before the consumer.
+          // The unsafe case is a push whose parent block strictly contains the consumer's parent AND precedes the
+          // consumer's enclosing-scope stmt in document order: pop_P lands AFTER consumer's reverse code. On
+          // rejection, fall back to the per-IB alloca spill.
           if (is_load_top_safe_for_consumer(op->as<AdStackLoadTopStmt>(), stmt)) {
             stmt->set_operand(i, stmt->insert_before_me(op->clone()));
           } else {
@@ -97,15 +96,11 @@ class BackupSSA : public BasicStmtVisitor {
           // of a needs_grad SNode whose value the reverse must read at last-write rather than recompute, for instance)
           // and shapes outside one of our independent blocks. The recomputable path above takes precedence when its
           // predicate matches; otherwise control falls through to the `load(op)` line.
-          //
-          // `is_chain_clone_safe` extends the eligibility check beyond pure recomputability: it walks the same DAG and
-          // additionally verifies that every AdStackLoadTopStmt leaf is safe to clone at `stmt`'s reverse cursor per
-          // the consumer-aware ancestor check (see `is_load_top_safe_for_consumer`). A leaf whose stack receives a
-          // subsequent push in a strict ancestor scope of `stmt`'s parent block is unsafe: the matching reverse pop
-          // emitted by `MakeAdjoint::visit(AdStackPushStmt)` lands at end of the outer scope's reverse code, after
-          // `stmt` has executed - so the cloned load_top reads the post-push top instead of the leaf's forward value.
-          // On rejection, fall back to the per-IB alloca spill, which captures the forward-time SSA value verbatim.
-          if (RecomputableChainAnalyzer::is_recomputable(op, recomputable_cache_) && is_chain_clone_safe(op, stmt)) {
+          // `is_chain_clone_safe` adds a per-leaf check on top of `is_recomputable`: each `AdStackLoadTopStmt` chain
+          // leaf must satisfy the consumer-aware ancestor predicate (same rule as the bare-`AdStackLoadTopStmt`
+          // operand path). On rejection, fall back to the per-IB alloca spill.
+          if (RecomputableChainAnalyzer::is_recomputable(op, recomputable_cache_, mutated_snodes_) &&
+              is_chain_clone_safe(op, stmt)) {
             std::unordered_map<Stmt *, Stmt *> clone_cache;
             Stmt *cloned = RecomputableChainCloner::clone_at(op, stmt, clone_cache);
             stmt->set_operand(i, cloned);
@@ -118,10 +113,13 @@ class BackupSSA : public BasicStmtVisitor {
     }
   }
 
-  // Preorder index of every stmt reachable from `independent_block` at construction time. Captures the document order
-  // of the forward IR before any reverse-side insertion occurs; re-used across all `is_load_top_safe_for_consumer`
-  // queries to avoid an O(N) re-scan per check. The visitor only adds reverse-side stmts to `independent_block`
-  // afterwards, so existing stmt positions remain valid lookups for the lifetime of one BackupSSA run.
+  // Memoization cache for `RecomputableChainAnalyzer::is_recomputable` queries within one BackupSSA run. Re-used across
+  // all generic_visit calls; invariant during the visit because forward IR is read-only here.
+  std::unordered_map<Stmt *, bool> recomputable_cache_;
+
+  // Document-order index of every stmt reachable from `independent_block` at construction time. Captures forward-IR
+  // positions before any reverse-side insertion occurs; reused by `is_load_top_safe_for_consumer` so the per-load_top
+  // ancestor check runs in O(1) per query after a single O(N) walk.
   std::unordered_map<Stmt *, int> forward_preorder_;
 
   void compute_forward_preorder() {
@@ -150,8 +148,6 @@ class BackupSSA : public BasicStmtVisitor {
     walk(independent_block);
   }
 
-  // Returns true iff `ancestor` is a strict ancestor block of `descendant` (i.e. ancestor != descendant AND ancestor
-  // is reachable by repeatedly walking `descendant->parent_block()`).
   static bool is_strict_ancestor(Block *ancestor, Block *descendant) {
     if (ancestor == nullptr || descendant == nullptr || ancestor == descendant) {
       return false;
@@ -166,49 +162,28 @@ class BackupSSA : public BasicStmtVisitor {
     return false;
   }
 
-  // Returns the unique ancestor stmt of `stmt` that lives directly inside `target_block` (i.e. its `parent` is
-  // `target_block`). Walks up `stmt->parent->parent_stmt()` chain. Returns nullptr if `target_block` is not on
-  // `stmt`'s ancestor chain.
   static Stmt *ancestor_in_block(Stmt *stmt, Block *target_block) {
     Stmt *cur = stmt;
     while (cur != nullptr) {
       if (cur->parent == target_block) {
         return cur;
       }
-      Block *cur_parent_block = cur->parent;
-      if (cur_parent_block == nullptr) {
+      Block *cur_parent = cur->parent;
+      if (cur_parent == nullptr) {
         return nullptr;
       }
-      cur = cur_parent_block->parent_stmt();
+      cur = cur_parent->parent_stmt();
     }
     return nullptr;
   }
 
-  // Returns true iff cloning `lt` at `consumer`'s position reads the same value `lt` returned at forward time.
-  //
-  // Cloning a load_top reads the live top of the stack at the cloned read's runtime position. That value matches `lt`'s
-  // forward value iff every forward push to the same stack that lands AFTER `lt` in document order has its matching
-  // reverse pop fire BEFORE `consumer` in execution order.
-  //
-  // `MakeAdjoint::visit(AdStackPushStmt)` emits the matching `AdStackPopStmt` into its `current_block`, which is the
-  // reverse mirror of the push's parent block. So the pop lives in the reverse code emitted for that push's enclosing
-  // scope. The pop fires before `consumer` exactly when `consumer`'s enclosing scope is the same as (or shallower than)
-  // the push's enclosing scope. Equivalently, the unsafe case is a push whose parent block STRICTLY contains the
-  // consumer's parent block - the pop is then emitted at end of the reverse code in the outer scope, after the
-  // consumer's own reverse scope has finished.
-  //
-  // The check ignores pushes whose parent block is unrelated to the consumer's parent (siblings under a common
-  // ancestor, e.g. push in `if A` body and consumer in `if B` body). Cross-sibling reverse ordering is determined by
-  // MakeAdjoint's reverse-walk order over the forward IR; the existing tests do not exercise that shape, so the
-  // predicate stops at the strict-ancestor case. Broaden the predicate if a future regression surfaces from a
-  // sibling-of-ancestor push whose pop fires after `consumer` in execution order.
+  // Returns true iff cloning `lt` at `consumer`'s position reads `lt`'s forward value. The unsafe case is a forward
+  // push P to the same stack such that (a) P's parent block is a strict ancestor of `consumer`'s parent and (b) P
+  // precedes consumer's enclosing-scope stmt in P's parent block. Both conditions together mean pop_P fires after
+  // `consumer` in execution order, so the cloned load_top reads the post-push top.
   bool is_load_top_safe_for_consumer(AdStackLoadTopStmt *lt, Stmt *consumer) {
     auto lt_it = forward_preorder_.find(lt);
     if (lt_it == forward_preorder_.end()) {
-      // Stmt outside the captured forward IB preorder. BackupSSA only walks IBs and the preorder snapshot covers
-      // every reachable forward stmt, so a missing entry means `lt` was inserted by a later pass we have not seen.
-      // Conservatively return true (clone): the IB-level alloca-spill fallback is the recovery path, and all known
-      // unsafe shapes have an entry in `forward_preorder_`.
       return true;
     }
     auto *stack = lt->stack ? lt->stack->cast<AdStackAllocaStmt>() : nullptr;
@@ -226,15 +201,6 @@ class BackupSSA : public BasicStmtVisitor {
       if (pit == forward_preorder_.end() || pit->second <= lt_pos) {
         continue;
       }
-      // Subsequent forward push to the same stack. Unsafe iff its parent block strictly contains consumer's parent
-      // AND P precedes consumer's enclosing-scope stmt in P's parent block. The document-order refinement: pop_P is
-      // emitted at MakeAdjoint's reverse cursor when P is visited; MakeAdjoint walks forward stmts in REVERSE order
-      // within a block, so within P's parent block, pop_P is emitted EARLIER in reverse code than the reverse-mirror
-      // of any forward stmt that PRECEDED P in document order. The reverse-mirror of `consumer`'s enclosing scope
-      // (`consumer_anc`, the unique ancestor of `consumer` that lives directly in P's parent block) determines
-      // where `consumer`'s reverse code lands. If P comes AFTER `consumer_anc` in P's parent block, pop_P is emitted
-      // BEFORE `consumer`'s reverse code, fires before `consumer` executes - clone is safe. If P comes BEFORE
-      // `consumer_anc`, pop_P lands AFTER `consumer`'s reverse code - clone reads the post-push top, unsafe.
       if (!is_strict_ancestor(p->parent, consumer_parent)) {
         continue;
       }
@@ -242,7 +208,7 @@ class BackupSSA : public BasicStmtVisitor {
       if (consumer_anc != nullptr) {
         auto cit = forward_preorder_.find(consumer_anc);
         if (cit != forward_preorder_.end() && pit->second > cit->second) {
-          continue;  // P after consumer's enclosing-scope stmt -> pop_P emitted before consumer reverse, safe.
+          continue;
         }
       }
       return false;
@@ -250,11 +216,6 @@ class BackupSSA : public BasicStmtVisitor {
     return true;
   }
 
-  // Walks the recomputable chain rooted at `op` and returns true iff every AdStackLoadTopStmt leaf is safe to clone
-  // for `consumer` per `is_load_top_safe_for_consumer`. Mirrors the structure of `RecomputableChainAnalyzer::check`
-  // so the traversal sees the same set of leaves and interior ops, then layers the consumer-aware safety predicate
-  // on the load_top leaves only. The cache is keyed on `(op, consumer->parent)` because the predicate depends on the
-  // consumer's parent block; collisions across consumers with different parents would silently return a stale result.
   bool is_chain_clone_safe(Stmt *op, Stmt *consumer) {
     Block *consumer_parent = consumer->parent;
     auto cache_key = std::make_pair(op, consumer_parent);
@@ -262,7 +223,7 @@ class BackupSSA : public BasicStmtVisitor {
     if (it != chain_clone_safe_cache_.end()) {
       return it->second;
     }
-    chain_clone_safe_cache_[cache_key] = false;  // tentative for cycles
+    chain_clone_safe_cache_[cache_key] = false;
     bool result = chain_clone_safe_check(op, consumer);
     chain_clone_safe_cache_[cache_key] = result;
     return result;
@@ -281,8 +242,7 @@ class BackupSSA : public BasicStmtVisitor {
     if (!is_interior) {
       return false;
     }
-    auto operands = op->get_operands();
-    for (auto *child : operands) {
+    for (auto *child : op->get_operands()) {
       if (child == nullptr) {
         continue;
       }
@@ -293,11 +253,6 @@ class BackupSSA : public BasicStmtVisitor {
     return true;
   }
 
-  // Memoization cache for `RecomputableChainAnalyzer::is_recomputable` queries within one BackupSSA run. Re-used across
-  // all generic_visit calls; invariant during the visit because forward IR is read-only here.
-  std::unordered_map<Stmt *, bool> recomputable_cache_;
-  // Memoization cache for `is_chain_clone_safe`. Keyed on `(op, consumer_parent)` since the predicate is consumer-
-  // aware (the safety check compares each load_top leaf's subsequent pushes against `consumer`'s parent block scope).
   struct PairHash {
     std::size_t operator()(const std::pair<Stmt *, Block *> &p) const noexcept {
       return std::hash<Stmt *>{}(p.first) ^ (std::hash<Block *>{}(p.second) << 1);

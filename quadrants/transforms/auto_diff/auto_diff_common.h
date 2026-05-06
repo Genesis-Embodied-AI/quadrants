@@ -79,28 +79,69 @@ class NonLinearOps {
 // reverse-direction loop's index, which matches the forward iteration the reverse is currently processing).
 // Side-effect-free interior ops: UnaryOp, BinaryOp, TernaryOp, MatrixPtr, GlobalPtr, ExternalPtr.
 //
-// `GlobalLoadStmt` and `ExternalPtrAccessStmt`-style reads are intentionally not recomputable: the underlying global
-// memory may be mutated mid-kernel by a sibling task, so reading at a different IR position can yield a different
-// value. `LocalLoadStmt` similarly aliases mutable allocas; the reverse pass must read its forward value through the
-// dedicated spill machinery.
+// `GlobalLoadStmt` is admitted as a recomputable interior node only when its source SNode is not mutated anywhere in
+// the surrounding IB (per `mutated_snodes`); a re-clone at the reverse cursor of a load whose SNode is also written
+// observes post-write state instead of the iter-k value the forward chain consumed. Loads whose source is not a
+// `GlobalPtrStmt` (e.g. `ExternalPtrStmt`, `GlobalTemporaryStmt`) are rejected outright since their write set is not
+// collected here. `LocalLoadStmt` aliases mutable allocas; the reverse pass reads its forward value through the
+// dedicated spill path.
 //
-// Caller passes a `cache` to share memoization across multiple queries on the same DAG (diamond shapes).
+// Caller passes a `cache` to share memoization across multiple queries on the same DAG (diamond shapes) and the
+// `mutated_snodes` set produced by `collect_mutated_snodes(ib)`.
 class RecomputableChainAnalyzer {
  public:
-  static bool is_recomputable(Stmt *stmt, std::unordered_map<Stmt *, bool> &cache) {
+  // Set of SNodes written somewhere in the IB. `GlobalStoreStmt`, `AtomicOpStmt`, and `SNodeOpStmt` destinations are
+  // tracked; `MatrixPtrStmt` is chased one level to its origin so post-`lower_matrix_ptr` shapes are captured.
+  static std::unordered_set<SNode *> collect_mutated_snodes(Block *ib) {
+    std::unordered_set<SNode *> result;
+    auto add_dest = [&](Stmt *dest) {
+      if (dest == nullptr)
+        return;
+      if (auto *mp = dest->cast<MatrixPtrStmt>())
+        dest = mp->origin;
+      if (dest == nullptr)
+        return;
+      if (auto *gp = dest->cast<GlobalPtrStmt>()) {
+        if (gp->snode != nullptr)
+          result.insert(gp->snode);
+      } else if (auto *mgp = dest->cast<MatrixOfGlobalPtrStmt>()) {
+        for (auto *s : mgp->snodes)
+          if (s != nullptr)
+            result.insert(s);
+      }
+    };
+    auto stmts = irpass::analysis::gather_statements(ib, [](Stmt *) { return true; });
+    for (auto *s : stmts) {
+      if (auto *gs = s->cast<GlobalStoreStmt>()) {
+        add_dest(gs->dest);
+      } else if (auto *ao = s->cast<AtomicOpStmt>()) {
+        add_dest(ao->dest);
+      } else if (auto *so = s->cast<SNodeOpStmt>()) {
+        if (so->snode != nullptr)
+          result.insert(so->snode);
+      }
+    }
+    return result;
+  }
+
+  static bool is_recomputable(Stmt *stmt,
+                              std::unordered_map<Stmt *, bool> &cache,
+                              const std::unordered_set<SNode *> &mutated_snodes) {
     auto it = cache.find(stmt);
     if (it != cache.end())
       return it->second;
     // Tentatively false to break cycles in pathological IR (real SSA DAGs are acyclic, but the cache also serves as a
     // visited set during recursion).
     cache[stmt] = false;
-    bool result = check(stmt, cache);
+    bool result = check(stmt, cache, mutated_snodes);
     cache[stmt] = result;
     return result;
   }
 
  private:
-  static bool check(Stmt *stmt, std::unordered_map<Stmt *, bool> &cache) {
+  static bool check(Stmt *stmt,
+                    std::unordered_map<Stmt *, bool> &cache,
+                    const std::unordered_set<SNode *> &mutated_snodes) {
     // Recomputable leaves: ConstStmt, ArgLoadStmt, AdStackLoadTopStmt, AdStackAllocaStmt. LoopIndexStmt is
     // intentionally excluded - cloning a LoopIndexStmt copies the reference to the forward RangeForStmt, but the cloned
     // consumer lives inside the reverse RangeForStmt (a separate stmt with its own loop index), so the cloned read
@@ -134,15 +175,16 @@ class RecomputableChainAnalyzer {
         stmt->is<ConstStmt>()) {
       return true;
     }
-    // GlobalLoadStmt as recomputable: the load reads a SNode value via GlobalPtrStmt. The cloned chain in the reverse
-    // pass re-issues the same load - safe iff the global is not mutated between the forward chain evaluation and the
-    // cloned re-read. Within a single kernel execution, forward writes complete before reverse runs, so the reverse
-    // re-read sees the kernel's final post-write state. If a global is mutated by the forward and then re-read by the
-    // reverse clone, the values can differ.
-    //
-    // Chain leaves that pass this branch are typically reads of kernel-input parameters not written by the kernel; for
-    // those, the re-read returns the same value as the forward read. The pass does not statically verify SNode
-    // read-only-ness, and mutated-global cases would silently produce wrong gradients.
+    // A `GlobalLoadStmt` chain leaf is recomputable only when its `GlobalPtrStmt` source resolves to an SNode the IB
+    // never writes; a reverse-side re-clone of a write-aliased SNode read returns post-write state. Non-`GlobalPtrStmt`
+    // sources (e.g. `ExternalPtrStmt`, `GlobalTemporaryStmt`) are rejected because their write set is not collected.
+    if (auto *gl = stmt->cast<GlobalLoadStmt>()) {
+      auto *src = gl->src;
+      auto *gp = src ? src->cast<GlobalPtrStmt>() : nullptr;
+      if (gp == nullptr || gp->snode == nullptr || mutated_snodes.count(gp->snode)) {
+        return false;
+      }
+    }
     bool is_interior = stmt->is<UnaryOpStmt>() || stmt->is<BinaryOpStmt>() || stmt->is<TernaryOpStmt>() ||
                        stmt->is<MatrixPtrStmt>() || stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() ||
                        stmt->is<GlobalLoadStmt>();
@@ -153,7 +195,7 @@ class RecomputableChainAnalyzer {
     for (auto *op : operands) {
       if (op == nullptr)
         continue;
-      if (!is_recomputable(op, cache))
+      if (!is_recomputable(op, cache, mutated_snodes))
         return false;
     }
     return true;
