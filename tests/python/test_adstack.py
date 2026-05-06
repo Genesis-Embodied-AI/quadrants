@@ -477,6 +477,64 @@ def test_eliminate_recomputable_pushes_preserves_zero_body_store():
     assert c.grad[None] == pytest.approx(expected_grad, rel=1e-5)
 
 
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False, ad_stack_experimental_enabled=True)
+def test_backup_ssa_load_top_with_subsequent_pushes():
+    # Pins `BackupSSA::is_load_top_stable` against the reverse-mode aliasing bug where cloning an
+    # `AdStackLoadTopStmt` at the reverse cursor reads the stack's live top - which differs from the original
+    # forward-time top whenever the same stack received another push between the original load_top and the end of
+    # the IB. The minimal IR shape that exhibits this:
+    #
+    #   - A multi-axis `qd.ndrange(...)` whose flat loop index is decomposed into per-axis indices via repeated
+    #     `floordiv` / `sub` over an adstack-backed value (each step pushes its result, then a subsequent
+    #     `load_top` reads that pushed value to feed the next decomposition step).
+    #   - A guarded division `out = in / mass` inside the kernel: `MakeAdjoint` emits two reverse formulas
+    #     (`adj(in) += adj(out) / mass`, `adj(mass) += -adj(out) * in / mass^2`) that re-evaluate `mass` and `in`
+    #     at the reverse cursor; that re-evaluation walks the per-axis index DAG, which BackupSSA was happy to
+    #     reconstruct from `floordiv(load_top(stack), const)` clones - the load_top clones read the stack's
+    #     final top, which is the LAST push (the inner axis) instead of the intermediate flat index.
+    #
+    # With the stable-load-top guard, BackupSSA detects the unsafe load_top, falls back to the per-IB alloca
+    # spill (`load(op)`), and the reverse re-evaluation reads the per-iteration forward-time index, producing
+    # the analytic gradients. Without the guard, the reverse pass reads `g_mass[j/2, j]` and `g_in[j/2, j]`
+    # instead of `g_mass[i, j]` / `g_in[i, j]`, so cells whose forward gate was true at `(i=1, j=1)` end up
+    # dividing `adj(out)` by `g_mass[0, 1]` (= 0) and the gradient comes out as `inf`/`nan`.
+    #
+    # Internal details: `cfg_optimization=False` keeps the compound `if true && (g_mass[i, j] > 0)` form alive
+    # (the `&&` lowering inserts the multi-push into the gate stack that the chain analyzer must clone through);
+    # `ad_stack_experimental_enabled=True` is the configuration where the cloned-load_top path actually fires.
+    g_mass = qd.field(qd.f32, shape=(2, 2), needs_grad=True)
+    g_in = qd.field(qd.f32, shape=(2, 2), needs_grad=True)
+    g_out = qd.field(qd.f32, shape=(2, 2), needs_grad=True)
+
+    @qd.kernel
+    def gated_div():
+        for i, j in qd.ndrange(2, 2):
+            if g_mass[i, j] > 0.0:
+                g_out[i, j] = g_in[i, j] / g_mass[i, j]
+
+    g_mass[1, 1] = 2.0
+    g_in[1, 1] = 4.0
+    g_out.grad[1, 1] = 1.0
+    gated_div.grad()
+
+    # Forward: g_out[1, 1] = g_in[1, 1] / g_mass[1, 1] = 2.0; gate is false at every other cell so all other
+    # gradients are zero. With dy = 1.0 on the active cell:
+    #   d(g_in[1, 1])   = 1 / g_mass[1, 1]                = 0.5
+    #   d(g_mass[1, 1]) = -g_in[1, 1] / g_mass[1, 1]^2    = -1.0
+    assert g_in.grad[1, 1] == pytest.approx(0.5, rel=1e-6)
+    assert g_mass.grad[1, 1] == pytest.approx(-1.0, rel=1e-6)
+    # Inactive cells must not have received any gradient. A regression where `BackupSSA` re-clones the
+    # load_top at the reverse cursor reads `g_mass[j/2, j] = g_mass[0, 1] = 0`, so 1/g_mass[0, 1] = inf
+    # would land on `g_in.grad[0, 1]` via the wrong index. Probing every other cell catches both the inf
+    # spill and any silent off-by-one accumulation.
+    for i in range(2):
+        for j in range(2):
+            if (i, j) == (1, 1):
+                continue
+            assert g_in.grad[i, j] == pytest.approx(0.0, abs=1e-6)
+            assert g_mass.grad[i, j] == pytest.approx(0.0, abs=1e-6)
+
+
 @pytest.mark.parametrize("n_iter", [1, 3, 10])
 @pytest.mark.parametrize("wrap_inner_in_func", [False, True])
 @test_utils.test(ad_stack_experimental_enabled=False)
