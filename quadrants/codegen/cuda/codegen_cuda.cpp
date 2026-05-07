@@ -745,6 +745,12 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           /* offset=*/llvm_val[stmt->args[1]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("cuda_lane_id");
+    } else if (stmt->func_name == "subgroupBarrier" || stmt->func_name == "subgroupMemoryBarrier") {
+      // Subgroups (warps) execute in lockstep on CUDA, and the API contract requires uniform
+      // control flow with all lanes active (see the data-movement note in subgroup.md), so
+      // intra-warp control / memory ordering is automatic. The op therefore lowers to nothing;
+      // we just produce an i32 zero placeholder to match the SPIR-V codegen's return convention.
+      llvm_val[stmt] = tlctx->get_constant(0);
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }

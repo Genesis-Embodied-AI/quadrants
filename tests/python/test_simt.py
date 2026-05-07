@@ -840,10 +840,11 @@ def test_subgroup_invocation_id_range():
         assert 0 <= a[i]
 
 
-@test_utils.test(arch=qd.vulkan)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_sync():
-    """Smoke test that ``subgroup.sync()`` (the renamed ``subgroup.barrier()``) traces and
-    runs.  Currently SPIR-V only, so Vulkan-gated."""
+    """Smoke test that ``subgroup.sync()`` (the renamed ``subgroup.barrier()``) traces and runs
+    on every GPU backend.  Lowers to ``OpControlBarrier`` on SPIR-V and to a no-op on CUDA /
+    AMDGPU (warps / waves are lockstep under the uniform-control-flow contract)."""
     N = 64
     a = qd.field(dtype=qd.i32, shape=N)
 
@@ -859,10 +860,11 @@ def test_subgroup_sync():
         assert a[i] >= 0
 
 
-@test_utils.test(arch=qd.vulkan)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_mem_fence():
     """Smoke test that ``subgroup.mem_fence()`` (the renamed ``subgroup.memory_barrier()``)
-    traces and runs.  Currently SPIR-V only, so Vulkan-gated."""
+    traces and runs on every GPU backend.  Lowers to ``OpMemoryBarrier`` on SPIR-V and to a
+    no-op on CUDA / AMDGPU."""
     N = 64
     a = qd.field(dtype=qd.i32, shape=N)
 
