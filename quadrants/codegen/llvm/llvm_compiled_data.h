@@ -101,6 +101,7 @@ class OffloadedTask {
   int block_dim{0};
   int grid_dim{0};
   int dynamic_shared_array_bytes{0};
+  int stream_parallel_group_id{0};
   AdStackSizingInfo ad_stack{};
 
   // Snode IDs this task writes to (read-modify-write counts as a write). Computed at codegen time
@@ -126,9 +127,22 @@ class OffloadedTask {
   explicit OffloadedTask(const std::string &name = "",
                          int block_dim = 0,
                          int grid_dim = 0,
-                         int dynamic_shared_array_bytes = 0)
-      : name(name), block_dim(block_dim), grid_dim(grid_dim), dynamic_shared_array_bytes(dynamic_shared_array_bytes) {};
-  QD_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes, ad_stack, snode_writes, arr_writes, arr_reads);
+                         int dynamic_shared_array_bytes = 0,
+                         int stream_parallel_group_id = 0)
+      : name(name),
+        block_dim(block_dim),
+        grid_dim(grid_dim),
+        dynamic_shared_array_bytes(dynamic_shared_array_bytes),
+        stream_parallel_group_id(stream_parallel_group_id) {};
+  QD_IO_DEF(name,
+            block_dim,
+            grid_dim,
+            dynamic_shared_array_bytes,
+            stream_parallel_group_id,
+            ad_stack,
+            snode_writes,
+            arr_writes,
+            arr_reads);
 };
 
 struct LLVMCompiledTask {
