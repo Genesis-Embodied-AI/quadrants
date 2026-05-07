@@ -34,7 +34,7 @@ Singular value decomposition — produces `(U, S, V)` such that `A = U @ S @ V.t
 
 Shapes 2×2 and 3×3 use closed-form / Jacobi-style implementations specialized per shape. Sign convention for `U` and `V` is the implementation's natural one and is **not** guaranteed to enforce `det(U) = det(V) = +1`; if you depend on a particular handedness (e.g. for an ARAP rotation `R = U @ V.transpose()`), check it explicitly and flip a column if needed.
 
-Singular values come out in implementation order — confirm via test if you depend on `S[0,0] >= S[1,1] >= S[2,2]`.
+The 2×2 path returns singular values sorted descending (`S[0,0] >= S[1,1]`). The 3×3 path does **not** sort — singular values come out in whatever order the Sifakis algorithm produces them. If you depend on `S[0,0] >= S[1,1] >= S[2,2]` for 3×3, sort explicitly.
 
 ### `qd.sym_eig(A, dt=None)`
 
