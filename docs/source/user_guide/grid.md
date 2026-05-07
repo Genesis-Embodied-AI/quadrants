@@ -50,18 +50,48 @@ def lookback_scan(...) -> None:
         prev = bid - 1
         while prev >= 0:
             while flags[prev] == STATE_INVALID:
-                pass
+                qd.simt.grid.memfence()
             qd.simt.grid.memfence()
             block_sum += partials[prev]
             ...
 ```
 
-The two `grid.memfence()` calls are doing different jobs:
+The three `grid.memfence()` calls are doing different jobs:
 
 1. The first orders the publication: any block reading `flags[bid] == STATE_AGGREGATE` is guaranteed to also see the published `partials[bid]`.
-2. The second is the symmetric reader-side fence: after observing the predecessor's flag, the reader needs to refresh its view of `partials[prev]` (the scope of which is already global, but the fence pins down the ordering).
+2. The second is **inside** the spin-wait, and is what forces each iteration to actually re-fetch `flags[prev]` from global memory (see "Spin-wait gotcha" below).
+3. The third is the symmetric reader-side fence: after observing the predecessor's flag, the reader needs to refresh its view of `partials[prev]` (the scope of which is already global, but the fence pins down the ordering).
 
 The fence does not require thread convergence, which is why it appears inside `if tid == 0` without deadlocking — `qd.simt.block.sync()` would deadlock there; `grid.memfence()` is safe.
+
+#### Spin-wait gotcha
+
+Quadrants ndarray reads compile to plain LLVM loads with no ordering or volatility. A naive spin-wait
+
+```python
+while flags[prev] == STATE_INVALID:
+    pass
+```
+
+is therefore unsafe: LLVM's loop-invariant-code-motion will hoist the load out of the loop (the loop body has no aliasing writes), so once the first read sees `STATE_INVALID` the loop never observes the producer's update — it spins forever. Two correct spellings:
+
+- **Fence inside the loop body** (used in the example above):
+
+  ```python
+  while flags[prev] == STATE_INVALID:
+      qd.simt.grid.memfence()
+  ```
+
+  `__threadfence()` has compiler-visible global side effects, which prevents LICM from hoisting the `flags[prev]` load across it; each iteration is forced to re-fetch from global memory. Cost: one fence per spin iteration.
+
+- **Atomic load via `atomic_or` with zero**:
+
+  ```python
+  while qd.atomic_or(flags[prev], 0) == STATE_INVALID:
+      pass
+  ```
+
+  `qd.atomic_or(x, 0)` is an atomic op that returns the current value without modifying it, which forces a real memory access on every iteration and additionally pins down ordering. Slightly cheaper than a per-iteration full grid fence on most hardware, and arguably the cleaner expression of "atomically load this slot".
 
 ## Performance and portability notes
 
