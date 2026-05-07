@@ -77,6 +77,11 @@ CUDAContext::CUDAContext() : profiler_(nullptr), driver_(CUDADriver::get_instanc
                                device_);
   supports_pageable_memory_access_ = device_supports_pageable_memory_access != 0;
 
+  int device_uses_host_page_tables = 0;
+  driver_.device_get_attribute(&device_uses_host_page_tables,
+                               CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS_USES_HOST_PAGE_TABLES, device_);
+  uses_host_page_tables_ = device_uses_host_page_tables != 0;
+
   mcpu_ = fmt::format("sm_{}", compute_capability_);
 
   QD_TRACE("Emitting CUDA code for {}", mcpu_);
