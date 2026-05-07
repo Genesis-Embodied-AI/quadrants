@@ -33,6 +33,13 @@ The remaining shuffle flavours (`shuffle_up`, `shuffle_xor`) are exposed in the 
 | `subgroup.barrier()`                        | no   | no     | yes                     |
 | `subgroup.memory_barrier()`                 | no   | no     | yes                     |
 
+Naming note: two of the names above are planned to be renamed in a future release, to align with the project's naming conventions across scopes:
+
+- `subgroup.barrier()` will be renamed to `subgroup.sync()` (matching `block.sync()`).
+- `subgroup.memory_barrier()` will be renamed to `subgroup.mem_fence()` (matching the planned `block.mem_fence()` and `grid.mem_fence()`).
+
+The new names are not yet available; this page uses the current names throughout.
+
 ### Voting and predicate ops
 
 Although these functions exist, we will migrate them to have an additional `log2_size` parameter, similar to `reduce_add` — so that the vote is over the first `2**log2_size` lanes rather than the full subgroup.
@@ -120,6 +127,8 @@ Picks one lane in the subgroup as the "leader". Returns `1` on the elected lane 
 - Currently SPIR-V only (`OpGroupNonUniformElect`). On CUDA / AMDGPU, emulate with `subgroup.invocation_id() == 0`.
 
 ### `barrier()` / `memory_barrier()`
+
+**Planned renames: `subgroup.sync()` (in place of `barrier()`) and `subgroup.mem_fence()` (in place of `memory_barrier()`).** Both will be renamed in a future release; the current names remain the only spellings available today, and the rest of this section uses them.
 
 `barrier()` is a subgroup-scope thread-converging barrier — every lane in the subgroup must reach the call before any lane proceeds. `memory_barrier()` is a subgroup-scope memory fence: it orders memory operations within the subgroup without requiring thread convergence.
 
