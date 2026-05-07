@@ -454,8 +454,6 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_intrinsic("ctlz_i32", Intrinsic::ctlz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
       patch_intrinsic("cttz_i32", Intrinsic::cttz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
 
-      patch_intrinsic("block_mem_fence", Intrinsic::nvvm_membar_cta, false);
-
       link_module_with_cuda_libdevice(module);
 
 #ifdef QD_WITH_CUDA

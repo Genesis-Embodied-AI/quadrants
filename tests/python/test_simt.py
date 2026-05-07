@@ -541,6 +541,35 @@ def test_block_mem_fence_smoke():
         assert a[i] == i
 
 
+# Verify that `block.mem_fence()` can be called from divergent control flow without deadlocking.
+# This is the property that distinguishes a memory fence from a thread-converging barrier and
+# was the user-facing motivation for the rename `mem_sync -> mem_fence`. Before the CUDA
+# dispatch was switched from `block_barrier` to `block_mem_fence` (i.e. NVPTX `__syncthreads()`
+# vs. `__threadfence_block()`), this test would hang on CUDA because thread 0 would wait at
+# the barrier forever for the other 31 lanes that early-return without reaching the call site.
+# AMDGPU lowers to a workgroup-scope `fence`, Vulkan / Metal lower to `OpMemoryBarrier
+# (ScopeWorkgroup, ...)`; none of these require thread convergence, so the divergent pattern is
+# valid on every backend.
+@test_utils.test(arch=qd.gpu)
+def test_block_mem_fence_divergent_control_flow():
+    N = 32
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            tid = qd.simt.block.thread_idx()
+            if tid == 0:
+                qd.simt.block.mem_fence()
+            a[i] = tid
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i
+
+
 # Deprecation aliases: the old names still work, and emit DeprecationWarning on first use.
 # pytest.warns enables `simplefilter("always")` for its scope, bypassing the project-wide
 # `warnings.filterwarnings("once", ..., module="quadrants")` set in `quadrants/lang/misc.py`.
