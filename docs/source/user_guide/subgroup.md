@@ -21,6 +21,8 @@ The full Python API is grouped here by category. The first column lists each op,
 
 \* AMDGPU `shuffle_down` (and therefore `reduce_add`, which is built on it) is currently emulated via `ds_bpermute` (~50 cycle latency).
 
+Use `shuffle` with an explicit lane index in the meantime — every shuffle pattern can be expressed that way.
+
 ### Identification and control
 
 | Op                                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) |
@@ -149,8 +151,6 @@ Per-lane inclusive scans over the full subgroup. Lane `i` receives `v[0] op v[1]
 ### `shuffle_xor`, `broadcast_first`, `exclusive_*`, `all_true`, `any_true`, `all_equal`
 
 These names are present in `python/quadrants/lang/simt/subgroup.py` but are currently `# TODO` stubs that return `None` on every backend. They are listed in the support matrices above for completeness — calling them produces a tracing failure rather than a useful operation. Do not depend on them today.
-
-For the shuffle-class names in particular (`shuffle_xor`, plus the `shuffle_up` gap on CUDA / AMDGPU), use `shuffle` with an explicit lane index in the meantime — every shuffle pattern can be expressed that way.
 
 ## Examples
 
