@@ -24,7 +24,12 @@ Calling a backend marked "no" raises `ValueError` from the Python layer at trace
 
 \* On CUDA, `block.mem_sync()` currently lowers via `block_barrier` (i.e. `__syncthreads()`), which doubles as a memory fence but additionally requires thread convergence — meaning calling it from divergent control flow today deadlocks. A fix to lower `mem_sync()` to a pure `__threadfence_block()` is in flight as [quadrants#637](https://github.com/Genesis-Embodied-AI/quadrants/pull/637); once merged, the divergent-branch pattern shown in the `block.mem_sync()` semantics section below works as written. Until then, prefer calling `mem_sync()` from uniform control flow on CUDA.
 
-Naming note: `block.mem_sync()` is planned to be renamed to `block.mem_fence()` in a future release, to align with the project's "fence vs barrier" terminology. The new name is not yet available; this page uses the current name throughout.
+Naming note: two of the names on this page are planned to be renamed in a future release, to align with the project's "fence vs barrier" terminology and to use a consistent `mem_fence` spelling:
+
+- `block.mem_sync()` will be renamed to `block.mem_fence()`.
+- `grid.memfence()` will be renamed to `grid.mem_fence()` (note the underscore).
+
+The new names are not yet available; this page uses the current names throughout.
 
 ## Barrier vs fence: the distinction that matters
 
@@ -35,7 +40,7 @@ Two of these ops sound similar but have very different semantics, and mixing the
 
 Concretely, on the SPIR-V backend `sync()` lowers to `workgroupBarrier` and `mem_sync()` lowers to `workgroupMemoryBarrier`. On CUDA, `sync()` lowers to `__syncthreads()`; `mem_sync()` is intended to lower to `__threadfence_block()` (a pure fence with no convergence requirement) — see the support-table caveat above. Calling `sync()` from a path that not all threads reach (a divergent `if`, an early `return`, etc.) is a classic GPU deadlock and applies to both backends.
 
-The corresponding distinction at device scope is `grid.memfence()` (memory fence across the entire grid, no thread synchronization). There is no block-style "device barrier" — to synchronize threads across blocks, finish the kernel and launch a new one.
+The corresponding distinction at device scope is `grid.memfence()` (to be renamed `grid.mem_fence()` in a future release; memory fence across the entire grid, no thread synchronization). There is no block-style "device barrier" — to synchronize threads across blocks, finish the kernel and launch a new one.
 
 ## Semantics
 
@@ -98,6 +103,8 @@ On CUDA / AMDGPU this is the natural way to identify which work-item a thread sh
 Returns the local thread index within the block. Currently only implemented on SPIR-V backends (Vulkan / Metal); on CUDA / AMDGPU it raises. On CUDA / AMDGPU, use `global_thread_idx()` together with `qd.loop_config(block_dim=...)` and recover the in-block index via `global_thread_idx() % block_dim`.
 
 ## Grid-scope fence: `qd.simt.grid.memfence()`
+
+**Planned rename: `qd.simt.grid.mem_fence()`** (note the underscore). This op will be renamed in a future release for consistency with the planned `block.mem_fence()`. The current name (`grid.memfence()`) remains the only spelling available today; the rest of this section uses it.
 
 `grid.memfence()` is the device-scope counterpart of `block.mem_sync()` (to be renamed `block.mem_fence()` in a future release). It orders memory operations across the entire grid, so writes made by one block become visible to other blocks after the fence. CUDA only today; lowers to `__threadfence()` (`nvvm_membar_gl`).
 
