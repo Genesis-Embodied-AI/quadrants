@@ -841,6 +841,100 @@ def test_subgroup_invocation_id_range():
 
 
 @test_utils.test(arch=qd.vulkan)
+def test_subgroup_sync():
+    """Smoke test that ``subgroup.sync()`` (the renamed ``subgroup.barrier()``) traces and
+    runs.  Currently SPIR-V only, so Vulkan-gated."""
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            subgroup.sync()
+            a[i] = subgroup.invocation_id()
+
+    foo()
+    for i in range(N):
+        assert a[i] >= 0
+
+
+@test_utils.test(arch=qd.vulkan)
+def test_subgroup_mem_fence():
+    """Smoke test that ``subgroup.mem_fence()`` (the renamed ``subgroup.memory_barrier()``)
+    traces and runs.  Currently SPIR-V only, so Vulkan-gated."""
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            subgroup.mem_fence()
+            a[i] = subgroup.invocation_id()
+
+    foo()
+    for i in range(N):
+        assert a[i] >= 0
+
+
+def _drain_deprecation_warnings(records):
+    return [r for r in records if issubclass(r.category, DeprecationWarning)]
+
+
+def test_subgroup_barrier_deprecation_warn_once(monkeypatch):
+    """``subgroup.barrier()`` is a deprecated alias for ``subgroup.sync()``.  It must emit a
+    single ``DeprecationWarning`` on first use (regardless of how many times it is called) and
+    forward to ``sync()``.  Pure-Python unit test: ``sync`` is monkey-patched to a no-op so
+    the test does not require a Quadrants kernel context."""
+    import warnings as _w
+
+    from quadrants.lang.simt import subgroup as sg
+
+    sg._barrier_deprecation_warned = False
+    calls = []
+    monkeypatch.setattr(sg, "sync", lambda: calls.append("sync"))
+
+    with _w.catch_warnings(record=True) as records:
+        _w.simplefilter("always", DeprecationWarning)
+        sg.barrier()
+        sg.barrier()
+        sg.barrier()
+
+    deprecations = _drain_deprecation_warnings(records)
+    assert len(deprecations) == 1, f"expected exactly one DeprecationWarning, got {len(deprecations)}"
+    msg = str(deprecations[0].message)
+    assert "qd.simt.subgroup.barrier()" in msg
+    assert "qd.simt.subgroup.sync()" in msg
+    assert calls == ["sync", "sync", "sync"], calls
+
+
+def test_subgroup_memory_barrier_deprecation_warn_once(monkeypatch):
+    """``subgroup.memory_barrier()`` is a deprecated alias for ``subgroup.mem_fence()``.
+    Mirror of ``test_subgroup_barrier_deprecation_warn_once``."""
+    import warnings as _w
+
+    from quadrants.lang.simt import subgroup as sg
+
+    sg._memory_barrier_deprecation_warned = False
+    calls = []
+    monkeypatch.setattr(sg, "mem_fence", lambda: calls.append("mem_fence"))
+
+    with _w.catch_warnings(record=True) as records:
+        _w.simplefilter("always", DeprecationWarning)
+        sg.memory_barrier()
+        sg.memory_barrier()
+        sg.memory_barrier()
+
+    deprecations = _drain_deprecation_warnings(records)
+    assert len(deprecations) == 1, f"expected exactly one DeprecationWarning, got {len(deprecations)}"
+    msg = str(deprecations[0].message)
+    assert "qd.simt.subgroup.memory_barrier()" in msg
+    assert "qd.simt.subgroup.mem_fence()" in msg
+    assert calls == ["mem_fence", "mem_fence", "mem_fence"], calls
+
+
+@test_utils.test(arch=qd.vulkan)
 def test_vulkan_subgroup_id_survives_reinit():
     """Regression test: SubgroupLocalInvocationId must stay stable across
     repeated qd.init(vulkan)/qd.reset() cycles.  An NVIDIA driver bug
