@@ -163,23 +163,6 @@ if (QD_WITH_LLVM)
       message(FATAL_ERROR "Cannot find any clang executable.")
     endif()
 
-    # Setup LLVM_LINK_EXECUTABLE. Required to merge runtime.bc + adstack_runtime.bc into a single bitcode module.
-    # Search the LLVM toolchain dir (`$LLVM_DIR/bin` set by `.github/workflows/scripts/ti_build/llvm.py` in CI) and
-    # the directory next to CLANG_EXECUTABLE first so we get a version-matched llvm-link, then fall back to PATH.
-    if (LLVM_LINK_EXECUTABLE)
-      message("LLVM_LINK_EXECUTABLE defined: ${LLVM_LINK_EXECUTABLE}")
-    else()
-      get_filename_component(_clang_dir "${CLANG_EXECUTABLE}" DIRECTORY)
-      find_program(LLVM_LINK_EXECUTABLE
-                   NAMES llvm-link-22 llvm-link-21 llvm-link-20 llvm-link
-                   HINTS "$ENV{LLVM_DIR}/bin" "${_clang_dir}")
-      message("llvm-link executable found at ${LLVM_LINK_EXECUTABLE}")
-    endif()
-
-    if (NOT LLVM_LINK_EXECUTABLE)
-      message(FATAL_ERROR "Cannot find llvm-link executable; required to merge runtime bitcode modules.")
-    endif()
-
     macro(check_clang_version)
       execute_process(COMMAND ${CLANG_EXECUTABLE} --version OUTPUT_VARIABLE CLANG_VERSION_OUTPUT)
       string(REGEX MATCH "([0-9]+)\\.[0-9]+(\\.[0-9]+)?" CLANG_VERSION "${CLANG_VERSION_OUTPUT}")

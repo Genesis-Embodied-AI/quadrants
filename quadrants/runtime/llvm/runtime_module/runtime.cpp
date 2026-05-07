@@ -575,6 +575,8 @@ void runtime_get_temporaries_ptr(LLVMRuntime *runtime) {
   runtime->set_result(quadrants_result_buffer_ret_value_id, runtime->temporaries);
 }
 
+#include "adstack_runtime.cpp"
+
 void runtime_retrieve_and_reset_error_code(LLVMRuntime *runtime) {
   runtime->set_result(quadrants_result_buffer_error_id, runtime->error_code);
   runtime->error_code = 0;

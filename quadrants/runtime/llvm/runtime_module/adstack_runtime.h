@@ -1,6 +1,9 @@
-// Public surface of the adstack runtime helpers. adstack_runtime.cpp is its own translation unit, compiled to its own
-// bitcode and merged with runtime.bc via `llvm-link` into the final `runtime_<arch>.bc`. Both TUs share the
-// `LLVMRuntime` struct memory layout via llvm_runtime.h.
+// Public surface of the adstack runtime helpers. The implementation lives in adstack_runtime.cpp, which is
+// `#include`d once from runtime.cpp so the bitcode build stays a single translation unit (matching the existing
+// `node_*.h` / `internal_functions.h` / `locked_task.h` pattern in this directory). Both files share the
+// `LLVMRuntime` struct memory layout via llvm_runtime.h. A real two-TU build via `llvm-link` would collapse
+// structurally identical named struct types (`RootMeta` / `DenseMeta` / ..., `BitmaskedMeta` / `PointerMeta`)
+// under a single name, which then breaks the host `QuadrantsLLVMContext::get_runtime_type` lookup by name.
 //
 // All `runtime_*adstack*` functions are entry points called via the LLVM JIT (`runtime_jit->call` on CPU and CUDA /
 // AMDGPU - the `runtime_` prefix is what `init_runtime_module` keys off to mark the function as a `.entry` kernel on

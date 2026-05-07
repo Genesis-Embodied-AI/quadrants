@@ -1,21 +1,15 @@
-// Adstack runtime helpers for the LLVM bitcode runtime. Standalone translation unit: compiled to its own bitcode
-// (`adstack_runtime_<arch>.bc`) and merged with `runtime.bc` via `llvm-link` to produce the final
-// `runtime_<arch>.bc` consumed by `init_runtime_module`. Shares the `LLVMRuntime` struct memory layout with
-// runtime.cpp through llvm_runtime.h (pulled in via adstack_runtime.h).
+// Adstack runtime helpers for the LLVM bitcode runtime. This file is `#include`d once from runtime.cpp so the
+// bitcode build stays a single translation unit (see adstack_runtime.h for why a real two-TU split via `llvm-link`
+// is broken by LLVM's named-struct type uniquing). It sees runtime.cpp's preamble - type aliases, the `STRUCT_FIELD`
+// macro, the `LLVMRuntime` / `RuntimeContext` struct definitions - through that include site, mirroring how
+// `node_*.h` / `internal_functions.h` / `locked_task.h` are factored out today.
 //
 // See adstack_runtime.h for the public API documentation; the file-scope comments in each function below cover
 // the implementation details.
 
-#include <cstring>
-#include <new>
-
-#include "quadrants/program/context.h"
-
-#include "adstack_runtime.h"
-
 // STRUCT_FIELD getters for the adstack-prefixed `LLVMRuntime` fields. The struct fields themselves live in
 // llvm_runtime.h (they are part of the struct memory layout), but the macro-generated `extern "C"` getters / setters
-// can live in any TU - co-locating them here keeps the adstack surface in one place.
+// can live anywhere in the TU - co-locating them here keeps the adstack surface in one place.
 STRUCT_FIELD(LLVMRuntime, adstack_heap_buffer);
 STRUCT_FIELD(LLVMRuntime, adstack_heap_size);
 STRUCT_FIELD(LLVMRuntime, adstack_per_thread_stride);

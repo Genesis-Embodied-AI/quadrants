@@ -47,16 +47,6 @@ def setup_llvm() -> str:
         case default:
             raise RuntimeError(f"Unsupported platform: {u.system} {u.machine}")
 
-    # The release zip drops the executable bit on POSIX targets, so binaries (clang, llvm-link, ...) come out 0644.
-    # CMake `find_program` then warns that the file is "readable but not executable" and `/bin/sh` later refuses with
-    # PermissionError. Mirrors `vulkan.py` / `sccache.py` which chmod 0755 right after their respective downloads.
-    if u.system != "Windows":
-        bin_dir = out / "bin"
-        if bin_dir.is_dir():
-            for entry in bin_dir.iterdir():
-                if entry.is_file():
-                    entry.chmod(0o755)
-
     # We should use LLVM toolchains shipped with OS.
     # path_prepend('PATH', out / 'bin')
     os.environ["LLVM_DIR"] = str(out)
