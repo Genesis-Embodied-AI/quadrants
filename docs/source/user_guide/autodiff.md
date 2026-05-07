@@ -349,14 +349,37 @@ A large `ndrange` combined with several loop-carried variables multiplies quickl
 
 ## What can go wrong
 
-- **Adstack overflow.** Surfaces as `QuadrantsAssertionError: Adstack overflow ...` at the next Quadrants Python entry. The message names the offending kernel + offload task and the most likely cause:
-  - *Untracked tensor mutation between launches.* A tensor backing a data-dependent loop bound was written to outside Quadrants's tracking - typically a DLPack zero-copy mutation through a torch tensor sharing storage with a Quadrants ndarray, or a raw pointer write through a non-torch consumer. The cached adstack capacity was sized against the value before the mutation; if the mutation grew the bound, the next launch overflows. Workaround: route the write through a Quadrants API (`Ndarray.write` / `Ndarray.fill` / a kernel that writes the value). Alternatively, catch the exception and re-launch - Quadrants invalidates the cached bound on raise, so the retry runs against the live state. Kernel state may be inconsistent after an overflow; do not retry the same step without restarting from a clean state.
-  - *Sizer under-estimated the bound (Quadrants bug).* On unusually intricate nested loops - typically deeply nested `for i in range(arr[...])` with cumulative-index arithmetic - the sizer can compute a bound that is mathematically tighter than the actual push count. To file a bug: clear `/tmp/ir/`, rerun your script with `QD_DUMP_IR=1` set in the environment so Quadrants dumps the kernel IR there, then open an issue on the Quadrants repo with the contents of `/tmp/ir/` attached as a zip. Workaround: pass a generous `ad_stack_size=N` to `qd.init()` with `N` large enough to cover the real push count (bypasses the sizer).
-- **Out-of-memory before the kernel even runs.** A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer's number is correct. Surfaces as an allocator OOM at launch time. Remedies are the ones listed under *Avoiding OOM on GPU* above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.
-- **Loop bounds backed by a mutated ndarray.** A reverse-mode kernel with `for i in range(n[j])` requires `n[j]` to hold the same value at the forward call and at `.grad()`. If anything writes to `n[j]` between those two points - the differentiable kernel itself, or any other kernel call - the backward call will trigger an `Adstack overflow` exception or the computed gradient would come out silently wrong. The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until `.grad()` returns. The reason for that is Quadrants' adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like [PyTorch's autograd](https://pytorch.org/docs/stable/notes/autograd.html) is not affected, since the trip count is recorded as the forward runs and reused at backward time.
-- **Inner reverse-mode loop with a complex bound at very large extent.** An arbitrarily large enclosing range works only when the inner trip count fits a fixed subset of expressions; other shapes cap at ~16 million enclosing iterations and raise `RuntimeError: ... iteration count ... exceeds the 16777216 guard` past that. Workaround: rewrite the trip count to stay within the supported subset, or shrink the enclosing loop below the threshold.
-  - *Works at any enclosing-range size:* integer ndarray reads up to 32 bits wide (single- or multi-axis, indexed by literal constants or enclosing loop variables), field reads of the same width indexed by literal constants or enclosing loop variables (`my_field[None]`, `my_field[k]` for a constant `k`, `my_field[i]` where `i` is an enclosing loop variable), `arr.shape[k]` shape terms, literal integer constants, and `+`, `-`, `*`, `max` of those.
-  - *Caps at the threshold:* 64-bit integer ndarray or field reads, arithmetic-indexed reads (`arr[i // 2]`), and ragged inner ranges whose own bound depends on an enclosing loop variable through an unsupported leaf shape.
+### Adstack overflow
+
+Surfaces as `QuadrantsAssertionError: Adstack overflow ...` at the next Quadrants Python entry. The message names the offending kernel + offload task and the most likely cause.
+
+The two cases the runtime distinguishes:
+
+- *Untracked tensor mutation between launches.* A tensor backing a data-dependent loop bound was written to outside Quadrants's tracking - typically a DLPack zero-copy mutation through a torch tensor sharing storage with a Quadrants ndarray, or a raw pointer write through a non-torch consumer. The cached adstack capacity was sized against the value before the mutation; if the mutation grew the bound, the next launch overflows. Workaround: route the write through a Quadrants API (`Ndarray.write` / `Ndarray.fill` / a kernel that writes the value). Alternatively, catch the exception and re-launch - Quadrants invalidates the cached bound on raise, so the retry runs against the live state. Kernel state may be inconsistent after an overflow; do not retry the same step without restarting from a clean state.
+- *Sizer under-estimated the bound (Quadrants bug).* On unusually intricate nested loops - typically deeply nested `for i in range(arr[...])` with cumulative-index arithmetic - the sizer can compute a bound that is mathematically tighter than the actual push count. To file a bug: clear `/tmp/ir/`, rerun your script with `QD_DUMP_IR=1` set in the environment so Quadrants dumps the kernel IR there, then open an issue on the Quadrants repo with the contents of `/tmp/ir/` attached as a zip. Workaround: pass a generous `ad_stack_size=N` to `qd.init()` with `N` large enough to cover the real push count (bypasses the sizer).
+
+### Out-of-memory before the kernel even runs
+
+A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer's number is correct. Surfaces as an allocator OOM at launch time. Remedies are the ones listed under *Avoiding OOM on GPU* above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.
+
+### Loop bounds backed by a mutated ndarray
+
+A reverse-mode kernel with `for i in range(n[j])` requires `n[j]` to hold the same value at the forward call and at `.grad()`. If anything writes to `n[j]` between those two points - the differentiable kernel itself, or any other kernel call - the backward call will trigger an `Adstack overflow` exception or the computed gradient would come out silently wrong.
+
+The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until `.grad()` returns. The reason for that is Quadrants' adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like [PyTorch's autograd](https://pytorch.org/docs/stable/notes/autograd.html) is not affected, since the trip count is recorded as the forward runs and reused at backward time.
+
+### Inner reverse-mode loop with a complex bound at very large extent
+
+An arbitrarily large enclosing range works only when the inner trip count fits a fixed subset of expressions; other shapes cap at ~16 million enclosing iterations and raise `RuntimeError: ... iteration count ... exceeds the 16777216 guard` past that.
+
+Two categories of bound expression:
+
+- *Works at any enclosing-range size:* integer ndarray reads up to 32 bits wide (single- or multi-axis, indexed by literal constants or enclosing loop variables), field reads of the same width indexed by literal constants or enclosing loop variables (`my_field[None]`, `my_field[k]` for a constant `k`, `my_field[i]` where `i` is an enclosing loop variable), `arr.shape[k]` shape terms, literal integer constants, and `+`, `-`, `*`, `max` of those.
+- *Caps at the threshold:* 64-bit integer ndarray or field reads, arithmetic-indexed reads (`arr[i // 2]`, `arr[i % 4]`), and ragged inner ranges whose own bound depends on an enclosing loop variable through an unsupported leaf shape.
+
+A concrete example that hits the cap is `for j in range(arr[i // 2]):` with `arr[0] = (1 << 24) + 1`.
+
+Workaround: rewrite the trip count to stay within the supported subset, or shrink the enclosing loop below the threshold.
 
 ## Performance characteristics
 
