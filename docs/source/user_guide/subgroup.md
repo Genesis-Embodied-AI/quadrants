@@ -35,6 +35,8 @@ The remaining shuffle flavours (`shuffle_up`, `shuffle_xor`) are exposed in the 
 
 ### Voting and predicate ops
 
+Although these functions exist, we will migrate them to have an additional `log2_size` parameter, similar to `reduce_add` — so that the vote is over `2**log2_size` consecutive lanes rather than the full subgroup.
+
 | Op                                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) |
 |---------------------------------------------|------|--------|-------------------------|
 | `subgroup.all_true(predicate)`              | no   | no     | no                      |
@@ -44,6 +46,8 @@ The remaining shuffle flavours (`shuffle_up`, `shuffle_xor`) are exposed in the 
 All three are TODO stubs in `python/quadrants/lang/simt/subgroup.py` and currently return `None` on every backend. The CUDA-only counterparts on `qd.simt.warp` (`warp.all_nonzero`, `warp.any_nonzero`, `warp.unique`) are usable today if you can afford to be CUDA-bound.
 
 ### Reductions and scans
+
+`reduce_add` and `reduce_all_add` already take a `log2_size` parameter. The `inclusive_*` and `exclusive_*` rows below do not. Although these functions exist, we will migrate the `inclusive_*` and `exclusive_*` ops to have an additional `log2_size` parameter, similar to `reduce_add` — so that the scan is over `2**log2_size` consecutive lanes rather than the full subgroup.
 
 | Op                                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                       |
 |---------------------------------------------|------|--------|-------------------------|------------------------------|
