@@ -63,60 +63,11 @@ The two `grid.memfence()` calls are doing different jobs:
 
 The fence does not require thread convergence, which is why it appears inside `if tid == 0` without deadlocking — `qd.simt.block.sync()` would deadlock there; `grid.memfence()` is safe.
 
-## Examples
-
-### Cross-block reduction with a single kernel
-
-```python
-NUM_BLOCKS = 64
-BLOCK_SIZE = 256
-
-partials = qd.field(qd.f32, shape=(NUM_BLOCKS,))
-flags    = qd.field(qd.i32, shape=(NUM_BLOCKS,))
-
-@qd.kernel
-def reduce_one_pass(input: qd.types.NDArray[qd.f32, 1], result: qd.types.NDArray[qd.f32, 1]) -> None:
-    qd.loop_config(block_dim=BLOCK_SIZE)
-
-    bid = qd.simt.block.global_thread_idx() // BLOCK_SIZE
-    tid = qd.simt.block.global_thread_idx()  % BLOCK_SIZE
-
-    local = qd.f32(0.0)
-    i = bid * BLOCK_SIZE + tid
-    if i < input.shape[0]:
-        local = input[i]
-
-    block_sum = qd.simt.subgroup.reduce_all_add(local, 5)
-
-    if tid == 0:
-        partials[bid] = block_sum
-        qd.simt.grid.memfence()
-        flags[bid] = 1
-
-    if bid == NUM_BLOCKS - 1 and tid == 0:
-        for b in range(NUM_BLOCKS - 1):
-            while flags[b] == 0:
-                pass
-            qd.simt.grid.memfence()
-        total = qd.f32(0.0)
-        for b in range(NUM_BLOCKS):
-            total += partials[b]
-        result[0] = total
-```
-
-The two-stage publish-then-flag pattern is exactly what Onesweep, decoupled-look-back scan, and persistent-thread reductions are built on. Without the `grid.memfence()`, a reader could observe `flags[b] == 1` while still seeing the old value of `partials[b]`.
-
-### When to *not* use it
-
-If you only need to publish across threads of the same block, `qd.simt.block.mem_sync()` is several times cheaper. Use `grid.memfence()` only for true cross-block coordination.
-
-If you need every thread in the grid to *converge* (not just see each other's writes), there is no in-kernel primitive — finish the kernel and launch a new one. Quadrants kernels are inherently asynchronous from each other only through the launch boundary, which doubles as a cross-grid barrier.
-
 ## Performance and portability notes
 
 - **CUDA-only today.** AMDGPU and SPIR-V lowerings are not implemented; calling `grid.memfence()` on those backends raises at trace time. Cross-platform code that needs a grid-scope fence must currently CUDA-bound the kernel, or restructure to use the kernel-launch boundary.
 - **Cost scales with the global-cache invalidation domain.** A grid fence drains the L2 (and on some GPUs the L1) caches of all SMs / CUs touching the address. On A100 / H100 the cost is on the order of tens to low hundreds of nanoseconds per call; in tight loops, prefer batching multiple cross-block updates per fence.
-- **Pair with the right ordering of memory ops.** The fence orders the *calling thread*'s memory ops; readers in other blocks need their own fence (or an atomic load) to refresh their view. The producer-fence + consumer-fence pattern in the example above is the canonical idiom.
+- **Pair with the right ordering of memory ops.** The fence orders the *calling thread*'s memory ops; readers in other blocks need their own fence (or an atomic load) to refresh their view. The producer-fence + consumer-fence pattern is the canonical idiom.
 - **Not a substitute for atomics on contended locations.** A fence orders writes but does not serialize them. If multiple blocks write to the same location, you need an atomic regardless of how the fence is placed.
 
 ## Related
