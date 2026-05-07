@@ -4737,6 +4737,8 @@ def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
 )
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_max_reducer_pins_stride_for_oversized_axis(shape, body_kind):
+    if impl.current_cfg().arch == qd.cuda and impl.get_cuda_compute_capability() < 80:
+        pytest.skip("Pre-Ampere CUDA: max-reducer dispatch is gated off; the oversized axis hits the 1<<24 cap")
     # A reverse-mode kernel with a parallel-for over an arbitrarily large ndarray axis and an inner range-for bound to a
     # recognizer-accepted trip-count expression sizes its adstack at launch time and computes the right gradient,
     # without the per-task sizer's `1<<24` cap firing.
@@ -4815,6 +4817,8 @@ def test_max_reducer_pins_stride_for_oversized_axis(shape, body_kind):
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_max_reducer_dispatch_counts_advance_on_input_mutation():
+    if impl.current_cfg().arch == qd.cuda and impl.get_cuda_compute_capability() < 80:
+        pytest.skip("Pre-Ampere CUDA: max-reducer dispatch is gated off; dispatch-count assertions cannot hold")
     # Pins the dispatch + cache invalidation pipeline. The first launch must fire at least one max-reducer dispatch (the
     # kernel's `MaxOverRange(0, a.shape[0], a[var])` matches the recognizer grammar so the recognizer captures the spec;
     # the launcher dispatches once and bumps `Program.max_reducer_dispatch_count`). A subsequent host mutation of the
@@ -4868,6 +4872,8 @@ def test_max_reducer_dispatch_counts_advance_on_input_mutation():
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_max_reducer_grammar_fallback():
+    if impl.current_cfg().arch == qd.cuda and impl.get_cuda_compute_capability() < 80:
+        pytest.skip("Pre-Ampere CUDA: max-reducer dispatch is gated off")
     # Pins the recognizer's grammar gate. A reverse-mode kernel whose inner trip count is a compile-time constant (no
     # `MaxOverRange` wrapper in the resulting `SizeExpr`) does not match the recognizer grammar and there is no spec for
     # `recognize_adstack_max_reducer_specs` to capture. The launcher's pre-publish dispatch finds an empty
@@ -4923,6 +4929,8 @@ def test_max_reducer_grammar_fallback():
 )
 @test_utils.test(require=qd.extension.adstack)
 def test_max_reducer_field_load_bound_var_dispatch(body_kind):
+    if impl.current_cfg().arch == qd.cuda and impl.get_cuda_compute_capability() < 80:
+        pytest.skip("Pre-Ampere CUDA: max-reducer dispatch is gated off; dispatch-count assertions cannot hold")
     # A reverse-mode kernel whose inner range-for trip count reads a `qd.field` indexed by the outer chain variable
     # captures via the parallel max-reducer dispatch and produces the analytical gradient. The body-shape
     # parametrization exercises every supported composition: bound-var FieldLoad on its own, mixed with bound-var ETR
@@ -5030,6 +5038,8 @@ def test_max_reducer_field_load_bound_var_dispatch(body_kind):
 
 @test_utils.test(require=qd.extension.adstack)
 def test_max_reducer_field_load_bound_var_cache_invalidates_on_snode_mutation():
+    if impl.current_cfg().arch == qd.cuda and impl.get_cuda_compute_capability() < 80:
+        pytest.skip("Pre-Ampere CUDA: max-reducer dispatch is gated off")
     # A reverse-mode kernel whose inner trip count reads a `qd.field` indexed by the outer chain variable redispatches
     # the max-reducer when the gating field is mutated between launches.
     #
@@ -5089,6 +5099,8 @@ def test_max_reducer_field_load_bound_var_cache_invalidates_on_snode_mutation():
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_above_cap_out_of_grammar_kernel_raises():
+    if impl.current_cfg().arch == qd.cuda and impl.get_cuda_compute_capability() < 80:
+        pytest.skip("Pre-Ampere CUDA: max-reducer dispatch is gated off")
     # A reverse-mode kernel whose inner `range(...)` trip count is bound to an out-of-grammar `MaxOverRange` body and
     # whose iteration count exceeds the `1<<24` adstack-sizer cap surfaces a `QuadrantsAssertionError` at `qd.sync()`.
     #

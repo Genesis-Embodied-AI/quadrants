@@ -20,6 +20,7 @@
 #include "quadrants/rhi/llvm/llvm_device.h"
 
 #include "quadrants/platform/cuda/detect_cuda.h"
+#include "quadrants/rhi/cuda/cuda_context.h"
 #include "quadrants/rhi/cuda/cuda_driver.h"
 
 #include "quadrants/platform/amdgpu/detect_amdgpu.h"
@@ -288,6 +289,19 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
   if (ctx == nullptr || ctx->args_type == nullptr) {
     return result;
   }
+  // Skip the dispatch on pre-Ampere CUDA (compute capability < 8.0). On Turing-class hardware (sm_75 and earlier),
+  // `runtime_eval_adstack_max_reduce` faults at `cuLaunchKernel` with an illegal-address when reading ndarray data
+  // through `ctx->arg_buffer`. The host-side d2h view of the same memory at the launch site shows the correct
+  // bytes, so the kernel's view diverges from the host's; the precise root cause has not been pinned down. Ampere
+  // and newer (sm_80+) work in practice (verified on Blackwell sm_120). With an empty result map here,
+  // `publish_adstack_metadata` walks the unsubstituted `SerializedSizeExpr` tree and the per-stack sizer falls
+  // through to the worst-case-num-threads heap budget, which is sufficient for correctness on this hardware.
+  // AMDGPU keeps the dispatch enabled.
+#if defined(QD_WITH_CUDA)
+  if (config_.arch == Arch::cuda && CUDAContext::get_instance().get_compute_capability() < 80) {
+    return result;
+  }
+#endif
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
   AdStackCache *cache = (prog != nullptr) ? &prog->adstack_cache() : nullptr;
 
