@@ -1,0 +1,151 @@
+quadrants.lang.simt.subgroup
+============================
+
+.. py:module:: quadrants.lang.simt.subgroup
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.simt.subgroup.sync
+   quadrants.lang.simt.subgroup.mem_fence
+   quadrants.lang.simt.subgroup.barrier
+   quadrants.lang.simt.subgroup.memory_barrier
+   quadrants.lang.simt.subgroup.elect
+   quadrants.lang.simt.subgroup.all_true
+   quadrants.lang.simt.subgroup.any_true
+   quadrants.lang.simt.subgroup.all_equal
+   quadrants.lang.simt.subgroup.broadcast_first
+   quadrants.lang.simt.subgroup.reduce_add
+   quadrants.lang.simt.subgroup.reduce_all_add
+   quadrants.lang.simt.subgroup.inclusive_add
+   quadrants.lang.simt.subgroup.inclusive_mul
+   quadrants.lang.simt.subgroup.inclusive_min
+   quadrants.lang.simt.subgroup.inclusive_max
+   quadrants.lang.simt.subgroup.inclusive_and
+   quadrants.lang.simt.subgroup.inclusive_or
+   quadrants.lang.simt.subgroup.inclusive_xor
+   quadrants.lang.simt.subgroup.exclusive_add
+   quadrants.lang.simt.subgroup.exclusive_mul
+   quadrants.lang.simt.subgroup.exclusive_min
+   quadrants.lang.simt.subgroup.exclusive_max
+   quadrants.lang.simt.subgroup.exclusive_and
+   quadrants.lang.simt.subgroup.exclusive_or
+   quadrants.lang.simt.subgroup.exclusive_xor
+   quadrants.lang.simt.subgroup.shuffle
+   quadrants.lang.simt.subgroup.shuffle_xor
+   quadrants.lang.simt.subgroup.shuffle_up
+   quadrants.lang.simt.subgroup.shuffle_down
+
+
+Module Contents
+---------------
+
+.. py:function:: sync()
+
+.. py:function:: mem_fence()
+
+.. py:function:: barrier()
+
+.. py:function:: memory_barrier()
+
+.. py:function:: elect()
+
+   Return ``1`` on lane ``0`` of every subgroup and ``0`` on every other lane.
+
+   Implemented portably as ``invocation_id() == 0``: every backend that lowers
+   ``invocation_id()`` therefore lowers ``elect()`` at zero extra cost (it inlines at trace
+   time into a single compare + zext).
+
+   Note that this narrows SPIR-V's ``OpGroupNonUniformElect`` semantics, which may pick any
+   *active* lane as the elected one.  Under the documented uniform-CF + all-lanes-active
+   contract for ``qd.simt.subgroup`` this distinction is invisible (lane 0 is always
+   active and is a legal choice), and pinning down the elected lane keeps the behaviour
+   consistent across backends.
+
+
+.. py:function:: all_true(cond)
+
+.. py:function:: any_true(cond)
+
+.. py:function:: all_equal(value)
+
+.. py:function:: broadcast_first(value)
+
+   Broadcast lane 0's ``value`` to every lane in the subgroup.
+
+   Equivalent to ``broadcast(value, qd.u32(0))``; ``0`` is trivially dynamically uniform, so the
+   SPIR-V ``OpGroupNonUniformBroadcast`` requirement is satisfied. Decorated with ``@qd.func`` and
+   inlined into the calling kernel.
+
+
+.. py:function:: reduce_add(value, log2_size: template())
+
+   Sum ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
+
+   The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.
+   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
+   (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).
+
+   ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
+   shuffle+add operations in the calling kernel's IR.
+
+
+.. py:function:: reduce_all_add(value, log2_size: template())
+
+   Sum ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.
+
+   The result is broadcast to all ``2**log2_size`` lanes.  Caller must ensure ``2**log2_size``
+   does not exceed the active subgroup size on the target.
+
+   ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
+   shuffle+add operations in the calling kernel's IR.
+
+
+.. py:function:: inclusive_add(value)
+
+.. py:function:: inclusive_mul(value)
+
+.. py:function:: inclusive_min(value)
+
+.. py:function:: inclusive_max(value)
+
+.. py:function:: inclusive_and(value)
+
+.. py:function:: inclusive_or(value)
+
+.. py:function:: inclusive_xor(value)
+
+.. py:function:: exclusive_add(value)
+
+.. py:function:: exclusive_mul(value)
+
+.. py:function:: exclusive_min(value)
+
+.. py:function:: exclusive_max(value)
+
+.. py:function:: exclusive_and(value)
+
+.. py:function:: exclusive_or(value)
+
+.. py:function:: exclusive_xor(value)
+
+.. py:function:: shuffle(value, index)
+
+.. py:function:: shuffle_xor(value, mask)
+
+   Lane ``i`` reads ``value`` from lane ``i ^ mask``.
+
+   Implemented portably as ``shuffle(value, lane ^ mask)``: every backend that lowers
+   ``shuffle`` therefore lowers ``shuffle_xor``. ``mask`` is a ``u32`` and must place the
+   XOR partner inside the active subgroup; results outside that range are
+   implementation-defined (same caveat as ``shuffle``). Decorated with ``@qd.func`` and inlined
+   into the calling kernel.
+
+
+.. py:function:: shuffle_up(value, offset)
+
+.. py:function:: shuffle_down(value, offset)
+
