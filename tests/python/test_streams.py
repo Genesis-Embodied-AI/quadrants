@@ -538,3 +538,111 @@ def test_stream_pool_reuse():
         qd.sync()
         assert np.allclose(a.to_numpy(), v), f"iteration {iteration}"
         assert np.allclose(b.to_numpy(), v * 2.0), f"iteration {iteration}"
+
+
+@test_utils.test()
+def test_with_multiple_context_managers_rejected():
+    import pytest
+
+    from quadrants.lang.exception import QuadrantsSyntaxError
+
+    N = 64
+    a = qd.field(qd.f32, shape=(N,))
+
+    with pytest.raises(QuadrantsSyntaxError, match="single context manager"):
+
+        @qd.kernel
+        def bad():
+            with qd.stream_parallel(), qd.stream_parallel():
+                for i in range(N):
+                    a[i] = 1.0
+
+        bad()
+
+
+@test_utils.test()
+def test_with_as_rejected():
+    import pytest
+
+    from quadrants.lang.exception import QuadrantsSyntaxError
+
+    N = 64
+    a = qd.field(qd.f32, shape=(N,))
+
+    with pytest.raises(QuadrantsSyntaxError, match="with .* as"):
+
+        @qd.kernel
+        def bad():
+            with qd.stream_parallel() as s:
+                for i in range(N):
+                    a[i] = 1.0
+
+        bad()
+
+
+@test_utils.test()
+def test_with_non_call_expression_rejected():
+    import pytest
+
+    from quadrants.lang.exception import QuadrantsSyntaxError
+
+    N = 64
+    a = qd.field(qd.f32, shape=(N,))
+    dummy = qd.stream_parallel
+
+    with pytest.raises(QuadrantsSyntaxError, match="requires a call expression"):
+
+        @qd.kernel
+        def bad():
+            with dummy:
+                for i in range(N):
+                    a[i] = 1.0
+
+        bad()
+
+
+@test_utils.test()
+def test_with_non_stream_parallel_rejected():
+    import pytest
+
+    from quadrants.lang.exception import QuadrantsSyntaxError
+
+    N = 64
+    a = qd.field(qd.f32, shape=(N,))
+
+    def other_ctx():
+        pass
+
+    with pytest.raises(QuadrantsSyntaxError, match="only supports qd.stream_parallel"):
+
+        @qd.kernel
+        def bad():
+            with other_ctx():
+                for i in range(N):
+                    a[i] = 1.0
+
+        bad()
+
+
+@test_utils.test()
+def test_stream_parallel_in_func_rejected():
+    import pytest
+
+    from quadrants.lang.exception import QuadrantsSyntaxError
+
+    N = 64
+    a = qd.field(qd.f32, shape=(N,))
+
+    with pytest.raises(QuadrantsSyntaxError, match="only be used inside @qd.kernel"):
+
+        @qd.func
+        def helper():
+            with qd.stream_parallel():
+                for i in range(N):
+                    a[i] = 1.0
+
+        @qd.kernel
+        def bad():
+            helper()
+
+        bad()
