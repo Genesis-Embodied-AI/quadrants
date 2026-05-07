@@ -133,7 +133,7 @@ The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `
 
 ## Sizes, performance, portability
 
-- **Size cap is the dominant constraint.** For matrices outside the supported sizes, you currently have to write your own Jacobi sweep (for symmetric EVD up to ~12×12) or LU / Cholesky (for general inverse / solve). qipc maintains a Jacobi EVD that handles sizes up to 12; it is being considered for upstreaming but is not in `quadrants` today.
+- **Size cap is the dominant constraint.** For matrices outside the supported sizes, you currently have to write your own Jacobi sweep (for symmetric EVD up to ~12×12) or LU / Cholesky (for general inverse / solve).
 - **Compile time.** Each call is unrolled per thread, so a kernel that calls `qd.svd` on a 3×3 matrix per element compiles a moderately large block of straight-line code per thread. Compile time is generally fine for these sizes; matrices larger than the cap would not be — register pressure plus unrolling explode quickly.
 - **Numerical conditioning.** All implementations use `f32` by default, which is fine for graphics / soft-body simulation but not always sufficient for stiff IPC-style problems. Pass `dt=qd.f64` whenever conditioning matters; the cost on modern GPUs is a constant factor, not order-of-magnitude.
 - **Backend portability.** All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split. Numerical behaviour is bit-exact across backends only for `f64`; `f32` may differ in the last bit because of fused-multiply-add ordering choices.
@@ -142,7 +142,7 @@ The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `
 
 For reference / planning purposes, the gaps users most often hit:
 
-- **Larger SVD / EVD.** Sizes > 3×3 are unsupported. For symmetric EVD up to ~12×12, a Jacobi sweep is the standard approach (qipc has one); for general SVD, a one-sided Jacobi or QR-with-shifts is the standard approach.
+- **Larger SVD / EVD.** Sizes > 3×3 are unsupported. For symmetric EVD up to ~12×12, a Jacobi sweep is the standard approach; for general SVD, a one-sided Jacobi or QR-with-shifts is the standard approach.
 - **`Matrix.inverse` size cap.** Documented in [matrix_vector](matrix_vector.md): the closed-form cofactor inverse caps at 4×4. Larger inverses need an LU or Cholesky factorisation, neither of which is exposed today.
 - **`atomic_cas`.** Unrelated to decompositions, but the building block for spinlocks and lock-free dictionaries; not exposed in Python — `qd.atomic_*` covers add / sub / mul / min / max / and / or / xor but does not currently include compare-and-swap.
 - **3×3 `qd.eig`.** Only the 2×2 general (non-symmetric) eigendecomposition is provided. For 3×3, use `qd.sym_eig` if your matrix is symmetric.
