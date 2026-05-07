@@ -6,19 +6,19 @@ All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.polar_decompose`, `qd
 
 ## What's available
 
-| Op                              | Operates on            | Dim n  | Returns                                                |
-|---------------------------------|------------------------|--------|--------------------------------------------------------|
-| `qd.svd(A)`                     | square real matrix     | 2, 3   | `(U, S, V)` such that `A = U @ S @ V.transpose()`      |
-| `qd.sym_eig(A)`                 | symmetric real matrix  | 2, 3   | `(eigenvalues, eigenvectors)` (real)                   |
-| `qd.polar_decompose(A)`         | square real matrix     | 2, 3   | `(R, S)` such that `A = R @ S`, `R` orthogonal, `S` SPD |
-| `qd.eig(A)`                     | square real matrix     | 2      | `(eigenvalues, eigenvectors)` (complex, packed)        |
-| `qd.solve(A, b)`                | square `A` + vector `b`| 2, 3   | `x` such that `A @ x = b`                              |
+| Op                              | Operates on            | Shapes        | Returns                                                |
+|---------------------------------|------------------------|---------------|--------------------------------------------------------|
+| `qd.svd(A)`                     | square real matrix     | 2×2, 3×3      | `(U, S, V)` such that `A = U @ S @ V.transpose()`      |
+| `qd.sym_eig(A)`                 | symmetric real matrix  | 2×2, 3×3      | `(eigenvalues, eigenvectors)` (real)                   |
+| `qd.polar_decompose(A)`         | square real matrix     | 2×2, 3×3      | `(R, S)` such that `A = R @ S`, `R` orthogonal, `S` SPD |
+| `qd.eig(A)`                     | square real matrix     | 2×2           | `(eigenvalues, eigenvectors)` (complex, packed)        |
+| `qd.solve(A, b)`                | square `A` + vector `b`| 2×2, 3×3      | `x` such that `A @ x = b`                              |
 
-The "Dim n" column is the matrix dimension — `n = 2` means a 2×2 input, `n = 3` means 3×3. A few patterns to note:
+A few patterns to note:
 
-- **Dimensions are fixed.** Calling any of these on a matrix outside the supported dimensions raises an exception at trace time (`"SVD only supports 2D and 3D matrices."`, etc.). Larger matrices need a different path — typically a Jacobi-style sweep applied iteratively, which Quadrants does not currently provide out of the box.
+- **Shapes are fixed.** Calling any of these on a matrix outside the supported shapes raises an exception at trace time (`"SVD only supports 2D and 3D matrices."`, etc.). Larger matrices need a different path — typically a Jacobi-style sweep applied iteratively, which Quadrants does not currently provide out of the box.
 - **All ops accept an optional `dt` argument.** When unspecified, it defaults to `impl.get_runtime().default_fp` — usually `qd.f32` unless overridden in `qd.init()`. Pass `dt=qd.f64` for the high-precision variant; passing `dt=qd.f32` explicitly is also fine if you want to be loud about it.
-- **Output dimensions match the input dimensions.** A 3×3 input yields 3×3 outputs (and a length-3 vector for `solve` / eigenvalues); a 2×2 input yields 2×2 outputs.
+- **Output shape matches the input shape.** A 3×3 input yields 3×3 outputs (and a length-3 vector for `solve` / eigenvalues); a 2×2 input yields 2×2 outputs.
 - **Real matrices only.** `qd.eig` returns complex results in a packed real layout (see below); the others all assume real-valued input and return real-valued output.
 
 ## Semantics
@@ -31,7 +31,7 @@ Singular value decomposition — produces `(U, S, V)` such that `A = U @ S @ V.t
 - `V` orthogonal.
 - `S` diagonal, with non-negative singular values.
 
-Dimensions 2 and 3 use closed-form / Jacobi-style implementations specialized per dimension. Sign convention for `U` and `V` is the implementation's natural one and is **not** guaranteed to enforce `det(U) = det(V) = +1`; if you depend on a particular handedness (e.g. for an ARAP rotation `R = U @ V.transpose()`), check it explicitly and flip a column if needed.
+Shapes 2×2 and 3×3 use closed-form / Jacobi-style implementations specialized per shape. Sign convention for `U` and `V` is the implementation's natural one and is **not** guaranteed to enforce `det(U) = det(V) = +1`; if you depend on a particular handedness (e.g. for an ARAP rotation `R = U @ V.transpose()`), check it explicitly and flip a column if needed.
 
 Singular values come out in implementation order — confirm via test if you depend on `S[0,0] >= S[1,1] >= S[2,2]`.
 
@@ -68,7 +68,7 @@ Eigenvalues of a real 2×2 matrix come in complex-conjugate pairs when the discr
 
 Direct solve of `A @ x = b` via Gauss elimination with partial pivoting. Returns the solution vector `x`.
 
-- Dimensions 2 and 3.
+- Shapes 2×2 and 3×3.
 - The implementation asserts `A.n == A.m` and `A.m == b.n`.
 - Singular `A` triggers an `assert` failure (`"Matrix is singular in linear solve."`); the assert is active by default and is your only signal of singularity.
 - Use this for one-off small solves; for systems that decompose once and back-solve many times, currently you have to bake the LU yourself (or just call `qd.solve` per b — for 2×2 / 3×3 the gain from caching the LU is negligible compared to the launch).
@@ -105,7 +105,7 @@ def make_spd_3x3(H: qd.types.matrix(3, 3, qd.f64)) -> qd.types.matrix(3, 3, qd.f
     return Q @ Lambda @ Q.transpose()
 ```
 
-Used by IPC-style methods to project an indefinite Hessian to its closest SPD approximation per element. Note the dimension cap — only 3×3 today, since `qd.sym_eig` itself caps at 3×3.
+Used by IPC-style methods to project an indefinite Hessian to its closest SPD approximation per element. Note the shape cap — only 3×3 today, since `qd.sym_eig` itself caps at 3×3.
 
 ### Per-thread linear solve
 
@@ -131,10 +131,10 @@ def shape_match(A: qd.types.matrix(2, 2, qd.f32)) -> qd.types.matrix(2, 2, qd.f3
 
 The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `‖R - A‖_F` — the building block of position-based dynamics shape-matching.
 
-## Dimensions, performance, portability
+## Shapes, performance, portability
 
-- **Dimension cap is the dominant constraint.** For matrices outside the supported dimensions, you currently have to write your own Jacobi sweep (for symmetric EVD up to ~12×12) or LU / Cholesky (for general inverse / solve).
-- **Compile time.** Each call is unrolled per thread, so a kernel that calls `qd.svd` on a 3×3 matrix per element compiles a moderately large block of straight-line code per thread. Compile time is generally fine at these dimensions; matrices larger than the cap would not be — register pressure plus unrolling explode quickly.
+- **Shape cap is the dominant constraint.** For matrices outside the supported shapes, you currently have to write your own Jacobi sweep (for symmetric EVD up to ~12×12) or LU / Cholesky (for general inverse / solve).
+- **Compile time.** Each call is unrolled per thread, so a kernel that calls `qd.svd` on a 3×3 matrix per element compiles a moderately large block of straight-line code per thread. Compile time is generally fine at these shapes; matrices larger than the cap would not be — register pressure plus unrolling explode quickly.
 - **Numerical conditioning.** All implementations use `f32` by default, which is fine for graphics / soft-body simulation but not always sufficient for stiff IPC-style problems. Pass `dt=qd.f64` whenever conditioning matters; the cost on modern GPUs is a constant factor, not order-of-magnitude.
 - **Backend portability.** All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split. Numerical behaviour is bit-exact across backends only for `f64`; `f32` may differ in the last bit because of fused-multiply-add ordering choices.
 
@@ -142,8 +142,8 @@ The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `
 
 For reference / planning purposes, the gaps users most often hit:
 
-- **Larger SVD / EVD.** Dimensions above 3 are unsupported. For symmetric EVD up to ~12×12, a Jacobi sweep is the standard approach; for general SVD, a one-sided Jacobi or QR-with-shifts is the standard approach.
-- **`Matrix.inverse` dimension cap.** Documented in [matrix_vector](matrix_vector.md): the closed-form cofactor inverse caps at 4×4. Larger inverses need an LU or Cholesky factorisation, neither of which is exposed today.
+- **Larger SVD / EVD.** Shapes above 3×3 are unsupported. For symmetric EVD up to ~12×12, a Jacobi sweep is the standard approach; for general SVD, a one-sided Jacobi or QR-with-shifts is the standard approach.
+- **`Matrix.inverse` shape cap.** Documented in [matrix_vector](matrix_vector.md): the closed-form cofactor inverse caps at 4×4. Larger inverses need an LU or Cholesky factorisation, neither of which is exposed today.
 - **`atomic_cas`.** Unrelated to decompositions, but the building block for spinlocks and lock-free dictionaries; not exposed in Python — `qd.atomic_*` covers add / sub / mul / min / max / and / or / xor but does not currently include compare-and-swap.
 - **3×3 `qd.eig`.** Only the 2×2 general (non-symmetric) eigendecomposition is provided. For 3×3, use `qd.sym_eig` if your matrix is symmetric.
 
