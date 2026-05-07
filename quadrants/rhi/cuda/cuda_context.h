@@ -31,6 +31,7 @@ class CUDAContext {
   bool debug_;
   bool supports_mem_pool_;
   bool supports_pageable_memory_access_;
+  bool uses_host_page_tables_;
   void *stream_;
 
  public:
@@ -93,6 +94,16 @@ class CUDAContext {
   // copy of `RuntimeContext` before each launch.
   bool supports_pageable_memory_access() const {
     return supports_pageable_memory_access_;
+  }
+
+  // CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS_USES_HOST_PAGE_TABLES (= 100). 1 when the device walks the host's page
+  // tables directly via ATS / HPT (Ampere and newer with HMM-equipped drivers, including Blackwell). 0 on pre-Ampere
+  // HMM, where pageable-memory access goes through the legacy fault-and-migrate path. The legacy path is sensitive to
+  // the timing of host writes vs. kernel reads under stream-ordered allocations and to multi-process pressure; the
+  // adstack runtime helper kernels (`runtime_eval_adstack_size_expr`, `runtime_eval_adstack_max_reduce`,
+  // `runtime_eval_static_bound_count`) hit those issues empirically on Turing T4 (sm_75) and are gated off there.
+  bool uses_host_page_tables() const {
+    return uses_host_page_tables_;
   }
 
   ~CUDAContext();

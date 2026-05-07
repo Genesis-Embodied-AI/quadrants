@@ -349,7 +349,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       break;
     }
   }
-  needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().supports_pageable_memory_access();
+  // Gate the HMM-shortcut on whether the device walks host page tables directly (attribute 100). This is a sharper
+  // predicate than `supports_pageable_memory_access` (attribute 88, which is also true on Turing-class HMM where
+  // the legacy fault-and-migrate path is unsafe under multi-process pressure). On Ampere+ the device reads host
+  // memory through host page tables and the staging is redundant; on Turing/Volta we always stage.
+  needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().uses_host_page_tables();
   void *device_context_ptr = nullptr;
   if (needs_sizer_device_ctx) {
     if (launcher_ctx.runtime_context_dev_ptr == nullptr) {

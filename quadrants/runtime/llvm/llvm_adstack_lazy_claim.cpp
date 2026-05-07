@@ -422,6 +422,18 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
   if (ctx == nullptr || ctx->args_type == nullptr) {
     return result;
   }
+  // Skip the dispatch on pre-Ampere CUDA (attribute 100 = 0). The runtime helper kernel
+  // (`runtime_eval_adstack_max_reduce`) reads ndarray data through `ctx->arg_buffer` -> stream-ordered allocations,
+  // and that read is not reliable on Turing-class HMM where pageable-memory access goes through the legacy
+  // fault-and-migrate path: empirically the kernel either reads stale bytes (returning the empty-range sentinel
+  // and undersizing the adstack) or faults at `cuLaunchKernel` with an illegal-address. With an empty result map,
+  // `publish_adstack_metadata` walks the unsubstituted `SerializedSizeExpr` tree; the per-stack sizer falls through
+  // to the worst-case-num-threads heap budget, which is sufficient for correctness on this hardware.
+#if defined(QD_WITH_CUDA)
+  if (config_.arch == Arch::cuda && !CUDAContext::get_instance().uses_host_page_tables()) {
+    return result;
+  }
+#endif
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
   AdStackCache *cache = (prog != nullptr) ? &prog->adstack_cache() : nullptr;
 
