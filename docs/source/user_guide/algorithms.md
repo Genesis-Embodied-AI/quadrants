@@ -2,8 +2,6 @@
 
 Device-wide algorithms — primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above grid-scope synchronization: they *use* block, subgroup, and grid primitives internally and expose a high-level entry point that the user calls from host (Python) code, not from inside a kernel.
 
-The current `qd.algorithms` namespace is small — two ops, both built around prefix-style internal kernels. The set is expected to grow over time (radix sort, reduce-by-key, select / compact).
-
 ## What's available
 
 | Op                              | What it does                                | CUDA | AMDGPU | Vulkan | Metal |
