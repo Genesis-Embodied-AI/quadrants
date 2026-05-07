@@ -570,81 +570,46 @@ def test_block_mem_fence_divergent_control_flow():
         assert a[i] == i
 
 
-# Producer-consumer memory-ordering test for `block.mem_fence()`.
+# NOTE: a producer-consumer memory-ordering test for `block.mem_fence()` (i.e. thread 0
+# publishes data + flag with a fence between, another thread spin-waits on flag then reads
+# data) was attempted in this PR and removed. Every variant deadlocks on CUDA before
+# pytest's process-level timeout fires:
 #
-# Thread 0 (producer) publishes `data[0] = 100 + it` and then atomically sets `flag[0] = 1`,
-# with `block.mem_fence()` between the two stores. Thread `BLOCK - 1` (consumer) atomically
-# spin-loads `flag`, then fences and reads `data`. The kernel runs `N_ITERS` rounds and we
-# assert the consumer always sees the latest published `data`.
+# 1. Plain shared-memory load `while flag[0] == 0: pass` -- LLVM hoists the load out of the
+#    loop because there is no `volatile` qualifier and no memory-clobbering call inside the
+#    loop body. The consumer never re-reads the flag.
 #
-# Honest caveat about what this test actually exercises:
+# 2. Plain shared-memory load with `block.mem_fence()` inside the loop body -- LLVM's
+#    `nvvm_membar_cta` intrinsic is `IntrInaccessibleMemOnly`, which clobbers the
+#    "inaccessible" memory category but does not invalidate the optimizer's cached view of
+#    `addrspace(3)` (shared memory) loads it has already seen. The flag load is still
+#    hoisted.
 #
-#   On every supported backend, atomic operations on shared memory are at least relaxed-
-#   ordering and on CUDA they are acquire-release. So the atomic flag itself provides
-#   *some* of the ordering that `block.mem_fence()` is independently meant to provide. As a
-#   result, this test does NOT cleanly isolate `block.mem_fence()` -- it would also pass if
-#   the fence were a pure no-op, as long as the atomic flag's implicit ordering is enough.
+# 3. Atomic-add load `while qd.atomic_add(flag[0], 0) == 0: pass` -- adding zero appears to
+#    be elided somewhere in the Quadrants -> LLVM lowering pipeline; the loop also fails to
+#    terminate.
 #
-# What it does still catch:
-#   1. The regression we actually fixed in this PR -- `block.mem_fence()` lowering to a
-#      thread-converging barrier rather than a pure fence -- because the producer (thread 0)
-#      and consumer (thread BLOCK-1) hit the fence in different control-flow paths; a
-#      barrier-style lowering deadlocks the kernel.
-#   2. End-to-end compilation, kernel launch, and shared-memory + atomic-on-shared-memory
-#      interactions for the producer/consumer pattern on every backend.
-#   3. `block.SharedArray` + `block.mem_fence` + `qd.atomic_add` on shared memory used
-#      together in a non-trivial way.
+# 4. Atomic-or load `while qd.atomic_or(flag[0], 0) == 0: pass` -- same outcome as (3).
 #
-# What it does NOT catch:
-#   * A `block.mem_fence()` that becomes a complete no-op AND the producer's two stores get
-#     compiler-reordered to (`flag = 1; data = 100+it`). On CUDA / AMDGPU / SPIR-V the
-#     opaque `mem_fence` call site is currently treated as a memory clobber by LLVM, so the
-#     compiler does not reorder around it even when the runtime effect is empty. A test
-#     that strictly isolates the fence's runtime effect would require a `volatile`-flavored
-#     shared-array primitive that Quadrants does not currently expose.
+# Even if one of these did terminate, atomic-flagged variants would weaken the test --
+# atomic ops on shared memory are relaxed-ordering at minimum and acq-rel on CUDA, so the
+# atomic itself would provide much of the ordering that `block.mem_fence()` is meant to
+# provide independently.
 #
-# Layout choice: `BLOCK = 128` puts the producer (thread 0) and consumer (thread BLOCK-1)
-# in different subgroups on every supported backend (CUDA warp = 32; AMDGPU wave = 32 or 64;
-# Vulkan / Metal subgroup is vendor-defined but <= 128 on every shipping target). Threads
-# in different subgroups have independent forward progress on every modern GPU, so the
-# consumer's spin does not deadlock waiting on a producer it shares lockstep execution
-# with. We deliberately do NOT use `block.sync()` between the producer's two stores --
-# that would test sync ordering instead of fence ordering.
-@test_utils.test(arch=qd.gpu)
-def test_block_mem_fence_producer_consumer():
-    N_ITERS = 64
-    BLOCK = 128
-    out = qd.field(dtype=qd.i32, shape=N_ITERS)
-
-    @qd.kernel
-    def foo():
-        qd.loop_config(block_dim=BLOCK)
-        for tid in range(BLOCK):
-            flag = qd.simt.block.SharedArray((1,), qd.i32)
-            data = qd.simt.block.SharedArray((1,), qd.i32)
-
-            for it in range(N_ITERS):
-                if tid == 0:
-                    data[0] = 0
-                    flag[0] = 0
-                qd.simt.block.sync()
-
-                if tid == 0:
-                    data[0] = 100 + it
-                    qd.simt.block.mem_fence()
-                    qd.atomic_add(flag[0], 1)
-                elif tid == BLOCK - 1:
-                    while qd.atomic_or(flag[0], 0) == 0:
-                        pass
-                    qd.simt.block.mem_fence()
-                    out[it] = data[0]
-
-                qd.simt.block.sync()
-
-    foo()
-
-    for it in range(N_ITERS):
-        assert out[it] == 100 + it, f"iter {it}: got {out[it]}, expected {100 + it}"
+# The fundamental gap is that Quadrants' Python API does not currently expose a
+# `volatile`-flavored shared-array primitive, which is the standard tool for writing
+# producer-consumer ordering tests in CUDA / Vulkan / Metal. Adding such a primitive (e.g.
+# `block.SharedArray(..., volatile=True)`) is a Quadrants frontend feature outside this PR.
+#
+# What we do test, in lieu of a full producer-consumer ordering test:
+#   - `test_block_mem_fence_smoke`: end-to-end compile + run on every backend.
+#   - `test_block_mem_fence_divergent_control_flow`: the fence is a fence, not a thread-
+#     converging barrier. This catches the regression we actually fixed in this PR.
+#
+# The convergence test exercises every backend's mem_fence through divergent control flow,
+# which is the hard correctness property and the practical motivation for renaming
+# `mem_sync -> mem_fence`. Pure memory-ordering correctness against compiler reordering of
+# adjacent shared-memory stores is left as a future enhancement.
 
 
 # Deprecation aliases: the old names still work, and emit DeprecationWarning on first use.
