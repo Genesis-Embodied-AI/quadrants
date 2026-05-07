@@ -63,17 +63,6 @@ The two `grid.memfence()` calls are doing different jobs:
 
 The fence does not require thread convergence, which is why it appears inside `if tid == 0` without deadlocking — `qd.simt.block.sync()` would deadlock there; `grid.memfence()` is safe.
 
-## When to use which fence
-
-| Scope you need to publish to        | Use                                  |
-|-------------------------------------|--------------------------------------|
-| Other lanes in the same subgroup    | `qd.simt.subgroup.memory_barrier()`  |
-| Other threads in the same block     | `qd.simt.block.mem_sync()`           |
-| Other blocks in the same grid       | `qd.simt.grid.memfence()`            |
-| Threads of a *future* kernel launch | (implicit at the kernel boundary; no explicit fence required from Python) |
-
-A wider scope is always sound — `grid.memfence()` is a strict superset of `block.mem_sync()`'s ordering — but slower, because more caches need to be drained. Pick the narrowest scope that matches your sharing pattern.
-
 ## Examples
 
 ### Cross-block reduction with a single kernel
