@@ -38,7 +38,7 @@ on:
       quadrants_ref:
         description: "Quadrants ref to build + test (branch / tag / SHA). Default = tip of the source branch holding the in-flight debug instrumentation."
         required: false
-        default: "duburcqa/codegen_llvm_adstack_factor_out"
+        default: "duburcqa/turing_stream_pin_experiment"
       tmate_timeout_minutes:
         description: "tmate session timeout (minutes). `touch /tmp/continue` from inside the shell to skip the rest of the wait."
         required: false
@@ -61,7 +61,7 @@ jobs:
     name: Build + reproduce + sanitizer + tmate on CUDA T4
     runs-on: gpu-t4-4-core
     env:
-      QUADRANTS_REF: ${{ github.event.inputs.quadrants_ref || 'duburcqa/codegen_llvm_adstack_factor_out' }}
+      QUADRANTS_REF: ${{ github.event.inputs.quadrants_ref || 'duburcqa/turing_stream_pin_experiment' }}
       TMATE_TIMEOUT: ${{ github.event.inputs.tmate_timeout_minutes || '60' }}
       REPRODUCE_COUNT: ${{ github.event.inputs.reproduce_count || '50' }}
       QD_OFFLINE_CACHE: "0"
