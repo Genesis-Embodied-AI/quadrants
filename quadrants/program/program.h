@@ -25,7 +25,6 @@
 #include "quadrants/program/kernel_profiler.h"
 #include "quadrants/program/snode_expr_utils.h"
 #include "quadrants/program/snode_rw_accessors_bank.h"
-#include "quadrants/program/program_stream.h"
 #include "quadrants/program/context.h"
 #include "quadrants/struct/snode_tree.h"
 #include "quadrants/system/threading.h"
@@ -344,10 +343,6 @@ class QD_DLL_EXPORT Program {
     return ndarrays_.size();
   }
 
-  StreamManager &stream_manager() {
-    return stream_manager_;
-  }
-
   // TODO(zhanlue): Move these members and corresponding interfaces to ProgramImpl Ideally, Program should serve as a
   // pure interface class and all the implementations should fall inside ProgramImpl
   //
@@ -356,7 +351,6 @@ class QD_DLL_EXPORT Program {
 
  private:
   CompileConfig compile_config_;
-  StreamManager stream_manager_{Arch::x64};  // re-initialized in constructor after arch is known
 
   uint64 ndarray_writer_counter_{0};
   uint64 ndarray_reader_counter_{0};

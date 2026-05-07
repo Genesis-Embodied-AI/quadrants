@@ -60,7 +60,6 @@ tile16
 
 fastcache
 graph
-streams
 perf_dispatch
 init_options
 ```
