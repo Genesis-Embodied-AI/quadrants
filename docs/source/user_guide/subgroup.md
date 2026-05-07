@@ -30,15 +30,15 @@ The remaining shuffle flavours (`shuffle_up`, `shuffle_xor`) are exposed in the 
 | `subgroup.invocation_id()`                  | yes  | yes    | yes                     |
 | `subgroup.group_size()`                     | no   | no     | yes                     |
 | `subgroup.elect()`                          | no   | no     | yes                     |
-| `subgroup.barrier()`                        | no   | no     | yes                     |
-| `subgroup.memory_barrier()`                 | no   | no     | yes                     |
+| `subgroup.sync()`                           | no   | no     | yes                     |
+| `subgroup.mem_fence()`                      | no   | no     | yes                     |
 
-Naming note: two of the names above are planned to be renamed in a future release, to align with the project's naming conventions across scopes:
+Naming note: two of the names above were recently renamed to align with the project's naming conventions across scopes:
 
-- `subgroup.barrier()` will be renamed to `subgroup.sync()` (matching `block.sync()`).
-- `subgroup.memory_barrier()` will be renamed to `subgroup.mem_fence()` (matching the planned `block.mem_fence()` and `grid.mem_fence()`).
+- `subgroup.barrier()` has been renamed to `subgroup.sync()` (matching `block.sync()`).
+- `subgroup.memory_barrier()` has been renamed to `subgroup.mem_fence()` (matching the planned `block.mem_fence()` and `grid.mem_fence()`).
 
-The new names are not yet available; this page uses the current names throughout.
+The old names remain as deprecated aliases that emit a `DeprecationWarning` on first use and forward to the new ones; they will be removed in a future release. The rest of this page uses the new names.
 
 ### Voting and predicate ops
 
@@ -127,13 +127,12 @@ Picks one lane in the subgroup as the "leader". Returns `1` on the elected lane 
 - Useful for "exactly one lane does X" patterns where you don't care which lane it is — e.g. emitting a single global write per subgroup.
 - Currently SPIR-V only (`OpGroupNonUniformElect`). On CUDA / AMDGPU, emulate with `subgroup.invocation_id() == 0`.
 
-### `barrier()` / `memory_barrier()`
+### `sync()` / `mem_fence()`
 
-**Planned renames: `subgroup.sync()` (in place of `barrier()`) and `subgroup.mem_fence()` (in place of `memory_barrier()`).** Both will be renamed in a future release; the current names remain the only spellings available today, and the rest of this section uses them.
-
-`barrier()` is a subgroup-scope thread-converging barrier — every lane in the subgroup must reach the call before any lane proceeds. `memory_barrier()` is a subgroup-scope memory fence: it orders memory operations within the subgroup without requiring thread convergence.
+`sync()` is a subgroup-scope thread-converging barrier — every lane in the subgroup must reach the call before any lane proceeds. `mem_fence()` is a subgroup-scope memory fence: it orders memory operations within the subgroup without requiring thread convergence.
 
 - Both currently SPIR-V only (`OpControlBarrier` / `OpMemoryBarrier`, both scoped to `Subgroup`). On CUDA / AMDGPU, subgroups (warps) execute in lockstep and these are typically unnecessary; the equivalent under divergent control flow on CUDA is `__syncwarp(active_mask)`, which is not currently exposed through `qd.simt.subgroup`.
+- The legacy names `subgroup.barrier()` and `subgroup.memory_barrier()` are still available as deprecated aliases. They forward to `sync()` / `mem_fence()` and emit a `DeprecationWarning` on first use; prefer the new names in new code.
 
 ### `reduce_add(value, log2_size)`
 

@@ -1,17 +1,49 @@
 # pyright: reportInvalidTypeForm=false
 
+import warnings
+
 from quadrants.lang import impl
 from quadrants.lang.kernel_impl import func
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import u32
 
 
-def barrier():
+def sync():
     return impl.call_internal("subgroupBarrier", with_runtime_context=False)
 
 
-def memory_barrier():
+def mem_fence():
     return impl.call_internal("subgroupMemoryBarrier", with_runtime_context=False)
+
+
+_barrier_deprecation_warned = False
+_memory_barrier_deprecation_warned = False
+
+
+def barrier():
+    global _barrier_deprecation_warned
+    if not _barrier_deprecation_warned:
+        _barrier_deprecation_warned = True
+        warnings.warn(
+            "qd.simt.subgroup.barrier() is deprecated; use qd.simt.subgroup.sync() instead "
+            "(matching block.sync()).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    return sync()
+
+
+def memory_barrier():
+    global _memory_barrier_deprecation_warned
+    if not _memory_barrier_deprecation_warned:
+        _memory_barrier_deprecation_warned = True
+        warnings.warn(
+            "qd.simt.subgroup.memory_barrier() is deprecated; use qd.simt.subgroup.mem_fence() instead "
+            "(matching the planned block.mem_fence() / grid.mem_fence()).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    return mem_fence()
 
 
 def elect():
@@ -170,6 +202,8 @@ def shuffle_down(value, offset):
 
 
 __all__ = [
+    "sync",
+    "mem_fence",
     "barrier",
     "memory_barrier",
     "elect",
