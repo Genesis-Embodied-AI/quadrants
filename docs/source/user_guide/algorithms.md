@@ -32,7 +32,7 @@ qd.algorithms.parallel_sort(keys, vals)
 - **Key dtype.** Whatever the key field's dtype is, as long as `<` is meaningful for it (integer and float types).
 - **Stability.** Odd-even merge sort is *not* a stable sort — equal keys may be reordered relative to one another. If stability matters, encode tiebreakers into the keys (e.g. pack the original index into the low bits).
 - **Memory.** Strictly in-place — no auxiliary buffers from the caller's perspective.
-- **Performance characteristic.** Beats radix-style sorts for small N (roughly N ≲ 4K), losing to them at large N. For million-element key sets prefer a radix sort; for thousands or tens of thousands, this is a fine choice.
+- **Performance characteristic.** Beats radix-style sorts for small N (roughly N ≲ 4K), losing to them at large N.
 
 ### `qd.algorithms.PrefixSumExecutor`
 
