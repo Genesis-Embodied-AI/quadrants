@@ -1,6 +1,6 @@
 # Matrix decompositions and solvers
 
-Small fixed-size matrix decompositions and linear solvers — the kinds of operations a thread does on a 2×2 or 3×3 matrix held in registers. They are a different category from the element-wise / arithmetic matrix operations covered in [matrix_vector](matrix_vector.md): each entry point here implements a *numerical algorithm* (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.
+Small matrix decompositions and linear solvers — the kinds of operations a thread does on a 2×2 or 3×3 matrix held in registers. They are a different category from the element-wise / arithmetic matrix operations covered in [matrix_vector](matrix_vector.md): each entry point here implements a *numerical algorithm* (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.
 
 All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.polar_decompose`, `qd.eig`, `qd.solve`) and are intended to be called from inside a `@qd.kernel` or `@qd.func`. They run per thread — each thread independently decomposes its own matrix.
 
