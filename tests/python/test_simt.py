@@ -634,7 +634,7 @@ def test_block_mem_fence_producer_consumer():
                     qd.simt.block.mem_fence()
                     qd.atomic_add(flag[0], 1)
                 elif tid == BLOCK - 1:
-                    while qd.atomic_add(flag[0], 0) == 0:
+                    while qd.atomic_or(flag[0], 0) == 0:
                         pass
                     qd.simt.block.mem_fence()
                     out[it] = data[0]
