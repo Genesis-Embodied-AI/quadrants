@@ -45,7 +45,7 @@ Two of these ops sound similar but have very different semantics, and mixing the
 Concretely:
 
 - CUDA: `sync()` lowers to `__syncthreads()`; `mem_fence()` is intended to lower to `__threadfence_block()` (a pure fence with no convergence requirement) — see the support-table caveat above.
-- AMDGPU: `sync()` lowers to `s_barrier`; `mem_fence()` lowers to `__builtin_amdgcn_fence(__ATOMIC_ACQ_REL, "workgroup")`.
+- AMDGPU: `sync()` lowers to `s_barrier`; `mem_fence()` lowers to `fence acquire_release syncscope("workgroup")`.
 - Vulkan / Metal (SPIR-V): `sync()` lowers to `workgroupBarrier`; `mem_fence()` lowers to `workgroupMemoryBarrier`.
 
 Calling `sync()` from a path that not all threads reach (a divergent `if`, an early `return`, etc.) is a classic GPU deadlock and applies to all backends.
@@ -78,7 +78,7 @@ Each call performs both the synchronization (same convergence requirement as `sy
 
 A block-scope memory fence. Orders memory operations issued by the calling thread so that prior writes are visible to other threads in the block before any subsequent read by the calling thread can be reordered ahead of the fence. It does **not** synchronize threads — no convergence requirement (subject to the CUDA caveat in the support table).
 
-- Lowers to `__threadfence_block()` (`nvvm_membar_cta`) — the intended target — on CUDA, to `__builtin_amdgcn_fence(__ATOMIC_ACQ_REL, "workgroup")` on AMDGPU (which the AMDGCN backend lowers to `s_waitcnt lgkmcnt(0)` and friends), and to `workgroupMemoryBarrier` on SPIR-V (Vulkan / Metal).
+- Lowers to `__threadfence_block()` (`nvvm_membar_cta`) — the intended target — on CUDA, to an LLVM IR `fence acquire_release syncscope("workgroup")` on AMDGPU (which the AMDGCN backend lowers to the appropriate `s_waitcnt` / cache-flush sequence; emitted via a body-replacement in `llvm_context.cpp` rather than `__builtin_amdgcn_fence`, since the `runtime.cpp` is built with a host-targeted clang that doesn't know AMDGCN builtins), and to `workgroupMemoryBarrier` on SPIR-V (Vulkan / Metal).
 - Use this when one thread in the block (e.g. lane 0) needs to publish data to shared memory and have the publication be visible to the rest of the block without forcing the publishing thread to wait at a barrier. The pattern is typically:
 
   ```python
@@ -130,7 +130,7 @@ Today only the X dimension is exposed (1-D blocks). For 2-D / 3-D blocks the cal
 `grid.mem_fence()` is the device-scope counterpart of `block.mem_fence()`. It orders memory operations across the entire grid, so writes made by one block become visible to other blocks after the fence. Per-backend lowering:
 
 - CUDA: `__threadfence()` (`nvvm_membar_gl`).
-- AMDGPU: `__builtin_amdgcn_fence(__ATOMIC_ACQ_REL, "agent")`, lowered by the AMDGCN backend to the appropriate `s_waitcnt` / cache-flush sequence.
+- AMDGPU: LLVM IR `fence acquire_release syncscope("agent")`, lowered by the AMDGCN backend to the appropriate `s_waitcnt` / cache-flush sequence (emitted via a body-replacement in `llvm_context.cpp`, see `block.mem_fence()` above for why we don't use the Clang builtin).
 - Vulkan: `OpMemoryBarrier(ScopeDevice, AcquireRelease | UniformMemory | WorkgroupMemory)`.
 - Metal: same SPIR-V op as Vulkan, translated by MoltenVK to MSL `atomic_thread_fence(metal::memory_scope_device)` (see Metal caveat in the support table).
 
