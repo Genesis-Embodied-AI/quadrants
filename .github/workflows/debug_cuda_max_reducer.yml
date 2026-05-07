@@ -1,8 +1,8 @@
 name: Debug CUDA T4 max-reducer hang
 
 # DO NOT MERGE. Single-job workflow that builds Quadrants in editable mode on a `gpu-t4-4-core`
-# runner, runs the proven reproducer, captures a compute-sanitizer trace + dmesg Xid events,
-# then drops into a blocking tmate session so we can iterate inside the same source tree.
+# runner, opens a detached tmate session for live attach, then runs the proven reproducer +
+# compute-sanitizer trace + dmesg Xid capture in the background while you iterate.
 #
 # Findings carried over from the previous debug session:
 #   * Reproducer = `pytest -n 8 --count 50 tests/python/test_ad_ndarray.py -k cuda` on T4. ~50% of
@@ -21,13 +21,14 @@ name: Debug CUDA T4 max-reducer hang
 #      `cd _skbuild/*/cmake-build && cmake --build .` inside tmate is fast).
 #   2. Pre-installs `nvidia-cuda-toolkit` so `compute-sanitizer` is available.
 #   3. Captures system / driver / HMM info + the pre-test `dmesg` snapshot.
-#   4. Runs the reproducer with `CUDA_LAUNCH_BLOCKING=1`, captures the failure traceback.
-#   5. Snapshots `dmesg` again so the new Xid lines are visible.
-#   6. Re-runs the previously-failed tests under `compute-sanitizer --tool memcheck`. Its first
+#   4. Opens a detached tmate session - SSH command is printed in the workflow log; the workflow
+#      continues straight into the reproducer / sanitizer / artifact-upload steps.
+#   5. Runs the reproducer with `CUDA_LAUNCH_BLOCKING=1`, streaming pytest output through an
+#      abort wrapper that SIGTERMs the controller on the first FAILED line.
+#   6. Snapshots `dmesg` again so the new Xid lines are visible.
+#   7. Re-runs the previously-failed tests under `compute-sanitizer --tool memcheck`. Its first
 #      `Invalid write` block is the offending kernel.
-#   7. Drops into tmate. The full source tree is at `$GITHUB_WORKSPACE`; rebuild via
-#      `cd _skbuild/*/cmake-build && cmake --build .` after editing.
-#   8. Uploads `/tmp/repro/` as an artifact.
+#   8. Uploads `/tmp/repro/` as an artifact. Tmate keeps running until `timeout-minutes` or job end.
 
 on:
   pull_request:
@@ -35,9 +36,9 @@ on:
   workflow_dispatch:
     inputs:
       quadrants_ref:
-        description: "Quadrants ref to build + test (branch / tag / SHA). Default = HEAD of duburcqa/adstack_max_reducer_shader without speculative fix."
+        description: "Quadrants ref to build + test (branch / tag / SHA). Default = tip of the source branch holding the in-flight debug instrumentation."
         required: false
-        default: "efd3f69abba15b574bf729ae11239d2a203a5f40"
+        default: "duburcqa/codegen_llvm_adstack_factor_out"
       tmate_timeout_minutes:
         description: "tmate session timeout (minutes). `touch /tmp/continue` from inside the shell to skip the rest of the wait."
         required: false
@@ -60,7 +61,7 @@ jobs:
     name: Build + reproduce + sanitizer + tmate on CUDA T4
     runs-on: gpu-t4-4-core
     env:
-      QUADRANTS_REF: ${{ github.event.inputs.quadrants_ref || 'efd3f69abba15b574bf729ae11239d2a203a5f40' }}
+      QUADRANTS_REF: ${{ github.event.inputs.quadrants_ref || 'duburcqa/codegen_llvm_adstack_factor_out' }}
       TMATE_TIMEOUT: ${{ github.event.inputs.tmate_timeout_minutes || '60' }}
       REPRODUCE_COUNT: ${{ github.event.inputs.reproduce_count || '50' }}
       QD_OFFLINE_CACHE: "0"
@@ -90,7 +91,7 @@ jobs:
           {
             echo "=== uname / lsb_release ==="
             uname -a
-            cat /etc/os-release | head -5
+            cat /etc/os-release
             echo "=== nvidia-smi ==="
             nvidia-smi
             echo "=== driver version ==="
@@ -120,13 +121,14 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y \
             build-essential cmake ninja-build pkg-config git \
+            liblz4-dev libncurses-dev libssl-dev libzstd-dev \
             libcusolver-dev-12-8 libcusolver-12-8 libcusparse-dev-12-8 libcusparse-12-8 \
             libnvjitlink-12-8 libcublas-12-8 \
             nvidia-cuda-toolkit
           echo "/usr/local/cuda/targets/x86_64-linux/lib" | sudo tee /etc/ld.so.conf.d/cuda-targets.conf
           sudo ldconfig
           which compute-sanitizer
-          compute-sanitizer --version | head -3
+          compute-sanitizer --version
 
       - name: Install Python build deps + LLVM toolchain
         run: |
@@ -140,7 +142,7 @@ jobs:
           echo "LLVM_DIR=${LLVM_DIR}" >> $GITHUB_ENV
           echo "${LLVM_DIR}/bin" >> $GITHUB_PATH
           chmod +x ${LLVM_DIR}/bin/* || true
-          ${LLVM_DIR}/bin/clang --version | head -1
+          ${LLVM_DIR}/bin/clang --version
 
       - name: Build in develop mode (./build.py --write-env + python setup.py develop)
         run: |
@@ -155,11 +157,11 @@ jobs:
           # scikit-build-core as a build backend; editable install ships a python-only stub).
           ./build.py --write-env=/tmp/build_env.sh
           set +x; source /tmp/build_env.sh; set -x
-          python setup.py develop 2>&1 | tail -40
+          python setup.py develop
           python -c "import quadrants as qd; qd.init(arch=qd.cuda); print('cuda init OK')" 2>&1 | tee /tmp/repro/cuda_init.log
           BUILD_DIR=$(ls -d _skbuild/*/cmake-build 2>/dev/null | head -1)
           echo "BUILD_DIR=${BUILD_DIR}" | tee -a $GITHUB_ENV
-          ls -la "${BUILD_DIR}/" | head -5
+          ls -la "${BUILD_DIR}/"
 
       - name: Stage repro helpers under /tmp/repro/
         run: |
@@ -170,8 +172,28 @@ jobs:
           set -x
           cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
           export QD_OFFLINE_CACHE=0 QD_DEBUG_ADSTACK=1 PYTHONUNBUFFERED=1 PYTHONFAULTHANDLER=1 CUDA_LAUNCH_BLOCKING=1
-          exec python -m pytest -n 8 --count "${1:-50}" -ra -v --tb=long \
-            tests/python/test_ad_ndarray.py -k cuda
+          # Stream pytest output through this shell and abort the whole run the moment the first
+          # FAILED line appears. pytest-xdist's `-x` does not work, so we drive abort externally:
+          # read the pytest controller's combined stdout/stderr line-by-line; on the first match,
+          # SIGTERM the controller (its xdist workers are direct children and follow). Without this,
+          # `--count 50` would burn the full 50x sweep after the bug has already reproduced.
+          # The calling workflow step pipes our stdout through `tee /tmp/repro/reproducer.log`.
+          exec 3< <(python -m pytest -n 8 --count "${1:-50}" -ra -v --tb=long \
+                      tests/python/test_ad_ndarray.py -k cuda 2>&1)
+          PYTEST_PID=$!
+          ABORTED=0
+          while IFS= read -r line <&3; do
+            printf '%s\n' "$line"
+            if [ "$ABORTED" = "0" ] && [ "${line#*FAILED}" != "$line" ]; then
+              ABORTED=1
+              echo "[abort] FAILED detected; SIGTERM pytest controller pid=$PYTEST_PID + xdist workers"
+              pkill -TERM -P "$PYTEST_PID" 2>/dev/null || true
+              kill -TERM "$PYTEST_PID" 2>/dev/null || true
+            fi
+          done
+          exec 3<&-
+          wait "$PYTEST_PID" 2>/dev/null
+          exit $?
           SH
           chmod +x /tmp/repro/run_reproducer.sh
 
@@ -181,8 +203,11 @@ jobs:
           cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
           export QD_OFFLINE_CACHE=0 QD_DEBUG_ADSTACK=1 PYTHONUNBUFFERED=1 PYTHONFAULTHANDLER=1 CUDA_LAUNCH_BLOCKING=1
           # `--lf` runs only the previously-failed tests; serial (-n 0) so sanitizer output stays sane.
+          # `-s` disables pytest stdout/stderr capture so the host-side `[trace dispatch_max_reducers]`
+          # fprintfs land in the captured log immediately preceding the sanitizer fault block (without
+          # `-s` pytest swallows stderr per-test and the trace lines never reach `sanitizer.log`).
           exec compute-sanitizer --tool memcheck --print-limit 50 --launch-timeout 0 --error-exitcode 99 \
-            python -m pytest -n 0 --lf -x --tb=long -v
+            python -m pytest -n 0 --lf -x --tb=long -v -s
           SH
           chmod +x /tmp/repro/run_sanitizer.sh
 
@@ -246,6 +271,18 @@ jobs:
           EOF
           ls -la /tmp/repro/
 
+      - name: Tmate detached (BEFORE reproducer, limit-access-to-actor)
+        # Detached so it returns immediately and the workflow continues into the reproducer / sanitizer
+        # / artifact upload steps. The SSH command is printed in the workflow log; attach any time to
+        # iterate inside the same source tree (`cd _skbuild/*/cmake-build && cmake --build .`). The
+        # detached session lives until the job ends or `timeout-minutes` elapses.
+        if: always()
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+          detached: true
+          timeout-minutes: ${{ fromJSON(env.TMATE_TIMEOUT) }}
+
       - name: Reproducer (-n 8 --count $REPRODUCE_COUNT, CUDA_LAUNCH_BLOCKING=1)
         id: reproduce
         continue-on-error: true
@@ -257,7 +294,7 @@ jobs:
           sudo dmesg --ctime > /tmp/repro/dmesg_after_reproducer.log 2>/dev/null
           echo "=== Xid lines added by the reproducer ==="
           diff /tmp/repro/dmesg_before.log /tmp/repro/dmesg_after_reproducer.log \
-            | grep -E "Xid|MMU Fault|nvidia_uvm" | head -40 | tee /tmp/repro/xid_added.log
+            | grep -E "Xid|MMU Fault|nvidia_uvm" | tee /tmp/repro/xid_added.log
 
       - name: compute-sanitizer over previously-failed tests
         if: always() && steps.reproduce.outputs.exit_code != '0'
@@ -265,13 +302,6 @@ jobs:
         run: |
           set -x
           bash /tmp/repro/run_sanitizer.sh 2>&1 | tee /tmp/repro/sanitizer.log
-          # Pull out the first illegal-access block.
-          {
-            echo "=== first illegal-access block ==="
-            grep -B 3 -A 40 "Invalid\|Out-of-bounds\|Misaligned\|Uninitialized\|Error" /tmp/repro/sanitizer.log | head -200
-            echo "=== summary ==="
-            tail -40 /tmp/repro/sanitizer.log
-          } | tee /tmp/repro/sanitizer_summary.txt
 
       - name: Final dmesg snapshot
         if: always()
@@ -289,17 +319,6 @@ jobs:
           path: |
             /tmp/repro/
           if-no-files-found: ignore
-
-      - name: Tmate session AT THE VERY END (blocking, limit-access-to-actor)
-        # All log capture + artifact upload happens before this so the user attaches into a shell where
-        # `/tmp/repro/` is fully populated AND already mirrored to the workflow's artifact, even if the
-        # user's iteration inside the shell corrupts those files.
-        if: always()
-        uses: mxschmitt/action-tmate@v3
-        with:
-          limit-access-to-actor: true
-          detached: false
-          timeout-minutes: ${{ fromJSON(env.TMATE_TIMEOUT) }}
 
       - name: Re-emit reproducer exit code
         if: always()
