@@ -63,8 +63,8 @@ For cases that require manual control — such as launching separate kernels on 
 s1 = qd.create_stream()
 s2 = qd.create_stream()
 
-fill_a(qd_stream=s1)
-fill_b(qd_stream=s2)
+some_func1(qd_stream=s1)
+some_func2(qd_stream=s2)
 
 s1.synchronize()
 s2.synchronize()
@@ -115,9 +115,8 @@ Streams and events support `with` blocks for automatic cleanup:
 
 ```python
 with qd.create_stream() as s:
-    fill_a(qd_stream=s)
-    s.synchronize()
-# s.destroy() called automatically
+    some_func1(qd_stream=s)
+# s.destroy() called automatically — waits for in-flight work
 ```
 
 ### PyTorch interop (CUDA)
