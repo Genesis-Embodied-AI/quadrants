@@ -390,9 +390,9 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_barrier_red("block_barrier_or_i32", Intrinsic::nvvm_barrier_cta_red_or_aligned_all, true);
       patch_barrier_red("block_barrier_count_i32", Intrinsic::nvvm_barrier_cta_red_popc_aligned_all, false);
       patch_intrinsic("warp_barrier", Intrinsic::nvvm_bar_warp_sync, false);
-      patch_intrinsic("block_memfence", Intrinsic::nvvm_membar_cta, false);
-      patch_intrinsic("grid_memfence", Intrinsic::nvvm_membar_gl, false);
-      patch_intrinsic("system_memfence", Intrinsic::nvvm_membar_sys, false);
+      patch_intrinsic("block_mem_fence", Intrinsic::nvvm_membar_cta, false);
+      patch_intrinsic("grid_mem_fence", Intrinsic::nvvm_membar_gl, false);
+      patch_intrinsic("system_mem_fence", Intrinsic::nvvm_membar_sys, false);
 
       patch_intrinsic("cuda_all", Intrinsic::nvvm_vote_all);
       patch_intrinsic("cuda_all_sync", Intrinsic::nvvm_vote_all_sync);
@@ -453,7 +453,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_intrinsic("ctlz_i32", Intrinsic::ctlz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
       patch_intrinsic("cttz_i32", Intrinsic::cttz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
 
-      patch_intrinsic("block_memfence", Intrinsic::nvvm_membar_cta, false);
+      patch_intrinsic("block_mem_fence", Intrinsic::nvvm_membar_cta, false);
 
       link_module_with_cuda_libdevice(module);
 
