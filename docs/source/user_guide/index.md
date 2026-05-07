@@ -47,6 +47,7 @@ autodiff
 :maxdepth: 1
 :titlesonly:
 
+grid
 subgroup
 tile16
 ```
