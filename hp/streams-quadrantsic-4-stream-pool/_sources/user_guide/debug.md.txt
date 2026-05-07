@@ -38,7 +38,7 @@ a = x[-1]     # AssertionError in debug mode
 
 #### Adstack overflow
 
-`debug=True` also enables a deferred bounds check on the adstack used by reverse-mode autodiff. A push past the per-stack capacity (set via `qd.init(ad_stack_size=...)` or per-alloca by `determine_ad_stack_size`) raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`. Without the check, an adstack overflow silently writes past the per-thread slab and produces a wrong gradient.
+The adstack overflow check on reverse-mode autodiff runs always, on every backend, regardless of `debug`. A push past the per-stack capacity raises `QuadrantsAssertionError("[Aa]dstack overflow")` at the next Quadrants Python entry that polls the overflow flag after the offending kernel has executed - kernel launch, host-side field / ndarray read, or `qd.sync()`. On CPU this is the entry of the offending launch itself; on GPU it can be one or more entries later, since the GPU may not have run the offending push by the time the poll at end-of-launch fires. The error message describes the cause (untracked tensor mutation between launches, or sizer under-estimate caused by a bug in Quadrants) and the recovery flow; see [Autodiff -> What can go wrong](autodiff.md) for the full description.
 
 ### Assertions in kernels
 

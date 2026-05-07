@@ -126,7 +126,7 @@ You can run these locally with `pre-commit run -a` after `pip install pre-commit
 - **check-markup-links** (`check_markup_links.yml`) — validates links in documentation
 - **linux / macosx / win** — build and test on each platform
 - **test-gpu** — GPU-specific tests
-- **coverage report** — a diff coverage summary is posted as a PR comment on each push, with a link to the full annotated report. This includes kernel-level branch coverage. See [Kernel code coverage](kernel_coverage.md) for details.
+- **coverage report** — a one-line diff coverage summary is posted as a PR comment on each push, linking to the full annotated report. This includes kernel-level branch coverage. See [Kernel code coverage](kernel_coverage.md) for details.
 
 ### Line wrapping check (`check_wrapping.yml`)
 
@@ -153,26 +153,33 @@ The agent reports up to 5 violations, each annotated with the host file's hotnes
 
 ### PR change report (`pr_change_report.yml`)
 
-Posts a fresh PR comment on every push pointing at a GitHub Check whose page contains a per-file / per-function breakdown of code-line additions and removals. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal — i.e. docstrings and continuation lines of multi-line strings. C/C++ `/* … */` block comments are stripped before counting.
+Posts a fresh PR comment on every push. The comment is a single line: the totals (file count, code lines added, code lines removed) formatted as a markdown link to a GitHub Check whose page contains the full per-file / per-function breakdown. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of multi-line strings). C/C++ `/* … */` block comments are stripped before counting.
 
-Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR) and an `Existing:` group (modified or deleted), and within each group sorted by added lines descending. Sample shape:
+The number columns on the Check page (without a `+` or `-` sign) are code-line counts in the BASE (pre-PR) version: file size before this PR (0 for newly-added files), function body size before this PR (0 for new functions; original body size for deleted functions). `+<n>` / `-<n>` are code lines added / removed by this PR.
+
+Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR), an `Existing:` group (modified by this PR), and a `Deleted:` group (removed by this PR), and within each group sorted by added lines descending, then removed lines descending. Files that are deleted in their entirety appear as a single per-file row (so the totals stay accurate) but skip the per-function breakdown. Sample shape:
 
 ```
-quadrants/program/program_stream.cpp 151 +151
+quadrants/program/program_stream.cpp 0 +151
     New:
-      StreamManager::create_event()             NEW      +18
-      StreamManager::create_stream()            NEW      +18
-      StreamManager::record_event()             NEW      +15
-      StreamManager::destroy_event()            NEW      +13
-      StreamManager::destroy_stream()           NEW      +13
+      StreamManager::create_event()             0     +18
+      StreamManager::create_stream()            0     +18
+      StreamManager::record_event()             0     +15
+      StreamManager::destroy_event()            0     +13
+      StreamManager::destroy_stream()           0     +13
 
-python/quadrants/lang/stream.py 111 +111
+python/quadrants/lang/stream.py 0 +111
     New:
-      Event.destroy()              NEW       +9
-      Stream.destroy()             NEW       +9
-      Event._destroy_prog()        NEW       +8
-      Stream._destroy_prog()       NEW       +8
-      Event.__del__()              NEW       +7
+      Event.destroy()             0      +9
+      Stream.destroy()            0      +9
+      Event._destroy_prog()       0      +8
+      Stream._destroy_prog()      0      +8
+      Event.__del__()             0      +7
+
+quadrants/program/legacy_stream.cpp 42 -42
+    # entire file deleted (per-function breakdown skipped)
 ```
+
+The `0` in the LoC column for the two new files reflects that both files did not exist before this PR (their pre-PR code-line count is 0). The `42 -42` row for `legacy_stream.cpp` is a fully-deleted file: 42 code lines existed before this PR and all 42 were removed.
 
 This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.

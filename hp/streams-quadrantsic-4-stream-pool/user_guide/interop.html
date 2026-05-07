@@ -59,7 +59,7 @@
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Automatic differentiation" href="autodiff.html" />
+    <link rel="next" title="Shared Metal command queue (PyTorch MPS)" href="metal_shared_queue.html" />
     <link rel="prev" title="Parallelization" href="parallelization.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -298,6 +298,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
 <ul class="nav bd-sidenav">
@@ -574,6 +575,7 @@
 </pre></div>
 </div>
 <p>This is intentional: forcing a sync on every Quadrants kernel that touches a previously-zerocopied field would be very expensive in workloads that batch many torch ops and many kernels back-to-back. If you mutate fields from torch and then read them from a Quadrants kernel on Metal, call <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> once between the torch ops and the kernels.</p>
+<p><strong>Shared command queue.</strong> The synchronisation overhead above can be eliminated entirely by passing PyTorch MPS’s <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue</span></code> to Quadrants at init time via <code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code>. Quadrants provides <code class="docutils literal notranslate"><span class="pre">quadrants.interop.get_mps_command_queue()</span></code> to extract the queue pointer at runtime. When both frameworks share the same queue, Metal guarantees command buffer ordering automatically. See <a class="reference internal" href="metal_shared_queue.html"><span class="std std-doc">Shared Metal command queue</span></a> for the setup guide.</p>
 </section>
 <section id="lifetime-caveats">
 <h3>Lifetime caveats<a class="headerlink" href="#lifetime-caveats" title="Link to this heading">#</a></h3>
@@ -771,11 +773,11 @@
       </div>
     </a>
     <a class="right-next"
-       href="autodiff.html"
+       href="metal_shared_queue.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Automatic differentiation</p>
+        <p class="prev-next-title">Shared Metal command queue (PyTorch MPS)</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

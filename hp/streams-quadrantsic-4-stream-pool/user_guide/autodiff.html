@@ -60,7 +60,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Subgroup primitives" href="subgroup.html" />
-    <link rel="prev" title="Numpy and Torch interop" href="interop.html" />
+    <link rel="prev" title="Shared Metal command queue (PyTorch MPS)" href="metal_shared_queue.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.7.6" />
@@ -298,6 +298,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
 <ul class="current nav bd-sidenav">
@@ -669,6 +670,7 @@
 </table>
 </div>
 <p>Either way, the per-thread stride and each adstack’s offset / max-size land in a small buffer the main kernel reads on every push. The backing heap grows on demand to match the largest size any launch has needed so far, and is reused across subsequent launches - you do not need to reserve memory up front.</p>
+<p>The sized result is cached per task and reused while the loop bounds are unchanged. Although changing loop bounds at runtime is possible, it comes with some limitations for performance reasons. See <a class="reference internal" href="#what-can-go-wrong">What can go wrong</a> for details.</p>
 <p>The on-device sizer relies on two common hardware features (64-bit integer arithmetic and raw-pointer storage-buffer access). Every mainstream GPU from late 2018 onward supports both.</p>
 </section>
 <section id="manual-override">
@@ -763,16 +765,14 @@
 <section id="what-can-go-wrong">
 <h2>What can go wrong<a class="headerlink" href="#what-can-go-wrong" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><strong>Adstack overflow at <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> (sizer under-estimated the bound).</strong> Surfaces asynchronously at the next <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> as <code class="docutils literal notranslate"><span class="pre">QuadrantsAssertionError:</span> <span class="pre">Adstack</span> <span class="pre">overflow</span> <span class="pre">...</span></code>. On unusually intricate nested loops - typically deeply nested <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(arr[...])</span></code> with cumulative-index arithmetic - the sizer can compute a bound that is mathematically tighter than the actual push count. This is a bug; please file it with <code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR=1</span></code> set so the kernel IR ships with the report. Workarounds, in order of convenience:</p>
+<li><p><strong>Adstack overflow.</strong> Surfaces as <code class="docutils literal notranslate"><span class="pre">QuadrantsAssertionError:</span> <span class="pre">Adstack</span> <span class="pre">overflow</span> <span class="pre">...</span></code> at the next Quadrants Python entry. The message names the offending kernel + offload task and the most likely cause:</p>
 <ul>
-<li><p>shorten the innermost dynamic loop;</p></li>
-<li><p>precompute its worst-case trip into a scalar field the kernel only reads;</p></li>
-<li><p>split the inner section into its own <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>;</p></li>
-<li><p>pass <code class="docutils literal notranslate"><span class="pre">ad_stack_size=N</span></code> to <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> with <code class="docutils literal notranslate"><span class="pre">N</span></code> large enough to cover the real push count (bypasses the sizer).</p></li>
+<li><p><em>Untracked tensor mutation between launches.</em> A tensor backing a data-dependent loop bound was written to outside Quadrants’s tracking - typically a DLPack zero-copy mutation through a torch tensor sharing storage with a Quadrants ndarray, or a raw pointer write through a non-torch consumer. The cached adstack capacity was sized against the value before the mutation; if the mutation grew the bound, the next launch overflows. Fix: route the write through a Quadrants API (<code class="docutils literal notranslate"><span class="pre">Ndarray.write</span></code> / <code class="docutils literal notranslate"><span class="pre">Ndarray.fill</span></code> / a kernel that writes the value). Alternatively, catch the exception and re-launch - Quadrants invalidates the cached bound on raise, so the retry runs against the live state. Kernel state may be inconsistent after an overflow; do not retry the same step without restarting from a clean state.</p></li>
+<li><p><em>Sizer under-estimated the bound (Quadrants bug).</em> On unusually intricate nested loops - typically deeply nested <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(arr[...])</span></code> with cumulative-index arithmetic - the sizer can compute a bound that is mathematically tighter than the actual push count. To file a bug: clear <code class="docutils literal notranslate"><span class="pre">/tmp/ir/</span></code>, rerun your script with <code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR=1</span></code> set in the environment so Quadrants dumps the kernel IR there, then open an issue on the Quadrants repo with the contents of <code class="docutils literal notranslate"><span class="pre">/tmp/ir/</span></code> attached as a zip. Workaround: pass a generous <code class="docutils literal notranslate"><span class="pre">ad_stack_size=N</span></code> to <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> with <code class="docutils literal notranslate"><span class="pre">N</span></code> large enough to cover the real push count (bypasses the sizer).</p></li>
 </ul>
 </li>
 <li><p><strong>Out-of-memory before the kernel even runs.</strong> A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer’s number is correct. Surfaces as an allocator OOM at launch time. Remedies are the ones listed under <em>Avoiding OOM on GPU</em> above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.</p></li>
-<li><p><strong>Loop bounds backed by a mutated ndarray.</strong> A reverse-mode kernel with <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n[j])</span></code> requires <code class="docutils literal notranslate"><span class="pre">n[j]</span></code> to hold the same value at the forward call and at <code class="docutils literal notranslate"><span class="pre">.grad()</span></code>. If anything writes to <code class="docutils literal notranslate"><span class="pre">n[j]</span></code> between those two points - the differentiable kernel itself, or any other kernel call - the computed gradient may come out wrong, sometimes as an <code class="docutils literal notranslate"><span class="pre">Adstack</span> <span class="pre">overflow</span></code> exception at <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code>, sometimes silently. The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> returns. The reason for that is Quadrants’ adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like <a class="reference external" href="https://pytorch.org/docs/stable/notes/autograd.html">PyTorch’s autograd</a> is not affected, since the trip count is recorded as the forward runs and reused at backward time.</p></li>
+<li><p><strong>Loop bounds backed by a mutated ndarray.</strong> A reverse-mode kernel with <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n[j])</span></code> requires <code class="docutils literal notranslate"><span class="pre">n[j]</span></code> to hold the same value at the forward call and at <code class="docutils literal notranslate"><span class="pre">.grad()</span></code>. If anything writes to <code class="docutils literal notranslate"><span class="pre">n[j]</span></code> between those two points - the differentiable kernel itself, or any other kernel call - the backward call will trigger an <code class="docutils literal notranslate"><span class="pre">Adstack</span> <span class="pre">overflow</span></code> exception or the computed gradient would come out silently wrong. The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> returns. The reason for that is Quadrants’ adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like <a class="reference external" href="https://pytorch.org/docs/stable/notes/autograd.html">PyTorch’s autograd</a> is not affected, since the trip count is recorded as the forward runs and reused at backward time.</p></li>
 </ul>
 </section>
 <section id="performance-characteristics">
@@ -871,12 +871,12 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="interop.html"
+       href="metal_shared_queue.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Numpy and Torch interop</p>
+        <p class="prev-next-title">Shared Metal command queue (PyTorch MPS)</p>
       </div>
     </a>
     <a class="right-next"

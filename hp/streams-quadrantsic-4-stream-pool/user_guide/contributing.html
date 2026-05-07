@@ -298,6 +298,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
 <ul class="nav bd-sidenav">
@@ -511,7 +512,7 @@
 <li><p><strong>check-markup-links</strong> (<code class="docutils literal notranslate"><span class="pre">check_markup_links.yml</span></code>) — validates links in documentation</p></li>
 <li><p><strong>linux / macosx / win</strong> — build and test on each platform</p></li>
 <li><p><strong>test-gpu</strong> — GPU-specific tests</p></li>
-<li><p><strong>coverage report</strong> — a diff coverage summary is posted as a PR comment on each push, with a link to the full annotated report. This includes kernel-level branch coverage. See <a class="reference internal" href="kernel_coverage.html"><span class="std std-doc">Kernel code coverage</span></a> for details.</p></li>
+<li><p><strong>coverage report</strong> — a one-line diff coverage summary is posted as a PR comment on each push, linking to the full annotated report. This includes kernel-level branch coverage. See <a class="reference internal" href="kernel_coverage.html"><span class="std std-doc">Kernel code coverage</span></a> for details.</p></li>
 </ul>
 </section>
 <section id="line-wrapping-check-check-wrapping-yml">
@@ -538,25 +539,30 @@
 </section>
 <section id="pr-change-report-pr-change-report-yml">
 <h3>PR change report (<code class="docutils literal notranslate"><span class="pre">pr_change_report.yml</span></code>)<a class="headerlink" href="#pr-change-report-pr-change-report-yml" title="Link to this heading">#</a></h3>
-<p>Posts a fresh PR comment on every push pointing at a GitHub Check whose page contains a per-file / per-function breakdown of code-line additions and removals. “Code lines” exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal — i.e. docstrings and continuation lines of multi-line strings. C/C++ <code class="docutils literal notranslate"><span class="pre">/*</span> <span class="pre">…</span> <span class="pre">*/</span></code> block comments are stripped before counting.</p>
-<p>Files are sorted by added lines descending. Within each file, functions are split into a <code class="docutils literal notranslate"><span class="pre">New:</span></code> group (added by this PR) and an <code class="docutils literal notranslate"><span class="pre">Existing:</span></code> group (modified or deleted), and within each group sorted by added lines descending. Sample shape:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">quadrants</span><span class="o">/</span><span class="n">program</span><span class="o">/</span><span class="n">program_stream</span><span class="o">.</span><span class="n">cpp</span> <span class="mi">151</span> <span class="o">+</span><span class="mi">151</span>
+<p>Posts a fresh PR comment on every push. The comment is a single line: the totals (file count, code lines added, code lines removed) formatted as a markdown link to a GitHub Check whose page contains the full per-file / per-function breakdown. “Code lines” exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of multi-line strings). C/C++ <code class="docutils literal notranslate"><span class="pre">/*</span> <span class="pre">…</span> <span class="pre">*/</span></code> block comments are stripped before counting.</p>
+<p>The number columns on the Check page (without a <code class="docutils literal notranslate"><span class="pre">+</span></code> or <code class="docutils literal notranslate"><span class="pre">-</span></code> sign) are code-line counts in the BASE (pre-PR) version: file size before this PR (0 for newly-added files), function body size before this PR (0 for new functions; original body size for deleted functions). <code class="docutils literal notranslate"><span class="pre">+&lt;n&gt;</span></code> / <code class="docutils literal notranslate"><span class="pre">-&lt;n&gt;</span></code> are code lines added / removed by this PR.</p>
+<p>Files are sorted by added lines descending. Within each file, functions are split into a <code class="docutils literal notranslate"><span class="pre">New:</span></code> group (added by this PR), an <code class="docutils literal notranslate"><span class="pre">Existing:</span></code> group (modified by this PR), and a <code class="docutils literal notranslate"><span class="pre">Deleted:</span></code> group (removed by this PR), and within each group sorted by added lines descending, then removed lines descending. Files that are deleted in their entirety appear as a single per-file row (so the totals stay accurate) but skip the per-function breakdown. Sample shape:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">quadrants</span><span class="o">/</span><span class="n">program</span><span class="o">/</span><span class="n">program_stream</span><span class="o">.</span><span class="n">cpp</span> <span class="mi">0</span> <span class="o">+</span><span class="mi">151</span>
     <span class="n">New</span><span class="p">:</span>
-      <span class="n">StreamManager</span><span class="p">::</span><span class="n">create_event</span><span class="p">()</span>             <span class="n">NEW</span>      <span class="o">+</span><span class="mi">18</span>
-      <span class="n">StreamManager</span><span class="p">::</span><span class="n">create_stream</span><span class="p">()</span>            <span class="n">NEW</span>      <span class="o">+</span><span class="mi">18</span>
-      <span class="n">StreamManager</span><span class="p">::</span><span class="n">record_event</span><span class="p">()</span>             <span class="n">NEW</span>      <span class="o">+</span><span class="mi">15</span>
-      <span class="n">StreamManager</span><span class="p">::</span><span class="n">destroy_event</span><span class="p">()</span>            <span class="n">NEW</span>      <span class="o">+</span><span class="mi">13</span>
-      <span class="n">StreamManager</span><span class="p">::</span><span class="n">destroy_stream</span><span class="p">()</span>           <span class="n">NEW</span>      <span class="o">+</span><span class="mi">13</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">create_event</span><span class="p">()</span>             <span class="mi">0</span>     <span class="o">+</span><span class="mi">18</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">create_stream</span><span class="p">()</span>            <span class="mi">0</span>     <span class="o">+</span><span class="mi">18</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">record_event</span><span class="p">()</span>             <span class="mi">0</span>     <span class="o">+</span><span class="mi">15</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">destroy_event</span><span class="p">()</span>            <span class="mi">0</span>     <span class="o">+</span><span class="mi">13</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">destroy_stream</span><span class="p">()</span>           <span class="mi">0</span>     <span class="o">+</span><span class="mi">13</span>
 
-<span class="n">python</span><span class="o">/</span><span class="n">quadrants</span><span class="o">/</span><span class="n">lang</span><span class="o">/</span><span class="n">stream</span><span class="o">.</span><span class="n">py</span> <span class="mi">111</span> <span class="o">+</span><span class="mi">111</span>
+<span class="n">python</span><span class="o">/</span><span class="n">quadrants</span><span class="o">/</span><span class="n">lang</span><span class="o">/</span><span class="n">stream</span><span class="o">.</span><span class="n">py</span> <span class="mi">0</span> <span class="o">+</span><span class="mi">111</span>
     <span class="n">New</span><span class="p">:</span>
-      <span class="n">Event</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>              <span class="n">NEW</span>       <span class="o">+</span><span class="mi">9</span>
-      <span class="n">Stream</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>             <span class="n">NEW</span>       <span class="o">+</span><span class="mi">9</span>
-      <span class="n">Event</span><span class="o">.</span><span class="n">_destroy_prog</span><span class="p">()</span>        <span class="n">NEW</span>       <span class="o">+</span><span class="mi">8</span>
-      <span class="n">Stream</span><span class="o">.</span><span class="n">_destroy_prog</span><span class="p">()</span>       <span class="n">NEW</span>       <span class="o">+</span><span class="mi">8</span>
-      <span class="n">Event</span><span class="o">.</span><span class="fm">__del__</span><span class="p">()</span>              <span class="n">NEW</span>       <span class="o">+</span><span class="mi">7</span>
+      <span class="n">Event</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>             <span class="mi">0</span>      <span class="o">+</span><span class="mi">9</span>
+      <span class="n">Stream</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>            <span class="mi">0</span>      <span class="o">+</span><span class="mi">9</span>
+      <span class="n">Event</span><span class="o">.</span><span class="n">_destroy_prog</span><span class="p">()</span>       <span class="mi">0</span>      <span class="o">+</span><span class="mi">8</span>
+      <span class="n">Stream</span><span class="o">.</span><span class="n">_destroy_prog</span><span class="p">()</span>      <span class="mi">0</span>      <span class="o">+</span><span class="mi">8</span>
+      <span class="n">Event</span><span class="o">.</span><span class="fm">__del__</span><span class="p">()</span>             <span class="mi">0</span>      <span class="o">+</span><span class="mi">7</span>
+
+<span class="n">quadrants</span><span class="o">/</span><span class="n">program</span><span class="o">/</span><span class="n">legacy_stream</span><span class="o">.</span><span class="n">cpp</span> <span class="mi">42</span> <span class="o">-</span><span class="mi">42</span>
+    <span class="c1"># entire file deleted (per-function breakdown skipped)</span>
 </pre></div>
 </div>
+<p>The <code class="docutils literal notranslate"><span class="pre">0</span></code> in the LoC column for the two new files reflects that both files did not exist before this PR (their pre-PR code-line count is 0). The <code class="docutils literal notranslate"><span class="pre">42</span> <span class="pre">-42</span></code> row for <code class="docutils literal notranslate"><span class="pre">legacy_stream.cpp</span></code> is a fully-deleted file: 42 code lines existed before this PR and all 42 were removed.</p>
 <p>This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
 </section>
 </section>

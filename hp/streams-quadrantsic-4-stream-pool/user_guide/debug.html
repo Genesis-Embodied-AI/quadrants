@@ -298,6 +298,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
 <ul class="nav bd-sidenav">
@@ -429,7 +430,7 @@
 </div>
 <section id="adstack-overflow">
 <h4>Adstack overflow<a class="headerlink" href="#adstack-overflow" title="Link to this heading">#</a></h4>
-<p><code class="docutils literal notranslate"><span class="pre">debug=True</span></code> also enables a deferred bounds check on the adstack used by reverse-mode autodiff. A push past the per-stack capacity (set via <code class="docutils literal notranslate"><span class="pre">qd.init(ad_stack_size=...)</span></code> or per-alloca by <code class="docutils literal notranslate"><span class="pre">determine_ad_stack_size</span></code>) raises <code class="docutils literal notranslate"><span class="pre">RuntimeError(&quot;[Aa]dstack</span> <span class="pre">overflow&quot;)</span></code> on the next <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code>. Without the check, an adstack overflow silently writes past the per-thread slab and produces a wrong gradient.</p>
+<p>The adstack overflow check on reverse-mode autodiff runs always, on every backend, regardless of <code class="docutils literal notranslate"><span class="pre">debug</span></code>. A push past the per-stack capacity raises <code class="docutils literal notranslate"><span class="pre">QuadrantsAssertionError(&quot;[Aa]dstack</span> <span class="pre">overflow&quot;)</span></code> at the next Quadrants Python entry that polls the overflow flag after the offending kernel has executed - kernel launch, host-side field / ndarray read, or <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code>. On CPU this is the entry of the offending launch itself; on GPU it can be one or more entries later, since the GPU may not have run the offending push by the time the poll at end-of-launch fires. The error message describes the cause (untracked tensor mutation between launches, or sizer under-estimate caused by a bug in Quadrants) and the recovery flow; see <a class="reference internal" href="autodiff.html"><span class="std std-doc">Autodiff -&gt; What can go wrong</span></a> for the full description.</p>
 </section>
 </section>
 <section id="assertions-in-kernels">
