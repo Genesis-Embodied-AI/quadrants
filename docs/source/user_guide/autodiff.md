@@ -370,16 +370,38 @@ The safe rule: populate loop-bound ndarrays before the forward call and leave th
 
 ### Inner reverse-mode loop with a complex bound at very large extent
 
-An arbitrarily large enclosing range works only when the inner trip count fits a fixed subset of expressions; other shapes cap at ~16 million enclosing iterations and raise `RuntimeError: ... iteration count ... exceeds the 16777216 guard` past that.
+Consider a kernel with two nested loops where the inner loop's iteration count depends on the outer
+loop variable through an arithmetic expression on an ndarray index:
 
-Two categories of bound expression:
+```python
+@qd.kernel
+def kernel(arr: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+    for i in range(arr.shape[0]):       # outer loop, runs N times
+        for j in range(arr[i // 2]):    # inner loop, count = arr[i // 2]
+            ...                         # any reverse-mode body
+```
 
-- *Works at any enclosing-range size:* integer ndarray reads up to 32 bits wide (single- or multi-axis, indexed by literal constants or enclosing loop variables), field reads of the same width indexed by literal constants or enclosing loop variables (`my_field[None]`, `my_field[k]` for a constant `k`, `my_field[i]` where `i` is an enclosing loop variable), `arr.shape[k]` shape terms, literal integer constants, and `+`, `-`, `*`, `max` of those.
-- *Caps at the threshold:* 64-bit integer ndarray or field reads, arithmetic-indexed reads (`arr[i // 2]`, `arr[i % 4]`), and ragged inner ranges whose own bound depends on an enclosing loop variable through an unsupported leaf shape.
+The inner loop's iteration count `arr[i // 2]` is what we call the inner loop's *bound expression*.
+Reverse-mode autodiff needs an upper bound on how many times the inner loop body executes across the
+whole kernel; for that, the compiler analyses the bound expression at launch time. Two cases:
 
-A concrete example that hits the cap is `for j in range(arr[i // 2]):` with `arr[0] = (1 << 24) + 1`.
+- **Fast path (any outer size).** If the bound expression is built from: integer ndarray reads up to
+  32 bits wide indexed by literal constants or directly by an outer loop variable
+  (`arr[i]`, `arr[i, j]`); field reads of the same shape (`my_field[None]`, `my_field[k]`,
+  `my_field[i]`); shape terms (`arr.shape[k]`); literal integer constants; and `+ - * max` of those -
+  the compiler computes the upper bound exactly with no iteration-count limit on the outer loop.
 
-Workaround: rewrite the trip count to stay within the supported subset, or shrink the enclosing loop below the threshold.
+- **Capped path (outer size <= 16 777 216).** If the bound expression uses: 64-bit integer reads, an
+  index that is an arithmetic expression of an outer loop variable (`arr[i // 2]`, `arr[i % 4]`), or
+  reads through another dynamic-bound loop, the compiler falls back to a host-side iteration walk that
+  is hard-capped at 2^24 = 16 777 216 outer iterations. Past that cap the kernel raises
+  `RuntimeError: ... iteration count ... exceeds the 16777216 guard`.
+
+The example above hits the capped path because of the `i // 2` index. With `arr.shape[0] = (1 << 24) + 1`
+it raises at launch.
+
+Workaround: rewrite the bound expression to one of the fast-path shapes (e.g. precompute `arr[i // 2]`
+into a temporary ndarray indexed by `i` directly), or keep the outer loop count below 2^24.
 
 ## Performance characteristics
 
