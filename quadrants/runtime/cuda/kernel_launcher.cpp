@@ -249,7 +249,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   auto *executor = get_runtime_executor();
   auto *cuda_module = launcher_ctx.jit_module;
   const auto &parameters = *launcher_ctx.parameters;
-  const auto &offloaded_tasks = launcher_ctx.offloaded_tasks;
+  // Snapshot by value: `publish_adstack_metadata`'s host-eval branch triggers recursive `register_llvm_kernel` calls
+  // for snode-reader kernels, which call `contexts_.resize()` and invalidate any reference into the vector.  The
+  // `launcher_ctx` reference above is used only for per-handle persistent-buffer fields (arg_buffer / runtime_context)
+  // that are read before the recursive path fires and never touched after `launch_offloaded_tasks` returns.
+  const auto offloaded_tasks = launcher_ctx.offloaded_tasks;
 
   CUDAContext::get_instance().make_current();
 

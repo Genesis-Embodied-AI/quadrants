@@ -207,7 +207,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   auto *executor = get_runtime_executor();
   auto *amdgpu_module = launcher_ctx.jit_module;
   const auto &parameters = *launcher_ctx.parameters;
-  const auto &offloaded_tasks = launcher_ctx.offloaded_tasks;
+  // Snapshot by value: `publish_adstack_metadata`'s host-eval branch triggers recursive `register_llvm_kernel`
+  // calls for snode-reader kernels, which `contexts_.resize()` and invalidate any reference into the vector.
+  const auto offloaded_tasks = launcher_ctx.offloaded_tasks;
 
   AMDGPUContext::get_instance().make_current();
   ctx.get_context().runtime = executor->get_llvm_runtime();
