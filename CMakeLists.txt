@@ -164,14 +164,15 @@ if (QD_WITH_LLVM)
     endif()
 
     # Setup LLVM_LINK_EXECUTABLE. Required to merge runtime.bc + adstack_runtime.bc into a single bitcode module.
-    # Search the directory next to CLANG_EXECUTABLE first so we get a version-matched llvm-link, then fall back to PATH.
+    # Search the LLVM toolchain dir (`$LLVM_DIR/bin` set by `.github/workflows/scripts/ti_build/llvm.py` in CI) and
+    # the directory next to CLANG_EXECUTABLE first so we get a version-matched llvm-link, then fall back to PATH.
     if (LLVM_LINK_EXECUTABLE)
       message("LLVM_LINK_EXECUTABLE defined: ${LLVM_LINK_EXECUTABLE}")
     else()
       get_filename_component(_clang_dir "${CLANG_EXECUTABLE}" DIRECTORY)
       find_program(LLVM_LINK_EXECUTABLE
                    NAMES llvm-link-22 llvm-link-21 llvm-link-20 llvm-link
-                   HINTS "${_clang_dir}")
+                   HINTS "$ENV{LLVM_DIR}/bin" "${_clang_dir}")
       message("llvm-link executable found at ${LLVM_LINK_EXECUTABLE}")
     endif()
 
