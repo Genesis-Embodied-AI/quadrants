@@ -570,6 +570,64 @@ def test_block_mem_fence_divergent_control_flow():
         assert a[i] == i
 
 
+# Producer-consumer memory-ordering correctness test for `block.mem_fence()`. Thread 0 (the
+# producer) repeatedly publishes a value into shared memory and then sets a flag, with a
+# `block.mem_fence()` separating the two stores. Thread `BLOCK-1` (the consumer) spin-waits on
+# the flag, fences, and reads the published value. Without store-store ordering on the
+# producer side or load-load ordering on the consumer side, the consumer can observe
+# `flag == 1` with the data still at its initial value, which would fail the assertion.
+#
+# Layout choice: `BLOCK = 128` puts the producer and consumer in different subgroups on every
+# supported backend (CUDA warp = 32; AMDGPU wave = 32 or 64; Vulkan / Metal subgroup is
+# vendor-defined but in practice <= 128). Threads in different subgroups are guaranteed
+# independent forward progress on every modern GPU, so the consumer's spin-wait does not
+# deadlock waiting for a producer it shares lock-step execution with. We deliberately do NOT
+# use `block.sync()` between the producer's two stores -- that would test sync ordering, not
+# fence ordering.
+#
+# Caveat: GPU spin-wait tests are inherently fragile relative to the strong-ordered
+# pattern-matching tests above. We run 64 publish/consume rounds to amortize over compiler
+# variability, and reset state under a `block.sync()` between rounds. If this test ever flakes
+# on real hardware, the expected response is to investigate whether the platform's forward-
+# progress guarantees are weaker than assumed (see SPIR-V spec on ShaderTerminationInvocation,
+# CUDA C Programming Guide section on independent thread scheduling).
+@test_utils.test(arch=qd.gpu)
+def test_block_mem_fence_producer_consumer():
+    N_ITERS = 64
+    BLOCK = 128
+    out = qd.field(dtype=qd.i32, shape=N_ITERS)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=BLOCK)
+        for tid in range(BLOCK):
+            flag = qd.simt.block.SharedArray((1,), qd.i32)
+            data = qd.simt.block.SharedArray((1,), qd.i32)
+
+            for it in range(N_ITERS):
+                if tid == 0:
+                    data[0] = 0
+                    flag[0] = 0
+                qd.simt.block.sync()
+
+                if tid == 0:
+                    data[0] = 100 + it
+                    qd.simt.block.mem_fence()
+                    flag[0] = 1
+                elif tid == BLOCK - 1:
+                    while flag[0] == 0:
+                        pass
+                    qd.simt.block.mem_fence()
+                    out[it] = data[0]
+
+                qd.simt.block.sync()
+
+    foo()
+
+    for it in range(N_ITERS):
+        assert out[it] == 100 + it, f"iter {it}: got {out[it]}, expected {100 + it}"
+
+
 # Deprecation aliases: the old names still work, and emit DeprecationWarning on first use.
 # pytest.warns enables `simplefilter("always")` for its scope, bypassing the project-wide
 # `warnings.filterwarnings("once", ..., module="quadrants")` set in `quadrants/lang/misc.py`.
