@@ -15,7 +15,7 @@ Device-wide algorithms — primitives that consume and produce whole arrays, exe
 
 ### `qd.algorithms.parallel_sort(keys, values=None)`
 
-In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `field` or `ndarray`.
+In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `qd.field` — `parallel_sort` reaches into `snode.ptr.offset` internally, so `ndarray` is **not** supported and will fail at trace time with an `AttributeError`.
 
 ```python
 keys = qd.field(qd.i32, shape=(N,))
@@ -48,11 +48,11 @@ psum.run(arr)
 
 Constructor:
 
-- `length: int` — the maximum number of elements the executor can scan. Internally allocates an auxiliary `qd.field(i32, shape=padded_length)` sized to the Kogge-Stone hierarchy (block size = 64).
+- `length: int` — the **fixed** number of elements the executor will scan on every `.run()` call. Internally allocates an auxiliary `qd.field(i32, shape=padded_length)` sized to the Kogge-Stone hierarchy (block size = 64).
 
 `run(input_arr)`:
 
-- `input_arr` must be a 1-D `qd.field(qd.i32, shape=(L,))` with `L <= length`.
+- `input_arr` must be a 1-D `qd.field(qd.i32, shape=(length,))` — its length must match the constructor's `length` exactly. `run()` always blits `length` elements between `input_arr` and the internal buffer; passing a shorter field results in out-of-bounds reads / writes (no runtime check today).
 - Returns nothing; `input_arr` is overwritten with the scan result.
 
 Constraints:
