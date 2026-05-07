@@ -24,7 +24,10 @@
 #include "quadrants/rhi/cuda/cuda_driver.h"
 
 #include "quadrants/platform/amdgpu/detect_amdgpu.h"
+#include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
+
+#include "quadrants/runtime/llvm/adstack_lazy_claim/cuda_stream_pin.h"
 
 namespace quadrants::lang {
 
@@ -171,6 +174,12 @@ void LlvmRuntimeExecutor::publish_per_task_bound_count_device(std::size_t task_i
     return;  // unrecognised comparison op (the IR pattern matcher should have rejected it earlier)
   }
 
+  // Pin the device context's `stream_` to the legacy default stream for the runtime_jit->call below; see
+  // `cuda_stream_pin.h` for the cross-stream-visibility rationale. Same shape as the max-reducer dispatch.
+#if defined(QD_WITH_CUDA)
+  CudaDefaultStreamPinGuard cuda_default_stream_pin(config_.arch == Arch::cuda);
+#endif
+
   // Fill the device-side params struct on the host. Threshold bits live as the same u32 the runtime function bitcasts
   // back; we copy whichever underlying integer or float value the analysis captured. The two source shapes (ndarray +
   // SNode) share the comparison fields and differ only in which trailing fields the reducer reads (`arg_word_offset`
@@ -289,18 +298,10 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
   if (ctx == nullptr || ctx->args_type == nullptr) {
     return result;
   }
-  // Skip the dispatch on pre-Ampere CUDA (compute capability < 8.0). On Turing-class hardware (sm_75 and earlier),
-  // `runtime_eval_adstack_max_reduce` faults at `cuLaunchKernel` with an illegal-address when reading ndarray data
-  // through `ctx->arg_buffer`. The host-side d2h view of the same memory at the launch site shows the correct
-  // bytes, so the kernel's view diverges from the host's; the precise root cause has not been pinned down. Ampere
-  // and newer (sm_80+) work in practice (verified on Blackwell sm_120). With an empty result map here,
-  // `publish_adstack_metadata` walks the unsubstituted `SerializedSizeExpr` tree and the per-stack sizer falls
-  // through to the worst-case-num-threads heap budget, which is sufficient for correctness on this hardware.
-  // AMDGPU keeps the dispatch enabled.
+  // Pin the device context's `stream_` to the legacy default stream for the whole dispatch + DtoH read sequence.
+  // See `cuda_stream_pin.h` for the cross-stream-visibility rationale.
 #if defined(QD_WITH_CUDA)
-  if (config_.arch == Arch::cuda && CUDAContext::get_instance().get_compute_capability() < 80) {
-    return result;
-  }
+  CudaDefaultStreamPinGuard cuda_default_stream_pin(config_.arch == Arch::cuda);
 #endif
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
   AdStackCache *cache = (prog != nullptr) ? &prog->adstack_cache() : nullptr;
