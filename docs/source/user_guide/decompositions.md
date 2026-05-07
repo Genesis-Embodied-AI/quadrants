@@ -36,6 +36,8 @@ Shapes 2×2 and 3×3 use closed-form / Jacobi-style implementations specialized 
 
 The 2×2 path returns singular values sorted descending (`S[0,0] >= S[1,1]`). The 3×3 path does **not** sort — singular values come out in whatever order the Sifakis algorithm produces them. If you depend on `S[0,0] >= S[1,1] >= S[2,2]` for 3×3, sort explicitly.
 
+**FIXME (sort consistency):** the 2×2 / 3×3 split is an inconsistency in the API — both shapes should either sort descending or both should leave the order to the algorithm. The 2×2 swap is essentially free; making 3×3 sort would cost a few comparisons and column swaps. Pick one and apply it across both shapes (and update this paragraph accordingly).
+
 ### `qd.sym_eig(A, dt=None)`
 
 Symmetric eigendecomposition — for a real symmetric `A`, returns `(eigenvalues, eigenvectors)` with:
