@@ -76,7 +76,9 @@ Direct solve of `A @ x = b` via Gauss elimination with partial pivoting. Returns
 - Shapes 2×2 and 3×3.
 - The implementation asserts `A.n == A.m` and `A.m == b.n`.
 - Singular `A` is checked by a kernel `assert` (`"Matrix is singular in linear solve."`) inside the Gauss-elimination path. Kernel asserts only fire when the runtime is initialised with `qd.init(debug=True)` (see [debug](debug.md)) — under the default `debug=False` a singular input silently produces a divide-by-zero / NaN result with no diagnostic. If you need a signal in production, check singularity explicitly before calling `qd.solve` (e.g. `abs(A.determinant())` against a tolerance), or run development workloads with `debug=True` to catch the case.
-- Use this for one-off small solves; for systems that decompose once and back-solve many times, currently you have to bake the LU yourself (or just call `qd.solve` per b — for 2×2 / 3×3 the gain from caching the LU is negligible compared to the launch).
+- Intended for one-off small solves: each call factorises `A` from scratch and back-substitutes for the given `b`.
+- There is no separate LU-factor / reuse API. If you want to amortise the factorisation across many right-hand-sides, you have to write the factorisation yourself in user code.
+- At 2×2 / 3×3, the factorisation cost is dominated by kernel-launch overhead, so calling `qd.solve` once per `b` is usually fine in practice — the missing factor-reuse API matters more for larger shapes (which `qd.solve` does not support today anyway).
 
 ## Examples
 
