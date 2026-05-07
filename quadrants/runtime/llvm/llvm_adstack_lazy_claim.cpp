@@ -437,14 +437,22 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
   AdStackCache *cache = (prog != nullptr) ? &prog->adstack_cache() : nullptr;
 
-  // First pass: per-spec cache lookup. Hits drop straight into the result map; misses queue up host-resolved begin /
-  // end + encoded body bytecode for the dispatch loop. Mirrors the gfx variant's two-phase structure so the cache hit
-  // path stays free of any device traffic.
+  // Pass 1: per-spec cache lookup. Hits drop straight into `result`; misses go to pending with back-refs to the
+  // source `SerializedSizeExpr` and `StaticAdStackMaxReducerSpec`. Host-evaluation of begin / end and body bytecode
+  // encoding is deferred to the per-level prepare step below, where each spec's `dependent_mor_node_idxs` have
+  // already been substituted into the working tree. Mirrors the gfx variant's level-based dispatch so a captured
+  // outer `MaxOverRange` whose end references a captured inner `MaxOverRange` resolves through the inner's parallel
+  // dispatch instead of host-walking it (which would either trip the host evaluator's `1<<24` cap or read garbage
+  // through device-resident ndarray buffers on launchers that do not host-accessibilise their data pointers).
   struct PendingMaxReducerDispatch {
     uint64_t cache_key;
     uint32_t registry_id;
     int32_t stack_id;
     int32_t mor_node_idx;
+    const SerializedSizeExpr *expr;
+    const StaticAdStackMaxReducerSpec *spec;
+    bool dispatched{false};
+    bool dropped{false};
     LlvmAdStackMaxReducerDeviceParams params;
     std::vector<uint8_t> body_bytecode;
     std::vector<AdStackCache::SizeExprReadObservation> reads;
@@ -455,8 +463,6 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
     if (ad_stack.max_reducer_specs.empty()) {
       continue;
     }
-    // The LLVM `AdStackSizingInfo::registry_id` is populated by codegen at finalize-time; if for some reason it is
-    // still 0 (unregistered task), skip - the spec cannot be cache-keyed reliably without a stable id.
     const uint32_t registry_id = ad_stack.registry_id;
     if (registry_id == 0) {
       continue;
@@ -472,70 +478,13 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
           continue;
         }
       }
-      const SerializedSizeExpr &expr = ad_stack.size_exprs[spec.stack_id];
-      // Multi-axis chain support: evaluate `[begin, end)` per captured axis and accumulate the total cross-product
-      // length. Any axis whose begin / end fails to host-resolve, or whose product overflows u32, drops the spec (the
-      // per-thread sizer's capped path absorbs it). The recognizer guarantees axes are ordered outermost-first so the
-      // cross-product index decomposes via stride-major math in the runtime function below.
-      const std::size_t num_axes = spec.axis_var_ids.size();
-      if (num_axes == 0 || num_axes > static_cast<std::size_t>(kAdStackMaxReducerMaxAxes)) {
-        continue;
-      }
-      std::vector<int64_t> per_axis_begin(num_axes, 0);
-      std::vector<int64_t> per_axis_length(num_axes, 0);
-      bool axes_ok = true;
-      uint64_t total_length = 1;
-      for (std::size_t a = 0; a < num_axes; ++a) {
-        const int64_t bv = evaluate_adstack_size_expr_at_node(expr, spec.axis_begin_node_idxs[a], prog, ctx);
-        const int64_t ev = evaluate_adstack_size_expr_at_node(expr, spec.axis_end_node_idxs[a], prog, ctx);
-        if (bv < 0 || ev < 0 || ev <= bv) {
-          axes_ok = false;
-          break;
-        }
-        per_axis_begin[a] = bv;
-        per_axis_length[a] = ev - bv;
-        total_length *= static_cast<uint64_t>(per_axis_length[a]);
-        if (total_length > std::numeric_limits<uint32_t>::max()) {
-          axes_ok = false;
-          break;
-        }
-      }
-      if (!axes_ok) {
-        continue;
-      }
-      auto arg_buffer_offset_resolver = [&](const std::vector<int32_t> &arg_id_path) -> int32_t {
-        std::vector<int> path(arg_id_path.begin(), arg_id_path.end());
-        path.push_back(TypeFactory::DATA_PTR_POS_IN_NDARRAY);
-        const std::size_t byte_off = ctx->args_type->get_element_offset(path);
-        if (byte_off > std::numeric_limits<int32_t>::max()) {
-          return -1;
-        }
-        return static_cast<int32_t>(byte_off);
-      };
-      EncodedMaxReducerBody encoded = encode_max_reducer_body_bytecode(expr, spec.body_node_idx, spec.axis_var_ids,
-                                                                       arg_buffer_offset_resolver, ctx, prog);
-      if (encoded.body_node_count == 0) {
-        continue;
-      }
       PendingMaxReducerDispatch p{};
       p.cache_key = key;
       p.registry_id = registry_id;
       p.stack_id = spec.stack_id;
       p.mor_node_idx = spec.mor_node_idx;
-      p.params = LlvmAdStackMaxReducerDeviceParams{};
-      p.params.output_slot = 0;  // assigned per pending below
-      p.params.num_axes = static_cast<uint32_t>(num_axes);
-      p.params.body_node_count = encoded.body_node_count;
-      p.params.body_root_node_idx = static_cast<int32_t>(encoded.body_node_count) - 1;
-      for (std::size_t a = 0; a < num_axes; ++a) {
-        p.params.per_axis_length[a] = static_cast<uint32_t>(per_axis_length[a]);
-        p.params.per_axis_begin[a] = per_axis_begin[a];
-        // The encoder dense-remaps each chain bound-var id to slot `a` in `[0, num_axes)`; the runtime uses the same
-        // slot to populate `scope.values[a]` for axis `a`. Encode that slot directly here.
-        p.params.per_axis_var_id[a] = static_cast<int32_t>(a);
-      }
-      p.body_bytecode = std::move(encoded.bytes);
-      p.reads = std::move(encoded.body_reads);
+      p.expr = &ad_stack.size_exprs[spec.stack_id];
+      p.spec = &spec;
       pending.push_back(std::move(p));
     }
   }
@@ -586,40 +535,129 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
     }
   };
 
-  // Lazy-grow the output buffer to fit `pending.size()` i64 slots. Reused across launches; amortised doubling.
-  const std::size_t needed_output_bytes = pending.size() * sizeof(int64_t);
-  if (needed_output_bytes > adstack_max_reducer_outputs_capacity_) {
-    Device::AllocParams alloc_params{};
-    alloc_params.size = std::max<std::size_t>(needed_output_bytes, 2 * adstack_max_reducer_outputs_capacity_);
-    alloc_params.host_read = false;
-    alloc_params.host_write = true;
-    alloc_params.export_sharing = false;
-    alloc_params.usage = AllocUsage::Storage;
-    DeviceAllocation new_alloc;
-    RhiResult res = llvm_device()->allocate_memory(alloc_params, &new_alloc);
-    QD_ERROR_IF(res != RhiResult::success,
-                "Failed to allocate {} bytes for adstack max reducer outputs buffer (err: {})", alloc_params.size,
-                int(res));
-    adstack_max_reducer_outputs_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
-    adstack_max_reducer_outputs_capacity_ = alloc_params.size;
-  }
-  void *outputs_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_outputs_alloc_);
-  // Publish the (possibly grown) buffer pointer into `runtime->adstack_max_reducer_outputs`.
-  copy_h2d(runtime_adstack_max_reducer_outputs_field_ptr_, &outputs_dev_ptr, sizeof(void *));
-
-  // Per-pending dispatch: assign `output_slot`, h2d the params + body bytecode into the lazy-grow scratch buffers,
-  // invoke the runtime function. The runtime function is single-threaded on every backend; on CUDA / AMDGPU the JIT
-  // module launches it as a single-thread kernel, on CPU it's a direct host call.
   auto *const runtime_jit = get_runtime_jit_module();
   void *runtime_context_ptr_for_reducer =
       device_runtime_context_ptr != nullptr ? device_runtime_context_ptr : static_cast<void *>(&ctx->get_context());
-  for (std::size_t k = 0; k < pending.size(); ++k) {
-    pending[k].params.output_slot = static_cast<uint32_t>(k);
-    // Params buffer.
-    const std::size_t needed_params_bytes = sizeof(LlvmAdStackMaxReducerDeviceParams);
-    if (needed_params_bytes > adstack_max_reducer_params_capacity_) {
+
+  auto arg_buffer_offset_resolver = [&](const std::vector<int32_t> &arg_id_path) -> int32_t {
+    std::vector<int> path(arg_id_path.begin(), arg_id_path.end());
+    path.push_back(TypeFactory::DATA_PTR_POS_IN_NDARRAY);
+    const std::size_t byte_off = ctx->args_type->get_element_offset(path);
+    if (byte_off > std::numeric_limits<int32_t>::max()) {
+      return -1;
+    }
+    return static_cast<int32_t>(byte_off);
+  };
+
+  // Level-based dispatch: each iteration processes the specs whose `dependent_mor_node_idxs` are all in `result`
+  // (cache hits + earlier rounds), substitutes those values into the working tree, host-evaluates begin / end,
+  // encodes body bytecode, then dispatches the round one spec at a time (the LLVM runtime function is single-
+  // threaded; batching is per-round only at the spec-prep level). Most kernels finish in one round; nested patterns
+  // (e.g. outer MaxOverRange whose end contains a captured inner max-of-array) take one round per dependency depth.
+  // No-progress rounds drop the remaining specs and let the per-task sizer's loud-error path absorb them.
+  std::size_t dispatched_count = 0;
+  std::size_t dropped_count = 0;
+  while (dispatched_count + dropped_count < pending.size()) {
+    std::vector<std::size_t> level_indices;
+    for (std::size_t k = 0; k < pending.size(); ++k) {
+      if (pending[k].dispatched || pending[k].dropped)
+        continue;
+      bool deps_ok = true;
+      for (int32_t dep_node : pending[k].spec->dependent_mor_node_idxs) {
+        const uint64_t dep_key = (static_cast<uint64_t>(pending[k].registry_id) & 0xFFFFFFFFull) |
+                                 ((static_cast<uint64_t>(pending[k].stack_id) & 0xFFFFull) << 32) |
+                                 ((static_cast<uint64_t>(dep_node) & 0xFFFFull) << 48);
+        if (result.find(dep_key) == result.end()) {
+          deps_ok = false;
+          break;
+        }
+      }
+      if (deps_ok)
+        level_indices.push_back(k);
+    }
+    if (level_indices.empty()) {
+      for (std::size_t k = 0; k < pending.size(); ++k) {
+        if (!pending[k].dispatched && !pending[k].dropped) {
+          pending[k].dropped = true;
+          ++dropped_count;
+        }
+      }
+      break;
+    }
+
+    // Prepare each ready spec: substitute already-resolved deps' values into the tree, host-eval begin / end, encode
+    // body bytecode. Specs whose preparation fails (axis non-resolvable, length over u32 cap, body grammar reject)
+    // mark `dropped` and are skipped for this round and forever.
+    std::vector<std::size_t> level_dispatch;
+    level_dispatch.reserve(level_indices.size());
+    for (std::size_t k : level_indices) {
+      const auto *spec = pending[k].spec;
+      const std::size_t num_axes = spec->axis_var_ids.size();
+      if (num_axes == 0 || num_axes > static_cast<std::size_t>(kAdStackMaxReducerMaxAxes)) {
+        pending[k].dropped = true;
+        ++dropped_count;
+        continue;
+      }
+      const SerializedSizeExpr substituted =
+          substitute_precomputed_max_over_range(*pending[k].expr, pending[k].registry_id, pending[k].stack_id, result);
+      std::vector<int64_t> per_axis_begin(num_axes, 0);
+      std::vector<int64_t> per_axis_length(num_axes, 0);
+      bool axes_ok = true;
+      uint64_t total_length = 1;
+      for (std::size_t a = 0; a < num_axes; ++a) {
+        const int64_t bv = evaluate_adstack_size_expr_at_node(substituted, spec->axis_begin_node_idxs[a], prog, ctx);
+        const int64_t ev = evaluate_adstack_size_expr_at_node(substituted, spec->axis_end_node_idxs[a], prog, ctx);
+        if (bv < 0 || ev < 0 || ev <= bv) {
+          axes_ok = false;
+          break;
+        }
+        per_axis_begin[a] = bv;
+        per_axis_length[a] = ev - bv;
+        total_length *= static_cast<uint64_t>(per_axis_length[a]);
+        if (total_length > std::numeric_limits<uint32_t>::max()) {
+          axes_ok = false;
+          break;
+        }
+      }
+      if (!axes_ok) {
+        pending[k].dropped = true;
+        ++dropped_count;
+        continue;
+      }
+      EncodedMaxReducerBody encoded = encode_max_reducer_body_bytecode(
+          substituted, spec->body_node_idx, spec->axis_var_ids, arg_buffer_offset_resolver, ctx, prog);
+      if (encoded.body_node_count == 0) {
+        pending[k].dropped = true;
+        ++dropped_count;
+        continue;
+      }
+      pending[k].params = LlvmAdStackMaxReducerDeviceParams{};
+      // `output_slot` is assigned the round-local index after `level_dispatch` is finalised, just before the dispatch
+      // loop below; this matches the gfx launcher's per-round output-buffer reuse pattern.
+      pending[k].params.num_axes = static_cast<uint32_t>(num_axes);
+      pending[k].params.body_node_count = encoded.body_node_count;
+      pending[k].params.body_root_node_idx = static_cast<int32_t>(encoded.body_node_count) - 1;
+      for (std::size_t a = 0; a < num_axes; ++a) {
+        pending[k].params.per_axis_length[a] = static_cast<uint32_t>(per_axis_length[a]);
+        pending[k].params.per_axis_begin[a] = per_axis_begin[a];
+        pending[k].params.per_axis_var_id[a] = static_cast<int32_t>(a);
+      }
+      pending[k].body_bytecode = std::move(encoded.bytes);
+      pending[k].reads = std::move(encoded.body_reads);
+      level_dispatch.push_back(k);
+    }
+    if (level_dispatch.empty()) {
+      continue;
+    }
+
+    // Lazy-grow + (re-)publish the outputs buffer for this round. Sized to `level_dispatch.size()` i64 slots so each
+    // dispatched spec's `output_slot` is its position within `level_dispatch` (round-local), matching the gfx
+    // launcher's per-round output-buffer reuse. Re-publishing is required if the alloc grew across rounds because the
+    // runtime field stores a raw device pointer.
+    const std::size_t needed_output_bytes = level_dispatch.size() * sizeof(int64_t);
+    if (needed_output_bytes > adstack_max_reducer_outputs_capacity_) {
       Device::AllocParams alloc_params{};
-      alloc_params.size = std::max<std::size_t>(needed_params_bytes, 2 * adstack_max_reducer_params_capacity_);
+      alloc_params.size = std::max<std::size_t>(needed_output_bytes, 2 * adstack_max_reducer_outputs_capacity_);
       alloc_params.host_read = false;
       alloc_params.host_write = true;
       alloc_params.export_sharing = false;
@@ -627,52 +665,81 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       DeviceAllocation new_alloc;
       RhiResult res = llvm_device()->allocate_memory(alloc_params, &new_alloc);
       QD_ERROR_IF(res != RhiResult::success,
-                  "Failed to allocate {} bytes for adstack max reducer params buffer (err: {})", alloc_params.size,
+                  "Failed to allocate {} bytes for adstack max reducer outputs buffer (err: {})", alloc_params.size,
                   int(res));
-      adstack_max_reducer_params_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
-      adstack_max_reducer_params_capacity_ = alloc_params.size;
+      adstack_max_reducer_outputs_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+      adstack_max_reducer_outputs_capacity_ = alloc_params.size;
     }
-    void *params_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_params_alloc_);
-    copy_h2d(params_dev_ptr, &pending[k].params, needed_params_bytes);
+    void *outputs_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_outputs_alloc_);
+    copy_h2d(runtime_adstack_max_reducer_outputs_field_ptr_, &outputs_dev_ptr, sizeof(void *));
 
-    // Body bytecode buffer.
-    const std::size_t needed_bytecode_bytes = pending[k].body_bytecode.size();
-    if (needed_bytecode_bytes > adstack_max_reducer_bytecode_capacity_) {
-      Device::AllocParams alloc_params{};
-      alloc_params.size = std::max<std::size_t>(needed_bytecode_bytes, 2 * adstack_max_reducer_bytecode_capacity_);
-      alloc_params.host_read = false;
-      alloc_params.host_write = true;
-      alloc_params.export_sharing = false;
-      alloc_params.usage = AllocUsage::Storage;
-      DeviceAllocation new_alloc;
-      RhiResult res = llvm_device()->allocate_memory(alloc_params, &new_alloc);
-      QD_ERROR_IF(res != RhiResult::success,
-                  "Failed to allocate {} bytes for adstack max reducer bytecode buffer (err: {})", alloc_params.size,
-                  int(res));
-      adstack_max_reducer_bytecode_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
-      adstack_max_reducer_bytecode_capacity_ = alloc_params.size;
+    // Assign each ready spec's `output_slot` to its round-local index within `level_dispatch`, then h2d its params +
+    // body bytecode and invoke the single-threaded runtime function.
+    for (std::size_t i = 0; i < level_dispatch.size(); ++i) {
+      const std::size_t k = level_dispatch[i];
+      pending[k].params.output_slot = static_cast<uint32_t>(i);
+      const std::size_t needed_params_bytes = sizeof(LlvmAdStackMaxReducerDeviceParams);
+      if (needed_params_bytes > adstack_max_reducer_params_capacity_) {
+        Device::AllocParams alloc_params{};
+        alloc_params.size = std::max<std::size_t>(needed_params_bytes, 2 * adstack_max_reducer_params_capacity_);
+        alloc_params.host_read = false;
+        alloc_params.host_write = true;
+        alloc_params.export_sharing = false;
+        alloc_params.usage = AllocUsage::Storage;
+        DeviceAllocation new_alloc;
+        RhiResult res = llvm_device()->allocate_memory(alloc_params, &new_alloc);
+        QD_ERROR_IF(res != RhiResult::success,
+                    "Failed to allocate {} bytes for adstack max reducer params buffer (err: {})", alloc_params.size,
+                    int(res));
+        adstack_max_reducer_params_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+        adstack_max_reducer_params_capacity_ = alloc_params.size;
+      }
+      void *params_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_params_alloc_);
+      copy_h2d(params_dev_ptr, &pending[k].params, needed_params_bytes);
+
+      const std::size_t needed_bytecode_bytes = pending[k].body_bytecode.size();
+      if (needed_bytecode_bytes > adstack_max_reducer_bytecode_capacity_) {
+        Device::AllocParams alloc_params{};
+        alloc_params.size = std::max<std::size_t>(needed_bytecode_bytes, 2 * adstack_max_reducer_bytecode_capacity_);
+        alloc_params.host_read = false;
+        alloc_params.host_write = true;
+        alloc_params.export_sharing = false;
+        alloc_params.usage = AllocUsage::Storage;
+        DeviceAllocation new_alloc;
+        RhiResult res = llvm_device()->allocate_memory(alloc_params, &new_alloc);
+        QD_ERROR_IF(res != RhiResult::success,
+                    "Failed to allocate {} bytes for adstack max reducer bytecode buffer (err: {})", alloc_params.size,
+                    int(res));
+        adstack_max_reducer_bytecode_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+        adstack_max_reducer_bytecode_capacity_ = alloc_params.size;
+      }
+      void *bytecode_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_bytecode_alloc_);
+      copy_h2d(bytecode_dev_ptr, pending[k].body_bytecode.data(), needed_bytecode_bytes);
+
+      runtime_jit->call<void *, void *, void *, void *>("runtime_eval_adstack_max_reduce", llvm_runtime_,
+                                                        runtime_context_ptr_for_reducer, params_dev_ptr,
+                                                        bytecode_dev_ptr);
     }
-    void *bytecode_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_bytecode_alloc_);
-    copy_h2d(bytecode_dev_ptr, pending[k].body_bytecode.data(), needed_bytecode_bytes);
 
-    runtime_jit->call<void *, void *, void *, void *>("runtime_eval_adstack_max_reduce", llvm_runtime_,
-                                                      runtime_context_ptr_for_reducer, params_dev_ptr,
-                                                      bytecode_dev_ptr);
-  }
-
-  // Read back the per-spec output slots. Single contiguous d2h.
-  std::vector<int64_t> outputs_host(pending.size(), 0);
-  copy_d2h(outputs_host.data(), outputs_dev_ptr, needed_output_bytes);
-  for (std::size_t k = 0; k < pending.size(); ++k) {
-    int64_t v = outputs_host[k];
-    if (v == std::numeric_limits<int64_t>::min()) {
-      v = 0;  // empty-range sentinel from the runtime function; normalise to zero
-    }
-    result[pending[k].cache_key] = v;
-    if (cache != nullptr) {
-      populate_max_reducer_body_observations(pending[k].reads, ctx, cache);
-      cache->record_max_reducer_eval(pending[k].registry_id, pending[k].stack_id, pending[k].mor_node_idx, v,
-                                     std::move(pending[k].reads));
+    // Read back this round's output slots. The runtime function writes int64 values at `outputs[output_slot]`; each
+    // spec's `output_slot` is its round-local index within `level_dispatch`, so the d2h covers exactly the round's
+    // dispatched specs.
+    std::vector<int64_t> outputs_host(level_dispatch.size(), 0);
+    copy_d2h(outputs_host.data(), outputs_dev_ptr, needed_output_bytes);
+    for (std::size_t i = 0; i < level_dispatch.size(); ++i) {
+      const std::size_t k = level_dispatch[i];
+      int64_t v = outputs_host[i];
+      if (v == std::numeric_limits<int64_t>::min()) {
+        v = 0;
+      }
+      result[pending[k].cache_key] = v;
+      if (cache != nullptr) {
+        populate_max_reducer_body_observations(pending[k].reads, ctx, cache);
+        cache->record_max_reducer_eval(pending[k].registry_id, pending[k].stack_id, pending[k].mor_node_idx, v,
+                                       std::move(pending[k].reads));
+      }
+      pending[k].dispatched = true;
+      ++dispatched_count;
     }
   }
 

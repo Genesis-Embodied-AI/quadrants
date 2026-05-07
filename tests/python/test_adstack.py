@@ -4713,10 +4713,6 @@ def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
         )
 
 
-def _adstack_cache_prog():
-    return impl.get_runtime().prog
-
-
 @pytest.mark.parametrize(
     "shape, body_kind",
     # `shape` selects whether the per-task sizer's `1<<24` host-eval cap fires; the smaller shape stays well below the
@@ -4798,7 +4794,7 @@ def test_max_reducer_pins_stride_for_oversized_axis(shape, body_kind):
     for i in range(N_X):
         x[i] = 0.1
 
-    prog = _adstack_cache_prog()
+    prog = impl.get_runtime().prog
     prog._reset_max_reducer_dispatch_count()
 
     compute(arr)
@@ -4847,7 +4843,7 @@ def test_max_reducer_dispatch_counts_advance_on_input_mutation():
     for i in range(N):
         x[i] = 0.1
 
-    prog = _adstack_cache_prog()
+    prog = impl.get_runtime().prog
     prog._reset_max_reducer_dispatch_count()
 
     compute(a)
@@ -4896,7 +4892,7 @@ def test_max_reducer_grammar_fallback():
     for i in range(N):
         x[i] = 0.1
 
-    prog = _adstack_cache_prog()
+    prog = impl.get_runtime().prog
     prog._reset_max_reducer_dispatch_count()
 
     compute()
@@ -4917,40 +4913,40 @@ def test_above_cap_out_of_grammar_kernel_raises():
     # A reverse-mode kernel whose inner `range(...)` trip count is bound to an out-of-grammar `MaxOverRange` body and
     # whose iteration count exceeds the `1<<24` adstack-sizer cap surfaces a `QuadrantsAssertionError` at `qd.sync()`.
     #
-    # Internal details: the recognizer's chain capture (`recognize_adstack_max_reducer_specs`) descends through nested
-    # `MaxOverRange`s only while every inner `[begin, end)` is closed-form (`Const`, `ExternalTensorShape`, or
-    # already-captured deeper MORs). A ragged inner range like `for j_e in range(a[i_e])` reads its bound from an
-    # `ExternalTensorRead` indexed by the OUTER chain's bound var, which `max_reducer_bound_is_closed` rejects, so the
-    # chain stops at the outer `MaxOverRange` and the body recognizer then sees an inner `MaxOverRange` node which is
-    # not in the accepted body grammar (`Const / ExternalTensorRead / Add / Sub / Mul / Max`). The whole spec is dropped
-    # and the per-task sizer walks the outer `MaxOverRange` itself. With `a.shape[0] > 1<<24` the cap fires on the host
-    # evaluator (`QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node`, raised as `RuntimeError` on the CPU host
-    # fast path) and on the SPIR-V on-device sizer (the trailing overflow-flag slot of the metadata buffer, raised as
-    # `QuadrantsAssertionError` from the host post-readback in `publish_adstack_metadata_spirv`). The CUDA and AMDGPU
-    # LLVM-GPU sizer short-circuits the walk and returns 0 from `device_eval_node`'s `kMaxOverRange` arm so the
-    # single-thread on-device dispatch stays within the driver's TDR window; the cap-hit then surfaces indirectly via
-    # the existing `stack_push` overflow infrastructure on a subsequent main-kernel launch, and the resulting diagnostic
-    # message attribution depends on the kernel layout. That indirect path is covered by
-    # `test_adstack_overflow_diagnostic_and_auto_recovery`.
+    # Internal details: the recognizer's body grammar accepts only `Const / ExternalTensorRead / Add / Sub / Mul / Max /
+    # ExternalTensorShape / FieldLoad(literal-indices)`, and `max_reducer_body_is_recognizable` further restricts
+    # `ExternalTensorRead` leaves to dtypes whose value range cannot collide with the cache-revalidation sentinel
+    # (`INT64_MIN`) - `i8 / i16 / i32 / u8 / u16 / u32` only. An `i64` ndarray read passes the host evaluator
+    # (`evaluate_node`'s `ExternalTensorRead` arm reads any integer dtype) but fails the recognizer's dtype check, so the
+    # whole spec is dropped and the per-task sizer walks the outer `MaxOverRange` itself. With `a.shape[0] > 1<<24` the
+    # cap fires on the host evaluator (`QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node`, raised as
+    # `RuntimeError` on the CPU host fast path) and on the SPIR-V on-device sizer (the trailing overflow-flag slot of the
+    # metadata buffer, raised as `QuadrantsAssertionError` from the host post-readback in
+    # `publish_adstack_metadata_spirv`). The CUDA and AMDGPU LLVM-GPU sizer short-circuits the walk and returns 0 from
+    # `device_eval_node`'s `kMaxOverRange` arm so the single-thread on-device dispatch stays within the driver's TDR
+    # window; the cap-hit then surfaces indirectly via the existing `stack_push` overflow infrastructure on a subsequent
+    # main-kernel launch, and the resulting diagnostic message attribution depends on the kernel layout. That indirect
+    # path is covered by `test_adstack_overflow_diagnostic_and_auto_recovery`.
     N_X = 4
     shape = (1 << 24) + 1
     # All-zero gating ndarray keeps the forward kernel's actual inner-loop work at zero on every thread; the cap-hit is
     # purely a property of the symbolic `MaxOverRange` iteration count, so we do not need any cell to be non-zero for
     # the per-task sizer's walk to overflow the guard.
-    a_data = np.zeros(shape, dtype=np.int32)
-    a = qd.ndarray(qd.i32, shape=(shape,))
+    a_data = np.zeros(shape, dtype=np.int64)
+    a = qd.ndarray(qd.i64, shape=(shape,))
     a.from_numpy(a_data)
 
     x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
     loss = qd.field(qd.f32, shape=(), needs_grad=True)
 
     @qd.kernel
-    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+    def compute(a: qd.types.ndarray(dtype=qd.i64, ndim=1)):
         for i_e in range(a.shape[0]):
-            # `range(a[i_e])` makes the inner `MaxOverRange`'s `[begin, end)` depend on the outer chain's bound
-            # variable, which the recognizer's `max_reducer_bound_is_closed` rejects. The per-task sizer walks
-            # the outer `MaxOverRange(0, shape[0], ...)` itself, hits the `1<<24` cap, and raises on every
-            # backend.
+            # `a` is an `i64` ndarray, so the inner `MaxOverRange`'s `end` is an `ExternalTensorRead` with leaf dtype
+            # `i64`. `max_reducer_body_is_recognizable` rejects `i64 / u64` leaves (the cache-revalidation sentinel
+            # `INT64_MIN` is a legal value of an `i64` cell, so a mutated cache entry could false-hit on revalidation).
+            # The whole spec is dropped and the per-task sizer walks the outer `MaxOverRange(0, shape[0], ...)` itself,
+            # hits the `1<<24` cap, and raises on every backend.
             for j_e in range(a[i_e]):
                 n = a[j_e]
                 accum = 0.0
