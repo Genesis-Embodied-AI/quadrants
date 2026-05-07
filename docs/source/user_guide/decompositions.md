@@ -18,7 +18,7 @@ A few patterns to note:
 
 - **Shapes are fixed.** Calling any of these on a matrix outside the supported shapes raises an exception at trace time (`"SVD only supports 2D and 3D matrices."`, etc.). Larger matrices need a different path — typically a Jacobi-style sweep applied iteratively, which Quadrants does not currently provide out of the box.
   - **FIXME (message wording):** these exception strings are misleading — "2D matrix" / "3D matrix" conventionally means "rank-2 / rank-3 tensor" (any matrix is rank-2), but here the intent is "matrix of shape 2×2 / 3×3". They should be updated to e.g. `"SVD only supports 2×2 and 3×3 matrices."`. This page reproduces the messages as they are emitted today.
-- **All ops accept an optional `dt` argument.** When unspecified, it defaults to `impl.get_runtime().default_fp` — usually `qd.f32` unless overridden in `qd.init()`. Pass `dt=qd.f64` for the high-precision variant; passing `dt=qd.f32` explicitly is also fine if you want to be loud about it.
+- **All ops accept an optional `dt` argument.** When unspecified, it defaults to `impl.get_runtime().default_fp` — usually `qd.f32` unless overridden in `qd.init()`. Pass `dt=qd.f64` for the high-precision variant.
 - **Output shape matches the input shape.** A 3×3 input yields 3×3 outputs (and a length-3 vector for `solve` / eigenvalues); a 2×2 input yields 2×2 outputs.
 - **Real matrices only.** `qd.eig` returns complex results in a packed real layout (see below); the others all assume real-valued input and return real-valued output.
 
