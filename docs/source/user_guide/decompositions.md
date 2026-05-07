@@ -141,15 +141,6 @@ The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `
 - **Compile time.** Each call is unrolled per thread, so a kernel that calls `qd.svd` on a 3×3 matrix per element compiles a moderately large block of straight-line code per thread. Compile time is generally fine at these shapes; matrices larger than the cap may not be — register pressure plus unrolling explode quickly.
 - **Backend portability.** All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split.
 
-## What's missing
-
-For reference / planning purposes, the gaps users most often hit:
-
-- **Larger SVD / EVD.** Shapes above 3×3 are unsupported. For symmetric EVD up to ~12×12, a Jacobi sweep is the standard approach; for general SVD, a one-sided Jacobi or QR-with-shifts is the standard approach.
-- **`Matrix.inverse` shape cap.** Documented in [matrix_vector](matrix_vector.md): the closed-form cofactor inverse caps at 4×4. Larger inverses need an LU or Cholesky factorisation, neither of which is exposed today.
-- **`atomic_cas`.** Unrelated to decompositions, but the building block for spinlocks and lock-free dictionaries; not exposed in Python — `qd.atomic_*` covers add / sub / mul / min / max / and / or / xor but does not currently include compare-and-swap.
-- **3×3 `qd.eig`.** Only the 2×2 general (non-symmetric) eigendecomposition is provided. For 3×3, use `qd.sym_eig` if your matrix is symmetric.
-
 ## Related
 
 - [matrix_vector](matrix_vector.md) — element-wise / arithmetic matrix operations (`@`, `inverse`, `determinant`, `transpose`, dot, cross, norm, `outer_product`). Covers the operations whose implementation is a single closed-form formula.
