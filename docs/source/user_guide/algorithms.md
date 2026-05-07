@@ -1,0 +1,127 @@
+# Algorithms
+
+Device-wide algorithms — primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above grid-scope synchronization: they *use* block, subgroup, and grid primitives internally and expose a high-level entry point that the user calls from host (Python) code, not from inside a kernel.
+
+The current `qd.algorithms` namespace is small — two ops, both built around prefix-style internal kernels. The set is expected to grow over time (radix sort, reduce-by-key, select / compact).
+
+## What's available
+
+| Op                              | What it does                                | CUDA | AMDGPU | Vulkan | Metal |
+|---------------------------------|---------------------------------------------|------|--------|--------|-------|
+| `qd.algorithms.parallel_sort`   | Odd-even merge sort (in-place, key or key-value) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.PrefixSumExecutor` | Inclusive in-place prefix sum (i32 only)  | yes  | no     | yes    | no    |
+
+\* `parallel_sort` runs anywhere a Quadrants kernel runs; portability is inherited from the underlying kernel infrastructure. AMDGPU and Metal coverage is exercised less heavily than CUDA / Vulkan; report any failures.
+
+## Semantics
+
+### `qd.algorithms.parallel_sort(keys, values=None)`
+
+In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `field` or `ndarray`.
+
+```python
+keys = qd.field(qd.i32, shape=(N,))
+qd.algorithms.parallel_sort(keys)
+```
+
+```python
+keys = qd.field(qd.i32, shape=(N,))
+vals = qd.field(qd.f32, shape=(N,))
+qd.algorithms.parallel_sort(keys, vals)
+```
+
+- **Algorithm.** Batcher's odd-even merge sort. Time complexity `O(N log² N)`, work-efficient for small / mid-sized arrays.
+- **Key dtype.** Whatever the key field's dtype is, as long as `<` is meaningful for it (integer and float types).
+- **Stability.** Odd-even merge sort is *not* a stable sort — equal keys may be reordered relative to one another. If stability matters, encode tiebreakers into the keys (e.g. pack the original index into the low bits).
+- **Memory.** Strictly in-place — no auxiliary buffers from the caller's perspective.
+- **Performance characteristic.** Beats radix-style sorts for small N (roughly N ≲ 4K), losing to them at large N. For million-element key sets prefer a radix sort (qipc / CUB-style); for thousands or tens of thousands, this is a fine choice.
+
+### `qd.algorithms.PrefixSumExecutor`
+
+Inclusive in-place prefix sum (scan) over a 1-D `i32` field. Construct once with the array length, then call `.run(field)` to scan.
+
+```python
+psum = qd.algorithms.PrefixSumExecutor(N)
+arr  = qd.field(qd.i32, shape=(N,))
+# ... fill arr ...
+psum.run(arr)
+# arr now holds the inclusive prefix sum: arr[i] = sum(arr_original[0..=i]).
+```
+
+Constructor:
+
+- `length: int` — the maximum number of elements the executor can scan. Internally allocates an auxiliary `qd.field(i32, shape=padded_length)` sized to the Kogge-Stone hierarchy (block size = 64).
+
+`run(input_arr)`:
+
+- `input_arr` must be a 1-D `qd.field(qd.i32, shape=(L,))` with `L <= length`.
+- Returns nothing; `input_arr` is overwritten with the scan result.
+
+Constraints:
+
+- **Dtype:** `qd.i32` only. Calling with any other dtype raises `RuntimeError("Only qd.i32 type is supported for prefix sum.")`.
+- **Inclusive only.** No exclusive variant exposed. To convert to exclusive, post-process: `exclusive[i] = inclusive[i] - input_original[i]`.
+- **Backend coverage.** CUDA and Vulkan only. AMDGPU and Metal raise `RuntimeError(f"{arch} is not supported for prefix sum.")` at trace time. Cross-platform code that needs a portable exclusive scan currently has to roll its own (see, for example, the qipc Onesweep / decoupled-look-back scan).
+
+The implementation is a Kogge-Stone hierarchical scan: per-block inclusive scan on shared memory, then a small recursive scan over per-block totals, then a uniform-add pass to propagate back. This means the executor reuses the underlying buffer across calls, which is why it's a class (allocate once, run many times) rather than a free function.
+
+## Examples
+
+### Sort indices by per-element key
+
+```python
+N = 1000
+keys = qd.field(qd.f32, shape=(N,))
+indices = qd.field(qd.i32, shape=(N,))
+
+@qd.kernel
+def init() -> None:
+    for i in range(N):
+        keys[i] = qd.random()
+        indices[i] = i
+
+init()
+qd.algorithms.parallel_sort(keys, indices)
+# keys is now ascending; indices[k] is the original index of the k-th smallest key.
+```
+
+### Compact-array offsets via prefix sum
+
+```python
+N = 100_000
+flags  = qd.field(qd.i32, shape=(N,))   # 0 or 1 per element
+offsets = qd.field(qd.i32, shape=(N,))
+
+@qd.kernel
+def populate(input: qd.types.NDArray[qd.f32, 1], threshold: qd.f32) -> None:
+    for i in range(N):
+        flags[i] = 1 if input[i] > threshold else 0
+
+@qd.kernel
+def copy_flags() -> None:
+    for i in range(N):
+        offsets[i] = flags[i]
+
+scan = qd.algorithms.PrefixSumExecutor(N)
+
+populate(input, 0.5)
+copy_flags()
+scan.run(offsets)
+# offsets[i] is now the 1-based output position of element i if it was selected.
+```
+
+The compact-output kernel reads `offsets[i]` (or `offsets[i] - flags[i]` for 0-based) to decide where to write surviving elements. This is the textbook scan-based select / compact pattern; the only Quadrants-specific note is the `i32`-only restriction.
+
+## Performance and portability notes
+
+- **`parallel_sort` is `O(N log² N)`**, which is fine up to a few thousand elements and noticeably slower than a radix sort beyond that. The algorithm is stable in *control flow* but not stable in element ordering — important for code that compacts after sorting.
+- **`PrefixSumExecutor` is `i32`-only and CUDA + Vulkan-only.** This is the most-often-hit limitation in cross-platform code. If you need `u32` / `i64` / `f32` / `f64` keys or AMDGPU / Metal coverage, you currently have to compose your own scan from `qd.simt.subgroup.inclusive_add` (per-block) plus an outer kernel that handles the multi-block roll-up — or use the qipc Onesweep / decoupled-look-back scan if you have a hard dependency on it.
+- **Allocate the executor once, run it many times.** The internal auxiliary buffer is sized to the constructor's `length`; constructing per call wastes allocation traffic. Each `.run()` is a sequence of kernel launches; the cost is `O(N / cache_line)` global memory bandwidth, not user-visible launch overhead.
+- **No fence required between `populate` and `scan.run`.** Each algorithm kernel launches its own kernels under the hood, and the kernel boundary serializes against prior writes from host-launched kernels.
+
+## Related
+
+- `qd.simt.block.*` — the block-scope reductions and shared-memory primitives that algorithm kernels build on.
+- `qd.simt.subgroup.*` — `inclusive_add` and friends, what the per-block scan stage of `PrefixSumExecutor` actually calls.
+- `qd.simt.grid.memfence()` — the grid-scope memory fence that decoupled-look-back scans (a more efficient alternative to Kogge-Stone) require.
+- [parallelization](parallelization.md) — broader synchronization story, including how `qd.algorithms` operations compose with hand-written kernels.
