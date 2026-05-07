@@ -69,7 +69,7 @@ def thread_idx():
 
 def global_thread_idx():
     arch = impl.get_runtime().prog.config().arch
-    if arch == _qd_core.cuda or _qd_core.amdgpu:
+    if arch == _qd_core.cuda or arch == _qd_core.amdgpu:
         return impl.get_runtime().compiling_callable.ast_builder().insert_thread_idx_expr()
     if arch_uses_spv(arch):
         return impl.call_internal("globalInvocationId", with_runtime_context=False)

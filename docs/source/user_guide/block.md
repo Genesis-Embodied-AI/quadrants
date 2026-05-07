@@ -8,19 +8,19 @@ The closely-related grid-level fence (`qd.simt.grid.mem_fence()`) is documented 
 
 ## What's available
 
-| Op                                              | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) |
-|-------------------------------------------------|------|--------|-------------------------|
-| `block.sync()`                                  | yes  | yes    | yes                     |
-| `block.sync_all_nonzero(predicate)`             | yes  | no     | no                      |
-| `block.sync_any_nonzero(predicate)`             | yes  | no     | no                      |
-| `block.sync_count_nonzero(predicate)`           | yes  | no     | no                      |
-| `block.mem_fence()`                             | yes\*| no     | yes                     |
-| `block.SharedArray(shape, dtype)`               | yes  | yes    | yes                     |
-| `block.global_thread_idx()`                     | yes  | yes    | —                       |
-| `block.thread_idx()`                            | no   | no     | yes                     |
-| `grid.mem_fence()` (device-scope, see below)    | yes  | no     | no                      |
+| Op                                              | CUDA | AMDGPU | Vulkan | Metal |
+|-------------------------------------------------|------|--------|--------|-------|
+| `block.sync()`                                  | yes  | yes    | yes    | yes   |
+| `block.sync_all_nonzero(predicate)`             | yes  | no     | no     | no    |
+| `block.sync_any_nonzero(predicate)`             | yes  | no     | no     | no    |
+| `block.sync_count_nonzero(predicate)`           | yes  | no     | no     | no    |
+| `block.mem_fence()`                             | yes\*| no     | yes    | yes   |
+| `block.SharedArray(shape, dtype)`               | yes  | yes    | yes    | yes   |
+| `block.global_thread_idx()`                     | yes  | yes    | yes    | yes   |
+| `block.thread_idx()`                            | no   | no     | yes    | yes   |
+| `grid.mem_fence()` (device-scope, see below)    | yes  | no     | no     | no    |
 
-Calling a backend marked "no" raises `ValueError` from the Python layer at trace time. `global_thread_idx()` is verified on CUDA and AMDGPU; the SPIR-V codepath in the wrapper exists but is currently unreachable due to a control-flow quirk in the dispatch and is therefore left undocumented here.
+Calling a backend marked "no" raises `ValueError` from the Python layer at trace time. Vulkan and Metal share a SPIR-V codegen path (Metal goes through MoltenVK → MSL); they are listed as separate columns because a few ops have Metal-specific limitations that are called out below.
 
 \* On CUDA, `block.mem_fence()` currently lowers via `block_barrier` (i.e. `__syncthreads()`), which doubles as a memory fence but additionally requires thread convergence — meaning calling it from divergent control flow today deadlocks. A fix to lower `mem_fence()` to a pure `__threadfence_block()` is in flight as [quadrants#637](https://github.com/Genesis-Embodied-AI/quadrants/pull/637); once merged, the divergent-branch pattern shown in the `block.mem_fence()` semantics section below works as written. Until then, prefer calling `mem_fence()` from uniform control flow on CUDA.
 
@@ -94,7 +94,9 @@ A worked example with `Tile16x16` interaction is in [tile16](tile16.md).
 
 ### `block.global_thread_idx()`
 
-Returns the global thread index of the calling thread within the kernel launch. Verified on CUDA and AMDGPU.
+Returns the global thread index of the calling thread within the kernel launch.
+
+On CUDA / AMDGPU this lowers to the in-block thread index (`nvvm_read_ptx_sreg_tid_x` / `amdgcn_workitem_id_x`) plus the grid offset that the offload framework adds; on Vulkan / Metal it lowers to `globalInvocationId` (MoltenVK maps this to MSL `thread_position_in_grid`).
 
 On CUDA / AMDGPU this is the natural way to identify which work-item a thread should process when the kernel uses `qd.loop_config(block_dim=...)` — together with `block_dim`, you can recover the in-block thread index via `global_thread_idx() % block_dim`.
 

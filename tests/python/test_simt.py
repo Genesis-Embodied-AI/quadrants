@@ -569,6 +569,25 @@ def test_grid_memfence_deprecated_alias():
     assert a[0] == 11
 
 
+# Portable test for `block.global_thread_idx()`. Runs on every supported GPU backend; in particular,
+# verifies the SPIR-V dispatch path that was previously unreachable due to a Python-side dispatch bug.
+@test_utils.test(arch=qd.gpu)
+def test_block_global_thread_idx_portable():
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = qd.simt.block.global_thread_idx()
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i
+
+
 # The old SPIR-V-only no-arg subgroup reductions (`subgroup.reduce_add` / `reduce_mul` / `reduce_min`
 # / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`) and their Vulkan-specific tests have
 # been removed.  See `test_subgroup_reduce_add` / `test_subgroup_reduce_all_add` below for the
