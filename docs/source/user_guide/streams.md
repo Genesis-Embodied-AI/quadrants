@@ -119,42 +119,6 @@ with qd.create_stream() as s:
 # s.destroy() called automatically — waits for in-flight work
 ```
 
-### PyTorch interop (CUDA)
-
-When mixing Quadrants kernels with PyTorch operations on CUDA, both frameworks must use the same stream to avoid race conditions.
-
-#### Running Quadrants kernels on PyTorch's stream
-
-```python
-import torch
-from quadrants.lang.stream import Stream
-
-torch_stream_ptr = torch.cuda.current_stream().cuda_stream
-stream = Stream(torch_stream_ptr)
-
-physics_kernel(qd_stream=stream)
-observations = compute_obs_tensor()  # PyTorch op on the same stream
-apply_actions_kernel(qd_stream=stream)
-```
-
-Wrap PyTorch's raw `CUstream` pointer in a Quadrants `Stream` object. Do **not** call `destroy()` on this wrapper — PyTorch owns the underlying stream.
-
-#### Running PyTorch operations on a Quadrants stream
-
-```python
-qd_stream = qd.create_stream()
-torch_stream = torch.cuda.ExternalStream(qd_stream.handle)
-
-with torch.cuda.stream(torch_stream):
-    physics_kernel(qd_stream=qd_stream)
-    observations = compute_obs_tensor()
-    apply_actions_kernel(qd_stream=qd_stream)
-
-qd_stream.destroy()
-```
-
-`Stream.handle` is the raw `CUstream` pointer, which `torch.cuda.ExternalStream` accepts directly.
-
 ## Limitations
 
 - **Not compatible with graphs.** Do not pass `qd_stream` to a kernel decorated with `graph=True`.
