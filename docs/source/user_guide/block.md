@@ -2,7 +2,7 @@
 
 Block-level primitives operate on the threads of a single CUDA thread block (CTA) / AMDGPU workgroup / Vulkan or Metal workgroup. They include thread barriers, memory fences, shared memory, and per-thread indexing helpers — the building blocks for cooperation among threads of the same block.
 
-Block ops live under `qd.simt.block`. They are written so the same Python source compiles to the right vendor primitive on each backend; calling a backend that has not implemented an op raises `ValueError` from the Python layer at trace time.
+Block ops live under `qd.simt.block`. They are written so the same Python source compiles to the right vendor primitive on each backend. As of this writing every op on this page is portable across CUDA, AMDGPU, Vulkan, and Metal; the only remaining caveats (called out in the support-table footnotes below) are around CUDA's `block.mem_fence()` lowering, Metal's cross-workgroup memory-ordering on older Apple hardware, and a perf trade-off for the emulated `block.sync_*_nonzero` ops on non-CUDA backends. None of them are correctness gaps. If a future op is added that is not yet portable, the Python layer will raise `ValueError` at trace time on the unsupported backend.
 
 The closely-related grid-level fence (`qd.simt.grid.mem_fence()`) is documented at the end of this page, since users picking between a block-scope and a device-scope fence need to see both side by side.
 
@@ -20,7 +20,7 @@ The closely-related grid-level fence (`qd.simt.grid.mem_fence()`) is documented 
 | `block.thread_idx()`                            | yes  | yes    | yes    | yes   |
 | `grid.mem_fence()` (device-scope, see below)    | yes  | yes    | yes    | yes\*\* |
 
-Calling a backend marked "no" raises `ValueError` from the Python layer at trace time. Vulkan and Metal share a SPIR-V codegen path (Metal goes through MoltenVK → MSL); they are listed as separate columns because a few ops have Metal-specific limitations that are called out below.
+Vulkan and Metal share a SPIR-V codegen path (Metal goes through MoltenVK → MSL); they are listed as separate columns because a couple of ops have Metal-specific caveats called out below. Footnoted entries are still functional, just with the limitations the footnote describes.
 
 \* On CUDA, `block.mem_fence()` currently lowers via `block_barrier` (i.e. `__syncthreads()`), which doubles as a memory fence but additionally requires thread convergence — meaning calling it from divergent control flow today deadlocks. A fix to lower `mem_fence()` to a pure `__threadfence_block()` is in flight as [quadrants#637](https://github.com/Genesis-Embodied-AI/quadrants/pull/637); once merged, the divergent-branch pattern shown in the `block.mem_fence()` semantics section below works as written. Until then, prefer calling `mem_fence()` from uniform control flow on CUDA.
 
@@ -42,7 +42,13 @@ Two of these ops sound similar but have very different semantics, and mixing the
 - `block.sync()` is a **thread-converging barrier**. Every thread in the block must reach the call site before any thread proceeds. It also implies a memory fence at block scope.
 - `block.mem_fence()` is a **memory fence only**, at block scope. It orders memory operations but does not require thread convergence — it is safe to call from divergent control flow (e.g. inside `if tid == 0`).
 
-Concretely, on the SPIR-V backend `sync()` lowers to `workgroupBarrier` and `mem_fence()` lowers to `workgroupMemoryBarrier`. On CUDA, `sync()` lowers to `__syncthreads()`; `mem_fence()` is intended to lower to `__threadfence_block()` (a pure fence with no convergence requirement) — see the support-table caveat above. Calling `sync()` from a path that not all threads reach (a divergent `if`, an early `return`, etc.) is a classic GPU deadlock and applies to both backends.
+Concretely:
+
+- CUDA: `sync()` lowers to `__syncthreads()`; `mem_fence()` is intended to lower to `__threadfence_block()` (a pure fence with no convergence requirement) — see the support-table caveat above.
+- AMDGPU: `sync()` lowers to `s_barrier`; `mem_fence()` lowers to `__builtin_amdgcn_fence(__ATOMIC_ACQ_REL, "workgroup")`.
+- Vulkan / Metal (SPIR-V): `sync()` lowers to `workgroupBarrier`; `mem_fence()` lowers to `workgroupMemoryBarrier`.
+
+Calling `sync()` from a path that not all threads reach (a divergent `if`, an early `return`, etc.) is a classic GPU deadlock and applies to all backends.
 
 The corresponding distinction at device scope is `grid.mem_fence()` (memory fence across the entire grid, no thread synchronization). There is no block-style "device barrier" — to synchronize threads across blocks, finish the kernel and launch a new one.
 
