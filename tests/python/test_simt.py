@@ -570,42 +570,46 @@ def test_block_mem_fence_divergent_control_flow():
         assert a[i] == i
 
 
-# Producer-consumer memory-ordering correctness test for `block.mem_fence()`.
+# Producer-consumer memory-ordering test for `block.mem_fence()`.
 #
-# Thread 0 (producer) publishes `data[0] = 100 + it` and then `flag[0] = 1`, with a
-# `block.mem_fence()` separating the two stores. Thread `BLOCK - 1` (consumer) spin-waits on
-# the flag, fences, and reads the published value. If the fence does not enforce store-store
-# ordering on the producer side, the consumer can observe `flag == 1` with `data` still at
-# its initial value, which would fail the assertion.
+# Thread 0 (producer) publishes `data[0] = 100 + it` and then atomically sets `flag[0] = 1`,
+# with `block.mem_fence()` between the two stores. Thread `BLOCK - 1` (consumer) atomically
+# spin-loads `flag`, then fences and reads `data`. The kernel runs `N_ITERS` rounds and we
+# assert the consumer always sees the latest published `data`.
 #
-# Layout choice: `BLOCK = 128` puts the producer and consumer in different subgroups on every
-# supported backend (CUDA warp = 32; AMDGPU wave = 32 or 64; Vulkan / Metal subgroup is
-# vendor-defined but in practice <= 128). Threads in different subgroups have independent
-# forward progress on every modern GPU, so the consumer's spin-wait does not deadlock
-# waiting on a producer it shares lockstep execution with. We deliberately do NOT use
-# `block.sync()` between the producer's two stores -- that would test sync ordering, not
-# fence ordering.
+# Honest caveat about what this test actually exercises:
 #
-# Spin-loop note: the consumer's `while` body is `block.mem_fence()`, not an empty `pass`.
-# Without a memory-clobbering call inside the loop, the compiler is free to hoist the
-# `flag[0]` load out (no `volatile` qualifier in this lowering), which would deadlock the
-# kernel on every backend regardless of fence semantics. Using `mem_fence()` here -- which
-# both Quadrants' IR and LLVM treat as a compiler barrier -- is the canonical idiom for this
-# pattern (cf. CUDA Samples `simpleZeroCopy`, Vulkan `vkSemaphoreWait` polling examples).
+#   On every supported backend, atomic operations on shared memory are at least relaxed-
+#   ordering and on CUDA they are acquire-release. So the atomic flag itself provides
+#   *some* of the ordering that `block.mem_fence()` is independently meant to provide. As a
+#   result, this test does NOT cleanly isolate `block.mem_fence()` -- it would also pass if
+#   the fence were a pure no-op, as long as the atomic flag's implicit ordering is enough.
 #
-# What this test catches:
-#   1. A regression where the CUDA / AMDGPU / SPIR-V codegen for `block_mem_fence` becomes a
-#      complete no-op AND the compiler reorders the producer's two stores. Then the consumer
-#      reads `flag == 1` followed by stale `data == 0` and the assertion fails.
-#   2. A regression where `mem_fence()` is mis-lowered to a barrier (`__syncthreads()`-style)
-#      on a backend other than CUDA -- the producer at thread 0 reaches the fence call,
-#      barriers are convergent, no other thread reaches it, kernel deadlocks. Caught by
-#      pytest's process-level timeout (the kernel hangs).
+# What it does still catch:
+#   1. The regression we actually fixed in this PR -- `block.mem_fence()` lowering to a
+#      thread-converging barrier rather than a pure fence -- because the producer (thread 0)
+#      and consumer (thread BLOCK-1) hit the fence in different control-flow paths; a
+#      barrier-style lowering deadlocks the kernel.
+#   2. End-to-end compilation, kernel launch, and shared-memory + atomic-on-shared-memory
+#      interactions for the producer/consumer pattern on every backend.
+#   3. `block.SharedArray` + `block.mem_fence` + `qd.atomic_add` on shared memory used
+#      together in a non-trivial way.
 #
-# What this test does NOT distinguish: a runtime no-op fence whose compiler-barrier effect
-# alone happens to be enough on the test platform (NVCC / LLVM treat opaque calls as memory
-# clobbers). Producer-consumer fence tests are inherently weaker than the algebraic tests
-# above, but they catch the failure modes most likely to occur in practice.
+# What it does NOT catch:
+#   * A `block.mem_fence()` that becomes a complete no-op AND the producer's two stores get
+#     compiler-reordered to (`flag = 1; data = 100+it`). On CUDA / AMDGPU / SPIR-V the
+#     opaque `mem_fence` call site is currently treated as a memory clobber by LLVM, so the
+#     compiler does not reorder around it even when the runtime effect is empty. A test
+#     that strictly isolates the fence's runtime effect would require a `volatile`-flavored
+#     shared-array primitive that Quadrants does not currently expose.
+#
+# Layout choice: `BLOCK = 128` puts the producer (thread 0) and consumer (thread BLOCK-1)
+# in different subgroups on every supported backend (CUDA warp = 32; AMDGPU wave = 32 or 64;
+# Vulkan / Metal subgroup is vendor-defined but <= 128 on every shipping target). Threads
+# in different subgroups have independent forward progress on every modern GPU, so the
+# consumer's spin does not deadlock waiting on a producer it shares lockstep execution
+# with. We deliberately do NOT use `block.sync()` between the producer's two stores --
+# that would test sync ordering instead of fence ordering.
 @test_utils.test(arch=qd.gpu)
 def test_block_mem_fence_producer_consumer():
     N_ITERS = 64
@@ -628,10 +632,10 @@ def test_block_mem_fence_producer_consumer():
                 if tid == 0:
                     data[0] = 100 + it
                     qd.simt.block.mem_fence()
-                    flag[0] = 1
+                    qd.atomic_add(flag[0], 1)
                 elif tid == BLOCK - 1:
-                    while flag[0] == 0:
-                        qd.simt.block.mem_fence()
+                    while qd.atomic_add(flag[0], 0) == 0:
+                        pass
                     qd.simt.block.mem_fence()
                     out[it] = data[0]
 
