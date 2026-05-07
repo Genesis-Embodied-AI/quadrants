@@ -397,6 +397,11 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       llvm_val[stmt] = emit_amdgpu_shuffle_down(
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type, offset);
+    } else if (stmt->func_name == "subgroupShuffleUp") {
+      auto offset = builder->CreateZExtOrTrunc(llvm_val[stmt->args[1]], llvm::Type::getInt32Ty(*llvm_context));
+      llvm_val[stmt] = emit_amdgpu_shuffle_up(
+          /* value=*/llvm_val[stmt->args[0]],
+          /* dt=*/stmt->args[0]->ret_type, offset);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
     } else {
@@ -470,6 +475,21 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
       return call("amdgpu_shuffle_down_i64", offset, value);
     QD_ERROR("subgroup shuffle_down: unsupported type {} on AMDGPU", data_type_name(dt));
+    return nullptr;
+  }
+
+  // FIXME: Same DPP fast-path opportunity as `emit_amdgpu_shuffle_down` —
+  // currently emulates `shuffle_up` via `ds_bpermute` (~50 cycle latency).
+  llvm::Value *emit_amdgpu_shuffle_up(llvm::Value *value, DataType dt, llvm::Value *offset) {
+    if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::u32))
+      return call("amdgpu_shuffle_up_i32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f32))
+      return call("amdgpu_shuffle_up_f32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f64))
+      return call("amdgpu_shuffle_up_f64", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
+      return call("amdgpu_shuffle_up_i64", offset, value);
+    QD_ERROR("subgroup shuffle_up: unsupported type {} on AMDGPU", data_type_name(dt));
     return nullptr;
   }
 

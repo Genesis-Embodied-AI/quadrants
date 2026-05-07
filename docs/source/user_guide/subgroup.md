@@ -14,14 +14,14 @@ The full Python API is grouped here by category. The first column lists each op,
 |---------------------------------------------|------|--------|-------------------------|------------------------------|
 | `subgroup.shuffle(value, index)`            | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 | `subgroup.shuffle_down(value, offset)`      | yes  | yes\*  | yes                     | i32, u32, f32, f64, i64, u64 |
-| `subgroup.shuffle_up(value, offset)`        | no   | no     | yes                     | i32, u32, f32, f64, i64, u64 |
-| `subgroup.shuffle_xor(value, mask)`         | no   | no     | no                      | — (TODO stub on every backend) |
+| `subgroup.shuffle_up(value, offset)`        | yes  | yes\*  | yes                     | i32, u32, f32, f64, i64, u64 |
+| `subgroup.shuffle_xor(value, mask)`         | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 | `subgroup.broadcast(value, index)`          | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
-| `subgroup.broadcast_first(value)`           | no   | no     | no                      | — (TODO stub on every backend) |
+| `subgroup.broadcast_first(value)`           | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 
-\* AMDGPU `shuffle_down` (and therefore `reduce_add`, which is built on it) is currently emulated via `ds_bpermute` (~50 cycle latency).
+\* AMDGPU `shuffle_down` / `shuffle_up` (and therefore `reduce_add`, which is built on `shuffle_down`) are currently emulated via `ds_bpermute` (~50 cycle latency).
 
-The remaining shuffle flavours (`shuffle_up`, `shuffle_xor`) are exposed in the Python module but are not yet implemented across backends. Calling them will fail at codegen. Use `shuffle` with an explicit lane index in the meantime — every shuffle pattern can be expressed that way.
+`shuffle_xor` and `broadcast_first` are portable `@qd.func` wrappers on top of `shuffle` / `broadcast` (`shuffle_xor(value, mask)` ≡ `shuffle(value, lane ^ mask)`; `broadcast_first(value)` ≡ `broadcast(value, qd.u32(0))`). They inline at trace time and run wherever the underlying op runs.
 
 ### Identification and control
 
@@ -91,10 +91,18 @@ Lane `i` returns the `value` held by lane `i + offset`. Lanes near the top of th
 
 ### `shuffle_up(value, offset)`
 
-Lane `i` returns the `value` held by lane `i - offset`. Lanes near the bottom of the subgroup — where `i - offset < 0` — receive an implementation-defined value (typically their own `value`).
+Lane `i` returns the `value` held by lane `i - offset`. Lanes near the bottom of the subgroup — where `i - offset < 0` — receive an implementation-defined value (typically their own `value`), so the bottom `offset` lanes' results should be ignored or masked.
 
-- Same dtype rules as `shuffle` / `shuffle_down`.
-- Currently lowered only on SPIR-V (`OpGroupNonUniformShuffleUp`). CUDA and AMDGPU fall through to the generic LLVM runtime-call path and fail to link; until they are added, emulate with an explicit `shuffle(value, lane - offset)`.
+- Same dtype rules as `shuffle` / `shuffle_down`; `offset` is a `u32`.
+- Maps to `__shfl_up_sync` on CUDA and `OpGroupNonUniformShuffleUp` on SPIR-V. On AMDGPU it is currently emulated with `ds_bpermute((lane - offset) * 4, value)` (same fast-path FIXME as `shuffle_down`).
+
+### `shuffle_xor(value, mask)`
+
+Lane `i` returns the `value` held by lane `i ^ mask`. Convenient for butterfly patterns (used internally by `reduce_all_add`).
+
+- Same dtype rules as `shuffle`; `mask` is a `u32`.
+- Implemented portably as a `@qd.func` over `shuffle`: every backend that lowers `shuffle` therefore lowers `shuffle_xor` with no additional codegen path. Inlines at trace time into a single `shuffle(value, u32(invocation_id()) ^ mask)`.
+- The XOR partner must be inside the active subgroup; behaviour outside that range is implementation-defined (same caveat as `shuffle`).
 
 ### `broadcast(value, index)`
 
@@ -103,6 +111,13 @@ Every lane in the subgroup returns the `value` held by the lane whose subgroup-l
 - Same dtype rules as `shuffle`.
 - Maps to `__shfl_sync` on CUDA, `ds_bpermute` on AMDGPU, and `OpGroupNonUniformBroadcast` on SPIR-V.
 - **Important: on SPIR-V, `index` must be dynamically uniform** — the same value on every lane in the subgroup. Passing a per-lane varying `index` is undefined behavior, because `OpGroupNonUniformBroadcast` requires its `Id` operand to be dynamically uniform across the subgroup. On CUDA / AMDGPU, `index` may vary per lane and the call is identical to `shuffle(value, index)`. If you need a varying source lane, use `shuffle` directly.
+
+### `broadcast_first(value)`
+
+Every lane returns lane 0's `value`. Convenience wrapper for the common "read lane 0 from every lane" pattern.
+
+- Same dtype rules as `broadcast`.
+- Implemented portably as a `@qd.func` over `broadcast(value, qd.u32(0))`: every backend that lowers `broadcast` therefore lowers `broadcast_first`. The `0` index is trivially dynamically uniform, so the SPIR-V `OpGroupNonUniformBroadcast` requirement is satisfied. Inlines at trace time.
 
 ### Common to the data-movement ops
 
@@ -161,7 +176,7 @@ Per-lane inclusive scans over the full subgroup. Lane `i` receives `v[0] op v[1]
 - `_add`, `_mul`, `_min`, `_max` accept integer and float dtypes; `_and`, `_or`, `_xor` accept integer dtypes only.
 - The operation is over the full subgroup; there is no sized variant. For sums, a sized portable inclusive scan can be derived from `reduce_add` plus a prefix-fixup pattern.
 
-### `shuffle_xor`, `broadcast_first`, `exclusive_*`, `all_true`, `any_true`, `all_equal`
+### `exclusive_*`, `all_true`, `any_true`, `all_equal`
 
 These names are present in `python/quadrants/lang/simt/subgroup.py` but are currently `# TODO` stubs that return `None` on every backend. They are listed in the support matrices above for completeness — calling them produces a tracing failure rather than a useful operation. Do not depend on them today.
 
@@ -296,8 +311,9 @@ After the call, lane `k` holds `a[0] + a[1] + ... + a[k]`. This compiles only on
 
 ## Performance notes
 
-- Shuffles are register-to-register on CUDA (`__shfl_sync`, `__shfl_down_sync`) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.
-- AMDGPU `shuffle` and `shuffle_down` both go through `ds_permute` / `ds_bpermute` today (LDS-routed, roughly tens of cycles).
+- Shuffles are register-to-register on CUDA (`__shfl_sync`, `__shfl_down_sync`, `__shfl_up_sync`) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.
+- AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` all go through `ds_permute` / `ds_bpermute` today (LDS-routed, roughly tens of cycles).
+- `shuffle_xor` and `broadcast_first` are `@qd.func` wrappers over `shuffle` / `broadcast` and inline at trace time, so on every backend they cost exactly the same as the underlying op.
 - `reduce_add` and `reduce_all_add` both issue exactly `log2_size` shuffles and `log2_size` adds per call. No barriers, no shared memory, no launch overhead (they inline).
 - Pick `reduce_all_add` over `reduce_add + broadcast` when you need the result in every lane — same cost, one fewer shuffle.
 - 64-bit dtypes (`i64`, `u64`, `f64`) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.

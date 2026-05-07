@@ -662,6 +662,84 @@ def test_subgroup_shuffle_down(dtype):
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_up(dtype):
+    """shuffle_up: each lane reads from lane_id - offset."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.shuffle_up(src[i], qd.u32(1))
+
+    _init_field(src, N, dtype)
+
+    foo()
+
+    # Lane 1 reads from lane 0, lane 2 from lane 1, lane 3 from lane 2
+    # (within the guaranteed min subgroup of 4 lanes, lane 0's result is undefined).
+    assert dst[1] == src[0]
+    assert dst[2] == src[1]
+    assert dst[3] == src[2]
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_xor(dtype):
+    """shuffle_xor: each lane reads from lane_id ^ mask. Wrapper version of the manual XOR
+    pattern tested in test_subgroup_shuffle_xor_pattern."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.shuffle_xor(src[i], qd.u32(1))
+
+    _init_field(src, N, dtype)
+
+    foo()
+
+    # Lanes 0-3 are in the same subgroup: 0<->1 swap, 2<->3 swap.
+    assert dst[0] == src[1]
+    assert dst[1] == src[0]
+    assert dst[2] == src[3]
+    assert dst[3] == src[2]
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_broadcast_first(dtype):
+    """broadcast_first: every lane gets lane 0's value. Portable @qd.func wrapper over
+    broadcast(value, 0)."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    a = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = subgroup.broadcast_first(a[i])
+
+    _init_field(a, N, dtype)
+    expected = a[0]
+
+    foo()
+
+    # Lanes 0-3 are guaranteed to share a subgroup (min size is 4).
+    for i in range(4):
+        assert a[i] == expected
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_down_reduction(dtype):
     """Tree reduction via shuffle_down, summing 4 values."""
     _skip_if_f64_unsupported(dtype)

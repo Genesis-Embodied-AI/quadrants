@@ -65,13 +65,19 @@ def all_equal(value):
     pass
 
 
-def broadcast_first(value):
-    # TODO
-    pass
-
-
 def broadcast(value, index):
     return impl.call_internal("subgroupBroadcast", value, index, with_runtime_context=False)
+
+
+@func
+def broadcast_first(value):
+    """Broadcast lane 0's ``value`` to every lane in the subgroup.
+
+    Equivalent to ``broadcast(value, qd.u32(0))``; ``0`` is trivially dynamically uniform, so the
+    SPIR-V ``OpGroupNonUniformBroadcast`` requirement is satisfied. Decorated with ``@qd.func`` and
+    inlined into the calling kernel.
+    """
+    return broadcast(value, u32(0))
 
 
 def group_size():
@@ -188,9 +194,18 @@ def shuffle(value, index):
     return impl.call_internal("subgroupShuffle", value, index, with_runtime_context=False)
 
 
+@func
 def shuffle_xor(value, mask):
-    # TODO
-    pass
+    """Lane ``i`` reads ``value`` from lane ``i ^ mask``.
+
+    Implemented portably as ``shuffle(value, lane ^ mask)``: every backend that lowers
+    ``shuffle`` therefore lowers ``shuffle_xor``. ``mask`` is a ``u32`` and must place the
+    XOR partner inside the active subgroup; results outside that range are
+    implementation-defined (same caveat as ``shuffle``). Decorated with ``@qd.func`` and inlined
+    into the calling kernel.
+    """
+    lane = invocation_id()
+    return shuffle(value, u32(lane) ^ mask)
 
 
 def shuffle_up(value, offset):
