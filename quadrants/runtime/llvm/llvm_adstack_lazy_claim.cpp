@@ -630,8 +630,11 @@ void LlvmRuntimeExecutor::ensure_adstack_heap_float(std::size_t needed_bytes) {
 void LlvmRuntimeExecutor::check_adstack_overflow() {
   // Called from `synchronize_and_assert()` on every qd.sync(), plus per-launch from `Program::launch_kernel`. The
   // flag lives in pinned host memory (allocated at `materialize_runtime`); polling is a relaxed atomic load/exchange
-  // on the cached host pointer via `std::atomic<int64_t>` reinterpret_cast — no DtoH, no JIT call. Available on all
-  // backends because the pinned-host memory is in the host process address space regardless of where the kernel ran.
+  // on the cached host pointer via `std::atomic<int64_t>` reinterpret_cast - no DtoH, no JIT call, no sync drain.
+  // Available on all backends because the pinned-host memory is in the host process address space regardless of
+  // where the kernel that wrote it ran. The reinterpret_cast is portable because `std::atomic<int64_t>` is
+  // layout-compatible with `int64_t` on every target (verified by the static_assert below); see also Itanium ABI /
+  // MSVC ABI lock-free guarantees.
   //
   // Returns early when the slot has not been allocated yet (e.g. a C++ test that constructs Program without
   // materializing the runtime and then triggers `Program::finalize -> synchronize`).
