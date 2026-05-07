@@ -121,7 +121,7 @@ with qd.create_stream() as s:
 
 ### PyTorch interop (CUDA)
 
-When mixing Quadrants kernels with PyTorch operations on CUDA, both frameworks must use the same stream to avoid race conditions. Without explicit stream management, Quadrants and PyTorch may launch work on different streams with no ordering guarantees, leading to intermittent data corruption.
+When mixing Quadrants kernels with PyTorch operations on CUDA, both frameworks must use the same stream to avoid race conditions.
 
 #### Running Quadrants kernels on PyTorch's stream
 
