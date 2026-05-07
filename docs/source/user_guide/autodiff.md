@@ -370,16 +370,22 @@ The safe rule: populate loop-bound ndarrays before the forward call and leave th
 
 ### Inner reverse-mode loop with a complex bound at very large extent
 
-An arbitrarily large enclosing range works only when the inner trip count fits a fixed subset of expressions; other shapes cap at ~16 million enclosing iterations and raise `RuntimeError: ... iteration count ... exceeds the 16777216 guard` past that.
+Consider a reverse-mode kernel with two nested loops where the enclosed loop's iteration count depends on the outer loop variable through an arithmetic expression on an ndarray index:
 
-Two categories of bound expression:
+```python
+for i in range(arr.shape[0]):       # outer loop
+    for j in range(arr[i // 2]):    # enclosed loop: for <var> in range(<bound expression>)
+        ...
+```
 
-- *Works at any enclosing-range size:* integer ndarray reads up to 32 bits wide (single- or multi-axis, indexed by literal constants or enclosing loop variables), field reads of the same width indexed by literal constants or enclosing loop variables (`my_field[None]`, `my_field[k]` for a constant `k`, `my_field[i]` where `i` is an enclosing loop variable), `arr.shape[k]` shape terms, literal integer constants, and `+`, `-`, `*`, `max` of those.
-- *Caps at the threshold:* 64-bit integer ndarray or field reads, arithmetic-indexed reads (`arr[i // 2]`, `arr[i % 4]`), and ragged inner ranges whose own bound depends on an enclosing loop variable through an unsupported leaf shape.
+The enclosed loop's iteration count `arr[i // 2]` is what we call the enclosed loop's *bound expression*. Reverse-mode autodiff needs an upper bound on how many times the enclosed loop body executes across the whole kernel. To do so, the compiler analyses the bound expression at launch time by taking one of the two evaluation paths based on its structure:
 
-A concrete example that hits the cap is `for j in range(arr[i // 2]):` with `arr[0] = (1 << 24) + 1`.
+- **Parallel:** integer ndarray reads up to 32 bits wide, single- or multi-axis, indexed by literal constants or outer loop variables are evaluated in parallel. Field reads of the same width and the same indexing rules apply: `my_field[None]`, `my_field[k]` for a constant `k`, or `my_field[i]` where `i` is an outer loop variable. The shape term `arr.shape[k]`. Literal integer constants. And any `+`, `-`, `*`, `max` of those. The outer loop can run any number of iterations.
+- **Sequential:** 64-bit integer ndarray or field reads, arithmetic-indexed reads (`arr[i // 2]`, `arr[i % 4]`), or any nested reads where the index is itself a ndarray or field read result (e.g. `arr1[arr2[i]]`, `my_field[arr[i]]`) fallbacks to sequential evaluation. Nested loops are supported, but the classification propagates outward across loop nesting: if any enclosed loop's bound is sequential, the enclosing bound is sequential too. The outer loop is capped at 2^24 = 16 777 216 iterations; past that the kernel raises `RuntimeError: ... iteration count ... exceeds the 16777216 guard`. This cap is artificial. It keeps the single-thread GPU evaluation time tractable.
 
-Workaround: rewrite the trip count to stay within the supported subset, or shrink the enclosing loop below the threshold.
+In the example above, the iteration count of the enclosed loop takes the sequential path because of the `i // 2` index, which means that it would raise at launch for `arr.shape[0] = (1 << 24) + 1`.
+
+Workaround: rewrite the bound expression so it takes the parallel path (e.g. precompute `bounds[i] = arr[i // 2]` into a persistent separate buffer, pass `bounds` in as an input, and use `for j in range(bounds[i]):`), or keep the outer loop count below 2^24.
 
 ## Performance characteristics
 
@@ -420,6 +426,12 @@ def k_data_dependent(a):
     for i in range(a.shape[0]):
         while a[i] < 10:              # bound that can only be known by running the loop body
             a[i] = a[i] + 1
+
+@qd.kernel
+def k_inner_struct_for(a, field):
+    for i in range(a.shape[0]):
+        for j in field:               # struct-for as the enclosed loop with reverse-mode pushes
+            ...
 ```
 
 ## Appendix B: gate-index shapes that capture vs fall back to the worst-case heap
