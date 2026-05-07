@@ -643,6 +643,52 @@ def test_block_thread_idx_portable():
         assert a[i] == i
 
 
+# Multi-block coverage for `block.thread_idx()`: with block_dim=8 and loop total 32, the kernel
+# runs across 4 blocks and the in-block index must reset to 0 at each block boundary. Without
+# this case, a regression that aliased `block.thread_idx()` to `block.global_thread_idx()` (or
+# vice versa) would slip past the single-block portable tests. CUDA / AMDGPU lower this to the
+# `tid.x` SREG; Vulkan / Metal lower it to `gl_LocalInvocationID.x` (which is what required the
+# `OpEntryPoint` interface fix earlier in this PR).
+@test_utils.test(arch=qd.gpu)
+def test_block_thread_idx_multi_block():
+    N = 32
+    BLOCK = 8
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=BLOCK)
+        for i in range(N):
+            a[i] = qd.simt.block.thread_idx()
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i % BLOCK
+
+
+# Multi-block coverage for `block.global_thread_idx()`: same shape as the test above, but the
+# expected values span the full grid (0..N-1) rather than wrapping per block. Together with
+# `test_block_thread_idx_multi_block` this distinguishes the two ops on every backend — a
+# `global_thread_idx == thread_idx` aliasing regression fails one of the two.
+@test_utils.test(arch=qd.gpu)
+def test_block_global_thread_idx_multi_block():
+    N = 32
+    BLOCK = 8
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=BLOCK)
+        for i in range(N):
+            a[i] = qd.simt.block.global_thread_idx()
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i
+
+
 # The old SPIR-V-only no-arg subgroup reductions (`subgroup.reduce_add` / `reduce_mul` / `reduce_min`
 # / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`) and their Vulkan-specific tests have
 # been removed.  See `test_subgroup_reduce_add` / `test_subgroup_reduce_all_add` below for the
