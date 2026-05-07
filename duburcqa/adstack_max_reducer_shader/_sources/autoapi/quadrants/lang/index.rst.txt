@@ -34,6 +34,7 @@ Submodules
    /autoapi/quadrants/lang/simt/index
    /autoapi/quadrants/lang/snode/index
    /autoapi/quadrants/lang/source_builder/index
+   /autoapi/quadrants/lang/stream/index
    /autoapi/quadrants/lang/struct/index
    /autoapi/quadrants/lang/util/index
 

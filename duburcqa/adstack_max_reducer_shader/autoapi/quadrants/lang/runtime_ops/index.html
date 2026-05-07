@@ -353,7 +353,7 @@
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.runtime_ops.sync" title="quadrants.lang.runtime_ops.sync"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sync</span></code></a>()</p></td>
-<td><p>Blocks the calling thread until all the previously</p></td>
+<td><p>Synchronizes the default stream.</p></td>
 </tr>
 </tbody>
 </table>
@@ -364,8 +364,9 @@
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.runtime_ops.sync">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.runtime_ops.</span></span><span class="sig-name descname"><span class="pre">sync</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/runtime_ops.html#sync"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.runtime_ops.sync" title="Link to this definition">#</a></dt>
-<dd><p>Blocks the calling thread until all the previously
-launched Quadrants kernels have completed.</p>
+<dd><p>Synchronizes the default stream.</p>
+<p>Blocks the calling thread until all work on the default GPU stream has completed.  Kernels launched on explicit
+streams created via <code class="xref py py-func docutils literal notranslate"><span class="pre">quadrants.create_stream()</span></code> are <strong>not</strong> waited on — call <code class="docutils literal notranslate"><span class="pre">stream.synchronize()</span></code> for those.</p>
 </dd></dl>
 
 </section>
