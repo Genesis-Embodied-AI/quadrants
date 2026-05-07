@@ -201,15 +201,13 @@ Program *LlvmRuntimeExecutor::get_program() const {
 void LlvmRuntimeExecutor::synchronize() {
   if (config_.arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
-    CUDAContext::get_instance().make_current();
-    CUDADriver::get_instance().context_synchronize();
+    CUDADriver::get_instance().stream_synchronize(nullptr);
 #else
     QD_ERROR("No CUDA support");
 #endif
   } else if (config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
-    AMDGPUContext::get_instance().make_current();
-    AMDGPUDriver::get_instance().device_synchronize();
+    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
 #else
     QD_ERROR("No AMDGPU support");
 #endif
