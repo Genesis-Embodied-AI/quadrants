@@ -1,9 +1,9 @@
 // Max-reducer dispatch for SPIR-V backends. Extracted out of `runtime.cpp` for the same reason
 // `adstack_bound_reducer_launch.cpp` is - keeps `GfxRuntime::launch_kernel` focused on the main-kernel record/submit
 // flow. Conditional on at least one task in the kernel having a non-empty
-// `TaskAttributes::AdStackSizingAttribs::max_reducer_specs`. Returns an empty map on devices missing PSB+Int64 caps or
-// on kernels with no captured specs; the caller falls through to the per-thread sizer eval, whose `1<<24` cap then
-// surfaces as a hard error via the device sizer's overflow-flag slot if the iteration count exceeds the cap.
+// `TaskAttributes::AdStackSizingAttribs::max_reducer_specs`. Returns an empty map on devices missing PSB+Int64 caps
+// or on kernels with no captured specs; the caller falls through to the per-thread sizer eval, whose `1<<24` cap
+// then surfaces as a hard error via the device sizer's overflow-flag slot if the iteration count exceeds the cap.
 //
 // Per-spec mechanism:
 // 1. Pack the cache key `(registry_id, stack_id, mor_node_idx)` and query `AdStackCache::try_max_reducer_cache_hit`. On

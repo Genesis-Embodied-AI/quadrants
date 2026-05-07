@@ -584,9 +584,9 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizin
   const std::size_t n_stacks = ad_stack.allocas.size();
   std::vector<AdStackSizeExprDeviceStackHeader> stack_headers(n_stacks);
   std::vector<const SerializedSizeExpr *> exprs(n_stacks, nullptr);
-  // Per-stack substituted trees: if the max-reducer dispatched a value for any
-  // captured `MaxOverRange`, swap it in as a `Const` BEFORE the device interpreter walks the tree. Storage owns
-  // the substituted copies so `exprs[i]` (a pointer) remains valid through `encode_bytecode_common`.
+  // Per-stack substituted trees: if the max-reducer dispatched a value for any captured `MaxOverRange`, swap it in
+  // as a `Const` BEFORE the device interpreter walks the tree. Storage owns the substituted copies so `exprs[i]` (a
+  // pointer) remains valid through `encode_bytecode_common`.
   std::vector<SerializedSizeExpr> substituted_storage(n_stacks);
   for (std::size_t i = 0; i < n_stacks; ++i) {
     stack_headers[i].entry_size_bytes = static_cast<uint32_t>(ad_stack.allocas[i].entry_size_bytes);
@@ -678,9 +678,9 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
   const std::size_t n_stacks = ad_stack.allocas.size();
   std::vector<AdStackSizeExprDeviceStackHeader> stack_headers(n_stacks);
   std::vector<const SerializedSizeExpr *> exprs(n_stacks, nullptr);
-  // Per-stack substituted trees. when the max-reducer dispatched a value for
-  // a captured `MaxOverRange` node, substitute it as a `Const` BEFORE the device sizer encoder walks the tree.
-  // Storage owns the substituted copies so `exprs[i]` (a pointer) stays valid through `encode_bytecode_common`.
+  // Per-stack substituted trees. when the max-reducer dispatched a value for a captured `MaxOverRange` node,
+  // substitute it as a `Const` BEFORE the device sizer encoder walks the tree. Storage owns the substituted copies
+  // so `exprs[i]` (a pointer) stays valid through `encode_bytecode_common`.
   std::vector<SerializedSizeExpr> substituted_storage(n_stacks);
   for (std::size_t i = 0; i < n_stacks; ++i) {
     const auto &a = ad_stack.allocas[i];
