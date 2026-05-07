@@ -26,13 +26,11 @@ from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
-from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import (
     QuadrantsSyntaxError,
 )
 from quadrants.lang.matrix import MatrixType
-from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import StructType
 from quadrants.lang.util import to_quadrants_type
 from quadrants.types import annotations, buffer_view_type, ndarray_type, primitive_types
@@ -319,11 +317,7 @@ class FunctionDefTransformer:
                     # polymorphic).
                     if field.type is not _TensorClass and hasattr(field.type, "check_matched"):
                         field.type.check_matched(data_child.get_type(), field.name)
-                    _cache = getattr(
-                        getattr(ctx, "global_context", None),
-                        "ndarray_to_any_array",
-                        None,
-                    )
+                    _cache = getattr(getattr(ctx, "global_context", None), "ndarray_to_any_array", None)
                     promoted = _cache.get(id(data_child)) if _cache else None
                     ctx.create_variable(flat_name, promoted if promoted is not None else data_child)
                 elif dataclasses.is_dataclass(data_child):
@@ -342,13 +336,7 @@ class FunctionDefTransformer:
         # Ndarray arguments are passed by reference.
         if isinstance(argument_type, (ndarray_type.NdarrayType)):
             if not isinstance(
-                data,
-                (
-                    _ndarray.ScalarNdarray,
-                    matrix.VectorNdarray,
-                    matrix.MatrixNdarray,
-                    any_array.AnyArray,
-                ),
+                data, (_ndarray.ScalarNdarray, matrix.VectorNdarray, matrix.MatrixNdarray, any_array.AnyArray)
             ):
                 raise QuadrantsSyntaxError(f"Argument {argument_name} of type {argument_type} is not recognized.")
             argument_type.check_matched(data.get_type(), argument_name)
@@ -455,70 +443,7 @@ class FunctionDefTransformer:
             else:
                 FunctionDefTransformer._transform_as_func(ctx, node, args)
 
-        if ctx.is_kernel:
-            FunctionDefTransformer._validate_stream_parallel_exclusivity(node.body, ctx.global_vars)
-
         with ctx.variable_scope_guard():
             build_stmts(ctx, node.body)
 
         return None
-
-    @staticmethod
-    def _is_stream_parallel_with(stmt: ast.stmt, global_vars: dict[str, Any]) -> bool:
-        if not isinstance(stmt, ast.With):
-            return False
-        if len(stmt.items) != 1:
-            return False
-        item = stmt.items[0]
-        if not isinstance(item.context_expr, ast.Call):
-            return False
-        func_node = item.context_expr.func
-        if ASTResolver.resolve_to(func_node, stream_parallel, global_vars):
-            return True
-        resolved = ASTResolver.resolve_value(func_node, global_vars)
-        if resolved is not None:
-            return getattr(resolved, "__name__", None) == "stream_parallel" and getattr(
-                resolved, "__module__", ""
-            ).startswith("quadrants")
-        if isinstance(func_node, ast.Attribute) and func_node.attr == "stream_parallel":
-            return True
-        if isinstance(func_node, ast.Name) and func_node.id == "stream_parallel":
-            return True
-        return False
-
-    @staticmethod
-    def _is_docstring(stmt: ast.stmt, index: int) -> bool:
-        return index == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, (ast.Constant, ast.Str))
-
-    @staticmethod
-    def _is_coverage_probe(stmt: ast.stmt) -> bool:
-        if not isinstance(stmt, ast.Assign) or len(stmt.targets) != 1:
-            return False
-        target = stmt.targets[0]
-        return (
-            isinstance(target, ast.Subscript)
-            and isinstance(target.value, ast.Name)
-            and target.value.id.startswith("_qd_cov")
-        )
-
-    @staticmethod
-    def _validate_stream_parallel_exclusivity(body: list[ast.stmt], global_vars: dict[str, Any]) -> None:
-        if not any(FunctionDefTransformer._is_stream_parallel_with(s, global_vars) for s in body):
-            return
-        for i, stmt in enumerate(body):
-            if FunctionDefTransformer._is_docstring(stmt, i):
-                continue
-            if FunctionDefTransformer._is_coverage_probe(stmt):
-                continue
-            if not FunctionDefTransformer._is_stream_parallel_with(stmt, global_vars):
-                stmt_desc = f"{type(stmt).__name__}"
-                if isinstance(stmt, ast.With) and stmt.items:
-                    ctx_expr = stmt.items[0].context_expr
-                    if isinstance(ctx_expr, ast.Call) and isinstance(ctx_expr.func, ast.Attribute):
-                        stmt_desc += f"(with {ast.dump(ctx_expr.func)})"
-                raise QuadrantsSyntaxError(
-                    "When using qd.stream_parallel(), all top-level statements "
-                    "in the kernel must be 'with qd.stream_parallel():' blocks. "
-                    f"Move non-parallel code to a separate kernel. "
-                    f"[stmt {i}: {stmt_desc}, body_len={len(body)}]"
-                )

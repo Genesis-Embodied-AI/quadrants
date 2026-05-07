@@ -23,7 +23,6 @@ struct ForLoopConfig {
   MemoryAccessOptions mem_access_opt;
   int block_dim{0};
   bool uniform{false};
-  int stream_parallel_group_id{0};
   std::string loop_name{""};
 };
 
@@ -199,7 +198,6 @@ class FrontendForStmt : public Stmt {
   bool strictly_serialized;
   MemoryAccessOptions mem_access_opt;
   int block_dim;
-  int stream_parallel_group_id{0};
   std::string loop_name;
 
   FrontendForStmt(const ExprGroup &loop_vars,
@@ -889,7 +887,6 @@ class ASTBuilder {
       config.mem_access_opt.clear();
       config.block_dim = 0;
       config.strictly_serialized = false;
-      config.stream_parallel_group_id = 0;
       config.loop_name.clear();
     }
   };
@@ -900,8 +897,6 @@ class ASTBuilder {
   Arch arch_;
   ForLoopDecoratorRecorder for_loop_dec_;
   int id_counter_{0};
-  int stream_parallel_group_counter_{0};
-  int current_stream_parallel_group_id_{0};
 
  public:
   ASTBuilder(Block *initial, Arch arch, bool is_kernel) : is_kernel_(is_kernel), arch_(arch) {
@@ -1025,15 +1020,6 @@ class ASTBuilder {
 
   void reset_snode_access_flag() {
     for_loop_dec_.reset();
-  }
-
-  void begin_stream_parallel() {
-    QD_ERROR_IF(current_stream_parallel_group_id_ != 0, "Nested stream_parallel blocks are not supported");
-    current_stream_parallel_group_id_ = ++stream_parallel_group_counter_;
-  }
-
-  void end_stream_parallel() {
-    current_stream_parallel_group_id_ = 0;
   }
 
   Identifier get_next_id(const std::string &name = "") {
