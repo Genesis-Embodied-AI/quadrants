@@ -404,6 +404,15 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
           /* dt=*/stmt->args[0]->ret_type, offset);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
+    } else if (stmt->func_name == "subgroupSize") {
+      // AMDGPU wavefront size is 32 (RDNA / wave32) or 64 (CDNA, GFX9, RDNA wave64).  The
+      // `llvm.amdgcn.wavefrontsize` intrinsic returns the wavefront size as i32; the AMDGPU
+      // backend folds it to 32 or 64 at codegen time based on the function's
+      // `+wavefrontsize32` / `+wavefrontsize64` target feature.  Returning the intrinsic
+      // (rather than a Quadrants-side constant) lets LLVM pick the right value for the
+      // active wavefront mode without Quadrants having to track it.
+      llvm_val[stmt] =
+          builder->CreateIntrinsic(Intrinsic::amdgcn_wavefrontsize, ArrayRef<llvm::Value *>{});
     } else if (stmt->func_name == "subgroupBarrier") {
       // Wave-scope thread reconvergence barrier.  `llvm.amdgcn.wave.barrier` is the LLVM
       // intrinsic AMDGPU exposes for wave-level sync: on chips where waves are lockstep

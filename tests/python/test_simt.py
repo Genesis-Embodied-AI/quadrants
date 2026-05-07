@@ -890,6 +890,75 @@ def test_subgroup_mem_fence():
         assert a[i] >= 0
 
 
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_group_size():
+    """``subgroup.group_size()`` returns the active subgroup size.
+
+    Lowers to a constant ``32`` on CUDA, ``llvm.amdgcn.wavefrontsize`` on AMDGPU
+    (constant-folded by the AMDGPU backend to 32 or 64 depending on wavefront mode), and
+    ``OpSubgroupSize`` on SPIR-V.  We verify (a) every lane sees the same value and (b)
+    that value is one of the sizes the spec actually allows on real hardware ({32, 64}).
+    """
+    N = 128
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = subgroup.group_size()
+
+    foo()
+    seen = a[0]
+    assert seen in (32, 64), f"unexpected group_size {seen}"
+    for i in range(N):
+        assert a[i] == seen, f"group_size disagrees: a[0]={seen}, a[{i}]={a[i]}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_elect():
+    """``subgroup.elect()`` returns ``1`` on lane 0 of every subgroup, ``0`` elsewhere.
+
+    Implemented as a ``@qd.func`` wrapper over ``invocation_id() == 0``, so it works on
+    every backend that lowers ``invocation_id``.  We verify, in a single kernel, that:
+
+    * ``elect()`` returns 0 or 1.
+    * Every elected lane has ``invocation_id() == 0``, and every non-elected lane has
+      ``invocation_id() != 0`` — i.e. lane 0 is exactly the elected one.
+    * The total elected count equals ``N / group_size()`` — one per subgroup.
+    """
+    N = 256
+    elected = qd.field(dtype=qd.i32, shape=N)
+    lane_id = qd.field(dtype=qd.i32, shape=N)
+    sg_size = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            elected[i] = subgroup.elect()
+            lane_id[i] = subgroup.invocation_id()
+            sg_size[i] = subgroup.group_size()
+
+    foo()
+
+    sg = sg_size[0]
+    assert sg in (32, 64), f"unexpected group_size {sg}"
+
+    total_elected = 0
+    for i in range(N):
+        assert elected[i] in (0, 1), f"elect() returned non-bool {elected[i]} at i={i}"
+        if elected[i] == 1:
+            assert lane_id[i] == 0, f"elected lane has invocation_id={lane_id[i]}, expected 0"
+            total_elected += 1
+        else:
+            assert lane_id[i] != 0, f"non-elected lane has invocation_id=0 at i={i}"
+
+    assert total_elected == N // sg, (
+        f"expected {N // sg} elected lanes (N={N} / sg_size={sg}), got {total_elected}"
+    )
+
+
 def _drain_deprecation_warnings(records):
     return [r for r in records if issubclass(r.category, DeprecationWarning)]
 

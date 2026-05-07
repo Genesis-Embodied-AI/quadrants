@@ -28,8 +28,8 @@ The full Python API is grouped here by category. The first column lists each op,
 | Op                                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) |
 |---------------------------------------------|------|--------|-------------------------|
 | `subgroup.invocation_id()`                  | yes  | yes    | yes                     |
-| `subgroup.group_size()`                     | no   | no     | yes                     |
-| `subgroup.elect()`                          | no   | no     | yes                     |
+| `subgroup.group_size()`                     | yes  | yes    | yes                     |
+| `subgroup.elect()`                          | yes  | yes    | yes                     |
 | `subgroup.sync()`                           | yes  | yes    | yes                     |
 | `subgroup.mem_fence()`                      | yes\*\* | yes\*\* | yes                  |
 
@@ -135,14 +135,18 @@ Returns this lane's subgroup-local index — `0..subgroup_size - 1`. Used both a
 
 ### `group_size()`
 
-Returns the subgroup size in effect for the current launch. Currently SPIR-V only; on CUDA the active warp size is statically `32`, and on AMDGPU it is `32` or `64` depending on the wavefront mode chosen at compile time, so a runtime query is typically unnecessary on those backends.
+Returns the subgroup size in effect for the current launch as an `i32`.
+
+- **CUDA**: lowers to a static `32` constant — the warp size is fixed on every supported NVIDIA architecture (sm_30+). The optimizer can fold it into address arithmetic, so calling `group_size()` is no more expensive than hard-coding `32`.
+- **AMDGPU**: lowers to `llvm.amdgcn.wavefrontsize`, which the AMDGPU backend constant-folds to `32` (RDNA / wave32) or `64` (CDNA, GFX9, RDNA wave64) at codegen time based on the function's wavefront-mode target feature.
+- **SPIR-V**: lowers to a load of the `OpSubgroupSize` builtin — a true runtime query, since on Vulkan compute the subgroup size can be 32 on most desktop GPUs but is permitted to be other powers of two.
 
 ### `elect()`
 
-Picks one lane in the subgroup as the "leader". Returns `1` on the elected lane and `0` on every other lane. The choice of which lane is elected is implementation-defined but stable for the duration of the call.
+Returns `1` on lane 0 of every subgroup and `0` on every other lane. Useful for "exactly one lane does X" patterns where you don't care which lane does it — e.g. emitting a single global write per subgroup.
 
-- Useful for "exactly one lane does X" patterns where you don't care which lane it is — e.g. emitting a single global write per subgroup.
-- Currently SPIR-V only (`OpGroupNonUniformElect`). On CUDA / AMDGPU, emulate with `subgroup.invocation_id() == 0`.
+- Implemented portably as a `@qd.func` wrapper: `i32(invocation_id() == 0)`. Inlines at trace time into a single compare + zero-extend on every backend.
+- This narrows the SPIR-V `OpGroupNonUniformElect` semantics, which would otherwise be free to pick any *active* lane. Under the documented uniform-CF + all-lanes-active contract for `qd.simt.subgroup` the distinction is invisible (lane 0 is always active and is a legal choice), and pinning the elected lane down keeps the behaviour identical across backends.
 
 ### `sync()` / `mem_fence()`
 

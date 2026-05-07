@@ -5,7 +5,7 @@ import warnings
 from quadrants.lang import impl
 from quadrants.lang.kernel_impl import func
 from quadrants.types.annotations import template
-from quadrants.types.primitive_types import u32
+from quadrants.types.primitive_types import i32, u32
 
 
 def sync():
@@ -46,8 +46,21 @@ def memory_barrier():
     return mem_fence()
 
 
+@func
 def elect():
-    return impl.call_internal("subgroupElect", with_runtime_context=False)
+    """Return ``1`` on lane ``0`` of every subgroup and ``0`` on every other lane.
+
+    Implemented portably as ``invocation_id() == 0``: every backend that lowers
+    ``invocation_id()`` therefore lowers ``elect()`` at zero extra cost (it inlines at trace
+    time into a single compare + zext).
+
+    Note that this narrows SPIR-V's ``OpGroupNonUniformElect`` semantics, which may pick any
+    *active* lane as the elected one.  Under the documented uniform-CF + all-lanes-active
+    contract for ``qd.simt.subgroup`` this distinction is invisible (lane 0 is always
+    active and is a legal choice), and pinning down the elected lane keeps the behaviour
+    consistent across backends.
+    """
+    return i32(invocation_id() == 0)
 
 
 def all_true(cond):
