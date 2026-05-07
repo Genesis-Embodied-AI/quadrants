@@ -628,13 +628,10 @@ void LlvmRuntimeExecutor::ensure_adstack_heap_float(std::size_t needed_bytes) {
 }
 
 void LlvmRuntimeExecutor::check_adstack_overflow() {
-  // Called from `synchronize()` on every sync, plus other Quadrants Python entry points wired in
-  // `Program::check_adstack_overflow_and_raise`. The flag lives in pinned host memory (allocated at
-  // `materialize_runtime`); polling is a relaxed atomic exchange on the cached host pointer via
-  // `std::atomic<int64_t>` reinterpret_cast - no DtoH, no JIT call, no sync drain. Available on all backends because
-  // the pinned-host memory is in the host process address space regardless of where the kernel that wrote it ran.
-  // The reinterpret_cast is portable because `std::atomic<int64_t>` is layout-compatible with `int64_t` on every
-  // target (verified by the static_assert below); see also Itanium ABI / MSVC ABI lock-free guarantees.
+  // Called from `synchronize_and_assert()` on every qd.sync(), plus per-launch from `Program::launch_kernel`. The
+  // flag lives in pinned host memory (allocated at `materialize_runtime`); polling is a relaxed atomic load/exchange
+  // on the cached host pointer via `std::atomic<int64_t>` reinterpret_cast — no DtoH, no JIT call. Available on all
+  // backends because the pinned-host memory is in the host process address space regardless of where the kernel ran.
   //
   // Returns early when the slot has not been allocated yet (e.g. a C++ test that constructs Program without
   // materializing the runtime and then triggers `Program::finalize -> synchronize`).
@@ -643,15 +640,21 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
   if (adstack_overflow_flag_host_ptr_ == nullptr) {
     return;
   }
+  // Peek first: a relaxed load is cheaper than an exchange and avoids consuming the flag when the companion
+  // task_id slot has not yet been flushed from the device.  The per-launch call site does NOT synchronize
+  // before polling, so the device's two atomic writes (flag OR, then task_id cmpxchg) may arrive at the host
+  // out of order.  If we consumed the flag here but the task_id hadn't landed, the diagnostic would lack the
+  // kernel name and the later qd.sync() would see both slots clean — losing the identity forever.
   int64_t flag =
-      reinterpret_cast<std::atomic<int64_t> *>(adstack_overflow_flag_host_ptr_)->exchange(0, std::memory_order_relaxed);
+      reinterpret_cast<std::atomic<int64_t> *>(adstack_overflow_flag_host_ptr_)->load(std::memory_order_relaxed);
   if (flag == 0) {
     return;
   }
-  // Drain the companion task-id slot in the same poll. Both slots cleared so the next overflow records a fresh
-  // identity. `task_id == 0` means the kernel that overflowed pre-dates the registry wiring or its
-  // `ad_stack.registry_id` was unset for any reason (e.g. a deserialised offline-cache task that has not yet been
-  // re-registered); the diagnose helper falls through to the generic dual-cause message in that case.
+  // Flag is set — drain the default stream so that the companion task_id write is guaranteed to be host-visible
+  // before we read it.  This sync only fires on the rare overflow path, so it has zero cost on the fast path.
+  synchronize();
+  // Now consume both slots atomically.
+  reinterpret_cast<std::atomic<int64_t> *>(adstack_overflow_flag_host_ptr_)->store(0, std::memory_order_relaxed);
   uint32_t task_id = 0;
   if (adstack_overflow_task_id_host_ptr_ != nullptr) {
     int64_t recorded = reinterpret_cast<std::atomic<int64_t> *>(adstack_overflow_task_id_host_ptr_)
