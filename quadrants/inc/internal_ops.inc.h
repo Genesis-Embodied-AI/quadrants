@@ -21,6 +21,7 @@ PER_INTERNAL_OP(test_internal_func_args)
 // SPIRV
 PER_INTERNAL_OP(workgroupBarrier)
 PER_INTERNAL_OP(workgroupMemoryBarrier)
+PER_INTERNAL_OP(gridMemoryBarrier)
 PER_INTERNAL_OP(localInvocationId)
 PER_INTERNAL_OP(vkGlobalThreadIdx)
 PER_INTERNAL_OP(subgroupBarrier)

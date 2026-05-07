@@ -346,6 +346,7 @@ void Operations::init_internals() {
 
   PLAIN_OP(workgroupBarrier, i32_void, false);
   PLAIN_OP(workgroupMemoryBarrier, i32_void, false);
+  PLAIN_OP(gridMemoryBarrier, i32_void, false);
   PLAIN_OP(localInvocationId, i32, false);
   PLAIN_OP(vkGlobalThreadIdx, i32, false);
   PLAIN_OP(subgroupBarrier, i32_void, false);

@@ -486,8 +486,14 @@ def test_block_sync():
         assert a[i] == N - 1
 
 
-# TODO: replace this with a stronger test case
-@test_utils.test(arch=qd.cuda)
+# TODO: replace this with a stronger test case. The test relies on a grid-scope memory fence
+# ordering the `a[i] = 1` write before the per-block atomic-add counter, so that the "last
+# block" branch can read all the `a[i]` values back. CUDA / AMDGPU honor this strictly via
+# their `_mem_fence` intrinsics; Vulkan honors it via `OpMemoryBarrier(ScopeDevice, ...)`;
+# Metal honors it via MSL `atomic_thread_fence(memory_scope_device)` on Apple Silicon /
+# macOS 10.13+ (see the support-table caveat in `block.md`). On very old Apple Intel GPUs
+# this test may need investigation; for now we run on the full GPU set.
+@test_utils.test(arch=qd.gpu)
 def test_grid_mem_fence():
     N = 1000
     BLOCK_SIZE = 1
@@ -538,7 +544,7 @@ def test_block_mem_fence_smoke():
 # Deprecation aliases: the old names still work, and emit DeprecationWarning on first use.
 # pytest.warns enables `simplefilter("always")` for its scope, bypassing the project-wide
 # `warnings.filterwarnings("once", ..., module="quadrants")` set in `quadrants/lang/misc.py`.
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_block_mem_sync_deprecated_alias():
     a = qd.field(dtype=qd.i32, shape=1)
 
@@ -554,7 +560,7 @@ def test_block_mem_sync_deprecated_alias():
     assert a[0] == 7
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_grid_memfence_deprecated_alias():
     a = qd.field(dtype=qd.i32, shape=1)
 

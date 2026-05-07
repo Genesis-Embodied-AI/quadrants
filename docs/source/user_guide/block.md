@@ -18,11 +18,13 @@ The closely-related grid-level fence (`qd.simt.grid.mem_fence()`) is documented 
 | `block.SharedArray(shape, dtype)`               | yes  | yes    | yes    | yes   |
 | `block.global_thread_idx()`                     | yes  | yes    | yes    | yes   |
 | `block.thread_idx()`                            | no   | no     | yes    | yes   |
-| `grid.mem_fence()` (device-scope, see below)    | yes  | no     | no     | no    |
+| `grid.mem_fence()` (device-scope, see below)    | yes  | yes    | yes    | yes\*\* |
 
 Calling a backend marked "no" raises `ValueError` from the Python layer at trace time. Vulkan and Metal share a SPIR-V codegen path (Metal goes through MoltenVK → MSL); they are listed as separate columns because a few ops have Metal-specific limitations that are called out below.
 
 \* On CUDA, `block.mem_fence()` currently lowers via `block_barrier` (i.e. `__syncthreads()`), which doubles as a memory fence but additionally requires thread convergence — meaning calling it from divergent control flow today deadlocks. A fix to lower `mem_fence()` to a pure `__threadfence_block()` is in flight as [quadrants#637](https://github.com/Genesis-Embodied-AI/quadrants/pull/637); once merged, the divergent-branch pattern shown in the `block.mem_fence()` semantics section below works as written. Until then, prefer calling `mem_fence()` from uniform control flow on CUDA.
+
+\*\* On Metal, `grid.mem_fence()` lowers (via MoltenVK / SPIRV-Cross → MSL) to `atomic_thread_fence(metal::memory_scope_device)`, available since MSL 2.0 (macOS 10.13+ / iOS 11+). Cross-workgroup memory-ordering guarantees are stronger on Apple Silicon (A11+) than on older Apple hardware or very old macOS Intel GPUs; for those targets, validate empirically that producer-consumer patterns across blocks behave as expected, or fall back to splitting the kernel.
 
 Naming note: two of the names on this page were recently renamed for consistency with the project's "fence vs barrier" terminology and to use a consistent `mem_fence` spelling. The old names are still available as deprecated aliases that emit a `DeprecationWarning` (shown once per process, courtesy of `warnings.filterwarnings("once", ..., module="quadrants")` configured by `quadrants/lang/misc.py`):
 
@@ -105,7 +107,12 @@ Returns the local thread index within the block. Currently only implemented on S
 
 ## Grid-scope fence: `qd.simt.grid.mem_fence()`
 
-`grid.mem_fence()` is the device-scope counterpart of `block.mem_fence()`. It orders memory operations across the entire grid, so writes made by one block become visible to other blocks after the fence. CUDA only today; lowers to `__threadfence()` (`nvvm_membar_gl`).
+`grid.mem_fence()` is the device-scope counterpart of `block.mem_fence()`. It orders memory operations across the entire grid, so writes made by one block become visible to other blocks after the fence. Per-backend lowering:
+
+- CUDA: `__threadfence()` (`nvvm_membar_gl`).
+- AMDGPU: `__builtin_amdgcn_fence(__ATOMIC_ACQ_REL, "agent")`, lowered by the AMDGCN backend to the appropriate `s_waitcnt` / cache-flush sequence.
+- Vulkan: `OpMemoryBarrier(ScopeDevice, AcquireRelease | UniformMemory | WorkgroupMemory)`.
+- Metal: same SPIR-V op as Vulkan, translated by MoltenVK to MSL `atomic_thread_fence(metal::memory_scope_device)` (see Metal caveat in the support table).
 
 Use it when you need cross-block coordination via global memory (decoupled look-back scan, inter-block flag publishing, single-pass reductions, etc.). For coordination within a single block, prefer `block.mem_fence()` — it is cheaper.
 
