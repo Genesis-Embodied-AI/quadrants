@@ -47,6 +47,7 @@ autodiff
 :maxdepth: 1
 :titlesonly:
 
+atomics
 subgroup
 tile16
 ```
