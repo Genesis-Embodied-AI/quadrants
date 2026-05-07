@@ -595,6 +595,25 @@ def test_block_global_thread_idx_portable():
         assert a[i] == i
 
 
+# Portable test for `block.thread_idx()`. Sets `block_dim == grid_dim_total` (single-block
+# launch) so the in-block index equals the global index, then verifies on every GPU backend.
+@test_utils.test(arch=qd.gpu)
+def test_block_thread_idx_portable():
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = qd.simt.block.thread_idx()
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i
+
+
 # The old SPIR-V-only no-arg subgroup reductions (`subgroup.reduce_add` / `reduce_mul` / `reduce_min`
 # / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`) and their Vulkan-specific tests have
 # been removed.  See `test_subgroup_reduce_add` / `test_subgroup_reduce_all_add` below for the

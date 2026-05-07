@@ -282,6 +282,7 @@ void Operations::init_internals() {
 #undef INSERT_TRIPLET
 
   PLAIN_OP(linear_thread_idx, i32, true);
+  PLAIN_OP(block_thread_idx, i32, false);
   PLAIN_OP(test_stack, i32_void, true);
   PLAIN_OP(test_active_mask, i32_void, true);
   PLAIN_OP(test_shfl, i32_void, true);

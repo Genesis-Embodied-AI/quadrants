@@ -359,6 +359,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
 #endif
 
       patch_intrinsic("thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
+      patch_intrinsic("block_thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
       patch_intrinsic("cuda_clock_i64", Intrinsic::nvvm_read_ptx_sreg_clock64);
       patch_intrinsic("block_idx", Intrinsic::nvvm_read_ptx_sreg_ctaid_x);
       patch_intrinsic("block_dim", Intrinsic::nvvm_read_ptx_sreg_ntid_x);
@@ -511,6 +512,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       }
       function_pass_manager.doFinalization();
       patch_intrinsic("thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
+      patch_intrinsic("block_thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
       patch_intrinsic("block_idx", llvm::Intrinsic::amdgcn_workgroup_id_x);
       patch_intrinsic("block_barrier", llvm::Intrinsic::amdgcn_s_barrier, false);
       patch_intrinsic("amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);

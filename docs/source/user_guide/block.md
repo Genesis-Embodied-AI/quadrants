@@ -17,7 +17,7 @@ The closely-related grid-level fence (`qd.simt.grid.mem_fence()`) is documented 
 | `block.mem_fence()`                             | yes\*| yes    | yes    | yes   |
 | `block.SharedArray(shape, dtype)`               | yes  | yes    | yes    | yes   |
 | `block.global_thread_idx()`                     | yes  | yes    | yes    | yes   |
-| `block.thread_idx()`                            | no   | no     | yes    | yes   |
+| `block.thread_idx()`                            | yes  | yes    | yes    | yes   |
 | `grid.mem_fence()` (device-scope, see below)    | yes  | yes    | yes    | yes\*\* |
 
 Calling a backend marked "no" raises `ValueError` from the Python layer at trace time. Vulkan and Metal share a SPIR-V codegen path (Metal goes through MoltenVK → MSL); they are listed as separate columns because a few ops have Metal-specific limitations that are called out below.
@@ -103,7 +103,16 @@ On CUDA / AMDGPU this is the natural way to identify which work-item a thread sh
 
 ### `block.thread_idx()`
 
-Returns the local thread index within the block. Currently only implemented on SPIR-V backends (Vulkan / Metal); on CUDA / AMDGPU it raises. On CUDA / AMDGPU, use `global_thread_idx()` together with `qd.loop_config(block_dim=...)` and recover the in-block index via `global_thread_idx() % block_dim`.
+Returns the in-block (workgroup-local) thread index of the calling thread. Available on every supported GPU backend.
+
+- CUDA: `nvvm_read_ptx_sreg_tid_x` (i.e. `threadIdx.x`).
+- AMDGPU: `amdgcn_workitem_id_x`.
+- Vulkan: `localInvocationId` (`gl_LocalInvocationID.x`).
+- Metal: same SPIR-V op as Vulkan; MoltenVK / SPIRV-Cross translates to MSL `thread_position_in_threadgroup`.
+
+This is the thread's index *within its own block / workgroup*. To get the across-grid index, use `block.global_thread_idx()`. The historical workaround on CUDA / AMDGPU of recovering the in-block index via `global_thread_idx() % block_dim` is still valid but no longer necessary; prefer the direct `block.thread_idx()` call for clarity.
+
+Today only the X dimension is exposed (1-D blocks). For 2-D / 3-D blocks the calling code should compute the linear index from `block.thread_idx()` and the block-Y / Z dimensions itself, or stick to 1-D blocks (the dominant Quadrants idiom — `qd.loop_config(block_dim=N)` always sets the X extent).
 
 ## Grid-scope fence: `qd.simt.grid.mem_fence()`
 

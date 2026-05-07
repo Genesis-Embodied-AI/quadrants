@@ -71,6 +71,8 @@ def mem_sync():
 
 def thread_idx():
     arch = impl.get_runtime().prog.config().arch
+    if arch == _qd_core.cuda or arch == _qd_core.amdgpu:
+        return impl.call_internal("block_thread_idx", with_runtime_context=False)
     if arch_uses_spv(arch):
         return impl.call_internal("localInvocationId", with_runtime_context=False)
     raise ValueError(f"qd.block.thread_idx is not supported for arch {arch}")

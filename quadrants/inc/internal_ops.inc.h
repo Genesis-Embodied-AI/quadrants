@@ -7,6 +7,7 @@ PER_INTERNAL_OP(insert_triplet_f32)
 PER_INTERNAL_OP(insert_triplet_f64)
 
 PER_INTERNAL_OP(linear_thread_idx)
+PER_INTERNAL_OP(block_thread_idx)
 
 PER_INTERNAL_OP(test_stack)
 PER_INTERNAL_OP(test_active_mask)
