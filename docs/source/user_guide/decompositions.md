@@ -93,7 +93,7 @@ def closest_rotation(A: qd.types.matrix(3, 3, qd.f64)) -> qd.types.matrix(3, 3, 
     return R
 ```
 
-The `R.determinant() < 0.0` branch fixes the handedness when SVD's sign convention produces a reflection rather than a rotation — a standard ARAP / IPC trick.
+The `R.determinant() < 0.0` branch fixes the handedness when SVD's sign convention produces a reflection rather than a rotation — a standard ARAP trick.
 
 ### Project to symmetric positive semi-definite (`make_spd`)
 
@@ -110,7 +110,7 @@ def make_spd_3x3(H: qd.types.matrix(3, 3, qd.f64)) -> qd.types.matrix(3, 3, qd.f
     return Q @ Lambda @ Q.transpose()
 ```
 
-Used by IPC-style methods to project an indefinite Hessian to its closest SPD approximation per element. Note the shape cap — only 3×3 today, since `qd.sym_eig` itself caps at 3×3.
+Used to project an indefinite Hessian to its closest SPD approximation per element. Note the shape cap — only 3×3 today, since `qd.sym_eig` itself caps at 3×3.
 
 ### Per-thread linear solve
 
@@ -140,7 +140,7 @@ The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `
 
 - **Shape cap is the dominant constraint.** For matrices outside the supported shapes, you currently have to write your own Jacobi sweep (for symmetric EVD up to ~12×12) or LU / Cholesky (for general inverse / solve).
 - **Compile time.** Each call is unrolled per thread, so a kernel that calls `qd.svd` on a 3×3 matrix per element compiles a moderately large block of straight-line code per thread. Compile time is generally fine at these shapes; matrices larger than the cap would not be — register pressure plus unrolling explode quickly.
-- **Numerical conditioning.** All implementations use `f32` by default, which is fine for graphics / soft-body simulation but not always sufficient for stiff IPC-style problems. Pass `dt=qd.f64` whenever conditioning matters; the cost on modern GPUs is a constant factor, not order-of-magnitude.
+- **Numerical conditioning.** All implementations use `f32` by default, which is fine for graphics / soft-body simulation but not always sufficient for stiff problems. Pass `dt=qd.f64` whenever conditioning matters; the cost on modern GPUs is a constant factor, not order-of-magnitude.
 - **Backend portability.** All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split. Numerical behaviour is bit-exact across backends only for `f64`; `f32` may differ in the last bit because of fused-multiply-add ordering choices.
 
 ## What's missing
