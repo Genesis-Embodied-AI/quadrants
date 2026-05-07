@@ -55,22 +55,27 @@ size_t resolve_ndarray_data_ptr_byte_offset(LaunchContextBuilder &host_ctx, cons
   return host_ctx.args_type->get_element_offset(indices);
 }
 
-// Per-spec dispatch unit, populated from each captured `StaticAdStackMaxReducerSpec` after host-resolving every axis's
-// begin / end and encoding the body bytecode. Specs whose body encoding fails or whose total cross-product length is
-// zero are dropped before reaching the dispatch loop. `per_axis_*` are ordered outermost-first to match the
-// recognizer's chain-capture order; `length` is the cross-product (product of `per_axis_length`).
+// Per-spec dispatch unit, populated from each captured `StaticAdStackMaxReducerSpec`. Pass 1 (`collect_specs`) only
+// fills the cache-key / identity fields and the back-references to the source `SerializedSizeExpr` and spec; the
+// substitution-aware `prepare_spec` step writes the host-eval-derived `length` / `per_axis_*` and the body bytecode
+// once the spec's `dependent_mor_node_idxs` are all in `result`. Specs whose preparation fails (axis resolution
+// failure, body grammar reject, body too large) flip `dropped` and are excluded from dispatch.
 struct PendingMaxReducerDispatch {
   uint64_t cache_key;
   uint32_t registry_id;
   int32_t stack_id;
   int32_t mor_node_idx;
-  uint32_t length;
-  uint32_t num_axes;
+  const SerializedSizeExpr *expr;
+  const StaticAdStackMaxReducerSpec *spec;
+  bool dispatched{false};
+  bool dropped{false};
+  uint32_t length{0};
+  uint32_t num_axes{0};
   std::vector<uint32_t> per_axis_length;
   std::vector<int64_t> per_axis_begin;
   std::vector<uint8_t> body_bytecode;
-  uint32_t body_node_count;
-  uint32_t indices_count;
+  uint32_t body_node_count{0};
+  uint32_t indices_count{0};
   std::vector<AdStackCache::SizeExprReadObservation> reads;
 };
 
@@ -86,6 +91,7 @@ uint64_t pack_max_reducer_key(uint32_t registry_id, int32_t stack_id, int32_t mo
 
 MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host_ctx,
                                                       DeviceAllocationGuard *args_buffer,
+                                                      const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
                                                       const std::vector<spirv::TaskAttributes> &task_attribs) {
   MaxReducerResultMap result;
 
@@ -104,9 +110,10 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
   AdStackCache *cache = (prog != nullptr) ? &prog->adstack_cache() : nullptr;
 
-  // First pass: query the cache per spec, dropping hits straight into `result` and queueing misses for dispatch. Each
-  // miss host-resolves `begin` / `end` and encodes the body bytecode up front so the second pass only writes packed
-  // params / bytecode bytes and bookkeeps offsets.
+  // Pass 1: collect specs into pending. Cache hits go straight to `result`; misses go to pending with back-references
+  // to the source `SerializedSizeExpr` and `StaticAdStackMaxReducerSpec`. Host-evaluation of begin / end and body
+  // bytecode encoding is deferred to the per-level prepare step below, where each spec's
+  // `dependent_mor_node_idxs` have already been substituted into the working tree.
   std::vector<PendingMaxReducerDispatch> pending;
   pending.reserve(task_attribs.size());
   for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
@@ -114,10 +121,9 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
     if (attribs.ad_stack.max_reducer_specs.empty()) {
       continue;
     }
-    // Lazily register the task with the Program-side identity registry if `publish_adstack_metadata_spirv` has not run
-    // yet for this task. The registration is idempotent so the later publish call is a no-op for already-registered
-    // tasks. The cache-key encoding uses `registry_id` to disambiguate same-shape `MaxOverRange` nodes across kernels,
-    // so the id has to exist before the first cache lookup.
+    // Lazily register the task with the Program-side identity registry; `publish_adstack_metadata_spirv` is idempotent
+    // for already-registered tasks. The cache-key encoding uses `registry_id` to disambiguate same-shape MORs across
+    // kernels, so the id has to exist before the first cache lookup.
     auto &mutable_attribs =
         const_cast<quadrants::lang::spirv::TaskAttributes::AdStackSizingAttribs &>(attribs.ad_stack);
     if (mutable_attribs.registry_id == 0 && cache != nullptr) {
@@ -135,7 +141,7 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
     }
     const uint32_t registry_id = mutable_attribs.registry_id;
     if (registry_id == 0) {
-      continue;  // no Program back-ref available; skip the spec
+      continue;
     }
     for (const auto &spec : attribs.ad_stack.max_reducer_specs) {
       const uint64_t key = pack_max_reducer_key(registry_id, spec.stack_id, spec.mor_node_idx);
@@ -146,74 +152,13 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
           continue;
         }
       }
-      // Multi-axis chain support: host-evaluate `[begin, end)` per captured axis, accumulate the cross-product length,
-      // and pass the per-axis arrays into the dispatch. Any axis that fails to host-resolve, or whose product overflows
-      // u32, drops the spec (fallback: the per-thread sizer's capped path absorbs it).
-      const SerializedSizeExpr &expr = attribs.ad_stack.allocas[spec.stack_id].size_expr;
-      const std::size_t num_axes = spec.axis_var_ids.size();
-      if (num_axes == 0 || num_axes > static_cast<std::size_t>(kAdStackMaxReducerMaxAxes)) {
-        continue;
-      }
-      std::vector<uint32_t> per_axis_length_v(num_axes, 0);
-      std::vector<int64_t> per_axis_begin_v(num_axes, 0);
-      bool axes_ok = true;
-      uint64_t total_length = 1;
-      for (std::size_t a = 0; a < num_axes; ++a) {
-        const int64_t bv = evaluate_adstack_size_expr_at_node(expr, spec.axis_begin_node_idxs[a], prog, &host_ctx);
-        const int64_t ev = evaluate_adstack_size_expr_at_node(expr, spec.axis_end_node_idxs[a], prog, &host_ctx);
-        if (bv < 0 || ev < 0 || ev <= bv) {
-          axes_ok = false;
-          break;
-        }
-        const int64_t len = ev - bv;
-        if (len > std::numeric_limits<uint32_t>::max()) {
-          axes_ok = false;
-          break;
-        }
-        per_axis_begin_v[a] = bv;
-        per_axis_length_v[a] = static_cast<uint32_t>(len);
-        total_length *= static_cast<uint64_t>(len);
-        if (total_length > std::numeric_limits<uint32_t>::max()) {
-          axes_ok = false;
-          break;
-        }
-      }
-      if (!axes_ok) {
-        continue;
-      }
-
-      // Encode the body bytecode via `encode_max_reducer_body_bytecode`. The encoder resolves each
-      // `kExternalTensorRead` leaf's `arg_buffer_offset` via the closure below, mirroring the SizeExpr device bytecode
-      // encoder's offset precomputation, and dense-remaps the chain bound-var ids into device-scope slots `[0,
-      // num_axes)`.
-      auto arg_buffer_offset_resolver = [&](const std::vector<int32_t> &arg_id_path) -> int32_t {
-        std::vector<int> path(arg_id_path.begin(), arg_id_path.end());
-        const size_t byte_off = resolve_ndarray_data_ptr_byte_offset(host_ctx, path);
-        if (byte_off > std::numeric_limits<int32_t>::max()) {
-          return -1;
-        }
-        return static_cast<int32_t>(byte_off);
-      };
-      EncodedMaxReducerBody encoded = encode_max_reducer_body_bytecode(expr, spec.body_node_idx, spec.axis_var_ids,
-                                                                       arg_buffer_offset_resolver, &host_ctx, prog);
-      if (encoded.body_node_count == 0 || encoded.body_node_count > spirv::kAdStackMaxReducerMaxBodyNodes) {
-        // Encoder rejected the body (out-of-grammar or too many nodes); skip the spec.
-        continue;
-      }
-
       PendingMaxReducerDispatch p{};
       p.cache_key = key;
       p.registry_id = registry_id;
       p.stack_id = spec.stack_id;
       p.mor_node_idx = spec.mor_node_idx;
-      p.length = static_cast<uint32_t>(total_length);
-      p.num_axes = static_cast<uint32_t>(num_axes);
-      p.per_axis_length = std::move(per_axis_length_v);
-      p.per_axis_begin = std::move(per_axis_begin_v);
-      p.body_bytecode = std::move(encoded.bytes);
-      p.body_node_count = encoded.body_node_count;
-      p.indices_count = encoded.indices_count;
-      p.reads = std::move(encoded.body_reads);
+      p.expr = &attribs.ad_stack.allocas[spec.stack_id].size_expr;
+      p.spec = &spec;
       pending.push_back(std::move(p));
     }
   }
@@ -236,33 +181,18 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
     adstack_max_reducer_pipeline_ = std::move(pipeline);
   }
 
-  // Pack one params blob per pending spec at descriptor-alignment offsets (256B on the most conservative drivers in the
-  // wild; matches the bound reducer's choice). Pack body bytecode at 4-byte alignment within a separate buffer (no
-  // descriptor offset alignment needed there because the entire bytecode buffer is bound at offset 0 and each spec's
-  // offset is encoded inside its params blob as a u32 word offset).
+  // Slot-0 placeholder for kernels with no kernel arg buffer. Same RHI rule as the bound reducer: descriptor-set
+  // layouts require a non-null binding even if the shader's branch never reads it.
+  if (args_buffer == nullptr && !adstack_max_reducer_args_placeholder_buffer_) {
+    auto [buf, res] = device_->allocate_memory_unique({sizeof(uint32_t), /*host_write=*/false, /*host_read=*/false,
+                                                       /*export_sharing=*/false, AllocUsage::Storage});
+    QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack max reducer slot-0 placeholder buffer");
+    adstack_max_reducer_args_placeholder_buffer_ = std::move(buf);
+  }
+
   constexpr size_t kDescriptorOffsetAlignment = 256;
   auto align_up = [](size_t v, size_t a) { return (v + a - 1) & ~(a - 1); };
   const size_t params_size_bytes = spirv::AdStackMaxReducerParams::kNumWords * sizeof(uint32_t);
-  std::vector<size_t> per_spec_params_offsets(pending.size());
-  std::vector<uint32_t> per_spec_bytecode_word_offsets(pending.size());
-  size_t total_params_bytes = 0;
-  size_t total_bytecode_bytes = 0;
-  for (size_t k = 0; k < pending.size(); ++k) {
-    per_spec_params_offsets[k] = align_up(total_params_bytes, kDescriptorOffsetAlignment);
-    total_params_bytes = per_spec_params_offsets[k] + params_size_bytes;
-    QD_ASSERT_INFO(pending[k].body_bytecode.size() % sizeof(uint32_t) == 0,
-                   "max-reducer body bytecode is not 4-byte aligned (size={})", pending[k].body_bytecode.size());
-    per_spec_bytecode_word_offsets[k] = static_cast<uint32_t>(total_bytecode_bytes / sizeof(uint32_t));
-    total_bytecode_bytes += pending[k].body_bytecode.size();
-  }
-  // Output buffer: two u32 slots per pending spec (`[value, overflow_flag]`), cleared to {0, 0} before dispatch.
-  // Threads `OpAtomicUMax` into the value slot for body values that fit in `UINT32_MAX`, and `OpAtomicOr 1` into the
-  // overflow flag for body values above that. The two-slot layout sidesteps spirv-cross's MSL backend gap on i64
-  // atomics (`MSL currently does not support 64-bit atomics`), unlocking Metal / Vulkan-via-MoltenVK paths that would
-  // otherwise fail at pipeline-create. The host (`map` + read below) detects overflow per spec and falls back to direct
-  // host-eval for that spec via `evaluate_adstack_size_expr_at_node`.
-  const size_t output_bytes = pending.size() * 2 * sizeof(uint32_t);
-
   auto grow_buffer = [&](std::unique_ptr<DeviceAllocationGuard> &buf, size_t &capacity, size_t needed, bool host_write,
                          bool host_read, const char *label) {
     if (buf && capacity >= needed) {
@@ -279,167 +209,269 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
     capacity = new_size;
   };
 
-  grow_buffer(adstack_max_reducer_params_buffer_, adstack_max_reducer_params_buffer_size_, total_params_bytes,
-              /*host_write=*/true, /*host_read=*/false, "adstack max reducer params buffer");
-  grow_buffer(adstack_max_reducer_bytecode_buffer_, adstack_max_reducer_bytecode_buffer_size_, total_bytecode_bytes,
-              /*host_write=*/true, /*host_read=*/false, "adstack max reducer bytecode buffer");
-  grow_buffer(adstack_max_reducer_output_buffer_, adstack_max_reducer_output_buffer_size_, output_bytes,
-              /*host_write=*/false, /*host_read=*/true, "adstack max reducer output buffer");
-
-  // Write params + bytecode into their respective host-mapped buffers in one pass. Output buffer gets the INT64_MIN
-  // sentinel fill via the same map; the dispatch's atomic-SMax then beats this baseline on every matching thread.
-  {
-    void *mapped = nullptr;
-    RhiResult map_res = device_->map_range(adstack_max_reducer_params_buffer_->get_ptr(0), total_params_bytes, &mapped);
-    QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack max reducer params buffer");
+  // Level-based dispatch: each iteration picks every undispatched spec whose `dependent_mor_node_idxs` are all already
+  // in `result` (cache hits + earlier rounds), substitutes those values into the working tree, host-evaluates begin /
+  // end against the substituted tree, encodes the body bytecode, then dispatches the level's specs as a single batched
+  // cmdlist. Most kernels have specs without inter-spec dependencies and finish in one round; nested patterns (e.g.
+  // outer `MaxOverRange` whose end contains a previously-captured inner `max-of-array`) take one round per dependency
+  // depth. A round that picks no specs but has unprocessed pending entries breaks out via the `cycle / unresolvable`
+  // guard and leaves those entries dropped, falling through to the per-task device sizer.
+  size_t dispatched_count = 0;
+  size_t dropped_count = 0;
+  while (dispatched_count + dropped_count < pending.size()) {
+    std::vector<size_t> level_indices;
     for (size_t k = 0; k < pending.size(); ++k) {
-      spirv::AdStackMaxReducerParams params{};
-      params.output_slot = static_cast<uint32_t>(k);
-      params.length = pending[k].length;
-      params.num_axes = pending[k].num_axes;
-      params.body_bytecode_offset_words = per_spec_bytecode_word_offsets[k];
-      params.body_node_count = pending[k].body_node_count;
-      // Indices table starts immediately after the body's nodes within the spec's bytecode region. The encoder wrote
-      // `[nodes][indices]` contiguously, so the indices base word offset = body_bytecode_offset_words + body_node_count
-      // * (sizeof(AdStackSizeExprDeviceNode) / 4).
-      const uint32_t node_words = sizeof(AdStackSizeExprDeviceNode) / 4u;
-      params.body_indices_offset_words = per_spec_bytecode_word_offsets[k] + pending[k].body_node_count * node_words;
-      // Per-axis fields (slots beyond `num_axes` left zero by the value-init above so the shader's bounds checks never
-      // read uninitialised data on lower-rank specs). The encoder dense-remaps each chain bound-var id to slot `a` in
-      // `[0, num_axes)`; encode that slot directly here so the shader's `kBoundVariable` / `kExternalTensorRead` cases
-      // land at the right scope index.
-      for (uint32_t a = 0; a < pending[k].num_axes; ++a) {
-        params.per_axis_length[a] = pending[k].per_axis_length[a];
-        const uint64_t begin_u64 = static_cast<uint64_t>(pending[k].per_axis_begin[a]);
-        params.per_axis_begin_lo[a] = static_cast<uint32_t>(begin_u64 & 0xFFFFFFFFull);
-        params.per_axis_begin_hi[a] = static_cast<uint32_t>((begin_u64 >> 32) & 0xFFFFFFFFull);
-        params.per_axis_var_id[a] = static_cast<int32_t>(a);
+      if (pending[k].dispatched || pending[k].dropped)
+        continue;
+      bool deps_ok = true;
+      for (int32_t dep_node : pending[k].spec->dependent_mor_node_idxs) {
+        const uint64_t dep_key = pack_max_reducer_key(pending[k].registry_id, pending[k].stack_id, dep_node);
+        if (result.find(dep_key) == result.end()) {
+          deps_ok = false;
+          break;
+        }
       }
-      std::memcpy(reinterpret_cast<char *>(mapped) + per_spec_params_offsets[k], &params, params_size_bytes);
+      if (deps_ok)
+        level_indices.push_back(k);
     }
-    device_->unmap(*adstack_max_reducer_params_buffer_);
-  }
-  if (total_bytecode_bytes > 0) {
-    void *mapped = nullptr;
-    RhiResult map_res =
-        device_->map_range(adstack_max_reducer_bytecode_buffer_->get_ptr(0), total_bytecode_bytes, &mapped);
-    QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack max reducer bytecode buffer");
-    char *base = reinterpret_cast<char *>(mapped);
-    size_t cursor = 0;
-    for (size_t k = 0; k < pending.size(); ++k) {
-      std::memcpy(base + cursor, pending[k].body_bytecode.data(), pending[k].body_bytecode.size());
-      cursor += pending[k].body_bytecode.size();
+    if (level_indices.empty()) {
+      // Cycle / unresolvable - no progress possible. Drop remaining and let the per-task sizer absorb them.
+      for (size_t k = 0; k < pending.size(); ++k) {
+        if (!pending[k].dispatched && !pending[k].dropped) {
+          pending[k].dropped = true;
+          ++dropped_count;
+        }
+      }
+      break;
     }
-    device_->unmap(*adstack_max_reducer_bytecode_buffer_);
-  }
-  // Slot-0 placeholder for kernels with no kernel arg buffer. Same RHI rule as the bound reducer: descriptor-set
-  // layouts require a non-null binding even if the shader's branch never reads it.
-  if (args_buffer == nullptr && !adstack_max_reducer_args_placeholder_buffer_) {
-    auto [buf, res] = device_->allocate_memory_unique({sizeof(uint32_t), /*host_write=*/false, /*host_read=*/false,
-                                                       /*export_sharing=*/false, AllocUsage::Storage});
-    QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack max reducer slot-0 placeholder buffer");
-    adstack_max_reducer_args_placeholder_buffer_ = std::move(buf);
-  }
 
-  // Force visibility of prior writes (matches `adstack_bound_reducer_launch.cpp`'s rationale): MoltenVK's PSB load path
-  // bypasses the descriptor-bound cache that a prior accessor kernel's submit_synced flushed via vkQueueWaitIdle, so
-  // without this sequence the reducer reads stale ndarray contents on Apple Silicon.
-  flush();
-  device_->wait_idle();
-
-  // Zero the per-spec output slots through a fresh GPU cmdlist instead of a host `map_range` + `memcpy`. The host-side
-  // clear is not guaranteed to be fenced ahead of the next compute pipeline read on every backend / driver combination
-  // - Apple M1 leaves the host write sitting in a write-combined cache and the dispatch reads stale bytes (typically
-  // the previous launch's max), so the atomic-UMax never beats them. A GPU-side `buffer_fill` is sequenced by the
-  // compute queue's own dependency tracking and avoids the host-vs-GPU coherence question entirely. Mirrors
-  // `adstack_bound_reducer_launch.cpp`'s `buffer_fill`-via-separate-cmdlist pattern.
-  auto [clear_cmdlist, clear_cmdlist_res] = device_->get_compute_stream()->new_command_list_unique();
-  QD_ASSERT_INFO(clear_cmdlist_res == RhiResult::success, "Failed to create adstack max reducer clear cmdlist");
-  clear_cmdlist->buffer_fill(adstack_max_reducer_output_buffer_->get_ptr(0), output_bytes, /*data=*/0);
-  clear_cmdlist->buffer_barrier(*adstack_max_reducer_output_buffer_);
-  device_->get_compute_stream()->submit_synced(clear_cmdlist.get());
-
-  // Build a single cmdlist with one dispatch per pending spec.
-  auto [cmdlist, cmdlist_res] = device_->get_compute_stream()->new_command_list_unique();
-  QD_ASSERT_INFO(cmdlist_res == RhiResult::success, "Failed to create adstack max reducer cmdlist");
-  for (size_t k = 0; k < pending.size(); ++k) {
-    auto bindings = device_->create_resource_set_unique();
-    if (args_buffer != nullptr) {
-      bindings->rw_buffer(0, *args_buffer);
-    } else {
-      bindings->rw_buffer(0, *adstack_max_reducer_args_placeholder_buffer_);
+    // Prepare each ready spec: substitute already-resolved deps' values into the tree, host-eval begin / end, encode
+    // body bytecode. Specs whose preparation fails (axis non-resolvable, length over u32 cap, body grammar reject)
+    // mark `dropped` and are skipped for this round and forever.
+    auto arg_buffer_offset_resolver = [&](const std::vector<int32_t> &arg_id_path) -> int32_t {
+      std::vector<int> path(arg_id_path.begin(), arg_id_path.end());
+      const size_t byte_off = resolve_ndarray_data_ptr_byte_offset(host_ctx, path);
+      if (byte_off > std::numeric_limits<int32_t>::max()) {
+        return -1;
+      }
+      return static_cast<int32_t>(byte_off);
+    };
+    std::vector<size_t> level_dispatch;
+    level_dispatch.reserve(level_indices.size());
+    for (size_t k : level_indices) {
+      const auto *spec = pending[k].spec;
+      const std::size_t num_axes = spec->axis_var_ids.size();
+      if (num_axes == 0 || num_axes > static_cast<std::size_t>(kAdStackMaxReducerMaxAxes)) {
+        pending[k].dropped = true;
+        ++dropped_count;
+        continue;
+      }
+      // Substitute every already-resolved MOR in `result` (for this spec's stack) into a working copy of the tree, so
+      // begin / end host-evaluation sees the dependent specs as `kConst` instead of walking through them.
+      const SerializedSizeExpr substituted =
+          substitute_precomputed_max_over_range(*pending[k].expr, pending[k].registry_id, pending[k].stack_id, result);
+      std::vector<uint32_t> per_axis_length_v(num_axes, 0);
+      std::vector<int64_t> per_axis_begin_v(num_axes, 0);
+      bool axes_ok = true;
+      uint64_t total_length = 1;
+      for (std::size_t a = 0; a < num_axes; ++a) {
+        const int64_t bv =
+            evaluate_adstack_size_expr_at_node(substituted, spec->axis_begin_node_idxs[a], prog, &host_ctx);
+        const int64_t ev =
+            evaluate_adstack_size_expr_at_node(substituted, spec->axis_end_node_idxs[a], prog, &host_ctx);
+        if (bv < 0 || ev < 0 || ev <= bv) {
+          axes_ok = false;
+          break;
+        }
+        const int64_t len = ev - bv;
+        if (len > std::numeric_limits<uint32_t>::max()) {
+          axes_ok = false;
+          break;
+        }
+        per_axis_begin_v[a] = bv;
+        per_axis_length_v[a] = static_cast<uint32_t>(len);
+        total_length *= static_cast<uint64_t>(len);
+        if (total_length > std::numeric_limits<uint32_t>::max()) {
+          axes_ok = false;
+          break;
+        }
+      }
+      if (!axes_ok) {
+        pending[k].dropped = true;
+        ++dropped_count;
+        continue;
+      }
+      EncodedMaxReducerBody encoded = encode_max_reducer_body_bytecode(
+          substituted, spec->body_node_idx, spec->axis_var_ids, arg_buffer_offset_resolver, &host_ctx, prog);
+      if (encoded.body_node_count == 0 || encoded.body_node_count > spirv::kAdStackMaxReducerMaxBodyNodes) {
+        pending[k].dropped = true;
+        ++dropped_count;
+        continue;
+      }
+      pending[k].length = static_cast<uint32_t>(total_length);
+      pending[k].num_axes = static_cast<uint32_t>(num_axes);
+      pending[k].per_axis_length = std::move(per_axis_length_v);
+      pending[k].per_axis_begin = std::move(per_axis_begin_v);
+      pending[k].body_bytecode = std::move(encoded.bytes);
+      pending[k].body_node_count = encoded.body_node_count;
+      pending[k].indices_count = encoded.indices_count;
+      pending[k].reads = std::move(encoded.body_reads);
+      level_dispatch.push_back(k);
     }
-    bindings->rw_buffer(1, *adstack_max_reducer_output_buffer_);
-    bindings->rw_buffer(2, adstack_max_reducer_params_buffer_->get_ptr(per_spec_params_offsets[k]), params_size_bytes);
-    bindings->rw_buffer(3, *adstack_max_reducer_bytecode_buffer_);
-
-    cmdlist->bind_pipeline(adstack_max_reducer_pipeline_.get());
-    RhiResult bind_res = cmdlist->bind_shader_resources(bindings.get());
-    QD_ERROR_IF(bind_res != RhiResult::success, "adstack max reducer resource binding error: RhiResult({})",
-                int(bind_res));
-
-    // Each thread walks `kElementsPerThread` elements via a strided loop inside the shader, so the host can cap
-    // workgroup count well below the Vulkan / Metal `maxComputeWorkGroupCount[0]` minimum (65535) without dropping any
-    // elements. With workgroup_size = 128 and elements_per_thread = 64 the dispatch covers up to 65535 * 128 * 64 =
-    // ~536M elements per spec, two orders of magnitude above any reverse-mode workload the recognizer captures in
-    // practice. Keep the constant in sync with `kElementsPerThread` in `adstack_max_reducer_shader.cpp`.
-    constexpr uint32_t kElementsPerThread = 64u;
-    constexpr uint32_t kMaxWorkgroupCountX = 65535u;
-    const uint32_t threads_per_workgroup = spirv::kAdStackMaxReducerWorkgroupSize;
-    const uint32_t elements_per_workgroup = threads_per_workgroup * kElementsPerThread;
-    uint32_t group_x = (pending[k].length + elements_per_workgroup - 1) / elements_per_workgroup;
-    if (group_x > kMaxWorkgroupCountX) {
-      group_x = kMaxWorkgroupCountX;
+    if (level_dispatch.empty()) {
+      continue;  // every ready spec failed preparation; loop checks for more progress next iteration
     }
-    if (group_x == 0) {
-      // Empty range; record 0 directly. Caller's substitute helper treats 0 as the dispatched value (per-thread sizer's
-      // `kConst 0` evaluator floors at 1 downstream). RHI rejects 0x1x1 dispatches on most backends.
-      result[pending[k].cache_key] = 0;
-      continue;
-    }
-    RhiResult dispatch_res = cmdlist->dispatch(group_x, 1, 1);
-    QD_ERROR_IF(dispatch_res != RhiResult::success, "adstack max reducer dispatch error: RhiResult({})",
-                int(dispatch_res));
-    cmdlist->buffer_barrier(*adstack_max_reducer_output_buffer_);
-  }
-  device_->get_compute_stream()->submit_synced(cmdlist.get());
 
-  // Read back per-spec output slots: `slots[2*k]` = u32 max, `slots[2*k + 1]` = overflow flag. Overflow specs fall back
-  // to direct host-eval over the `MaxOverRange` node; the host evaluator's `1<<24` cap surfaces the hard error path on
-  // out-of-grammar shapes that exceed both u32 (body value) and the cap (iteration count).
-  {
+    // Pack params + bytecode for this level. Output buffer holds two u32 slots per dispatched spec (`[value,
+    // overflow_flag]`); the spec's slot index in this round's output buffer is its position in `level_dispatch`.
+    std::vector<size_t> per_spec_params_offsets(level_dispatch.size());
+    std::vector<uint32_t> per_spec_bytecode_word_offsets(level_dispatch.size());
+    size_t total_params_bytes = 0;
+    size_t total_bytecode_bytes = 0;
+    for (size_t i = 0; i < level_dispatch.size(); ++i) {
+      const size_t k = level_dispatch[i];
+      per_spec_params_offsets[i] = align_up(total_params_bytes, kDescriptorOffsetAlignment);
+      total_params_bytes = per_spec_params_offsets[i] + params_size_bytes;
+      QD_ASSERT_INFO(pending[k].body_bytecode.size() % sizeof(uint32_t) == 0,
+                     "max-reducer body bytecode is not 4-byte aligned (size={})", pending[k].body_bytecode.size());
+      per_spec_bytecode_word_offsets[i] = static_cast<uint32_t>(total_bytecode_bytes / sizeof(uint32_t));
+      total_bytecode_bytes += pending[k].body_bytecode.size();
+    }
+    const size_t output_bytes = level_dispatch.size() * 2 * sizeof(uint32_t);
+
+    grow_buffer(adstack_max_reducer_params_buffer_, adstack_max_reducer_params_buffer_size_, total_params_bytes,
+                /*host_write=*/true, /*host_read=*/false, "adstack max reducer params buffer");
+    grow_buffer(adstack_max_reducer_bytecode_buffer_, adstack_max_reducer_bytecode_buffer_size_, total_bytecode_bytes,
+                /*host_write=*/true, /*host_read=*/false, "adstack max reducer bytecode buffer");
+    grow_buffer(adstack_max_reducer_output_buffer_, adstack_max_reducer_output_buffer_size_, output_bytes,
+                /*host_write=*/false, /*host_read=*/true, "adstack max reducer output buffer");
+
+    // Write params + bytecode into their host-mapped buffers.
+    {
+      void *mapped = nullptr;
+      RhiResult map_res =
+          device_->map_range(adstack_max_reducer_params_buffer_->get_ptr(0), total_params_bytes, &mapped);
+      QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack max reducer params buffer");
+      for (size_t i = 0; i < level_dispatch.size(); ++i) {
+        const size_t k = level_dispatch[i];
+        spirv::AdStackMaxReducerParams params{};
+        params.output_slot = static_cast<uint32_t>(i);
+        params.length = pending[k].length;
+        params.num_axes = pending[k].num_axes;
+        params.body_bytecode_offset_words = per_spec_bytecode_word_offsets[i];
+        params.body_node_count = pending[k].body_node_count;
+        const uint32_t node_words = sizeof(AdStackSizeExprDeviceNode) / 4u;
+        params.body_indices_offset_words = per_spec_bytecode_word_offsets[i] + pending[k].body_node_count * node_words;
+        for (uint32_t a = 0; a < pending[k].num_axes; ++a) {
+          params.per_axis_length[a] = pending[k].per_axis_length[a];
+          const uint64_t begin_u64 = static_cast<uint64_t>(pending[k].per_axis_begin[a]);
+          params.per_axis_begin_lo[a] = static_cast<uint32_t>(begin_u64 & 0xFFFFFFFFull);
+          params.per_axis_begin_hi[a] = static_cast<uint32_t>((begin_u64 >> 32) & 0xFFFFFFFFull);
+          params.per_axis_var_id[a] = static_cast<int32_t>(a);
+        }
+        std::memcpy(reinterpret_cast<char *>(mapped) + per_spec_params_offsets[i], &params, params_size_bytes);
+      }
+      device_->unmap(*adstack_max_reducer_params_buffer_);
+    }
+    if (total_bytecode_bytes > 0) {
+      void *mapped = nullptr;
+      RhiResult map_res =
+          device_->map_range(adstack_max_reducer_bytecode_buffer_->get_ptr(0), total_bytecode_bytes, &mapped);
+      QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack max reducer bytecode buffer");
+      char *base = reinterpret_cast<char *>(mapped);
+      size_t cursor = 0;
+      for (size_t i = 0; i < level_dispatch.size(); ++i) {
+        const size_t k = level_dispatch[i];
+        std::memcpy(base + cursor, pending[k].body_bytecode.data(), pending[k].body_bytecode.size());
+        cursor += pending[k].body_bytecode.size();
+      }
+      device_->unmap(*adstack_max_reducer_bytecode_buffer_);
+    }
+
+    flush();
+    device_->wait_idle();
+
+    // GPU-side clear of the output buffer. Apple Silicon Metal leaves a host-side `map_range` + memset clear sitting in
+    // a write-combined cache that the next compute pipeline read does not observe; a `buffer_fill` is sequenced by the
+    // compute queue.
+    auto [clear_cmdlist, clear_cmdlist_res] = device_->get_compute_stream()->new_command_list_unique();
+    QD_ASSERT_INFO(clear_cmdlist_res == RhiResult::success, "Failed to create adstack max reducer clear cmdlist");
+    clear_cmdlist->buffer_fill(adstack_max_reducer_output_buffer_->get_ptr(0), output_bytes, /*data=*/0);
+    clear_cmdlist->buffer_barrier(*adstack_max_reducer_output_buffer_);
+    device_->get_compute_stream()->submit_synced(clear_cmdlist.get());
+
+    auto [cmdlist, cmdlist_res] = device_->get_compute_stream()->new_command_list_unique();
+    QD_ASSERT_INFO(cmdlist_res == RhiResult::success, "Failed to create adstack max reducer cmdlist");
+    // Mirror `adstack_sizer_launch.cpp`'s residency hint so Metal's PSB load path sees ndarray data buffers as
+    // resident; without `track_physical_buffer` the Apple GPU returns zero / lower-32-bits-of-pointer garbage for every
+    // `kExternalTensorRead` body load. Called once per cmdlist (before the per-spec dispatches).
+    if (device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer)) {
+      for (const auto &[arg_id, alloc] : ndarray_allocs) {
+        cmdlist->track_physical_buffer(alloc);
+      }
+    }
+    for (size_t i = 0; i < level_dispatch.size(); ++i) {
+      const size_t k = level_dispatch[i];
+      auto bindings = device_->create_resource_set_unique();
+      if (args_buffer != nullptr) {
+        bindings->rw_buffer(0, *args_buffer);
+      } else {
+        bindings->rw_buffer(0, *adstack_max_reducer_args_placeholder_buffer_);
+      }
+      bindings->rw_buffer(1, *adstack_max_reducer_output_buffer_);
+      bindings->rw_buffer(2, adstack_max_reducer_params_buffer_->get_ptr(per_spec_params_offsets[i]),
+                          params_size_bytes);
+      bindings->rw_buffer(3, *adstack_max_reducer_bytecode_buffer_);
+
+      cmdlist->bind_pipeline(adstack_max_reducer_pipeline_.get());
+      RhiResult bind_res = cmdlist->bind_shader_resources(bindings.get());
+      QD_ERROR_IF(bind_res != RhiResult::success, "adstack max reducer resource binding error: RhiResult({})",
+                  int(bind_res));
+
+      // Each thread walks `kElementsPerThread` elements via a strided loop inside the shader; cap workgroup count well
+      // below the Vulkan / Metal `maxComputeWorkGroupCount[0]` minimum (65535). Keep in sync with the shader.
+      constexpr uint32_t kElementsPerThread = 64u;
+      constexpr uint32_t kMaxWorkgroupCountX = 65535u;
+      const uint32_t threads_per_workgroup = spirv::kAdStackMaxReducerWorkgroupSize;
+      const uint32_t elements_per_workgroup = threads_per_workgroup * kElementsPerThread;
+      uint32_t group_x = (pending[k].length + elements_per_workgroup - 1) / elements_per_workgroup;
+      if (group_x > kMaxWorkgroupCountX)
+        group_x = kMaxWorkgroupCountX;
+      if (group_x == 0) {
+        // Empty range; record 0 directly. RHI rejects 0x1x1 dispatches on most backends.
+        result[pending[k].cache_key] = 0;
+        pending[k].dispatched = true;
+        ++dispatched_count;
+        continue;
+      }
+      RhiResult dispatch_res = cmdlist->dispatch(group_x, 1, 1);
+      QD_ERROR_IF(dispatch_res != RhiResult::success, "adstack max reducer dispatch error: RhiResult({})",
+                  int(dispatch_res));
+      cmdlist->buffer_barrier(*adstack_max_reducer_output_buffer_);
+    }
+    device_->get_compute_stream()->submit_synced(cmdlist.get());
+
+    // Read back this level's output slots: `slots[2*i]` = u32 max for `level_dispatch[i]`, `slots[2*i + 1]` = overflow
+    // flag. Overflow specs fall back to direct host-eval over the captured MOR node (against the substituted tree, so
+    // already-resolved deps' values are folded in). Cache misses get recorded with their body read observations so the
+    // next launch can short-circuit on a generation match.
     void *mapped = nullptr;
     RhiResult map_res = device_->map(*adstack_max_reducer_output_buffer_, &mapped);
     QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack max reducer output buffer for readback");
     const uint32_t *slots = reinterpret_cast<const uint32_t *>(mapped);
-    for (size_t k = 0; k < pending.size(); ++k) {
-      const uint32_t value_u32 = slots[2 * k];
-      const uint32_t overflow_flag = slots[2 * k + 1];
+    for (size_t i = 0; i < level_dispatch.size(); ++i) {
+      const size_t k = level_dispatch[i];
+      if (pending[k].dispatched)
+        continue;  // empty-range short-circuit handled above
+      const uint32_t value_u32 = slots[2 * i];
+      const uint32_t overflow_flag = slots[2 * i + 1];
       int64_t v;
       if (overflow_flag != 0) {
-        // Host eval over the captured `MaxOverRange` node. Re-resolve `expr` from the per-task attribs by matching
-        // `(stack_id, mor_node_idx)` against the recognized specs; on the gfx side we look up
-        // `task_attribs[ti]->ad_stack.size_exprs[stack_id]` indirectly via the cache key triplet.
-        const SerializedSizeExpr *expr = nullptr;
-        for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
-          if (task_attribs[ti].ad_stack.registry_id != pending[k].registry_id) {
-            continue;
-          }
-          const auto &allocas = task_attribs[ti].ad_stack.allocas;
-          if (pending[k].stack_id < 0 || static_cast<size_t>(pending[k].stack_id) >= allocas.size()) {
-            continue;
-          }
-          expr = &allocas[pending[k].stack_id].size_expr;
-          break;
-        }
-        if (expr != nullptr) {
-          v = evaluate_adstack_size_expr_at_node(*expr, pending[k].mor_node_idx, prog, &host_ctx);
-          if (v < 0) {
-            v = 0;
-          }
-        } else {
-          v = 0;  // unrecoverable; leave as zero so the per-task sizer floors at 1
-        }
+        const SerializedSizeExpr substituted = substitute_precomputed_max_over_range(
+            *pending[k].expr, pending[k].registry_id, pending[k].stack_id, result);
+        v = evaluate_adstack_size_expr_at_node(substituted, pending[k].mor_node_idx, prog, &host_ctx);
+        if (v < 0)
+          v = 0;
       } else {
         v = static_cast<int64_t>(value_u32);
       }
@@ -449,6 +481,8 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
         cache->record_max_reducer_eval(pending[k].registry_id, pending[k].stack_id, pending[k].mor_node_idx, v,
                                        std::move(pending[k].reads));
       }
+      pending[k].dispatched = true;
+      ++dispatched_count;
     }
     device_->unmap(*adstack_max_reducer_output_buffer_);
   }

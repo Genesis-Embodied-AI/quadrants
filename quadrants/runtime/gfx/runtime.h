@@ -188,6 +188,7 @@ class QD_DLL_EXPORT GfxRuntime {
   quadrants::lang::MaxReducerResultMap dispatch_max_reducers(
       LaunchContextBuilder &host_ctx,
       DeviceAllocationGuard *args_buffer,
+      const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
       const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs);
 
   void init_nonroot_buffers();
