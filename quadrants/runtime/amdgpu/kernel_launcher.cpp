@@ -379,6 +379,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   } else if (ctx.result_buffer_size > 0) {
     AMDGPUDriver::get_instance().stream_synchronize(active_stream);
   }
+  // Persistent scratch: no per-launch free for the per-handle `arg_buffer` / `runtime_context` or the launcher-global
+  // `result_buffer`. All three live until the launcher is destroyed; the dtor handles the final `mem_free_async`.
+  // Ephemeral buffers (explicit-stream path) are freed here.
   if (ephemeral_arg_buffer != nullptr) {
     AMDGPUDriver::get_instance().mem_free_async(ephemeral_arg_buffer, active_stream);
   }
