@@ -24,12 +24,14 @@ Calling a backend marked "no" raises `ValueError` from the Python layer at trace
 
 \* On CUDA, `block.mem_sync()` currently lowers via `block_barrier` (i.e. `__syncthreads()`), which doubles as a memory fence but additionally requires thread convergence — meaning calling it from divergent control flow today deadlocks. A fix to lower `mem_sync()` to a pure `__threadfence_block()` is in flight as [quadrants#637](https://github.com/Genesis-Embodied-AI/quadrants/pull/637); once merged, the divergent-branch pattern shown in the `block.mem_sync()` semantics section below works as written. Until then, prefer calling `mem_sync()` from uniform control flow on CUDA.
 
+Naming note: `block.mem_sync()` is planned to be renamed to `block.mem_fence()` in a future release, to align with the project's "fence vs barrier" terminology. The new name is not yet available; this page uses the current name throughout.
+
 ## Barrier vs fence: the distinction that matters
 
 Two of these ops sound similar but have very different semantics, and mixing them up deadlocks the GPU. The summary:
 
 - `block.sync()` is a **thread-converging barrier**. Every thread in the block must reach the call site before any thread proceeds. It also implies a memory fence at block scope.
-- `block.mem_sync()` is a **memory fence only**, at block scope. It orders memory operations but does not require thread convergence — it is safe to call from divergent control flow (e.g. inside `if tid == 0`).
+- `block.mem_sync()` (to be renamed `block.mem_fence()` in a future release) is a **memory fence only**, at block scope. It orders memory operations but does not require thread convergence — it is safe to call from divergent control flow (e.g. inside `if tid == 0`).
 
 Concretely, on the SPIR-V backend `sync()` lowers to `workgroupBarrier` and `mem_sync()` lowers to `workgroupMemoryBarrier`. On CUDA, `sync()` lowers to `__syncthreads()`; `mem_sync()` is intended to lower to `__threadfence_block()` (a pure fence with no convergence requirement) — see the support-table caveat above. Calling `sync()` from a path that not all threads reach (a divergent `if`, an early `return`, etc.) is a classic GPU deadlock and applies to both backends.
 
@@ -55,6 +57,8 @@ Block-wide barriers that also reduce a per-thread `i32` predicate across the blo
 Each call performs both the synchronization (same convergence requirement as `sync()`) and the reduction in a single instruction. Only available on CUDA today; they lower to the NVPTX `barrier.cta.red` family of intrinsics (`block_barrier_and_i32`, `block_barrier_or_i32`, `block_barrier_count_i32`).
 
 ### `block.mem_sync()`
+
+**Planned rename: `block.mem_fence()`.** This op will be renamed to `block.mem_fence()` in a future release. The current name (`mem_sync()`) remains the only spelling available today; the rest of this section uses it.
 
 A block-scope memory fence. Orders memory operations issued by the calling thread so that prior writes are visible to other threads in the block before any subsequent read by the calling thread can be reordered ahead of the fence. It does **not** synchronize threads — no convergence requirement (subject to the CUDA caveat in the support table).
 
@@ -95,7 +99,7 @@ Returns the local thread index within the block. Currently only implemented on S
 
 ## Grid-scope fence: `qd.simt.grid.memfence()`
 
-`grid.memfence()` is the device-scope counterpart of `block.mem_sync()`. It orders memory operations across the entire grid, so writes made by one block become visible to other blocks after the fence. CUDA only today; lowers to `__threadfence()` (`nvvm_membar_gl`).
+`grid.memfence()` is the device-scope counterpart of `block.mem_sync()` (to be renamed `block.mem_fence()` in a future release). It orders memory operations across the entire grid, so writes made by one block become visible to other blocks after the fence. CUDA only today; lowers to `__threadfence()` (`nvvm_membar_gl`).
 
 Use it when you need cross-block coordination via global memory (decoupled look-back scan, inter-block flag publishing, single-pass reductions, etc.). For coordination within a single block, prefer `block.mem_sync()` — it is cheaper.
 
