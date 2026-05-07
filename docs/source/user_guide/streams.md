@@ -59,12 +59,19 @@ For cases that require manual control — such as launching separate kernels on 
 
 ### Creating and using streams
 
+Any `@qd.kernel` function accepts a special `qd_stream` keyword argument — you do not need to declare it in the kernel signature. The `@qd.kernel` decorator handles it automatically.
+
 ```python
+@qd.kernel
+def my_kernel():
+    for i in range(N):
+        a[i] = i
+
 s1 = qd.create_stream()
 s2 = qd.create_stream()
 
-some_func1(qd_stream=s1)
-some_func2(qd_stream=s2)
+my_kernel(qd_stream=s1)
+my_kernel(qd_stream=s2)
 
 s1.synchronize()
 s2.synchronize()
@@ -73,7 +80,7 @@ s1.destroy()
 s2.destroy()
 ```
 
-Pass `qd_stream=` to any kernel call to launch it on that stream. Kernels on different streams may execute concurrently. Call `synchronize()` to block until all work on a stream completes.
+Kernels on different streams may execute concurrently. Call `synchronize()` to block until all work on a stream completes.
 
 ### Events
 
