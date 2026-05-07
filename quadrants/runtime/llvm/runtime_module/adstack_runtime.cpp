@@ -117,7 +117,7 @@ struct DeviceEvalScope {
   i64 values[kDeviceBoundVarCap];
 };
 
-i64 device_load_element(const char *data_ptr, i64 linear, i32 prim_dt) {
+__attribute__((always_inline)) inline i64 device_load_element(const char *data_ptr, i64 linear, i32 prim_dt) {
   // Enum values mirror `PrimitiveTypeID` in `quadrants/inc/data_type.inc.h` (f16=0, f32=1, f64=2, i8=3, i16=4,
   // i32=5, i64=6, u1=7, u8=8, u16=9, u32=10, u64=11). The pre-pass only emits integer reads (the adstack-size
   // grammar rejects float-typed reads at build_value_expr), so we only decode the integer types here.
@@ -433,23 +433,169 @@ extern "C" void runtime_eval_static_bound_count(LLVMRuntime *runtime, RuntimeCon
   runtime->adstack_bound_row_capacities[params->task_index] = count;
 }
 
-// per-launch per-launch parallel-max evaluator over the body of a captured `StaticAdStackMaxReducerSpec`'s
-// `MaxOverRange` node. Single-thread serial walk on every backend (CPU host thread, CUDA / AMDGPU single-thread
-// JIT-launched device function), mirroring `runtime_eval_static_bound_count`. The body bytecode reuses the existing
-// `AdStackSizeExprDeviceNode` POD format already shared between the host encoder and the LLVM device sizer interpreter
-// (`device_eval_node`); The recognizer grammar restricts body kinds to `kConst / kBoundVariable / kExternalTensorRead /
-// kAdd / kSub / kMul / kMax`, so the recursive walk never recurses through `kMaxOverRange` or `kFieldLoad` and the
-// iteration stays linear in the cross-product of every captured axis.
+// per-launch parallel-max evaluator over the body of a captured `StaticAdStackMaxReducerSpec`'s `MaxOverRange` node.
+// Two entry points share the same per-iteration body so CPU keeps a single in-process call and GPU saturates the
+// dispatch:
+//   - `_serial` (CPU): one thread walks the full cross-product, writes the result directly to `output_slot`. The
+//     host dispatcher caller does not seed the slot - this entry point publishes the final value (or the INT64_MIN
+//     sentinel for an empty / out-of-bound axis count).
+//   - `_parallel` (CUDA / AMDGPU): grid-strided walk; each thread accumulates a per-thread running max and atomically
+//     reduces into `output_slot` with `atomic_max_i64`. The host dispatcher seeds the slot to INT64_MIN before
+//     launching so an empty cross-product leaves the sentinel for the host launcher to detect and floor at zero.
+//
+// The body bytecode reuses the existing `AdStackSizeExprDeviceNode` POD format already shared between the host encoder
+// and the LLVM device sizer interpreter (`device_eval_node`). The recognizer grammar restricts body kinds to `kConst /
+// kBoundVariable / kExternalTensorRead / kAdd / kSub / kMul / kMax`, so the recursive walk never recurses through
+// `kMaxOverRange` or `kFieldLoad` and the iteration stays linear in the cross-product of every captured axis.
 //
 // Multi-axis: walks the cross-product of `params->per_axis_length[0..num_axes)` outermost-first. Per-iteration the
 // runtime pre-populates `scope.values[per_axis_var_id[a]] = per_axis_begin[a] + axis_idx_a` for every axis, then
-// evaluates `device_eval_node(body_root_idx, &scope, ...)` and updates the running max. Result is written to
-// `runtime->adstack_max_reducer_outputs[output_slot]`. Caller clears the slot before the dispatch so an empty range
-// leaves the sentinel for the host launcher to detect and floor at zero.
-extern "C" void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime,
-                                                RuntimeContext *ctx,
-                                                Ptr params_blob,
-                                                Ptr body_bytecode) {
+// evaluates `device_eval_node(body_root_idx, &scope, ...)` and updates the running max.
+namespace {
+// Iterative post-order evaluator for the max-reducer body. The recursive `device_eval_node` poisons NVPTX
+// codegen: the backend treats the recursive call as undef-returning, which folds the surrounding conditional to
+// a constant and DCE's the entire post-loop atomic-reduce block. The recognizer accepts max-reducer body kinds
+// `kConst / kBoundVariable / kExternalTensorRead / kFieldLoad / kAdd / kSub / kMul / kMax` (no `kMaxOverRange`),
+// so a fixed-size stack walk of the post-order body bytecode covers every accepted shape with no recursion.
+// Stack depth is bounded by tree depth; recognized bodies are tiny (a few nodes), so 32 slots is plenty.
+constexpr int kMaxReducerEvalStackDepth = 32;
+
+__attribute__((always_inline)) inline i64 device_eval_max_reduce_body_iterative(
+    LLVMRuntime *runtime,
+    const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
+    const i32 *indices,
+    i32 body_node_count,
+    DeviceEvalScope *scope,
+    const char *arg_buffer) {
+  using K = quadrants::lang::AdStackSizeExprDeviceKind;
+  i64 stack[kMaxReducerEvalStackDepth];
+  i32 sp = 0;
+  for (i32 idx = 0; idx < body_node_count; ++idx) {
+    const auto &node = nodes[idx];
+    switch (static_cast<K>(node.kind)) {
+      case K::kConst:
+        stack[sp++] = node.const_value;
+        break;
+      case K::kBoundVariable: {
+        const i32 var = node.var_id;
+        i64 v = 0;
+        if (var >= 0 && var < kDeviceBoundVarCap) {
+          v = scope->values[var];
+        }
+        stack[sp++] = v;
+        break;
+      }
+      case K::kExternalTensorRead: {
+        auto data_ptr_raw = *reinterpret_cast<const char *const *>(arg_buffer + node.arg_buffer_offset);
+        i64 linear = 0;
+        for (i32 k = 0; k < node.indices_count; ++k) {
+          const i32 raw = indices[node.indices_offset + 2 * k];
+          const i32 elem_stride = indices[node.indices_offset + 2 * k + 1];
+          i64 v = 0;
+          if (raw >= 0) {
+            v = raw;
+          } else {
+            const i32 var = -(raw + 1);
+            if (var >= 0 && var < kDeviceBoundVarCap)
+              v = scope->values[var];
+          }
+          linear += v * static_cast<i64>(elem_stride);
+        }
+        stack[sp++] = device_load_element(data_ptr_raw, linear, node.prim_dt);
+        break;
+      }
+      case K::kFieldLoad: {
+        // Bound-var-indexed `kFieldLoad` body leaf: encoder stores `arg_buffer_offset = snode_root_id` and
+        // `const_value = place_byte_offset_in_root` for the LLVM path. Closed FieldLoads are host-folded to `kConst`
+        // at encode time; SPIR-V-encoded bytecode (snode_root_id < 0) cannot be resolved here, so push 0 as a safe
+        // over-approximation - the host diagnose path re-runs synchronously and raises if needed.
+        const i32 snode_root_id = node.arg_buffer_offset;
+        if (snode_root_id < 0 || runtime == nullptr) {
+          stack[sp++] = 0;
+          break;
+        }
+        const auto root_ptr = reinterpret_cast<const char *>(runtime->roots[snode_root_id]);
+        const i64 place_byte_off = node.const_value;
+        i64 elem_idx = 0;
+        for (i32 k = 0; k < node.indices_count; ++k) {
+          const i32 raw = indices[node.indices_offset + 2 * k];
+          const i32 elem_stride = indices[node.indices_offset + 2 * k + 1];
+          i64 v = 0;
+          if (raw >= 0) {
+            v = raw;
+          } else {
+            const i32 var = -(raw + 1);
+            if (var >= 0 && var < kDeviceBoundVarCap)
+              v = scope->values[var];
+          }
+          elem_idx += v * static_cast<i64>(elem_stride);
+        }
+        stack[sp++] = device_load_element(root_ptr + place_byte_off, elem_idx, node.prim_dt);
+        break;
+      }
+      case K::kAdd: {
+        i64 rhs = stack[--sp];
+        i64 lhs = stack[--sp];
+        stack[sp++] = lhs + rhs;
+        break;
+      }
+      case K::kSub: {
+        i64 rhs = stack[--sp];
+        i64 lhs = stack[--sp];
+        i64 diff = lhs - rhs;
+        stack[sp++] = diff > 0 ? diff : 0;
+        break;
+      }
+      case K::kMul: {
+        i64 rhs = stack[--sp];
+        i64 lhs = stack[--sp];
+        stack[sp++] = lhs * rhs;
+        break;
+      }
+      case K::kMax: {
+        i64 rhs = stack[--sp];
+        i64 lhs = stack[--sp];
+        stack[sp++] = lhs > rhs ? lhs : rhs;
+        break;
+      }
+      default:
+        // Out-of-grammar kinds (e.g. `kMaxOverRange`) shouldn't appear in a recognizer-accepted body. Push 0 so the
+        // kernel completes deterministically; the host's diagnose path re-runs the tree and raises.
+        stack[sp++] = 0;
+        break;
+    }
+  }
+  return sp > 0 ? stack[sp - 1] : 0;
+}
+
+__attribute__((always_inline)) inline i64 runtime_eval_adstack_max_reduce_one_step(
+    LLVMRuntime *runtime,
+    const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
+    const i32 *indices,
+    i32 body_node_count,
+    const quadrants::lang::LlvmAdStackMaxReducerDeviceParams *params,
+    u64 i,
+    u32 num_axes,
+    DeviceEvalScope *scope,
+    const char *arg_buffer) {
+  u64 rem = i;
+  for (u32 a = num_axes; a-- > 0;) {
+    const u32 len_a = params->per_axis_length[a];
+    const u64 idx_a = rem % (u64)len_a;
+    rem = rem / (u64)len_a;
+    const i32 var_id = params->per_axis_var_id[a];
+    if (var_id >= 0 && var_id < kDeviceBoundVarCap) {
+      scope->values[var_id] = params->per_axis_begin[a] + (i64)idx_a;
+    }
+  }
+  return device_eval_max_reduce_body_iterative(runtime, nodes, indices, body_node_count, scope, arg_buffer);
+}
+}  // namespace
+
+extern "C" void runtime_eval_adstack_max_reduce_serial(LLVMRuntime *runtime,
+                                                       RuntimeContext *ctx,
+                                                       Ptr params_blob,
+                                                       Ptr body_bytecode) {
   using quadrants::lang::AdStackSizeExprDeviceNode;
   using quadrants::lang::kAdStackMaxReducerMaxAxes;
   using quadrants::lang::LlvmAdStackMaxReducerDeviceParams;
@@ -468,14 +614,11 @@ extern "C" void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime,
   // Sentinel start: INT64_MIN so the first body value always wins over an empty cross-product. Caller normalises the
   // empty case (writes 0 / floors at compile-time) when reading the slot back.
   i64 running_max = (i64)0x8000000000000000ll;
-  const i32 root_idx = params->body_root_node_idx;
   const u32 num_axes = params->num_axes;
   if (num_axes == 0 || num_axes > (u32)kAdStackMaxReducerMaxAxes) {
     runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
     return;
   }
-  // Compute the total cross-product length up front; bail on a zero-length axis to keep the linear walk's mod / div
-  // decomposition well-defined.
   u64 total_length = 1;
   for (u32 a = 0; a < num_axes; ++a) {
     if (params->per_axis_length[a] == 0u) {
@@ -484,27 +627,87 @@ extern "C" void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime,
     }
     total_length *= (u64)params->per_axis_length[a];
   }
-  // Walk a single linear counter `i` over `[0, total_length)` and decompose into per-axis indices outermost-first (axis
-  // 0 is the slowest-varying = highest stride). The host launcher caps `total_length` at u32 max in the dispatch site
-  // so the linear counter fits in u32 and the per-axis math stays in i64.
   for (u64 i = 0; i < total_length; ++i) {
-    u64 rem = i;
-    for (u32 a = num_axes; a-- > 0;) {
-      const u32 len_a = params->per_axis_length[a];
-      const u64 idx_a = rem % (u64)len_a;
-      rem = rem / (u64)len_a;
-      const i32 var_id = params->per_axis_var_id[a];
-      if (var_id >= 0 && var_id < kDeviceBoundVarCap) {
-        scope.values[var_id] = params->per_axis_begin[a] + (i64)idx_a;
-      }
-    }
-    i64 v = device_eval_node(runtime, nodes, indices, root_idx, &scope, arg_buffer);
+    i64 v = runtime_eval_adstack_max_reduce_one_step(runtime, nodes, indices, params->body_node_count, params, i,
+                                                     num_axes, &scope, arg_buffer);
     if (v > running_max) {
       running_max = v;
     }
   }
   runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
 }
+
+#if ARCH_cuda || ARCH_amdgpu
+// Forward decl: defined later in runtime.cpp; included here in single-TU layout means we forward-decl rather than
+// reorder the function definitions.
+void block_barrier();
+extern "C" void runtime_eval_adstack_max_reduce_parallel(LLVMRuntime *runtime,
+                                                         RuntimeContext *ctx,
+                                                         Ptr params_blob,
+                                                         Ptr body_bytecode) {
+  using quadrants::lang::AdStackSizeExprDeviceNode;
+  using quadrants::lang::kAdStackMaxReducerMaxAxes;
+  using quadrants::lang::LlvmAdStackMaxReducerDeviceParams;
+
+  const auto *params = reinterpret_cast<const LlvmAdStackMaxReducerDeviceParams *>(params_blob);
+  const auto *nodes = reinterpret_cast<const AdStackSizeExprDeviceNode *>(body_bytecode);
+  const auto *indices = reinterpret_cast<const i32 *>(reinterpret_cast<const char *>(nodes) +
+                                                      sizeof(AdStackSizeExprDeviceNode) * params->body_node_count);
+
+  const u32 num_axes = params->num_axes;
+  if (num_axes == 0 || num_axes > (u32)kAdStackMaxReducerMaxAxes) {
+    return;  // Host pre-seeded the slot with INT64_MIN; nothing to reduce.
+  }
+  u64 total_length = 1;
+  for (u32 a = 0; a < num_axes; ++a) {
+    if (params->per_axis_length[a] == 0u) {
+      return;  // Empty cross-product. Sentinel stays.
+    }
+    total_length *= (u64)params->per_axis_length[a];
+  }
+
+  const char *arg_buffer = ctx->arg_buffer;
+  DeviceEvalScope scope;
+  for (i32 k = 0; k < kDeviceBoundVarCap; ++k) {
+    scope.values[k] = 0;
+  }
+
+  // Per-thread grid-strided walk over [0, total_length). Each thread tracks a private running max in registers;
+  // the post-loop CAS reduces all per-thread maxima into the host-seeded INT64_MIN slot. Body evaluation goes
+  // through `device_eval_max_reduce_body_iterative` (post-order stack walk, no recursion) - the recursive
+  // `device_eval_node` triggers an NVPTX backend pathology where the recursive callee is treated as
+  // undef-returning, which dead-code-eliminates the entire post-loop atomic-reduce block. The iterative walk
+  // covers every body kind the recognizer accepts (`kConst / kBoundVariable / kExternalTensorRead / kAdd / kSub /
+  // kMul / kMax`) on a fixed 32-slot stack.
+  const u64 tid = (u64)(block_idx() * block_dim() + thread_idx());
+  const u64 stride = (u64)(grid_dim() * block_dim());
+  i64 running_max = (i64)0x8000000000000000ll;
+  for (u64 i = tid; i < total_length; i += stride) {
+    i64 v = runtime_eval_adstack_max_reduce_one_step(runtime, nodes, indices, params->body_node_count, params, i,
+                                                     num_axes, &scope, arg_buffer);
+    if (v > running_max) {
+      running_max = v;
+    }
+  }
+  // Atomic-max reduction across all per-thread maxima into the host-seeded INT64_MIN slot via a
+  // `__atomic_compare_exchange_n` CAS loop. Both NVPTX and AMDGPU lower the builtin to a generic-addrspace `atom.cas`
+  // (NVPTX) / `flat_atomic_cmpswap` (AMDGPU); the slot pointer comes from a runtime memory load
+  // (`runtime->adstack_max_reducer_outputs[output_slot]`), and the unified builtin keeps the bitcode parseable on every
+  // host triple, including aarch64 where PTX register-class constraints (`=l`) are rejected by clang's frontend.
+  if (running_max != (i64)0x8000000000000000ll) {
+    i64 *slot = &runtime->adstack_max_reducer_outputs[params->output_slot];
+    i64 old_val = *slot;
+    while (running_max > old_val) {
+      i64 expected = old_val;
+      if (__atomic_compare_exchange_n(slot, &expected, running_max, /*weak=*/false, __ATOMIC_RELAXED,
+                                      __ATOMIC_RELAXED)) {
+        break;
+      }
+      old_val = expected;
+    }
+  }
+}
+#endif
 
 extern "C" void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr bytecode) {
   // Bytecode layout:

@@ -542,8 +542,17 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
     void *outputs_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_outputs_alloc_);
     copy_h2d(runtime_adstack_max_reducer_outputs_field_ptr_, &outputs_dev_ptr, sizeof(void *));
 
+    // GPU parallel reducer: seed every round-local output slot with INT64_MIN so the per-thread `atomic_max_i64`
+    // reductions inside `runtime_eval_adstack_max_reduce_parallel` can publish the cross-product max into a known
+    // sentinel. CPU's `_serial` variant writes the slot directly inside the kernel (no host-side seeding needed).
+    const bool use_gpu_parallel_reducer = config_.arch == Arch::cuda || config_.arch == Arch::amdgpu;
+    if (use_gpu_parallel_reducer) {
+      std::vector<int64_t> sentinel_slots(level_dispatch.size(), static_cast<int64_t>(0x8000000000000000ll));
+      copy_h2d(outputs_dev_ptr, sentinel_slots.data(), sentinel_slots.size() * sizeof(int64_t));
+    }
+
     // Assign each ready spec's `output_slot` to its round-local index within `level_dispatch`, then h2d its params +
-    // body bytecode and invoke the single-threaded runtime function.
+    // body bytecode and invoke the runtime evaluator.
     for (std::size_t i = 0; i < level_dispatch.size(); ++i) {
       const std::size_t k = level_dispatch[i];
       pending[k].params.output_slot = static_cast<uint32_t>(i);
@@ -585,9 +594,26 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       void *bytecode_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_bytecode_alloc_);
       copy_h2d(bytecode_dev_ptr, pending[k].body_bytecode.data(), needed_bytecode_bytes);
 
-      runtime_jit->call<void *, void *, void *, void *>("runtime_eval_adstack_max_reduce", llvm_runtime_,
-                                                        runtime_context_ptr_for_reducer, params_dev_ptr,
-                                                        bytecode_dev_ptr);
+      if (use_gpu_parallel_reducer) {
+        // Grid-strided parallel reducer. Cap `grid_dim` at the launcher's saturating grid_dim so the dispatch
+        // shares the heap-row budget the rest of the launcher uses; `block_dim` matches the codegen default. The
+        // grid-stride loop handles arbitrary `total_length` so under-dispatching is harmless.
+        std::uint64_t cross_product = 1;
+        for (std::size_t a = 0; a < pending[k].params.num_axes; ++a) {
+          cross_product *= static_cast<std::uint64_t>(pending[k].params.per_axis_length[a]);
+        }
+        const std::size_t block_dim = static_cast<std::size_t>(std::max(1, config_.max_block_dim));
+        const std::size_t needed_threads = std::max<std::size_t>(1, static_cast<std::size_t>(cross_product));
+        const std::size_t grid_dim_cap = static_cast<std::size_t>(std::max(1, config_.saturating_grid_dim));
+        const std::size_t grid_dim = std::min(grid_dim_cap, (needed_threads + block_dim - 1) / block_dim);
+        runtime_jit->launch<void *, void *, void *, void *>(
+            "runtime_eval_adstack_max_reduce_parallel", grid_dim, block_dim, 0, llvm_runtime_,
+            runtime_context_ptr_for_reducer, params_dev_ptr, bytecode_dev_ptr);
+      } else {
+        runtime_jit->call<void *, void *, void *, void *>("runtime_eval_adstack_max_reduce_serial", llvm_runtime_,
+                                                          runtime_context_ptr_for_reducer, params_dev_ptr,
+                                                          bytecode_dev_ptr);
+      }
     }
 
     // Read back this round's output slots. The runtime function writes int64 values at `outputs[output_slot]`; each

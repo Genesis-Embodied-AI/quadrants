@@ -34,13 +34,22 @@ void runtime_get_adstack_max_reducer_field_ptr(LLVMRuntime *runtime);
 
 // Per-launch device-resident reducers / interpreters consumed by the host launcher right before each adstack-bearing
 // kernel dispatch. `runtime_eval_static_bound_count` walks a captured gating ndarray / SNode field and writes the
-// gate-passing count into `runtime->adstack_bound_row_capacities[task_index]`. `runtime_eval_adstack_max_reduce`
-// walks a captured `StaticAdStackMaxReducerSpec` body over its multi-axis cross-product and writes the running max
-// into `runtime->adstack_max_reducer_outputs[output_slot]`. `runtime_eval_adstack_size_expr` walks every alloca's
-// SizeExpr tree and publishes per-stack offsets / max_sizes plus the per-thread strides into `LLVMRuntime`. The
-// blob layouts are defined in the `quadrants/ir/...adstack...device.h` headers.
+// gate-passing count into `runtime->adstack_bound_row_capacities[task_index]`.
+// `runtime_eval_adstack_max_reduce_{serial,parallel}` walk a captured `StaticAdStackMaxReducerSpec` body over its
+// multi-axis cross-product and reduce-max into `runtime->adstack_max_reducer_outputs[output_slot]`. The `_serial`
+// variant is a single-thread call (used on CPU); the `_parallel` variant is a grid-strided launch with an
+// `atomic_max_i64` reduction (used on CUDA / AMDGPU). `runtime_eval_adstack_size_expr` walks every alloca's SizeExpr
+// tree and publishes per-stack offsets / max_sizes plus the per-thread strides into `LLVMRuntime`. The blob layouts
+// are defined in the `quadrants/ir/...adstack...device.h` headers.
 void runtime_eval_static_bound_count(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr params_blob);
-void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr params_blob, Ptr body_bytecode);
+void runtime_eval_adstack_max_reduce_serial(LLVMRuntime *runtime,
+                                            RuntimeContext *ctx,
+                                            Ptr params_blob,
+                                            Ptr body_bytecode);
+void runtime_eval_adstack_max_reduce_parallel(LLVMRuntime *runtime,
+                                              RuntimeContext *ctx,
+                                              Ptr params_blob,
+                                              Ptr body_bytecode);
 void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr bytecode);
 
 // Publish the device-mapped addresses of the pinned-host overflow flag / task-id slots the host allocated at
