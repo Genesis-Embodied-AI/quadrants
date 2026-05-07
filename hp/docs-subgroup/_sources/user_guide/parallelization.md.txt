@@ -73,17 +73,15 @@ There are some additional types, but these are variations on global memory:
 - constant memory: global memory, but which can be stored easily in cache
 - local memory: storage which is private to each specific thread, but, unintuitively, is stored off-chip, and is as slow as global memory
 
-Quadrants gives access to shared memory, using `qd.stmt.SharedArray()`, but typically Quadrants kernels use only global memory and register memory. You cannot directly request to use registers, but registers will be used to hold any local variables, within the limits of available registers. Fields, ndarrays, and other data, are stored in global memory. This holds some implications for synchronization.
+Quadrants gives access to shared memory, using `qd.simt.block.SharedArray()`, but typically Quadrants kernels use only global memory and register memory. You cannot directly request to use registers, but registers will be used to hold any local variables, within the limits of available registers. Fields, ndarrays, and other data, are stored in global memory. This holds some implications for synchronization.
 
 ## Thread synchronization
 
 Typically, Quadrants kernels use `atomic_` operations for synchronization. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that `atomic` operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.
 
-When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads.
+When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads. The block-level primitives (`qd.simt.block.sync`, `qd.simt.block.mem_sync`, the predicate-reducing barriers, and `SharedArray` itself) are documented in [block](block.md), which also discusses the important distinction between a thread-converging barrier and a memory-only fence.
 
-However, these fences and barriers do not work for global memory.
-
-To synchronize writes to global memory, you'll need to finish the current kernel, and launch a new kernel.
+However, these block-scope fences and barriers do not work for synchronizing writes across blocks. For cross-block coordination through global memory, use `qd.simt.grid.memfence()` (a device-scope fence; see [block](block.md#grid-scope-fence-qdsimtgridmemfence)) — or, if you need full cross-block thread synchronization, finish the current kernel and launch a new kernel.
 
 ## Avoiding synchronization
 

@@ -60,7 +60,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Tile16x16: register-resident 16x16 tiles" href="tile16.html" />
-    <link rel="prev" title="Automatic differentiation" href="autodiff.html" />
+    <link rel="prev" title="Block primitives" href="block.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.7.6" />
@@ -306,6 +306,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
@@ -642,10 +643,11 @@
 </section>
 <section id="broadcast-value-index">
 <h3><code class="docutils literal notranslate"><span class="pre">broadcast(value,</span> <span class="pre">index)</span></code><a class="headerlink" href="#broadcast-value-index" title="Link to this heading">#</a></h3>
-<p>Every lane in the subgroup returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by the lane whose subgroup-local id equals <code class="docutils literal notranslate"><span class="pre">index</span></code>. Equivalent to <code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">index)</span></code> but expresses intent (“read lane <code class="docutils literal notranslate"><span class="pre">index</span></code>”) more directly and may map to a cheaper instruction where the backend has a dedicated broadcast.</p>
+<p>Every lane in the subgroup returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by the lane whose subgroup-local id equals <code class="docutils literal notranslate"><span class="pre">index</span></code>. Expresses intent (“read lane <code class="docutils literal notranslate"><span class="pre">index</span></code>”) more directly than <code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">index)</span></code> and on backends with a dedicated broadcast may map to a cheaper instruction.</p>
 <ul class="simple">
 <li><p>Same dtype rules as <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>.</p></li>
 <li><p>Maps to <code class="docutils literal notranslate"><span class="pre">__shfl_sync</span></code> on CUDA, <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> on AMDGPU, and <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformBroadcast</span></code> on SPIR-V.</p></li>
+<li><p><strong>Important: on SPIR-V, <code class="docutils literal notranslate"><span class="pre">index</span></code> must be dynamically uniform</strong> — the same value on every lane in the subgroup. Passing a per-lane varying <code class="docutils literal notranslate"><span class="pre">index</span></code> is undefined behavior, because <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformBroadcast</span></code> requires its <code class="docutils literal notranslate"><span class="pre">Id</span></code> operand to be dynamically uniform across the subgroup. On CUDA / AMDGPU, <code class="docutils literal notranslate"><span class="pre">index</span></code> may vary per lane and the call is identical to <code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">index)</span></code>. If you need a varying source lane, use <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> directly.</p></li>
 </ul>
 </section>
 <section id="common-to-the-data-movement-ops">
@@ -866,12 +868,12 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="autodiff.html"
+       href="block.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Automatic differentiation</p>
+        <p class="prev-next-title">Block primitives</p>
       </div>
     </a>
     <a class="right-next"
