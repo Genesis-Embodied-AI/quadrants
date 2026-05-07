@@ -98,10 +98,11 @@ Lane `i` returns the `value` held by lane `i - offset`. Lanes near the bottom of
 
 ### `broadcast(value, index)`
 
-Every lane in the subgroup returns the `value` held by the lane whose subgroup-local id equals `index`. Equivalent to `shuffle(value, index)` but expresses intent ("read lane `index`") more directly and may map to a cheaper instruction where the backend has a dedicated broadcast.
+Every lane in the subgroup returns the `value` held by the lane whose subgroup-local id equals `index`. Expresses intent ("read lane `index`") more directly than `shuffle(value, index)` and on backends with a dedicated broadcast may map to a cheaper instruction.
 
 - Same dtype rules as `shuffle`.
 - Maps to `__shfl_sync` on CUDA, `ds_bpermute` on AMDGPU, and `OpGroupNonUniformBroadcast` on SPIR-V.
+- **Important: on SPIR-V, `index` must be dynamically uniform** — the same value on every lane in the subgroup. Passing a per-lane varying `index` is undefined behavior, because `OpGroupNonUniformBroadcast` requires its `Id` operand to be dynamically uniform across the subgroup. On CUDA / AMDGPU, `index` may vary per lane and the call is identical to `shuffle(value, index)`. If you need a varying source lane, use `shuffle` directly.
 
 ### Common to the data-movement ops
 
