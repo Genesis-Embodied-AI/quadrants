@@ -30,10 +30,8 @@ The full Python API is grouped here by category. The first column lists each op,
 | `subgroup.invocation_id()`                  | yes  | yes    | yes                     |
 | `subgroup.group_size()`                     | no   | no     | yes                     |
 | `subgroup.elect()`                          | no   | no     | yes                     |
-| `subgroup.sync()`                           | yes\*\* | yes\*\* | yes                  |
-| `subgroup.mem_fence()`                      | yes\*\* | yes\*\* | yes                  |
-
-\*\* On CUDA / AMDGPU `sync()` / `mem_fence()` lower to nothing: subgroups (warps / waves) execute in lockstep under our uniform-control-flow contract (see the data-movement note below), so intra-warp control and memory ordering are automatic. They are not no-op'd away on SPIR-V because Vulkan / Metal subgroups can diverge — the SPIR-V backend emits real `OpControlBarrier` / `OpMemoryBarrier` instructions there.
+| `subgroup.sync()`                           | no   | no     | yes                     |
+| `subgroup.mem_fence()`                      | no   | no     | yes                     |
 
 Naming note: two of the names above were recently renamed to align with the project's naming conventions across scopes:
 
@@ -148,8 +146,7 @@ Picks one lane in the subgroup as the "leader". Returns `1` on the elected lane 
 
 `sync()` is a subgroup-scope thread-converging barrier — every lane in the subgroup must reach the call before any lane proceeds. `mem_fence()` is a subgroup-scope memory fence: it orders memory operations within the subgroup without requiring thread convergence.
 
-- On SPIR-V (Vulkan / Metal) these lower to `OpControlBarrier` / `OpMemoryBarrier` scoped to `Subgroup`. On CUDA / AMDGPU they lower to nothing: subgroups (warps / waves) execute in lockstep under the uniform-control-flow contract that already governs the data-movement ops, so intra-warp control and memory ordering are automatic. The Python API is therefore portable, but only the SPIR-V backend actually emits an instruction.
-- The CUDA / AMDGPU lowering does **not** cover the divergent-control-flow case. If you are calling these from divergent control flow on CUDA you want `__syncwarp(active_mask)`, which is not currently exposed through `qd.simt.subgroup`.
+- Both currently SPIR-V only (`OpControlBarrier` / `OpMemoryBarrier`, both scoped to `Subgroup`). On CUDA / AMDGPU, subgroups (warps) execute in lockstep and these are typically unnecessary; the equivalent under divergent control flow on CUDA is `__syncwarp(active_mask)`, which is not currently exposed through `qd.simt.subgroup`.
 - The legacy names `subgroup.barrier()` and `subgroup.memory_barrier()` are still available as deprecated aliases. They forward to `sync()` / `mem_fence()` and emit a `DeprecationWarning` on first use; prefer the new names in new code.
 
 ### `reduce_add(value, log2_size)`

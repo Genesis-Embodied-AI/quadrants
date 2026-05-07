@@ -404,12 +404,6 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
           /* dt=*/stmt->args[0]->ret_type, offset);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
-    } else if (stmt->func_name == "subgroupBarrier" || stmt->func_name == "subgroupMemoryBarrier") {
-      // Subgroups (waves) execute in lockstep on AMDGPU under uniform control flow with all lanes
-      // active (see the data-movement note in subgroup.md), so intra-wave control / memory
-      // ordering is automatic. The op therefore lowers to nothing; we just produce an i32 zero
-      // placeholder to match the SPIR-V codegen's return convention.
-      llvm_val[stmt] = tlctx->get_constant(0);
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }
