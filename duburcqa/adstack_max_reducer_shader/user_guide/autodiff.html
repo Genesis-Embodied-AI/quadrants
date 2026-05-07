@@ -59,7 +59,7 @@
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Subgroup primitives" href="subgroup.html" />
+    <link rel="next" title="Block primitives" href="block.html" />
     <link rel="prev" title="Shared Metal command queue (PyTorch MPS)" href="metal_shared_queue.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -306,6 +306,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
@@ -763,22 +764,35 @@
 </section>
 <section id="what-can-go-wrong">
 <h2>What can go wrong<a class="headerlink" href="#what-can-go-wrong" title="Link to this heading">#</a></h2>
+<section id="adstack-overflow">
+<h3>Adstack overflow<a class="headerlink" href="#adstack-overflow" title="Link to this heading">#</a></h3>
+<p>Surfaces as <code class="docutils literal notranslate"><span class="pre">QuadrantsAssertionError:</span> <span class="pre">Adstack</span> <span class="pre">overflow</span> <span class="pre">...</span></code> at the next Quadrants Python entry. The message names the offending kernel + offload task and the most likely cause.</p>
+<p>The two cases the runtime distinguishes:</p>
 <ul class="simple">
-<li><p><strong>Adstack overflow.</strong> Surfaces as <code class="docutils literal notranslate"><span class="pre">QuadrantsAssertionError:</span> <span class="pre">Adstack</span> <span class="pre">overflow</span> <span class="pre">...</span></code> at the next Quadrants Python entry. The message names the offending kernel + offload task and the most likely cause:</p>
-<ul>
 <li><p><em>Untracked tensor mutation between launches.</em> A tensor backing a data-dependent loop bound was written to outside Quadrants’s tracking - typically a DLPack zero-copy mutation through a torch tensor sharing storage with a Quadrants ndarray, or a raw pointer write through a non-torch consumer. The cached adstack capacity was sized against the value before the mutation; if the mutation grew the bound, the next launch overflows. Workaround: route the write through a Quadrants API (<code class="docutils literal notranslate"><span class="pre">Ndarray.write</span></code> / <code class="docutils literal notranslate"><span class="pre">Ndarray.fill</span></code> / a kernel that writes the value). Alternatively, catch the exception and re-launch - Quadrants invalidates the cached bound on raise, so the retry runs against the live state. Kernel state may be inconsistent after an overflow; do not retry the same step without restarting from a clean state.</p></li>
 <li><p><em>Sizer under-estimated the bound (Quadrants bug).</em> On unusually intricate nested loops - typically deeply nested <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(arr[...])</span></code> with cumulative-index arithmetic - the sizer can compute a bound that is mathematically tighter than the actual push count. To file a bug: clear <code class="docutils literal notranslate"><span class="pre">/tmp/ir/</span></code>, rerun your script with <code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR=1</span></code> set in the environment so Quadrants dumps the kernel IR there, then open an issue on the Quadrants repo with the contents of <code class="docutils literal notranslate"><span class="pre">/tmp/ir/</span></code> attached as a zip. Workaround: pass a generous <code class="docutils literal notranslate"><span class="pre">ad_stack_size=N</span></code> to <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> with <code class="docutils literal notranslate"><span class="pre">N</span></code> large enough to cover the real push count (bypasses the sizer).</p></li>
 </ul>
-</li>
-<li><p><strong>Out-of-memory before the kernel even runs.</strong> A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer’s number is correct. Surfaces as an allocator OOM at launch time. Remedies are the ones listed under <em>Avoiding OOM on GPU</em> above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.</p></li>
-<li><p><strong>Loop bounds backed by a mutated ndarray.</strong> A reverse-mode kernel with <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n[j])</span></code> requires <code class="docutils literal notranslate"><span class="pre">n[j]</span></code> to hold the same value at the forward call and at <code class="docutils literal notranslate"><span class="pre">.grad()</span></code>. If anything writes to <code class="docutils literal notranslate"><span class="pre">n[j]</span></code> between those two points - the differentiable kernel itself, or any other kernel call - the backward call will trigger an <code class="docutils literal notranslate"><span class="pre">Adstack</span> <span class="pre">overflow</span></code> exception or the computed gradient would come out silently wrong. The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> returns. The reason for that is Quadrants’ adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like <a class="reference external" href="https://pytorch.org/docs/stable/notes/autograd.html">PyTorch’s autograd</a> is not affected, since the trip count is recorded as the forward runs and reused at backward time.</p></li>
-<li><p><strong>Inner reverse-mode loop with a complex bound at very large extent.</strong> An arbitrarily large enclosing range works only when the inner trip count fits a fixed subset of expressions; other shapes cap at ~16 million enclosing iterations and raise <code class="docutils literal notranslate"><span class="pre">RuntimeError:</span> <span class="pre">...</span> <span class="pre">iteration</span> <span class="pre">count</span> <span class="pre">...</span> <span class="pre">exceeds</span> <span class="pre">the</span> <span class="pre">16777216</span> <span class="pre">guard</span></code> past that. Workaround: rewrite the trip count to stay within the supported subset, or shrink the enclosing loop below the threshold.</p>
-<ul>
+</section>
+<section id="out-of-memory-before-the-kernel-even-runs">
+<h3>Out-of-memory before the kernel even runs<a class="headerlink" href="#out-of-memory-before-the-kernel-even-runs" title="Link to this heading">#</a></h3>
+<p>A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer’s number is correct. Surfaces as an allocator OOM at launch time. Remedies are the ones listed under <em>Avoiding OOM on GPU</em> above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.</p>
+</section>
+<section id="loop-bounds-backed-by-a-mutated-ndarray">
+<h3>Loop bounds backed by a mutated ndarray<a class="headerlink" href="#loop-bounds-backed-by-a-mutated-ndarray" title="Link to this heading">#</a></h3>
+<p>A reverse-mode kernel with <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n[j])</span></code> requires <code class="docutils literal notranslate"><span class="pre">n[j]</span></code> to hold the same value at the forward call and at <code class="docutils literal notranslate"><span class="pre">.grad()</span></code>. If anything writes to <code class="docutils literal notranslate"><span class="pre">n[j]</span></code> between those two points - the differentiable kernel itself, or any other kernel call - the backward call will trigger an <code class="docutils literal notranslate"><span class="pre">Adstack</span> <span class="pre">overflow</span></code> exception or the computed gradient would come out silently wrong.</p>
+<p>The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> returns. The reason for that is Quadrants’ adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like <a class="reference external" href="https://pytorch.org/docs/stable/notes/autograd.html">PyTorch’s autograd</a> is not affected, since the trip count is recorded as the forward runs and reused at backward time.</p>
+</section>
+<section id="inner-reverse-mode-loop-with-a-complex-bound-at-very-large-extent">
+<h3>Inner reverse-mode loop with a complex bound at very large extent<a class="headerlink" href="#inner-reverse-mode-loop-with-a-complex-bound-at-very-large-extent" title="Link to this heading">#</a></h3>
+<p>An arbitrarily large enclosing range works only when the inner trip count fits a fixed subset of expressions; other shapes cap at ~16 million enclosing iterations and raise <code class="docutils literal notranslate"><span class="pre">RuntimeError:</span> <span class="pre">...</span> <span class="pre">iteration</span> <span class="pre">count</span> <span class="pre">...</span> <span class="pre">exceeds</span> <span class="pre">the</span> <span class="pre">16777216</span> <span class="pre">guard</span></code> past that.</p>
+<p>Two categories of bound expression:</p>
+<ul class="simple">
 <li><p><em>Works at any enclosing-range size:</em> integer ndarray reads up to 32 bits wide (single- or multi-axis, indexed by literal constants or enclosing loop variables), field reads of the same width indexed by literal constants or enclosing loop variables (<code class="docutils literal notranslate"><span class="pre">my_field[None]</span></code>, <code class="docutils literal notranslate"><span class="pre">my_field[k]</span></code> for a constant <code class="docutils literal notranslate"><span class="pre">k</span></code>, <code class="docutils literal notranslate"><span class="pre">my_field[i]</span></code> where <code class="docutils literal notranslate"><span class="pre">i</span></code> is an enclosing loop variable), <code class="docutils literal notranslate"><span class="pre">arr.shape[k]</span></code> shape terms, literal integer constants, and <code class="docutils literal notranslate"><span class="pre">+</span></code>, <code class="docutils literal notranslate"><span class="pre">-</span></code>, <code class="docutils literal notranslate"><span class="pre">*</span></code>, <code class="docutils literal notranslate"><span class="pre">max</span></code> of those.</p></li>
-<li><p><em>Caps at the threshold:</em> 64-bit integer ndarray or field reads, arithmetic-indexed reads (<code class="docutils literal notranslate"><span class="pre">arr[i</span> <span class="pre">//</span> <span class="pre">2]</span></code>), and ragged inner ranges whose own bound depends on an enclosing loop variable through an unsupported leaf shape.</p></li>
+<li><p><em>Caps at the threshold:</em> 64-bit integer ndarray or field reads, arithmetic-indexed reads (<code class="docutils literal notranslate"><span class="pre">arr[i</span> <span class="pre">//</span> <span class="pre">2]</span></code>, <code class="docutils literal notranslate"><span class="pre">arr[i</span> <span class="pre">%</span> <span class="pre">4]</span></code>), and ragged inner ranges whose own bound depends on an enclosing loop variable through an unsupported leaf shape.</p></li>
 </ul>
-</li>
-</ul>
+<p>A concrete example that hits the cap is <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">j</span> <span class="pre">in</span> <span class="pre">range(arr[i</span> <span class="pre">//</span> <span class="pre">2]):</span></code> with <code class="docutils literal notranslate"><span class="pre">arr[0]</span> <span class="pre">=</span> <span class="pre">(1</span> <span class="pre">&lt;&lt;</span> <span class="pre">24)</span> <span class="pre">+</span> <span class="pre">1</span></code>.</p>
+<p>Workaround: rewrite the trip count to stay within the supported subset, or shrink the enclosing loop below the threshold.</p>
+</section>
 </section>
 <section id="performance-characteristics">
 <h2>Performance characteristics<a class="headerlink" href="#performance-characteristics" title="Link to this heading">#</a></h2>
@@ -885,11 +899,11 @@
       </div>
     </a>
     <a class="right-next"
-       href="subgroup.html"
+       href="block.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Subgroup primitives</p>
+        <p class="prev-next-title">Block primitives</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -934,7 +948,13 @@
 </li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-can-go-wrong">What can go wrong</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-can-go-wrong">What can go wrong</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#adstack-overflow">Adstack overflow</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#out-of-memory-before-the-kernel-even-runs">Out-of-memory before the kernel even runs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#loop-bounds-backed-by-a-mutated-ndarray">Loop bounds backed by a mutated ndarray</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inner-reverse-mode-loop-with-a-complex-bound-at-very-large-extent">Inner reverse-mode loop with a complex bound at very large extent</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-characteristics">Performance characteristics</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#appendix-a-types-of-dynamic-loops-supported-by-reverse-mode-ad">Appendix A: types of dynamic loops supported by reverse-mode AD</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#appendix-b-gate-index-shapes-that-capture-vs-fall-back-to-the-worst-case-heap">Appendix B: gate-index shapes that capture vs fall back to the worst-case heap</a></li>
