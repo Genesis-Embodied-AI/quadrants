@@ -653,7 +653,10 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
   // Flag is set — drain the default stream so that the companion task_id write is guaranteed to be host-visible
   // before we read it.  This sync only fires on the rare overflow path, so it has zero cost on the fast path.
   synchronize();
-  // Now consume both slots atomically.
+  // Now consume both slots.  Both cleared so the next overflow records a fresh identity.  `task_id == 0` means the
+  // kernel that overflowed pre-dates the registry wiring or its `ad_stack.registry_id` was unset for any reason
+  // (e.g. a deserialised offline-cache task that has not yet been re-registered); the diagnose helper falls through
+  // to the generic dual-cause message in that case.
   reinterpret_cast<std::atomic<int64_t> *>(adstack_overflow_flag_host_ptr_)->store(0, std::memory_order_relaxed);
   uint32_t task_id = 0;
   if (adstack_overflow_task_id_host_ptr_ != nullptr) {
