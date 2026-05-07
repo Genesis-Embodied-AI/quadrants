@@ -32,7 +32,7 @@ qd.algorithms.parallel_sort(keys, vals)
 - **Key dtype.** Whatever the key field's dtype is, as long as `<` is meaningful for it (integer and float types).
 - **Stability.** Odd-even merge sort is *not* a stable sort — equal keys may be reordered relative to one another. If stability matters, encode tiebreakers into the keys (e.g. pack the original index into the low bits).
 - **Memory.** Strictly in-place — no auxiliary buffers from the caller's perspective.
-- **Performance characteristic.** Beats radix-style sorts for small N (roughly N ≲ 4K), losing to them at large N. For million-element key sets prefer a radix sort (qipc / CUB-style); for thousands or tens of thousands, this is a fine choice.
+- **Performance characteristic.** Beats radix-style sorts for small N (roughly N ≲ 4K), losing to them at large N. For million-element key sets prefer a radix sort; for thousands or tens of thousands, this is a fine choice.
 
 ### `qd.algorithms.PrefixSumExecutor`
 
@@ -59,7 +59,7 @@ Constraints:
 
 - **Dtype:** `qd.i32` only. Calling with any other dtype raises `RuntimeError("Only qd.i32 type is supported for prefix sum.")`.
 - **Inclusive only.** No exclusive variant exposed. To convert to exclusive, post-process: `exclusive[i] = inclusive[i] - input_original[i]`.
-- **Backend coverage.** CUDA and Vulkan only. AMDGPU and Metal raise `RuntimeError(f"{arch} is not supported for prefix sum.")` at trace time. Cross-platform code that needs a portable exclusive scan currently has to roll its own (see, for example, the qipc Onesweep / decoupled-look-back scan).
+- **Backend coverage.** CUDA and Vulkan only. AMDGPU and Metal raise `RuntimeError(f"{arch} is not supported for prefix sum.")` at trace time. Cross-platform code that needs a portable exclusive scan currently has to roll its own (e.g. an Onesweep / decoupled-look-back scan).
 
 The implementation is a Kogge-Stone hierarchical scan: per-block inclusive scan on shared memory, then a small recursive scan over per-block totals, then a uniform-add pass to propagate back. This means the executor reuses the underlying buffer across calls, which is why it's a class (allocate once, run many times) rather than a free function.
 
@@ -113,7 +113,7 @@ The compact-output kernel reads `offsets[i]` (or `offsets[i] - flags[i]` for 0-b
 ## Performance and portability notes
 
 - **`parallel_sort` is `O(N log² N)`**, which is fine up to a few thousand elements and noticeably slower than a radix sort beyond that. The algorithm is stable in *control flow* but not stable in element ordering — important for code that compacts after sorting.
-- **`PrefixSumExecutor` is `i32`-only and CUDA + Vulkan-only.** This is the most-often-hit limitation in cross-platform code. If you need `u32` / `i64` / `f32` / `f64` keys or AMDGPU / Metal coverage, you currently have to compose your own scan from `qd.simt.subgroup.inclusive_add` (per-block) plus an outer kernel that handles the multi-block roll-up — or use the qipc Onesweep / decoupled-look-back scan if you have a hard dependency on it.
+- **`PrefixSumExecutor` is `i32`-only and CUDA + Vulkan-only.** This is the most-often-hit limitation in cross-platform code. If you need `u32` / `i64` / `f32` / `f64` keys or AMDGPU / Metal coverage, you currently have to compose your own scan from `qd.simt.subgroup.inclusive_add` (per-block) plus an outer kernel that handles the multi-block roll-up.
 - **Allocate the executor once, run it many times.** The internal auxiliary buffer is sized to the constructor's `length`; constructing per call wastes allocation traffic. Each `.run()` is a sequence of kernel launches; the cost is `O(N / cache_line)` global memory bandwidth, not user-visible launch overhead.
 - **No fence required between `populate` and `scan.run`.** Each algorithm kernel launches its own kernels under the hood, and the kernel boundary serializes against prior writes from host-launched kernels.
 
