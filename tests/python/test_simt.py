@@ -488,7 +488,7 @@ def test_block_sync():
 
 # TODO: replace this with a stronger test case
 @test_utils.test(arch=qd.cuda)
-def test_grid_memfence():
+def test_grid_mem_fence():
     N = 1000
     BLOCK_SIZE = 1
     a = qd.field(dtype=qd.u32, shape=N)
@@ -499,7 +499,7 @@ def test_grid_memfence():
         qd.loop_config(block_dim=BLOCK_SIZE)
         for i in range(N):
             a[i] = 1
-            qd.simt.grid.memfence()
+            qd.simt.grid.mem_fence()
 
             # Execute a prefix sum after all blocks finish
             actual_order_of_block = qd.atomic_add(block_counter, 1)
@@ -511,6 +511,62 @@ def test_grid_memfence():
 
     for i in range(N):
         assert a[i] == i + 1
+
+
+# Smoke test for the new block.mem_fence() name. We can't easily provoke a memory-ordering bug
+# deterministically, so this just ensures the kernel compiles and runs.
+@test_utils.test(arch=qd.cuda)
+def test_block_mem_fence_smoke():
+    N = 32
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = i
+            qd.simt.block.mem_fence()
+            qd.simt.block.sync()
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i
+
+
+# Deprecation aliases: the old names still work, and emit DeprecationWarning on first use.
+# pytest.warns enables `simplefilter("always")` for its scope, bypassing the project-wide
+# `warnings.filterwarnings("once", ..., module="quadrants")` set in `quadrants/lang/misc.py`.
+@test_utils.test(arch=qd.cuda)
+def test_block_mem_sync_deprecated_alias():
+    a = qd.field(dtype=qd.i32, shape=1)
+
+    with pytest.warns(DeprecationWarning, match=r"qd\.simt\.block\.mem_sync"):
+
+        @qd.kernel
+        def foo():
+            a[0] = 7
+            qd.simt.block.mem_sync()
+
+        foo()
+
+    assert a[0] == 7
+
+
+@test_utils.test(arch=qd.cuda)
+def test_grid_memfence_deprecated_alias():
+    a = qd.field(dtype=qd.i32, shape=1)
+
+    with pytest.warns(DeprecationWarning, match=r"qd\.simt\.grid\.memfence"):
+
+        @qd.kernel
+        def foo():
+            a[0] = 11
+            qd.simt.grid.memfence()
+
+        foo()
+
+    assert a[0] == 11
 
 
 # The old SPIR-V-only no-arg subgroup reductions (`subgroup.reduce_add` / `reduce_mul` / `reduce_min`

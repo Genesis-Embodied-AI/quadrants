@@ -1,5 +1,7 @@
 # type: ignore
 
+import warnings
+
 from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.expr import make_expr_group
@@ -40,13 +42,22 @@ def sync_count_nonzero(predicate):
     raise ValueError(f"qd.block.sync_count_nonzero is not supported for arch {arch}")
 
 
-def mem_sync():
+def mem_fence():
     arch = impl.get_runtime().prog.config().arch
     if arch == _qd_core.cuda:
         return impl.call_internal("block_barrier", with_runtime_context=False)
     if arch_uses_spv(arch):
         return impl.call_internal("workgroupMemoryBarrier", with_runtime_context=False)
-    raise ValueError(f"qd.block.mem_sync is not supported for arch {arch}")
+    raise ValueError(f"qd.block.mem_fence is not supported for arch {arch}")
+
+
+def mem_sync():
+    warnings.warn(
+        "qd.simt.block.mem_sync() is deprecated; use qd.simt.block.mem_fence() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return mem_fence()
 
 
 def thread_idx():
