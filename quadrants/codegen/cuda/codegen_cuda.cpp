@@ -745,6 +745,21 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           /* offset=*/llvm_val[stmt->args[1]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("cuda_lane_id");
+    } else if (stmt->func_name == "subgroupBarrier") {
+      // Subgroup-scope thread reconvergence barrier.  Maps to `__syncwarp(0xFFFFFFFF)` via the
+      // existing `warp_barrier` runtime helper, which is patched to `nvvm_bar_warp_sync`.
+      // Caller contract is uniform-CF + all lanes active (see subgroup.md), hence the full
+      // active mask.  Reconverges lanes that may have ended up at different PCs under
+      // independent thread scheduling on Volta+.
+      call("warp_barrier", tlctx->get_constant((uint32)0xFFFFFFFF));
+      llvm_val[stmt] = tlctx->get_constant(0);
+    } else if (stmt->func_name == "subgroupMemoryBarrier") {
+      // Subgroup-scope memory fence.  CUDA has no warp-scope memory fence intrinsic, so we
+      // emit `__threadfence_block()` (CTA-scope, via the existing `block_memfence` patched to
+      // `nvvm_membar_cta`).  This is over-strict but correct: a CTA-scope fence orders memory
+      // as observed by the whole CTA, of which the subgroup is a subset.
+      call("block_memfence");
+      llvm_val[stmt] = tlctx->get_constant(0);
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }

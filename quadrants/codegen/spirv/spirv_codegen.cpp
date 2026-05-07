@@ -1424,8 +1424,18 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                    ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), ir_->const_i32_zero_);
     val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "subgroupMemoryBarrier") {
-    ir_->make_inst(spv::OpMemoryBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup),
-                   ir_->const_i32_zero_);
+    // The Memory Semantics operand of OpMemoryBarrier must include both an ordering bit
+    // (Acquire / Release / AcquireRelease / SequentiallyConsistent) and at least one storage
+    // class (UniformMemory / WorkgroupMemory / ImageMemory / ...).  The previous emission used
+    // 0 for Semantics, which is invalid SPIR-V and behaves as a no-op on drivers that accept
+    // it.  Match the pattern used for `workgroupMemoryBarrier` above: AcquireRelease with the
+    // storage classes Quadrants kernels actually touch (uniform buffers + workgroup-shared
+    // memory).
+    ir_->make_inst(
+        spv::OpMemoryBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup),
+        ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsUniformMemoryMask |
+                                                       spv::MemorySemanticsWorkgroupMemoryMask |
+                                                       spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "subgroupSize") {
     val = ir_->cast(ir_->i32_type(), ir_->get_subgroup_size());

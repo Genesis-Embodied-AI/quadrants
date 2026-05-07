@@ -840,10 +840,16 @@ def test_subgroup_invocation_id_range():
         assert 0 <= a[i]
 
 
-@test_utils.test(arch=qd.vulkan)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_sync():
-    """Smoke test that ``subgroup.sync()`` (the renamed ``subgroup.barrier()``) traces and
-    runs.  Currently SPIR-V only, so Vulkan-gated."""
+    """Smoke test that ``subgroup.sync()`` traces, codegens, and runs on every GPU backend.
+
+    Verifies the trivial "sync inside a uniform-CF kernel doesn't break the emitted code"
+    contract on CUDA (``__syncwarp(0xFFFFFFFF)``), AMDGPU (``llvm.amdgcn.wave.barrier``),
+    and SPIR-V (``OpControlBarrier(Subgroup, Subgroup, 0)``).  We do not attempt to test
+    reconvergence semantics here — that would require deliberately divergent control flow
+    plus a memory-visible side-channel and is too flaky to be a unit test.
+    """
     N = 64
     a = qd.field(dtype=qd.i32, shape=N)
 
@@ -859,10 +865,16 @@ def test_subgroup_sync():
         assert a[i] >= 0
 
 
-@test_utils.test(arch=qd.vulkan)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_mem_fence():
-    """Smoke test that ``subgroup.mem_fence()`` (the renamed ``subgroup.memory_barrier()``)
-    traces and runs.  Currently SPIR-V only, so Vulkan-gated."""
+    """Smoke test that ``subgroup.mem_fence()`` traces, codegens, and runs on every GPU
+    backend: CUDA (``__threadfence_block()``), AMDGPU (LLVM workgroup-scope ``fence``), and
+    SPIR-V (``OpMemoryBarrier(Subgroup, AcquireRelease | UniformMemory | WorkgroupMemory)``).
+
+    Like ``test_subgroup_sync``, we verify only that the kernel compiles and runs.  Testing
+    actual memory-ordering semantics requires constructing a producer/consumer race that
+    only the fence makes legal, which is hard to write portably and easy to make flaky.
+    """
     N = 64
     a = qd.field(dtype=qd.i32, shape=N)
 
@@ -870,8 +882,8 @@ def test_subgroup_mem_fence():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            subgroup.mem_fence()
             a[i] = subgroup.invocation_id()
+            subgroup.mem_fence()
 
     foo()
     for i in range(N):
