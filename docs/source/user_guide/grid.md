@@ -6,11 +6,19 @@ Grid ops live under `qd.simt.grid`. The namespace currently contains a single op
 
 ## What's available
 
-| Op                       | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) |
-|--------------------------|------|--------|-------------------------|
-| `qd.simt.grid.memfence()`| yes  | no     | no                      |
+| Op                       | CUDA | AMDGPU                | SPIR-V (Vulkan / Metal) |
+|--------------------------|------|-----------------------|-------------------------|
+| `qd.simt.grid.memfence()`| yes  | silent no-op (FIXME)  | unsupported (codegen failure) |
 
-Calling a backend marked "no" raises a runtime / link-time error. AMDGPU and SPIR-V lowerings are tracked as future work; until they land, kernels that need a grid-scope fence are CUDA-only.
+What actually happens today on each backend:
+
+- **CUDA**: lowers to `__threadfence()` (`nvvm_membar_gl`). Works as documented.
+- **AMDGPU**: there is no `patch_intrinsic("grid_memfence", ...)` in the AMDGPU branch of `quadrants/runtime/llvm/llvm_context.cpp`, so calls link against the empty stub `void grid_memfence() {}` in `quadrants/runtime/llvm/runtime_module/runtime.cpp` and execute as a **silent no-op**. Cross-block ordering that depends on the fence will silently fail — the most dangerous failure mode, because nothing complains at trace, link, or run time.
+- **SPIR-V (Vulkan / Metal)**: `quadrants/codegen/spirv/spirv_codegen.cpp::visit(InternalFuncStmt)` has no `grid_memfence` case; the call leaves a downstream value undefined and will fail during SPIR-V emission (not with a clean diagnostic).
+
+In practice, **kernels that need a grid-scope fence are CUDA-only today**. Cross-platform code must either CUDA-bound the kernel or restructure to use the kernel-launch boundary as the cross-block synchronisation point.
+
+**FIXME (arch guard):** `python/quadrants/lang/simt/grid.py::memfence()` currently has no arch guard. It should mirror `qd.simt.block.mem_sync` and raise a clear `ValueError("qd.simt.grid.memfence is not supported for arch ...")` on AMDGPU and SPIR-V — replacing the AMDGPU silent no-op and the SPIR-V codegen failure with a single, descriptive trace-time error. (Tracked here, in the doc, until that change lands.)
 
 Naming note: `qd.simt.grid.memfence()` will be renamed to `qd.simt.grid.mem_fence()` (note the underscore) in the near future, for consistency with the `mem_fence` spelling used at other scopes. The new name is not yet available; this page uses the current name throughout.
 
@@ -95,7 +103,7 @@ is therefore unsafe: LLVM's loop-invariant-code-motion will hoist the load out o
 
 ## Performance and portability notes
 
-- **CUDA-only today.** AMDGPU and SPIR-V lowerings are not implemented; calling `grid.memfence()` on those backends raises at trace time. Cross-platform code that needs a grid-scope fence must currently CUDA-bound the kernel, or restructure to use the kernel-launch boundary.
+- **CUDA-only today.** AMDGPU and SPIR-V lowerings are not implemented — see the per-backend behaviour described under "What's available". Cross-platform code that needs a grid-scope fence must currently CUDA-bound the kernel or restructure to use the kernel-launch boundary.
 - **Cost scales with the global-cache invalidation domain.** A grid fence drains the L2 (and on some GPUs the L1) caches of all SMs / CUs touching the address. On A100 / H100 the cost is on the order of tens to low hundreds of nanoseconds per call; in tight loops, prefer batching multiple cross-block updates per fence.
 - **Pair with the right ordering of memory ops.** The fence orders the *calling thread*'s memory ops; readers in other blocks need their own fence (or an atomic load) to refresh their view. The producer-fence + consumer-fence pattern is the canonical idiom.
 - **Not a substitute for atomics on contended locations.** A fence orders writes but does not serialize them. If multiple blocks write to the same location, you need an atomic regardless of how the fence is placed.
