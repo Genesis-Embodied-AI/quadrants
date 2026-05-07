@@ -407,44 +407,48 @@
 <thead>
 <tr class="row-odd"><th class="head"><p>Op</p></th>
 <th class="head"><p>Operates on</p></th>
-<th class="head"><p>Dim n</p></th>
+<th class="head"><p>Shapes</p></th>
 <th class="head"><p>Returns</p></th>
 </tr>
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.svd(A)</span></code></p></td>
 <td><p>square real matrix</p></td>
-<td><p>2, 3</p></td>
+<td><p>2×2, 3×3</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">(U,</span> <span class="pre">S,</span> <span class="pre">V)</span></code> such that <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">U</span> <span class="pre">&#64;</span> <span class="pre">S</span> <span class="pre">&#64;</span> <span class="pre">V.transpose()</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.sym_eig(A)</span></code></p></td>
 <td><p>symmetric real matrix</p></td>
-<td><p>2, 3</p></td>
+<td><p>2×2, 3×3</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">(eigenvalues,</span> <span class="pre">eigenvectors)</span></code> (real)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.polar_decompose(A)</span></code></p></td>
 <td><p>square real matrix</p></td>
-<td><p>2, 3</p></td>
+<td><p>2×2, 3×3</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">(R,</span> <span class="pre">S)</span></code> such that <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">R</span> <span class="pre">&#64;</span> <span class="pre">S</span></code>, <code class="docutils literal notranslate"><span class="pre">R</span></code> orthogonal, <code class="docutils literal notranslate"><span class="pre">S</span></code> SPD</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.eig(A)</span></code></p></td>
 <td><p>square real matrix</p></td>
-<td><p>2</p></td>
+<td><p>2×2</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">(eigenvalues,</span> <span class="pre">eigenvectors)</span></code> (complex, packed)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.solve(A,</span> <span class="pre">b)</span></code></p></td>
 <td><p>square <code class="docutils literal notranslate"><span class="pre">A</span></code> + vector <code class="docutils literal notranslate"><span class="pre">b</span></code></p></td>
-<td><p>2, 3</p></td>
+<td><p>2×2, 3×3</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">x</span></code> such that <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">&#64;</span> <span class="pre">x</span> <span class="pre">=</span> <span class="pre">b</span></code></p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>The “Dim n” column is the matrix dimension — <code class="docutils literal notranslate"><span class="pre">n</span> <span class="pre">=</span> <span class="pre">2</span></code> means a 2×2 input, <code class="docutils literal notranslate"><span class="pre">n</span> <span class="pre">=</span> <span class="pre">3</span></code> means 3×3. A few patterns to note:</p>
+<p>A few patterns to note:</p>
 <ul class="simple">
-<li><p><strong>Dimensions are fixed.</strong> Calling any of these on a matrix outside the supported dimensions raises an exception at trace time (<code class="docutils literal notranslate"><span class="pre">&quot;SVD</span> <span class="pre">only</span> <span class="pre">supports</span> <span class="pre">2D</span> <span class="pre">and</span> <span class="pre">3D</span> <span class="pre">matrices.&quot;</span></code>, etc.). Larger matrices need a different path — typically a Jacobi-style sweep applied iteratively, which Quadrants does not currently provide out of the box.</p></li>
-<li><p><strong>All ops accept an optional <code class="docutils literal notranslate"><span class="pre">dt</span></code> argument.</strong> When unspecified, it defaults to <code class="docutils literal notranslate"><span class="pre">impl.get_runtime().default_fp</span></code> — usually <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code> unless overridden in <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>. Pass <code class="docutils literal notranslate"><span class="pre">dt=qd.f64</span></code> for the high-precision variant; passing <code class="docutils literal notranslate"><span class="pre">dt=qd.f32</span></code> explicitly is also fine if you want to be loud about it.</p></li>
-<li><p><strong>Output dimensions match the input dimensions.</strong> A 3×3 input yields 3×3 outputs (and a length-3 vector for <code class="docutils literal notranslate"><span class="pre">solve</span></code> / eigenvalues); a 2×2 input yields 2×2 outputs.</p></li>
+<li><p><strong>Shapes are fixed.</strong> Calling any of these on a matrix outside the supported shapes raises an exception at trace time (<code class="docutils literal notranslate"><span class="pre">&quot;SVD</span> <span class="pre">only</span> <span class="pre">supports</span> <span class="pre">2D</span> <span class="pre">and</span> <span class="pre">3D</span> <span class="pre">matrices.&quot;</span></code>, etc.). Larger matrices need a different path — typically a Jacobi-style sweep applied iteratively, which Quadrants does not currently provide out of the box.</p>
+<ul>
+<li><p><strong>FIXME (message wording):</strong> these exception strings are misleading — “2D matrix” / “3D matrix” conventionally means “rank-2 / rank-3 tensor” (any matrix is rank-2), but here the intent is “matrix of shape 2×2 / 3×3”. They should be updated to e.g. <code class="docutils literal notranslate"><span class="pre">&quot;SVD</span> <span class="pre">only</span> <span class="pre">supports</span> <span class="pre">2×2</span> <span class="pre">and</span> <span class="pre">3×3</span> <span class="pre">matrices.&quot;</span></code>. This page reproduces the messages as they are emitted today.</p></li>
+</ul>
+</li>
+<li><p><strong>All ops accept an optional <code class="docutils literal notranslate"><span class="pre">dt</span></code> argument.</strong> When unspecified, it defaults to <code class="docutils literal notranslate"><span class="pre">impl.get_runtime().default_fp</span></code> — usually <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code> unless overridden in <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>. Pass <code class="docutils literal notranslate"><span class="pre">dt=qd.f64</span></code> for the high-precision variant.</p></li>
+<li><p><strong>Output shape matches the input shape.</strong> A 3×3 input yields 3×3 outputs (and a length-3 vector for <code class="docutils literal notranslate"><span class="pre">solve</span></code> / eigenvalues); a 2×2 input yields 2×2 outputs.</p></li>
 <li><p><strong>Real matrices only.</strong> <code class="docutils literal notranslate"><span class="pre">qd.eig</span></code> returns complex results in a packed real layout (see below); the others all assume real-valued input and return real-valued output.</p></li>
 </ul>
 </section>
@@ -458,8 +462,9 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">V</span></code> orthogonal.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">S</span></code> diagonal, with non-negative singular values.</p></li>
 </ul>
-<p>Dimensions 2 and 3 use closed-form / Jacobi-style implementations specialized per dimension. Sign convention for <code class="docutils literal notranslate"><span class="pre">U</span></code> and <code class="docutils literal notranslate"><span class="pre">V</span></code> is the implementation’s natural one and is <strong>not</strong> guaranteed to enforce <code class="docutils literal notranslate"><span class="pre">det(U)</span> <span class="pre">=</span> <span class="pre">det(V)</span> <span class="pre">=</span> <span class="pre">+1</span></code>; if you depend on a particular handedness (e.g. for an ARAP rotation <code class="docutils literal notranslate"><span class="pre">R</span> <span class="pre">=</span> <span class="pre">U</span> <span class="pre">&#64;</span> <span class="pre">V.transpose()</span></code>), check it explicitly and flip a column if needed.</p>
-<p>Singular values come out in implementation order — confirm via test if you depend on <code class="docutils literal notranslate"><span class="pre">S[0,0]</span> <span class="pre">&gt;=</span> <span class="pre">S[1,1]</span> <span class="pre">&gt;=</span> <span class="pre">S[2,2]</span></code>.</p>
+<p>Shapes 2×2 and 3×3 use closed-form / Jacobi-style implementations specialized per shape. Sign convention for <code class="docutils literal notranslate"><span class="pre">U</span></code> and <code class="docutils literal notranslate"><span class="pre">V</span></code> is the implementation’s natural one and is <strong>not</strong> guaranteed to enforce <code class="docutils literal notranslate"><span class="pre">det(U)</span> <span class="pre">=</span> <span class="pre">det(V)</span> <span class="pre">=</span> <span class="pre">+1</span></code>; if you depend on a particular handedness (e.g. for an ARAP rotation <code class="docutils literal notranslate"><span class="pre">R</span> <span class="pre">=</span> <span class="pre">U</span> <span class="pre">&#64;</span> <span class="pre">V.transpose()</span></code>), check it explicitly and flip a column if needed.</p>
+<p>The 2×2 path returns singular values sorted descending (<code class="docutils literal notranslate"><span class="pre">S[0,0]</span> <span class="pre">&gt;=</span> <span class="pre">S[1,1]</span></code>). The 3×3 path does <strong>not</strong> sort — singular values come out in whatever order the Sifakis algorithm produces them. If you depend on <code class="docutils literal notranslate"><span class="pre">S[0,0]</span> <span class="pre">&gt;=</span> <span class="pre">S[1,1]</span> <span class="pre">&gt;=</span> <span class="pre">S[2,2]</span></code> for 3×3, sort explicitly.</p>
+<p><strong>FIXME (sort consistency):</strong> the 2×2 / 3×3 split is an inconsistency in the API — both shapes should either sort descending or both should leave the order to the algorithm (or parametrize it with a boolean template parameter, e.g. <code class="docutils literal notranslate"><span class="pre">qd.svd(A,</span> <span class="pre">sorted=True)</span></code>). The 2×2 swap is essentially free; making 3×3 sort would cost a few comparisons and column swaps. Pick one and apply it across both shapes (and update this paragraph accordingly).</p>
 </section>
 <section id="qd-sym-eig-a-dt-none">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.sym_eig(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-sym-eig-a-dt-none" title="Link to this heading">#</a></h3>
@@ -469,6 +474,7 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">eigenvectors</span></code>: a <code class="docutils literal notranslate"><span class="pre">Matrix(n,</span> <span class="pre">n)</span></code> whose columns are the corresponding orthonormal eigenvectors.</p></li>
 </ul>
 <p>For 3×3, eigenvalues come out sorted in ascending order (the implementation explicitly sorts at the end). The 2×2 path does not perform an explicit sort — verify with a test if you need a particular order in 2D.</p>
+<p><strong>FIXME (sort consistency):</strong> same kind of inconsistency as <code class="docutils literal notranslate"><span class="pre">qd.svd</span></code>, with the additional twist that the sort directions disagree across ops — <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> 3×3 sorts <em>ascending</em>, while <code class="docutils literal notranslate"><span class="pre">qd.svd</span></code> 2×2 sorts <em>descending</em>. Both shapes of <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> should sort the same way, and ideally <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.svd</span></code> should agree on a direction (or parametrize via a boolean template parameter, e.g. <code class="docutils literal notranslate"><span class="pre">qd.sym_eig(A,</span> <span class="pre">sorted=True)</span></code>). Pick one and apply it across both shapes and across both ops (and update this paragraph accordingly).</p>
 <p><code class="docutils literal notranslate"><span class="pre">A</span></code> is <em>assumed</em> symmetric; the implementation does not symmetrize first. If your matrix is only approximately symmetric (e.g. accumulated floating-point error), explicitly compute <code class="docutils literal notranslate"><span class="pre">(A</span> <span class="pre">+</span> <span class="pre">A.transpose())</span> <span class="pre">*</span> <span class="pre">0.5</span></code> before calling.</p>
 </section>
 <section id="qd-polar-decompose-a-dt-none">
@@ -493,10 +499,10 @@
 <h3><code class="docutils literal notranslate"><span class="pre">qd.solve(A,</span> <span class="pre">b,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-solve-a-b-dt-none" title="Link to this heading">#</a></h3>
 <p>Direct solve of <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">&#64;</span> <span class="pre">x</span> <span class="pre">=</span> <span class="pre">b</span></code> via Gauss elimination with partial pivoting. Returns the solution vector <code class="docutils literal notranslate"><span class="pre">x</span></code>.</p>
 <ul class="simple">
-<li><p>Dimensions 2 and 3.</p></li>
+<li><p>Shapes 2×2 and 3×3.</p></li>
 <li><p>The implementation asserts <code class="docutils literal notranslate"><span class="pre">A.n</span> <span class="pre">==</span> <span class="pre">A.m</span></code> and <code class="docutils literal notranslate"><span class="pre">A.m</span> <span class="pre">==</span> <span class="pre">b.n</span></code>.</p></li>
-<li><p>Singular <code class="docutils literal notranslate"><span class="pre">A</span></code> triggers an <code class="docutils literal notranslate"><span class="pre">assert</span></code> failure (<code class="docutils literal notranslate"><span class="pre">&quot;Matrix</span> <span class="pre">is</span> <span class="pre">singular</span> <span class="pre">in</span> <span class="pre">linear</span> <span class="pre">solve.&quot;</span></code>); the assert is active by default and is your only signal of singularity.</p></li>
-<li><p>Use this for one-off small solves; for systems that decompose once and back-solve many times, currently you have to bake the LU yourself (or just call <code class="docutils literal notranslate"><span class="pre">qd.solve</span></code> per b — for 2×2 / 3×3 the gain from caching the LU is negligible compared to the launch).</p></li>
+<li><p>Singular <code class="docutils literal notranslate"><span class="pre">A</span></code> is checked by a kernel <code class="docutils literal notranslate"><span class="pre">assert</span></code> (<code class="docutils literal notranslate"><span class="pre">&quot;Matrix</span> <span class="pre">is</span> <span class="pre">singular</span> <span class="pre">in</span> <span class="pre">linear</span> <span class="pre">solve.&quot;</span></code>) inside the Gauss-elimination path. Kernel asserts only fire when the runtime is initialised with <code class="docutils literal notranslate"><span class="pre">qd.init(debug=True)</span></code> (see <a class="reference internal" href="debug.html"><span class="std std-doc">debug</span></a>) — under the default <code class="docutils literal notranslate"><span class="pre">debug=False</span></code> a singular input silently produces a divide-by-zero / NaN result with no diagnostic. If you need a signal in production, check singularity explicitly before calling <code class="docutils literal notranslate"><span class="pre">qd.solve</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">abs(A.determinant())</span></code> against a tolerance), or run development workloads with <code class="docutils literal notranslate"><span class="pre">debug=True</span></code> to catch the case.</p></li>
+<li><p>Each call factorises <code class="docutils literal notranslate"><span class="pre">A</span></code> from scratch and back-substitutes for the given <code class="docutils literal notranslate"><span class="pre">b</span></code>.</p></li>
 </ul>
 </section>
 </section>
@@ -514,7 +520,7 @@
     <span class="k">return</span> <span class="n">R</span>
 </pre></div>
 </div>
-<p>The <code class="docutils literal notranslate"><span class="pre">det(R)</span> <span class="pre">&lt;</span> <span class="pre">0</span></code> branch fixes the handedness when SVD’s sign convention produces a reflection rather than a rotation — a standard ARAP / IPC trick.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">R.determinant()</span> <span class="pre">&lt;</span> <span class="pre">0.0</span></code> branch fixes the handedness when SVD’s sign convention produces a reflection rather than a rotation.</p>
 </section>
 <section id="project-to-symmetric-positive-semi-definite-make-spd">
 <h3>Project to symmetric positive semi-definite (<code class="docutils literal notranslate"><span class="pre">make_spd</span></code>)<a class="headerlink" href="#project-to-symmetric-positive-semi-definite-make-spd" title="Link to this heading">#</a></h3>
@@ -530,7 +536,7 @@
     <span class="k">return</span> <span class="n">Q</span> <span class="o">@</span> <span class="n">Lambda</span> <span class="o">@</span> <span class="n">Q</span><span class="o">.</span><span class="n">transpose</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>Used by IPC-style methods to project an indefinite Hessian to its closest SPD approximation per element. Note the dimension cap — only 3×3 today, since <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> itself caps at 3×3.</p>
+<p>Used to project an indefinite Hessian to its closest SPD approximation per element. Note the shape cap — only 3×3 today, since <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> itself caps at 3×3.</p>
 </section>
 <section id="per-thread-linear-solve">
 <h3>Per-thread linear solve<a class="headerlink" href="#per-thread-linear-solve" title="Link to this heading">#</a></h3>
@@ -555,23 +561,11 @@
 <p>The rotation factor <code class="docutils literal notranslate"><span class="pre">R</span></code> from <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">R</span> <span class="pre">&#64;</span> <span class="pre">S</span></code> is the rigid alignment that minimises <code class="docutils literal notranslate"><span class="pre">‖R</span> <span class="pre">-</span> <span class="pre">A‖_F</span></code> — the building block of position-based dynamics shape-matching.</p>
 </section>
 </section>
-<section id="dimensions-performance-portability">
-<h2>Dimensions, performance, portability<a class="headerlink" href="#dimensions-performance-portability" title="Link to this heading">#</a></h2>
+<section id="shapes-performance-portability">
+<h2>Shapes, performance, portability<a class="headerlink" href="#shapes-performance-portability" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><strong>Dimension cap is the dominant constraint.</strong> For matrices outside the supported dimensions, you currently have to write your own Jacobi sweep (for symmetric EVD up to ~12×12) or LU / Cholesky (for general inverse / solve).</p></li>
-<li><p><strong>Compile time.</strong> Each call is unrolled per thread, so a kernel that calls <code class="docutils literal notranslate"><span class="pre">qd.svd</span></code> on a 3×3 matrix per element compiles a moderately large block of straight-line code per thread. Compile time is generally fine at these dimensions; matrices larger than the cap would not be — register pressure plus unrolling explode quickly.</p></li>
-<li><p><strong>Numerical conditioning.</strong> All implementations use <code class="docutils literal notranslate"><span class="pre">f32</span></code> by default, which is fine for graphics / soft-body simulation but not always sufficient for stiff IPC-style problems. Pass <code class="docutils literal notranslate"><span class="pre">dt=qd.f64</span></code> whenever conditioning matters; the cost on modern GPUs is a constant factor, not order-of-magnitude.</p></li>
-<li><p><strong>Backend portability.</strong> All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split. Numerical behaviour is bit-exact across backends only for <code class="docutils literal notranslate"><span class="pre">f64</span></code>; <code class="docutils literal notranslate"><span class="pre">f32</span></code> may differ in the last bit because of fused-multiply-add ordering choices.</p></li>
-</ul>
-</section>
-<section id="what-s-missing">
-<h2>What’s missing<a class="headerlink" href="#what-s-missing" title="Link to this heading">#</a></h2>
-<p>For reference / planning purposes, the gaps users most often hit:</p>
-<ul class="simple">
-<li><p><strong>Larger SVD / EVD.</strong> Dimensions above 3 are unsupported. For symmetric EVD up to ~12×12, a Jacobi sweep is the standard approach; for general SVD, a one-sided Jacobi or QR-with-shifts is the standard approach.</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">Matrix.inverse</span></code> dimension cap.</strong> Documented in <a class="reference internal" href="matrix_vector.html"><span class="std std-doc">matrix_vector</span></a>: the closed-form cofactor inverse caps at 4×4. Larger inverses need an LU or Cholesky factorisation, neither of which is exposed today.</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_cas</span></code>.</strong> Unrelated to decompositions, but the building block for spinlocks and lock-free dictionaries; not exposed in Python — <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code> covers add / sub / mul / min / max / and / or / xor but does not currently include compare-and-swap.</p></li>
-<li><p><strong>3×3 <code class="docutils literal notranslate"><span class="pre">qd.eig</span></code>.</strong> Only the 2×2 general (non-symmetric) eigendecomposition is provided. For 3×3, use <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> if your matrix is symmetric.</p></li>
+<li><p><strong>Compile time.</strong> Each call is unrolled per thread, so a kernel that calls <code class="docutils literal notranslate"><span class="pre">qd.svd</span></code> on a 3×3 matrix per element compiles a moderately large block of straight-line code per thread. Compile time is generally fine at these shapes; matrices larger than the cap may not be — register pressure plus unrolling explode quickly.</p></li>
+<li><p><strong>Backend portability.</strong> All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split.</p></li>
 </ul>
 </section>
 <section id="related">
@@ -647,8 +641,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#polar-decomposition-for-shape-matching">2×2 polar decomposition for shape matching</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dimensions-performance-portability">Dimensions, performance, portability</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-s-missing">What’s missing</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#shapes-performance-portability">Shapes, performance, portability</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related">Related</a></li>
 </ul>
   </nav></div>

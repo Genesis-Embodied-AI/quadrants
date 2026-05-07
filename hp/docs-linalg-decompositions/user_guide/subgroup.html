@@ -399,32 +399,156 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="subgroup-primitives">
 <h1>Subgroup primitives<a class="headerlink" href="#subgroup-primitives" title="Link to this heading">#</a></h1>
-<p>Subgroup operations let threads within the same subgroup (warp on NVIDIA, wave on AMD) exchange register values directly, without using shared memory or barriers. They are the building block for fast in-warp data exchange — broadcasts, neighbour exchanges, permutations, reductions — and are used internally by <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> (see <a class="reference internal" href="tile16.html"><span class="std std-doc">tile16</span></a>).</p>
-<p>Subgroup ops live under <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code> and are written so the same Python source compiles to the right vendor primitive on each backend.</p>
+<p>Subgroup operations let threads within the same subgroup (warp on NVIDIA, wave on AMD, subgroup on Vulkan / Metal) cooperate directly — exchanging register values, voting on predicates, scanning, and electing a leader — without going through shared memory or block barriers. They are the building block for fast in-warp data exchange and are used internally by <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> (see <a class="reference internal" href="tile16.html"><span class="std std-doc">tile16</span></a>).</p>
+<p>Subgroup ops live under <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code> and are written so the same Python source compiles to the right vendor primitive on each backend. Calling a backend that has not implemented an op fails at trace or codegen time.</p>
 <section id="what-s-available">
 <h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
+<p>The full Python API is grouped here by category. The first column lists each op, the next three columns indicate which backend currently lowers it. Cells marked “no” either raise from the Python wrapper, fail to link in the runtime, or return <code class="docutils literal notranslate"><span class="pre">None</span></code> from a <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">TODO</span></code> stub — in every case the op is unusable on that backend today.</p>
+<section id="data-movement">
+<h3>Data movement<a class="headerlink" href="#data-movement" title="Link to this heading">#</a></h3>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Op</p></th>
 <th class="head"><p>CUDA</p></th>
 <th class="head"><p>AMDGPU</p></th>
-<th class="head"><p>SPIR-V (Vulkan)</p></th>
+<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
 <th class="head"><p>dtypes</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.shuffle(v,</span> <span class="pre">idx)</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.shuffle(value,</span> <span class="pre">index)</span></code></p></td>
 <td><p>yes</p></td>
 <td><p>yes</p></td>
 <td><p>yes</p></td>
 <td><p>i32, u32, f32, f64, i64, u64</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.shuffle_down(v,</span> <span class="pre">n)</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.shuffle_down(value,</span> <span class="pre">offset)</span></code></p></td>
 <td><p>yes</p></td>
 <td><p>yes*</p></td>
 <td><p>yes</p></td>
 <td><p>i32, u32, f32, f64, i64, u64</p></td>
 </tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.shuffle_up(value,</span> <span class="pre">offset)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+<td><p>i32, u32, f32, f64, i64, u64</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.shuffle_xor(value,</span> <span class="pre">mask)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>— (TODO stub on every backend)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.broadcast(value,</span> <span class="pre">index)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>i32, u32, f32, f64, i64, u64</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.broadcast_first(value)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>— (TODO stub on every backend)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>* AMDGPU <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> (and therefore <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code>, which is built on it) is currently emulated via <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> (~50 cycle latency).</p>
+<p>The remaining shuffle flavours (<code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code>, <code class="docutils literal notranslate"><span class="pre">shuffle_xor</span></code>) are exposed in the Python module but are not yet implemented across backends. Calling them will fail at codegen. Use <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> with an explicit lane index in the meantime — every shuffle pattern can be expressed that way.</p>
+</section>
+<section id="identification-and-control">
+<h3>Identification and control<a class="headerlink" href="#identification-and-control" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.group_size()</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.elect()</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.barrier()</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.memory_barrier()</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Naming note: two of the names above are planned to be renamed in a future release, to align with the project’s naming conventions across scopes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">subgroup.barrier()</span></code> will be renamed to <code class="docutils literal notranslate"><span class="pre">subgroup.sync()</span></code> (matching <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">subgroup.memory_barrier()</span></code> will be renamed to <code class="docutils literal notranslate"><span class="pre">subgroup.mem_fence()</span></code> (matching the planned <code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code> and <code class="docutils literal notranslate"><span class="pre">grid.mem_fence()</span></code>).</p></li>
+</ul>
+<p>The new names are not yet available; this page uses the current names throughout.</p>
+</section>
+<section id="voting-and-predicate-ops">
+<h3>Voting and predicate ops<a class="headerlink" href="#voting-and-predicate-ops" title="Link to this heading">#</a></h3>
+<p>Although these functions exist, we will migrate them to have an additional <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> parameter, similar to <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> — so that the vote is over the first <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes rather than the full subgroup.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.all_true(predicate)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.any_true(predicate)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.all_equal(value)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>All three are TODO stubs in <code class="docutils literal notranslate"><span class="pre">python/quadrants/lang/simt/subgroup.py</span></code> and currently return <code class="docutils literal notranslate"><span class="pre">None</span></code> on every backend. The CUDA-only counterparts on <code class="docutils literal notranslate"><span class="pre">qd.simt.warp</span></code> (<code class="docutils literal notranslate"><span class="pre">warp.all_nonzero</span></code>, <code class="docutils literal notranslate"><span class="pre">warp.any_nonzero</span></code>, <code class="docutils literal notranslate"><span class="pre">warp.unique</span></code>) are usable today if you can afford to be CUDA-bound.</p>
+</section>
+<section id="reductions-and-scans">
+<h3>Reductions and scans<a class="headerlink" href="#reductions-and-scans" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> and <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> already take a <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> parameter. The <code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code> and <code class="docutils literal notranslate"><span class="pre">exclusive_*</span></code> rows below do not. Although these functions exist, we will migrate the <code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code> and <code class="docutils literal notranslate"><span class="pre">exclusive_*</span></code> ops to have an additional <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> parameter, similar to <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> — so that the scan is over the first <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes rather than the full subgroup.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+<th class="head"><p>dtypes</p></th>
+</tr>
+</thead>
+<tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.reduce_add(v,</span> <span class="pre">log2_size)</span></code></p></td>
 <td><p>yes</p></td>
 <td><p>yes*</p></td>
@@ -437,12 +561,59 @@
 <td><p>yes</p></td>
 <td><p>any type supporting <code class="docutils literal notranslate"><span class="pre">+</span></code></p></td>
 </tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_add(value)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_mul(value)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_min(value)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_max(value)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_and(value)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+<td><p>integer</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_or(value)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+<td><p>integer</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_xor(value)</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+<td><p>integer</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.exclusive_add</span></code> / <code class="docutils literal notranslate"><span class="pre">_mul</span></code> / <code class="docutils literal notranslate"><span class="pre">_min</span></code> / <code class="docutils literal notranslate"><span class="pre">_max</span></code> / <code class="docutils literal notranslate"><span class="pre">_and</span></code> / <code class="docutils literal notranslate"><span class="pre">_or</span></code> / <code class="docutils literal notranslate"><span class="pre">_xor</span></code></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>— (TODO stubs)</p></td>
+</tr>
 </tbody>
 </table>
 </div>
-<p>* AMDGPU <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> (and therefore <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code>, which is built on it) is currently emulated via <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> (~50 cycle latency).</p>
-<p>The remaining shuffle flavours (<code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code>, <code class="docutils literal notranslate"><span class="pre">shuffle_xor</span></code>) are exposed in the Python module but are not yet implemented across backends. Calling them will fail at codegen. Use <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> with an explicit lane index in the meantime — every shuffle pattern can be expressed that way.</p>
-<p>The SPIR-V-only no-arg reductions (<code class="docutils literal notranslate"><span class="pre">subgroup.reduce_mul</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_min</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_max</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_and</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_or</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_xor</span></code>, plus the original <code class="docutils literal notranslate"><span class="pre">reduce_add(value)</span></code> with no <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>) have been removed in favour of the portable sized API described below. For reductions other than sum, build a sized helper on top of <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> / <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> following the same pattern.</p>
+<p>The SPV-only no-arg reductions (<code class="docutils literal notranslate"><span class="pre">subgroup.reduce_mul</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_min</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_max</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_and</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_or</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_xor</span></code>, plus the original <code class="docutils literal notranslate"><span class="pre">reduce_add(value)</span></code> with no <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>) have been removed in favour of the portable sized API (<code class="docutils literal notranslate"><span class="pre">reduce_add(v,</span> <span class="pre">log2_size)</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_all_add(v,</span> <span class="pre">log2_size)</span></code>). For reductions other than sum, build a sized helper on top of <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> / <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> following the same pattern.</p>
+</section>
 </section>
 <section id="semantics">
 <h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
@@ -463,11 +634,56 @@
 <li><p>Maps to <code class="docutils literal notranslate"><span class="pre">__shfl_down_sync</span></code> on CUDA and <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformShuffleDown</span></code> on SPIR-V. On AMDGPU it is currently emulated with <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> (see the support matrix above).</p></li>
 </ul>
 </section>
-<section id="common-to-both">
-<h3>Common to both<a class="headerlink" href="#common-to-both" title="Link to this heading">#</a></h3>
+<section id="shuffle-up-value-offset">
+<h3><code class="docutils literal notranslate"><span class="pre">shuffle_up(value,</span> <span class="pre">offset)</span></code><a class="headerlink" href="#shuffle-up-value-offset" title="Link to this heading">#</a></h3>
+<p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by lane <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">-</span> <span class="pre">offset</span></code>. Lanes near the bottom of the subgroup — where <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">-</span> <span class="pre">offset</span> <span class="pre">&lt;</span> <span class="pre">0</span></code> — receive an implementation-defined value (typically their own <code class="docutils literal notranslate"><span class="pre">value</span></code>).</p>
 <ul class="simple">
-<li><p>Ops are issued under a full active mask on CUDA (<code class="docutils literal notranslate"><span class="pre">0xFFFFFFFF</span></code>). Call them from uniform control flow; calling from divergent control flow is undefined on most backends. (this means: all threads have to execute the shuffle)</p></li>
-<li><p>Subgroup size varies by backend (32 on NVIDIA, 32 or 64 on AMD, 32 in Vulkan compute on most GPUs).</p></li>
+<li><p>Same dtype rules as <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> / <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code>.</p></li>
+<li><p>Currently lowered only on SPIR-V (<code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformShuffleUp</span></code>). CUDA and AMDGPU fall through to the generic LLVM runtime-call path and fail to link; until they are added, emulate with an explicit <code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">lane</span> <span class="pre">-</span> <span class="pre">offset)</span></code>.</p></li>
+</ul>
+</section>
+<section id="broadcast-value-index">
+<h3><code class="docutils literal notranslate"><span class="pre">broadcast(value,</span> <span class="pre">index)</span></code><a class="headerlink" href="#broadcast-value-index" title="Link to this heading">#</a></h3>
+<p>Every lane in the subgroup returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by the lane whose subgroup-local id equals <code class="docutils literal notranslate"><span class="pre">index</span></code>. Expresses intent (“read lane <code class="docutils literal notranslate"><span class="pre">index</span></code>”) more directly than <code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">index)</span></code> and on backends with a dedicated broadcast may map to a cheaper instruction.</p>
+<ul class="simple">
+<li><p>Same dtype rules as <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>.</p></li>
+<li><p>Maps to <code class="docutils literal notranslate"><span class="pre">__shfl_sync</span></code> on CUDA, <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> on AMDGPU, and <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformBroadcast</span></code> on SPIR-V.</p></li>
+<li><p><strong>Important: on SPIR-V, <code class="docutils literal notranslate"><span class="pre">index</span></code> must be dynamically uniform</strong> — the same value on every lane in the subgroup. Passing a per-lane varying <code class="docutils literal notranslate"><span class="pre">index</span></code> is undefined behavior, because <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformBroadcast</span></code> requires its <code class="docutils literal notranslate"><span class="pre">Id</span></code> operand to be dynamically uniform across the subgroup. On CUDA / AMDGPU, <code class="docutils literal notranslate"><span class="pre">index</span></code> may vary per lane and the call is identical to <code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">index)</span></code>. If you need a varying source lane, use <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> directly.</p></li>
+</ul>
+</section>
+<section id="common-to-the-data-movement-ops">
+<h3>Common to the data-movement ops<a class="headerlink" href="#common-to-the-data-movement-ops" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>All shuffles / broadcasts are issued under a full active mask on CUDA (<code class="docutils literal notranslate"><span class="pre">0xFFFFFFFF</span></code>). Call them from uniform control flow; calling from divergent control flow is undefined on most backends. (This means: every thread has to execute the shuffle.)</p></li>
+<li><p>Subgroup size varies by backend (32 on NVIDIA, 32 or 64 on AMD depending on wavefront mode, 32 in Vulkan compute on most GPUs). Use <code class="docutils literal notranslate"><span class="pre">subgroup.group_size()</span></code> to query at runtime on SPIR-V; on CUDA / AMDGPU use a compile-time constant.</p></li>
+</ul>
+</section>
+<section id="invocation-id">
+<h3><code class="docutils literal notranslate"><span class="pre">invocation_id()</span></code><a class="headerlink" href="#invocation-id" title="Link to this heading">#</a></h3>
+<p>Returns this lane’s subgroup-local index — <code class="docutils literal notranslate"><span class="pre">0..subgroup_size</span> <span class="pre">-</span> <span class="pre">1</span></code>. Used both as a lane id when computing a target lane for <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> / <code class="docutils literal notranslate"><span class="pre">broadcast</span></code>, and as a per-lane identifier in cooperative algorithms.</p>
+<ul class="simple">
+<li><p>Returns <code class="docutils literal notranslate"><span class="pre">i32</span></code>.</p></li>
+<li><p>Available on every backend.</p></li>
+</ul>
+</section>
+<section id="group-size">
+<h3><code class="docutils literal notranslate"><span class="pre">group_size()</span></code><a class="headerlink" href="#group-size" title="Link to this heading">#</a></h3>
+<p>Returns the subgroup size in effect for the current launch. Currently SPIR-V only; on CUDA the active warp size is statically <code class="docutils literal notranslate"><span class="pre">32</span></code>, and on AMDGPU it is <code class="docutils literal notranslate"><span class="pre">32</span></code> or <code class="docutils literal notranslate"><span class="pre">64</span></code> depending on the wavefront mode chosen at compile time, so a runtime query is typically unnecessary on those backends.</p>
+</section>
+<section id="elect">
+<h3><code class="docutils literal notranslate"><span class="pre">elect()</span></code><a class="headerlink" href="#elect" title="Link to this heading">#</a></h3>
+<p>Picks one lane in the subgroup as the “leader”. Returns <code class="docutils literal notranslate"><span class="pre">1</span></code> on the elected lane and <code class="docutils literal notranslate"><span class="pre">0</span></code> on every other lane. The choice of which lane is elected is implementation-defined but stable for the duration of the call.</p>
+<ul class="simple">
+<li><p>Useful for “exactly one lane does X” patterns where you don’t care which lane it is — e.g. emitting a single global write per subgroup.</p></li>
+<li><p>Currently SPIR-V only (<code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformElect</span></code>). On CUDA / AMDGPU, emulate with <code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span> <span class="pre">==</span> <span class="pre">0</span></code>.</p></li>
+</ul>
+</section>
+<section id="barrier-memory-barrier">
+<h3><code class="docutils literal notranslate"><span class="pre">barrier()</span></code> / <code class="docutils literal notranslate"><span class="pre">memory_barrier()</span></code><a class="headerlink" href="#barrier-memory-barrier" title="Link to this heading">#</a></h3>
+<p><strong>Planned renames: <code class="docutils literal notranslate"><span class="pre">subgroup.sync()</span></code> (in place of <code class="docutils literal notranslate"><span class="pre">barrier()</span></code>) and <code class="docutils literal notranslate"><span class="pre">subgroup.mem_fence()</span></code> (in place of <code class="docutils literal notranslate"><span class="pre">memory_barrier()</span></code>).</strong> Both will be renamed in a future release; the current names remain the only spellings available today, and the rest of this section uses them.</p>
+<p><code class="docutils literal notranslate"><span class="pre">barrier()</span></code> is a subgroup-scope thread-converging barrier — every lane in the subgroup must reach the call before any lane proceeds. <code class="docutils literal notranslate"><span class="pre">memory_barrier()</span></code> is a subgroup-scope memory fence: it orders memory operations within the subgroup without requiring thread convergence.</p>
+<ul class="simple">
+<li><p>Both currently SPIR-V only (<code class="docutils literal notranslate"><span class="pre">OpControlBarrier</span></code> / <code class="docutils literal notranslate"><span class="pre">OpMemoryBarrier</span></code>, both scoped to <code class="docutils literal notranslate"><span class="pre">Subgroup</span></code>). On CUDA / AMDGPU, subgroups (warps) execute in lockstep and these are typically unnecessary; the equivalent under divergent control flow on CUDA is <code class="docutils literal notranslate"><span class="pre">__syncwarp(active_mask)</span></code>, which is not currently exposed through <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code>.</p></li>
 </ul>
 </section>
 <section id="reduce-add-value-log2-size">
@@ -475,7 +691,7 @@
 <p>Sums <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> tree. The result is valid <strong>in lane 0</strong> of each group; other lanes hold partial sums and should be considered undefined.</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> — a compile-time constant. The body unrolls into exactly <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> <code class="docutils literal notranslate"><span class="pre">shuffle_down</span> <span class="pre">+</span> <span class="pre">add</span></code> pairs in the calling kernel’s IR, with no runtime loop overhead.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> must not exceed the active subgroup size on the target (32 on CUDA/Metal and on RDNA, 64 on CDNA). Passing a larger value produces implementation-defined results; it does not error.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> must not exceed the active subgroup size on the target (32 on CUDA / Metal and on RDNA, 64 on CDNA). Passing a larger value produces implementation-defined results; it does not error.</p></li>
 <li><p>The reduction works on any type that supports <code class="docutils literal notranslate"><span class="pre">+</span></code> and <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code>; in practice this means i32, u32, f32, f64, i64, u64.</p></li>
 <li><p>Decorated with <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.</p></li>
 </ul>
@@ -489,6 +705,19 @@
 <li><p>Use this when every lane needs the reduction result (e.g. to divide by the sum, or to branch on it uniformly). It costs exactly the same number of shuffles as <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> but leaves the answer in all lanes, so it replaces a <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> + <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>/broadcast pair.</p></li>
 <li><p>Uses <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code> under the hood.</p></li>
 </ul>
+</section>
+<section id="inclusive-add-inclusive-mul-inclusive-min-inclusive-max-inclusive-and-inclusive-or-inclusive-xor">
+<h3><code class="docutils literal notranslate"><span class="pre">inclusive_add</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_mul</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_min</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_max</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_and</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_or</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_xor</span></code><a class="headerlink" href="#inclusive-add-inclusive-mul-inclusive-min-inclusive-max-inclusive-and-inclusive-or-inclusive-xor" title="Link to this heading">#</a></h3>
+<p>Per-lane inclusive scans over the full subgroup. Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> receives <code class="docutils literal notranslate"><span class="pre">v[0]</span> <span class="pre">op</span> <span class="pre">v[1]</span> <span class="pre">op</span> <span class="pre">...</span> <span class="pre">op</span> <span class="pre">v[i]</span></code>, where <code class="docutils literal notranslate"><span class="pre">op</span></code> is the operation indicated by the suffix and <code class="docutils literal notranslate"><span class="pre">v[k]</span></code> is the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by lane <code class="docutils literal notranslate"><span class="pre">k</span></code>.</p>
+<ul class="simple">
+<li><p>Currently SPIR-V only (<code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformInclusiveScan</span></code> parameterised by the operation). On CUDA / AMDGPU, fall through to the generic LLVM runtime-call path and fail to link; until they are added, build the equivalent on top of <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> / <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code> with a log2-step loop.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_add</span></code>, <code class="docutils literal notranslate"><span class="pre">_mul</span></code>, <code class="docutils literal notranslate"><span class="pre">_min</span></code>, <code class="docutils literal notranslate"><span class="pre">_max</span></code> accept integer and float dtypes; <code class="docutils literal notranslate"><span class="pre">_and</span></code>, <code class="docutils literal notranslate"><span class="pre">_or</span></code>, <code class="docutils literal notranslate"><span class="pre">_xor</span></code> accept integer dtypes only.</p></li>
+<li><p>The operation is over the full subgroup; there is no sized variant. For sums, a sized portable inclusive scan can be derived from <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> plus a prefix-fixup pattern.</p></li>
+</ul>
+</section>
+<section id="shuffle-xor-broadcast-first-exclusive-all-true-any-true-all-equal">
+<h3><code class="docutils literal notranslate"><span class="pre">shuffle_xor</span></code>, <code class="docutils literal notranslate"><span class="pre">broadcast_first</span></code>, <code class="docutils literal notranslate"><span class="pre">exclusive_*</span></code>, <code class="docutils literal notranslate"><span class="pre">all_true</span></code>, <code class="docutils literal notranslate"><span class="pre">any_true</span></code>, <code class="docutils literal notranslate"><span class="pre">all_equal</span></code><a class="headerlink" href="#shuffle-xor-broadcast-first-exclusive-all-true-any-true-all-equal" title="Link to this heading">#</a></h3>
+<p>These names are present in <code class="docutils literal notranslate"><span class="pre">python/quadrants/lang/simt/subgroup.py</span></code> but are currently <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">TODO</span></code> stubs that return <code class="docutils literal notranslate"><span class="pre">None</span></code> on every backend. They are listed in the support matrices above for completeness — calling them produces a tracing failure rather than a useful operation. Do not depend on them today.</p>
 </section>
 </section>
 <section id="examples">
@@ -505,7 +734,7 @@
         <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">qd</span><span class="o">.</span><span class="n">u32</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
 </pre></div>
 </div>
-<p>After the kernel, every lane in a subgroup holds the original value of its lane 0.</p>
+<p>After the kernel, every lane in a subgroup holds the original value of its lane 0. <code class="docutils literal notranslate"><span class="pre">subgroup.broadcast(a[i],</span> <span class="pre">qd.u32(0))</span></code> is interchangeable here.</p>
 </section>
 <section id="identity-shuffle-each-lane-reads-its-own-id">
 <h3>Identity shuffle (each lane reads its own id)<a class="headerlink" href="#identity-shuffle-each-lane-reads-its-own-id" title="Link to this heading">#</a></h3>
@@ -595,26 +824,36 @@
 </section>
 <section id="partial-subgroup-reductions">
 <h3>Partial-subgroup reductions<a class="headerlink" href="#partial-subgroup-reductions" title="Link to this heading">#</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> does not have to match the full subgroup. Sum groups of 8 with <code class="docutils literal notranslate"><span class="pre">reduce_add(v,</span> <span class="pre">3)</span></code> or groups of 16 with <code class="docutils literal notranslate"><span class="pre">reduce_all_add(v,</span> <span class="pre">4)</span></code>; the caller just ensures <code class="docutils literal notranslate"><span class="pre">2**log2_size</span> <span class="pre">&lt;=</span> <span class="pre">subgroup_size</span></code> (so 5 on CUDA / Metal / RDNA, up to 6 on CDNA).</p>
+<p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> does not have to match the full subgroup. Sum groups of 8 with <code class="docutils literal notranslate"><span class="pre">reduce_add(v,</span> <span class="pre">3)</span></code> or groups of 16 with <code class="docutils literal notranslate"><span class="pre">reduce_all_add(v,</span> <span class="pre">4)</span></code>; the caller just ensures <code class="docutils literal notranslate"><span class="pre">2**log2_size</span> <span class="pre">&lt;=</span> <span class="pre">subgroup_size</span></code> (so up to 5 on CUDA / Metal / RDNA, up to 6 on CDNA).</p>
+</section>
+<section id="inclusive-scan-on-spir-v">
+<h3>Inclusive scan on SPIR-V<a class="headerlink" href="#inclusive-scan-on-spir-v" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">cumsum</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">inclusive_add</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>After the call, lane <code class="docutils literal notranslate"><span class="pre">k</span></code> holds <code class="docutils literal notranslate"><span class="pre">a[0]</span> <span class="pre">+</span> <span class="pre">a[1]</span> <span class="pre">+</span> <span class="pre">...</span> <span class="pre">+</span> <span class="pre">a[k]</span></code>. This compiles only on SPIR-V backends today; for a portable inclusive scan, build one on <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> / <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code> with a log2-step loop.</p>
 </section>
 </section>
 <section id="performance-notes">
 <h2>Performance notes<a class="headerlink" href="#performance-notes" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p>Shuffles are register-to-register on CUDA (<code class="docutils literal notranslate"><span class="pre">__shfl_sync</span></code>, <code class="docutils literal notranslate"><span class="pre">__shfl_down_sync</span></code>) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.</p></li>
-<li><p>AMDGPU <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> and <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> both go through <code class="docutils literal notranslate"><span class="pre">ds_permute</span></code>/<code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> today (LDS-routed, roughly tens of cycles).</p></li>
+<li><p>AMDGPU <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> and <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> both go through <code class="docutils literal notranslate"><span class="pre">ds_permute</span></code> / <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> today (LDS-routed, roughly tens of cycles).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> and <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> both issue exactly <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> shuffles and <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> adds per call. No barriers, no shared memory, no launch overhead (they inline).</p></li>
 <li><p>Pick <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> over <code class="docutils literal notranslate"><span class="pre">reduce_add</span> <span class="pre">+</span> <span class="pre">broadcast</span></code> when you need the result in every lane — same cost, one fewer shuffle.</p></li>
 <li><p>64-bit dtypes (<code class="docutils literal notranslate"><span class="pre">i64</span></code>, <code class="docutils literal notranslate"><span class="pre">u64</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code>) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code> (SPIR-V) lowers to a single <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniform*</span></code> instruction — hardware-assisted on most modern GPUs.</p></li>
 </ul>
 </section>
 <section id="related">
 <h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><a class="reference internal" href="tile16.html"><span class="std std-doc">tile16</span></a> — <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> builds on <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code> to implement register-resident 16x16 matrix tiles.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code> — returns this lane’s subgroup-local index.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">subgroup.size()</span></code> — returns the active subgroup size.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">subgroup.reduce_add</span></code> / <code class="docutils literal notranslate"><span class="pre">subgroup.reduce_all_add</span></code> — portable sized sum reductions built on <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> / <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> (see above).</p></li>
+<li><p><a class="reference internal" href="tile16.html"><span class="std std-doc">tile16</span></a> — <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> builds on <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code> to implement register-resident 16×16 matrix tiles.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.warp.*</span></code> — CUDA-only counterparts to the still-stubbed <code class="docutils literal notranslate"><span class="pre">subgroup.{ballot,</span> <span class="pre">all_true,</span> <span class="pre">any_true,</span> <span class="pre">match_*,</span> <span class="pre">active_mask,</span> <span class="pre">...}</span></code>. Useful as a fallback when the portable version is not yet implemented; loses cross-backend portability.</p></li>
 </ul>
 </section>
 </section>
@@ -666,13 +905,27 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-s-available">What’s available</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-s-available">What’s available</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#data-movement">Data movement</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#identification-and-control">Identification and control</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#voting-and-predicate-ops">Voting and predicate ops</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reductions-and-scans">Reductions and scans</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics">Semantics</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shuffle-value-index"><code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">index)</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shuffle-down-value-offset"><code class="docutils literal notranslate"><span class="pre">shuffle_down(value,</span> <span class="pre">offset)</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#common-to-both">Common to both</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shuffle-up-value-offset"><code class="docutils literal notranslate"><span class="pre">shuffle_up(value,</span> <span class="pre">offset)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#broadcast-value-index"><code class="docutils literal notranslate"><span class="pre">broadcast(value,</span> <span class="pre">index)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#common-to-the-data-movement-ops">Common to the data-movement ops</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#invocation-id"><code class="docutils literal notranslate"><span class="pre">invocation_id()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#group-size"><code class="docutils literal notranslate"><span class="pre">group_size()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#elect"><code class="docutils literal notranslate"><span class="pre">elect()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#barrier-memory-barrier"><code class="docutils literal notranslate"><span class="pre">barrier()</span></code> / <code class="docutils literal notranslate"><span class="pre">memory_barrier()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reduce-add-value-log2-size"><code class="docutils literal notranslate"><span class="pre">reduce_add(value,</span> <span class="pre">log2_size)</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reduce-all-add-value-log2-size"><code class="docutils literal notranslate"><span class="pre">reduce_all_add(value,</span> <span class="pre">log2_size)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inclusive-add-inclusive-mul-inclusive-min-inclusive-max-inclusive-and-inclusive-or-inclusive-xor"><code class="docutils literal notranslate"><span class="pre">inclusive_add</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_mul</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_min</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_max</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_and</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_or</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_xor</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shuffle-xor-broadcast-first-exclusive-all-true-any-true-all-equal"><code class="docutils literal notranslate"><span class="pre">shuffle_xor</span></code>, <code class="docutils literal notranslate"><span class="pre">broadcast_first</span></code>, <code class="docutils literal notranslate"><span class="pre">exclusive_*</span></code>, <code class="docutils literal notranslate"><span class="pre">all_true</span></code>, <code class="docutils literal notranslate"><span class="pre">any_true</span></code>, <code class="docutils literal notranslate"><span class="pre">all_equal</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#examples">Examples</a><ul class="nav section-nav flex-column">
@@ -684,6 +937,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sum-32-lanes-with-reduce-add">Sum 32 lanes with <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#broadcast-the-sum-to-all-lanes-with-reduce-all-add">Broadcast the sum to all lanes with <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#partial-subgroup-reductions">Partial-subgroup reductions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inclusive-scan-on-spir-v">Inclusive scan on SPIR-V</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-notes">Performance notes</a></li>
