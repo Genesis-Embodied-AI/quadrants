@@ -1,6 +1,6 @@
 # Math
 
-`qd.math` is the quadrants standard library of math helpers. Per the module docstring it "supports glsl-style vectors, matrices and functions"; in practice the surface includes vector / matrix constructors (`vec2`, `vec3`, `vec4`, `mat2`, `mat3`, `mat4`, etc.), GLSL-style scalar / vector ops (`mix`, `clamp`, `step`, `smoothstep`, `sign`, `normalize`, `length`, `distance`, `dot`, `cross`, `reflect`, `refract`, `mod`), trig (`sin`, `cos`, `tan`, `asin`, `acos`, `atan2`, `tanh`, `exp`, `log`, `log2`, `pow`, `sqrt`, `floor`, `ceil`, `round`), rotation builders (`rot_by_axis`, `rot_yaw_pitch_roll`, `rotation2d`, `rotation3d`, `translate`, `scale`, `eye`), float-classification helpers (`isinf`, `isnan`), the constants `e`, `pi`, `inf`, `nan`, and the integer bit-counting helpers documented below.
+`qd.math` is the quadrants standard library of math helpers.
 
 This page currently documents only the bit-counting helpers. The broader `qd.math` surface is exported and usable today but is not yet documented here.
 
