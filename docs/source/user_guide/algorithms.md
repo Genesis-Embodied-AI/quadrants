@@ -112,7 +112,6 @@ The compact-output kernel reads `offsets[i]` (or `offsets[i] - flags[i]` for 0-b
 
 ## Performance and portability notes
 
-- **`parallel_sort` is `O(N log² N)`**.
 - **No fence required between `populate` and `scan.run`.** Each algorithm kernel launches its own kernels under the hood, and the kernel boundary serializes against prior writes from host-launched kernels.
 
 ## Related
