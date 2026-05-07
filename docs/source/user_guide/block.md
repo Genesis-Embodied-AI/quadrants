@@ -22,7 +22,7 @@ The closely-related grid-level fence (`qd.simt.grid.memfence()`) is documented a
 
 Calling a backend marked "no" raises `ValueError` from the Python layer at trace time. `global_thread_idx()` is verified on CUDA and AMDGPU; the SPIR-V codepath in the wrapper exists but is currently unreachable due to a control-flow quirk in the dispatch and is therefore left undocumented here.
 
-\* On CUDA, `block.mem_sync()` currently lowers via `block_barrier` (i.e. `__syncthreads()`), which doubles as a memory fence but additionally requires thread convergence — meaning calling it from divergent control flow today deadlocks. A fix to lower `mem_sync()` to a pure `__threadfence_block()` is in flight as [quadrants#637](https://github.com/Genesis-Embodied-AI/quadrants/pull/637); once merged, the pattern shown in the [memory-fence example](#memory-fence-in-a-divergent-branch) below works as written. Until then, prefer calling `mem_sync()` from uniform control flow on CUDA.
+\* On CUDA, `block.mem_sync()` currently lowers via `block_barrier` (i.e. `__syncthreads()`), which doubles as a memory fence but additionally requires thread convergence — meaning calling it from divergent control flow today deadlocks. A fix to lower `mem_sync()` to a pure `__threadfence_block()` is in flight as [quadrants#637](https://github.com/Genesis-Embodied-AI/quadrants/pull/637); once merged, the divergent-branch pattern shown in the `block.mem_sync()` semantics section below works as written. Until then, prefer calling `mem_sync()` from uniform control flow on CUDA.
 
 ## Barrier vs fence: the distinction that matters
 
@@ -91,7 +91,7 @@ On CUDA / AMDGPU this is the natural way to identify which work-item a thread sh
 
 ### `block.thread_idx()`
 
-Returns the local thread index within the block. Currently only implemented on SPIR-V backends (Vulkan / Metal); on CUDA / AMDGPU it raises. On CUDA / AMDGPU, use `global_thread_idx()` and the loop-driven indexing pattern instead — see the [examples](#examples) below.
+Returns the local thread index within the block. Currently only implemented on SPIR-V backends (Vulkan / Metal); on CUDA / AMDGPU it raises. On CUDA / AMDGPU, use `global_thread_idx()` together with `qd.loop_config(block_dim=...)` and recover the in-block index via `global_thread_idx() % block_dim`.
 
 ## Grid-scope fence: `qd.simt.grid.memfence()`
 
@@ -100,91 +100,6 @@ Returns the local thread index within the block. Currently only implemented on S
 Use it when you need cross-block coordination via global memory (decoupled look-back scan, inter-block flag publishing, single-pass reductions, etc.). For coordination within a single block, prefer `block.mem_sync()` — it is cheaper.
 
 There is no built-in grid-wide barrier (cooperative-groups-style); the only way to converge threads across blocks is to finish the kernel and launch a new one.
-
-## Examples
-
-### Block barrier with shared memory
-
-```python
-import quadrants as qd
-
-BLOCK = 256
-
-@qd.kernel
-def reduce_per_block(a: qd.types.ndarray(dtype=qd.f32, ndim=1),
-                     out: qd.types.ndarray(dtype=qd.f32, ndim=1)) -> None:
-    sh = qd.simt.block.SharedArray(BLOCK, qd.f32)
-    qd.loop_config(block_dim=BLOCK)
-    for i in range(a.shape[0]):
-        tid = i % BLOCK
-        sh[tid] = a[i]
-        qd.simt.block.sync()
-        # ... cooperative reduction over `sh` ...
-```
-
-Every thread in the block writes its slot in `sh`, then `sync()` ensures every write is visible to every other thread before the reduction begins.
-
-### Memory fence in a divergent branch
-
-```python
-@qd.kernel
-def publish_then_sync() -> None:
-    sh = qd.simt.block.SharedArray(1, qd.i32)
-    flag = qd.simt.block.SharedArray(1, qd.i32)
-    qd.loop_config(block_dim=32)
-    for i in range(32):
-        tid = i % 32
-        if tid == 0:
-            sh[0] = 42
-            qd.simt.block.mem_sync()
-            flag[0] = 1
-        qd.simt.block.sync()
-        # all threads now see sh[0] == 42 once flag[0] == 1
-```
-
-`mem_sync()` runs on a single thread inside the divergent branch. Substituting `sync()` here would deadlock, since the other 31 threads never enter the `if`. On CUDA this pattern depends on the lowering fix tracked in [#637](https://github.com/Genesis-Embodied-AI/quadrants/pull/637); on SPIR-V it already works.
-
-### Block-wide predicate reductions
-
-```python
-@qd.kernel
-def vote(b: qd.types.ndarray(dtype=qd.i32, ndim=1),
-         out_all: qd.types.ndarray(dtype=qd.i32, ndim=1),
-         out_any: qd.types.ndarray(dtype=qd.i32, ndim=1),
-         out_cnt: qd.types.ndarray(dtype=qd.i32, ndim=1)) -> None:
-    qd.loop_config(block_dim=32)
-    for i in range(32):
-        out_all[i] = qd.simt.block.sync_all_nonzero(b[i])
-        out_any[i] = qd.simt.block.sync_any_nonzero(b[i])
-        out_cnt[i] = qd.simt.block.sync_count_nonzero(b[i])
-```
-
-Each op both synchronizes the block and returns the reduction result, in a single instruction. CUDA only.
-
-### Cross-block publish via `grid.memfence()`
-
-```python
-@qd.kernel
-def publish(buf: qd.types.ndarray(dtype=qd.i32, ndim=1),
-            flag: qd.types.ndarray(dtype=qd.i32, ndim=1)) -> None:
-    qd.loop_config(block_dim=32)
-    for i in range(buf.shape[0]):
-        tid = i % 32
-        if tid == 0:
-            buf[i // 32] = i // 32
-            qd.simt.grid.memfence()
-            qd.atomic_add(flag, 0, 1)
-```
-
-The `memfence()` here ensures that the data write to `buf` becomes visible to other blocks before the atomic increment of `flag` does, so any block reading `flag > N` is guaranteed to see at least `N` published `buf` entries. This is the building block of decoupled-look-back scan and other single-pass multi-block algorithms.
-
-## Performance and portability notes
-
-- `sync()` is a couple of instructions on every backend and is essentially free in steady state; the cost is the implicit serialization point.
-- `mem_sync()` is cheaper than `sync()` (no thread convergence) but costs more than uncached register-only work — use it only where memory-ordering is actually needed.
-- `SharedArray` is statically allocated per block; the total per-block budget depends on the GPU (typically 48 KB or 100 KB on CUDA). Exceeding the budget fails at compile time.
-- `grid.memfence()` is more expensive than `mem_sync()` because it orders memory at device scope. Prefer the cheapest fence that gives the visibility you need.
-- The CUDA-only ops (`sync_*_nonzero`) and the SPV-only `thread_idx()` are flagged in the support table above; calling them on the wrong backend raises at trace time, so portability mistakes are caught early.
 
 ## Related
 
