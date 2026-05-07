@@ -93,7 +93,7 @@ def closest_rotation(A: qd.types.matrix(3, 3, qd.f64)) -> qd.types.matrix(3, 3, 
     return R
 ```
 
-The `R.determinant() < 0.0` branch fixes the handedness when SVD's sign convention produces a reflection rather than a rotation — a standard ARAP trick.
+The `R.determinant() < 0.0` branch fixes the handedness when SVD's sign convention produces a reflection rather than a rotation.
 
 ### Project to symmetric positive semi-definite (`make_spd`)
 
