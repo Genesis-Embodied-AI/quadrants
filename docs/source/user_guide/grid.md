@@ -23,13 +23,6 @@ What Quadrants does provide at grid scope is a pure **memory fence**:
 - **`qd.simt.grid.memfence()`** orders memory operations issued by the calling thread so that prior writes are visible to other threads **anywhere in the grid** (across blocks) before any subsequent read in the calling thread can be reordered ahead of the fence. It does **not** synchronize threads.
 - For full thread synchronization across the grid, finish the current kernel and launch a new one — the implicit kernel-end barrier is the canonical cross-block synchronization in Quadrants.
 
-The corresponding distinctions at narrower scopes:
-
-- Block scope: `qd.simt.block.sync()` (barrier) vs `qd.simt.block.mem_sync()` (fence).
-- Subgroup scope: `qd.simt.subgroup.barrier()` (barrier) vs `qd.simt.subgroup.memory_barrier()` (fence).
-
-A useful mental model: barriers converge threads, fences order memory; grid scope only offers the fence.
-
 ## Semantics
 
 ### `qd.simt.grid.memfence()`
