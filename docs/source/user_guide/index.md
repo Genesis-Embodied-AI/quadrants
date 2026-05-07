@@ -48,6 +48,7 @@ autodiff
 :titlesonly:
 
 atomics
+math
 subgroup
 tile16
 ```
