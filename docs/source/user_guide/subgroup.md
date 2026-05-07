@@ -21,7 +21,7 @@ The full Python API is grouped here by category. The first column lists each op,
 
 \* AMDGPU `shuffle_down` (and therefore `reduce_add`, which is built on it) is currently emulated via `ds_bpermute` (~50 cycle latency).
 
-Use `shuffle` with an explicit lane index in the meantime — every shuffle pattern can be expressed that way.
+Use `shuffle` with an explicit lane index — every shuffle pattern can be expressed that way.
 
 ### Identification and control
 
