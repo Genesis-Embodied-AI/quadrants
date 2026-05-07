@@ -12,6 +12,8 @@ Grid ops live under `qd.simt.grid`. The namespace currently contains a single op
 
 Calling a backend marked "no" raises a runtime / link-time error. AMDGPU and SPIR-V lowerings are tracked as future work; until they land, kernels that need a grid-scope fence are CUDA-only.
 
+Naming note: `qd.simt.grid.memfence()` will be renamed to `qd.simt.grid.mem_fence()` (note the underscore) in the near future, for consistency with the `mem_fence` spelling used at other scopes. The new name is not yet available; this page uses the current name throughout.
+
 ## Barrier vs fence at grid scope
 
 There is no `grid.sync()` — Quadrants does not expose a thread-converging barrier across blocks within a single kernel launch. The reasons are practical: CUDA cooperative groups need launch-time opt-in, AMDGPU and SPIR-V either lack a comparable primitive or expose it only under non-portable extensions, and the latency of an in-kernel grid barrier is comparable to a kernel relaunch on most hardware.
@@ -31,6 +33,8 @@ A useful mental model: barriers converge threads, fences order memory; grid scop
 ## Semantics
 
 ### `qd.simt.grid.memfence()`
+
+**Planned rename: `qd.simt.grid.mem_fence()`** (with underscore). The op will be renamed in a future release for consistency with the `mem_fence` spelling at other scopes; the current `memfence` name remains the only spelling available today, and the rest of this section uses it.
 
 A device-scope memory fence. Lowers to `__threadfence()` (`nvvm_membar_gl`) on CUDA. No convergence requirement — safe to call from divergent control flow (e.g. inside `if tid == 0`).
 
