@@ -14,7 +14,7 @@ The closely-related grid-level fence (`qd.simt.grid.mem_fence()`) is documented 
 | `block.sync_all_nonzero(predicate)`             | yes  | no     | no     | no    |
 | `block.sync_any_nonzero(predicate)`             | yes  | no     | no     | no    |
 | `block.sync_count_nonzero(predicate)`           | yes  | no     | no     | no    |
-| `block.mem_fence()`                             | yes\*| no     | yes    | yes   |
+| `block.mem_fence()`                             | yes\*| yes    | yes    | yes   |
 | `block.SharedArray(shape, dtype)`               | yes  | yes    | yes    | yes   |
 | `block.global_thread_idx()`                     | yes  | yes    | yes    | yes   |
 | `block.thread_idx()`                            | no   | no     | yes    | yes   |
@@ -65,8 +65,7 @@ Each call performs both the synchronization (same convergence requirement as `sy
 
 A block-scope memory fence. Orders memory operations issued by the calling thread so that prior writes are visible to other threads in the block before any subsequent read by the calling thread can be reordered ahead of the fence. It does **not** synchronize threads — no convergence requirement (subject to the CUDA caveat in the support table).
 
-- Lowers to `__threadfence_block()` (`nvvm_membar_cta`) — the intended target — on CUDA, and to `workgroupMemoryBarrier` on SPIR-V.
-- AMDGPU support is currently unimplemented and raises `ValueError` at trace time.
+- Lowers to `__threadfence_block()` (`nvvm_membar_cta`) — the intended target — on CUDA, to `__builtin_amdgcn_fence(__ATOMIC_ACQ_REL, "workgroup")` on AMDGPU (which the AMDGCN backend lowers to `s_waitcnt lgkmcnt(0)` and friends), and to `workgroupMemoryBarrier` on SPIR-V (Vulkan / Metal).
 - Use this when one thread in the block (e.g. lane 0) needs to publish data to shared memory and have the publication be visible to the rest of the block without forcing the publishing thread to wait at a barrier. The pattern is typically:
 
   ```python

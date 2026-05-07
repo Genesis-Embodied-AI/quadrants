@@ -513,9 +513,10 @@ def test_grid_mem_fence():
         assert a[i] == i + 1
 
 
-# Smoke test for the new block.mem_fence() name. We can't easily provoke a memory-ordering bug
-# deterministically, so this just ensures the kernel compiles and runs.
-@test_utils.test(arch=qd.cuda)
+# Smoke test for `block.mem_fence()`. We can't easily provoke a memory-ordering bug
+# deterministically, so this just ensures the call compiles and the kernel runs end-to-end on
+# every supported GPU backend (CUDA / AMDGPU / Vulkan / Metal).
+@test_utils.test(arch=qd.gpu)
 def test_block_mem_fence_smoke():
     N = 32
     a = qd.field(dtype=qd.i32, shape=N)

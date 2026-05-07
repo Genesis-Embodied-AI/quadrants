@@ -45,7 +45,16 @@ def sync_count_nonzero(predicate):
 def mem_fence():
     arch = impl.get_runtime().prog.config().arch
     if arch == _qd_core.cuda:
+        # NB: lowers via the same internal op as `block.sync()` today (see
+        # `block.md` support-table footnote and PR #637 in flight). The
+        # `block_mem_fence` runtime symbol is wired up in
+        # `quadrants/runtime/llvm/runtime_module/runtime.cpp` and patched in
+        # `quadrants/runtime/llvm/llvm_context.cpp`, but the Python -> IR path
+        # still emits `block_barrier` to preserve current convergence
+        # semantics until #637 lands.
         return impl.call_internal("block_barrier", with_runtime_context=False)
+    if arch == _qd_core.amdgpu:
+        return impl.call_internal("block_mem_fence", with_runtime_context=False)
     if arch_uses_spv(arch):
         return impl.call_internal("workgroupMemoryBarrier", with_runtime_context=False)
     raise ValueError(f"qd.block.mem_fence is not supported for arch {arch}")

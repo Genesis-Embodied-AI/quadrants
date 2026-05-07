@@ -1895,9 +1895,25 @@ void warp_barrier(uint32 mask) {
 }
 
 void block_mem_fence() {
+#ifdef ARCH_amdgpu
+  // Workgroup-scope memory fence (no thread convergence). On CUDA this body
+  // is replaced by `patch_intrinsic("block_mem_fence", nvvm_membar_cta, ...)`
+  // in `llvm_context.cpp`; on AMDGPU there is no LLVM intrinsic to patch
+  // through `patch_intrinsic` (the AMDGCN fence intrinsic takes
+  // ordering+syncscope arguments), so we emit the right instruction
+  // directly via the Clang builtin and let the AMDGCN backend lower it to
+  // `s_waitcnt lgkmcnt(0)` etc.
+  __builtin_amdgcn_fence(__ATOMIC_ACQ_REL, "workgroup");
+#endif
 }
 
 void grid_mem_fence() {
+#ifdef ARCH_amdgpu
+  // Device-scope (cross-workgroup) memory fence. CUDA's body gets patched
+  // to `nvvm_membar_gl`; AMDGPU emits the agent-scope fence directly, same
+  // reasoning as `block_mem_fence` above.
+  __builtin_amdgcn_fence(__ATOMIC_ACQ_REL, "agent");
+#endif
 }
 
 // these trivial functions are needed by the DEFINE_REDUCTION macro
