@@ -113,7 +113,7 @@ The compact-output kernel reads `offsets[i]` (or `offsets[i] - flags[i]` for 0-b
 ## Performance and portability notes
 
 - **`parallel_sort` is `O(N log² N)`**.
-- **`PrefixSumExecutor` is `i32`-only and CUDA + Vulkan-only.** This is the most-often-hit limitation in cross-platform code. If you need `u32` / `i64` / `f32` / `f64` keys or AMDGPU / Metal coverage, you currently have to compose your own scan from `qd.simt.subgroup.inclusive_add` (per-block) plus an outer kernel that handles the multi-block roll-up.
+- **`PrefixSumExecutor` is `i32`-only and CUDA + Vulkan-only.**
 - **Allocate the executor once, run it many times.** The internal auxiliary buffer is sized to the constructor's `length`; constructing per call wastes allocation traffic. Each `.run()` is a sequence of kernel launches; the cost is `O(N / cache_line)` global memory bandwidth, not user-visible launch overhead.
 - **No fence required between `populate` and `scan.run`.** Each algorithm kernel launches its own kernels under the hood, and the kernel boundary serializes against prior writes from host-launched kernels.
 
