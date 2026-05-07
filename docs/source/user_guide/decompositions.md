@@ -47,6 +47,8 @@ Symmetric eigendecomposition — for a real symmetric `A`, returns `(eigenvalues
 
 For 3×3, eigenvalues come out sorted in ascending order (the implementation explicitly sorts at the end). The 2×2 path does not perform an explicit sort — verify with a test if you need a particular order in 2D.
 
+**FIXME (sort consistency):** same kind of inconsistency as `qd.svd`, with the additional twist that the sort directions disagree across ops — `qd.sym_eig` 3×3 sorts *ascending*, while `qd.svd` 2×2 sorts *descending*. Both shapes of `qd.sym_eig` should sort the same way, and ideally `qd.sym_eig` and `qd.svd` should agree on a direction (or parametrize via a boolean template parameter, e.g. `qd.sym_eig(A, sorted=True)`). Pick one and apply it across both shapes and across both ops (and update this paragraph accordingly).
+
 `A` is *assumed* symmetric; the implementation does not symmetrize first. If your matrix is only approximately symmetric (e.g. accumulated floating-point error), explicitly compute `(A + A.transpose()) * 0.5` before calling.
 
 ### `qd.polar_decompose(A, dt=None)`
