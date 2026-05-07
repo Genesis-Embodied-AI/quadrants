@@ -30,12 +30,18 @@ int64_t replay_one_observation(const AdStackCache::SizeExprReadObservation &obs,
   using Obs = AdStackCache::SizeExprReadObservation;
   switch (obs.kind) {
     case Obs::FieldLoadObs: {
-      // Gen-counter fast skip: when no kernel has bumped this SNode's write generation since record time,
-      // the underlying field value cannot have changed and we can return the recorded `observed_value`
-      // without dispatching a reader kernel. The dispatch is the dominant per-launch cost on the hot path
-      // for steady-state reverse-mode loops with stable bounds.
+      // Gen-counter fast skip: when no kernel has bumped this SNode's write generation since record time, the
+      // underlying field value cannot have changed and we can return the recorded `observed_value` without dispatching
+      // a reader kernel. The dispatch is the dominant per-launch cost on the hot path for steady-state reverse-mode
+      // loops with stable bounds.
       if (prog != nullptr && prog->adstack_cache().snode_write_gen(obs.snode_id) == obs.observed_gen) {
         return obs.observed_value;
+      }
+      // Max-reducer body FieldLoadObs (bound-var-indexed leaves) records `indices = {}` since the body is evaluated at
+      // every cross-product point and there is no single canonical index to re-read. The gen counter is the only valid
+      // staleness signal in that mode; a gen mismatch unconditionally invalidates the cache.
+      if (obs.indices.empty()) {
+        return obs.observed_value + 1;
       }
       int64_t v = read_field_with_launch_cache(obs.snode_id, obs.indices, prog);
       if (v == std::numeric_limits<int64_t>::min()) {
@@ -170,11 +176,22 @@ bool AdStackCache::try_max_reducer_cache_hit(uint32_t registry_id,
 void populate_max_reducer_body_observations(std::vector<AdStackCache::SizeExprReadObservation> &reads,
                                             LaunchContextBuilder *ctx,
                                             AdStackCache *cache) {
-  if (ctx == nullptr) {
-    return;
-  }
   for (auto &obs : reads) {
+    if (obs.kind == AdStackCache::SizeExprReadObservation::FieldLoadObs) {
+      // `FieldLoadObs` from a bound-var-indexed body leaf: snapshot the snode write generation so a subsequent launch
+      // that has not mutated the SNode replays the cached max via `replay_one_observation`'s gen-fast-skip arm. Same
+      // sentinel rationale as `ExternalReadObs` below: the recognizer restricts the leaf dtype so an `INT64_MIN`
+      // recorded value cannot equal a freshly-loaded one on cache miss.
+      obs.observed_value = std::numeric_limits<int64_t>::min();
+      if (cache != nullptr) {
+        obs.observed_gen = cache->snode_write_gen(obs.snode_id);
+      }
+      continue;
+    }
     if (obs.kind != AdStackCache::SizeExprReadObservation::ExternalReadObs || obs.arg_id_path.empty()) {
+      continue;
+    }
+    if (ctx == nullptr) {
       continue;
     }
     int arg_id = obs.arg_id_path[0];

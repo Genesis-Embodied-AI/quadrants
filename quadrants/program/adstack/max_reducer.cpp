@@ -11,8 +11,10 @@
 
 #include "quadrants/common/logging.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
+#include "quadrants/ir/snode.h"
 #include "quadrants/ir/type.h"
 #include "quadrants/ir/type_factory.h"
+#include "quadrants/program/adstack/device_bytecode.h"
 #include "quadrants/program/adstack/eval.h"
 #include "quadrants/program/launch_context_builder.h"
 #include "quadrants/program/program.h"
@@ -89,14 +91,26 @@ bool max_reducer_body_is_recognizable(const SerializedSizeExpr &expr,
       // unconditionally closed. The encoder host-folds it to `kConst` at encode time via `evaluate_node`.
       return true;
     case SizeExpr::Kind::FieldLoad:
-      // `FieldLoad` is closed iff every index slot is a literal constant. Bound-var indices (`my_field[i_e]`) would
-      // need to be resolved per chain-axis iteration, but the encoder host-folds the leaf once at encode time with an
-      // empty bound-var map and emits the result as `kConst`; a non-literal index would assert inside
-      // `evaluate_field_load` ("FieldLoad references unbound var_id"). The closed-only restriction is upheld here so
-      // the recognizer never lets such a body reach the encoder.
+      // `FieldLoad` accepts both literal indices (host-folded by the encoder via `evaluate_field_load` against an empty
+      // bound-var map and emitted as `kConst`) and bound-variable refs from the captured chain. The latter case lowers
+      // to a `kFieldLoad` device node whose base pointer is pre-resolved on host (PSB on SPIR-V, `runtime->roots[id] +
+      // place_byte_offset` on LLVM) and whose per-axis byte strides come from `compute_dense_snode_strides`. Foreign
+      // bound-var refs (var_ids outside the captured chain) are rejected since the device-side scope only carries the
+      // chain's axes.
       for (int32_t raw : n.indices) {
-        if (raw < 0) {
-          return false;  // bound-var index - not host-foldable as a closed leaf
+        if (raw >= 0) {
+          continue;
+        }
+        const int32_t var_id = -(raw + 1);
+        bool found = false;
+        for (int32_t want : expected_var_ids) {
+          if (want == var_id) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          return false;
         }
       }
       return true;
@@ -220,7 +234,8 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
     const std::vector<int32_t> &bound_var_ids,
     const std::function<int32_t(const std::vector<int32_t> &arg_id_path)> &arg_buffer_offset_resolver,
     LaunchContextBuilder *ctx,
-    Program *prog) {
+    Program *prog,
+    const FieldLoadDeviceEmitter *fl_emitter) {
   EncodedMaxReducerBody out;
   if (body_node_idx < 0 || static_cast<std::size_t>(body_node_idx) >= expr.nodes.size()) {
     return out;
@@ -378,20 +393,116 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
         break;
       }
       case SizeExpr::Kind::FieldLoad: {
-        // Closed leaf - resolve via the snode-rw bank host-side at encode time and emit as `kConst`. Same cache-
-        // invalidation story as `kExternalTensorShape`: the recorded `FieldLoadObs` carries the snode write gen, and a
-        // subsequent launch that bumps that gen forces a fresh fold on replay.
         if (prog == nullptr) {
-          return EncodedMaxReducerBody{};  // FieldLoad needs a live Program for snode resolution
+          return EncodedMaxReducerBody{};  // FieldLoad needs a live Program for snode resolution.
         }
-        std::unordered_map<int32_t, int64_t> empty_bound;
-        std::vector<AdStackCache::SizeExprReadObservation> read_sink;
-        const int64_t v = evaluate_field_load(src, empty_bound, prog, &read_sink);
-        dst.kind = static_cast<int32_t>(AdStackSizeExprDeviceKind::kConst);
-        dst.const_value = v;
-        for (auto &obs : read_sink) {
-          out.body_reads.push_back(std::move(obs));
+        // Closed FieldLoad (every index slot is a literal constant) host-folds via `evaluate_field_load` to a `kConst`
+        // leaf at encode time. The recorded `FieldLoadObs` carries the snode write-gen so a subsequent launch that has
+        // not bumped the gen replays the cached value, mirroring the `kExternalTensorShape` host-fold path.
+        bool has_bound_var_index = false;
+        for (int32_t raw : src.indices) {
+          if (raw < 0) {
+            has_bound_var_index = true;
+            break;
+          }
         }
+        if (!has_bound_var_index) {
+          std::unordered_map<int32_t, int64_t> empty_bound;
+          std::vector<AdStackCache::SizeExprReadObservation> read_sink;
+          const int64_t v = evaluate_field_load(src, empty_bound, prog, &read_sink);
+          dst.kind = static_cast<int32_t>(AdStackSizeExprDeviceKind::kConst);
+          dst.const_value = v;
+          for (auto &obs : read_sink) {
+            out.body_reads.push_back(std::move(obs));
+          }
+          break;
+        }
+        // Bound-var-indexed FieldLoad: emit a `kFieldLoad` device node that the body interpreter resolves per
+        // cross-product iteration. Backend-specific base resolution: SPIR-V passes a non-empty `fl_emitter` whose
+        // `fetch` returns `root_psb + place_byte_offset` (pre-baked PSB address); LLVM passes a null emitter and we
+        // resolve `(snode_root_id, place_byte_offset)` directly via `prog`, which the LLVM device interpreter then
+        // resolves at runtime via `runtime->roots[snode_root_id] + place_byte_offset`. Per-axis byte strides come from
+        // `compute_dense_snode_strides` (units = leaf primitive type, not bytes), shared with the per-task sizer's
+        // `kFieldLoad` arm.
+        SNode *snode = prog->get_snode_by_id(src.snode_id);
+        if (snode == nullptr) {
+          return EncodedMaxReducerBody{};
+        }
+        auto *prim_ty = snode->dt->cast<PrimitiveType>();
+        if (prim_ty == nullptr) {
+          return EncodedMaxReducerBody{};
+        }
+        // Same dtype restriction as `kExternalTensorRead`: the cache-revalidation sentinel `INT64_MIN` must be
+        // unreachable from a freshly-loaded leaf value, so reject `i64 / u64` leaves where a mutated cell could legally
+        // hold the sentinel and false-hit on revalidation.
+        const auto leaf_dt = prim_ty->type;
+        switch (leaf_dt) {
+          case PrimitiveTypeID::i8:
+          case PrimitiveTypeID::i16:
+          case PrimitiveTypeID::i32:
+          case PrimitiveTypeID::u8:
+          case PrimitiveTypeID::u16:
+          case PrimitiveTypeID::u32:
+            break;
+          default:
+            return EncodedMaxReducerBody{};
+        }
+        std::vector<int32_t> elem_strides;
+        if (!compute_dense_snode_strides(snode, &elem_strides)) {
+          return EncodedMaxReducerBody{};
+        }
+        if (elem_strides.size() != src.indices.size()) {
+          return EncodedMaxReducerBody{};
+        }
+        int32_t snode_root_id = -1;
+        int64_t base_or_place_off = 0;
+        if (fl_emitter != nullptr && !fl_emitter->empty()) {
+          uint64_t base_psb = 0;
+          std::vector<int32_t> emitter_strides;
+          if (!fl_emitter->fetch(snode, &base_psb, &emitter_strides)) {
+            return EncodedMaxReducerBody{};
+          }
+          base_or_place_off = static_cast<int64_t>(base_psb);
+        } else {
+          // LLVM path: store `snode_root_id` in `arg_buffer_offset` (unused by FieldLoad on SPIR-V) and
+          // `place_byte_offset` in `const_value`. The LLVM device interpreter reads `runtime->roots[snode_root_id] +
+          // place_byte_offset` and adds the per-axis-stride-weighted element offset.
+          snode_root_id = snode->get_snode_tree_id();
+          base_or_place_off = static_cast<int64_t>(prog->get_field_in_tree_offset(snode_root_id, snode));
+        }
+        dst.kind = static_cast<int32_t>(AdStackSizeExprDeviceKind::kFieldLoad);
+        dst.prim_dt = static_cast<int32_t>(leaf_dt);
+        dst.arg_buffer_offset = snode_root_id;
+        dst.const_value = base_or_place_off;
+        const int32_t indices_off = static_cast<int32_t>(indices_table.size());
+        for (std::size_t a = 0; a < src.indices.size(); ++a) {
+          int32_t emit_raw;
+          int64_t raw = src.indices[a];
+          if (raw >= 0) {
+            emit_raw = static_cast<int32_t>(raw);
+          } else {
+            const int32_t host_var_id = static_cast<int32_t>(-(raw + 1));
+            const int32_t slot = remap_chain_var(host_var_id);
+            if (slot < 0) {
+              return EncodedMaxReducerBody{};
+            }
+            emit_raw = -(slot + 1);
+          }
+          indices_table.push_back(emit_raw);
+          indices_table.push_back(elem_strides[a]);
+        }
+        dst.indices_offset = indices_off;
+        dst.indices_count = static_cast<int32_t>(src.indices.size());
+        // Push a `FieldLoadObs` skeleton: snode_id is the staleness key; `indices = {}` signals to
+        // `replay_one_observation`'s FieldLoadObs arm that the gen counter is the sole staleness signal (the body is
+        // evaluated at every cross-product point so there is no canonical scalar to re-read on a gen mismatch).
+        // `populate_max_reducer_body_observations` fills in `observed_value` (sentinel) and `observed_gen` at dispatch
+        // time once a live `AdStackCache` is in scope.
+        AdStackCache::SizeExprReadObservation obs{};
+        obs.kind = AdStackCache::SizeExprReadObservation::FieldLoadObs;
+        obs.snode_id = src.snode_id;
+        obs.prim_dt = static_cast<int>(leaf_dt);
+        out.body_reads.push_back(std::move(obs));
         break;
       }
       case SizeExpr::Kind::Add:

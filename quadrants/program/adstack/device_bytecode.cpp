@@ -201,26 +201,6 @@ AdStackSizeExprDeviceNode make_empty_device_node(int32_t kind) {
   return dn;
 }
 
-// Data needed to encode a `FieldLoad` as a `kFieldLoad` device node. Populated by the SPIR-V encoder entry
-// point via `GfxRuntime` / `Device` queries; the LLVM encoder passes a default-constructed (empty) emitter,
-// which routes every `FieldLoad` through the host-fold path instead (safe on CPU / CUDA / AMDGPU where a
-// nested accessor kernel launch is fine).
-struct FieldLoadDeviceEmitter {
-  // Returns true on success, populating `out_base_psb` with `root_buffer_psb + place_byte_offset_in_root` and
-  // `out_elem_strides` with one positive int32 *element* stride per active axis of `snode` (stride in units of
-  // the leaf's primitive type, not bytes - the sizer shader reuses `psb_load_scalar` which already multiplies
-  // by `sizeof(prim_dt)`). Returns false when the snode layout is not amenable to direct PSB indexing
-  // (bitmasked / pointer / hash chain, bit-level place, not-all-dense path), in which case the encoder raises
-  // a `QD_ERROR`. The dense-only restriction is deliberate - observed kernels exercise only dense chains in the
-  // adstack pre-pass's `SizeExpr::FieldLoad` leaves, and extending this to bitmasked / pointer would require
-  // threading the full access codegen through the sizer shader, which is out of scope.
-  std::function<bool(SNode *snode, uint64_t *out_base_psb, std::vector<int32_t> *out_elem_strides)> fetch;
-
-  bool empty() const {
-    return fetch == nullptr;
-  }
-};
-
 // Recursive top-down encoder. Each call returns the index of the emitted root in `out_nodes`. Subtrees whose
 // leaves are all host-resolvable (no `ExternalTensorRead`, and - on the LLVM path - no `FieldLoad` either) and
 // whose bound variables are all locally bound within the subtree get folded to a single `kConst` device node

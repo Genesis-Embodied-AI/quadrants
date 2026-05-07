@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "quadrants/codegen/llvm/llvm_compiled_data.h"
@@ -12,6 +13,29 @@ namespace quadrants::lang {
 
 class LaunchContextBuilder;
 class Program;
+class SNode;
+
+// Data needed to encode a `FieldLoad` as a `kFieldLoad` device node on the SPIR-V backend. Populated by the SPIR-V
+// dispatch site (per-task sizer or max-reducer) via `GfxRuntime` / `Device` queries; the LLVM encoder paths pass a
+// default-constructed (`empty()`) emitter and resolve `(snode_root_id, place_byte_offset)` directly via `prog`. The
+// fetch closure returns `out_base_psb = root_buffer_psb + place_byte_offset_in_root` and per-active-axis element
+// strides (in units of the leaf primitive type, not bytes - the shader multiplies by `sizeof(prim_dt)` separately via
+// `psb_load_scalar`). Returns false when the snode is not amenable to direct PSB indexing (bitmasked / pointer / hash
+// chain, bit-level place, not-all-dense path); the encoder treats that as a hard error on the per-task sizer path or
+// drops the spec on the max-reducer path.
+struct FieldLoadDeviceEmitter {
+  std::function<bool(SNode *snode, uint64_t *out_base_psb, std::vector<int32_t> *out_elem_strides)> fetch;
+
+  bool empty() const {
+    return fetch == nullptr;
+  }
+};
+
+// Compute per-active-axis element strides for a dense `place`-leaf SNode (units = leaf primitive type, not bytes).
+// Matches the SPIR-V FieldLoad emitter's stride convention; the max-reducer encoder reuses this to lay out the
+// `[idx_a_raw, elem_stride_a]` indices-table pairs that the body interpreter walks. Returns false on non-dense /
+// bit-level / multi-child-dense layouts (same restriction as the per-task sizer's `FieldLoadDeviceEmitter::fetch`).
+bool compute_dense_snode_strides(SNode *leaf, std::vector<int32_t> *out_elem_strides);
 
 // Flattens every alloca's `SerializedSizeExpr` tree into the device-readable bytecode defined in
 // `quadrants/ir/adstack_size_expr_device.h` and returns the raw bytes ready to upload to a device scratch buffer.

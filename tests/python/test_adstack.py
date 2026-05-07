@@ -4908,25 +4908,204 @@ def test_max_reducer_grammar_fallback():
         assert x.grad[i] == pytest.approx(expected, rel=1e-5)
 
 
+@pytest.mark.parametrize(
+    "body_kind",
+    [
+        "field_bv",
+        "field_bv_plus_arr_bv",
+        "arr_bv_plus_field_bv",
+        "max_field_bv_arr_bv",
+        "max_field_bv_const",
+        "field_bv_arith_combine",
+        "field_bv_indexed_by_field_load",
+        "arr_bv_indexed_by_field_load",
+    ],
+)
+@test_utils.test(require=qd.extension.adstack)
+def test_max_reducer_field_load_bound_var_dispatch(body_kind):
+    # A reverse-mode kernel whose inner range-for trip count reads a `qd.field` indexed by the outer chain variable
+    # captures via the parallel max-reducer dispatch and produces the analytical gradient. The body-shape
+    # parametrization exercises every supported composition: bound-var FieldLoad on its own, mixed with bound-var ETR
+    # via `Add` / `Max`, combined with `Const` / arithmetic, and the nested-load worst-case form (`field[field[i]]` /
+    # `arr[field[i]]`).
+    #
+    # Internal details: each variant lowers to `MaxOverRange(0, M, body)` where `body` is bound-var-indexed
+    # `FieldLoad(field_a, [bound_var])` or a recognizer-accepted composition that includes one. The relaxed
+    # `max_reducer_body_is_recognizable::FieldLoad` arm accepts the leaf, the encoder emits a `kFieldLoad` device node
+    # whose base pointer is pre-resolved on host (PSB on SPIR-V, `runtime->roots[id] + place_byte_offset` on LLVM),
+    # and the dispatch reads `field_a[i]` for every `i` and keeps the max. The two `_indexed_by_field_load` variants
+    # exercise the conservative-wrapper path: `SerializedSizeExprNode::indices` carries one int32 per axis (no
+    # subtree refs), so the trip-count builder substitutes `MaxOverRange(var, 0, leaf_snode.shape, body=Load(snode,
+    # [var]))` that iterates the leaf snode's full axis - the recognizer captures it via the same bound-var route and
+    # the dispatched max equals `max_k field_a[k]` (resp. `max_k arr[k]`). Across all variants the body's max value
+    # over the indexed range is `N_X`, keeping the asserted gradient identical.
+    N_X = 4
+    M = 8
+    # Field-a holds the bound-var-indexed counter values: peak value `N_X` lands at the last cell, so a per-element walk
+    # is necessary to observe the heap-stride correctness; a partial walk that stops at the first non-zero cell would
+    # under-bound the heap stride.
+    field_a = qd.field(qd.i32, shape=(M,))
+    field_a_init = np.zeros(M, dtype=np.int32)
+    field_a_init[-1] = N_X
+    for i in range(M):
+        field_a[i] = int(field_a_init[i])
+    # Field-b is the inner-index source for the `_indexed_by_field_load` variants. Setting every cell to the index of
+    # field_a's peak (M-1) routes every outer iteration to the cell holding `N_X`; the dispatch's worst-case wrapper
+    # walks field_a's full axis regardless, so the max reduction still observes `N_X` and the gradient stays uniform.
+    field_b = qd.field(qd.i32, shape=(M,))
+    for i in range(M):
+        field_b[i] = M - 1
+    arr = qd.ndarray(qd.i32, shape=(M,))
+    arr.from_numpy(field_a_init)
+
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i_e in range(M):
+            # Each variant is an algebraic identity over the value at `field_a[i_e]` (or `field_a[field_b[i_e]]` for the
+            # nested-load forms): max value over the captured axis is `N_X` so the asserted gradient stays uniform.
+            n = (
+                field_a[i_e]
+                if qd.static(body_kind == "field_bv")
+                else (
+                    field_a[i_e] + (a[i_e] - a[i_e])
+                    if qd.static(body_kind == "field_bv_plus_arr_bv")
+                    else (
+                        a[i_e] + (field_a[i_e] - a[i_e])
+                        if qd.static(body_kind == "arr_bv_plus_field_bv")
+                        else (
+                            max(field_a[i_e], a[i_e])
+                            if qd.static(body_kind == "max_field_bv_arr_bv")
+                            else (
+                                max(field_a[i_e], 0)
+                                if qd.static(body_kind == "max_field_bv_const")
+                                else (
+                                    max(field_a[i_e] + 0, field_a[i_e] * 1 - 0)
+                                    if qd.static(body_kind == "field_bv_arith_combine")
+                                    else (
+                                        field_a[field_b[i_e]]
+                                        if qd.static(body_kind == "field_bv_indexed_by_field_load")
+                                        else a[field_b[i_e]]
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+            accum = 0.0
+            for j in range(n):
+                accum = accum + x[j] * x[j]
+            loss[None] += accum
+
+    for i in range(N_X):
+        x[i] = 0.1
+
+    prog = impl.get_runtime().prog
+    prog._reset_max_reducer_dispatch_count()
+
+    compute(arr)
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad(arr)
+    qd.sync()
+
+    # Only one outer iteration walks the inner loop with a non-zero count (the cell at position `M-1` for the direct
+    # variants, or every iteration via field_b -> field_a[M-1] for the nested variants); each surviving inner
+    # iteration contributes `2 * x[k]` to `x.grad[k]`. The recognizer captures every variant via the bound-var
+    # FieldLoad / ETR path so the dispatch counter must advance.
+    assert prog._get_max_reducer_dispatch_count() >= 1
+    if body_kind in ("field_bv_indexed_by_field_load", "arr_bv_indexed_by_field_load"):
+        # Nested-load worst-case: every outer iteration routes to the peak cell so the reverse pass accumulates `M`
+        # times.
+        expected = 2 * 0.1 * M
+    else:
+        expected = 2 * 0.1
+    for k in range(N_X):
+        assert x.grad[k] == pytest.approx(expected, rel=1e-5)
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_max_reducer_field_load_bound_var_cache_invalidates_on_snode_mutation():
+    # A reverse-mode kernel whose inner trip count reads a `qd.field` indexed by the outer chain variable redispatches
+    # the max-reducer when the gating field is mutated between launches.
+    #
+    # Internal details: the encoder emits a `kFieldLoad` device node and pushes a `FieldLoadObs` carrying the snode id
+    # and the live `snode_write_gen` snapshot. On the second launch's `try_max_reducer_cache_hit`,
+    # `replay_one_observation`'s `FieldLoadObs` arm fast-skips on a matching gen and otherwise falls through to the
+    # invalidate path (`obs.indices == {}` means the gen counter is the sole staleness signal for max-reducer body
+    # observations). Mutating `field_a[M-1]` from Python bumps `snode_write_gen` so the second launch's replay
+    # invalidates the entry and the dispatch counter advances beyond `after_first`.
+    M = 8
+    N_X = 4
+
+    field_a = qd.field(qd.i32, shape=(M,))
+    for i in range(M):
+        field_a[i] = 0
+    field_a[M - 1] = 2
+
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i_e in range(M):
+            n = field_a[i_e]
+            accum = 0.0
+            for j in range(n):
+                accum = accum + x[j] * x[j]
+            loss[None] += accum
+
+    for i in range(N_X):
+        x[i] = 0.1
+
+    prog = impl.get_runtime().prog
+    prog._reset_max_reducer_dispatch_count()
+
+    compute()
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad()
+    qd.sync()
+    after_first = prog._get_max_reducer_dispatch_count()
+    assert after_first >= 1
+
+    # Bump field_a's peak value to force a different max; the snode write must bump `snode_write_gen` and the next
+    # launch's cache replay must invalidate, advancing the dispatch counter.
+    field_a[M - 1] = 4
+    pre_mutation = prog._get_max_reducer_dispatch_count()
+    compute()
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad()
+    qd.sync()
+    assert prog._get_max_reducer_dispatch_count() > pre_mutation
+
+
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_above_cap_out_of_grammar_kernel_raises():
     # A reverse-mode kernel whose inner `range(...)` trip count is bound to an out-of-grammar `MaxOverRange` body and
     # whose iteration count exceeds the `1<<24` adstack-sizer cap surfaces a `QuadrantsAssertionError` at `qd.sync()`.
     #
-    # Internal details: the recognizer's body grammar accepts only `Const / ExternalTensorRead / Add / Sub / Mul / Max /
-    # ExternalTensorShape / FieldLoad(literal-indices)`, and `max_reducer_body_is_recognizable` further restricts
-    # `ExternalTensorRead` leaves to dtypes whose value range cannot collide with the cache-revalidation sentinel
-    # (`INT64_MIN`) - `i8 / i16 / i32 / u8 / u16 / u32` only. An `i64` ndarray read passes the host evaluator
-    # (`evaluate_node`'s `ExternalTensorRead` arm reads any integer dtype) but fails the recognizer's dtype check, so the
-    # whole spec is dropped and the per-task sizer walks the outer `MaxOverRange` itself. With `a.shape[0] > 1<<24` the
-    # cap fires on the host evaluator (`QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node`, raised as
-    # `RuntimeError` on the CPU host fast path) and on the SPIR-V on-device sizer (the trailing overflow-flag slot of the
-    # metadata buffer, raised as `QuadrantsAssertionError` from the host post-readback in
+    # Internal details: the recognizer's body grammar accepts only `Const / ExternalTensorRead / Add / Sub / Mul / Max
+    # / ExternalTensorShape / FieldLoad(literal-or-bound-var indices)`, and `max_reducer_body_is_recognizable` further
+    # restricts `ExternalTensorRead` leaves to dtypes whose value range cannot collide with the cache-revalidation
+    # sentinel (`INT64_MIN`) - `i8 / i16 / i32 / u8 / u16 / u32` only. An `i64` ndarray read passes the host evaluator
+    # (`evaluate_node`'s `ExternalTensorRead` arm reads any integer dtype) but fails the recognizer's dtype check, so
+    # the whole spec is dropped and the per-task sizer walks the outer `MaxOverRange` itself. With `a.shape[0] >
+    # 1<<24` the cap fires on the host evaluator (`QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node`, raised
+    # as `RuntimeError` on the CPU host fast path) and on the SPIR-V on-device sizer (the trailing overflow-flag slot
+    # of the metadata buffer, raised as `QuadrantsAssertionError` from the host post-readback in
     # `publish_adstack_metadata_spirv`). The CUDA and AMDGPU LLVM-GPU sizer short-circuits the walk and returns 0 from
     # `device_eval_node`'s `kMaxOverRange` arm so the single-thread on-device dispatch stays within the driver's TDR
-    # window; the cap-hit then surfaces indirectly via the existing `stack_push` overflow infrastructure on a subsequent
-    # main-kernel launch, and the resulting diagnostic message attribution depends on the kernel layout. That indirect
-    # path is covered by `test_adstack_overflow_diagnostic_and_auto_recovery`.
+    # window; the cap-hit then surfaces indirectly via the existing `stack_push` overflow infrastructure on a
+    # subsequent main-kernel launch, and the resulting diagnostic message attribution depends on the kernel layout.
+    # That indirect path is covered by `test_adstack_overflow_diagnostic_and_auto_recovery`.
     N_X = 4
     shape = (1 << 24) + 1
     # All-zero gating ndarray keeps the forward kernel's actual inner-loop work at zero on every thread; the cap-hit is

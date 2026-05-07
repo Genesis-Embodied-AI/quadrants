@@ -302,6 +302,7 @@ Value interpret_body(IRBuilder &ir,
   Label case_const = ir.new_label();
   Label case_bv = ir.new_label();
   Label case_etr = ir.new_label();
+  Label case_fl = ir.new_label();
   Label case_add = ir.new_label();
   Label case_sub = ir.new_label();
   Label case_mul = ir.new_label();
@@ -317,6 +318,7 @@ Value interpret_body(IRBuilder &ir,
                static_cast<uint32_t>(AdStackSizeExprDeviceKind::kConst), case_const,             //
                static_cast<uint32_t>(AdStackSizeExprDeviceKind::kBoundVariable), case_bv,        //
                static_cast<uint32_t>(AdStackSizeExprDeviceKind::kExternalTensorRead), case_etr,  //
+               static_cast<uint32_t>(AdStackSizeExprDeviceKind::kFieldLoad), case_fl,            //
                static_cast<uint32_t>(AdStackSizeExprDeviceKind::kAdd), case_add,                 //
                static_cast<uint32_t>(AdStackSizeExprDeviceKind::kSub), case_sub,                 //
                static_cast<uint32_t>(AdStackSizeExprDeviceKind::kMul), case_mul,                 //
@@ -365,6 +367,30 @@ Value interpret_body(IRBuilder &ir,
     Value arg_word_u32 = ir.cast(ir.u32_type(), arg_word_i32);
     Value data_ptr_u64 = load_arg_buf_u64_ptr(ir, args_buf, arg_word_u32);
     Value loaded_i64 = emit_psb_load_i64_int_only(ir, data_ptr_u64, linear_i32, prim_dt);
+    ir.store_variable(computed_var, loaded_i64);
+    ir.make_inst(spv::OpBranch, kind_merge);
+  }
+
+  // kFieldLoad: PSB-load the body field's element at the indices-table-resolved linear offset. Same `[idx_a_raw,
+  // elem_stride_a]` indices layout as `kExternalTensorRead`, so `compute_external_read_elem_index` is reused verbatim
+  // for the bound-var dense-remap. The base pointer comes from the encoder's pre-baked `const_value` (= snode tree
+  // root_psb + place_byte_offset_in_root); the kernel arg buffer is irrelevant since FieldLoads target SNodes, not
+  // ndarrays. `track_physical_buffer` on the SNode tree root buffer is the dispatch-site's responsibility (mirrors the
+  // ndarray residency hint that kExternalTensorRead requires on Apple Silicon).
+  ir.start_label(case_fl);
+  {
+    Value prim_dt =
+        load_buf_i32(ir, bytecode_buf, ir.add(slot_base, ir.uint_immediate_number(ir.u32_type(), kNodeWordPrimDt)));
+    Value const_lo_idx = ir.add(slot_base, ir.uint_immediate_number(ir.u32_type(), kNodeWordConstValueLo));
+    Value base_i64 = load_buf_i64(ir, bytecode_buf, const_lo_idx);
+    Value base_u64 = ir.make_value(spv::OpBitcast, ir.u64_type(), base_i64);
+    Value indices_offset = load_buf_i32(
+        ir, bytecode_buf, ir.add(slot_base, ir.uint_immediate_number(ir.u32_type(), kNodeWordIndicesOffset)));
+    Value indices_count = load_buf_i32(
+        ir, bytecode_buf, ir.add(slot_base, ir.uint_immediate_number(ir.u32_type(), kNodeWordIndicesCount)));
+    Value linear_i32 = compute_external_read_elem_index(ir, bytecode_buf, body_indices_offset_words, indices_offset,
+                                                        indices_count, scope_var);
+    Value loaded_i64 = emit_psb_load_i64_int_only(ir, base_u64, linear_i32, prim_dt);
     ir.store_variable(computed_var, loaded_i64);
     ir.make_inst(spv::OpBranch, kind_merge);
   }

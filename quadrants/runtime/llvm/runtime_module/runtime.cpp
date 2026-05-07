@@ -924,7 +924,8 @@ i64 device_load_element(const char *data_ptr, i64 linear, i32 prim_dt) {
   }
 }
 
-i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
+i64 device_eval_node(LLVMRuntime *runtime,
+                     const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
                      const i32 *indices,
                      i32 node_idx,
                      DeviceEvalScope *scope,
@@ -935,27 +936,27 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
     case K::kConst:
       return node.const_value;
     case K::kAdd:
-      return device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer) +
-             device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
+      return device_eval_node(runtime, nodes, indices, node.operand_a, scope, arg_buffer) +
+             device_eval_node(runtime, nodes, indices, node.operand_b, scope, arg_buffer);
     case K::kSub: {
-      // Match the host evaluator: clamp negative trip counts to zero so an underflowed `end - begin` doesn't
-      // poison a surrounding `Mul` / `MaxOverRange` product.
-      i64 lhs = device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer);
-      i64 rhs = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
+      // Match the host evaluator: clamp negative trip counts to zero so an underflowed `end - begin` doesn't poison a
+      // surrounding `Mul` / `MaxOverRange` product.
+      i64 lhs = device_eval_node(runtime, nodes, indices, node.operand_a, scope, arg_buffer);
+      i64 rhs = device_eval_node(runtime, nodes, indices, node.operand_b, scope, arg_buffer);
       i64 diff = lhs - rhs;
       return diff > 0 ? diff : 0;
     }
     case K::kMul:
-      return device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer) *
-             device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
+      return device_eval_node(runtime, nodes, indices, node.operand_a, scope, arg_buffer) *
+             device_eval_node(runtime, nodes, indices, node.operand_b, scope, arg_buffer);
     case K::kMax: {
-      i64 lhs = device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer);
-      i64 rhs = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
+      i64 lhs = device_eval_node(runtime, nodes, indices, node.operand_a, scope, arg_buffer);
+      i64 rhs = device_eval_node(runtime, nodes, indices, node.operand_b, scope, arg_buffer);
       return lhs > rhs ? lhs : rhs;
     }
     case K::kMaxOverRange: {
-      i64 begin = device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer);
-      i64 end = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
+      i64 begin = device_eval_node(runtime, nodes, indices, node.operand_a, scope, arg_buffer);
+      i64 end = device_eval_node(runtime, nodes, indices, node.operand_b, scope, arg_buffer);
       // Iteration guard. Recognized `MaxOverRange` shapes are dispatched in parallel by the max-reducer and substituted
       // to a `Const` before the sizer interpreter walks the tree, so the only way to land in this branch with a delta
       // above the cap is an out-of-grammar shape. Skip the walk and return 0 to keep the single-thread on-device
@@ -971,7 +972,7 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
         if (var >= 0 && var < kDeviceBoundVarCap) {
           scope->values[var] = i;
         }
-        i64 v = device_eval_node(nodes, indices, node.body_node_idx, scope, arg_buffer);
+        i64 v = device_eval_node(runtime, nodes, indices, node.body_node_idx, scope, arg_buffer);
         if (v > result)
           result = v;
       }
@@ -984,17 +985,17 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
       return 0;
     }
     case K::kExternalTensorRead: {
-      // `data_ptr_slot = *(void **)(arg_buffer + arg_buffer_offset)`: read the ndarray's data pointer out of the
-      // kernel arg buffer at the offset the host encoder precomputed via `args_type->get_element_offset`. This
-      // replaces the host evaluator's `ctx->array_ptrs` map lookup with a straight field read that the device
-      // can perform without reaching for a std::unordered_map.
+      // `data_ptr_slot = *(void **)(arg_buffer + arg_buffer_offset)`: read the ndarray's data pointer out of the kernel
+      // arg buffer at the offset the host encoder precomputed via `args_type->get_element_offset`. This replaces the
+      // host evaluator's `ctx->array_ptrs` map lookup with a straight field read that the device can perform without
+      // reaching for a std::unordered_map.
       auto data_ptr_raw = *reinterpret_cast<const char *const *>(arg_buffer + node.arg_buffer_offset);
-      // Indices encoded as `[idx_a_raw, elem_stride_a]` pairs per axis, matching `kFieldLoad`'s layout. The
-      // host encoder in `adstack_size_expr_eval.cpp` pre-computes the C-order element strides from the
-      // launch context's ndarray shape; a 1-D read collapses to `elem_stride = 1` and recovers the original
-      // stride-1 sum. The multi-axis case is what this fix unblocks: without the per-axis multiply a 2-D
-      // `a[i, j]` read would land on `a_flat[i + j]` instead of `a_flat[i * shape[1] + j]`, silently
-      // under-bounding the sizer and tripping `Adstack overflow` at `qd.sync()`.
+      // Indices encoded as `[idx_a_raw, elem_stride_a]` pairs per axis, matching `kFieldLoad`'s layout. The host
+      // encoder in `adstack_size_expr_eval.cpp` pre-computes the C-order element strides from the launch context's
+      // ndarray shape; a 1-D read collapses to `elem_stride = 1` and recovers the original stride-1 sum. The multi-axis
+      // case is what this fix unblocks: without the per-axis multiply a 2-D `a[i, j]` read would land on
+      // `a_flat[i + j]` instead of `a_flat[i * shape[1] + j]`, under-bounding the sizer and tripping `Adstack overflow`
+      // at `qd.sync()`.
       i64 linear = 0;
       for (i32 k = 0; k < node.indices_count; ++k) {
         const i32 raw = indices[node.indices_offset + 2 * k];
@@ -1011,13 +1012,37 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
       }
       return device_load_element(data_ptr_raw, linear, node.prim_dt);
     }
-    case K::kFieldLoad:
-      // The LLVM encoder always host-folds `FieldLoad` leaves (via `SNodeRwAccessorsBank`) before emitting
-      // device bytecode, so the interpreter never sees `kFieldLoad`. It is reserved for the SPIR-V sizer
-      // shader's PSB read path. Return zero rather than asserting (this runtime-module compiles to LLVM
-      // bitcode with no host-assert facility) so a mis-emitted tree surfaces downstream as a wrong-`max_size`
-      // adstack overflow at `qd.sync()` rather than silently UB here.
-      return 0;
+    case K::kFieldLoad: {
+      // Bound-var-indexed `kFieldLoad` body leaf: the encoder stores `arg_buffer_offset = snode_root_id` and
+      // `const_value = place_byte_offset_in_root` (i.e. the byte offset of the place leaf within its containing snode
+      // tree). The base pointer is `runtime->roots[snode_root_id]`, which lives on every LLVM backend (CPU host pointer
+      // / CUDA / AMDGPU device pointer set up at materialization time). The closed-FieldLoad path host-folds at encode
+      // time and never reaches this arm; a `snode_root_id < 0` here means the bytecode came from a SPIR-V encoder
+      // (which stores `root_psb + place_byte_offset` directly in `const_value` and leaves `arg_buffer_offset = -1`),
+      // not the LLVM path; we cannot resolve it here so return 0 (safe over-approximation - a sentinel max forces the
+      // host to fall back to capped sizer eval downstream).
+      const i32 snode_root_id = node.arg_buffer_offset;
+      if (snode_root_id < 0 || runtime == nullptr) {
+        return 0;
+      }
+      const auto root_ptr = reinterpret_cast<const char *>(runtime->roots[snode_root_id]);
+      const i64 place_byte_off = node.const_value;
+      i64 elem_idx = 0;
+      for (i32 k = 0; k < node.indices_count; ++k) {
+        const i32 raw = indices[node.indices_offset + 2 * k];
+        const i32 elem_stride = indices[node.indices_offset + 2 * k + 1];
+        i64 v = 0;
+        if (raw >= 0) {
+          v = raw;
+        } else {
+          const i32 var = -(raw + 1);
+          if (var >= 0 && var < kDeviceBoundVarCap)
+            v = scope->values[var];
+        }
+        elem_idx += v * static_cast<i64>(elem_stride);
+      }
+      return device_load_element(root_ptr + place_byte_off, elem_idx, node.prim_dt);
+    }
   }
   return 0;
 }
@@ -1251,7 +1276,7 @@ void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime, RuntimeContext *ctx, 
         scope.values[var_id] = params->per_axis_begin[a] + (i64)idx_a;
       }
     }
-    i64 v = device_eval_node(nodes, indices, root_idx, &scope, arg_buffer);
+    i64 v = device_eval_node(runtime, nodes, indices, root_idx, &scope, arg_buffer);
     if (v > running_max) {
       running_max = v;
     }
@@ -1307,7 +1332,7 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
       // No symbolic bound captured (offline-cache-hit with `size_exprs` dropped) - use the compile-time bound.
       max_size = sh.max_size_compile_time > 0 ? sh.max_size_compile_time : 1;
     } else {
-      i64 v = device_eval_node(nodes, indices, sh.root_node_idx, &scope, arg_buffer);
+      i64 v = device_eval_node(runtime, nodes, indices, sh.root_node_idx, &scope, arg_buffer);
       // Floor at 1 to match the host evaluator (`evaluate_adstack_size_expr`); a tree that evaluates to 0 or negative
       // leaves one slot reserved so the heap base address is still valid and any spurious push surfaces as an overflow
       // rather than a zero-slice alias. Do NOT clamp upward against `max_size_compile_time`: the compile-time seed is a

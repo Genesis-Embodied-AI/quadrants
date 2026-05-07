@@ -34,8 +34,11 @@
 #include "quadrants/codegen/spirv/adstack_max_reducer_shader.h"
 #include "quadrants/common/logging.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
+#include "quadrants/ir/snode.h"
 #include "quadrants/ir/type_factory.h"
+#include "quadrants/program/adstack/device_bytecode.h"
 #include "quadrants/program/launch_context_builder.h"
+#include "quadrants/program/program.h"
 #include "quadrants/rhi/device.h"
 
 namespace quadrants::lang {
@@ -256,6 +259,30 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
       }
       return static_cast<int32_t>(byte_off);
     };
+    // SPIR-V FieldLoad-with-bound-var-index emitter: resolve `(snode tree root_psb + place_byte_offset_in_root)` plus
+    // per-active-axis element strides for each `kFieldLoad` body leaf. Mirrors the per-task sizer's emitter in
+    // `device_bytecode.cpp::encode_adstack_size_expr_device_bytecode_for_spirv`. The encoder folds the closed-FieldLoad
+    // path host-side (no emitter call) and routes only bound-var-indexed leaves through this closure.
+    Device *dev = device_;
+    FieldLoadDeviceEmitter fl_emitter{};
+    fl_emitter.fetch = [prog, dev](SNode *snode, uint64_t *out_base_psb,
+                                   std::vector<int32_t> *out_elem_strides) -> bool {
+      if (snode == nullptr || prog == nullptr || dev == nullptr) {
+        return false;
+      }
+      if (!compute_dense_snode_strides(snode, out_elem_strides)) {
+        return false;
+      }
+      const int tree_id = snode->get_snode_tree_id();
+      DevicePtr tree_root_devptr = prog->get_snode_tree_device_ptr(tree_id);
+      const uint64_t root_psb = dev->get_memory_physical_pointer(tree_root_devptr);
+      if (root_psb == 0) {
+        return false;
+      }
+      const size_t place_byte_offset = prog->get_field_in_tree_offset(tree_id, snode);
+      *out_base_psb = root_psb + static_cast<uint64_t>(place_byte_offset);
+      return true;
+    };
     std::vector<size_t> level_dispatch;
     level_dispatch.reserve(level_indices.size());
     for (size_t k : level_indices) {
@@ -301,8 +328,9 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
         ++dropped_count;
         continue;
       }
-      EncodedMaxReducerBody encoded = encode_max_reducer_body_bytecode(
-          substituted, spec->body_node_idx, spec->axis_var_ids, arg_buffer_offset_resolver, &host_ctx, prog);
+      EncodedMaxReducerBody encoded =
+          encode_max_reducer_body_bytecode(substituted, spec->body_node_idx, spec->axis_var_ids,
+                                           arg_buffer_offset_resolver, &host_ctx, prog, &fl_emitter);
       if (encoded.body_node_count == 0 || encoded.body_node_count > spirv::kAdStackMaxReducerMaxBodyNodes) {
         pending[k].dropped = true;
         ++dropped_count;
@@ -404,10 +432,17 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
     QD_ASSERT_INFO(cmdlist_res == RhiResult::success, "Failed to create adstack max reducer cmdlist");
     // Mirror `adstack_sizer_launch.cpp`'s residency hint so Metal's PSB load path sees ndarray data buffers as
     // resident; without `track_physical_buffer` the Apple GPU returns zero / lower-32-bits-of-pointer garbage for every
-    // `kExternalTensorRead` body load. Called once per cmdlist (before the per-spec dispatches).
+    // `kExternalTensorRead` body load. The same hint covers `kFieldLoad` body leaves: the SNode tree root buffers used
+    // by the FieldLoad PSB read path are also referenced via raw `bufferDeviceAddress` and need an explicit
+    // `useResource:` hint on Apple Silicon. Called once per cmdlist (before the per-spec dispatches).
     if (device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer)) {
       for (const auto &[arg_id, alloc] : ndarray_allocs) {
         cmdlist->track_physical_buffer(alloc);
+      }
+      for (const auto &root_buffer : root_buffers_) {
+        if (root_buffer != nullptr) {
+          cmdlist->track_physical_buffer(*root_buffer);
+        }
       }
     }
     for (size_t i = 0; i < level_dispatch.size(); ++i) {

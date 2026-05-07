@@ -44,13 +44,19 @@ struct EncodedMaxReducerBody {
   // generation match. Caller fills in the begin/end observations and appends body observations from this list.
   std::vector<AdStackCache::SizeExprReadObservation> body_reads;
 };
+// Forward decl: defined in `quadrants/program/adstack/device_bytecode.h`. Including the full header here would create a
+// cycle (`device_bytecode.h` already includes this header for `MaxReducerResultMap`). The encoder only references the
+// struct's `fetch` field via the pointer parameter so a forward declaration is enough at this site.
+struct FieldLoadDeviceEmitter;
+
 EncodedMaxReducerBody encode_max_reducer_body_bytecode(
     const SerializedSizeExpr &expr,
     int32_t body_node_idx,
     const std::vector<int32_t> &bound_var_ids,
     const std::function<int32_t(const std::vector<int32_t> &arg_id_path)> &arg_buffer_offset_resolver,
     LaunchContextBuilder *ctx,
-    Program *prog);
+    Program *prog,
+    const FieldLoadDeviceEmitter *fl_emitter = nullptr);
 
 // Snapshot the live ndarray data pointer + generation counter into each `ExternalReadObs` record. The encoder emits the
 // observation skeleton (kind / arg_id_path / prim_dt) but cannot fill in the runtime-resolved `data_ptr` /
