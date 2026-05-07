@@ -11,9 +11,9 @@ The closely-related grid-level fence (`qd.simt.grid.mem_fence()`) is documented 
 | Op                                              | CUDA | AMDGPU | Vulkan | Metal |
 |-------------------------------------------------|------|--------|--------|-------|
 | `block.sync()`                                  | yes  | yes    | yes    | yes   |
-| `block.sync_all_nonzero(predicate)`             | yes  | no     | no     | no    |
-| `block.sync_any_nonzero(predicate)`             | yes  | no     | no     | no    |
-| `block.sync_count_nonzero(predicate)`           | yes  | no     | no     | no    |
+| `block.sync_all_nonzero(predicate)`             | yes  | yes\*\*\* | yes\*\*\* | yes\*\*\* |
+| `block.sync_any_nonzero(predicate)`             | yes  | yes\*\*\* | yes\*\*\* | yes\*\*\* |
+| `block.sync_count_nonzero(predicate)`           | yes  | yes\*\*\* | yes\*\*\* | yes\*\*\* |
 | `block.mem_fence()`                             | yes\*| yes    | yes    | yes   |
 | `block.SharedArray(shape, dtype)`               | yes  | yes    | yes    | yes   |
 | `block.global_thread_idx()`                     | yes  | yes    | yes    | yes   |
@@ -25,6 +25,8 @@ Calling a backend marked "no" raises `ValueError` from the Python layer at trace
 \* On CUDA, `block.mem_fence()` currently lowers via `block_barrier` (i.e. `__syncthreads()`), which doubles as a memory fence but additionally requires thread convergence — meaning calling it from divergent control flow today deadlocks. A fix to lower `mem_fence()` to a pure `__threadfence_block()` is in flight as [quadrants#637](https://github.com/Genesis-Embodied-AI/quadrants/pull/637); once merged, the divergent-branch pattern shown in the `block.mem_fence()` semantics section below works as written. Until then, prefer calling `mem_fence()` from uniform control flow on CUDA.
 
 \*\* On Metal, `grid.mem_fence()` lowers (via MoltenVK / SPIRV-Cross → MSL) to `atomic_thread_fence(metal::memory_scope_device)`, available since MSL 2.0 (macOS 10.13+ / iOS 11+). Cross-workgroup memory-ordering guarantees are stronger on Apple Silicon (A11+) than on older Apple hardware or very old macOS Intel GPUs; for those targets, validate empirically that producer-consumer patterns across blocks behave as expected, or fall back to splitting the kernel.
+
+\*\*\* On AMDGPU, Vulkan, and Metal the `block.sync_{all,any,count}_nonzero(p)` ops are *emulated* via shared memory (one shared `i32` slot + 2 block barriers + an atomic-or / atomic-add) rather than a single hardware-fused barrier-with-reduction. CUDA has the fused NVPTX `barrier.cta.red.{and,or,popc}.aligned.all.sync` family of intrinsics so it stays on the fast path; the other backends do not have a direct analog (in particular, SPIR-V `OpGroupNonUniform*` only operates at subgroup scope reliably across Vulkan + Metal). The emulation is correct and portable but costs two `block.sync()`s plus one shared-memory atomic per call instead of a single barrier instruction; if you have an inner loop calling these ops millions of times, consider whether you can batch the predicate before reducing it.
 
 Naming note: two of the names on this page were recently renamed for consistency with the project's "fence vs barrier" terminology and to use a consistent `mem_fence` spelling. The old names are still available as deprecated aliases that emit a `DeprecationWarning` (shown once per process, courtesy of `warnings.filterwarnings("once", ..., module="quadrants")` configured by `quadrants/lang/misc.py`):
 
@@ -61,7 +63,10 @@ Block-wide barriers that also reduce a per-thread `i32` predicate across the blo
 - `sync_any_nonzero(p)` returns non-zero if `p` is non-zero on **any** thread (logical OR).
 - `sync_count_nonzero(p)` returns the number of threads for which `p` is non-zero (popcount).
 
-Each call performs both the synchronization (same convergence requirement as `sync()`) and the reduction in a single instruction. Only available on CUDA today; they lower to the NVPTX `barrier.cta.red` family of intrinsics (`block_barrier_and_i32`, `block_barrier_or_i32`, `block_barrier_count_i32`).
+Each call performs both the synchronization (same convergence requirement as `sync()`) and the reduction.
+
+- On CUDA, this lowers to a single hardware-fused instruction from the NVPTX `barrier.cta.red` family — `block_barrier_and_i32`, `block_barrier_or_i32`, `block_barrier_count_i32`.
+- On AMDGPU, Vulkan, and Metal, there is no direct hardware-fused barrier-with-reduction, so the op is emulated in Quadrants Python (`_block_reduce_*_emulated` in `python/quadrants/lang/simt/block.py`) as: lane 0 zeroes a 1-element `SharedArray(i32)` → `block.sync()` → every thread folds its predicate via `qd.atomic_or` / `qd.atomic_add` → `block.sync()` → every thread reads the broadcasted result. Two block barriers plus one shared-memory atomic per call. See the support-table footnote for the perf trade-off.
 
 ### `block.mem_fence()`
 

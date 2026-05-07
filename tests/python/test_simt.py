@@ -52,7 +52,7 @@ def test_all_nonzero():
         assert a[i] == 0
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_sync_all_nonzero():
     a = qd.field(dtype=qd.i32, shape=256)
     b = qd.field(dtype=qd.i32, shape=256)
@@ -108,7 +108,7 @@ def test_any_nonzero():
         assert a[i] == 1
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_sync_any_nonzero():
     a = qd.field(dtype=qd.i32, shape=256)
     b = qd.field(dtype=qd.i32, shape=256)
@@ -136,7 +136,7 @@ def test_sync_any_nonzero():
         assert a[i] == 1
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_sync_count_nonzero():
     a = qd.field(dtype=qd.i32, shape=256)
     b = qd.field(dtype=qd.i32, shape=256)

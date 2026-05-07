@@ -4,8 +4,11 @@ import warnings
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
+from quadrants.lang import ops as _ops
 from quadrants.lang.expr import make_expr_group
+from quadrants.lang.kernel_impl import func as _func
 from quadrants.lang.util import quadrants_scope
+from quadrants.types.primitive_types import i32 as _i32
 
 
 def arch_uses_spv(arch):
@@ -24,7 +27,12 @@ def sync():
 def sync_all_nonzero(predicate):
     arch = impl.get_runtime().prog.config().arch
     if arch == _qd_core.cuda:
+        # Hardware-fused barrier+reduction on NVPTX (`barrier.cta.red.and.aligned.all.sync`).
         return impl.call_internal("block_barrier_and_i32", predicate, with_runtime_context=False)
+    if arch == _qd_core.amdgpu or arch_uses_spv(arch):
+        # AMDGPU and SPIR-V (Vulkan / Metal) emulate via shared memory + 2 barriers + an
+        # atomic; see `_block_reduce_*_emulated` below for the pattern.
+        return _block_reduce_all_nonzero_emulated(predicate)
     raise ValueError(f"qd.block.sync_all_nonzero is not supported for arch {arch}")
 
 
@@ -32,6 +40,8 @@ def sync_any_nonzero(predicate):
     arch = impl.get_runtime().prog.config().arch
     if arch == _qd_core.cuda:
         return impl.call_internal("block_barrier_or_i32", predicate, with_runtime_context=False)
+    if arch == _qd_core.amdgpu or arch_uses_spv(arch):
+        return _block_reduce_any_nonzero_emulated(predicate)
     raise ValueError(f"qd.block.sync_any_nonzero is not supported for arch {arch}")
 
 
@@ -39,6 +49,8 @@ def sync_count_nonzero(predicate):
     arch = impl.get_runtime().prog.config().arch
     if arch == _qd_core.cuda:
         return impl.call_internal("block_barrier_count_i32", predicate, with_runtime_context=False)
+    if arch == _qd_core.amdgpu or arch_uses_spv(arch):
+        return _block_reduce_count_nonzero_emulated(predicate)
     raise ValueError(f"qd.block.sync_count_nonzero is not supported for arch {arch}")
 
 
@@ -114,3 +126,51 @@ class SharedArray:
                 _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
             )
         )
+
+
+# Shared-memory emulation of CUDA's hardware-fused barrier-with-reduction ops, used on backends
+# that lack a direct equivalent (AMDGPU has no NVPTX `barrier.cta.red.*` analog; SPIR-V's
+# `OpGroupNonUniform*` only operate at subgroup scope reliably across Vulkan + Metal).
+#
+# Pattern: lane 0 zeroes a 1-element shared `i32` -> block.sync() -> every thread atomically
+# folds its predicate into the slot -> block.sync() -> every thread reads the broadcasted result.
+# Costs 2 barriers + 1 atomic (vs. CUDA's hardware fast path of 1 barrier+reduction). Slower
+# than the CUDA path but functionally equivalent and portable. Each call-site allocates a fresh
+# `SharedArray` so multiple calls in the same kernel do not alias each other.
+@_func
+def _block_reduce_any_nonzero_emulated(predicate: _i32) -> _i32:
+    counter = SharedArray((1,), _i32)
+    if thread_idx() == 0:
+        counter[0] = 0
+    sync()
+    if predicate != 0:
+        _ops.atomic_or(counter[0], 1)
+    sync()
+    return counter[0]
+
+
+@_func
+def _block_reduce_all_nonzero_emulated(predicate: _i32) -> _i32:
+    # `all_nonzero` is implemented as `not any_zero`: every thread with a zero predicate ORs a 1
+    # into the shared slot, then we invert. Avoids needing `atomic_and` with a non-zero initial
+    # value, which would require either a different sentinel or an extra control-flow step.
+    counter = SharedArray((1,), _i32)
+    if thread_idx() == 0:
+        counter[0] = 0
+    sync()
+    if predicate == 0:
+        _ops.atomic_or(counter[0], 1)
+    sync()
+    return 1 - counter[0]
+
+
+@_func
+def _block_reduce_count_nonzero_emulated(predicate: _i32) -> _i32:
+    counter = SharedArray((1,), _i32)
+    if thread_idx() == 0:
+        counter[0] = 0
+    sync()
+    if predicate != 0:
+        _ops.atomic_add(counter[0], 1)
+    sync()
+    return counter[0]
