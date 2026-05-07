@@ -768,7 +768,8 @@ Module Contents
       :type keep_dims: bool, optional
       :param dtype: The desired data type of returned numpy array.
       :type dtype: DataType, optional
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       :returns: The result NumPy array.
       :rtype: numpy.ndarray
@@ -784,7 +785,8 @@ Module Contents
       :param keep_dims: Whether to keep the dimension after conversion.
                         See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
       :type keep_dims: bool, optional
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       :returns: The result torch tensor.
       :rtype: torch.tensor
@@ -854,7 +856,8 @@ Module Contents
 
       Converts this ndarray to a ``numpy.ndarray``.
 
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       Example::
 
@@ -886,7 +889,8 @@ Module Contents
 
       Mirrors :meth:`MatrixField.to_torch`.
 
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
 
 
@@ -943,7 +947,8 @@ Module Contents
 
       Converts this vector ndarray to a ``numpy.ndarray``.
 
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       Example::
 
@@ -978,7 +983,8 @@ Module Contents
 
       Mirrors :meth:`MatrixField.to_torch` on the vector code path.
 
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
 
 

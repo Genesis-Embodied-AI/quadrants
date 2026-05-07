@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.impl &#8212; Quadrants 0.7.5 documentation</title>
+    <title>quadrants.lang.impl &#8212; Quadrants 0.7.6 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../_static/documentation_options.js?v=a674670e"></script>
+    <script src="../../../_static/documentation_options.js?v=918ced64"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.5" />
+  <meta name="docsearch:version" content="0.7.6" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.5 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
   
 </a></div>
     
@@ -321,7 +321,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">weakref</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">types</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionType</span><span class="p">,</span> <span class="n">MethodType</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Sequence</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Sequence</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 
@@ -343,6 +343,7 @@
     <span class="n">QuadrantsRuntimeError</span><span class="p">,</span>
     <span class="n">QuadrantsSyntaxError</span><span class="p">,</span>
     <span class="n">QuadrantsTypeError</span><span class="p">,</span>
+    <span class="n">handle_exception_from_cpp</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span><span class="p">,</span> <span class="n">make_expr_group</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span><span class="p">,</span> <span class="n">ScalarField</span>
@@ -895,7 +896,13 @@
             <span class="k">return</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">materialize</span><span class="p">()</span>
         <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">wrapped</span> <span class="o">=</span> <span class="n">handle_exception_from_cpp</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">wrapped</span> <span class="ow">is</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span>
+            <span class="k">raise</span> <span class="n">wrapped</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
 
 
 <span class="n">pyquadrants</span> <span class="o">=</span> <span class="n">PyQuadrants</span><span class="p">()</span>
@@ -903,6 +910,14 @@
 
 <span class="k">def</span><span class="w"> </span><span class="nf">get_runtime</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">PyQuadrants</span><span class="p">:</span>
     <span class="k">return</span> <span class="n">pyquadrants</span>
+
+
+<span class="n">_reset_hooks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">on_reset</span><span class="p">(</span><span class="n">hook</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="kc">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a callback to be invoked on ``reset()``.  Invalidates module-level caches without coupling.&quot;&quot;&quot;</span>
+    <span class="n">_reset_hooks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">hook</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">():</span>
@@ -916,9 +931,9 @@
     <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">old_kernels</span><span class="p">:</span>
         <span class="n">k</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
     <span class="n">_qd_core</span><span class="o">.</span><span class="n">reset_default_compile_config</span><span class="p">()</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._func_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">_frozen_dc_plans</span>  <span class="c1"># pylint: disable=C0415</span>
 
-    <span class="n">_frozen_dc_plans</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">hook</span> <span class="ow">in</span> <span class="n">_reset_hooks</span><span class="p">:</span>
+        <span class="n">hook</span><span class="p">()</span>
 
 
 <span class="nd">@quadrants_scope</span>

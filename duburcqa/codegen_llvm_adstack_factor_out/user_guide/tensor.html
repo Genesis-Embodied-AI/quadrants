@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Tensors &#8212; Quadrants 0.7.5 documentation</title>
+    <title>Tensors &#8212; Quadrants 0.7.6 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=a674670e"></script>
+    <script src="../_static/documentation_options.js?v=918ced64"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Matrix and Vector" href="matrix_vector.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.5" />
+  <meta name="docsearch:version" content="0.7.6" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.5 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
   
 </a></div>
     
@@ -298,6 +298,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
 <ul class="nav bd-sidenav">
@@ -540,7 +541,42 @@
 </pre></div>
 </div>
 <p>The exact same surface is available on both backends — switching <code class="docutils literal notranslate"><span class="pre">qd.tensor(...,</span> <span class="pre">backend=qd.Backend.FIELD/NDARRAY)</span></code> does not require any other code change at the call site.</p>
+<section id="zero-copy-with-copy-false">
+<h3>Zero-copy with <code class="docutils literal notranslate"><span class="pre">copy=False</span></code><a class="headerlink" href="#zero-copy-with-copy-false" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> and <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> accept a keyword-only <code class="docutils literal notranslate"><span class="pre">copy</span></code> argument:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
+<span class="n">a</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
+
+<span class="n">view</span>  <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>   <span class="c1"># zero-copy: aliases a&#39;s memory, or ValueError</span>
+<span class="n">auto</span>  <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>    <span class="c1"># zero-copy if possible, otherwise copy</span>
+<span class="n">clone</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>    <span class="c1"># independent copy (default)</span>
+</pre></div>
+</div>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Behaviour</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">True</span></code> (default)</p></td>
+<td><p>Independent copy via kernel. Safe to mutate freely.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>Zero-copy when available, otherwise falls back to a copy silently.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">False</span></code></p></td>
+<td><p>Zero-copy DLPack view, or <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> if unsupported for this backend/dtype.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">copy=False</span></code> and <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> avoid both the buffer allocation and the copy kernel when zero-copy is available — the returned numpy array or torch tensor points directly at Quadrants’ existing memory. For a large tensor this eliminates a potentially expensive memcpy and a device-side kernel launch. Writes through the view are immediately visible to subsequent Quadrants kernels (and vice versa), removing the need for <code class="docutils literal notranslate"><span class="pre">to_torch</span></code> → modify → <code class="docutils literal notranslate"><span class="pre">from_torch</span></code> round-trips.</p>
+<p>The difference between <code class="docutils literal notranslate"><span class="pre">False</span></code> and <code class="docutils literal notranslate"><span class="pre">None</span></code>: <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> when zero-copy is not supported (e.g. unsupported dtype or GPU-to-numpy), while <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> silently falls back to a kernel copy in those cases. Use <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> when you want zero-copy as a best-effort optimisation without having to handle exceptions.</p>
+<p>The tradeoff of zero-copy is lifetime coupling: the view is invalidated on <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>, and on GPU you must be mindful of stream synchronisation when both frameworks write to the same buffer.</p>
+<p>This works identically on both backends. For the full support matrix (which backends/dtypes qualify, lifetime caveats, Metal synchronisation) see <a class="reference internal" href="interop.html#zero-copy-interop-via-dlpack"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">interop</span></code></span></a>.</p>
 <p>Gradient buffers behave identically: <code class="docutils literal notranslate"><span class="pre">a.grad.to_numpy()</span></code> returns the canonical view of the gradient.</p>
+</section>
 </section>
 <section id="annotating-kernel-arguments-qd-tensor">
 <h2>Annotating kernel arguments: <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code><a class="headerlink" href="#annotating-kernel-arguments-qd-tensor" title="Link to this heading">#</a></h2>
@@ -673,7 +709,10 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vector-and-matrix-tensors">Vector and matrix tensors</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gradients">Gradients</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#controlling-physical-layout">Controlling physical layout</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#interop-with-numpy-and-pytorch">Interop with NumPy and PyTorch</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#interop-with-numpy-and-pytorch">Interop with NumPy and PyTorch</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-copy-with-copy-false">Zero-copy with <code class="docutils literal notranslate"><span class="pre">copy=False</span></code></a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#annotating-kernel-arguments-qd-tensor">Annotating kernel arguments: <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#pickle">Pickle</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#wrapping-a-bare-tensor-qd-wrap">Wrapping a bare tensor: <code class="docutils literal notranslate"><span class="pre">qd.wrap</span></code></a></li>

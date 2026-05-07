@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Kernel code coverage &#8212; Quadrants 0.7.5 documentation</title>
+    <title>Kernel code coverage &#8212; Quadrants 0.7.6 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=a674670e"></script>
+    <script src="../_static/documentation_options.js?v=918ced64"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="qd.init options" href="init_options.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.5" />
+  <meta name="docsearch:version" content="0.7.6" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.5 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
   
 </a></div>
     
@@ -298,6 +298,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
 <ul class="nav bd-sidenav">
@@ -480,11 +481,6 @@ coverage<span class="w"> </span>html
 <h2>Offline cache interaction<a class="headerlink" href="#offline-cache-interaction" title="Link to this heading">#</a></h2>
 <p>Coverage probes change the compiled kernel, so the offline cache will see them as new kernels and recompile. This is expected and does not affect correctness, but the first run with coverage enabled will be slower if you normally rely on cached kernels.</p>
 </section>
-<section id="ci-integration">
-<h2>CI integration<a class="headerlink" href="#ci-integration" title="Link to this heading">#</a></h2>
-<p>The CI workflow posts a compact coverage summary as a PR comment on each push, showing per-file coverage percentages and missing line ranges. The full annotated report (with per-line hit/miss markers) is published as a GitHub Check — the PR comment includes a link to it. A <strong>new comment</strong> is created each time (rather than editing the previous one) so that the PR timeline shows a clear chronological sequence of commits and their corresponding coverage results.</p>
-<p>The report covers only Python files (<code class="docutils literal notranslate"><span class="pre">.py</span></code>) and only lines added or modified in the PR diff — unchanged lines are not reported. C++ files are not included in the coverage report.</p>
-</section>
 <section id="under-the-hood">
 <h2>Under the hood<a class="headerlink" href="#under-the-hood" title="Link to this heading">#</a></h2>
 <p>When <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE=1</span></code> is set, quadrants rewrites the Python AST of each <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> before compilation. It inserts lightweight probe statements (<code class="docutils literal notranslate"><span class="pre">field[probe_id]</span> <span class="pre">=</span> <span class="pre">1</span></code>) at each source line. These probes compile as ordinary field stores and execute on the device alongside your kernel code.</p>
@@ -557,7 +553,6 @@ coverage<span class="w"> </span>html
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#coverage-and-autodiff">Coverage and autodiff</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-cache-interaction">Offline cache interaction</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-integration">CI integration</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood">Under the hood</a></li>
 </ul>
   </nav></div>

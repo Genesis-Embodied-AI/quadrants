@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Numpy and Torch interop &#8212; Quadrants 0.7.5 documentation</title>
+    <title>Numpy and Torch interop &#8212; Quadrants 0.7.6 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=a674670e"></script>
+    <script src="../_static/documentation_options.js?v=918ced64"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -59,11 +59,11 @@
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Automatic differentiation" href="autodiff.html" />
+    <link rel="next" title="Shared Metal command queue (PyTorch MPS)" href="metal_shared_queue.html" />
     <link rel="prev" title="Parallelization" href="parallelization.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.5" />
+  <meta name="docsearch:version" content="0.7.6" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.5 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
   
 </a></div>
     
@@ -298,6 +298,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
 <ul class="nav bd-sidenav">
@@ -469,12 +470,13 @@
 <p><code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> and <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> accept a keyword-only <code class="docutils literal notranslate"><span class="pre">copy</span></code> argument that controls whether the returned tensor/array is an independent copy of the data or a zero-copy view that aliases the underlying Quadrants memory.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
 
-<span class="n">view</span>  <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># zero-copy view: aliases f&#39;s memory</span>
+<span class="n">view</span>  <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># zero-copy view: aliases f&#39;s memory, or ValueError</span>
+<span class="n">auto</span>  <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>   <span class="c1"># zero-copy if possible, otherwise copy</span>
 <span class="n">clone</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>   <span class="c1"># independent copy (default)</span>
-<span class="n">auto</span>  <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">()</span>            <span class="c1"># same as copy=True</span>
+<span class="n">plain</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">()</span>            <span class="c1"># same as copy=True</span>
 </pre></div>
 </div>
-<p>When using <code class="docutils literal notranslate"><span class="pre">copy=False</span></code>, modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated – typically on <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code>, after which a fresh call to <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> returns a new view.</p>
+<p>When using <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> or <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> (when zero-copy succeeds), modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated – typically on <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code>, after which a fresh call to <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> returns a new view.</p>
 <section id="when-zero-copy-is-available">
 <h3>When zero-copy is available<a class="headerlink" href="#when-zero-copy-is-available" title="Link to this heading">#</a></h3>
 <p>Zero-copy uses <a class="reference external" href="https://github.com/dmlc/dlpack">DLPack</a> and requires:</p>
@@ -500,13 +502,16 @@
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">True</span></code> (default)</p></td>
 <td><p>Independent copy via kernel.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">False</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>Zero-copy view via DLPack when available, otherwise falls back to a copy silently.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">False</span></code></p></td>
 <td><p>Zero-copy view via DLPack, or <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> if zero-copy is unsupported for this backend/dtype.</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>The default <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> always returns a buffer that is safe to mutate without affecting the field/ndarray.</p>
+<p>The default <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> always returns a buffer that is safe to mutate without affecting the field/ndarray. Use <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> when you want zero-copy as a best-effort optimisation without having to handle exceptions — it gives you a view when possible and a safe copy otherwise.</p>
 </section>
 <section id="examples">
 <h3>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h3>
@@ -569,6 +574,7 @@
 </pre></div>
 </div>
 <p>This is intentional: forcing a sync on every Quadrants kernel that touches a previously-zerocopied field would be very expensive in workloads that batch many torch ops and many kernels back-to-back. If you mutate fields from torch and then read them from a Quadrants kernel on Metal, call <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> once between the torch ops and the kernels.</p>
+<p><strong>Shared command queue.</strong> The synchronisation overhead above can be eliminated entirely by passing PyTorch MPS’s <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue</span></code> to Quadrants at init time via <code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code>. Quadrants provides <code class="docutils literal notranslate"><span class="pre">quadrants.interop.get_mps_command_queue()</span></code> to extract the queue pointer at runtime. When both frameworks share the same queue, Metal guarantees command buffer ordering automatically. See <a class="reference internal" href="metal_shared_queue.html"><span class="std std-doc">Shared Metal command queue</span></a> for the setup guide.</p>
 </section>
 <section id="lifetime-caveats">
 <h3>Lifetime caveats<a class="headerlink" href="#lifetime-caveats" title="Link to this heading">#</a></h3>
@@ -719,17 +725,22 @@
 <td><p>yes</p></td>
 <td><p>yes</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">to_numpy(copy=None)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_torch(copy=None)</span></code></p></td>
+<td><p>no when possible, yes otherwise</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code></p></td>
 <td><p>no (DLPack view)</p></td>
 <td><p>yes</p></td>
 <td><p>yes</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">to_dlpack()</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">to_dlpack()</span></code></p></td>
 <td><p>no (raw capsule)</p></td>
 <td><p>yes</p></td>
 <td><p>yes</p></td>
 </tr>
-<tr class="row-even"><td><p>Direct pass-through</p></td>
+<tr class="row-odd"><td><p>Direct pass-through</p></td>
 <td><p>no</p></td>
 <td><p>no</p></td>
 <td><p>yes (as kernel arg)</p></td>
@@ -737,7 +748,7 @@
 </tbody>
 </table>
 </div>
-<p>The <code class="docutils literal notranslate"><span class="pre">copy</span></code> parameter is supported on <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> and <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> for <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code>, <code class="docutils literal notranslate"><span class="pre">MatrixField</span></code> (and <code class="docutils literal notranslate"><span class="pre">VectorField</span></code>), <code class="docutils literal notranslate"><span class="pre">StructField</span></code>, and all <code class="docutils literal notranslate"><span class="pre">Ndarray</span></code> types. See <a class="reference internal" href="#zero-copy-interop-via-dlpack">Zero-copy interop via DLPack</a> for the support matrix and lifetime rules.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">copy</span></code> parameter is supported on <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> and <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> for <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code>, <code class="docutils literal notranslate"><span class="pre">MatrixField</span></code> (and <code class="docutils literal notranslate"><span class="pre">VectorField</span></code>), <code class="docutils literal notranslate"><span class="pre">StructField</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code>, and all <code class="docutils literal notranslate"><span class="pre">Ndarray</span></code> types. See <a class="reference internal" href="#zero-copy-interop-via-dlpack">Zero-copy interop via DLPack</a> for the support matrix and lifetime rules.</p>
 </section>
 </section>
 
@@ -761,11 +772,11 @@
       </div>
     </a>
     <a class="right-next"
-       href="autodiff.html"
+       href="metal_shared_queue.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Automatic differentiation</p>
+        <p class="prev-next-title">Shared Metal command queue (PyTorch MPS)</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
