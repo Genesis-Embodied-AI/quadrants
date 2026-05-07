@@ -54,37 +54,6 @@ Bitwise atomics. Integer dtypes only — passing `f32` / `f64` raises a type err
 
 Atomic subtract and atomic multiply. `atomic_sub` is supported natively on most backends; `atomic_mul` on integer types lowers to a CAS loop on hardware without a native multiply atomic and is intentionally not heavily optimised — prefer reducing to a different scheme on hot paths.
 
-## Examples
-
-### Reserving a slot in an output array
-
-```python
-counter = qd.field(qd.i32, shape=())
-output  = qd.field(qd.f32, shape=(MAX_OUTPUTS,))
-
-@qd.kernel
-def emit(values: qd.types.NDArray[qd.f32, 1], threshold: qd.f32) -> None:
-    for i in range(values.shape[0]):
-        if values[i] > threshold:
-            slot = qd.atomic_add(counter[None], 1)
-            output[slot] = values[i]
-```
-
-Every thread that passes the predicate gets a unique `slot` from the counter. The pattern is the workhorse of select / compact and contact-pair generation.
-
-### Histogram
-
-```python
-hist = qd.field(qd.i32, shape=(NBINS,))
-
-@qd.kernel
-def histogram(samples: qd.types.NDArray[qd.f32, 1]) -> None:
-    for i in range(samples.shape[0]):
-        b = qd.i32(samples[i] * NBINS)
-        if 0 <= b < NBINS:
-            qd.atomic_add(hist[b], 1)
-```
-
 ## Performance and portability notes
 
 - **Atomic contention is the silent killer of throughput.** The cost of `qd.atomic_add(counter, 1)` from every thread is dominated by serialization at the location, not by the per-thread arithmetic. If many threads hit the same slot, prefer a two-stage scheme: per-warp / per-block reduction first (`qd.simt.block.reduce` if available, or `qd.simt.subgroup.reduce_add`), then a single atomic per warp / block.
