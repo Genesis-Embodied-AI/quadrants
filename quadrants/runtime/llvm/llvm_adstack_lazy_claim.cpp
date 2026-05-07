@@ -640,11 +640,11 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
   if (adstack_overflow_flag_host_ptr_ == nullptr) {
     return;
   }
-  // Peek first: a relaxed load is cheaper than an exchange and avoids consuming the flag when the companion
-  // task_id slot has not yet been flushed from the device.  The per-launch call site does NOT synchronize
-  // before polling, so the device's two atomic writes (flag OR, then task_id cmpxchg) may arrive at the host
-  // out of order.  If we consumed the flag here but the task_id hadn't landed, the diagnostic would lack the
-  // kernel name and the later qd.sync() would see both slots clean — losing the identity forever.
+  // Peek first: a relaxed load is cheaper than an exchange and avoids consuming the flag when the companion task_id
+  // slot has not yet been flushed from the device.  The per-launch call site does NOT synchronize before polling, so
+  // the device's two atomic writes (flag OR, then task_id cmpxchg) may arrive at the host out of order.  If we
+  // consumed the flag here but the task_id hadn't landed, the diagnostic would lack the kernel name and the later
+  // qd.sync() would see both slots clean — losing the identity forever.
   int64_t flag =
       reinterpret_cast<std::atomic<int64_t> *>(adstack_overflow_flag_host_ptr_)->load(std::memory_order_relaxed);
   if (flag == 0) {
@@ -671,9 +671,9 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
     diagnostic = std::move(diag.message);
     // Auto-invalidate the per-task metadata caches when the synchronous sizer rerun confirmed the cache is stale
     // (DLPack-bypass cause). The current run is corrupted (we are about to raise), but the next launch's sizer
-    // reruns from scratch against the live (mutated) state and the kernel runs to completion without further
-    // user intervention. Unknown / Quadrants-bug cases skip the invalidation so a real sizer bug is not masked
-    // by silent recompute.
+    // reruns from scratch against the live (mutated) state and the kernel runs to completion without further user
+    // intervention. Unknown / Quadrants-bug cases skip the invalidation so a real sizer bug is not masked by
+    // silent recompute.
     if (diag.confirmed_invalid_cache) {
       prog->adstack_cache().invalidate_all_per_task();
     }
