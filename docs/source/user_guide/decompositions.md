@@ -139,7 +139,6 @@ The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `
 ## Shapes, performance, portability
 
 - **Compile time.** Each call is unrolled per thread, so a kernel that calls `qd.svd` on a 3×3 matrix per element compiles a moderately large block of straight-line code per thread. Compile time is generally fine at these shapes; matrices larger than the cap would not be — register pressure plus unrolling explode quickly.
-- **Numerical conditioning.** All implementations use `f32` by default.
 - **Backend portability.** All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split. Numerical behaviour is bit-exact across backends only for `f64`; `f32` may differ in the last bit because of fused-multiply-add ordering choices.
 
 ## What's missing
