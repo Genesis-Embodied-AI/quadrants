@@ -570,27 +570,42 @@ def test_block_mem_fence_divergent_control_flow():
         assert a[i] == i
 
 
-# Producer-consumer memory-ordering correctness test for `block.mem_fence()`. Thread 0 (the
-# producer) repeatedly publishes a value into shared memory and then sets a flag, with a
-# `block.mem_fence()` separating the two stores. Thread `BLOCK-1` (the consumer) spin-waits on
-# the flag, fences, and reads the published value. Without store-store ordering on the
-# producer side or load-load ordering on the consumer side, the consumer can observe
-# `flag == 1` with the data still at its initial value, which would fail the assertion.
+# Producer-consumer memory-ordering correctness test for `block.mem_fence()`.
+#
+# Thread 0 (producer) publishes `data[0] = 100 + it` and then `flag[0] = 1`, with a
+# `block.mem_fence()` separating the two stores. Thread `BLOCK - 1` (consumer) spin-waits on
+# the flag, fences, and reads the published value. If the fence does not enforce store-store
+# ordering on the producer side, the consumer can observe `flag == 1` with `data` still at
+# its initial value, which would fail the assertion.
 #
 # Layout choice: `BLOCK = 128` puts the producer and consumer in different subgroups on every
 # supported backend (CUDA warp = 32; AMDGPU wave = 32 or 64; Vulkan / Metal subgroup is
-# vendor-defined but in practice <= 128). Threads in different subgroups are guaranteed
-# independent forward progress on every modern GPU, so the consumer's spin-wait does not
-# deadlock waiting for a producer it shares lock-step execution with. We deliberately do NOT
-# use `block.sync()` between the producer's two stores -- that would test sync ordering, not
+# vendor-defined but in practice <= 128). Threads in different subgroups have independent
+# forward progress on every modern GPU, so the consumer's spin-wait does not deadlock
+# waiting on a producer it shares lockstep execution with. We deliberately do NOT use
+# `block.sync()` between the producer's two stores -- that would test sync ordering, not
 # fence ordering.
 #
-# Caveat: GPU spin-wait tests are inherently fragile relative to the strong-ordered
-# pattern-matching tests above. We run 64 publish/consume rounds to amortize over compiler
-# variability, and reset state under a `block.sync()` between rounds. If this test ever flakes
-# on real hardware, the expected response is to investigate whether the platform's forward-
-# progress guarantees are weaker than assumed (see SPIR-V spec on ShaderTerminationInvocation,
-# CUDA C Programming Guide section on independent thread scheduling).
+# Spin-loop note: the consumer's `while` body is `block.mem_fence()`, not an empty `pass`.
+# Without a memory-clobbering call inside the loop, the compiler is free to hoist the
+# `flag[0]` load out (no `volatile` qualifier in this lowering), which would deadlock the
+# kernel on every backend regardless of fence semantics. Using `mem_fence()` here -- which
+# both Quadrants' IR and LLVM treat as a compiler barrier -- is the canonical idiom for this
+# pattern (cf. CUDA Samples `simpleZeroCopy`, Vulkan `vkSemaphoreWait` polling examples).
+#
+# What this test catches:
+#   1. A regression where the CUDA / AMDGPU / SPIR-V codegen for `block_mem_fence` becomes a
+#      complete no-op AND the compiler reorders the producer's two stores. Then the consumer
+#      reads `flag == 1` followed by stale `data == 0` and the assertion fails.
+#   2. A regression where `mem_fence()` is mis-lowered to a barrier (`__syncthreads()`-style)
+#      on a backend other than CUDA -- the producer at thread 0 reaches the fence call,
+#      barriers are convergent, no other thread reaches it, kernel deadlocks. Caught by
+#      pytest's process-level timeout (the kernel hangs).
+#
+# What this test does NOT distinguish: a runtime no-op fence whose compiler-barrier effect
+# alone happens to be enough on the test platform (NVCC / LLVM treat opaque calls as memory
+# clobbers). Producer-consumer fence tests are inherently weaker than the algebraic tests
+# above, but they catch the failure modes most likely to occur in practice.
 @test_utils.test(arch=qd.gpu)
 def test_block_mem_fence_producer_consumer():
     N_ITERS = 64
@@ -616,7 +631,7 @@ def test_block_mem_fence_producer_consumer():
                     flag[0] = 1
                 elif tid == BLOCK - 1:
                     while flag[0] == 0:
-                        pass
+                        qd.simt.block.mem_fence()
                     qd.simt.block.mem_fence()
                     out[it] = data[0]
 
