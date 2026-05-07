@@ -76,7 +76,7 @@ Direct solve of `A @ x = b` via Gauss elimination with partial pivoting. Returns
 - Shapes 2×2 and 3×3.
 - The implementation asserts `A.n == A.m` and `A.m == b.n`.
 - Singular `A` is checked by a kernel `assert` (`"Matrix is singular in linear solve."`) inside the Gauss-elimination path. Kernel asserts only fire when the runtime is initialised with `qd.init(debug=True)` (see [debug](debug.md)) — under the default `debug=False` a singular input silently produces a divide-by-zero / NaN result with no diagnostic. If you need a signal in production, check singularity explicitly before calling `qd.solve` (e.g. `abs(A.determinant())` against a tolerance), or run development workloads with `debug=True` to catch the case.
-- Intended for one-off small solves: each call factorises `A` from scratch and back-substitutes for the given `b`.
+- Each call factorises `A` from scratch and back-substitutes for the given `b`.
 
 ## Examples
 
