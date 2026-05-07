@@ -25,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC = REPO_ROOT / "quadrants" / "runtime" / "cuda" / "graph_do_while_cond.cu"
 OUT_HEADER = REPO_ROOT / "quadrants" / "runtime" / "cuda" / "graph_do_while_cond_fatbin.h"
 
-SM_VERSIONS = [90, 100, 120]
+SM_VERSIONS = [90, 100, 110, 120]
 SM_TARGETS = [f"-gencode=arch=compute_{v},code=sm_{v}" for v in SM_VERSIONS]
 
 

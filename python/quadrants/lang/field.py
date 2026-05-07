@@ -9,6 +9,7 @@ from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._logging import warn
 from quadrants.lang import impl
+from quadrants.lang._metal_interop import metal_needs_interop_sync, mps_sync_if_metal
 from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.lang.util import (
     in_python_scope,
@@ -223,7 +224,7 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
         if copy is False:
             raise ValueError(f"Zero-copy not available: {e}") from None
         return None
-    if impl.current_cfg().arch == _ARCH_METAL:
+    if metal_needs_interop_sync():
         impl.get_runtime().sync()
 
     if device is not None:
@@ -240,20 +241,6 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
             return None
 
     return tc
-
-
-def _mps_sync_if_metal():
-    """Call ``torch.mps.synchronize()`` when running on the Metal backend, no-op otherwise.
-
-    Quadrants and PyTorch MPS use separate Metal command queues, so ``qd.sync()`` only guarantees Quadrants writes are
-    complete. A subsequent ``.clone()`` or kernel copy is queued on the MPS stream and may execute *after* the next
-    Quadrants kernel overwrites the source buffer. We must also synchronize MPS after the copy.
-    """
-    # FIXME: DLPack may return old values on Apple Metal if sync is not systematically called manually.
-    if impl.current_cfg().arch == _ARCH_METAL:
-        import torch  # pylint: disable=C0415
-
-        torch.mps.synchronize()
 
 
 class _DLPackV1Adapter:
@@ -661,7 +648,7 @@ class ScalarField(Field):
 
         tensor_to_ext_arr(self, arr)
         quadrants.lang.runtime_ops.sync()  # type: ignore  # TODO: can we remove .runtime_ops here?
-        _mps_sync_if_metal()
+        mps_sync_if_metal()
         return arr
 
     @python_scope

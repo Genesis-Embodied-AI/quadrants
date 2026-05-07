@@ -59,6 +59,16 @@ struct TaskAttributes {
     // internal bug, not user-recoverable), and `synchronize()` surfaces it as a clear actionable error rather than
     // letting it silently corrupt gradients via OOB writes.
     AdStackBoundRowCapacity,
+    // Per-kernel StorageBuffer holding the `Program::adstack_sizing_info_registry_` id per task
+    // (`uint[num_tasks_in_kernel]`). Populated by the SPIR-V launcher in
+    // `GfxRuntime::publish_adstack_metadata_spirv` immediately after registering each adstack-bearing
+    // task with the Program-side identity registry; slot `task_id_in_kernel` carries the registry id
+    // for that task (0 for tasks without adstacks). The codegen task-end emit reads slot
+    // `task_id_in_kernel` and `OpAtomicCompareExchange`'s it into `AdStackOverflow[1]` on overflow,
+    // recording the FIRST overflowing task's registry id for the host raise site to look up
+    // kernel name + offload task index in its diagnostic message. Allocated and grown on demand
+    // following the same pattern as `AdStackBoundRowCapacity`.
+    AdStackTaskRegistryId,
   };
 
   struct BufferInfo {
@@ -208,9 +218,26 @@ struct TaskAttributes {
     uint32_t per_thread_stride_int_compile_time{0};
     std::vector<AdStackAllocaAttribs> allocas;
     std::optional<StaticBoundExpr> bound_expr;
+    // Identity in `Program::adstack_sizing_info_registry_`. Assigned at SPIR-V codegen time after the
+    // Program registry idempotently maps `&this` to a u32 id. Baked as an immediate into the codegen-
+    // emitted task-end overflow path's `cmpxchg(0, registry_id)` against slot 1 of the AdStackOverflow
+    // buffer so the host raise site can name the offending kernel + task in its diagnostic message. `0`
+    // means "not registered" - the codegen short-circuits the cmpxchg in that case. NOT serialised to the
+    // offline cache: ids are assigned per `Program` lifetime; a deserialised task re-registers itself at
+    // the next launch.
+    uint32_t registry_id{0};
     QD_IO_DEF(per_thread_stride_float_compile_time, per_thread_stride_int_compile_time, allocas, bound_expr);
   };
   AdStackSizingAttribs ad_stack;
+
+  // Snode IDs this task writes to (read-modify-write counts as a write). Computed at SPIR-V codegen time
+  // by walking the offloaded IR with `gather_snode_read_writes`. Consumed by the SPIR-V launcher on every
+  // `launch_kernel` call: each id here bumps `Program::snode_write_gen_[id]` so the per-task adstack
+  // metadata cache invalidates whenever a kernel that ran since the cache was recorded mutated a SNode
+  // a downstream `size_expr::FieldLoad` may read. Stored as raw IDs (not `SNode *`) so the field
+  // survives offline-cache load-store; the runtime resolves the pointer on demand via
+  // `Program::get_snode_by_id` only if it ever needs to call into snode-specific APIs.
+  std::vector<int> snode_writes;
 
   static std::string buffers_name(BufferInfo b);
 
@@ -222,7 +249,8 @@ struct TaskAttributes {
             task_type,
             buffer_binds,
             range_for_attribs,
-            ad_stack);
+            ad_stack,
+            snode_writes);
 };
 
 /**

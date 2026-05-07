@@ -9,6 +9,7 @@
 #include "quadrants/program/program.h"
 #include "quadrants/program/launch_context_builder.h"
 #include "quadrants/ir/type_factory.h"
+#include "quadrants/common/exceptions.h"
 #include "quadrants/common/filesystem.hpp"
 
 #include <cstring>
@@ -533,6 +534,12 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   // Record commands
   const auto &task_attribs = ti_kernel->ti_kernel_attribs().tasks_attribs;
 
+  // Adstack-cache invalidation bump - see `bump_writes_for_kernel_spirv` in `program/adstack_size_expr_eval.{h,cpp}`.
+  if (program_impl_ != nullptr) {
+    bump_writes_for_kernel_spirv(program_impl_->program, &host_ctx, task_attribs,
+                                 ti_kernel->ti_kernel_attribs().ctx_attribs.arr_access);
+  }
+
   // Device-side adstack SizeExpr evaluation: every task with adstack allocas has its per-alloca `max_size` /
   // `offset` metadata resolved by a dedicated compute shader (see `quadrants/runtime/gfx/adstack_sizer_launch.cpp`
   // for the full mechanism). The helper internally early-returns (after seeding the per-task vector with
@@ -618,12 +625,17 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         auto it = src.find(bind.buffer.root_id);
         bindings->rw_buffer(bind.binding, it != src.end() ? it->second : kDeviceNullAllocation);
       } else if (bind.buffer.type == BufferType::AdStackOverflow) {
-        // SPIR-V codegen writes a non-zero sentinel into this single-u32 buffer whenever an AdStackPushStmt hits the
-        // overflow branch. Allocate it lazily on first use and reuse across launches; synchronize() reads it, raises on
-        // non-zero, and zeros it for the next window.
+        // Two-slot u32 buffer: [overflow_signal, task_registry_id]. The SPIR-V codegen task-end emit
+        // writes a non-zero `stack_id + 1` into slot 0 via OpAtomicUMax whenever any push site overflowed
+        // its `max_size`, and `cmpxchg(0, registry_id)` into slot 1 to record the offending
+        // `AdStackSizingInfo`'s `Program::adstack_sizing_info_registry_` id (only the FIRST overflowing
+        // task's id sticks; subsequent threads' cmpxchg fails harmlessly). Host `synchronize()` reads
+        // both slots, raises with `Program::diagnose_adstack_overflow_message(task_id)`, and zeros both
+        // for the next window.
         if (!adstack_overflow_buffer_) {
-          auto [buf, res] = device_->allocate_memory_unique({sizeof(uint32_t), /*host_write=*/true, /*host_read=*/true,
-                                                             /*export_sharing=*/false, AllocUsage::Storage});
+          auto [buf, res] =
+              device_->allocate_memory_unique({2 * sizeof(uint32_t), /*host_write=*/true, /*host_read=*/true,
+                                               /*export_sharing=*/false, AllocUsage::Storage});
           QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack overflow buffer");
           adstack_overflow_buffer_ = std::move(buf);
           current_cmdlist_->buffer_fill(adstack_overflow_buffer_->get_ptr(0), kBufferSizeEntireSize, /*data=*/0);
@@ -666,6 +678,21 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         // having populated it.
         if (adstack_bound_row_capacity_buffer_) {
           bindings->rw_buffer(bind.binding, *adstack_bound_row_capacity_buffer_);
+        } else {
+          bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
+        }
+      } else if (bind.buffer.type == BufferType::AdStackTaskRegistryId) {
+        // Per-task `Program::adstack_sizing_info_registry_` ids written by the SPIR-V launcher in
+        // `publish_adstack_metadata_spirv` immediately after registering each adstack-bearing task; slot
+        // `ti` holds the registry id for that task (0 for tasks without adstacks). The codegen-emitted
+        // task-end overflow check reads slot `task_id_in_kernel_` and `OpAtomicCompareExchange`'s the
+        // value into `AdStackOverflow[1]` when the latter is still 0 - recording the FIRST overflowing
+        // task's identity. The codegen-side gate on `task_has_adstack_push_` ensures forward-only tasks
+        // never request this binding, so the buffer is always allocated by `publish_adstack_metadata_
+        // spirv` whenever it is requested. The defensive null bind keeps the assertion path intact if
+        // a future codegen path requests the binding without the launcher having allocated.
+        if (adstack_task_registry_id_buffer_) {
+          bindings->rw_buffer(bind.binding, *adstack_task_registry_id_buffer_);
         } else {
           bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
         }
@@ -981,11 +1008,15 @@ void GfxRuntime::synchronize() {
   // against pending GPU writes.
   if (adstack_overflow_buffer_ && !finalizing_) {
     uint32_t flag_val = 0;
+    uint32_t task_id_val = 0;
     void *mapped = nullptr;
     QD_ASSERT(device_->map(*adstack_overflow_buffer_, &mapped) == RhiResult::success);
-    flag_val = *reinterpret_cast<const uint32_t *>(mapped);
+    auto *slots = reinterpret_cast<uint32_t *>(mapped);
+    flag_val = slots[0];
+    task_id_val = slots[1];
     if (flag_val != 0) {
-      *reinterpret_cast<uint32_t *>(mapped) = 0;
+      slots[0] = 0;
+      slots[1] = 0;
     }
     device_->unmap(*adstack_overflow_buffer_);
     // UINT32_MAX is the dedicated sentinel the codegen-emitted defense-in-depth bounds check at the float Lowest
@@ -1001,14 +1032,24 @@ void GfxRuntime::synchronize() {
                 "LCA-block claim count. The bound is supposed to be exact by construction; reaching this signal "
                 "means the reducer and the main pass observed different threads passing the captured gating "
                 "predicate. File a bug with the kernel IR via `QD_DUMP_IR=1` and a minimal repro.");
-    QD_ERROR_IF(flag_val != 0,
-                "Adstack overflow (offending stack_id={}): a reverse-mode autodiff kernel pushed more elements "
-                "than the adstack capacity allows. Raised at the next qd.sync() rather than at the offending "
-                "kernel launch. The pre-pass resolved this alloca to a bound tighter than the actual runtime "
-                "push count - either the enclosing loop shape is outside the current `SizeExpr` grammar "
-                "(rewrite it, or extend the grammar), or the Bellman-Ford analyzer undercounted the "
-                "forward-pass accumulation on this stack (file a bug with the kernel IR via `QD_DUMP_IR=1`).",
-                flag_val - 1);
+    if (flag_val != 0) {
+      Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
+      std::string diagnostic;
+      if (prog != nullptr) {
+        auto diag = prog->adstack_cache().diagnose_adstack_overflow(task_id_val);
+        diagnostic = std::move(diag.message);
+        // See `LlvmRuntimeExecutor::check_adstack_overflow` for the rationale; only invalidate when the sizer rerun
+        // confirmed a stale cache (DLPack-bypass) so a Quadrants pre-pass bug is not silently masked.
+        if (diag.confirmed_invalid_cache) {
+          prog->adstack_cache().invalidate_all_per_task();
+        }
+      }
+      throw QuadrantsAssertionError(
+          fmt::format("Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack "
+                      "capacity allows. Raised at the next Quadrants Python entry rather than at the offending "
+                      "kernel launch. Offending adstack index within the task: {}.\n{}",
+                      flag_val - 1, diagnostic));
+    }
   }
   fflush(stdout);
 }

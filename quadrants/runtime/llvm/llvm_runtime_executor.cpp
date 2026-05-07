@@ -17,6 +17,7 @@
 #include "quadrants/rhi/cuda/cuda_driver.h"
 #include "quadrants/rhi/llvm/device_memory_pool.h"
 #include "quadrants/program/program_impl.h"
+#include "quadrants/program/program.h"
 
 #if defined(QD_WITH_CUDA)
 #include "quadrants/rhi/cuda/cuda_context.h"
@@ -191,6 +192,10 @@ void LlvmRuntimeExecutor::print_list_manager_info(void *list_manager, uint64 *re
 
   fmt::print(" length={:n}     {:n} chunks x [{:n} x {:n} B]  total={:.4f} MB\n", list_manager_len, num_active_chunks,
              elements_per_chunk, element_size, size_MB);
+}
+
+Program *LlvmRuntimeExecutor::get_program() const {
+  return program_impl_ != nullptr ? program_impl_->program : nullptr;
 }
 
 void LlvmRuntimeExecutor::synchronize() {
@@ -546,6 +551,44 @@ void LlvmRuntimeExecutor::finalize() {
     pinned_metadata_scratch_ = nullptr;
     pinned_metadata_scratch_capacity_ = 0;
   }
+  // Release the pinned host slot used for the adstack overflow flag. Mirrors the pinned_metadata_scratch
+  // release above. The `LLVMRuntime::adstack_overflow_flag_dev_ptr` field that referenced this slot is in the
+  // runtime struct, which is destroyed below; the dangling reference is harmless because the kernel JIT
+  // module is also being torn down.
+  if (adstack_overflow_flag_host_ptr_ != nullptr) {
+#if defined(QD_WITH_CUDA)
+    if (config_.arch == Arch::cuda) {
+      CUDADriver::get_instance().mem_free_host(adstack_overflow_flag_host_ptr_);
+    }
+#endif
+#if defined(QD_WITH_AMDGPU)
+    if (config_.arch == Arch::amdgpu) {
+      AMDGPUDriver::get_instance().mem_free_host(adstack_overflow_flag_host_ptr_);
+    }
+#endif
+    if (config_.arch != Arch::cuda && config_.arch != Arch::amdgpu) {
+      std::free(adstack_overflow_flag_host_ptr_);
+    }
+    adstack_overflow_flag_host_ptr_ = nullptr;
+    adstack_overflow_flag_dev_ptr_ = nullptr;
+  }
+  if (adstack_overflow_task_id_host_ptr_ != nullptr) {
+#if defined(QD_WITH_CUDA)
+    if (config_.arch == Arch::cuda) {
+      CUDADriver::get_instance().mem_free_host(adstack_overflow_task_id_host_ptr_);
+    }
+#endif
+#if defined(QD_WITH_AMDGPU)
+    if (config_.arch == Arch::amdgpu) {
+      AMDGPUDriver::get_instance().mem_free_host(adstack_overflow_task_id_host_ptr_);
+    }
+#endif
+    if (config_.arch != Arch::cuda && config_.arch != Arch::amdgpu) {
+      std::free(adstack_overflow_task_id_host_ptr_);
+    }
+    adstack_overflow_task_id_host_ptr_ = nullptr;
+    adstack_overflow_task_id_dev_ptr_ = nullptr;
+  }
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
     preallocated_runtime_objects_allocs_.reset();
     preallocated_runtime_memory_allocs_.reset();
@@ -732,6 +775,68 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
                                       (void *)&KernelProfilerBase::profiler_start);
     runtime_jit->call<void *, void *>("LLVMRuntime_set_profiler_stop", llvm_runtime_,
                                       (void *)&KernelProfilerBase::profiler_stop);
+  }
+
+  // Allocate the pinned host slot for the adstack overflow flag and publish its device-mapped address into the
+  // runtime. The kernel-side `stack_push` writes the overflow signal here via a system-wide atomic; the host polls
+  // the same memory directly via `adstack_overflow_flag_host_ptr_`. CUDA / AMDGPU pinned host memory is already
+  // UVA-mapped so the same pointer is valid from both sides; on CPU the runtime is host-resident and the same
+  // pointer is used unchanged. Required hardware: NVIDIA Compute Capability 6.0+ / AMD GFX9+, the same envelope
+  // the existing pinned-host H2D-async pattern in `llvm_adstack_lazy_claim.cpp` already requires.
+  {
+    void *host_slot = nullptr;
+    if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+      CUDADriver::get_instance().mem_alloc_host(&host_slot, sizeof(int64_t));
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+      AMDGPUDriver::get_instance().mem_alloc_host(&host_slot, sizeof(int64_t), 0u);
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else {
+      host_slot = std::malloc(sizeof(int64_t));
+    }
+    QD_ASSERT(host_slot != nullptr);
+    adstack_overflow_flag_host_ptr_ = static_cast<int64_t *>(host_slot);
+    *adstack_overflow_flag_host_ptr_ = 0;
+    // CUDA `cuMemAllocHost_v2` and HIP `hipHostMalloc` with default flags both return UVA-mapped memory; the
+    // host pointer is also a valid device pointer on Pascal+ / GFX9+ hardware. On CPU the runtime is in host
+    // memory and the kernel runs as a function call, so the same pointer applies.
+    adstack_overflow_flag_dev_ptr_ = host_slot;
+    runtime_jit->call<void *, void *>("runtime_set_adstack_overflow_flag_dev_ptr", llvm_runtime_,
+                                      adstack_overflow_flag_dev_ptr_);
+  }
+  // Companion task-id slot. Same allocation strategy as the flag above; placed in a separate page so the
+  // codegen-emitted `cmpxchg` does not contend with the flag's `atomic OR` on a shared cache line. Codegen
+  // writes the Program-assigned `adstack_sizing_info_id` here on the first overflowing thread; host reads
+  // the slot during the raise to look up the offending kernel / task in the Program-side registry.
+  {
+    void *host_slot = nullptr;
+    if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+      CUDADriver::get_instance().mem_alloc_host(&host_slot, sizeof(int64_t));
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+      AMDGPUDriver::get_instance().mem_alloc_host(&host_slot, sizeof(int64_t), 0u);
+#else
+      QD_NOT_IMPLEMENTED;
+#endif
+    } else {
+      host_slot = std::malloc(sizeof(int64_t));
+    }
+    QD_ASSERT(host_slot != nullptr);
+    adstack_overflow_task_id_host_ptr_ = static_cast<int64_t *>(host_slot);
+    *adstack_overflow_task_id_host_ptr_ = 0;
+    adstack_overflow_task_id_dev_ptr_ = host_slot;
+    runtime_jit->call<void *, void *>("runtime_set_adstack_overflow_task_id_dev_ptr", llvm_runtime_,
+                                      adstack_overflow_task_id_dev_ptr_);
   }
 }
 

@@ -28,11 +28,14 @@
 
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
+#include "quadrants/program/program.h"
 
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <unordered_set>
 #include <vector>
 
 #include "quadrants/ir/static_adstack_bound_reducer_device.h"
@@ -456,29 +459,13 @@ void LlvmRuntimeExecutor::ensure_per_task_float_heap_post_reducer(std::size_t ta
     clip_effective_rows_by_loop_trip_count(effective_rows, *ad_stack.bound_expr,
                                            std::numeric_limits<std::size_t>::max(), prog, ctx);
   }
-  // Read back the per-thread float stride (in bytes) that `publish_adstack_metadata` published into
-  // `runtime->adstack_per_thread_stride_float`. `AdStackSizingInfo::per_thread_stride_float` from the analysis pre-pass
-  // is in entry-count units (`2 * max_size`), not bytes, and would massively undersize the heap.
-  uint64_t stride_float_bytes_u64 = 0;
-  if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
-    if (config_.arch == Arch::cuda) {
-#if defined(QD_WITH_CUDA)
-      CUDADriver::get_instance().memcpy_device_to_host(&stride_float_bytes_u64, runtime_adstack_stride_float_field_ptr_,
-                                                       sizeof(uint64_t));
-#else
-      QD_NOT_IMPLEMENTED;
-#endif
-    } else if (config_.arch == Arch::amdgpu) {
-#if defined(QD_WITH_AMDGPU)
-      AMDGPUDriver::get_instance().memcpy_device_to_host(&stride_float_bytes_u64,
-                                                         runtime_adstack_stride_float_field_ptr_, sizeof(uint64_t));
-#else
-      QD_NOT_IMPLEMENTED;
-#endif
-    } else {
-      stride_float_bytes_u64 = *reinterpret_cast<const uint64_t *>(runtime_adstack_stride_float_field_ptr_);
-    }
-  }
+  // The per-thread float stride (in bytes) was just published into `runtime->adstack_per_thread_stride_float` by the
+  // matching `publish_adstack_metadata` call earlier in this task's per-task block. We stash the value host-side so
+  // we can read it directly here instead of paying a sync DtoH on every bound_expr task. The launcher pairs publish
+  // + reducer + post-reducer per task with no intervening publish for another task, so the stash is accurate at this
+  // call site. `AdStackSizingInfo::per_thread_stride_float` from the analysis pre-pass is in entry-count units
+  // (`2 * max_size`), not bytes, and would massively undersize the heap.
+  uint64_t stride_float_bytes_u64 = static_cast<uint64_t>(last_published_stride_float_bytes_);
   const std::size_t needed_bytes = effective_rows * static_cast<std::size_t>(stride_float_bytes_u64);
   // `QD_DEBUG_ADSTACK=1` opt-in diagnostic. Persistent so memory regressions can be debugged without re-instrumenting.
   if (std::getenv("QD_DEBUG_ADSTACK")) {
@@ -641,36 +628,59 @@ void LlvmRuntimeExecutor::ensure_adstack_heap_float(std::size_t needed_bytes) {
 }
 
 void LlvmRuntimeExecutor::check_adstack_overflow() {
-  // Called from `synchronize()` on every sync so adstack overflow surfaces as a Python exception regardless of
-  // `compile_config.debug`. The runtime / result buffer may not exist yet (e.g. a C++ test that constructs Program
-  // without materializing the runtime and then triggers Program::finalize -> synchronize), so no-op in that case.
-  if (llvm_runtime_ == nullptr || result_buffer_cache_ == nullptr) {
+  // Called from `synchronize()` on every sync, plus other Quadrants Python entry points wired in
+  // `Program::check_adstack_overflow_and_raise`. The flag lives in pinned host memory (allocated at
+  // `materialize_runtime`); polling is a relaxed atomic exchange on the cached host pointer via
+  // `std::atomic<int64_t>` reinterpret_cast - no DtoH, no JIT call, no sync drain. Available on all backends because
+  // the pinned-host memory is in the host process address space regardless of where the kernel that wrote it ran.
+  // The reinterpret_cast is portable because `std::atomic<int64_t>` is layout-compatible with `int64_t` on every
+  // target (verified by the static_assert below); see also Itanium ABI / MSVC ABI lock-free guarantees.
+  //
+  // Returns early when the slot has not been allocated yet (e.g. a C++ test that constructs Program without
+  // materializing the runtime and then triggers `Program::finalize -> synchronize`).
+  static_assert(std::atomic<int64_t>::is_always_lock_free,
+                "std::atomic<int64_t> must be lock-free for the reinterpret_cast pattern below to be portable");
+  if (adstack_overflow_flag_host_ptr_ == nullptr) {
     return;
   }
-  // `lookup_function` returns a host-callable pointer only on direct-dispatch backends (CPU LLVM JIT). CUDA / AMDGPU
-  // return device-side pointers and require the arg-marshalling `JITModule::call` path; the cached fast path therefore
-  // only fires when `direct_dispatch()` is true.
-  auto *runtime_jit_module = get_runtime_jit_module();
-  if (runtime_jit_module->direct_dispatch()) {
-    if (adstack_overflow_retriever_ == nullptr) {
-      adstack_overflow_retriever_ = reinterpret_cast<void (*)(void *)>(
-          runtime_jit_module->lookup_function("runtime_retrieve_and_reset_adstack_overflow"));
-      QD_ASSERT(adstack_overflow_retriever_ != nullptr);
+  int64_t flag =
+      reinterpret_cast<std::atomic<int64_t> *>(adstack_overflow_flag_host_ptr_)->exchange(0, std::memory_order_relaxed);
+  if (flag == 0) {
+    return;
+  }
+  // Drain the companion task-id slot in the same poll. Both slots cleared so the next overflow records a fresh
+  // identity. `task_id == 0` means the kernel that overflowed pre-dates the registry wiring or its
+  // `ad_stack.registry_id` was unset for any reason (e.g. a deserialised offline-cache task that has not yet been
+  // re-registered); the diagnose helper falls through to the generic dual-cause message in that case.
+  uint32_t task_id = 0;
+  if (adstack_overflow_task_id_host_ptr_ != nullptr) {
+    int64_t recorded = reinterpret_cast<std::atomic<int64_t> *>(adstack_overflow_task_id_host_ptr_)
+                           ->exchange(0, std::memory_order_relaxed);
+    task_id = static_cast<uint32_t>(recorded);
+  }
+  Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
+  std::string diagnostic;
+  if (prog != nullptr) {
+    auto diag = prog->adstack_cache().diagnose_adstack_overflow(task_id);
+    diagnostic = std::move(diag.message);
+    // Auto-invalidate the per-task metadata caches when the synchronous sizer rerun confirmed the cache is stale
+    // (DLPack-bypass cause). The current run is corrupted (we are about to raise), but the next launch's sizer
+    // reruns from scratch against the live (mutated) state and the kernel runs to completion without further
+    // user intervention. Unknown / Quadrants-bug cases skip the invalidation so a real sizer bug is not masked
+    // by silent recompute.
+    if (diag.confirmed_invalid_cache) {
+      prog->adstack_cache().invalidate_all_per_task();
     }
-    adstack_overflow_retriever_(llvm_runtime_);
   } else {
-    runtime_jit_module->call<void *>("runtime_retrieve_and_reset_adstack_overflow", llvm_runtime_);
-  }
-  auto flag = fetch_result<int64>(quadrants_result_buffer_error_id, result_buffer_cache_);
-  if (flag != 0) {
-    throw QuadrantsAssertionError(
+    diagnostic =
         "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
-        "allows. Raised at the next qd.sync() rather than at the offending kernel launch. The pre-pass "
-        "resolved this alloca to a bound tighter than the actual runtime push count - either the enclosing "
-        "loop shape is outside the current `SizeExpr` grammar (rewrite it, or extend the grammar), or the "
-        "Bellman-Ford analyzer undercounted the forward-pass accumulation on this stack (file a bug with "
-        "the kernel IR via `QD_DUMP_IR=1`).");
+        "allows.";
   }
+  throw QuadrantsAssertionError(
+      "Adstack overflow: a reverse-mode autodiff kernel pushed more elements "
+      "than the adstack capacity allows. Raised at the next Quadrants Python "
+      "entry rather than at the offending kernel launch.\n" +
+      diagnostic);
 }
 
 std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInfo &ad_stack,
@@ -762,11 +772,147 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     runtime_adstack_stride_int_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
         fetch_result_uint64(quadrants_result_buffer_ret_value_id + 4, result_buffer_cache_));
   }
-  copy_h2d(runtime_adstack_offsets_field_ptr_, &offsets_dev_ptr, sizeof(void *));
-  copy_h2d(runtime_adstack_max_sizes_field_ptr_, &max_sizes_dev_ptr, sizeof(void *));
+  // The pointed-to scratch allocations are stable across launches (only `grow_to` swaps them). Skip the per-launch
+  // h2d that publishes the pointer values whenever they have not changed since the last call. On HIP / CUDA each
+  // skipped pointer-publish is one queue round-trip the launcher would otherwise pay; on a typical reverse-mode
+  // sweep this fires thousands of times.
+  if (offsets_dev_ptr != adstack_offsets_dev_ptr_published_) {
+    copy_h2d(runtime_adstack_offsets_field_ptr_, &offsets_dev_ptr, sizeof(void *));
+    adstack_offsets_dev_ptr_published_ = offsets_dev_ptr;
+  }
+  if (max_sizes_dev_ptr != adstack_max_sizes_dev_ptr_published_) {
+    copy_h2d(runtime_adstack_max_sizes_field_ptr_, &max_sizes_dev_ptr, sizeof(void *));
+    adstack_max_sizes_dev_ptr_published_ = max_sizes_dev_ptr;
+  }
 
   std::size_t stride = 0;
   const bool is_gpu_llvm = (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu);
+
+  // Shared GPU async publish helper: pack `[stride_combined, stride_float, stride_int, offsets[n_stacks],
+  // max_sizes[n_stacks]]` into the pinned-host scratch (grow on demand, double-amortised), then issue 5 async H2Ds
+  // on the active stream and record the completion event. Used by both the host-eval branch (CUDA / AMDGPU
+  // resolvable size_exprs) and the on-device-sizer cache-hit branch. The driver's H2D DMA reads from the pinned
+  // bytes at execution time, so a `wait_pending()` at the top of the next call defends against an unusual
+  // interleaving where the GPU queue is backlogged and the next launch enters before the previous launch's last
+  // copy has been consumed. Only callable when `is_gpu_llvm` is true.
+  auto publish_metadata_pinned_async = [&](const uint64_t *offsets_src, const uint64_t *max_sizes_src,
+                                           uint64_t stride_combined_u64, uint64_t stride_float_u64,
+                                           uint64_t stride_int_u64) {
+    const std::size_t header_bytes = 3 * sizeof(uint64_t);
+    const std::size_t array_bytes = n_stacks * sizeof(uint64_t);
+    const std::size_t total_bytes = header_bytes + 2 * array_bytes;
+    auto wait_pending = [this]() {
+      if (!pinned_metadata_event_pending_) {
+        return;
+      }
+#if defined(QD_WITH_CUDA)
+      if (config_.arch == Arch::cuda) {
+        CUDADriver::get_instance().event_synchronize(pinned_metadata_event_);
+      }
+#endif
+#if defined(QD_WITH_AMDGPU)
+      if (config_.arch == Arch::amdgpu) {
+        AMDGPUDriver::get_instance().event_synchronize(pinned_metadata_event_);
+      }
+#endif
+      pinned_metadata_event_pending_ = false;
+    };
+    if (total_bytes > pinned_metadata_scratch_capacity_) {
+      wait_pending();
+      if (pinned_metadata_scratch_ != nullptr) {
+#if defined(QD_WITH_CUDA)
+        if (config_.arch == Arch::cuda) {
+          CUDADriver::get_instance().mem_free_host(pinned_metadata_scratch_);
+        }
+#endif
+#if defined(QD_WITH_AMDGPU)
+        if (config_.arch == Arch::amdgpu) {
+          AMDGPUDriver::get_instance().mem_free_host(pinned_metadata_scratch_);
+        }
+#endif
+        pinned_metadata_scratch_ = nullptr;
+      }
+      const std::size_t new_capacity = std::max<std::size_t>(total_bytes, 2 * pinned_metadata_scratch_capacity_);
+#if defined(QD_WITH_CUDA)
+      if (config_.arch == Arch::cuda) {
+        CUDADriver::get_instance().mem_alloc_host(&pinned_metadata_scratch_, new_capacity);
+      }
+#endif
+#if defined(QD_WITH_AMDGPU)
+      if (config_.arch == Arch::amdgpu) {
+        // `hipHostMallocDefault == 0`. Coherent / portable / write-combined flags are intentionally not set; the
+        // workload is small payloads written linearly by the host and DMA-read by the GPU once.
+        AMDGPUDriver::get_instance().mem_alloc_host(&pinned_metadata_scratch_, new_capacity, 0u);
+      }
+#endif
+      pinned_metadata_scratch_capacity_ = new_capacity;
+    }
+    if (pinned_metadata_event_ == nullptr) {
+      // `cuEventCreate` flag `0` (CU_EVENT_DEFAULT) means timing-enabled, which the driver costs us nothing to set
+      // up here and lets future profilers attach without re-creating the event. `hipEventCreateWithFlags` takes
+      // the same encoding.
+#if defined(QD_WITH_CUDA)
+      if (config_.arch == Arch::cuda) {
+        CUDADriver::get_instance().event_create(&pinned_metadata_event_, 0u);
+      }
+#endif
+#if defined(QD_WITH_AMDGPU)
+      if (config_.arch == Arch::amdgpu) {
+        AMDGPUDriver::get_instance().event_create(&pinned_metadata_event_, 0u);
+      }
+#endif
+    }
+    wait_pending();
+    auto *pinned = static_cast<uint64_t *>(pinned_metadata_scratch_);
+    pinned[0] = stride_combined_u64;
+    pinned[1] = stride_float_u64;
+    pinned[2] = stride_int_u64;
+    std::memcpy(pinned + 3, offsets_src, array_bytes);
+    std::memcpy(pinned + 3 + n_stacks, max_sizes_src, array_bytes);
+    // Queue the metadata copies on the stream the subsequent main-kernel dispatch will run on, so the GPU
+    // stream-orders the copies before the kernel reads `adstack_max_sizes` etc. CUDA: `CUDAContext::get_stream()`
+    // (configurable via `set_stream`, defaults to the null stream); AMDGPU: always the default stream because
+    // `AMDGPUContext::launch` passes `nullptr` to `hipLaunchKernel`.
+#if defined(QD_WITH_CUDA)
+    if (config_.arch == Arch::cuda) {
+      void *active_stream = CUDAContext::get_instance().get_stream();
+      CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned,
+                                                             sizeof(uint64_t), active_stream);
+      if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
+        CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_float_field_ptr_, pinned + 1,
+                                                               sizeof(uint64_t), active_stream);
+      }
+      if (runtime_adstack_stride_int_field_ptr_ != nullptr) {
+        CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_int_field_ptr_, pinned + 2,
+                                                               sizeof(uint64_t), active_stream);
+      }
+      CUDADriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 3, array_bytes, active_stream);
+      CUDADriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 3 + n_stacks, array_bytes,
+                                                             active_stream);
+      CUDADriver::get_instance().event_record(pinned_metadata_event_, active_stream);
+    }
+#endif
+#if defined(QD_WITH_AMDGPU)
+    if (config_.arch == Arch::amdgpu) {
+      void *active_stream = nullptr;
+      AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned,
+                                                               sizeof(uint64_t), active_stream);
+      if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
+        AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_float_field_ptr_, pinned + 1,
+                                                                 sizeof(uint64_t), active_stream);
+      }
+      if (runtime_adstack_stride_int_field_ptr_ != nullptr) {
+        AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_int_field_ptr_, pinned + 2,
+                                                                 sizeof(uint64_t), active_stream);
+      }
+      AMDGPUDriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 3, array_bytes, active_stream);
+      AMDGPUDriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 3 + n_stacks, array_bytes,
+                                                               active_stream);
+      AMDGPUDriver::get_instance().event_record(pinned_metadata_event_, active_stream);
+    }
+#endif
+    pinned_metadata_event_pending_ = true;
+  };
 
   // Host-eval fast path. The on-device sizer kernel exists to handle one specific leaf, `ExternalTensorRead`,
   // whose ndarray data lives in GPU-private memory (`cudaMalloc` / `hipMalloc`, no UVA fallback) and thus
@@ -809,6 +955,8 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     // Guard `program_impl_->program` lookups against the C++-only-tests setup where `program_impl_` itself is null;
     // the on-device branch below already does this and falls back to `max_size_compile_time`.
     Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
+    // Span the per-stack `evaluate_adstack_size_expr` calls below with one shared read cache.
+    SizeExprLaunchScope launch_scope;
     std::vector<uint64_t> host_max_sizes(n_stacks);
     for (std::size_t i = 0; i < n_stacks; ++i) {
       const SerializedSizeExpr *expr = (i < ad_stack.size_exprs.size()) ? &ad_stack.size_exprs[i] : nullptr;
@@ -860,139 +1008,8 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
         copy_h2d(runtime_adstack_stride_int_field_ptr_, &stride_int_u64, sizeof(uint64_t));
       }
     } else {
-      // Five-block payload packed into the pinned-host scratch as `[stride_combined, stride_float, stride_int,
-      // offsets[n_stacks], max_sizes[n_stacks]]`. Five async DMAs land on the matching device addresses; the driver's
-      // H2D DMA engine reads from the pinned bytes at execution time, so we must not overwrite the scratch before all
-      // copies have completed - hence the per-launch `event_record` after the last copy and the `event_synchronize` at
-      // the top of the next launch.
-      const std::size_t header_bytes = 3 * sizeof(uint64_t);
-      const std::size_t array_bytes = n_stacks * sizeof(uint64_t);
-      const std::size_t total_bytes = header_bytes + 2 * array_bytes;
-
-      auto wait_pending = [this]() {
-        if (!pinned_metadata_event_pending_) {
-          return;
-        }
-#if defined(QD_WITH_CUDA)
-        if (config_.arch == Arch::cuda) {
-          CUDADriver::get_instance().event_synchronize(pinned_metadata_event_);
-        }
-#endif
-#if defined(QD_WITH_AMDGPU)
-        if (config_.arch == Arch::amdgpu) {
-          AMDGPUDriver::get_instance().event_synchronize(pinned_metadata_event_);
-        }
-#endif
-        pinned_metadata_event_pending_ = false;
-      };
-
-      // Grow / first-allocate the pinned host scratch and the per-launch completion event. Doubling growth
-      // means the pinned alloc / free traffic is amortised to O(log peak_total_bytes) across a run.
-      if (total_bytes > pinned_metadata_scratch_capacity_) {
-        wait_pending();
-        if (pinned_metadata_scratch_ != nullptr) {
-#if defined(QD_WITH_CUDA)
-          if (config_.arch == Arch::cuda) {
-            CUDADriver::get_instance().mem_free_host(pinned_metadata_scratch_);
-          }
-#endif
-#if defined(QD_WITH_AMDGPU)
-          if (config_.arch == Arch::amdgpu) {
-            AMDGPUDriver::get_instance().mem_free_host(pinned_metadata_scratch_);
-          }
-#endif
-          pinned_metadata_scratch_ = nullptr;
-        }
-        std::size_t new_capacity = std::max<std::size_t>(total_bytes, 2 * pinned_metadata_scratch_capacity_);
-#if defined(QD_WITH_CUDA)
-        if (config_.arch == Arch::cuda) {
-          CUDADriver::get_instance().mem_alloc_host(&pinned_metadata_scratch_, new_capacity);
-        }
-#endif
-#if defined(QD_WITH_AMDGPU)
-        if (config_.arch == Arch::amdgpu) {
-          // `hipHostMallocDefault == 0`. Coherent / portable / write-combined flags are intentionally not set;
-          // the workload is small payloads written linearly by the host and DMA-read by the GPU once.
-          AMDGPUDriver::get_instance().mem_alloc_host(&pinned_metadata_scratch_, new_capacity, 0u);
-        }
-#endif
-        pinned_metadata_scratch_capacity_ = new_capacity;
-      }
-      if (pinned_metadata_event_ == nullptr) {
-        // `cuEventCreate` flag `0` (CU_EVENT_DEFAULT) means timing-enabled, which the driver costs us nothing
-        // to set up here and lets future profilers attach without re-creating the event. `hipEventCreateWithFlags`
-        // takes the same encoding.
-#if defined(QD_WITH_CUDA)
-        if (config_.arch == Arch::cuda) {
-          CUDADriver::get_instance().event_create(&pinned_metadata_event_, 0u);
-        }
-#endif
-#if defined(QD_WITH_AMDGPU)
-        if (config_.arch == Arch::amdgpu) {
-          AMDGPUDriver::get_instance().event_create(&pinned_metadata_event_, 0u);
-        }
-#endif
-      }
-      // Block until any in-flight copies from the previous launch have finished pulling from the pinned scratch
-      // before we overwrite it. In steady state this is a no-op because the small DMAs finish well before the
-      // host loops back here; the wait exists only to defend against an unusual interleaving where the GPU
-      // queue is backlogged and the next launch enters this function before the previous launch's last copy
-      // has been consumed.
-      wait_pending();
-
-      auto *pinned = static_cast<uint64_t *>(pinned_metadata_scratch_);
-      pinned[0] = stride_combined_u64;
-      pinned[1] = stride_float_u64;
-      pinned[2] = stride_int_u64;
-      std::memcpy(pinned + 3, host_offsets.data(), array_bytes);
-      std::memcpy(pinned + 3 + n_stacks, host_max_sizes.data(), array_bytes);
-
-      // Queue the metadata copies on the same stream the subsequent main-kernel dispatch will run on, so the
-      // GPU stream-orders the copies before the kernel reads `adstack_max_sizes` etc. On CUDA the active
-      // stream is `CUDAContext::get_instance().get_stream()` - configurable via `set_stream`, defaults to the
-      // null stream - and `CUDAContext::launch` dispatches kernels on the same handle. AMDGPU has no
-      // public stream-selection API: `AMDGPUContext::launch` always passes `nullptr` to `hipLaunchKernel`
-      // (i.e. the default stream), so the copies match that.
-#if defined(QD_WITH_CUDA)
-      if (config_.arch == Arch::cuda) {
-        void *active_stream = CUDAContext::get_instance().get_stream();
-        CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned,
-                                                               sizeof(uint64_t), active_stream);
-        if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
-          CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_float_field_ptr_, pinned + 1,
-                                                                 sizeof(uint64_t), active_stream);
-        }
-        if (runtime_adstack_stride_int_field_ptr_ != nullptr) {
-          CUDADriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_int_field_ptr_, pinned + 2,
-                                                                 sizeof(uint64_t), active_stream);
-        }
-        CUDADriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 3, array_bytes, active_stream);
-        CUDADriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 3 + n_stacks, array_bytes,
-                                                               active_stream);
-        CUDADriver::get_instance().event_record(pinned_metadata_event_, active_stream);
-      }
-#endif
-#if defined(QD_WITH_AMDGPU)
-      if (config_.arch == Arch::amdgpu) {
-        void *active_stream = nullptr;  // AMDGPUContext::launch always uses the default stream.
-        AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_field_ptr_, pinned,
-                                                                 sizeof(uint64_t), active_stream);
-        if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
-          AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_float_field_ptr_, pinned + 1,
-                                                                   sizeof(uint64_t), active_stream);
-        }
-        if (runtime_adstack_stride_int_field_ptr_ != nullptr) {
-          AMDGPUDriver::get_instance().memcpy_host_to_device_async(runtime_adstack_stride_int_field_ptr_, pinned + 2,
-                                                                   sizeof(uint64_t), active_stream);
-        }
-        AMDGPUDriver::get_instance().memcpy_host_to_device_async(offsets_dev_ptr, pinned + 3, array_bytes,
-                                                                 active_stream);
-        AMDGPUDriver::get_instance().memcpy_host_to_device_async(max_sizes_dev_ptr, pinned + 3 + n_stacks, array_bytes,
-                                                                 active_stream);
-        AMDGPUDriver::get_instance().event_record(pinned_metadata_event_, active_stream);
-      }
-#endif
-      pinned_metadata_event_pending_ = true;
+      publish_metadata_pinned_async(host_offsets.data(), host_max_sizes.data(), stride_combined_u64, stride_float_u64,
+                                    stride_int_u64);
     }
   } else {
     // GPU (CUDA / AMDGPU): encode the SizeExpr trees into device bytecode, upload, launch the sizer runtime
@@ -1005,73 +1022,173 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     // deref reads garbage. Moving the interpreter on-device keeps the pointer semantics intact - it reads the
     // data pointer out of `ctx->arg_buffer` (which the kernel will read too) and dereferences it where the
     // memory lives, with no migration / readback of the ndarray payload itself.
-    std::vector<uint8_t> bytecode;
-    if (program_impl_ != nullptr && program_impl_->program != nullptr) {
-      bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, program_impl_->program, ctx);
-    } else {
-      // No program attached (rare: C++-only tests that construct Program without a full runtime). Fall through
-      // to compile-time bounds by emitting an empty-tree bytecode - the device interpreter sees
-      // `root_node_idx == -1` for every stack and routes to `max_size_compile_time`.
-      bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, nullptr, ctx);
-    }
-    // Grow the scratch buffer if the bytecode outgrew the cached capacity. Amortised doubling keeps the
-    // allocation traffic O(log max_bytecode_bytes) across a run.
-    const std::size_t bytecode_bytes = bytecode.size();
-    if (bytecode_bytes > adstack_sizer_bytecode_capacity_) {
-      std::size_t new_cap = std::max<std::size_t>(bytecode_bytes, 2 * adstack_sizer_bytecode_capacity_);
-      Device::AllocParams params{};
-      params.size = new_cap;
-      params.host_read = false;
-      params.host_write = false;
-      params.export_sharing = false;
-      params.usage = AllocUsage::Storage;
-      DeviceAllocation new_alloc;
-      RhiResult res = llvm_device()->allocate_memory(params, &new_alloc);
-      QD_ERROR_IF(res != RhiResult::success,
-                  "Failed to allocate {} bytes for the adstack sizer bytecode scratch buffer (err: {})", params.size,
-                  int(res));
-      adstack_sizer_bytecode_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
-      adstack_sizer_bytecode_capacity_ = new_cap;
-    }
-    void *bytecode_dev_ptr = get_device_alloc_info_ptr(*adstack_sizer_bytecode_alloc_);
-    copy_h2d(bytecode_dev_ptr, bytecode.data(), bytecode_bytes);
-
-    // Invoke the device interpreter. On CUDA / AMDGPU `JITModule::call` launches this as a single-thread kernel
-    // on the default stream and stream-orders it before the subsequent main-kernel dispatch, so the writes we
-    // do here are visible by the time the user's kernel reads `adstack_max_sizes` etc.
     //
-    // The sizer kernel dereferences `ctx->arg_buffer` on device (that's how it resolves `ExternalTensorRead` leaves
-    // against ndarray pointers the caller packed into the arg buffer). AMDGPU always stages a device-side copy of
-    // `RuntimeContext` because HIP has no UVA fallback and the host pointer faults with `hipErrorIllegalAddress`. CUDA
-    // stages the device copy only when the driver + kernel do not expose HMM / system-allocated memory (queried via
-    // `CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS`): CUDA UVA covers pinned / CUDA-managed memory only, not the plain
-    // `std::make_unique<RuntimeContext>()` backing, so a host pointer works on HMM-capable setups but faults otherwise
-    // (Turing without HMM, Windows, pre-535 Linux drivers) as `CUDA_ERROR_ILLEGAL_ADDRESS` at the next DtoH sync
-    // `illegal memory access ... while calling memcpy_device_to_host`. When the caller passes `nullptr` (HMM-capable
-    // CUDA) we fall back to the host pointer; the launcher gates the allocation so HMM-equipped setups pay no staging
-    // cost.
-    auto *const runtime_jit = get_runtime_jit_module();
-    void *runtime_context_ptr_for_sizer =
-        device_runtime_context_ptr != nullptr ? device_runtime_context_ptr : static_cast<void *>(&ctx->get_context());
-    runtime_jit->call<void *, void *, void *>("runtime_eval_adstack_size_expr", llvm_runtime_,
-                                              runtime_context_ptr_for_sizer, bytecode_dev_ptr);
+    // Per-task metadata cache fast path: the sizer kernel's output (offsets / max_sizes / strides) is a
+    // deterministic function of (a) the per-task `AdStackSizingInfo *` (compile-time bytecode shape, stable
+    // for the kernel's lifetime), (b) every SNode value a `FieldLoad` leaf reads, and (c) every ndarray
+    // value an `ExternalTensorRead` leaf reads. Each launcher (cpu / cuda / amdgpu) bumps
+    // `Program::snode_write_gen_` / `ndarray_data_gen_` for everything this kernel may mutate before
+    // calling here, so the per-source generation snapshots stored alongside the cached payload catch any
+    // input change between launches and force a fresh sizer dispatch when needed. On hit, the cached
+    // offsets / max_sizes / strides are republished into the runtime struct via the same `copy_h2d` paths
+    // the host-eval branch above uses, and the entire bytecode-encode + h2d + sizer-kernel launch +
+    // 3x DtoH-stride pipeline is skipped. The cost of the sizer dispatch + DtoH stalls is small per
+    // launch on CUDA / AMDGPU, but a long sequence of reverse-mode launches over the same kernel
+    // pays it once per launch; the cache amortises that to once per generation-bump.
+    Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
+    bool llvm_metadata_cache_hit = false;
+    if (prog != nullptr) {
+      AdStackCache::LlvmPerTaskAdStackCacheEntry entry;
+      if (prog->adstack_cache().try_llvm_per_task_ad_stack_cache_hit(static_cast<const void *>(&ad_stack), ctx,
+                                                                     entry)) {
+        QD_ASSERT(entry.offsets.size() == n_stacks && entry.max_sizes.size() == n_stacks);
+        // Publish the cached payload through the pinned-host async pipeline shared with the host-eval
+        // branch above: one pinned-scratch pack + five `memcpy_host_to_device_async` issued on the same
+        // stream the main kernel will dispatch on, ordered behind the previous launch's
+        // `pinned_metadata_event_pending_` wait. Packing the same `[stride_combined, stride_float,
+        // stride_int, offsets[n_stacks], max_sizes[n_stacks]]` shape keeps both branches' DMA pattern
+        // identical and removes the per-launch sync round-trips a `copy_h2d` would otherwise impose; on
+        // CPU `copy_h2d` is `memcpy` already so we keep the direct path there.
+        if (!is_gpu_llvm) {
+          copy_h2d(offsets_dev_ptr, entry.offsets.data(), n_stacks * sizeof(uint64_t));
+          copy_h2d(max_sizes_dev_ptr, entry.max_sizes.data(), n_stacks * sizeof(uint64_t));
+          copy_h2d(runtime_adstack_stride_field_ptr_, &entry.stride_combined, sizeof(uint64_t));
+          if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
+            copy_h2d(runtime_adstack_stride_float_field_ptr_, &entry.stride_float, sizeof(uint64_t));
+          }
+          if (runtime_adstack_stride_int_field_ptr_ != nullptr) {
+            copy_h2d(runtime_adstack_stride_int_field_ptr_, &entry.stride_int, sizeof(uint64_t));
+          }
+        } else {
+          publish_metadata_pinned_async(entry.offsets.data(), entry.max_sizes.data(), entry.stride_combined,
+                                        entry.stride_float, entry.stride_int);
+        }
+        stride = static_cast<std::size_t>(entry.stride_combined);
+        stride_float_bytes = static_cast<std::size_t>(entry.stride_float);
+        stride_int_bytes = static_cast<std::size_t>(entry.stride_int);
+        llvm_metadata_cache_hit = true;
+      }
+    }
+    if (!llvm_metadata_cache_hit) {
+      std::vector<uint8_t> bytecode;
+      if (program_impl_ != nullptr && program_impl_->program != nullptr) {
+        bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, program_impl_->program, ctx);
+      } else {
+        // No program attached (rare: C++-only tests that construct Program without a full runtime). Fall through
+        // to compile-time bounds by emitting an empty-tree bytecode - the device interpreter sees
+        // `root_node_idx == -1` for every stack and routes to `max_size_compile_time`.
+        bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, nullptr, ctx);
+      }
+      // Grow the scratch buffer if the bytecode outgrew the cached capacity. Amortised doubling keeps the
+      // allocation traffic O(log max_bytecode_bytes) across a run.
+      const std::size_t bytecode_bytes = bytecode.size();
+      if (bytecode_bytes > adstack_sizer_bytecode_capacity_) {
+        std::size_t new_cap = std::max<std::size_t>(bytecode_bytes, 2 * adstack_sizer_bytecode_capacity_);
+        Device::AllocParams params{};
+        params.size = new_cap;
+        params.host_read = false;
+        params.host_write = false;
+        params.export_sharing = false;
+        params.usage = AllocUsage::Storage;
+        DeviceAllocation new_alloc;
+        RhiResult res = llvm_device()->allocate_memory(params, &new_alloc);
+        QD_ERROR_IF(res != RhiResult::success,
+                    "Failed to allocate {} bytes for the adstack sizer bytecode scratch buffer (err: {})", params.size,
+                    int(res));
+        adstack_sizer_bytecode_alloc_ = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+        adstack_sizer_bytecode_capacity_ = new_cap;
+      }
+      void *bytecode_dev_ptr = get_device_alloc_info_ptr(*adstack_sizer_bytecode_alloc_);
+      copy_h2d(bytecode_dev_ptr, bytecode.data(), bytecode_bytes);
 
-    // Read back the per-kind strides published by `runtime_eval_adstack_size_expr` so we can size the float and int
-    // heaps independently host-side. The combined stride is unused by the split-heap codegen but kept around for
-    // legacy-kernel backward compatibility (mirrors `stride_int` in the unconditional-split layout).
-    uint64_t stride_combined_readback = 0;
-    uint64_t stride_float_readback = 0;
-    uint64_t stride_int_readback = 0;
-    copy_d2h(&stride_combined_readback, runtime_adstack_stride_field_ptr_, sizeof(uint64_t));
-    if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
-      copy_d2h(&stride_float_readback, runtime_adstack_stride_float_field_ptr_, sizeof(uint64_t));
-    }
-    if (runtime_adstack_stride_int_field_ptr_ != nullptr) {
-      copy_d2h(&stride_int_readback, runtime_adstack_stride_int_field_ptr_, sizeof(uint64_t));
-    }
-    stride = static_cast<std::size_t>(stride_combined_readback);
-    stride_float_bytes = static_cast<std::size_t>(stride_float_readback);
-    stride_int_bytes = static_cast<std::size_t>(stride_int_readback);
+      // Invoke the device interpreter. On CUDA / AMDGPU `JITModule::call` launches this as a single-thread kernel
+      // on the default stream and stream-orders it before the subsequent main-kernel dispatch, so the writes we
+      // do here are visible by the time the user's kernel reads `adstack_max_sizes` etc.
+      //
+      // The sizer kernel dereferences `ctx->arg_buffer` on device (that's how it resolves `ExternalTensorRead` leaves
+      // against ndarray pointers the caller packed into the arg buffer). AMDGPU always stages a device-side copy of
+      // `RuntimeContext` because HIP has no UVA fallback and the host pointer faults with `hipErrorIllegalAddress`.
+      // CUDA stages the device copy only when the driver + kernel do not expose HMM / system-allocated memory (queried
+      // via `CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS`): CUDA UVA covers pinned / CUDA-managed memory only, not the
+      // plain `std::make_unique<RuntimeContext>()` backing, so a host pointer works on HMM-capable setups but faults
+      // otherwise (Turing without HMM, Windows, pre-535 Linux drivers) as `CUDA_ERROR_ILLEGAL_ADDRESS` at the next DtoH
+      // sync `illegal memory access ... while calling memcpy_device_to_host`. When the caller passes `nullptr`
+      // (HMM-capable CUDA) we fall back to the host pointer; the launcher gates the allocation so HMM-equipped setups
+      // pay no staging cost.
+      auto *const runtime_jit = get_runtime_jit_module();
+      void *runtime_context_ptr_for_sizer =
+          device_runtime_context_ptr != nullptr ? device_runtime_context_ptr : static_cast<void *>(&ctx->get_context());
+      runtime_jit->call<void *, void *, void *>("runtime_eval_adstack_size_expr", llvm_runtime_,
+                                                runtime_context_ptr_for_sizer, bytecode_dev_ptr);
+
+      // Read back the per-kind strides published by `runtime_eval_adstack_size_expr` so we can size the float and int
+      // heaps independently host-side. The combined stride is unused by the split-heap codegen but kept around for
+      // legacy-kernel backward compatibility (mirrors `stride_int` in the unconditional-split layout).
+      uint64_t stride_combined_readback = 0;
+      uint64_t stride_float_readback = 0;
+      uint64_t stride_int_readback = 0;
+      copy_d2h(&stride_combined_readback, runtime_adstack_stride_field_ptr_, sizeof(uint64_t));
+      if (runtime_adstack_stride_float_field_ptr_ != nullptr) {
+        copy_d2h(&stride_float_readback, runtime_adstack_stride_float_field_ptr_, sizeof(uint64_t));
+      }
+      if (runtime_adstack_stride_int_field_ptr_ != nullptr) {
+        copy_d2h(&stride_int_readback, runtime_adstack_stride_int_field_ptr_, sizeof(uint64_t));
+      }
+      stride = static_cast<std::size_t>(stride_combined_readback);
+      stride_float_bytes = static_cast<std::size_t>(stride_float_readback);
+      stride_int_bytes = static_cast<std::size_t>(stride_int_readback);
+
+      // Record the cache entry so the next launch on this kernel can skip the sizer pipeline. We also
+      // need to read back the offsets / max_sizes arrays the sizer wrote to the device buffers - the
+      // cache hit path above republishes them, so we must store host copies here. n_stacks is small
+      // (a few dozen at most for any reasonable kernel) so the extra DtoH cost is negligible
+      // compared to the dispatch + sizer-kernel launch we are about to amortise away.
+      if (prog != nullptr) {
+        std::vector<uint64_t> offsets_readback(n_stacks);
+        std::vector<uint64_t> max_sizes_readback(n_stacks);
+        copy_d2h(offsets_readback.data(), offsets_dev_ptr, n_stacks * sizeof(uint64_t));
+        copy_d2h(max_sizes_readback.data(), max_sizes_dev_ptr, n_stacks * sizeof(uint64_t));
+        // Walk size_exprs structurally to gather the dependency keys (snode_ids referenced via
+        // FieldLoad, arg_ids referenced via ExternalTensorShape / ExternalTensorRead). Pure tree
+        // inspection - no live value reads, no nested kernel launches. Mirrors the SPIR-V analogue.
+        std::unordered_set<int> snode_ids;
+        std::unordered_set<int> arg_ids;
+        for (const auto &expr : ad_stack.size_exprs) {
+          for (const auto &node : expr.nodes) {
+            switch (static_cast<SizeExpr::Kind>(node.kind)) {
+              case SizeExpr::Kind::FieldLoad:
+                if (node.snode_id >= 0)
+                  snode_ids.insert(node.snode_id);
+                break;
+              case SizeExpr::Kind::ExternalTensorShape:
+              case SizeExpr::Kind::ExternalTensorRead:
+                if (!node.arg_id_path.empty())
+                  arg_ids.insert(node.arg_id_path.front());
+                break;
+              default:
+                break;
+            }
+          }
+        }
+        std::vector<std::pair<int, uint64_t>> snode_gens;
+        snode_gens.reserve(snode_ids.size());
+        for (int snode_id : snode_ids) {
+          snode_gens.emplace_back(snode_id, prog->adstack_cache().snode_write_gen(snode_id));
+        }
+        std::vector<std::tuple<int, void *, uint64_t>> arg_gens;
+        arg_gens.reserve(arg_ids.size());
+        for (int arg_id : arg_ids) {
+          ArgArrayPtrKey data_key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+          auto ap_it = ctx->array_ptrs.find(data_key);
+          void *devalloc = (ap_it == ctx->array_ptrs.end()) ? nullptr : ap_it->second;
+          arg_gens.emplace_back(arg_id, devalloc, prog->adstack_cache().ndarray_data_gen(devalloc));
+        }
+        prog->adstack_cache().record_llvm_per_task_ad_stack(
+            static_cast<const void *>(&ad_stack), std::move(offsets_readback), std::move(max_sizes_readback),
+            stride_combined_readback, stride_float_readback, stride_int_readback, std::move(snode_gens),
+            std::move(arg_gens));
+      }
+    }  // end if (!llvm_metadata_cache_hit)
   }
 
   // Legacy combined heap: not allocated. The unconditional-split codegen reads `heap_float` for f32 allocas and
@@ -1108,6 +1225,7 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     }
     ensure_adstack_heap_float(float_bytes);
   }
+  last_published_stride_float_bytes_ = stride_float_bytes;
   return needed_bytes;
 }
 

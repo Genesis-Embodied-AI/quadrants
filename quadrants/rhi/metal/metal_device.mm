@@ -1067,18 +1067,26 @@ MTLCommandBuffer_id MetalCommandList::finalize() {
 }
 
 MetalStream::MetalStream(const MetalDevice &device,
-                         MTLCommandQueue_id mtl_command_queue)
-    : device_(&device), mtl_command_queue_(mtl_command_queue) {}
+                         MTLCommandQueue_id mtl_command_queue, bool owns_queue)
+    : device_(&device), mtl_command_queue_(mtl_command_queue),
+      owns_queue_(owns_queue) {}
 MetalStream::~MetalStream() { destroy(); }
 
 MetalStream *MetalStream::create(const MetalDevice &device) {
   MTLCommandQueue_id compute_queue = [device.mtl_device() newCommandQueue];
-  return new MetalStream(device, compute_queue);
+  return new MetalStream(device, compute_queue, /*owns_queue=*/true);
+}
+MetalStream *
+MetalStream::create_with_external_queue(const MetalDevice &device,
+                                        MTLCommandQueue_id external_queue) {
+  return new MetalStream(device, external_queue, /*owns_queue=*/false);
 }
 void MetalStream::destroy() {
   if (!is_destroyed_) {
     command_sync();
-    [mtl_command_queue_ release];
+    if (owns_queue_) {
+      [mtl_command_queue_ release];
+    }
     is_destroyed_ = true;
   }
 }
@@ -1263,8 +1271,15 @@ void MetalSurface::resize(uint32_t width, uint32_t height) {
   layer_.drawableSize = CGSizeMake(width_, height_);
 }
 
-MetalDevice::MetalDevice(MTLDevice_id mtl_device) : mtl_device_(mtl_device) {
-  compute_stream_ = std::unique_ptr<MetalStream>(MetalStream::create(*this));
+MetalDevice::MetalDevice(MTLDevice_id mtl_device,
+                         MTLCommandQueue_id external_command_queue)
+    : mtl_device_(mtl_device) {
+  if (external_command_queue != nil) {
+    compute_stream_ = std::unique_ptr<MetalStream>(
+        MetalStream::create_with_external_queue(*this, external_command_queue));
+  } else {
+    compute_stream_ = std::unique_ptr<MetalStream>(MetalStream::create(*this));
+  }
 
   default_sampler_ = create_sampler(mtl_device);
 
@@ -1275,8 +1290,13 @@ MetalDevice::~MetalDevice() { destroy(); }
 
 MetalDevice *MetalDevice::create() {
   MTLDevice_id mtl_device = MTLCreateSystemDefaultDevice();
-
   return new MetalDevice(mtl_device);
+}
+MetalDevice *
+MetalDevice::create_with_external_queue(uint64_t external_queue_ptr) {
+  MTLDevice_id mtl_device = MTLCreateSystemDefaultDevice();
+  auto *queue = reinterpret_cast<MTLCommandQueue_id>(external_queue_ptr);
+  return new MetalDevice(mtl_device, queue);
 }
 void MetalDevice::destroy() {
   if (!is_destroyed_) {

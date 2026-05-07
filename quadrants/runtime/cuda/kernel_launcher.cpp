@@ -5,6 +5,8 @@
 #include "quadrants/rhi/cuda/cuda_context.h"
 #include "quadrants/rhi/cuda/cuda_driver.h"
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
+#include "quadrants/program/program.h"
 
 #include <vector>
 
@@ -407,6 +409,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     CUDADriver::get_instance().memcpy_host_to_device_async(device_context_ptr, &ctx.get_context(),
                                                            sizeof(RuntimeContext), active_stream);
   }
+
+  // Adstack-cache invalidation bump - see `bump_writes_for_kernel_llvm` in `program/adstack_size_expr_eval.{h,cpp}`.
+  bump_writes_for_kernel_llvm(executor->get_program(), &ctx, offloaded_tasks);
 
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
