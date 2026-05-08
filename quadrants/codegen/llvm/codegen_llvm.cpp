@@ -1994,10 +1994,18 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
     current_task->ad_stack.allocas = ad_stack_allocas_info_;
     current_task->ad_stack.size_exprs = ad_stack_size_exprs_;
     current_task->ad_stack.bound_expr = ad_stack_static_bound_expr_;
-    // recognize `MaxOverRange` nodes that the runtime can reduce in parallel via the dedicated max-reducer dispatch
-    // instead of letting the per-thread sizer enumerate. Indexing matches `ad_stack_size_exprs_` (same iteration order
-    // as the pre-scan above).
-    current_task->ad_stack.max_reducer_specs = recognize_adstack_max_reducer_specs(ad_stack_size_exprs_);
+    // Recognize `MaxOverRange` nodes the runtime can reduce in parallel via the dedicated max-reducer dispatch instead
+    // of letting the per-thread sizer enumerate. Indexing matches `ad_stack_size_exprs_` (same iteration order as the
+    // pre-scan above). Skip on CPU: `runtime_eval_adstack_max_reduce_serial` walks single-threaded just like the host
+    // evaluator's `MaxOverRange` loop in `program/adstack/eval.cpp`, so the dispatch's per-launch setup overhead
+    // (params blob encode, body bytecode encode, observation bookkeeping, JIT call) is pure cost without compute
+    // parallelism to offset it - measured ~28 % wallclock regression on the rigid-step CPU bench. The host evaluator
+    // handles every iteration count up to its own cap (raised to UINT32_MAX on CPU in `eval.cpp`) so above-cap shapes
+    // still resolve correctly. On CUDA / AMDGPU the parallel reducer is the whole point of the dispatch and the
+    // recognizer stays active.
+    if (!arch_is_cpu(compile_config.arch)) {
+      current_task->ad_stack.max_reducer_specs = recognize_adstack_max_reducer_specs(ad_stack_size_exprs_);
+    }
     // Snodes the task body mutates. Persisted on `OffloadedTask::snode_writes` so the LLVM
     // launcher can invalidate the per-task adstack metadata cache when a kernel that runs in
     // between mutated a SNode an enclosing `size_expr::FieldLoad` reads. Mirrors the SPIR-V
