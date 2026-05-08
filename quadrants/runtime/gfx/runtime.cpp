@@ -541,9 +541,17 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   }
 
   // Max-reducer dispatch. Must precede `publish_adstack_metadata_spirv` so the per-spec substitution lands before the
-  // sizer's tree walk. Implementation lives in `runtime/gfx/adstack_max_reducer_launch.cpp`; that file early- returns
-  // an empty map on kernels with no captured specs so the call below is cheap in the common case.
-  const auto max_reducer_results = dispatch_max_reducers(host_ctx, args_buffer.get(), any_arrays, task_attribs);
+  // sizer's tree walk. Gated on whether any task in this kernel has captured specs so forward-only and reverse-mode-
+  // without-recognized-MaxOverRange kernels skip the call entirely and pay zero per-launch overhead. Mirrors the
+  // `any_lazy_task` gate below on `dispatch_adstack_bound_reducers`; implementation lives in
+  // `runtime/gfx/adstack_max_reducer_launch.cpp`.
+  const bool any_max_reducer_task =
+      std::any_of(task_attribs.begin(), task_attribs.end(),
+                  [](const spirv::TaskAttributes &t) { return !t.ad_stack.max_reducer_specs.empty(); });
+  quadrants::lang::MaxReducerResultMap max_reducer_results;
+  if (any_max_reducer_task) {
+    max_reducer_results = dispatch_max_reducers(host_ctx, args_buffer.get(), any_arrays, task_attribs);
+  }
 
   // Device-side adstack SizeExpr evaluation: every task with adstack allocas has its per-alloca `max_size` /
   // `offset` metadata resolved by a dedicated compute shader (see `quadrants/runtime/gfx/adstack_sizer_launch.cpp`
