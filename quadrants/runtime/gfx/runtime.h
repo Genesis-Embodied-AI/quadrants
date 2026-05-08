@@ -11,6 +11,7 @@
 #include "quadrants/struct/snode_tree.h"
 #include "quadrants/program/snode_expr_utils.h"
 #include "quadrants/program/program_impl.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/kernel_launcher.h"
 
 namespace quadrants::lang {
@@ -160,7 +161,8 @@ class QD_DLL_EXPORT GfxRuntime {
       DeviceAllocationGuard *args_buffer,
       const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
       const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
-      const std::string &kernel_name);
+      const std::string &kernel_name,
+      const quadrants::lang::MaxReducerResultMap &max_reducer_results = quadrants::lang::MaxReducerResultMap{});
 
   // Static-IR-bound sparse-adstack-heap reducer dispatch. For each task with a captured ndarray-backed `bound_expr`,
   // dispatches the generic reducer compute shader (see `quadrants/codegen/spirv/adstack_bound_reducer_shader.{h,cpp}`)
@@ -173,6 +175,20 @@ class QD_DLL_EXPORT GfxRuntime {
   std::unordered_map<int, uint32_t> dispatch_adstack_bound_reducers(
       LaunchContextBuilder &host_ctx,
       DeviceAllocationGuard *args_buffer,
+      const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs);
+
+  // Max-reducer dispatch. For each captured `StaticAdStackMaxReducerSpec` across every task in `task_attribs`, hits
+  // `AdStackCache::try_max_reducer_cache_hit` first; on miss dispatches `adstack_max_reducer_pipeline_` over `[0,
+  // length)` and atomic-SMaxes the body's per-thread result into the shared output buffer. The returned map is keyed by
+  // `(registry_id, stack_id, mor_node_idx)` packed via the same `AdStackCache` encoding so
+  // `substitute_precomputed_max_over_range` can substitute results into per-stack `SerializedSizeExpr` trees before the
+  // per-thread sizer or device sizer encoder walks them. Empty map on capability-missing devices or kernels with no
+  // captured specs (caller falls through to the existing capped path). Implementation lives in
+  // `runtime/gfx/adstack_max_reducer_launch.cpp`.
+  quadrants::lang::MaxReducerResultMap dispatch_max_reducers(
+      LaunchContextBuilder &host_ctx,
+      DeviceAllocationGuard *args_buffer,
+      const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
       const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs);
 
   void init_nonroot_buffers();
@@ -269,6 +285,23 @@ class QD_DLL_EXPORT GfxRuntime {
   // a non-null binding for the descriptor layout, but reusing the params buffer would alias slot 2 and get rejected on
   // Metal / MoltenVK by the same RHI rule the slot-3 placeholder above guards against.
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_args_placeholder_buffer_;
+
+  // Max-reducer per-`GfxRuntime` plumbing. Built once on the first launch that contains a task with non-empty
+  // `max_reducer_specs`, reused across every such launch afterwards. Null on backends without
+  // `spirv_has_physical_storage_buffer + spirv_has_int64`; in that case the runtime falls back to the existing capped
+  // path on the per-thread sizer eval (silent truncation at `1<<24` on the device sizer side; user-visible bug surfaces
+  // only with `QD_DEBUG_ADSTACK=1`). The grow-on-demand buffers below hold per-spec params blobs (binding 2), the body
+  // bytecode payload (binding 3), and the per-spec output i64 slots (binding 1). Slot 0 is the kernel arg buffer.
+  std::unique_ptr<Pipeline> adstack_max_reducer_pipeline_{nullptr};
+  std::unique_ptr<DeviceAllocationGuard> adstack_max_reducer_params_buffer_;
+  size_t adstack_max_reducer_params_buffer_size_{0};
+  std::unique_ptr<DeviceAllocationGuard> adstack_max_reducer_bytecode_buffer_;
+  size_t adstack_max_reducer_bytecode_buffer_size_{0};
+  std::unique_ptr<DeviceAllocationGuard> adstack_max_reducer_output_buffer_;
+  size_t adstack_max_reducer_output_buffer_size_{0};
+  // Slot-0 placeholder buffer for kernels with no kernel arg buffer (SNode-only kernels with `args_buffer == null`).
+  // Same RHI rule as the bound-reducer's slot-0 placeholder: descriptor-set layouts require a non-null binding.
+  std::unique_ptr<DeviceAllocationGuard> adstack_max_reducer_args_placeholder_buffer_;
 
   // Per-kernel `BufferType::AdStackBoundRowCapacity` (`uint[num_tasks_in_kernel]`). Populated by the host after the
   // bound-reducer dispatch with each task's exact reducer count (UINT32_MAX for tasks without a captured captured

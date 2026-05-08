@@ -69,6 +69,15 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // the cleared counter and UINT32_MAX-defaulted capacity arrays.
     executor->publish_adstack_lazy_claim_buffers(offloaded_tasks.size());
   }
+  // Max-reducer dispatch. Mirrors the CUDA launcher; results land in `current_max_reducer_results_` for
+  // `publish_adstack_metadata` to substitute into per-stack `SerializedSizeExpr` trees. Gated on whether any task has
+  // captured specs so forward-only and reverse-mode-without-recognized-MaxOverRange kernels pay no per-launch overhead.
+  const bool any_max_reducer_task =
+      std::any_of(offloaded_tasks.begin(), offloaded_tasks.end(),
+                  [](const OffloadedTask &t) { return !t.ad_stack.max_reducer_specs.empty(); });
+  if (any_max_reducer_task) {
+    executor->dispatch_max_reducers_for_tasks(offloaded_tasks, &ctx, context_pointer);
+  }
   std::size_t task_index = 0;
   for (const auto &task : offloaded_tasks) {
     int effective_grid_dim = task.grid_dim;
