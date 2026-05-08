@@ -1158,6 +1158,9 @@ def test_subgroup_all_true(log2_size):
     mixed[3] = 0
     run_and_check("zero-at-3", mixed)
     run_and_check("sparse-zeros", [(0 if (i % 7 == 0) else 1) for i in range(N)])
+    # Non-binary truthy values: locks the `predicate != 0` cast.  Values include 0,
+    # positive ints, and negatives -- anything non-zero must count as true.
+    run_and_check("nonbinary-mixed", [((i * 17) % 13) - 6 for i in range(N)])
 
 
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
@@ -1196,6 +1199,9 @@ def test_subgroup_any_true(log2_size):
     one_at[3] = 1
     run_and_check("one-at-3", one_at)
     run_and_check("sparse-ones", [(1 if (i % 7 == 0) else 0) for i in range(N)])
+    # Non-binary truthy values: locks the `predicate != 0` cast.  Same pattern as
+    # `test_subgroup_all_true`; mixes 0, positive, and negative ints.
+    run_and_check("nonbinary-mixed", [((i * 17) % 13) - 6 for i in range(N)])
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
@@ -1243,6 +1249,66 @@ def test_subgroup_all_equal(dtype, log2_size):
         "one-outlier-per-group",
         [(99 if (i % group_size) == (group_size - 1) else 7) for i in range(N)],
     )
+
+
+@pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_all_equal_float_contract(dtype, log2_size):
+    """``all_equal`` on floats uses the backend's native ``==``: ``NaN != NaN`` and
+    ``+0.0 == -0.0``, matching SPIR-V ``OpGroupNonUniformAllEqual``.  Locks both
+    contracts so a future refactor (e.g. swapping in ``__match_all_sync`` on CUDA)
+    can't silently regress to bit-equality."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.all_equal(src[i], log2_size)
+
+    group_size = 1 << log2_size
+
+    def run_and_check(label, src_values, expected_per_group):
+        for i in range(N):
+            src[i] = src_values[i]
+        foo()
+        for g in range(N // group_size):
+            base = g * group_size
+            expected = expected_per_group(g)
+            for k in range(group_size):
+                got = dst[base + k]
+                assert got == expected, (
+                    f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
+                )
+
+    nan = float("nan")
+
+    # +0.0 == -0.0 on the backend, so groups mixing +/- zero are all-equal.  Lane 0 of
+    # each group is +0.0 (group_base is always even for log2_size >= 1), every other
+    # lane in the group compares its value with +0.0 and gets True.
+    run_and_check(
+        "plus_minus_zero",
+        [(-0.0 if (i & 1) else 0.0) for i in range(N)],
+        lambda g: 1,
+    )
+    # NaN != NaN: a group containing any NaN reports 0.  Place NaN at the start of
+    # every group so every group fails.
+    run_and_check(
+        "nan_at_group_start",
+        [(nan if (i % group_size) == 0 else 1.0) for i in range(N)],
+        lambda g: 0,
+    )
+    # NaN at one lane: only the affected group reports 0, the rest are all-1.0 -> 1.
+    one_nan = [1.0] * N
+    one_nan[17] = nan
+    affected_group = 17 // group_size
+    run_and_check("one_nan_at_17", one_nan, lambda g: 0 if g == affected_group else 1)
+    # All NaN: every lane's `value == base` is False (NaN != NaN), so every group is 0.
+    run_and_check("all_nan", [nan] * N, lambda g: 0)
 
 
 @test_utils.test(arch=qd.gpu)
