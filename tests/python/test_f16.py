@@ -239,19 +239,24 @@ def test_fractal_f16():
     paint(0.03)
 
 
-# TODO(): Vulkan support
+def _skip_if_no_f16_atomic_on_spirv():
+    if qd.cfg.arch in (qd.vulkan, qd.metal):
+        caps = qd.lang.impl.get_runtime().prog.get_device_caps()
+        if not caps.get(qd._lib.core.DeviceCapability.spirv_has_atomic_float16):
+            pytest.skip("Device does not support f16 atomics")
+
+
 @pytest.mark.sm70
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_atomic_add_f16():
+    _skip_if_no_f16_atomic_on_spirv()
     f = qd.field(dtype=qd.f16, shape=(2))
 
     @qd.kernel
     def foo():
-        # Parallel sum
         for i in range(1000):
             f[0] += 1.12
 
-        # Serial sum
         for _ in range(1):
             for i in range(1000):
                 f[1] = f[1] + 1.12
@@ -260,19 +265,17 @@ def test_atomic_add_f16():
     assert f[0] == test_utils.approx(f[1], rel=1e-3)
 
 
-# TODO(): Vulkan support
 @pytest.mark.sm70
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_atomic_max_f16():
+    _skip_if_no_f16_atomic_on_spirv()
     f = qd.field(dtype=qd.f16, shape=(2))
 
     @qd.kernel
     def foo():
-        # Parallel max
         for i in range(1000):
             qd.atomic_max(f[0], 1.12 * i)
 
-        # Serial max
         for _ in range(1):
             for i in range(1000):
                 f[1] = qd.max(1.12 * i, f[1])
@@ -281,19 +284,17 @@ def test_atomic_max_f16():
     assert f[0] == test_utils.approx(f[1], rel=1e-3)
 
 
-# TODO(): Vulkan support
 @pytest.mark.sm70
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_atomic_min_f16():
+    _skip_if_no_f16_atomic_on_spirv()
     f = qd.field(dtype=qd.f16, shape=(2))
 
     @qd.kernel
     def foo():
-        # Parallel min
         for i in range(1000):
             qd.atomic_min(f[0], -3.13 * i)
 
-        # Serial min
         for _ in range(1):
             for i in range(1000):
                 f[1] = qd.min(-3.13 * i, f[1])
