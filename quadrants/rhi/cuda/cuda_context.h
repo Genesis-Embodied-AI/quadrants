@@ -32,6 +32,7 @@ class CUDAContext {
   bool debug_;
   bool supports_mem_pool_;
   bool supports_pageable_memory_access_;
+  bool uses_host_page_tables_;
   static thread_local void *stream_;
   std::vector<void *> stream_pool_;
 
@@ -95,6 +96,16 @@ class CUDAContext {
   // copy of `RuntimeContext` before each launch.
   bool supports_pageable_memory_access() const {
     return supports_pageable_memory_access_;
+  }
+
+  // CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS_USES_HOST_PAGE_TABLES (= 100). 1 when the device walks the host's
+  // page tables directly via ATS / HPT (Ampere and newer with HMM-equipped drivers, including Blackwell). 0 on
+  // pre-Ampere HMM, where pageable-memory access goes through the legacy fault-and-migrate path. Used by the
+  // adstack sizer launcher (`runtime/cuda/kernel_launcher.cpp`) to decide whether to stage a device-side copy of
+  // `RuntimeContext` before each launch: when host page tables are walked directly the helpers can dereference
+  // the host pointer through ctx, otherwise the launcher stages a device snapshot.
+  bool uses_host_page_tables() const {
+    return uses_host_page_tables_;
   }
 
   ~CUDAContext();

@@ -103,15 +103,17 @@ void eval_per_task_metadata_on_host(const std::vector<size_t> &adstack_task_indi
                                     const std::vector<spirv::TaskAttributes> &task_attribs,
                                     Program *prog,
                                     LaunchContextBuilder &host_ctx,
-                                    std::vector<PerTaskAdStackRuntime> &per_task_ad_stack) {
+                                    std::vector<PerTaskAdStackRuntime> &per_task_ad_stack,
+                                    const MaxReducerResultMap &max_reducer_results) {
   using HeapKind = spirv::TaskAttributes::AdStackAllocaAttribs::HeapKind;
   // Span the per-task `evaluate_adstack_size_expr` calls below with one shared read cache.
   SizeExprLaunchScope launch_scope;
   for (size_t ti : adstack_task_indices) {
     const auto &allocas = task_attribs[ti].ad_stack.allocas;
+    const uint32_t registry_id = task_attribs[ti].ad_stack.registry_id;
     auto &rt = per_task_ad_stack[ti];
     const size_t n_stacks = allocas.size();
-    rt.metadata.assign(2 + 2 * n_stacks, 0);
+    rt.metadata.assign(3 + 2 * n_stacks, 0);  // trailing slot is the overflow-flag the on-device sizer writes
     uint32_t running_off_f = 0;
     uint32_t running_off_i = 0;
     for (size_t i = 0; i < n_stacks; ++i) {
@@ -122,7 +124,20 @@ void eval_per_task_metadata_on_host(const std::vector<size_t> &adstack_task_indi
         // Match the shader's `max(max_size_compile_time, 1)` lower clamp.
         max_size = std::max<uint32_t>(a.max_size_compile_time, 1u);
       } else {
-        int64_t evaluated = evaluate_adstack_size_expr(a.size_expr, prog, &host_ctx);
+        // Substitute any captured `MaxOverRange` whose result the max-reducer dispatched into a `Const` before the host
+        // evaluator walks the tree. The substituted tree is a stack-local that cannot be used as a stable cache key, so
+        // the substitution branch routes through `evaluate_adstack_size_expr_no_cache`; the empty-results fast path
+        // keeps the live `a.size_expr` reference and the cache stays warm. The non-cache branch's per-launch eval cost
+        // is small (a single tree walk dominated by `ExternalTensorRead` PSB dereferences); the dispatch the
+        // substitution feeds off was the dominant cost in the first place.
+        int64_t evaluated;
+        if (max_reducer_results.empty()) {
+          evaluated = evaluate_adstack_size_expr(a.size_expr, prog, &host_ctx);
+        } else {
+          const SerializedSizeExpr substituted = substitute_precomputed_max_over_range(
+              a.size_expr, registry_id, static_cast<int32_t>(i), max_reducer_results);
+          evaluated = evaluate_adstack_size_expr_no_cache(substituted, prog, &host_ctx);
+        }
         // `evaluate_adstack_size_expr` returns -1 only when `expr.nodes` is empty (handled above) or hits
         // an internal hard error; clamp to the same `max(_, 1)` lower bound the shader applies.
         if (evaluated < 1) {
@@ -156,7 +171,8 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     DeviceAllocationGuard *args_buffer,
     const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
     const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
-    const std::string &kernel_name) {
+    const std::string &kernel_name,
+    const MaxReducerResultMap &max_reducer_results) {
   std::vector<PerTaskAdStackRuntime> per_task_ad_stack(task_attribs.size());
   for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
     per_task_ad_stack[ti].stride_float = task_attribs[ti].ad_stack.per_thread_stride_float_compile_time;
@@ -177,6 +193,16 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
                  "GfxRuntime::launch_kernel: `ProgramImpl::program` back-reference not set; cannot "
                  "encode AdStack SizeExpr bytecode. Ensure GfxProgramImpl passes `program_impl = this` "
                  "into `GfxRuntime::Params`.");
+
+  // Reverse-mode autodiff with adstacks requires Vulkan 1.3 (or Metal at MTLArgumentBuffersTier::Tier2) on this device.
+  // Older drivers cannot run the sizer paths correctly; the per-helper cap gates downstream
+  // (`dispatch_adstack_bound_reducers`, `dispatch_max_reducers`) rely on this single check and skip their own.
+  QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer),
+              "Reverse-mode autodiff with adstacks needs Vulkan 1.3 (or Metal Argument Buffers Tier 2); this "
+              "device does not advertise `spirv_has_physical_storage_buffer`.");
+  QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_int64),
+              "Reverse-mode autodiff with adstacks needs Vulkan 1.3 (or Metal Argument Buffers Tier 2); this "
+              "device does not advertise `spirv_has_int64`.");
 
   // Register each adstack-bearing task with the Program-side identity registry so the host raise site
   // can name the offending kernel + task in its diagnostic message. Idempotent: re-registration of the
@@ -259,7 +285,7 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
   // memory) still need the on-device sizer below.
   if (all_size_exprs_host_resolvable(adstack_task_indices, task_attribs)) {
     eval_per_task_metadata_on_host(adstack_task_indices, task_attribs, program_impl_->program, host_ctx,
-                                   per_task_ad_stack);
+                                   per_task_ad_stack, max_reducer_results);
     return per_task_ad_stack;
   }
 
@@ -365,11 +391,11 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
   SizeExprLaunchScope launch_scope;
   for (size_t k = 0; k < adstack_task_indices.size(); ++k) {
     size_t ti = adstack_task_indices[k];
-    per_task_bytecodes[k] = encode_adstack_size_expr_device_bytecode_for_spirv(task_attribs[ti].ad_stack,
-                                                                               program_impl_->program, &host_ctx);
+    per_task_bytecodes[k] = encode_adstack_size_expr_device_bytecode_for_spirv(
+        task_attribs[ti].ad_stack, program_impl_->program, &host_ctx, max_reducer_results);
     per_task_bytecode_offsets[k] = align_up(total_bytecode_bytes, kDescriptorOffsetAlignment);
     total_bytecode_bytes = per_task_bytecode_offsets[k] + per_task_bytecodes[k].size();
-    per_task_metadata_bytes[k] = (2u + 2u * task_attribs[ti].ad_stack.allocas.size()) * sizeof(uint32_t);
+    per_task_metadata_bytes[k] = (3u + 2u * task_attribs[ti].ad_stack.allocas.size()) * sizeof(uint32_t);
   }
 
   // Grow the shared bytecode scratch buffer if the concatenated blob outgrew it. Amortised doubling so
@@ -522,6 +548,19 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
                 "bytecode_for_spirv` (wrong `kNodeOffArgBufferOffset` or missing `ExternalTensorRead` "
                 "pre-substitution) or in the sizer shader's PSB read path, not a legitimate workload.",
                 rt.stride_float, rt.stride_int, kMaxSaneStridePerThread);
+    // Cap-hit tripwire. The on-device sizer writes 1 into the trailing overflow-flag slot when it observes a
+    // `MaxOverRange` whose iteration count exceeds the `1<<24` cap; the hard error here surfaces the failure at
+    // `qd.sync()` with a clean attribution. Recognized `MaxOverRange` shapes are dispatched in parallel by the
+    // max-reducer and substituted to `Const` before the sizer interpreter sees them, so this path is reachable only for
+    // out-of-grammar shapes; broadening the recognizer grammar moves more shapes onto the loud path automatically.
+    const size_t overflow_word_idx = 2u + 2u * task_attribs[ti].ad_stack.allocas.size();
+    QD_ERROR_IF(overflow_word_idx < rt.metadata.size() && rt.metadata[overflow_word_idx] != 0,
+                "Adstack on-device sizer hit a `MaxOverRange` whose iteration count exceeds the {} cap. The recognized "
+                "grammar's max-reducer dispatch did not capture this shape so the substitution path could not pre-fold "
+                "the `MaxOverRange` to a `Const`. Restructure the source kernel to fit the recognizer grammar (single "
+                "bound variable per body, body limited to `Const` / `ExternalTensorRead(arg, [BoundVariable])` / `Add` "
+                "/ `Sub` / `Mul` / `Max`), or shrink the enclosing reverse-mode loop's iteration count below the cap.",
+                int64_t{1} << 24);
     ctx_buffers_.push_back(std::move(per_task_metadata_allocs[k]));
   }
 

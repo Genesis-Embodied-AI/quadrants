@@ -4,7 +4,9 @@ add_library(llvm_runtime)
 target_sources(llvm_runtime
   PRIVATE
     llvm_runtime_executor.cpp
-    llvm_adstack_lazy_claim.cpp
+    adstack_lazy_claim/bound_eval.cpp
+    adstack_lazy_claim/metadata_publish.cpp
+    adstack_lazy_claim/heap_grow.cpp
     llvm_context.cpp
     snode_tree_buffer_manager.cpp
     kernel_launcher.cpp

@@ -540,13 +540,26 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
                                  ti_kernel->ti_kernel_attribs().ctx_attribs.arr_access);
   }
 
+  // Max-reducer dispatch. Must precede `publish_adstack_metadata_spirv` so the per-spec substitution lands before the
+  // sizer's tree walk. Gated on whether any task in this kernel has captured specs so forward-only and reverse-mode-
+  // without-recognized-MaxOverRange kernels skip the call entirely and pay zero per-launch overhead. Mirrors the
+  // `any_lazy_task` gate below on `dispatch_adstack_bound_reducers`; implementation lives in
+  // `runtime/gfx/adstack_max_reducer_launch.cpp`.
+  const bool any_max_reducer_task =
+      std::any_of(task_attribs.begin(), task_attribs.end(),
+                  [](const spirv::TaskAttributes &t) { return !t.ad_stack.max_reducer_specs.empty(); });
+  quadrants::lang::MaxReducerResultMap max_reducer_results;
+  if (any_max_reducer_task) {
+    max_reducer_results = dispatch_max_reducers(host_ctx, args_buffer.get(), any_arrays, task_attribs);
+  }
+
   // Device-side adstack SizeExpr evaluation: every task with adstack allocas has its per-alloca `max_size` /
   // `offset` metadata resolved by a dedicated compute shader (see `quadrants/runtime/gfx/adstack_sizer_launch.cpp`
   // for the full mechanism). The helper internally early-returns (after seeding the per-task vector with
   // compile-time strides) when no task has adstack allocas, so forward-only kernels pay only the cheap pre-populate
   // pass; the actual sizer dispatch + `wait_idle()` only fires for reverse-mode kernels.
   std::vector<PerTaskAdStackRuntime> per_task_ad_stack = publish_adstack_metadata_spirv(
-      host_ctx, args_buffer.get(), any_arrays, task_attribs, ti_kernel->ti_kernel_attribs().name);
+      host_ctx, args_buffer.get(), any_arrays, task_attribs, ti_kernel->ti_kernel_attribs().name, max_reducer_results);
 
   // Static-IR-bound sparse-adstack-heap reducer dispatch. Gated on whether any task in this kernel has a captured
   // `bound_expr` - the codegen routes such tasks through the lazy LCA-block atomic-rmw row claim that reads

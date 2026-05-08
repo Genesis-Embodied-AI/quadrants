@@ -86,6 +86,18 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // the cleared counter and UINT32_MAX-defaulted capacity arrays.
     executor->publish_adstack_lazy_claim_buffers(offloaded_tasks.size());
   }
+  // Max-reducer dispatch. Runs before the per-task loop so each `publish_adstack_metadata` call sees the result map via
+  // the executor's `current_max_reducer_results_` and can substitute captured `MaxOverRange`s inside its encoder. Gated
+  // on whether any task has captured specs so forward-only and reverse-mode-without-recognized-MaxOverRange kernels pay
+  // zero per-launch overhead (the dispatch otherwise clears the transient map, walks `offloaded_tasks`, and constructs
+  // a `CudaDefaultStreamPinGuard` RAII guard on every kernel launch). Mirrors the `any_lazy_task` gate above on
+  // `publish_adstack_lazy_claim_buffers`.
+  const bool any_max_reducer_task =
+      std::any_of(offloaded_tasks.begin(), offloaded_tasks.end(),
+                  [](const OffloadedTask &t) { return !t.ad_stack.max_reducer_specs.empty(); });
+  if (any_max_reducer_task) {
+    executor->dispatch_max_reducers_for_tasks(offloaded_tasks, &ctx, device_context_ptr);
+  }
 
   // Per-task adstack setup + grid-dim capping. Shared by serial and stream-parallel paths.
   auto prepare_task = [&](std::size_t task_index, const OffloadedTask &task) -> int {
@@ -410,7 +422,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       break;
     }
   }
-  needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().supports_pageable_memory_access();
+  // Gate the HMM-shortcut on whether the device walks host page tables directly (attribute 100). This is a sharper
+  // predicate than `supports_pageable_memory_access` (attribute 88, which is also true on Turing-class HMM where
+  // the legacy fault-and-migrate path is unsafe under multi-process pressure). On Ampere+ the device reads host
+  // memory through host page tables and the staging is redundant; on Turing/Volta we always stage.
+  needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().uses_host_page_tables();
   void *device_context_ptr = nullptr;
   void *ephemeral_context_ptr = nullptr;
   if (needs_sizer_device_ctx) {
