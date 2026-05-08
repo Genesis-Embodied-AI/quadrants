@@ -26,6 +26,7 @@
 #include "quadrants/inc/cuda_kernel_utils.inc.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/ir/static_adstack_bound_reducer_device.h"
+#include "quadrants/ir/static_adstack_max_reducer_device.h"
 #include "quadrants/math/arithmetic.h"
 
 struct RuntimeContext;
@@ -647,6 +648,15 @@ struct LLVMRuntime {
   u32 *adstack_bound_row_capacities = nullptr;
   u64 adstack_bound_row_capacities_capacity = 0;
 
+  // Per-spec output slot for the max reducer. One i64 per captured `StaticAdStackMaxReducerSpec`, written by
+  // `runtime_eval_adstack_max_reduce` during the per-launch dispatch and read by the host launcher to substitute the
+  // value as a `Const` into the per-stack `SerializedSizeExpr` tree before any LLVM eval path walks it. Sized / grown
+  // by the LlvmRuntimeExecutor lazy-allocate path on the first launch that has captured specs; cleared to INT64_MIN
+  // before each dispatch so the running-max sentinel is well-defined when `length == 0` (returns INT64_MIN; the caller
+  // floors at 0 + clamps to compile-time).
+  i64 *adstack_max_reducer_outputs = nullptr;
+  u64 adstack_max_reducer_outputs_capacity = 0;
+
   Ptr result_buffer;
   i32 allocator_lock;
 
@@ -693,6 +703,7 @@ STRUCT_FIELD(LLVMRuntime, adstack_offsets);
 STRUCT_FIELD(LLVMRuntime, adstack_max_sizes);
 STRUCT_FIELD(LLVMRuntime, adstack_row_counters);
 STRUCT_FIELD(LLVMRuntime, adstack_bound_row_capacities);
+STRUCT_FIELD(LLVMRuntime, adstack_max_reducer_outputs);
 STRUCT_FIELD(LLVMRuntime, adstack_overflow_flag_dev_ptr);
 STRUCT_FIELD(LLVMRuntime, adstack_overflow_task_id_dev_ptr);
 
@@ -840,6 +851,14 @@ void runtime_get_adstack_lazy_claim_field_ptrs(LLVMRuntime *runtime) {
   runtime->set_result(quadrants_result_buffer_ret_value_id + 1, (u64)(void *)&runtime->adstack_bound_row_capacities);
 }
 
+// Companion to `runtime_get_adstack_lazy_claim_field_ptrs` for the max-reducer outputs. The output buffer is
+// per-launch-allocated host-side and the field-address is cached once so the per-launch publish only writes the new
+// array pointer (when the buffer grows) and the read-back per-spec slot reads through the runtime's stable address.
+// Single field, single result slot.
+void runtime_get_adstack_max_reducer_field_ptr(LLVMRuntime *runtime) {
+  runtime->set_result(quadrants_result_buffer_ret_value_id, (u64)(void *)&runtime->adstack_max_reducer_outputs);
+}
+
 // Device-resident adstack SizeExpr interpreter. Runs on whatever backend the LLVM runtime JIT-compiles this
 // bitcode to: a plain C function call on CPU, a single-thread kernel launch on CUDA / AMDGPU. The bytecode buffer
 // layout is defined by `quadrants/ir/adstack_size_expr_device.h` and produced host-side by
@@ -905,7 +924,8 @@ i64 device_load_element(const char *data_ptr, i64 linear, i32 prim_dt) {
   }
 }
 
-i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
+i64 device_eval_node(LLVMRuntime *runtime,
+                     const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
                      const i32 *indices,
                      i32 node_idx,
                      DeviceEvalScope *scope,
@@ -916,42 +936,43 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
     case K::kConst:
       return node.const_value;
     case K::kAdd:
-      return device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer) +
-             device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
+      return device_eval_node(runtime, nodes, indices, node.operand_a, scope, arg_buffer) +
+             device_eval_node(runtime, nodes, indices, node.operand_b, scope, arg_buffer);
     case K::kSub: {
-      // Match the host evaluator: clamp negative trip counts to zero so an underflowed `end - begin` doesn't
-      // poison a surrounding `Mul` / `MaxOverRange` product.
-      i64 lhs = device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer);
-      i64 rhs = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
+      // Match the host evaluator: clamp negative trip counts to zero so an underflowed `end - begin` doesn't poison a
+      // surrounding `Mul` / `MaxOverRange` product.
+      i64 lhs = device_eval_node(runtime, nodes, indices, node.operand_a, scope, arg_buffer);
+      i64 rhs = device_eval_node(runtime, nodes, indices, node.operand_b, scope, arg_buffer);
       i64 diff = lhs - rhs;
       return diff > 0 ? diff : 0;
     }
     case K::kMul:
-      return device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer) *
-             device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
+      return device_eval_node(runtime, nodes, indices, node.operand_a, scope, arg_buffer) *
+             device_eval_node(runtime, nodes, indices, node.operand_b, scope, arg_buffer);
     case K::kMax: {
-      i64 lhs = device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer);
-      i64 rhs = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
+      i64 lhs = device_eval_node(runtime, nodes, indices, node.operand_a, scope, arg_buffer);
+      i64 rhs = device_eval_node(runtime, nodes, indices, node.operand_b, scope, arg_buffer);
       return lhs > rhs ? lhs : rhs;
     }
     case K::kMaxOverRange: {
-      i64 begin = device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer);
-      i64 end = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
-      // Mirror of the host evaluator's iteration guard (see `adstack_size_expr_eval.cpp::evaluate_node`).
-      // A range of several million would stall the sizer launch for seconds; anything that wide is almost
-      // certainly a pre-pass bug. Hard-stop via quadrants_assert so the failure surfaces at qd.sync() with
-      // a clear adstack-sizer attribution rather than a mysterious launch hang.
+      i64 begin = device_eval_node(runtime, nodes, indices, node.operand_a, scope, arg_buffer);
+      i64 end = device_eval_node(runtime, nodes, indices, node.operand_b, scope, arg_buffer);
+      // Iteration guard. Recognized `MaxOverRange` shapes are dispatched in parallel by the max-reducer and substituted
+      // to a `Const` before the sizer interpreter walks the tree, so the only way to land in this branch with a delta
+      // above the cap is an out-of-grammar shape. Skip the walk and return 0 to keep the single-thread on-device
+      // dispatch within the driver's TDR window; the host's `evaluate_node` re-runs the same tree synchronously during
+      // the diagnose path and raises via its `QD_ERROR_IF` then.
       constexpr i64 kMaxOverRangeIterations = i64{1} << 24;
+      if (end > begin && end - begin > kMaxOverRangeIterations) {
+        return 0;
+      }
       i64 result = 0;
       const i32 var = node.var_id;
       for (i64 i = begin; i < end; ++i) {
-        if (i - begin > kMaxOverRangeIterations) {
-          break;  // see host evaluator's note; a sibling assertion in the host path will have fired first.
-        }
         if (var >= 0 && var < kDeviceBoundVarCap) {
           scope->values[var] = i;
         }
-        i64 v = device_eval_node(nodes, indices, node.body_node_idx, scope, arg_buffer);
+        i64 v = device_eval_node(runtime, nodes, indices, node.body_node_idx, scope, arg_buffer);
         if (v > result)
           result = v;
       }
@@ -964,17 +985,17 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
       return 0;
     }
     case K::kExternalTensorRead: {
-      // `data_ptr_slot = *(void **)(arg_buffer + arg_buffer_offset)`: read the ndarray's data pointer out of the
-      // kernel arg buffer at the offset the host encoder precomputed via `args_type->get_element_offset`. This
-      // replaces the host evaluator's `ctx->array_ptrs` map lookup with a straight field read that the device
-      // can perform without reaching for a std::unordered_map.
+      // `data_ptr_slot = *(void **)(arg_buffer + arg_buffer_offset)`: read the ndarray's data pointer out of the kernel
+      // arg buffer at the offset the host encoder precomputed via `args_type->get_element_offset`. This replaces the
+      // host evaluator's `ctx->array_ptrs` map lookup with a straight field read that the device can perform without
+      // reaching for a std::unordered_map.
       auto data_ptr_raw = *reinterpret_cast<const char *const *>(arg_buffer + node.arg_buffer_offset);
-      // Indices encoded as `[idx_a_raw, elem_stride_a]` pairs per axis, matching `kFieldLoad`'s layout. The
-      // host encoder in `adstack_size_expr_eval.cpp` pre-computes the C-order element strides from the
-      // launch context's ndarray shape; a 1-D read collapses to `elem_stride = 1` and recovers the original
-      // stride-1 sum. The multi-axis case is what this fix unblocks: without the per-axis multiply a 2-D
-      // `a[i, j]` read would land on `a_flat[i + j]` instead of `a_flat[i * shape[1] + j]`, silently
-      // under-bounding the sizer and tripping `Adstack overflow` at `qd.sync()`.
+      // Indices encoded as `[idx_a_raw, elem_stride_a]` pairs per axis, matching `kFieldLoad`'s layout. The host
+      // encoder in `adstack_size_expr_eval.cpp` pre-computes the C-order element strides from the launch context's
+      // ndarray shape; a 1-D read collapses to `elem_stride = 1` and recovers the original stride-1 sum. The multi-axis
+      // case is what this fix unblocks: without the per-axis multiply a 2-D `a[i, j]` read would land on
+      // `a_flat[i + j]` instead of `a_flat[i * shape[1] + j]`, under-bounding the sizer and tripping `Adstack overflow`
+      // at `qd.sync()`.
       i64 linear = 0;
       for (i32 k = 0; k < node.indices_count; ++k) {
         const i32 raw = indices[node.indices_offset + 2 * k];
@@ -991,13 +1012,37 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
       }
       return device_load_element(data_ptr_raw, linear, node.prim_dt);
     }
-    case K::kFieldLoad:
-      // The LLVM encoder always host-folds `FieldLoad` leaves (via `SNodeRwAccessorsBank`) before emitting
-      // device bytecode, so the interpreter never sees `kFieldLoad`. It is reserved for the SPIR-V sizer
-      // shader's PSB read path. Return zero rather than asserting (this runtime-module compiles to LLVM
-      // bitcode with no host-assert facility) so a mis-emitted tree surfaces downstream as a wrong-`max_size`
-      // adstack overflow at `qd.sync()` rather than silently UB here.
-      return 0;
+    case K::kFieldLoad: {
+      // Bound-var-indexed `kFieldLoad` body leaf: the encoder stores `arg_buffer_offset = snode_root_id` and
+      // `const_value = place_byte_offset_in_root` (i.e. the byte offset of the place leaf within its containing snode
+      // tree). The base pointer is `runtime->roots[snode_root_id]`, which lives on every LLVM backend (CPU host pointer
+      // / CUDA / AMDGPU device pointer set up at materialization time). The closed-FieldLoad path host-folds at encode
+      // time and never reaches this arm; a `snode_root_id < 0` here means the bytecode came from a SPIR-V encoder
+      // (which stores `root_psb + place_byte_offset` directly in `const_value` and leaves `arg_buffer_offset = -1`),
+      // not the LLVM path; we cannot resolve it here so return 0 (safe over-approximation - a sentinel max forces the
+      // host to fall back to capped sizer eval downstream).
+      const i32 snode_root_id = node.arg_buffer_offset;
+      if (snode_root_id < 0 || runtime == nullptr) {
+        return 0;
+      }
+      const auto root_ptr = reinterpret_cast<const char *>(runtime->roots[snode_root_id]);
+      const i64 place_byte_off = node.const_value;
+      i64 elem_idx = 0;
+      for (i32 k = 0; k < node.indices_count; ++k) {
+        const i32 raw = indices[node.indices_offset + 2 * k];
+        const i32 elem_stride = indices[node.indices_offset + 2 * k + 1];
+        i64 v = 0;
+        if (raw >= 0) {
+          v = raw;
+        } else {
+          const i32 var = -(raw + 1);
+          if (var >= 0 && var < kDeviceBoundVarCap)
+            v = scope->values[var];
+        }
+        elem_idx += v * static_cast<i64>(elem_stride);
+      }
+      return device_load_element(root_ptr + place_byte_off, elem_idx, node.prim_dt);
+    }
   }
   return 0;
 }
@@ -1169,6 +1214,76 @@ void runtime_eval_static_bound_count(LLVMRuntime *runtime, RuntimeContext *ctx, 
   runtime->adstack_bound_row_capacities[params->task_index] = count;
 }
 
+// per-launch per-launch parallel-max evaluator over the body of a captured `StaticAdStackMaxReducerSpec`'s
+// `MaxOverRange` node. Single-thread serial walk on every backend (CPU host thread, CUDA / AMDGPU single-thread
+// JIT-launched device function), mirroring `runtime_eval_static_bound_count`. The body bytecode reuses the existing
+// `AdStackSizeExprDeviceNode` POD format already shared between the host encoder and the LLVM device sizer interpreter
+// (`device_eval_node`); The recognizer grammar restricts body kinds to `kConst / kBoundVariable / kExternalTensorRead /
+// kAdd / kSub / kMul / kMax`, so the recursive walk never recurses through `kMaxOverRange` or `kFieldLoad` and the
+// iteration stays linear in the cross-product of every captured axis.
+//
+// Multi-axis: walks the cross-product of `params->per_axis_length[0..num_axes)` outermost-first. Per-iteration the
+// runtime pre-populates `scope.values[per_axis_var_id[a]] = per_axis_begin[a] + axis_idx_a` for every axis, then
+// evaluates `device_eval_node(body_root_idx, &scope, ...)` and updates the running max. Result is written to
+// `runtime->adstack_max_reducer_outputs[output_slot]`. Caller clears the slot before the dispatch so an empty range
+// leaves the sentinel for the host launcher to detect and floor at zero.
+void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr params_blob, Ptr body_bytecode) {
+  using quadrants::lang::AdStackSizeExprDeviceNode;
+  using quadrants::lang::kAdStackMaxReducerMaxAxes;
+  using quadrants::lang::LlvmAdStackMaxReducerDeviceParams;
+
+  const auto *params = reinterpret_cast<const LlvmAdStackMaxReducerDeviceParams *>(params_blob);
+  const auto *nodes = reinterpret_cast<const AdStackSizeExprDeviceNode *>(body_bytecode);
+  const auto *indices = reinterpret_cast<const i32 *>(reinterpret_cast<const char *>(nodes) +
+                                                      sizeof(AdStackSizeExprDeviceNode) * params->body_node_count);
+
+  const char *arg_buffer = ctx->arg_buffer;
+  DeviceEvalScope scope;
+  for (i32 k = 0; k < kDeviceBoundVarCap; ++k) {
+    scope.values[k] = 0;
+  }
+
+  // Sentinel start: INT64_MIN so the first body value always wins over an empty cross-product. Caller normalises the
+  // empty case (writes 0 / floors at compile-time) when reading the slot back.
+  i64 running_max = (i64)0x8000000000000000ll;
+  const i32 root_idx = params->body_root_node_idx;
+  const u32 num_axes = params->num_axes;
+  if (num_axes == 0 || num_axes > (u32)kAdStackMaxReducerMaxAxes) {
+    runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
+    return;
+  }
+  // Compute the total cross-product length up front; bail on a zero-length axis to keep the linear walk's mod / div
+  // decomposition well-defined.
+  u64 total_length = 1;
+  for (u32 a = 0; a < num_axes; ++a) {
+    if (params->per_axis_length[a] == 0u) {
+      runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
+      return;
+    }
+    total_length *= (u64)params->per_axis_length[a];
+  }
+  // Walk a single linear counter `i` over `[0, total_length)` and decompose into per-axis indices outermost-first (axis
+  // 0 is the slowest-varying = highest stride). The host launcher caps `total_length` at u32 max in the dispatch site
+  // so the linear counter fits in u32 and the per-axis math stays in i64.
+  for (u64 i = 0; i < total_length; ++i) {
+    u64 rem = i;
+    for (u32 a = num_axes; a-- > 0;) {
+      const u32 len_a = params->per_axis_length[a];
+      const u64 idx_a = rem % (u64)len_a;
+      rem = rem / (u64)len_a;
+      const i32 var_id = params->per_axis_var_id[a];
+      if (var_id >= 0 && var_id < kDeviceBoundVarCap) {
+        scope.values[var_id] = params->per_axis_begin[a] + (i64)idx_a;
+      }
+    }
+    i64 v = device_eval_node(runtime, nodes, indices, root_idx, &scope, arg_buffer);
+    if (v > running_max) {
+      running_max = v;
+    }
+  }
+  runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
+}
+
 void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr bytecode) {
   // Bytecode layout:
   // [AdStackSizeExprDeviceHeader][stack_headers[n_stacks]][nodes[total_nodes]][indices[total_indices]]. All three
@@ -1217,7 +1332,7 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
       // No symbolic bound captured (offline-cache-hit with `size_exprs` dropped) - use the compile-time bound.
       max_size = sh.max_size_compile_time > 0 ? sh.max_size_compile_time : 1;
     } else {
-      i64 v = device_eval_node(nodes, indices, sh.root_node_idx, &scope, arg_buffer);
+      i64 v = device_eval_node(runtime, nodes, indices, sh.root_node_idx, &scope, arg_buffer);
       // Floor at 1 to match the host evaluator (`evaluate_adstack_size_expr`); a tree that evaluates to 0 or negative
       // leaves one slot reserved so the heap base address is still valid and any spurious push surfaces as an overflow
       // rather than a zero-slice alias. Do NOT clamp upward against `max_size_compile_time`: the compile-time seed is a

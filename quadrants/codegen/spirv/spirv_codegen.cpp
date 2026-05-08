@@ -10,6 +10,7 @@
 #include "quadrants/codegen/codegen_utils.h"
 #include "quadrants/program/program.h"
 #include "quadrants/program/kernel.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/ir.h"
 #include "quadrants/util/line_appender.h"
@@ -202,6 +203,17 @@ TaskCodegen::Result TaskCodegen::run() {
 
   task_attribs_.ad_stack.per_thread_stride_float_compile_time = ad_stack_heap_per_thread_stride_float_;
   task_attribs_.ad_stack.per_thread_stride_int_compile_time = ad_stack_heap_per_thread_stride_int_;
+  // recognize `MaxOverRange` nodes the runtime can reduce in parallel via the dedicated max-reducer dispatch instead of
+  // letting the per-thread sizer enumerate. Indexing matches `task_attribs_.ad_stack.allocas` (each entry's `size_expr`
+  // is the per-stack tree captured above).
+  {
+    std::vector<SerializedSizeExpr> per_stack_size_exprs;
+    per_stack_size_exprs.reserve(task_attribs_.ad_stack.allocas.size());
+    for (const auto &a : task_attribs_.ad_stack.allocas) {
+      per_stack_size_exprs.push_back(a.size_expr);
+    }
+    task_attribs_.ad_stack.max_reducer_specs = recognize_adstack_max_reducer_specs(per_stack_size_exprs);
+  }
 
   // Snodes the task body mutates (any `GlobalStore` or `AtomicOp` whose dest resolves to a
   // `GlobalPtrStmt`). Persisted on `task_attribs_.snode_writes` so the SPIR-V launcher can bump

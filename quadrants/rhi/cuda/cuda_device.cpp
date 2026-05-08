@@ -1,6 +1,8 @@
 #include "quadrants/rhi/cuda/cuda_device.h"
 #include "quadrants/rhi/llvm/device_memory_pool.h"
 
+#include <cstdio>
+
 #include "quadrants/jit/jit_module.h"
 
 namespace quadrants::lang {
@@ -23,7 +25,13 @@ RhiResult CudaDevice::allocate_memory(const AllocParams &params, DeviceAllocatio
   auto &mem_pool = DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
 
   bool managed = params.host_read || params.host_write;
+  fprintf(stderr, "[trace cuda allocate_memory] size=%zu managed=%d host_read=%d host_write=%d export=%d usage=%d\n",
+          params.size, (int)managed, (int)params.host_read, (int)params.host_write, (int)params.export_sharing,
+          (int)params.usage);
+  fflush(stderr);
   void *ptr = mem_pool.allocate(params.size, DeviceMemoryPool::page_size, managed);
+  fprintf(stderr, "[trace cuda allocate_memory]   pool.allocate returned ptr=%p\n", ptr);
+  fflush(stderr);
   if (ptr == nullptr) {
     return RhiResult::out_of_memory;
   }
@@ -34,7 +42,11 @@ RhiResult CudaDevice::allocate_memory(const AllocParams &params, DeviceAllocatio
   info.use_cached = false;
   info.use_preallocated = false;
 
+  fprintf(stderr, "[trace cuda allocate_memory]   memset (cuMemsetD8) ptr=%p size=%zu\n", info.ptr, info.size);
+  fflush(stderr);
   CUDADriver::get_instance().memset((void *)info.ptr, 0, info.size);
+  fprintf(stderr, "[trace cuda allocate_memory]   memset done\n");
+  fflush(stderr);
 
   *out_devalloc = DeviceAllocation{};
   out_devalloc->alloc_id = allocations_.size();
@@ -47,13 +59,20 @@ RhiResult CudaDevice::allocate_memory(const AllocParams &params, DeviceAllocatio
 DeviceAllocation CudaDevice::allocate_memory_runtime(const LlvmRuntimeAllocParams &params) {
   AllocInfo info;
   info.size = quadrants::iroundup(params.size, quadrants_page_size);
+  fprintf(stderr, "[trace cuda allocate_memory_runtime] requested_size=%zu rounded_size=%zu use_memory_pool=%d\n",
+          params.size, info.size, (int)params.use_memory_pool);
+  fflush(stderr);
   if (info.size == 0) {
     info.ptr = nullptr;
   } else if (params.use_memory_pool) {
     CUDADriver::get_instance().malloc_async((void **)&info.ptr, info.size, nullptr);
+    fprintf(stderr, "[trace cuda allocate_memory_runtime]   malloc_async ptr=%p\n", info.ptr);
+    fflush(stderr);
   } else {
     info.ptr =
         DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/).allocate_with_cache(this, params);
+    fprintf(stderr, "[trace cuda allocate_memory_runtime]   allocate_with_cache ptr=%p\n", info.ptr);
+    fflush(stderr);
 
     if (!info.ptr) {
       DeviceAllocation fail_alloc;
@@ -64,8 +83,13 @@ DeviceAllocation CudaDevice::allocate_memory_runtime(const LlvmRuntimeAllocParam
     }
   }
 
-  if (info.ptr)
+  if (info.ptr) {
+    fprintf(stderr, "[trace cuda allocate_memory_runtime]   memset ptr=%p size=%zu\n", info.ptr, info.size);
+    fflush(stderr);
     CUDADriver::get_instance().memset((void *)info.ptr, 0, info.size);
+    fprintf(stderr, "[trace cuda allocate_memory_runtime]   memset done\n");
+    fflush(stderr);
+  }
 
   info.is_imported = false;
   info.use_cached = true;
