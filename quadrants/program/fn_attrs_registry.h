@@ -15,8 +15,7 @@ namespace quadrants::lang {
 // `!F.hasFnAttribute(key)` in the corresponding jit_*.cpp).
 inline const std::unordered_map<std::string, std::unordered_set<std::string>> &
 get_fn_attrs_registry() {
-  static const std::unordered_map<std::string,
-                                  std::unordered_set<std::string>>
+  static const std::unordered_map<std::string, std::unordered_set<std::string>>
       kRegistry = {
           {"amdgpu",
            {

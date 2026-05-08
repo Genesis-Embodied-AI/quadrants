@@ -83,12 +83,8 @@ def test_fn_attrs_changes_fastcache_key():
     info, _ = get_source_info_and_src(k._primal.func)
 
     key_none = src_hasher.create_cache_key(False, info, (), (), None)
-    key_a = src_hasher.create_cache_key(
-        False, info, (), (), {"amdgpu": {"amdgpu-max-num-workgroups": "1,1,1"}}
-    )
-    key_b = src_hasher.create_cache_key(
-        False, info, (), (), {"amdgpu": {"amdgpu-max-num-workgroups": "256,1,1"}}
-    )
+    key_a = src_hasher.create_cache_key(False, info, (), (), {"amdgpu": {"amdgpu-max-num-workgroups": "1,1,1"}})
+    key_b = src_hasher.create_cache_key(False, info, (), (), {"amdgpu": {"amdgpu-max-num-workgroups": "256,1,1"}})
 
     assert key_none is not None and key_a is not None and key_b is not None
     assert key_none != key_a, "fn_attrs=None must hash differently from fn_attrs={...}"
@@ -157,9 +153,7 @@ def test_fn_attrs_reaches_amdgpu_jit_ir(tmp_path: pathlib.Path):
         # actionable instead of opaque.
         debug = []
         for p in ll_files:
-            attr_lines = [
-                ln for ln in p.read_text().splitlines() if ln.startswith("attributes #")
-            ]
+            attr_lines = [ln for ln in p.read_text().splitlines() if ln.startswith("attributes #")]
             debug.append(f"--- {p.name} ---\n" + "\n".join(attr_lines[:20]))
         pytest.fail(
             f"expected 'amdgpu-max-num-workgroups' with value {_FN_ATTRS_MARKER!r} "
@@ -176,4 +170,6 @@ if __name__ == "__main__":
     name, *rest = sys.argv[1:]
     {
         _e2e_child.__name__: _e2e_child,
-    }[name](rest)
+    }[
+        name
+    ](rest)

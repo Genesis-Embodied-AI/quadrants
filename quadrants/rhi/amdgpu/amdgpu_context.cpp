@@ -190,8 +190,7 @@ void AMDGPUContext::launch(void *func,
     bool valid =
         offline_cache::try_demangle_name(task_name, primal_task_name, key);
     profiler_amdgpu->trace(task_handle, valid ? primal_task_name : task_name,
-                           func, grid_dim, block_dim,
-                           dynamic_shared_mem_bytes);
+                           func, grid_dim, block_dim, dynamic_shared_mem_bytes);
   }
 
   auto context_guard = AMDGPUContext::get_instance().get_guard();

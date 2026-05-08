@@ -630,15 +630,16 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
         auto *wave_size = llvm::ConstantInt::get(i32_ty, 64);
         auto *in_wave = builder.CreateICmpULT(src_lane, wave_size);
 
-        auto *addr = builder.CreateShl(
-            src_lane, llvm::ConstantInt::get(i32_ty, 2));
+        auto *addr =
+            builder.CreateShl(src_lane, llvm::ConstantInt::get(i32_ty, 2));
         auto *bpermute_i32 = builder.CreateIntrinsic(
             llvm::Intrinsic::amdgcn_ds_bpermute, {}, {addr, val_i32});
 
         auto *picked = builder.CreateSelect(in_wave, bpermute_i32, val_i32);
 
         if (is_float) {
-          builder.CreateRet(builder.CreateBitCast(picked, builder.getFloatTy()));
+          builder.CreateRet(
+              builder.CreateBitCast(picked, builder.getFloatTy()));
         } else {
           builder.CreateRet(picked);
         }
@@ -681,13 +682,14 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
         auto *src_lane = builder.CreateSub(lane_id, delta_arg);
         // Wave-wide bound: src_lane must be >= 0.
         auto *in_wave = builder.CreateICmpSGE(src_lane, zero);
-        auto *addr = builder.CreateShl(
-            src_lane, llvm::ConstantInt::get(i32_ty, 2));
+        auto *addr =
+            builder.CreateShl(src_lane, llvm::ConstantInt::get(i32_ty, 2));
         auto *bpermute_i32 = builder.CreateIntrinsic(
             llvm::Intrinsic::amdgcn_ds_bpermute, {}, {addr, val_i32});
         auto *picked = builder.CreateSelect(in_wave, bpermute_i32, val_i32);
         if (is_float) {
-          builder.CreateRet(builder.CreateBitCast(picked, builder.getFloatTy()));
+          builder.CreateRet(
+              builder.CreateBitCast(picked, builder.getFloatTy()));
         } else {
           builder.CreateRet(picked);
         }
@@ -725,8 +727,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
         if (is_float) {
           val_i32 = builder.CreateBitCast(val_arg, i32_ty);
         }
-        auto *addr = builder.CreateShl(
-            src_lane_arg, llvm::ConstantInt::get(i32_ty, 2));
+        auto *addr =
+            builder.CreateShl(src_lane_arg, llvm::ConstantInt::get(i32_ty, 2));
         auto *bpermute_i32 = builder.CreateIntrinsic(
             llvm::Intrinsic::amdgcn_ds_bpermute, {}, {addr, val_i32});
         if (is_float) {
@@ -772,8 +774,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
         auto *lane_id = builder.CreateIntrinsic(
             llvm::Intrinsic::amdgcn_mbcnt_hi, {}, {neg_one, mbcnt_lo});
         auto *src_lane = builder.CreateXor(lane_id, delta_arg);
-        auto *addr = builder.CreateShl(
-            src_lane, llvm::ConstantInt::get(i32_ty, 2));
+        auto *addr =
+            builder.CreateShl(src_lane, llvm::ConstantInt::get(i32_ty, 2));
         auto *bpermute_i32 = builder.CreateIntrinsic(
             llvm::Intrinsic::amdgcn_ds_bpermute, {}, {addr, val_i32});
         if (is_float) {
@@ -1142,8 +1144,8 @@ void QuadrantsLLVMContext::mark_function_as_cuda_kernel(llvm::Function *func,
   }
 }
 
-void QuadrantsLLVMContext::mark_function_as_amdgpu_kernel(
-    llvm::Function *func, int block_dim) {
+void QuadrantsLLVMContext::mark_function_as_amdgpu_kernel(llvm::Function *func,
+                                                          int block_dim) {
   func->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
   if (block_dim > 0) {
     // Note: hardcoded wavefront size of 64 matches CDNA3. RDNA in wave32
@@ -1152,8 +1154,8 @@ void QuadrantsLLVMContext::mark_function_as_amdgpu_kernel(
     constexpr int kAmdgpuWavefrontSize = 64;
     int min_block_dim = std::max(block_dim, kAmdgpuWavefrontSize);
     int max_block_dim = std::max(block_dim, kAmdgpuWavefrontSize);
-    std::string size_str = std::to_string(min_block_dim) + "," +
-                           std::to_string(max_block_dim);
+    std::string size_str =
+        std::to_string(min_block_dim) + "," + std::to_string(max_block_dim);
     func->addFnAttr("amdgpu-flat-work-group-size", size_str);
   }
 }

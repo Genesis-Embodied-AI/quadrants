@@ -1,6 +1,5 @@
 import ast
 import inspect
-import math
 import sys
 import textwrap
 import types

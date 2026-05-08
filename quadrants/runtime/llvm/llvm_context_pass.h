@@ -122,10 +122,12 @@ struct AMDGPUConvertAllocaInstAddressSpacePass : public FunctionPass {
 // (scratch), the load/store is left as flat.
 struct AMDGPUFlatToGlobalLoadStorePass : public FunctionPass {
   static inline char ID{0};
-  AMDGPUFlatToGlobalLoadStorePass() : FunctionPass(ID) {}
+  AMDGPUFlatToGlobalLoadStorePass() : FunctionPass(ID) {
+  }
 
-  static bool originatesFromScratch(llvm::Value *ptr,
-                                    llvm::SmallPtrSetImpl<llvm::Value *> &Visited) {
+  static bool originatesFromScratch(
+      llvm::Value *ptr,
+      llvm::SmallPtrSetImpl<llvm::Value *> &Visited) {
     auto *origin = ptr->stripPointerCasts();
     if (!Visited.insert(origin).second)
       return false;  // already on the walk path — break the cycle
@@ -205,13 +207,13 @@ struct AMDGPUFlatToGlobalLoadStorePass : public FunctionPass {
       for (auto *I : to_convert) {
         llvm::IRBuilder<> B(I);
         if (auto *LI = llvm::dyn_cast<llvm::LoadInst>(I)) {
-          auto *cast = B.CreateAddrSpaceCast(LI->getPointerOperand(),
-                                             ptr_global_ty);
+          auto *cast =
+              B.CreateAddrSpaceCast(LI->getPointerOperand(), ptr_global_ty);
           LI->setOperand(LI->getPointerOperandIndex(), cast);
           modified = true;
         } else if (auto *SI = llvm::dyn_cast<llvm::StoreInst>(I)) {
-          auto *cast = B.CreateAddrSpaceCast(SI->getPointerOperand(),
-                                             ptr_global_ty);
+          auto *cast =
+              B.CreateAddrSpaceCast(SI->getPointerOperand(), ptr_global_ty);
           SI->setOperand(SI->getPointerOperandIndex(), cast);
           modified = true;
         }

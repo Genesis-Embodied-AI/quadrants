@@ -29,14 +29,14 @@ RUN uv venv -p ${PY_VERSION} /opt/venv
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# rocm and torch MUST be installed together or torch nightlies will 
+# rocm and torch MUST be installed together or torch nightlies will
 # mess up the rocm version
 RUN uv pip install pip cmake pybind11 build ninja scikit-build-core setuptools-scm numpy pytest && \
     uv pip install --index-url https://repo.amd.com/rocm/whl/${GFX_FAMILY}/ "rocm[libraries,devel]"==${THE_ROCK_VERSION} torch==${TORCH_VERSION} && \
     rocm-sdk init
 
 # Setup SRC
-ENV QUADRANTS_SRC_DIR=/src/quadrants/   
+ENV QUADRANTS_SRC_DIR=/src/quadrants/
 COPY . ${QUADRANTS_SRC_DIR}
 RUN git config --global --add safe.directory ${QUADRANTS_SRC_DIR}
 

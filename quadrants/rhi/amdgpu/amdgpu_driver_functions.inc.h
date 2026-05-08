@@ -69,7 +69,11 @@ PER_AMDGPU_FUNCTION(memcpy_device_to_host_async,
                     std::size_t,
                     void *);
 PER_AMDGPU_FUNCTION(malloc, hipMalloc, void **, std::size_t);
-PER_AMDGPU_FUNCTION(malloc_async_impl, hipMallocAsync, void **, std::size_t, void *);
+PER_AMDGPU_FUNCTION(malloc_async_impl,
+                    hipMallocAsync,
+                    void **,
+                    std::size_t,
+                    void *);
 PER_AMDGPU_FUNCTION(malloc_managed,
                     hipMallocManaged,
                     void **,

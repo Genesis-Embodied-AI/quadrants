@@ -723,7 +723,8 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler,
   }
 
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
-    QD_TRACE("Initializing {} random states using CUDA or AMDGPU", num_rand_states);
+    QD_TRACE("Initializing {} random states using CUDA or AMDGPU",
+             num_rand_states);
     runtime_jit->launch<void *, int>(
         "runtime_initialize_rand_states_cuda", config_.saturating_grid_dim,
         config_.max_block_dim, 0, llvm_runtime_, starting_rand_state);

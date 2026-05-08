@@ -1954,7 +1954,8 @@ void TaskCodeGenLLVM::visit(ExternalPtrStmt *stmt) {
       // Indexing array dimensions
       linear_index = builder->CreateMul(linear_index, sizes[size_var_index++]);
     }
-    auto index = builder->CreateSExtOrBitCast(llvm_val[stmt->indices[i]], i64_ty);
+    auto index =
+        builder->CreateSExtOrBitCast(llvm_val[stmt->indices[i]], i64_ty);
     linear_index = builder->CreateAdd(linear_index, index);
   }
   QD_ASSERT(size_var_index == num_indices - num_element_indices);
@@ -2030,9 +2031,8 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt,
   } else {
     context_param_type = llvm::PointerType::get(context_ty, 0);
   }
-  task_function_type =
-      llvm::FunctionType::get(llvm::Type::getVoidTy(*llvm_context),
-                              {context_param_type}, false);
+  task_function_type = llvm::FunctionType::get(
+      llvm::Type::getVoidTy(*llvm_context), {context_param_type}, false);
 
   auto task_kernel_name = fmt::format(
       "{}_{}_{}{}", kernel_name, task_codegen_id, stmt->task_name(), suffix);

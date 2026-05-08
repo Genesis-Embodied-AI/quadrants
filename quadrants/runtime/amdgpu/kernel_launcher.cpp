@@ -96,7 +96,8 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
 }
 
 void KernelLauncher::launch_offloaded_tasks_with_do_while(
-    LaunchContextBuilder &ctx, Context &launcher_ctx) {
+    LaunchContextBuilder &ctx,
+    Context &launcher_ctx) {
   int32_t counter_val;
   do {
     launch_offloaded_tasks(ctx, launcher_ctx);
@@ -174,9 +175,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         continue;
       if (ctx.device_allocation_type[arg_id] ==
               LaunchContextBuilder::DevAllocType::kNone &&
-          !on_amdgpu_device(
-              ctx.array_ptrs[ArgArrayPtrKey{
-                  arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}])) {
+          !on_amdgpu_device(ctx.array_ptrs[ArgArrayPtrKey{
+              arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}])) {
         needs_result_buffer = true;
         break;
       }
@@ -212,14 +212,14 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
           LaunchContextBuilder::DevAllocType::kNone) {
         if (on_amdgpu_device(data_ptr)) {
           if (branch_counts) {
-            branch_counts->kNone_on_device.fetch_add(
-                1, std::memory_order_relaxed);
+            branch_counts->kNone_on_device.fetch_add(1,
+                                                     std::memory_order_relaxed);
           }
           resolved_dev_ptr = data_ptr;
         } else {
           if (branch_counts) {
-            branch_counts->kNone_host_copy.fetch_add(
-                1, std::memory_order_relaxed);
+            branch_counts->kNone_host_copy.fetch_add(1,
+                                                     std::memory_order_relaxed);
           }
           DeviceAllocation devalloc = executor->allocate_memory_on_device(
               arr_sz, (uint64 *)device_result_buffer);
@@ -228,14 +228,15 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
             transfers = std::make_unique<std::unordered_map<
                 ArgArrayPtrKey, std::pair<void *, DeviceAllocation>,
                 ArgArrayPtrKeyHasher>>();
-            device_ptrs = std::make_unique<std::unordered_map<
-                ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher>>();
+            device_ptrs =
+                std::make_unique<std::unordered_map<ArgArrayPtrKey, void *,
+                                                    ArgArrayPtrKeyHasher>>();
           }
           (*device_ptrs)[data_ptr_idx] = resolved_dev_ptr;
           (*transfers)[data_ptr_idx] = {data_ptr, devalloc};
 
-          AMDGPUDriver::get_instance().memcpy_host_to_device(
-              resolved_dev_ptr, data_ptr, arr_sz);
+          AMDGPUDriver::get_instance().memcpy_host_to_device(resolved_dev_ptr,
+                                                             data_ptr, arr_sz);
         }
         ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_dev_ptr,
                              (uint64)ctx.array_ptrs[grad_ptr_idx]);

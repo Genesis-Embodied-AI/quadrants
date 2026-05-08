@@ -641,8 +641,8 @@ void export_lang(py::module &m) {
       .def("set_fn_attrs",
            [](Kernel *self,
               const std::unordered_map<
-                  std::string,
-                  std::unordered_map<std::string, std::string>> &fn_attrs) {
+                  std::string, std::unordered_map<std::string, std::string>>
+                  &fn_attrs) {
              const auto &registry = get_fn_attrs_registry();
              for (const auto &backend_kv : fn_attrs) {
                const auto reg_it = registry.find(backend_kv.first);

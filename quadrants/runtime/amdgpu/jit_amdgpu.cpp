@@ -50,8 +50,7 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
     std::unique_ptr<llvm::Module> &llvm_module) {
   static std::once_flag amdgpu_cl_flags;
   std::call_once(amdgpu_cl_flags, [] {
-    const char *args[] = {"quadrants",
-                          "-force-vector-interleave=8"};
+    const char *args[] = {"quadrants", "-force-vector-interleave=8"};
     llvm::cl::ParseCommandLineOptions(2, args);
   });
 
@@ -128,10 +127,11 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
       if (CB->getCalledOperand() != &F)
         continue;
       auto *Caller = CB->getFunction();
-      if (Caller && Caller->getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL &&
+      if (Caller &&
+          Caller->getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL &&
           Caller->hasFnAttribute("amdgpu-flat-work-group-size")) {
-        inherited =
-            Caller->getFnAttribute("amdgpu-flat-work-group-size").getValueAsString();
+        inherited = Caller->getFnAttribute("amdgpu-flat-work-group-size")
+                        .getValueAsString();
         break;
       }
     }
