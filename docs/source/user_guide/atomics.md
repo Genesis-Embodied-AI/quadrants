@@ -6,18 +6,22 @@ Atomic read-modify-write operations on a single memory location. They do not syn
 
 All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y)` atomically and returns the **old** value of `x`. `x` must be a writable memory target (a field element, ndarray element, or matrix slot); scalars and constant expressions are not allowed.
 
-| Op             | Semantics                              | i32 | u32 | i64 | u64 | f32 | f64 |
-|----------------|----------------------------------------|-----|-----|-----|-----|-----|-----|
-| `atomic_add`   | `x += y`                               | yes | yes | yes | yes | yes | \*  |
-| `atomic_sub`   | `x -= y`                               | yes | yes | yes | yes | yes | \*  |
-| `atomic_mul`   | `x *= y`                               | yes | yes | yes | yes | yes | \*  |
-| `atomic_min`   | `x = min(x, y)`                        | yes | yes | yes | yes | yes | \*  |
-| `atomic_max`   | `x = max(x, y)`                        | yes | yes | yes | yes | yes | \*  |
-| `atomic_and`   | `x &= y`                               | yes | yes | yes | yes | —   | —   |
-| `atomic_or`    | `x \|= y`                              | yes | yes | yes | yes | —   | —   |
-| `atomic_xor`   | `x ^= y`                               | yes | yes | yes | yes | —   | —   |
+"int" below means any of `i32` / `u32` / `i64` / `u64`. "Floats" means any of `f16` / `f32` / `f64`. Unless otherwise noted, "native" means the op lowers to a single hardware atomic instruction (or its SPIR-V / LLVM-IR equivalent), and "CAS" means a software compare-and-swap loop emitted around a non-atomic compute.
 
-\* `f64` atomic add / sub / mul / min / max is hardware-dependent: supported on CUDA sm_60+ for `add`, falls back to a CAS loop elsewhere or raises at codegen time on older targets and on backends that do not lower a CAS loop. Prefer `f32` on hot paths if portability matters.
+| Op                                          | CUDA                                       | AMDGPU                                | SPIR-V (Vulkan / Metal)                                | CPU                              |
+|---------------------------------------------|--------------------------------------------|---------------------------------------|--------------------------------------------------------|----------------------------------|
+| `atomic_add`                                | int / f32 native; f64 native (sm_60+)      | int / f32 native; f64 hardware-dependent | int native; f16 / f32 / f64 capability-gated, else CAS | int native; floats via CAS       |
+| `atomic_sub`                                | rewritten to `atomic_add(x, -y)` at IR-construction time — see note below | (same) | (same) | (same) |
+| `atomic_mul`                                | CAS on every dtype                         | CAS                                   | CAS                                                    | CAS                              |
+| `atomic_min`, `atomic_max`                  | int native; floats via CAS                 | int native; floats via CAS            | int native; floats via CAS                             | int native; floats via CAS       |
+| `atomic_and`, `atomic_or`, `atomic_xor`     | int only (native)                          | int only (native)                     | int only (native)                                      | int only (native)                |
+
+A few cross-cutting notes that the cells above abbreviate:
+
+- **`atomic_sub` is not a separate op in the IR.** `quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten` rewrites every `atomic_sub(x, y)` into `atomic_add(x, -y)` before codegen sees it, so per-backend support and per-dtype behaviour are exactly those of `atomic_add`.
+- **CAS-loop ops are noticeably slower than native atomics**, especially under contention — every contending thread retries the load + compare-exchange until it wins. Prefer pre-aggregating into a register or shared array and issuing a single atomic at the end of the block where possible.
+- **f16 floats always use a CAS loop** (no native f16 atomic on any backend except SPIR-V with the right capability bit).
+- **SPIR-V capability bits** (`spirv_has_atomic_float_add`, `spirv_has_atomic_float64_add`, `spirv_has_atomic_float16_add`) decide whether `atomic_add` lowers to native `OpAtomicFAddEXT` or a uint-backed CAS — the dispatch happens per-call inside `quadrants/codegen/spirv/spirv_codegen.cpp`.
 
 There is no `atomic_cas` (compare-and-swap) exposed in Python today. The C++ runtime uses CmpXchg internally; surfacing it requires extending `AtomicOpType`.
 
@@ -59,7 +63,7 @@ Bitwise atomics. Integer dtypes only — passing `f32` / `f64` raises a type err
 
 ### `qd.atomic_sub(x, y)` / `qd.atomic_mul(x, y)`
 
-Atomic subtract and atomic multiply. `atomic_sub` is supported natively on most backends; `atomic_mul` on integer types lowers to a CAS loop on hardware without a native multiply atomic and is intentionally not heavily optimised — prefer reducing to a different scheme on hot paths.
+Atomic subtract and atomic multiply. `atomic_sub` is rewritten to `atomic_add(x, -y)` at IR-construction time (`quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten`), so its per-backend behaviour is identical to `atomic_add`. `atomic_mul` always lowers to a CAS loop — no LLVM AtomicRMW or SPIR-V `OpAtomic*` op corresponds to multiply — and is intentionally not heavily optimised; prefer reducing to a different scheme on hot paths.
 
 ## Performance and portability notes
 
