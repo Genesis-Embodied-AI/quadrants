@@ -822,12 +822,14 @@ def test_subgroup_reduce_all_add(dtype, log2_size):
             assert abs(dst[i] - expected) < 1e-4 * abs(expected), f"lane {i}: got {dst[i]}, expected {expected}"
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_add(dtype, log2_size):
-    """Portable Hillis-Steele inclusive prefix sum: lane k of each 2**log2_size group has
-    sum(src[group_base..group_base+k+1])."""
+# Portable Hillis-Steele inclusive scans share the same kernel + Python verification
+# pattern; the only thing that varies is the operator and which dtypes are legal for it.
+# `_check_inclusive_scan` factors out the kernel launch, dtype skip, and per-lane check.
+
+_INT_DTYPES = (qd.i32, qd.i64, qd.u64)
+
+
+def _check_inclusive_scan(scan_func, py_op, dtype, log2_size, src_init):
     _skip_if_f64_unsupported(dtype)
     N = 64
     src = qd.field(dtype=dtype, shape=N)
@@ -837,25 +839,112 @@ def test_subgroup_inclusive_add(dtype, log2_size):
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.inclusive_add(src[i], log2_size)
+            dst[i] = scan_func(src[i], log2_size)
 
-    _init_field(src, N, dtype)
+    src_init(src, N, dtype)
     foo()
 
-    int_dtypes = (qd.i32, qd.i64, qd.u64)
     group_size = 1 << log2_size
     # Verify only the first group's worth of lanes; with 64 launch-threads on a 32-lane
     # subgroup the first 32 cleanly cover one group of size group_size (group_size <= 32).
-    running = 0
+    running = src[0]
     for k in range(group_size):
-        running += src[k]
+        if k > 0:
+            running = py_op(running, src[k])
         got = dst[k]
-        if dtype in int_dtypes:
+        if dtype in _INT_DTYPES:
             assert got == running, f"lane {k}: got {got}, expected {running}"
         else:
             assert abs(got - running) < 1e-4 * max(abs(running), 1.0), (
                 f"lane {k}: got {got}, expected {running}"
             )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_inclusive_add(dtype, log2_size):
+    """Portable inclusive prefix sum: lane k of each 2**log2_size group has
+    sum(src[group_base..group_base+k+1])."""
+    _check_inclusive_scan(subgroup.inclusive_add, lambda a, b: a + b, dtype, log2_size, _init_field)
+
+
+def _init_small_int_or_float(field, n, dtype):
+    """Initialise with values in [1, 4]: small enough that 32-way `*` doesn't overflow
+    i32 (4**5 = 1024)."""
+    for i in range(n):
+        field[i] = (i % 4) + 1
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_inclusive_mul(dtype, log2_size):
+    """Inclusive prefix product.  Inputs are clamped to [1, 4] so the 32-way product fits
+    comfortably in i32 (4**5 == 1024) and f32 (no overflow up to ~10^38)."""
+    _check_inclusive_scan(subgroup.inclusive_mul, lambda a, b: a * b, dtype, log2_size, _init_small_int_or_float)
+
+
+def _init_varied_int_or_float(field, n, dtype):
+    """Mix increasing and decreasing values so prefix-min / prefix-max have non-trivial
+    transitions across the group."""
+    for i in range(n):
+        # 11, 7, 13, 3, 17, 5, 19, ...  -- varied, non-monotonic, non-negative
+        field[i] = ((i * 7 + 11) % 23) + 1
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_inclusive_min(dtype, log2_size):
+    """Inclusive prefix min."""
+    _check_inclusive_scan(
+        subgroup.inclusive_min, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float
+    )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_inclusive_max(dtype, log2_size):
+    """Inclusive prefix max."""
+    _check_inclusive_scan(
+        subgroup.inclusive_max, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float
+    )
+
+
+def _init_bitwise_int(field, n, dtype):
+    """Initialise with bit-varied integer values so prefix &/|/^ have meaningful
+    transitions (bits flip on and off across lanes)."""
+    for i in range(n):
+        field[i] = (i * 5 + 0x37) & 0xFF
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_inclusive_and(dtype, log2_size):
+    """Inclusive prefix bitwise-AND.  Integer dtypes only."""
+    _skip_if_f64_unsupported(dtype)  # also handles 64-bit-int Metal/MoltenVK skips
+    _check_inclusive_scan(subgroup.inclusive_and, lambda a, b: a & b, dtype, log2_size, _init_bitwise_int)
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_inclusive_or(dtype, log2_size):
+    """Inclusive prefix bitwise-OR.  Integer dtypes only."""
+    _skip_if_f64_unsupported(dtype)
+    _check_inclusive_scan(subgroup.inclusive_or, lambda a, b: a | b, dtype, log2_size, _init_bitwise_int)
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_inclusive_xor(dtype, log2_size):
+    """Inclusive prefix bitwise-XOR.  Integer dtypes only."""
+    _skip_if_f64_unsupported(dtype)
+    _check_inclusive_scan(subgroup.inclusive_xor, lambda a, b: a ^ b, dtype, log2_size, _init_bitwise_int)
 
 
 @test_utils.test(arch=qd.gpu)

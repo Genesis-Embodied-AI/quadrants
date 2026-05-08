@@ -56,19 +56,19 @@ All three are TODO stubs in `python/quadrants/lang/simt/subgroup.py` and current
 
 ### Reductions and scans
 
-`reduce_add` and `reduce_all_add` take a `log2_size` parameter. `inclusive_add` does too. The other `inclusive_*` ops are mid-migration: they currently take `(value)` and scan over the full subgroup; they will gain a `log2_size` parameter as portable replacements land. The `exclusive_*` rows are still TODO stubs.
+`reduce_add`, `reduce_all_add`, and all seven `inclusive_*` ops take a `log2_size` parameter. The `exclusive_*` rows are still TODO stubs.
 
 | Op                                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                       |
 |---------------------------------------------|------|--------|-------------------------|------------------------------|
 | `subgroup.reduce_add(v, log2_size)`         | yes  | yes\*  | yes                     | any type supporting `+`      |
 | `subgroup.reduce_all_add(v, log2_size)`     | yes  | yes    | yes                     | any type supporting `+`      |
 | `subgroup.inclusive_add(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
-| `subgroup.inclusive_mul(value)`             | no   | no     | yes                     | integer + float             |
-| `subgroup.inclusive_min(value)`             | no   | no     | yes                     | integer + float             |
-| `subgroup.inclusive_max(value)`             | no   | no     | yes                     | integer + float             |
-| `subgroup.inclusive_and(value)`             | no   | no     | yes                     | integer                      |
-| `subgroup.inclusive_or(value)`              | no   | no     | yes                     | integer                      |
-| `subgroup.inclusive_xor(value)`             | no   | no     | yes                     | integer                      |
+| `subgroup.inclusive_mul(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
+| `subgroup.inclusive_min(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
+| `subgroup.inclusive_max(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
+| `subgroup.inclusive_and(v, log2_size)`      | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.inclusive_or(v, log2_size)`       | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.inclusive_xor(v, log2_size)`      | yes  | yes\*  | yes                     | integer                      |
 | `subgroup.exclusive_add` / `_mul` / `_min` / `_max` / `_and` / `_or` / `_xor` | no | no | no | — (TODO stubs) |
 
 The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_min` / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add(value)` with no `log2_size`) have been removed in favour of the portable sized API (`reduce_add(v, log2_size)` / `reduce_all_add(v, log2_size)`). For reductions other than sum, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern.
@@ -182,24 +182,16 @@ Same sum as `reduce_add`, but broadcast to **every lane** in each `2**log2_size`
 - Use this when every lane needs the reduction result (e.g. to divide by the sum, or to branch on it uniformly). It costs exactly the same number of shuffles as `reduce_add` but leaves the answer in all lanes, so it replaces a `reduce_add` + `shuffle`/broadcast pair.
 - Uses `subgroup.shuffle` under the hood.
 
-### `inclusive_add(value, log2_size)`
+### `inclusive_add` / `inclusive_mul` / `inclusive_min` / `inclusive_max` / `inclusive_and` / `inclusive_or` / `inclusive_xor`
 
-Per-lane inclusive prefix sum over `2**log2_size` consecutive lanes. Lane `i` within each group of `2**log2_size` lanes returns `v[group_start] + v[group_start + 1] + ... + v[i]`.
+Per-lane inclusive scan over `2**log2_size` consecutive lanes, under the binary operator named by the suffix. Lane `i` within each group of `2**log2_size` lanes returns `v[group_start] op v[group_start + 1] op ... op v[i]`.
 
-- `log2_size` is a `qd.template()` — a compile-time constant. The body unrolls into exactly `log2_size` `shuffle_up + add` pairs in the calling kernel's IR, with no runtime loop overhead.
+- `log2_size` is a `qd.template()` — a compile-time constant. The body unrolls into exactly `log2_size` `shuffle_up + op` pairs in the calling kernel's IR, with no runtime loop overhead.
 - `2**log2_size` must not exceed the active subgroup size on the target (32 on CUDA / Metal / RDNA, 64 on CDNA). Passing a larger value produces implementation-defined results; it does not error.
-- Works on any type that supports `+` and `shuffle_up`; in practice this means `i32`, `u32`, `f32`, `f64`, `i64`, `u64`.
-- Implemented as a `@qd.func` Hillis-Steele scan over `shuffle_up`. The shuffle is in uniform CF (every lane participates); only the per-lane add is conditional, which is allowed by the `shuffle_up` contract on every backend. Cross-group `shuffle_up` partners are masked off by the per-lane `lane_in_group >= offset` guard, so groups smaller than the full subgroup compose correctly.
+- `_add`, `_mul`, `_min`, `_max` accept integer and float dtypes (`i32`, `u32`, `i64`, `u64`, `f32`, `f64`); `_and`, `_or`, `_xor` accept integer dtypes only.
+- All seven share a single `@qd.func` Hillis-Steele scan helper (`_inclusive_scan`); each public op is a one-line wrapper that supplies the binary operator. The shuffle is in uniform CF (every lane participates); only the per-lane reduce step is conditional, which is allowed by the `shuffle_up` contract on every backend. Cross-group `shuffle_up` partners are masked off by the per-lane `lane_in_group >= offset` guard, so groups smaller than the full subgroup compose correctly.
 - Decorated with `@qd.func` and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.
-- AMDGPU note (`*` in the table): same `ds_bpermute` cost as `shuffle_up` — roughly tens of cycles per step × `log2_size` steps.
-
-### `inclusive_mul` / `inclusive_min` / `inclusive_max` / `inclusive_and` / `inclusive_or` / `inclusive_xor`
-
-Per-lane inclusive scans over the full subgroup. Lane `i` receives `v[0] op v[1] op ... op v[i]`, where `op` is the operation indicated by the suffix and `v[k]` is the `value` held by lane `k`.
-
-- Currently SPIR-V only (`OpGroupNonUniformInclusiveScan` parameterised by the operation). On CUDA / AMDGPU, fall through to the generic LLVM runtime-call path and fail to link; until they are added, build the equivalent on top of `shuffle_down` / `shuffle_up` with a log2-step loop.
-- `_mul`, `_min`, `_max` accept integer and float dtypes; `_and`, `_or`, `_xor` accept integer dtypes only.
-- The operation is over the full subgroup; there is no sized variant. These will gain a `log2_size` parameter as the same portable migration is applied (see `inclusive_add` above).
+- AMDGPU note (`*` in the table): same `ds_bpermute` cost as `shuffle_up` — roughly tens of cycles per step × `log2_size` steps. Hardware-accelerated `OpGroupNonUniformInclusiveScan` on SPIR-V is no longer used, even on backends that supported it (Vulkan, Metal); the trade-off is a uniform implementation across backends with predictable cost.
 
 ### `exclusive_*`, `all_true`, `any_true`, `all_equal`
 
@@ -342,7 +334,7 @@ After the call, lane `k` (within each group of 32) holds `a[group_start] + a[gro
 - `reduce_add` and `reduce_all_add` both issue exactly `log2_size` shuffles and `log2_size` adds per call. No barriers, no shared memory, no launch overhead (they inline).
 - Pick `reduce_all_add` over `reduce_add + broadcast` when you need the result in every lane — same cost, one fewer shuffle.
 - 64-bit dtypes (`i64`, `u64`, `f64`) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.
-- `inclusive_add` is a `@qd.func` Hillis-Steele scan; cost is exactly `log2_size` shuffle+add pairs, the same as a hand-rolled CUDA warp scan. The remaining `inclusive_*` ops still lower to a single `OpGroupNonUniform*` instruction on SPIR-V (hardware-assisted on most modern GPUs); on CUDA / AMDGPU they are unimplemented today.
+- All seven `inclusive_*` ops are `@qd.func` Hillis-Steele scans; cost is exactly `log2_size` shuffle+op pairs, the same as a hand-rolled CUDA warp scan, on every backend. Hardware-accelerated `OpGroupNonUniformInclusiveScan` on SPIR-V is no longer used — the cost difference vs. a portable shuffle tree is small in practice, and the uniform implementation makes performance predictable across CUDA, AMDGPU, and SPIR-V.
 
 ## Related
 

@@ -140,6 +140,70 @@ def reduce_all_add(value, log2_size: template()):
 # following the same pattern as `reduce_add` / `reduce_all_add` above when needed.
 
 
+# --- Inclusive scans -------------------------------------------------------------------
+#
+# All seven inclusive scans share the same Hillis-Steele tree over `shuffle_up`; only
+# the binary operator differs.  Each operator is a tiny ``@func`` so it can be passed
+# as a ``template()`` callable to the shared `_inclusive_scan` helper, which inlines it
+# into the per-lane reduce step.  ``log2_size`` is a compile-time constant so the loop
+# fully unrolls into ``log2_size`` shuffle+op pairs in the calling kernel's IR.
+
+
+@func
+def _bin_add(a, b):
+    return a + b
+
+
+@func
+def _bin_mul(a, b):
+    return a * b
+
+
+@func
+def _bin_min(a, b):
+    return min(a, b)
+
+
+@func
+def _bin_max(a, b):
+    return max(a, b)
+
+
+@func
+def _bin_and(a, b):
+    return a & b
+
+
+@func
+def _bin_or(a, b):
+    return a | b
+
+
+@func
+def _bin_xor(a, b):
+    return a ^ b
+
+
+@func
+def _inclusive_scan(value, op: template(), log2_size: template()):
+    """Hillis-Steele inclusive scan of ``value`` under binary ``op``, over ``2**log2_size``
+    consecutive lanes.  See `inclusive_add` for the contract; the only thing that changes
+    between the seven `inclusive_*` ops is which ``_bin_*`` is passed here.
+
+    The shuffle is in uniform CF (every lane participates); only the per-lane reduce step
+    is conditional, matching the contract for ``shuffle_up``.  Cross-group ``shuffle_up``
+    partners are masked out by ``lane_in_group >= offset``, so groups smaller than the
+    full subgroup compose correctly when ``log2_size < log2(group_size)``.
+    """
+    lane_in_group = invocation_id() & impl.static((1 << log2_size) - 1)
+    for i in impl.static(range(log2_size)):
+        offset = impl.static(1 << i)
+        partner = shuffle_up(value, u32(offset))
+        if lane_in_group >= offset:
+            value = op(value, partner)
+    return value
+
+
 @func
 def inclusive_add(value, log2_size: template()):
     """Inclusive prefix sum across ``2**log2_size`` consecutive lanes.
@@ -148,48 +212,50 @@ def inclusive_add(value, log2_size: template()):
     ``v[group_start] + v[group_start + 1] + ... + v[i]``.  Caller must ensure
     ``2**log2_size`` does not exceed the active subgroup size on the target
     (32 on CUDA / Metal / RDNA, 64 on CDNA).
-
-    ``log2_size`` is a compile-time template; the body is fully unrolled into
-    ``log2_size`` shuffle+add pairs.
-
-    Implementation: Hillis-Steele scan over ``shuffle_up``.  The shuffle is in uniform
-    control flow (every lane participates), the conditional update is per-lane
-    arithmetic only — same pattern as a hand-rolled CUDA warp scan, but written once
-    portably.  Cross-group ``shuffle_up`` partners are masked out by the per-lane
-    ``lane_in_group >= offset`` guard, so groups of size ``2**log2_size`` smaller than
-    the full subgroup compose correctly.
     """
-    lane_in_group = invocation_id() & impl.static((1 << log2_size) - 1)
-    for i in impl.static(range(log2_size)):
-        offset = impl.static(1 << i)
-        partner = shuffle_up(value, u32(offset))
-        if lane_in_group >= offset:
-            value = value + partner
-    return value
+    return _inclusive_scan(value, _bin_add, log2_size)
 
 
-def inclusive_mul(value):
-    return impl.call_internal("subgroupInclusiveMul", value, with_runtime_context=False)
+@func
+def inclusive_mul(value, log2_size: template()):
+    """Inclusive prefix product across ``2**log2_size`` consecutive lanes.  See
+    `inclusive_add` for the size contract."""
+    return _inclusive_scan(value, _bin_mul, log2_size)
 
 
-def inclusive_min(value):
-    return impl.call_internal("subgroupInclusiveMin", value, with_runtime_context=False)
+@func
+def inclusive_min(value, log2_size: template()):
+    """Inclusive prefix min across ``2**log2_size`` consecutive lanes.  See
+    `inclusive_add` for the size contract."""
+    return _inclusive_scan(value, _bin_min, log2_size)
 
 
-def inclusive_max(value):
-    return impl.call_internal("subgroupInclusiveMax", value, with_runtime_context=False)
+@func
+def inclusive_max(value, log2_size: template()):
+    """Inclusive prefix max across ``2**log2_size`` consecutive lanes.  See
+    `inclusive_add` for the size contract."""
+    return _inclusive_scan(value, _bin_max, log2_size)
 
 
-def inclusive_and(value):
-    return impl.call_internal("subgroupInclusiveAnd", value, with_runtime_context=False)
+@func
+def inclusive_and(value, log2_size: template()):
+    """Inclusive prefix bitwise-AND across ``2**log2_size`` consecutive lanes.  Integer
+    dtypes only.  See `inclusive_add` for the size contract."""
+    return _inclusive_scan(value, _bin_and, log2_size)
 
 
-def inclusive_or(value):
-    return impl.call_internal("subgroupInclusiveOr", value, with_runtime_context=False)
+@func
+def inclusive_or(value, log2_size: template()):
+    """Inclusive prefix bitwise-OR across ``2**log2_size`` consecutive lanes.  Integer
+    dtypes only.  See `inclusive_add` for the size contract."""
+    return _inclusive_scan(value, _bin_or, log2_size)
 
 
-def inclusive_xor(value):
-    return impl.call_internal("subgroupInclusiveXor", value, with_runtime_context=False)
+@func
+def inclusive_xor(value, log2_size: template()):
+    """Inclusive prefix bitwise-XOR across ``2**log2_size`` consecutive lanes.  Integer
+    dtypes only.  See `inclusive_add` for the size contract."""
+    return _inclusive_scan(value, _bin_xor, log2_size)
 
 
 def exclusive_add(value):
