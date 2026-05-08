@@ -28,6 +28,7 @@
 #include "quadrants/rhi/amdgpu/amdgpu_device.h"
 #if defined(QD_WITH_AMDGPU)
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
+#include "quadrants/runtime/amdgpu/persistent_runtime_jit_amdgpu.h"
 #endif
 
 namespace quadrants::lang {
@@ -860,6 +861,17 @@ LLVMRuntime *LlvmRuntimeExecutor::get_llvm_runtime() {
 }
 
 void LlvmRuntimeExecutor::init_runtime_jit_module(std::unique_ptr<llvm::Module> module) {
+#if defined(QD_WITH_AMDGPU)
+  if (config_.arch == Arch::amdgpu) {
+    // The runtime HSACO is byte-deterministic for a given `(mcpu, fast_math)` and is the dominant per-init
+    // cost on AMDGPU (LLVM `O3` codegen + `ld.lld` fork + `hipModuleLoadData`'s per-VF kernarg-pool draw). We
+    // serve it from a process-wide cache instead. The `module` argument we were handed was a fresh clone of
+    // the runtime IR built off `llvm_context_`; the cache holds its own equivalent clone built off a
+    // persistent context, so this clone is dropped on return.
+    runtime_jit_module_ = get_or_build_persistent_runtime_jit_amdgpu(config_);
+    return;
+  }
+#endif
   llvm_context_->init_runtime_module(module.get());
   runtime_jit_module_ = create_jit_module(std::move(module));
 }

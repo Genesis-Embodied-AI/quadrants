@@ -5,6 +5,7 @@ target_sources(amdgpu_runtime
   PRIVATE
     jit_amdgpu.cpp
     kernel_launcher.cpp
+    persistent_runtime_jit_amdgpu.cpp
   )
 
 target_include_directories(amdgpu_runtime

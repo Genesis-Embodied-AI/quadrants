@@ -33,6 +33,10 @@ endif()
 
 if (QD_WITH_AMDGPU)
     target_link_libraries(llvm_runtime PRIVATE ${llvm_amdgpu_libs})
+    # `LlvmRuntimeExecutor::init_runtime_jit_module` calls into
+    # `quadrants/runtime/amdgpu/persistent_runtime_jit_amdgpu.cpp` (process-wide cache of the runtime HSACO).
+    # Declare the dependency so the static-archive link order picks up the symbol.
+    target_link_libraries(llvm_runtime PRIVATE amdgpu_runtime)
 endif()
 
 target_link_libraries(llvm_runtime PRIVATE ti_device_api)
