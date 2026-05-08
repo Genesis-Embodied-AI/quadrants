@@ -503,6 +503,26 @@ def test_atomic_add_vector_field_fanout():
     assert f[None][2] == test_utils.approx(N * 3.0, rel=1e-5)
 
 
+# Pins the doc claim that bitwise atomics on float dtypes raise a type
+# error at trace time (atomics page: "Integer dtypes only -- passing
+# f32 / f64 raises a type error at trace time").
+@pytest.mark.parametrize("op", ["and", "or", "xor"])
+@pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_bitwise_on_float_field_raises(op, dtype):
+    test_utils.skip_if_f64_unsupported(dtype)
+    f = qd.field(dtype, shape=())
+    f[None] = 0
+    atomic_op = getattr(qd, f"atomic_{op}")
+
+    @qd.kernel
+    def kern():
+        atomic_op(f[None], qd.cast(1, dtype))
+
+    with pytest.raises(qd.lang.exception.QuadrantsCompilationError):
+        kern()
+
+
 @test_utils.test(arch=qd.gpu)
 def test_atomic_add_matrix_field_fanout():
     N = 256
