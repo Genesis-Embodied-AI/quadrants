@@ -503,6 +503,49 @@ def test_atomic_add_vector_field_fanout():
     assert f[None][2] == test_utils.approx(N * 3.0, rel=1e-5)
 
 
+# Pins the doc-table claim that atomic_add is "yes" on every integer
+# dtype (i32 / u32 / i64 / u64) on every GPU backend. Existing coverage
+# only exercises i32 (run_atomic_add_global_case) and u64 min/max
+# (test_atomic_min_max_uint).
+@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.i64, qd.u64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_add_int_contention(dtype):
+    N = 256
+    f = qd.field(dtype, shape=())
+    f[None] = 0
+
+    @qd.kernel
+    def kern():
+        for _ in range(N):
+            qd.atomic_add(f[None], qd.cast(1, dtype))
+
+    kern()
+    assert int(f[None]) == N
+
+
+# Pins the doc-table claim that atomic_and / atomic_or / atomic_xor are
+# "yes" on every integer dtype on every GPU backend. Existing coverage
+# only exercises i32 (test_atomic_{and,or,xor}_expr_evaled).
+@pytest.mark.parametrize("op,seed,arg,expected", [
+    ("and", 0xFF0F, 0x0FF0, 0x0F00),
+    ("or",  0x00F0, 0x0F00, 0x0FF0),
+    ("xor", 0xFF0F, 0x0FF0, 0xF0FF),
+])
+@pytest.mark.parametrize("dtype", [qd.u32, qd.i64, qd.u64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_bitwise_int_widths(op, seed, arg, expected, dtype):
+    f = qd.field(dtype, shape=())
+    f[None] = seed
+    atomic_op = getattr(qd, f"atomic_{op}")
+
+    @qd.kernel
+    def kern():
+        atomic_op(f[None], qd.cast(arg, dtype))
+
+    kern()
+    assert int(f[None]) == expected
+
+
 # Pins the doc claim that bitwise atomics on float dtypes raise a type
 # error at trace time (atomics page: "Integer dtypes only -- passing
 # f32 / f64 raises a type error at trace time").
