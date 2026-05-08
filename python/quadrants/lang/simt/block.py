@@ -124,37 +124,22 @@ class SharedArray:
 # `OpGroupNonUniform*` only operate at subgroup scope reliably across Vulkan + Metal).
 #
 # Pattern: lane 0 zeroes a 1-element shared `i32` -> block.sync() -> every thread atomically
-# folds its predicate into the slot -> block.sync() -> every thread reads the broadcasted result.
-# Costs 2 barriers + 1 atomic (vs. CUDA's hardware fast path of 1 barrier+reduction). Slower
-# than the CUDA path but functionally equivalent and portable. Each call-site allocates a fresh
-# `SharedArray` so multiple calls in the same kernel do not alias each other.
-@_func
-def _block_reduce_any_nonzero_emulated(predicate: _i32) -> _i32:
-    counter = SharedArray((1,), _i32)
-    if thread_idx() == 0:
-        counter[0] = 0
-    sync()
-    if predicate != 0:
-        _ops.atomic_or(counter[0], 1)
-    sync()
-    return counter[0]
-
-
-@_func
-def _block_reduce_all_nonzero_emulated(predicate: _i32) -> _i32:
-    # `all_nonzero` is implemented as `not any_zero`: every thread with a zero predicate ORs a 1
-    # into the shared slot, then we invert. Avoids needing `atomic_and` with a non-zero initial
-    # value, which would require either a different sentinel or an extra control-flow step.
-    counter = SharedArray((1,), _i32)
-    if thread_idx() == 0:
-        counter[0] = 0
-    sync()
-    if predicate == 0:
-        _ops.atomic_or(counter[0], 1)
-    sync()
-    return 1 - counter[0]
-
-
+# folds its predicate into the slot -> block.sync() -> every thread reads the broadcasted
+# result. Costs 2 barriers + 1 atomic (vs. CUDA's hardware fast path of 1 barrier+reduction).
+# Slower than the CUDA path but functionally equivalent and portable. Each call-site allocates
+# a fresh `SharedArray` so multiple calls in the same kernel do not alias each other.
+#
+# All three emulations use `atomic_add` rather than `atomic_or` / `atomic_and`. We originally
+# used the bitwise atomics on the `any` / `all` paths because the contributions are 0 / 1 and
+# OR is conceptually cleaner, but Metal (via MoltenVK / SPIRV-Cross) silently no-ops
+# `OpAtomicOr` on threadgroup memory in some configurations -- the SPIR-V op translates to MSL
+# `atomic_fetch_or_explicit` on a `threadgroup atomic_int` and the resulting shader does not
+# update the slot, so every thread reads back the initialiser value. `OpAtomicIAdd` does not
+# hit the same issue, so we route every reduction through `atomic_add`. Correctness sketch for
+# the new variants: `count` = number of threads contributing 1; `any_nonzero` = 1 iff `count > 0`;
+# `all_nonzero` = 1 iff no thread contributed a zero indicator (i.e. `count == 0` over the
+# zero-indicator predicate). The bool returns are implicitly cast to i32 by Quadrants' AST
+# transformer (`ast_transformer.py::qd_ops.cast(..., return_type)`).
 @_func
 def _block_reduce_count_nonzero_emulated(predicate: _i32) -> _i32:
     counter = SharedArray((1,), _i32)
@@ -165,3 +150,27 @@ def _block_reduce_count_nonzero_emulated(predicate: _i32) -> _i32:
         _ops.atomic_add(counter[0], 1)
     sync()
     return counter[0]
+
+
+@_func
+def _block_reduce_any_nonzero_emulated(predicate: _i32) -> _i32:
+    counter = SharedArray((1,), _i32)
+    if thread_idx() == 0:
+        counter[0] = 0
+    sync()
+    if predicate != 0:
+        _ops.atomic_add(counter[0], 1)
+    sync()
+    return counter[0] != 0
+
+
+@_func
+def _block_reduce_all_nonzero_emulated(predicate: _i32) -> _i32:
+    counter = SharedArray((1,), _i32)
+    if thread_idx() == 0:
+        counter[0] = 0
+    sync()
+    if predicate == 0:
+        _ops.atomic_add(counter[0], 1)
+    sync()
+    return counter[0] == 0
