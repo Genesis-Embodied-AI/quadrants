@@ -1,0 +1,41 @@
+name: clang-tidy (amdgpu)
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+    paths:
+      - 'quadrants/codegen/amdgpu/**'
+      - 'quadrants/platform/amdgpu/**'
+      - 'quadrants/rhi/amdgpu/**'
+      - 'quadrants/runtime/amdgpu/**'
+      - '.github/workflows/clang_tidy_amdgpu.yml'
+      - '.github/workflows/scripts_new/clang_tidy_amdgpu/**'
+      - '.clang-tidy'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+permissions: read-all
+jobs:
+  build:
+    name: clang-tidy (amdgpu)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prerequisites
+        run: |
+          bash .github/workflows/scripts_new/clang_tidy_amdgpu/1_prerequisites.sh
+      - name: Build (with AMDGPU backend)
+        run: |
+          bash .github/workflows/scripts_new/clang_tidy_amdgpu/2_build.sh
+      - name: clang-tidy on quadrants/**/amdgpu/
+        run: |
+          bash .github/workflows/scripts_new/clang_tidy_amdgpu/3_test.sh
