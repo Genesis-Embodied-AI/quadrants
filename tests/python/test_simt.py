@@ -845,19 +845,28 @@ def _check_inclusive_scan(scan_func, py_op, dtype, log2_size, src_init):
     foo()
 
     group_size = 1 << log2_size
-    # Verify only the first group's worth of lanes; with 64 launch-threads on a 32-lane
-    # subgroup the first 32 cleanly cover one group of size group_size (group_size <= 32).
-    running = src[0]
-    for k in range(group_size):
-        if k > 0:
-            running = py_op(running, src[k])
-        got = dst[k]
-        if dtype in _INT_DTYPES:
-            assert got == running, f"lane {k}: got {got}, expected {running}"
-        else:
-            assert abs(got - running) < 1e-4 * max(abs(running), 1.0), (
-                f"lane {k}: got {got}, expected {running}"
-            )
+    # Verify every group across the full 64-lane launch.  group_size <= 32 by the size
+    # contract, so each group fits inside one CUDA / Metal / RDNA subgroup.  Lanes 0-31
+    # and 32-63 form two independent subgroups that run the scan side by side; checking
+    # both, plus every group within each subgroup when log2_size < 5, exercises (a) the
+    # `lane_in_group >= offset` mask that isolates partial-subgroup groups from each
+    # other and (b) the absence of cross-subgroup leakage in the underlying shuffle_up.
+    for g in range(N // group_size):
+        group_base = g * group_size
+        running = src[group_base]
+        for k in range(group_size):
+            if k > 0:
+                running = py_op(running, src[group_base + k])
+            global_lane = group_base + k
+            got = dst[global_lane]
+            if dtype in _INT_DTYPES:
+                assert got == running, (
+                    f"group {g} lane {k} (global {global_lane}): got {got}, expected {running}"
+                )
+            else:
+                assert abs(got - running) < 1e-4 * max(abs(running), 1.0), (
+                    f"group {g} lane {k} (global {global_lane}): got {got}, expected {running}"
+                )
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
@@ -981,23 +990,28 @@ def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_i
     foo()
 
     group_size = 1 << log2_size
-    # Verify only the first group's worth of lanes; with 64 launch-threads on a 32-lane
-    # subgroup the first 32 cleanly cover one group of size group_size (group_size <= 32).
-    # exclusive[0] == identity; exclusive[k>0] == op-reduce(src[0..k]).
-    for k in range(group_size):
-        if k == 0:
-            expected = py_identity
-        else:
-            expected = src[0]
-            for j in range(1, k):
-                expected = py_op(expected, src[j])
-        got = dst[k]
-        if dtype in _INT_DTYPES:
-            assert got == expected, f"lane {k}: got {got}, expected {expected}"
-        else:
-            assert abs(got - expected) < 1e-4 * max(abs(expected), 1.0), (
-                f"lane {k}: got {got}, expected {expected}"
-            )
+    # Verify every group across the full 64-lane launch (see `_check_inclusive_scan`
+    # for the rationale).  exclusive[group_base] == identity; exclusive[group_base + k]
+    # for k > 0 == op-reduce(src[group_base..group_base + k]).
+    for g in range(N // group_size):
+        group_base = g * group_size
+        for k in range(group_size):
+            if k == 0:
+                expected = py_identity
+            else:
+                expected = src[group_base]
+                for j in range(1, k):
+                    expected = py_op(expected, src[group_base + j])
+            global_lane = group_base + k
+            got = dst[global_lane]
+            if dtype in _INT_DTYPES:
+                assert got == expected, (
+                    f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
+                )
+            else:
+                assert abs(got - expected) < 1e-4 * max(abs(expected), 1.0), (
+                    f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
+                )
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
