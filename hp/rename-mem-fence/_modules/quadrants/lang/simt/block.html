@@ -482,37 +482,22 @@
 <span class="c1"># `OpGroupNonUniform*` only operate at subgroup scope reliably across Vulkan + Metal).</span>
 <span class="c1">#</span>
 <span class="c1"># Pattern: lane 0 zeroes a 1-element shared `i32` -&gt; block.sync() -&gt; every thread atomically</span>
-<span class="c1"># folds its predicate into the slot -&gt; block.sync() -&gt; every thread reads the broadcasted result.</span>
-<span class="c1"># Costs 2 barriers + 1 atomic (vs. CUDA&#39;s hardware fast path of 1 barrier+reduction). Slower</span>
-<span class="c1"># than the CUDA path but functionally equivalent and portable. Each call-site allocates a fresh</span>
-<span class="c1"># `SharedArray` so multiple calls in the same kernel do not alias each other.</span>
-<span class="nd">@_func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_any_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
-    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="n">sync</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_or</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="n">sync</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-
-
-<span class="nd">@_func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_all_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
-    <span class="c1"># `all_nonzero` is implemented as `not any_zero`: every thread with a zero predicate ORs a 1</span>
-    <span class="c1"># into the shared slot, then we invert. Avoids needing `atomic_and` with a non-zero initial</span>
-    <span class="c1"># value, which would require either a different sentinel or an extra control-flow step.</span>
-    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="n">sync</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">predicate</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_or</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="n">sync</span><span class="p">()</span>
-    <span class="k">return</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-
-
+<span class="c1"># folds its predicate into the slot -&gt; block.sync() -&gt; every thread reads the broadcasted</span>
+<span class="c1"># result. Costs 2 barriers + 1 atomic (vs. CUDA&#39;s hardware fast path of 1 barrier+reduction).</span>
+<span class="c1"># Slower than the CUDA path but functionally equivalent and portable. Each call-site allocates</span>
+<span class="c1"># a fresh `SharedArray` so multiple calls in the same kernel do not alias each other.</span>
+<span class="c1">#</span>
+<span class="c1"># All three emulations use `atomic_add` rather than `atomic_or` / `atomic_and`. We originally</span>
+<span class="c1"># used the bitwise atomics on the `any` / `all` paths because the contributions are 0 / 1 and</span>
+<span class="c1"># OR is conceptually cleaner, but Metal (via MoltenVK / SPIRV-Cross) silently no-ops</span>
+<span class="c1"># `OpAtomicOr` on threadgroup memory in some configurations -- the SPIR-V op translates to MSL</span>
+<span class="c1"># `atomic_fetch_or_explicit` on a `threadgroup atomic_int` and the resulting shader does not</span>
+<span class="c1"># update the slot, so every thread reads back the initialiser value. `OpAtomicIAdd` does not</span>
+<span class="c1"># hit the same issue, so we route every reduction through `atomic_add`. Correctness sketch for</span>
+<span class="c1"># the new variants: `count` = number of threads contributing 1; `any_nonzero` = 1 iff `count &gt; 0`;</span>
+<span class="c1"># `all_nonzero` = 1 iff no thread contributed a zero indicator (i.e. `count == 0` over the</span>
+<span class="c1"># zero-indicator predicate). The bool returns are implicitly cast to i32 by Quadrants&#39; AST</span>
+<span class="c1"># transformer (`ast_transformer.py::qd_ops.cast(..., return_type)`).</span>
 <span class="nd">@_func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_count_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
     <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
@@ -523,6 +508,30 @@
         <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
     <span class="n">sync</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_any_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span>
+
+
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_all_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">predicate</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span>
 </pre></div>
 
                 </article>
