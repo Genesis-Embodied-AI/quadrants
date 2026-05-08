@@ -481,3 +481,42 @@ def test_atomic_mul_f32():
         return x
 
     assert mul_kernel() == 5040.0
+
+
+# Pins the doc claim that vector/matrix arguments to atomic ops fan out to one
+# scalar atomic per component (no all-or-nothing guarantee across components,
+# but every component must be summed exactly).
+@test_utils.test(arch=qd.gpu)
+def test_atomic_add_vector_field_fanout():
+    N = 256
+    f = qd.Vector.field(3, qd.f32, shape=())
+    f[None] = qd.Vector([0.0, 0.0, 0.0])
+
+    @qd.kernel
+    def kern():
+        for _ in range(N):
+            qd.atomic_add(f[None], qd.Vector([1.0, 2.0, 3.0]))
+
+    kern()
+    assert f[None][0] == test_utils.approx(N * 1.0, rel=1e-5)
+    assert f[None][1] == test_utils.approx(N * 2.0, rel=1e-5)
+    assert f[None][2] == test_utils.approx(N * 3.0, rel=1e-5)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_atomic_add_matrix_field_fanout():
+    N = 256
+    m = qd.Matrix.field(2, 3, qd.f32, shape=())
+    m[None] = qd.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    contrib = qd.Matrix([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+
+    @qd.kernel
+    def kern():
+        for _ in range(N):
+            qd.atomic_add(m[None], contrib)
+
+    kern()
+    for i in range(2):
+        for j in range(3):
+            expected = N * (i * 3 + j + 1)
+            assert m[None][i, j] == test_utils.approx(expected, rel=1e-5)
