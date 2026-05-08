@@ -370,22 +370,7 @@ The safe rule: populate loop-bound ndarrays before the forward call and leave th
 
 ### Inner reverse-mode loop with a complex bound at very large extent
 
-Consider a reverse-mode kernel with two nested loops where the enclosed loop's iteration count depends on the outer loop variable through an arithmetic expression on an ndarray index:
-
-```python
-for i in range(arr.shape[0]):       # outer loop
-    for j in range(arr[i // 2]):    # enclosed loop: for <var> in range(<bound expression>)
-        ...
-```
-
-The enclosed loop's iteration count `arr[i // 2]` is what we call the enclosed loop's *bound expression*. Reverse-mode autodiff needs an upper bound on how many times the enclosed loop body executes across the whole kernel. To do so, the compiler analyses the bound expression at launch time by taking one of the two evaluation paths based on its structure:
-
-- **Parallel:** integer ndarray reads up to 32 bits wide, single- or multi-axis, indexed by literal constants or outer loop variables are evaluated in parallel. Field reads of the same width and the same indexing rules apply: `my_field[None]`, `my_field[k]` for a constant `k`, or `my_field[i]` where `i` is an outer loop variable. The shape term `arr.shape[k]`. Literal integer constants. And any `+`, `-`, `*`, `max` of those. The outer loop can run any number of iterations.
-- **Sequential:** 64-bit integer ndarray or field reads, arithmetic-indexed reads (`arr[i // 2]`, `arr[i % 4]`), or any nested reads where the index is itself a ndarray or field read result (e.g. `arr1[arr2[i]]`, `my_field[arr[i]]`) fallbacks to sequential evaluation. Nested loops are supported, but the classification propagates outward across loop nesting: if any enclosed loop's bound is sequential, the enclosing bound is sequential too. The outer loop is capped at 2^24 = 16 777 216 iterations; past that the kernel raises `RuntimeError: ... iteration count ... exceeds the 16777216 guard`. This cap is artificial. It keeps the single-thread GPU evaluation time tractable.
-
-In the example above, the iteration count of the enclosed loop takes the sequential path because of the `i // 2` index, which means that it would raise at launch for `arr.shape[0] = (1 << 24) + 1`.
-
-Workaround: rewrite the bound expression so it takes the parallel path (e.g. precompute `bounds[i] = arr[i // 2]` into a persistent separate buffer, pass `bounds` in as an input, and use `for j in range(bounds[i]):`), or keep the outer loop count below 2^24.
+A reverse-mode kernel with two nested loops is in some cases limited to an outer-loop extent of at most `1 << 24`. In particular when the enclosed loop's trip count is an uncommon expression of the outer-loop variable, e.g. `for i in range(arr.shape[0]): ... for j in range(arr[i // 2]):`. See [Appendix C](#appendix-c-evaluation-of-the-enclosed-loops-bound-expression) for a complete walkthrough of the enclosed loop's bound expression and workarounds. When the limit applies and the outer extent exceeds it, the kernel raises `RuntimeError: ... iteration count ... exceeds the 16777216 guard` at launch.
 
 ## Performance characteristics
 
@@ -452,3 +437,51 @@ Patterns that fall back to the worst-case heap:
   - **Constant-index gate**: `field[42]`, or any axis that is a literal constant.
   - **Kernel-argument index, no iterating axis**: `field[arg]` where every axis is launch-constant.
   - **Indirect index via runtime load**: `field[other_field[i]]`; the compiler cannot prove `other_field` is injective.
+
+## Appendix C: evaluation of the enclosed loop's bound expression
+
+This appendix details how the runtime computes the worst-case trip count of an enclosed reverse-mode loop and which expression shapes each evaluation path accepts. It backs the *Inner reverse-mode loop with a complex bound at very large extent* entry under [What can go wrong](#what-can-go-wrong).
+
+Consider a reverse-mode kernel with two nested loops where the enclosed loop's iteration count depends on the outer loop variable through an arithmetic expression on an ndarray index:
+
+```python
+for i in range(arr.shape[0]):       # outer loop
+    for j in range(arr[i // 2]):    # enclosed loop: for <var> in range(<bound expression>)
+        ...
+```
+
+The enclosed loop's iteration count `arr[i // 2]` is what we call the enclosed loop's *bound expression*. It is a function of the outer-loop variable `i`: as `i` ranges over `[0, arr.shape[0])`, the bound expression evaluates to a different integer at each iteration. Reverse-mode autodiff needs the adstack sized for the worst case - the largest inner-loop trip count that will ever occur across the outer loop's full range, i.e. `max(arr[i // 2] for i in range(arr.shape[0]))`. For example, if `arr = [3, 5, 1]` and the outer loop runs `i` over `[0, 6)`:
+
+| `i` | `i // 2` | bound expression `arr[i // 2]` |
+| --- | --- | --- |
+| 0 | 0 | 3 |
+| 1 | 0 | 3 |
+| 2 | 1 | 5 |
+| 3 | 1 | 5 |
+| 4 | 2 | 1 |
+| 5 | 2 | 1 |
+
+Quadrants computes that worst case at launch time - in this example, the max of the column above, 5 - and sizes the adstack accordingly: each outer iteration accommodates up to 5 pushes and the adstack never overflows. With deeper loop nests each enclosed loop's bound expression is reduced separately and the adstack is sized as the product of those maxes.
+
+### Evaluation paths
+
+The compiler picks one of two evaluation paths to compute the maximum based on the bound expression's structure:
+
+- **Parallel:** the maximum is computed with a tiny parallel reduction kernel for efficiency. The reducer accepts a common subset of bound expressions:
+  - **Integer ndarray or field read** up to 32 bits wide, indexed by literal constants or outer-loop variables: `arr[i, j]`, `field[i]`.
+  - **Shape term**: `arr.shape[k]`.
+  - **Literal integer constant**: `42`.
+  - **Arithmetic combinator**: any `+`, `-`, `*`, `max` of the above.
+- **Sequential:** the fallback path, used whenever the parallel path doesn't support the bound expression. Quadrants walks the bound expression one outer-loop iteration at a time on a single thread; the adstack is sized identically, only the upfront cost differs. This path accepts everything the parallel path does, plus:
+  - **Arithmetic-indexed read**: `arr[i // 2]`, `arr[i % 4]`.
+  - **Indirect / nested read**: `arr1[arr2[i]]`, `my_field[arr[i]]`.
+
+### Nested loops
+
+Quadrants supports arbitrarily nested loops. When the bound expression itself contains another enclosed loop whose own bound expression must be reduced first, the enclosing bound expression takes the parallel path only if every nested bound expression also fits the parallel-path grammar; otherwise it falls back to the sequential walk. This keeps the runtime from mixing parallel and sequential evaluators inside a single bound expression, which would otherwise force per-iteration kernel launches.
+
+### Sequential walk cap
+
+The sequential walk's outer loop is artificially capped at 2^24 = 16 777 216 iterations to keep both the walk time and the read-tracking memory bounded; past that the kernel raises `RuntimeError: ... iteration count ... exceeds the 16777216 guard`. In the example above, the iteration count of the enclosed loop takes the sequential path because of the `i // 2` index, so it would raise at launch if `arr.shape[0] > (1 << 24)`.
+
+To circumvent this limitation, rewrite the bound expression to unlock the parallel path (e.g. precompute `bounds[i] = arr[i // 2]` into a persistent separate buffer, pass `bounds` in as an input, and use `for j in range(bounds[i]):`), or keep the outer loop count below 2^24.
