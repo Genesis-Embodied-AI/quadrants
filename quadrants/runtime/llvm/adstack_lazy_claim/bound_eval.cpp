@@ -27,7 +27,7 @@
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 
-#include "quadrants/runtime/llvm/adstack_lazy_claim/cuda_stream_pin.h"
+#include "quadrants/rhi/cuda/cuda_stream_pin.h"
 
 namespace quadrants::lang {
 
