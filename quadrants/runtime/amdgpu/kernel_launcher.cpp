@@ -59,7 +59,10 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             void *context_pointer,
                                             int arg_size) {
   auto *executor = get_runtime_executor();
-  // See the matching comment in `runtime/cuda/kernel_launcher.cpp` for the role of each gate.
+  // Two gates govern the per-launch adstack publish work, both opt-in by the kernel's IR shape. Forward-only kernels
+  // skip both gates and pay zero adstack overhead; reverse-mode kernels without a captured `bound_expr` skip the
+  // lazy-claim block, paying the per-task `publish_adstack_metadata` only. See the matching comment in
+  // `runtime/cuda/kernel_launcher.cpp` for the role of each gate.
   const bool any_lazy_task = std::any_of(offloaded_tasks.begin(), offloaded_tasks.end(),
                                          [](const OffloadedTask &t) { return t.ad_stack.bound_expr.has_value(); });
   if (any_lazy_task) {
