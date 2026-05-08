@@ -44,15 +44,19 @@ The old names remain as deprecated aliases that emit a `DeprecationWarning` on f
 
 ### Voting and predicate ops
 
-Although these functions exist, we will migrate them to have an additional `log2_size` parameter, similar to `reduce_add` — so that the vote is over the first `2**log2_size` lanes rather than the full subgroup.
+All three take a `log2_size` template parameter and reduce over each `2**log2_size` group of consecutive lanes, broadcasting the `i32` (`0` or `1`) result to every lane in the group. Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`.
 
-| Op                                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) |
-|---------------------------------------------|------|--------|-------------------------|
-| `subgroup.all_true(predicate)`              | no   | no     | no                      |
-| `subgroup.any_true(predicate)`              | no   | no     | no                      |
-| `subgroup.all_equal(value)`                 | no   | no     | no                      |
+| Op                                          | CUDA          | AMDGPU | SPIR-V (Vulkan / Metal) |
+|---------------------------------------------|---------------|--------|-------------------------|
+| `subgroup.all_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
+| `subgroup.any_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
+| `subgroup.all_equal(value, log2_size)`      | yes (fast at `log2_size==5`, transitively via `all_true`) | yes | yes |
 
-All three are TODO stubs in `python/quadrants/lang/simt/subgroup.py` and currently return `None` on every backend. The CUDA-only counterparts on `qd.simt.warp` (`warp.all_nonzero`, `warp.any_nonzero`, `warp.unique`) are usable today if you can afford to be CUDA-bound.
+CUDA shortcut: when `log2_size == 5` (full warp), `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF, p)` / `__any_sync(0xFFFFFFFF, p)` (one `vote.all` / `vote.any` instruction). The shortcut is selected at trace time via `qd.static()` on `impl.current_cfg().arch` and the compile-time `log2_size`, so partial-warp uses (and every other backend) cleanly fall back to a portable `shuffle_xor` butterfly with no branch in the emitted IR.
+
+`all_equal` always uses the broadcast-and-`all_true` form: every lane reads the value at the start of its group via `shuffle`, compares it with its own value, and `all_true`-reduces the per-lane equality bit. Cost: `1 + log2_size` shuffles in the portable case, or `1 shuffle + 1 vote.all` on CUDA at full-warp. We deliberately do *not* use `__match_all_sync` even on CUDA: it requires sm_70+, and it does bit-equality on floats, contradicting this op's documented `OpGroupNonUniformAllEqual` semantics (`NaN != NaN`, `+0.0 == -0.0`). Callers wanting bit-equality on floats should bit-cast to the same-width integer dtype before calling.
+
+The CUDA-only counterparts on `qd.simt.warp` (`warp.all_nonzero`, `warp.any_nonzero`, `warp.unique`) remain available; they take an explicit active mask and stay CUDA-bound, unlike the new portable `subgroup.*` versions.
 
 ### Reductions and scans
 
@@ -209,9 +213,22 @@ Per-lane exclusive scan over `2**log2_size` consecutive lanes, under the binary 
 - All seven share a single `@qd.func` helper (`_exclusive_scan`) that runs the inclusive scan, shifts the result up by one lane via `shuffle_up`, and substitutes `identity` at lane 0 of each group. The lane-0 substitution is required because `shuffle_up` with offset 1 is implementation-defined at lane 0 (and `OpGroupNonUniformShuffleUp` calls it undefined outright).
 - AMDGPU performance note (`*` in the table): same `ds_bpermute` cost as `shuffle_up`. Cost is one inclusive scan plus one extra `shuffle_up` and a select.
 
-### `all_true`, `any_true`, `all_equal`
+### `all_true(predicate, log2_size)` / `any_true(predicate, log2_size)`
 
-These names are present in `python/quadrants/lang/simt/subgroup.py` but are currently `# TODO` stubs that return `None` on every backend. They are listed in the support matrices above for completeness — calling them produces a tracing failure rather than a useful operation. Do not depend on them today.
+Per-lane AND-reduction (`all_true`) or OR-reduction (`any_true`) of `predicate != 0` across `2**log2_size` consecutive lanes. Returns `i32` (`0` or `1`), broadcast to every lane in the group.
+
+- `predicate` is any scalar dtype. The op compares `predicate != 0` at the start, so e.g. `subgroup.all_true(some_int_field[i], 5)` is well-formed.
+- `log2_size` is a `qd.template()` — a compile-time constant. Caller must ensure `2**log2_size` does not exceed the active subgroup size (32 on CUDA / Metal / RDNA, 64 on CDNA).
+- CUDA full-warp shortcut: when `log2_size == 5`, lowers to a single `__all_sync(0xFFFFFFFF, p)` / `__any_sync(0xFFFFFFFF, p)` via the `cuda_all_sync_i32` / `cuda_any_sync_i32` runtime helpers (one `vote.all` / `vote.any` instruction). The shortcut is selected at trace time via `qd.static()` on the active arch and `log2_size`, so the IR contains exactly the intrinsic call and no branch.
+- Portable fallback (every other backend, and CUDA at `log2_size < 5`): `shuffle_xor` butterfly — `log2_size` shuffles plus `log2_size` ANDs (or ORs), fully unrolled into the calling kernel's IR. Same shape as `reduce_all_add`.
+
+### `all_equal(value, log2_size)`
+
+Returns `i32(1)` on every lane in each `2**log2_size` group iff every lane in the group has the same `value` (under the backend's native `==`), else `i32(0)`.
+
+- `value` is any scalar dtype. Equality is the backend's native `==`: for floats this means `NaN != NaN` (a group with any `NaN` returns `0`) and `+0.0 == -0.0`, matching SPIR-V `OpGroupNonUniformAllEqual`. Callers wanting bit-equality on floats should `qd.bit_cast` to the same-width integer dtype first.
+- Implementation: each lane computes `group_base = invocation_id() & ~(2**log2_size - 1)`, reads the value at `group_base` via `shuffle`, compares to its own `value`, and `all_true`-reduces the equality bit. Inherits the CUDA full-warp shortcut transitively from `all_true`.
+- Cost: 1 shuffle + 1 `vote.all` on CUDA at `log2_size == 5`; 1 shuffle + `log2_size` butterfly shuffles otherwise. We deliberately do *not* use `__match_all_sync` on CUDA: it requires sm_70+ and uses bit-equality for floats, which would contradict this op's documented semantics.
 
 ## Examples
 
@@ -355,4 +372,4 @@ After the call, lane `k` (within each group of 32) holds `a[group_start] + a[gro
 ## Related
 
 - [tile16](tile16.md) — `Tile16x16` builds on `subgroup.shuffle` to implement register-resident 16×16 matrix tiles.
-- `qd.simt.warp.*` — CUDA-only counterparts to the still-stubbed `subgroup.{ballot, all_true, any_true, match_*, active_mask, ...}`. Useful as a fallback when the portable version is not yet implemented; loses cross-backend portability.
+- `qd.simt.warp.*` — CUDA-only counterparts (`warp.all_nonzero`, `warp.any_nonzero`, `warp.unique`, `warp.ballot`, `warp.match_*`, `warp.active_mask`, ...). The voting ops (`all_nonzero` / `any_nonzero` / `unique`) overlap with the new portable `subgroup.{all_true, any_true}`; the rest stay CUDA-bound. Useful when you need explicit active-mask control or an op that has no portable equivalent yet.

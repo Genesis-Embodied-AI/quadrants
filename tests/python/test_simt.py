@@ -1111,6 +1111,140 @@ def test_subgroup_exclusive_xor(dtype, log2_size):
     )
 
 
+# Voting / predicate ops.  All three are group-scoped over 2**log2_size lanes; the
+# scenario tables below exercise (a) every-lane-true / every-lane-false, (b) a single
+# odd lane in one group with the rest all-true / all-false (group isolation), and (c)
+# a sparse pattern that lands several groups in the all-true case and several in the
+# mixed case so the per-group reduction is the only thing distinguishing them.  We
+# verify every group across the full 64-lane launch (so log2_size in {1..4} covers the
+# multi-group case and log2_size==5 covers the full-warp / CUDA fast-path case, and
+# the launch spans two CUDA / Metal / RDNA subgroups so cross-subgroup leakage would
+# also be caught).
+
+
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_all_true(log2_size):
+    """``all_true(predicate, log2_size)`` is ``i32(all(predicate != 0))`` over each
+    ``2**log2_size`` group, broadcast to every lane in the group."""
+    N = 64
+    src = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.all_true(src[i], log2_size)
+
+    group_size = 1 << log2_size
+
+    def run_and_check(label, src_values):
+        for i in range(N):
+            src[i] = src_values[i]
+        foo()
+        for g in range(N // group_size):
+            base = g * group_size
+            expected = int(all(src_values[base + k] != 0 for k in range(group_size)))
+            for k in range(group_size):
+                got = dst[base + k]
+                assert got == expected, (
+                    f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
+                )
+
+    run_and_check("all-1", [1] * N)
+    run_and_check("all-0", [0] * N)
+    mixed = [1] * N
+    mixed[3] = 0
+    run_and_check("zero-at-3", mixed)
+    run_and_check("sparse-zeros", [(0 if (i % 7 == 0) else 1) for i in range(N)])
+
+
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_any_true(log2_size):
+    """``any_true(predicate, log2_size)`` is ``i32(any(predicate != 0))`` over each
+    ``2**log2_size`` group, broadcast to every lane in the group."""
+    N = 64
+    src = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.any_true(src[i], log2_size)
+
+    group_size = 1 << log2_size
+
+    def run_and_check(label, src_values):
+        for i in range(N):
+            src[i] = src_values[i]
+        foo()
+        for g in range(N // group_size):
+            base = g * group_size
+            expected = int(any(src_values[base + k] != 0 for k in range(group_size)))
+            for k in range(group_size):
+                got = dst[base + k]
+                assert got == expected, (
+                    f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
+                )
+
+    run_and_check("all-1", [1] * N)
+    run_and_check("all-0", [0] * N)
+    one_at = [0] * N
+    one_at[3] = 1
+    run_and_check("one-at-3", one_at)
+    run_and_check("sparse-ones", [(1 if (i % 7 == 0) else 0) for i in range(N)])
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_all_equal(dtype, log2_size):
+    """``all_equal(value, log2_size)`` is ``i32(all values equal)`` over each
+    ``2**log2_size`` group, broadcast to every lane in the group.  Equality is the
+    backend's native ``==``; we restrict scenarios to exactly-representable values
+    (small integers / their f32+f64 castings) so float ``==`` is unambiguous."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.all_equal(src[i], log2_size)
+
+    group_size = 1 << log2_size
+
+    def run_and_check(label, src_values):
+        for i in range(N):
+            src[i] = src_values[i]
+        foo()
+        for g in range(N // group_size):
+            base = g * group_size
+            base_val = src_values[base]
+            expected = int(all(src_values[base + k] == base_val for k in range(group_size)))
+            for k in range(group_size):
+                got = dst[base + k]
+                assert got == expected, (
+                    f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
+                )
+
+    run_and_check("all-same", [42] * N)
+    run_and_check("all-distinct", list(range(N)))
+    run_and_check(
+        "same-per-group",
+        [g for g in range(N // group_size) for _ in range(group_size)],
+    )
+    run_and_check(
+        "one-outlier-per-group",
+        [(99 if (i % group_size) == (group_size - 1) else 7) for i in range(N)],
+    )
+
+
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_invocation_id_range():
     """Verify invocation IDs are non-negative."""

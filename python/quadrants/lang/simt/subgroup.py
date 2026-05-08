@@ -2,6 +2,7 @@
 
 import warnings
 
+from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang import ops as qd_ops
 from quadrants.lang.kernel_impl import func
@@ -64,19 +65,89 @@ def elect():
     return i32(invocation_id() == 0)
 
 
-def all_true(cond):
-    # TODO
-    pass
+# --- Voting / predicate ops ------------------------------------------------------------
+#
+# All three are group-scoped over ``2**log2_size`` consecutive lanes, mirror the API of
+# ``reduce_all_add`` / ``inclusive_*`` / ``exclusive_*``, and broadcast the result to every
+# lane in the group as an ``i32`` (``0`` or ``1``).
+#
+# Backend strategy
+# ----------------
+# * On CUDA, when ``log2_size == 5`` (full warp), ``all_true`` / ``any_true`` lower to
+#   ``__all_sync(0xFFFFFFFF, p)`` / ``__any_sync(0xFFFFFFFF, p)`` (one ``vote.all`` /
+#   ``vote.any`` instruction).  This shortcut is selected at trace time via ``static()`` on
+#   ``impl.current_cfg().arch`` and on the compile-time ``log2_size`` template, so it
+#   collapses to a single intrinsic call in the IR with no overhead vs. handwritten CUDA.
+# * Every other backend, and CUDA for partial-warp groups, uses a portable
+#   ``shuffle_xor`` butterfly: ``log2_size`` shuffles + ``log2_size`` ANDs / ORs, fully
+#   unrolled into the calling kernel's IR.  Same shape as ``reduce_all_add``.
+# * ``all_equal`` is always implemented as ``all_true(value == broadcast_group_lane_0)``,
+#   so it inherits the CUDA shortcut transitively.  We don't reach for
+#   ``__match_all_sync`` because (a) it requires sm_70+, (b) it does bit-equality on
+#   floats, contradicting the SPIR-V ``OpGroupNonUniformAllEqual`` semantics this op
+#   advertises (``NaN != NaN``, ``+0.0 == -0.0``), and (c) the broadcast-then-AND form is
+#   only one shuffle slower while staying on the same code path everywhere.
 
 
-def any_true(cond):
-    # TODO
-    pass
+@func
+def all_true(predicate, log2_size: template()):
+    """AND-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns
+    ``1`` (``i32``) on every lane of the group iff every lane in the group has a non-zero
+    ``predicate``, else ``0``.
+
+    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the
+    target (32 on CUDA / Metal / RDNA, 64 on CDNA).  ``log2_size`` is a compile-time
+    template; the body is fully unrolled.
+    """
+    p = i32(predicate != 0)
+    if impl.static(impl.current_cfg().arch == _qd_core.cuda and log2_size == 5):
+        return impl.call_internal(
+            "cuda_all_sync_i32", u32(0xFFFFFFFF), p, with_runtime_context=False
+        )
+    for i in impl.static(range(log2_size)):
+        mask = impl.static(1 << i)
+        p = p & shuffle_xor(p, u32(mask))
+    return p
 
 
-def all_equal(value):
-    # TODO
-    pass
+@func
+def any_true(predicate, log2_size: template()):
+    """OR-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns
+    ``1`` (``i32``) on every lane of the group iff at least one lane in the group has a
+    non-zero ``predicate``, else ``0``.
+
+    See `all_true` for the size contract.
+    """
+    p = i32(predicate != 0)
+    if impl.static(impl.current_cfg().arch == _qd_core.cuda and log2_size == 5):
+        return impl.call_internal(
+            "cuda_any_sync_i32", u32(0xFFFFFFFF), p, with_runtime_context=False
+        )
+    for i in impl.static(range(log2_size)):
+        mask = impl.static(1 << i)
+        p = p | shuffle_xor(p, u32(mask))
+    return p
+
+
+@func
+def all_equal(value, log2_size: template()):
+    """Return ``1`` (``i32``) on every lane in each ``2**log2_size`` group iff every lane
+    in the group has the same ``value``, else ``0``.
+
+    Equality is the backend's native ``==`` on ``value``'s dtype: for floats this means
+    ``NaN != NaN`` (a group with any ``NaN`` returns ``0``) and ``+0.0 == -0.0``,
+    matching SPIR-V ``OpGroupNonUniformAllEqual``.  Callers wanting bit-equality on
+    floats should bit-cast to the same-width integer dtype before calling.
+
+    Implementation: each lane reads the value at the start of its group via ``shuffle``,
+    then ``all_true`` AND-reduces the per-lane equality bit.  Cost: one ``shuffle`` plus
+    one ``all_true`` (one ``vote.all`` on CUDA at ``log2_size == 5``, otherwise a
+    ``log2_size``-deep ``shuffle_xor`` butterfly).
+    """
+    lane = invocation_id()
+    group_base = u32(lane) & u32(~((1 << log2_size) - 1) & 0xFFFFFFFF)
+    base = shuffle(value, group_base)
+    return all_true(i32(value == base), log2_size)
 
 
 def broadcast(value, index):
