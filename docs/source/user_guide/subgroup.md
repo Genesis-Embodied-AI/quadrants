@@ -56,8 +56,6 @@ CUDA shortcut: when `log2_size == 5` (full warp), `all_true` / `any_true` lower 
 
 `all_equal` always uses the broadcast-and-`all_true` form: every lane reads the value at the start of its group via `shuffle`, compares it with its own value, and `all_true`-reduces the per-lane equality bit. Cost: `1 + log2_size` shuffles in the portable case, or `1 shuffle + 1 vote.all` on CUDA at full-warp. We deliberately do *not* use `__match_all_sync` even on CUDA: it requires sm_70+, and it does bit-equality on floats, contradicting this op's documented `OpGroupNonUniformAllEqual` semantics (`NaN != NaN`, `+0.0 == -0.0`). Callers wanting bit-equality on floats should bit-cast to the same-width integer dtype before calling.
 
-The CUDA-only counterparts on `qd.simt.warp` (`warp.all_nonzero`, `warp.any_nonzero`, `warp.unique`) remain available; they take an explicit active mask and stay CUDA-bound, unlike the new portable `subgroup.*` versions.
-
 ### Reductions and scans
 
 `reduce_add`, `reduce_all_add`, and all seven `inclusive_*` and `exclusive_*` ops take a `log2_size` parameter.
