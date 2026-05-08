@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 import quadrants as qd
@@ -516,6 +518,48 @@ def test_atomic_mul_contention(dtype):
     else:
         rtol = 1e-6 if dtype == qd.f32 else 1e-12
         assert arr[0] == test_utils.approx(float(expected), rel=rtol)
+
+
+# Pins the doc claim that floating-point atomic_min / atomic_max use
+# minNum / maxNum-style NaN semantics: when exactly one operand is NaN,
+# the non-NaN value is written back. Asserted on every GPU backend and
+# both arg orders. CPU is intentionally out of scope here -- the doc
+# explicitly warns that the CPU CAS path uses naive </</> > comparisons
+# with order-dependent results.
+@pytest.mark.parametrize("op", ["min", "max"])
+@pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_min_max_nan_seed(op, dtype):
+    test_utils.skip_if_f64_unsupported(dtype)
+    f = qd.field(dtype, shape=())
+    f[None] = float("nan")
+    atomic_op = getattr(qd, f"atomic_{op}")
+
+    @qd.kernel
+    def kern():
+        atomic_op(f[None], qd.cast(7.0, dtype))
+
+    kern()
+    assert not math.isnan(float(f[None]))
+    assert float(f[None]) == 7.0
+
+
+@pytest.mark.parametrize("op", ["min", "max"])
+@pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_min_max_nan_arg(op, dtype):
+    test_utils.skip_if_f64_unsupported(dtype)
+    f = qd.field(dtype, shape=())
+    f[None] = 7.0
+    atomic_op = getattr(qd, f"atomic_{op}")
+
+    @qd.kernel
+    def kern():
+        atomic_op(f[None], qd.cast(qd.math.nan, dtype))
+
+    kern()
+    assert not math.isnan(float(f[None]))
+    assert float(f[None]) == 7.0
 
 
 # Pins the doc claim that vector/matrix arguments to atomic ops fan out to one
