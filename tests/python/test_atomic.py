@@ -483,6 +483,41 @@ def test_atomic_mul_f32():
     assert mul_kernel() == 5040.0
 
 
+# Pins the doc claim that atomic_mul works (via CAS loop) under
+# multi-thread contention on every GPU backend, for both ints and
+# floats including f64. Existing coverage is single-thread only
+# (test_atomic_mul_f32, test_atomic_mul_expr_evaled). Values chosen
+# so the product is representable exactly in i32 / f32 / f64.
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_mul_contention(dtype):
+    test_utils.skip_if_f64_unsupported(dtype)
+    block_dim = 4
+    nblocks = 4
+    N = block_dim * nblocks
+
+    arr = qd.ndarray(dtype, (1,))
+    arr[0] = 1
+
+    @qd.kernel
+    def kern(out: qd.types.ndarray()):
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            qd.atomic_mul(out[0], qd.cast(tid + 1, dtype))
+
+    kern(arr)
+    per_block = 1
+    for v in range(1, block_dim + 1):
+        per_block *= v
+    expected = per_block**nblocks
+    if dtype == qd.i32:
+        assert int(arr[0]) == expected
+    else:
+        rtol = 1e-6 if dtype == qd.f32 else 1e-12
+        assert arr[0] == test_utils.approx(float(expected), rel=rtol)
+
+
 # Pins the doc claim that vector/matrix arguments to atomic ops fan out to one
 # scalar atomic per component (no all-or-nothing guarantee across components,
 # but every component must be summed exactly).
