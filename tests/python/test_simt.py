@@ -822,6 +822,42 @@ def test_subgroup_reduce_all_add(dtype, log2_size):
             assert abs(dst[i] - expected) < 1e-4 * abs(expected), f"lane {i}: got {dst[i]}, expected {expected}"
 
 
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_inclusive_add(dtype, log2_size):
+    """Portable Hillis-Steele inclusive prefix sum: lane k of each 2**log2_size group has
+    sum(src[group_base..group_base+k+1])."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.inclusive_add(src[i], log2_size)
+
+    _init_field(src, N, dtype)
+    foo()
+
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    group_size = 1 << log2_size
+    # Verify only the first group's worth of lanes; with 64 launch-threads on a 32-lane
+    # subgroup the first 32 cleanly cover one group of size group_size (group_size <= 32).
+    running = 0
+    for k in range(group_size):
+        running += src[k]
+        got = dst[k]
+        if dtype in int_dtypes:
+            assert got == running, f"lane {k}: got {got}, expected {running}"
+        else:
+            assert abs(got - running) < 1e-4 * max(abs(running), 1.0), (
+                f"lane {k}: got {got}, expected {running}"
+            )
+
+
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_invocation_id_range():
     """Verify invocation IDs are non-negative."""

@@ -36,7 +36,6 @@ PER_INTERNAL_OP(subgroupInvocationId)
 // removed: use portable Python `subgroup.reduce_add(value, log2_size)` (and equivalents) on top
 // of `subgroupShuffleDown` / `subgroupShuffle`, which work on all backends.  The inclusive-scan
 // ops below remain SPIR-V-only pending portable replacements.
-PER_INTERNAL_OP(subgroupInclusiveAdd)
 PER_INTERNAL_OP(subgroupInclusiveMul)
 PER_INTERNAL_OP(subgroupInclusiveMin)
 PER_INTERNAL_OP(subgroupInclusiveMax)

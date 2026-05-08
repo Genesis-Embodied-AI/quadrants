@@ -56,13 +56,13 @@ All three are TODO stubs in `python/quadrants/lang/simt/subgroup.py` and current
 
 ### Reductions and scans
 
-`reduce_add` and `reduce_all_add` already take a `log2_size` parameter. The `inclusive_*` and `exclusive_*` rows below do not. Although these functions exist, we will migrate the `inclusive_*` and `exclusive_*` ops to have an additional `log2_size` parameter, similar to `reduce_add` — so that the scan is over the first `2**log2_size` lanes rather than the full subgroup.
+`reduce_add` and `reduce_all_add` take a `log2_size` parameter. `inclusive_add` does too. The other `inclusive_*` ops are mid-migration: they currently take `(value)` and scan over the full subgroup; they will gain a `log2_size` parameter as portable replacements land. The `exclusive_*` rows are still TODO stubs.
 
 | Op                                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                       |
 |---------------------------------------------|------|--------|-------------------------|------------------------------|
 | `subgroup.reduce_add(v, log2_size)`         | yes  | yes\*  | yes                     | any type supporting `+`      |
 | `subgroup.reduce_all_add(v, log2_size)`     | yes  | yes    | yes                     | any type supporting `+`      |
-| `subgroup.inclusive_add(value)`             | no   | no     | yes                     | integer + float             |
+| `subgroup.inclusive_add(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
 | `subgroup.inclusive_mul(value)`             | no   | no     | yes                     | integer + float             |
 | `subgroup.inclusive_min(value)`             | no   | no     | yes                     | integer + float             |
 | `subgroup.inclusive_max(value)`             | no   | no     | yes                     | integer + float             |
@@ -182,13 +182,24 @@ Same sum as `reduce_add`, but broadcast to **every lane** in each `2**log2_size`
 - Use this when every lane needs the reduction result (e.g. to divide by the sum, or to branch on it uniformly). It costs exactly the same number of shuffles as `reduce_add` but leaves the answer in all lanes, so it replaces a `reduce_add` + `shuffle`/broadcast pair.
 - Uses `subgroup.shuffle` under the hood.
 
-### `inclusive_add` / `inclusive_mul` / `inclusive_min` / `inclusive_max` / `inclusive_and` / `inclusive_or` / `inclusive_xor`
+### `inclusive_add(value, log2_size)`
+
+Per-lane inclusive prefix sum over `2**log2_size` consecutive lanes. Lane `i` within each group of `2**log2_size` lanes returns `v[group_start] + v[group_start + 1] + ... + v[i]`.
+
+- `log2_size` is a `qd.template()` — a compile-time constant. The body unrolls into exactly `log2_size` `shuffle_up + add` pairs in the calling kernel's IR, with no runtime loop overhead.
+- `2**log2_size` must not exceed the active subgroup size on the target (32 on CUDA / Metal / RDNA, 64 on CDNA). Passing a larger value produces implementation-defined results; it does not error.
+- Works on any type that supports `+` and `shuffle_up`; in practice this means `i32`, `u32`, `f32`, `f64`, `i64`, `u64`.
+- Implemented as a `@qd.func` Hillis-Steele scan over `shuffle_up`. The shuffle is in uniform CF (every lane participates); only the per-lane add is conditional, which is allowed by the `shuffle_up` contract on every backend. Cross-group `shuffle_up` partners are masked off by the per-lane `lane_in_group >= offset` guard, so groups smaller than the full subgroup compose correctly.
+- Decorated with `@qd.func` and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.
+- AMDGPU note (`*` in the table): same `ds_bpermute` cost as `shuffle_up` — roughly tens of cycles per step × `log2_size` steps.
+
+### `inclusive_mul` / `inclusive_min` / `inclusive_max` / `inclusive_and` / `inclusive_or` / `inclusive_xor`
 
 Per-lane inclusive scans over the full subgroup. Lane `i` receives `v[0] op v[1] op ... op v[i]`, where `op` is the operation indicated by the suffix and `v[k]` is the `value` held by lane `k`.
 
 - Currently SPIR-V only (`OpGroupNonUniformInclusiveScan` parameterised by the operation). On CUDA / AMDGPU, fall through to the generic LLVM runtime-call path and fail to link; until they are added, build the equivalent on top of `shuffle_down` / `shuffle_up` with a log2-step loop.
-- `_add`, `_mul`, `_min`, `_max` accept integer and float dtypes; `_and`, `_or`, `_xor` accept integer dtypes only.
-- The operation is over the full subgroup; there is no sized variant. For sums, a sized portable inclusive scan can be derived from `reduce_add` plus a prefix-fixup pattern.
+- `_mul`, `_min`, `_max` accept integer and float dtypes; `_and`, `_or`, `_xor` accept integer dtypes only.
+- The operation is over the full subgroup; there is no sized variant. These will gain a `log2_size` parameter as the same portable migration is applied (see `inclusive_add` above).
 
 ### `exclusive_*`, `all_true`, `any_true`, `all_equal`
 
@@ -311,17 +322,17 @@ Every lane in each group of 32 sees the same `total`.
 
 `log2_size` does not have to match the full subgroup. Sum groups of 8 with `reduce_add(v, 3)` or groups of 16 with `reduce_all_add(v, 4)`; the caller just ensures `2**log2_size <= subgroup_size` (so up to 5 on CUDA / Metal / RDNA, up to 6 on CDNA).
 
-### Inclusive scan on SPIR-V
+### Inclusive scan with `inclusive_add`
 
 ```python
 @qd.kernel
 def cumsum(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
     qd.loop_config(block_dim=32)
     for i in range(a.shape[0]):
-        a[i] = subgroup.inclusive_add(a[i])
+        a[i] = subgroup.inclusive_add(a[i], 5)
 ```
 
-After the call, lane `k` holds `a[0] + a[1] + ... + a[k]`. This compiles only on SPIR-V backends today; for a portable inclusive scan, build one on `shuffle_down` / `shuffle_up` with a log2-step loop.
+After the call, lane `k` (within each group of 32) holds `a[group_start] + a[group_start+1] + ... + a[k]`. The `5` is `log2_size`; `2**5 == 32` matches the block dim. The body unrolls at trace time into five `shuffle_up + add` pairs. Use a smaller `log2_size` to scan over partial-subgroup groups (e.g. `inclusive_add(v, 3)` produces independent prefix sums in groups of 8).
 
 ## Performance notes
 
@@ -331,7 +342,7 @@ After the call, lane `k` holds `a[0] + a[1] + ... + a[k]`. This compiles only on
 - `reduce_add` and `reduce_all_add` both issue exactly `log2_size` shuffles and `log2_size` adds per call. No barriers, no shared memory, no launch overhead (they inline).
 - Pick `reduce_all_add` over `reduce_add + broadcast` when you need the result in every lane — same cost, one fewer shuffle.
 - 64-bit dtypes (`i64`, `u64`, `f64`) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.
-- `inclusive_*` (SPIR-V) lowers to a single `OpGroupNonUniform*` instruction — hardware-assisted on most modern GPUs.
+- `inclusive_add` is a `@qd.func` Hillis-Steele scan; cost is exactly `log2_size` shuffle+add pairs, the same as a hand-rolled CUDA warp scan. The remaining `inclusive_*` ops still lower to a single `OpGroupNonUniform*` instruction on SPIR-V (hardware-assisted on most modern GPUs); on CUDA / AMDGPU they are unimplemented today.
 
 ## Related
 

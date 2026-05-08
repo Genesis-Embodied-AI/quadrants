@@ -140,8 +140,32 @@ def reduce_all_add(value, log2_size: template()):
 # following the same pattern as `reduce_add` / `reduce_all_add` above when needed.
 
 
-def inclusive_add(value):
-    return impl.call_internal("subgroupInclusiveAdd", value, with_runtime_context=False)
+@func
+def inclusive_add(value, log2_size: template()):
+    """Inclusive prefix sum across ``2**log2_size`` consecutive lanes.
+
+    Lane ``i`` within each group of ``2**log2_size`` lanes returns
+    ``v[group_start] + v[group_start + 1] + ... + v[i]``.  Caller must ensure
+    ``2**log2_size`` does not exceed the active subgroup size on the target
+    (32 on CUDA / Metal / RDNA, 64 on CDNA).
+
+    ``log2_size`` is a compile-time template; the body is fully unrolled into
+    ``log2_size`` shuffle+add pairs.
+
+    Implementation: Hillis-Steele scan over ``shuffle_up``.  The shuffle is in uniform
+    control flow (every lane participates), the conditional update is per-lane
+    arithmetic only — same pattern as a hand-rolled CUDA warp scan, but written once
+    portably.  Cross-group ``shuffle_up`` partners are masked out by the per-lane
+    ``lane_in_group >= offset`` guard, so groups of size ``2**log2_size`` smaller than
+    the full subgroup compose correctly.
+    """
+    lane_in_group = invocation_id() & impl.static((1 << log2_size) - 1)
+    for i in impl.static(range(log2_size)):
+        offset = impl.static(1 << i)
+        partner = shuffle_up(value, u32(offset))
+        if lane_in_group >= offset:
+            value = value + partner
+    return value
 
 
 def inclusive_mul(value):

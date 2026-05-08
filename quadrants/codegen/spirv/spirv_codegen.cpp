@@ -1394,9 +1394,13 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
   // Python `subgroup.reduce_add(value, log2_size)` (and equivalents) on top of the cross-platform
   // `subgroupShuffleDown` / `subgroupShuffle` primitives instead.  The inclusive-scan ops below
   // are still SPIR-V-only and remain pending portable replacements.
+  // `subgroupInclusiveAdd` is no longer in this set: it is now implemented as a portable
+  // ``@qd.func`` shuffle_up wrapper in `qd.simt.subgroup`, so this codegen path is no
+  // longer reachable from Python.  The other inclusive ops still live here pending the
+  // same migration.
   const std::unordered_set<std::string> inclusive_scan_ops{
-      "subgroupInclusiveAdd", "subgroupInclusiveMul", "subgroupInclusiveMin", "subgroupInclusiveMax",
-      "subgroupInclusiveAnd", "subgroupInclusiveOr",  "subgroupInclusiveXor"};
+      "subgroupInclusiveMul", "subgroupInclusiveMin", "subgroupInclusiveMax", "subgroupInclusiveAnd",
+      "subgroupInclusiveOr",  "subgroupInclusiveXor"};
 
   const std::unordered_set<std::string> shuffle_ops{"subgroupShuffleDown", "subgroupShuffleUp", "subgroupShuffle"};
 
