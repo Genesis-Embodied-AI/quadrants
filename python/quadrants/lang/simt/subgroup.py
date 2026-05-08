@@ -4,7 +4,6 @@ import warnings
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
-from quadrants.lang import ops as qd_ops
 from quadrants.lang.kernel_impl import func
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import i32, u32
@@ -267,20 +266,19 @@ def _inclusive_scan(value, op: template(), log2_size: template()):
     partners are masked out by ``lane_in_group >= offset``, so groups smaller than the
     full subgroup compose correctly when ``log2_size < log2(group_size)``.
 
-    The conditional update uses ``qd.select`` (which lowers to ``OpSelect``) rather
-    than an ``if`` statement.  An ``if``-introduced control-flow split over a
-    subgroup-derived predicate, followed by a downstream subgroup op (the next
-    ``shuffle_up`` either inside this loop or in `_exclusive_scan`), miscompiles on
-    MoltenVK / Metal: lanes that took the false branch reconverge with stale
-    register state, so the next ``shuffle_up`` reads garbage.  ``OpSelect`` keeps
-    every lane in straight-line code and sidesteps the issue.  ``op(value, partner)``
-    has no side effects, so unconditionally evaluating it is fine.
+    Note: ``qd.select`` cannot be used here instead of ``if`` because ``OpSelect`` on
+    MoltenVK / Metal miscompiles when one operand is an f32 produced by a shuffle
+    intrinsic—the select silently returns the false-branch value regardless of the
+    condition.  The ``if`` form works correctly for the inclusive scan on its own;
+    callers that issue further subgroup ops after this scan (e.g. `_exclusive_scan`)
+    must insert a ``sync()`` barrier to force reconvergence before the next shuffle.
     """
     lane_in_group = invocation_id() & impl.static((1 << log2_size) - 1)
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << i)
         partner = shuffle_up(value, u32(offset))
-        value = qd_ops.select(lane_in_group >= offset, op(value, partner), value)
+        if lane_in_group >= offset:
+            value = op(value, partner)
     return value
 
 
@@ -363,19 +361,19 @@ def inclusive_xor(value, log2_size: template()):
 
 @func
 def _exclusive_scan(value, op: template(), identity, log2_size: template()):
-    """Generic exclusive scan: run the inclusive scan under ``op`` over ``2**log2_size``
-    consecutive lanes, then shift up by one lane and substitute ``identity`` at lane 0
-    of each group.
+    """Generic exclusive scan over ``2**log2_size`` consecutive lanes.
 
-    The lane-0 substitution uses ``qd.select`` rather than an ``if`` for the same
-    reason as `_inclusive_scan`: an ``if``-then-assignment guarded by a
-    subgroup-derived predicate miscompiles on MoltenVK / Metal when the surrounding
-    function also issues subgroup ops (this whole helper is one such call site).
+    Shift the input right by one lane within each group (filling lane 0 with
+    ``identity``), then run the inclusive scan on the shifted data.  This avoids
+    issuing a ``shuffle_up`` on the inclusive-scan result, which miscompiles on
+    MoltenVK / Metal (the SPIR-V compiler misoptimizes the register holding the
+    inclusive result when it is only consumed by a shuffle intrinsic).
     """
-    inc = _inclusive_scan(value, op, log2_size)
-    shifted = shuffle_up(inc, u32(1))
     lane_in_group = invocation_id() & impl.static((1 << log2_size) - 1)
-    return qd_ops.select(lane_in_group == 0, identity, shifted)
+    prev = shuffle_up(value, u32(1))
+    if lane_in_group == 0:
+        prev = identity
+    return _inclusive_scan(prev, op, log2_size)
 
 
 @func
