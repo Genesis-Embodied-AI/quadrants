@@ -258,39 +258,104 @@ def inclusive_xor(value, log2_size: template()):
     return _inclusive_scan(value, _bin_xor, log2_size)
 
 
-def exclusive_add(value):
-    # TODO
-    pass
+# --- Exclusive scans -------------------------------------------------------------------
+#
+# Each `exclusive_*` runs the inclusive scan, then shifts the result up by one lane via
+# `shuffle_up(inc, 1)` and replaces lane 0 of every group with the operator's identity.
+# Lane 0's result must be set explicitly because `shuffle_up` with offset 1 returns an
+# implementation-defined value at lane 0 (and `OpGroupNonUniformShuffleUp` calls it
+# undefined outright).  See `_exclusive_scan` for the shared body.
+#
+# Identity per op (in `value`'s dtype, expressed via dtype-preserving arithmetic so the
+# wrapper does not need to inspect the dtype):
+#
+#   add: ``value - value``                  (zero)
+#   mul: ``value - value + 1``              (one; the literal +1 takes value's dtype)
+#   or:  ``value ^ value``                  (zero; bitwise xor of value with itself)
+#   xor: ``value ^ value``                  (zero)
+#   and: ``~(value ^ value)``               (all bits set; bitwise not of zero)
+#
+# For min and max there is no portable type-extreme that can be derived from `value`
+# alone, so those two ops take an explicit ``identity`` argument: pass +∞ for
+# `exclusive_min`, −∞ for `exclusive_max` (or whatever sentinel makes sense for the
+# caller's dtype and value range).
 
 
-def exclusive_mul(value):
-    # TODO
-    pass
+@func
+def _exclusive_scan(value, op: template(), identity, log2_size: template()):
+    """Generic exclusive scan: run the inclusive scan under ``op`` over ``2**log2_size``
+    consecutive lanes, then shift up by one lane and substitute ``identity`` at lane 0
+    of each group."""
+    inc = _inclusive_scan(value, op, log2_size)
+    shifted = shuffle_up(inc, u32(1))
+    lane_in_group = invocation_id() & impl.static((1 << log2_size) - 1)
+    result = shifted
+    if lane_in_group == 0:
+        result = identity
+    return result
 
 
-def exclusive_min(value):
-    # TODO
-    pass
+@func
+def exclusive_add(value, log2_size: template()):
+    """Exclusive prefix sum across ``2**log2_size`` consecutive lanes.
+
+    Lane ``i`` (with ``i > 0``) within each group of ``2**log2_size`` lanes returns
+    ``v[group_start] + v[group_start + 1] + ... + v[i - 1]``.  Lane 0 of each group
+    returns the additive identity (zero, in ``value``'s dtype).
+    """
+    return _exclusive_scan(value, _bin_add, value - value, log2_size)
 
 
-def exclusive_max(value):
-    # TODO
-    pass
+@func
+def exclusive_mul(value, log2_size: template()):
+    """Exclusive prefix product across ``2**log2_size`` consecutive lanes.  Lane 0 of
+    each group returns the multiplicative identity (one, in ``value``'s dtype)."""
+    return _exclusive_scan(value, _bin_mul, value - value + 1, log2_size)
 
 
-def exclusive_and(value):
-    # TODO
-    pass
+@func
+def exclusive_min(value, log2_size: template(), identity):
+    """Exclusive prefix min across ``2**log2_size`` consecutive lanes.
+
+    Lane 0 of each group returns ``identity``: the caller must supply a value that is
+    ``>=`` every legal element of the input (typically ``+∞`` for floats, the dtype's
+    maximum for integers).  See the module-level note for why this op alone takes an
+    explicit identity.
+    """
+    return _exclusive_scan(value, _bin_min, identity, log2_size)
 
 
-def exclusive_or(value):
-    # TODO
-    pass
+@func
+def exclusive_max(value, log2_size: template(), identity):
+    """Exclusive prefix max across ``2**log2_size`` consecutive lanes.
+
+    Lane 0 of each group returns ``identity``: the caller must supply a value that is
+    ``<=`` every legal element of the input (typically ``-∞`` for floats, the dtype's
+    minimum for integers).  See the module-level note for why this op alone takes an
+    explicit identity.
+    """
+    return _exclusive_scan(value, _bin_max, identity, log2_size)
 
 
-def exclusive_xor(value):
-    # TODO
-    pass
+@func
+def exclusive_and(value, log2_size: template()):
+    """Exclusive prefix bitwise-AND.  Integer dtypes only.  Lane 0 of each group returns
+    all-bits-set in ``value``'s dtype."""
+    return _exclusive_scan(value, _bin_and, ~(value ^ value), log2_size)
+
+
+@func
+def exclusive_or(value, log2_size: template()):
+    """Exclusive prefix bitwise-OR.  Integer dtypes only.  Lane 0 of each group returns
+    zero in ``value``'s dtype."""
+    return _exclusive_scan(value, _bin_or, value ^ value, log2_size)
+
+
+@func
+def exclusive_xor(value, log2_size: template()):
+    """Exclusive prefix bitwise-XOR.  Integer dtypes only.  Lane 0 of each group returns
+    zero in ``value``'s dtype."""
+    return _exclusive_scan(value, _bin_xor, value ^ value, log2_size)
 
 
 def shuffle(value, index):

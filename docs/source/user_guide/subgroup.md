@@ -56,7 +56,7 @@ All three are TODO stubs in `python/quadrants/lang/simt/subgroup.py` and current
 
 ### Reductions and scans
 
-`reduce_add`, `reduce_all_add`, and all seven `inclusive_*` ops take a `log2_size` parameter. The `exclusive_*` rows are still TODO stubs.
+`reduce_add`, `reduce_all_add`, and all seven `inclusive_*` and `exclusive_*` ops take a `log2_size` parameter.
 
 | Op                                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                       |
 |---------------------------------------------|------|--------|-------------------------|------------------------------|
@@ -69,7 +69,13 @@ All three are TODO stubs in `python/quadrants/lang/simt/subgroup.py` and current
 | `subgroup.inclusive_and(v, log2_size)`      | yes  | yes\*  | yes                     | integer                      |
 | `subgroup.inclusive_or(v, log2_size)`       | yes  | yes\*  | yes                     | integer                      |
 | `subgroup.inclusive_xor(v, log2_size)`      | yes  | yes\*  | yes                     | integer                      |
-| `subgroup.exclusive_add` / `_mul` / `_min` / `_max` / `_and` / `_or` / `_xor` | no | no | no | — (TODO stubs) |
+| `subgroup.exclusive_add(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
+| `subgroup.exclusive_mul(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
+| `subgroup.exclusive_min(v, log2_size, identity)` | yes | yes\* | yes                  | integer + float             |
+| `subgroup.exclusive_max(v, log2_size, identity)` | yes | yes\* | yes                  | integer + float             |
+| `subgroup.exclusive_and(v, log2_size)`      | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.exclusive_or(v, log2_size)`       | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.exclusive_xor(v, log2_size)`      | yes  | yes\*  | yes                     | integer                      |
 
 The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_min` / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add(value)` with no `log2_size`) have been removed in favour of the portable sized API (`reduce_add(v, log2_size)` / `reduce_all_add(v, log2_size)`). For reductions other than sum, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern.
 
@@ -193,7 +199,17 @@ Per-lane inclusive scan over `2**log2_size` consecutive lanes, under the binary 
 - Decorated with `@qd.func` and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.
 - AMDGPU note (`*` in the table): same `ds_bpermute` cost as `shuffle_up` — roughly tens of cycles per step × `log2_size` steps. Hardware-accelerated `OpGroupNonUniformInclusiveScan` on SPIR-V is no longer used, even on backends that supported it (Vulkan, Metal); the trade-off is a uniform implementation across backends with predictable cost.
 
-### `exclusive_*`, `all_true`, `any_true`, `all_equal`
+### `exclusive_add` / `exclusive_mul` / `exclusive_min` / `exclusive_max` / `exclusive_and` / `exclusive_or` / `exclusive_xor`
+
+Per-lane exclusive scan over `2**log2_size` consecutive lanes, under the binary operator named by the suffix. Lane `i` (with `i > 0`) within each group of `2**log2_size` lanes returns `v[group_start] op v[group_start + 1] op ... op v[i - 1]`. Lane 0 of each group returns the operator's identity in `value`'s dtype.
+
+- `log2_size` is a `qd.template()` — a compile-time constant. The body unrolls into the inclusive scan (`log2_size` shuffle+op pairs) plus one extra `shuffle_up` and a per-lane select.
+- `_add`, `_mul`, `_or`, `_xor`, `_and` infer the lane-0 identity from `value`'s dtype: `value - value` (zero), `value - value + 1` (one), and `~(value ^ value)` (all bits set) respectively.
+- `_min` and `_max` take an explicit `identity` argument because there is no portable type-extreme literal that can be derived from `value` alone — pass `+∞` (or the dtype's max) for `_min`, `-∞` (or the dtype's min) for `_max`.
+- All seven share a single `@qd.func` helper (`_exclusive_scan`) that runs the inclusive scan, shifts the result up by one lane via `shuffle_up`, and substitutes `identity` at lane 0 of each group. The lane-0 substitution is required because `shuffle_up` with offset 1 is implementation-defined at lane 0 (and `OpGroupNonUniformShuffleUp` calls it undefined outright).
+- AMDGPU performance note (`*` in the table): same `ds_bpermute` cost as `shuffle_up`. Cost is one inclusive scan plus one extra `shuffle_up` and a select.
+
+### `all_true`, `any_true`, `all_equal`
 
 These names are present in `python/quadrants/lang/simt/subgroup.py` but are currently `# TODO` stubs that return `None` on every backend. They are listed in the support matrices above for completeness — calling them produces a tracing failure rather than a useful operation. Do not depend on them today.
 

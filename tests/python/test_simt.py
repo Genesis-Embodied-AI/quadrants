@@ -948,6 +948,155 @@ def test_subgroup_inclusive_xor(dtype, log2_size):
     _check_inclusive_scan(subgroup.inclusive_xor, lambda a, b: a ^ b, dtype, log2_size, _init_bitwise_int)
 
 
+# --- Exclusive scans ------------------------------------------------------------------
+#
+# Same kernel + verification shape as the inclusive tests above; the only differences are
+# (1) lane 0 of each group is expected to hold the operator's identity, and (2) for
+# min/max the wrapper takes an explicit `identity` arg that we pass through here.
+
+
+def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_init, *, takes_identity_arg=False):
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    if takes_identity_arg:
+        identity_value = py_identity
+
+        @qd.kernel
+        def foo():
+            qd.loop_config(block_dim=N)
+            for i in range(N):
+                dst[i] = scan_func(src[i], log2_size, identity_value)
+    else:
+
+        @qd.kernel
+        def foo():
+            qd.loop_config(block_dim=N)
+            for i in range(N):
+                dst[i] = scan_func(src[i], log2_size)
+
+    src_init(src, N, dtype)
+    foo()
+
+    group_size = 1 << log2_size
+    # Verify only the first group's worth of lanes; with 64 launch-threads on a 32-lane
+    # subgroup the first 32 cleanly cover one group of size group_size (group_size <= 32).
+    # exclusive[0] == identity; exclusive[k>0] == op-reduce(src[0..k]).
+    for k in range(group_size):
+        if k == 0:
+            expected = py_identity
+        else:
+            expected = src[0]
+            for j in range(1, k):
+                expected = py_op(expected, src[j])
+        got = dst[k]
+        if dtype in _INT_DTYPES:
+            assert got == expected, f"lane {k}: got {got}, expected {expected}"
+        else:
+            assert abs(got - expected) < 1e-4 * max(abs(expected), 1.0), (
+                f"lane {k}: got {got}, expected {expected}"
+            )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_exclusive_add(dtype, log2_size):
+    """Exclusive prefix sum.  Lane 0 of each group is 0."""
+    _check_exclusive_scan(
+        subgroup.exclusive_add, lambda a, b: a + b, 0, dtype, log2_size, _init_field
+    )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_exclusive_mul(dtype, log2_size):
+    """Exclusive prefix product.  Lane 0 of each group is 1."""
+    _check_exclusive_scan(
+        subgroup.exclusive_mul, lambda a, b: a * b, 1, dtype, log2_size, _init_small_int_or_float
+    )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_exclusive_min(dtype, log2_size):
+    """Exclusive prefix min.  Lane 0 of each group is the explicit `identity` we pass.
+    Use a sentinel larger than any element produced by `_init_varied_int_or_float` (max
+    is 23)."""
+    identity = 1_000_000 if dtype == qd.i32 else 1e30
+    _check_exclusive_scan(
+        subgroup.exclusive_min,
+        lambda a, b: min(a, b),
+        identity,
+        dtype,
+        log2_size,
+        _init_varied_int_or_float,
+        takes_identity_arg=True,
+    )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_exclusive_max(dtype, log2_size):
+    """Exclusive prefix max.  Lane 0 of each group is the explicit `identity` we pass.
+    Use a sentinel smaller than any element produced by `_init_varied_int_or_float` (min
+    is 1)."""
+    identity = -1_000_000 if dtype == qd.i32 else -1e30
+    _check_exclusive_scan(
+        subgroup.exclusive_max,
+        lambda a, b: max(a, b),
+        identity,
+        dtype,
+        log2_size,
+        _init_varied_int_or_float,
+        takes_identity_arg=True,
+    )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_exclusive_and(dtype, log2_size):
+    """Exclusive prefix bitwise-AND.  Lane 0 of each group is all-bits-set."""
+    _skip_if_f64_unsupported(dtype)
+    if dtype == qd.i32:
+        identity = -1
+    elif dtype == qd.i64:
+        identity = -1
+    else:  # u64
+        identity = (1 << 64) - 1
+    _check_exclusive_scan(
+        subgroup.exclusive_and, lambda a, b: a & b, identity, dtype, log2_size, _init_bitwise_int
+    )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_exclusive_or(dtype, log2_size):
+    """Exclusive prefix bitwise-OR.  Lane 0 of each group is 0."""
+    _skip_if_f64_unsupported(dtype)
+    _check_exclusive_scan(
+        subgroup.exclusive_or, lambda a, b: a | b, 0, dtype, log2_size, _init_bitwise_int
+    )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_exclusive_xor(dtype, log2_size):
+    """Exclusive prefix bitwise-XOR.  Lane 0 of each group is 0."""
+    _skip_if_f64_unsupported(dtype)
+    _check_exclusive_scan(
+        subgroup.exclusive_xor, lambda a, b: a ^ b, 0, dtype, log2_size, _init_bitwise_int
+    )
+
+
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_invocation_id_range():
     """Verify invocation IDs are non-negative."""
