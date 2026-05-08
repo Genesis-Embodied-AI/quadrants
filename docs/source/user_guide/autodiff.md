@@ -465,9 +465,9 @@ Quadrants computes that worst case at launch time - in this example, the max of 
 
 ### Evaluation paths
 
-On GPU backends the compiler picks one of two evaluation paths to compute the maximum based on the bound expression's structure; on CPU the sequential path is always taken since the runtime's CPU max-reducer is single-threaded and the parallel dispatch's per-launch setup would be pure overhead:
+The compiler picks one of two evaluation paths to compute the maximum based on the backend and the bound expression's structure:
 
-- **Parallel:** the maximum is computed with a tiny parallel reduction kernel on the GPU for efficiency. The reducer accepts a common subset of bound expressions:
+- **Parallel (GPU only):** the maximum is computed with a tiny parallel reduction kernel for efficiency. The reducer accepts a common subset of bound expressions:
   - **Integer ndarray or field read** up to 32 bits wide, indexed by literal constants or outer-loop variables: `arr[i, j]`, `field[i]`.
   - **Shape term**: `arr.shape[k]`.
   - **Literal integer constant**: `42`.

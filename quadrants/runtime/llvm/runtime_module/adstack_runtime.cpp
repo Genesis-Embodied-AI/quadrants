@@ -592,59 +592,14 @@ __attribute__((always_inline)) inline i64 runtime_eval_adstack_max_reduce_one_st
 }
 }  // namespace
 
-extern "C" void runtime_eval_adstack_max_reduce_serial(LLVMRuntime *runtime,
-                                                       RuntimeContext *ctx,
-                                                       Ptr params_blob,
-                                                       Ptr body_bytecode) {
-  using quadrants::lang::AdStackSizeExprDeviceNode;
-  using quadrants::lang::kAdStackMaxReducerMaxAxes;
-  using quadrants::lang::LlvmAdStackMaxReducerDeviceParams;
-
-  const auto *params = reinterpret_cast<const LlvmAdStackMaxReducerDeviceParams *>(params_blob);
-  const auto *nodes = reinterpret_cast<const AdStackSizeExprDeviceNode *>(body_bytecode);
-  const auto *indices = reinterpret_cast<const i32 *>(reinterpret_cast<const char *>(nodes) +
-                                                      sizeof(AdStackSizeExprDeviceNode) * params->body_node_count);
-
-  const char *arg_buffer = ctx->arg_buffer;
-  DeviceEvalScope scope;
-  for (i32 k = 0; k < kDeviceBoundVarCap; ++k) {
-    scope.values[k] = 0;
-  }
-
-  // Sentinel start: INT64_MIN so the first body value always wins over an empty cross-product. Caller normalises the
-  // empty case (writes 0 / floors at compile-time) when reading the slot back.
-  i64 running_max = (i64)0x8000000000000000ll;
-  const u32 num_axes = params->num_axes;
-  if (num_axes == 0 || num_axes > (u32)kAdStackMaxReducerMaxAxes) {
-    runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
-    return;
-  }
-  u64 total_length = 1;
-  for (u32 a = 0; a < num_axes; ++a) {
-    if (params->per_axis_length[a] == 0u) {
-      runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
-      return;
-    }
-    total_length *= (u64)params->per_axis_length[a];
-  }
-  for (u64 i = 0; i < total_length; ++i) {
-    i64 v = runtime_eval_adstack_max_reduce_one_step(runtime, nodes, indices, params->body_node_count, params, i,
-                                                     num_axes, &scope, arg_buffer);
-    if (v > running_max) {
-      running_max = v;
-    }
-  }
-  runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
-}
-
 #if ARCH_cuda || ARCH_amdgpu
 // Forward decl: defined later in runtime.cpp; included here in single-TU layout means we forward-decl rather than
 // reorder the function definitions.
 void block_barrier();
-extern "C" void runtime_eval_adstack_max_reduce_parallel(LLVMRuntime *runtime,
-                                                         RuntimeContext *ctx,
-                                                         Ptr params_blob,
-                                                         Ptr body_bytecode) {
+extern "C" void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime,
+                                                RuntimeContext *ctx,
+                                                Ptr params_blob,
+                                                Ptr body_bytecode) {
   using quadrants::lang::AdStackSizeExprDeviceNode;
   using quadrants::lang::kAdStackMaxReducerMaxAxes;
   using quadrants::lang::LlvmAdStackMaxReducerDeviceParams;

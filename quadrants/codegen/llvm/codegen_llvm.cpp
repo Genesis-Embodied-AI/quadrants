@@ -1996,13 +1996,11 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
     current_task->ad_stack.bound_expr = ad_stack_static_bound_expr_;
     // Recognize `MaxOverRange` nodes the runtime can reduce in parallel via the dedicated max-reducer dispatch instead
     // of letting the per-thread sizer enumerate. Indexing matches `ad_stack_size_exprs_` (same iteration order as the
-    // pre-scan above). Skip on CPU: `runtime_eval_adstack_max_reduce_serial` walks single-threaded just like the host
-    // evaluator's `MaxOverRange` loop in `program/adstack/eval.cpp`, so the dispatch's per-launch setup overhead
-    // (params blob encode, body bytecode encode, observation bookkeeping, JIT call) is pure cost without compute
-    // parallelism to offset it - measured ~28 % wallclock regression on the rigid-step CPU bench. The host evaluator
-    // handles every iteration count up to its own cap (raised to UINT32_MAX on CPU in `eval.cpp`) so above-cap shapes
-    // still resolve correctly. On CUDA / AMDGPU the parallel reducer is the whole point of the dispatch and the
-    // recognizer stays active.
+    // pre-scan above). Skip on CPU: the host evaluator's `MaxOverRange` loop in `program/adstack/eval.cpp` does the
+    // same serial walk, and dispatching the runtime helper would only add per-launch setup cost (params blob encode,
+    // body bytecode encode, observation bookkeeping, JIT call) with no compute parallelism to amortize. The host
+    // evaluator handles every iteration count up to its own cap (`UINT32_MAX` on CPU; see `eval.cpp`). On CUDA /
+    // AMDGPU the parallel reducer is the whole point of the dispatch and the recognizer stays active.
     if (!arch_is_cpu(compile_config.arch)) {
       current_task->ad_stack.max_reducer_specs = recognize_adstack_max_reducer_specs(ad_stack_size_exprs_);
     }

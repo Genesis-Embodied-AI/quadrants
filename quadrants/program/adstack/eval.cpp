@@ -334,11 +334,10 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
       // parallel by the max-reducer and substituted to a `Const` before the host evaluator walks the tree, so any
       // shape that lands here above the `1<<24` cap is out-of-grammar and a clear QD_ERROR beats a silent hang. On
       // CPU the recognizer is intentionally skipped (see the matching `arch_is_cpu` gate in
-      // `codegen/llvm/codegen_llvm.cpp::finalize_offloaded_task_function`: the CPU max-reducer walks single-threaded
-      // just like this loop, so the dispatch's per-launch setup overhead is pure cost), and the CPU max-reducer
-      // itself has no equivalent cap (`runtime_eval_adstack_max_reduce_serial` at
-      // `runtime/llvm/runtime_module/adstack_runtime.cpp:622-636` iterates `total_length` unconditionally), so this
-      // evaluator must match - lift the cap to `UINT32_MAX` on CPU so legitimate above-cap workloads still complete.
+      // `codegen/llvm/codegen_llvm.cpp::finalize_offloaded_task_function`: the runtime max-reducer would do the same
+      // serial walk this loop already does, so the dispatch's per-launch setup overhead is pure cost). With the
+      // recognizer skipped, every CPU `MaxOverRange` lands here, and observation memory is bounded by the
+      // structural pre-walk above so lifting the cap to `UINT32_MAX` is memory-safe.
       const bool prog_is_cpu = (prog != nullptr) && arch_is_cpu(prog->compile_config().arch);
       const int64_t kMaxOverRangeIterations = prog_is_cpu ? int64_t{UINT32_MAX} : (int64_t{1} << 24);
       QD_ERROR_IF(end > begin && end - begin > kMaxOverRangeIterations,
