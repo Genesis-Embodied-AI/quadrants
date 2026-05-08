@@ -486,14 +486,17 @@ def test_block_sync():
         assert a[i] == N - 1
 
 
-# TODO: replace this with a stronger test case. The test relies on a grid-scope memory fence
-# ordering the `a[i] = 1` write before the per-block atomic-add counter, so that the "last
-# block" branch can read all the `a[i]` values back. CUDA / AMDGPU honor this strictly via
-# their `_mem_fence` intrinsics; Vulkan honors it via `OpMemoryBarrier(ScopeDevice, ...)`;
-# Metal honors it via MSL `atomic_thread_fence(memory_scope_device)` on Apple Silicon /
-# macOS 10.13+ (see the support-table caveat in `block.md`). On very old Apple Intel GPUs
-# this test may need investigation; for now we run on the full GPU set.
-@test_utils.test(arch=qd.gpu)
+# The test relies on `grid.mem_fence()` ordering each block's *non-atomic* `a[i] = 1` write
+# before the subsequent per-block atomic-add counter. CUDA and AMDGPU honor this strictly
+# via their `mem_fence` intrinsics; Vulkan honors it via `OpMemoryBarrier(ScopeDevice, ...)`.
+# Metal does NOT, even on Apple Silicon: MSL `atomic_thread_fence(memory_scope_device)` --
+# which is what MoltenVK / SPIRV-Cross translate `OpMemoryBarrier(ScopeDevice, ...)` to --
+# only orders *atomic* memory accesses across the device, not plain stores; this is a
+# documented Metal limitation called out in the `grid.mem_fence()` Metal caveat in
+# `block.md`. So we exclude Metal here. Workloads that need cross-workgroup ordering on
+# Metal have to publish through atomic stores (e.g. `qd.atomic_or(a[i], 1)`) rather than
+# rely on a plain store + fence.
+@test_utils.test(arch=qd.gpu, exclude=qd.metal)
 def test_grid_mem_fence():
     N = 1000
     BLOCK_SIZE = 1
