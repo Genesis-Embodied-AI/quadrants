@@ -26,7 +26,7 @@ All atomic ops can be called on either global memory (fields, ndarrays) or block
 **Backend caveat for the fence-pair pattern.** Both fence helpers have current portability gaps that affect the patterns recommended on this page:
 
 - `qd.simt.block.mem_sync()` is supported on CUDA and SPIR-V; on AMDGPU it raises `ValueError("qd.block.mem_sync is not supported for arch ...")` at trace time.
-- `qd.simt.grid.memfence()` is fully implemented only on CUDA. On AMDGPU it currently links as a silent no-op (cross-block ordering will fail without any diagnostic); on SPIR-V it fails at codegen. See [grid](grid.md) for the per-backend details.
+- `qd.simt.grid.memfence()` is fully implemented only on CUDA. On AMDGPU it currently links as a silent no-op (cross-block ordering will fail without any diagnostic); on SPIR-V it fails at codegen.
 
 On AMDGPU specifically, neither fence-pair recipe works as documented yet; cross-platform code that needs an atomic plus a fence must restructure around the kernel-launch boundary or be CUDA-bound until the AMDGPU lowerings land.
 
