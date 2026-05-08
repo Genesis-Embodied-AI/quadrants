@@ -17,6 +17,7 @@ supported_systems
 tensor_types
 scalar_tensors
 matrix_vector
+decompositions
 tensor
 compound_types
 buffer_view
@@ -48,6 +49,7 @@ autodiff
 :titlesonly:
 
 atomics
+block
 math
 subgroup
 tile16
