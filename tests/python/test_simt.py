@@ -870,18 +870,19 @@ def test_subgroup_inclusive_add(dtype, log2_size):
 
 
 def _init_small_int_or_float(field, n, dtype):
-    """Initialise with values in [1, 4]: small enough that 32-way `*` doesn't overflow
-    i32 (4**5 = 1024)."""
+    """Bound the 32-way product to 2**8 == 256 (i32-safe, f32-exact): most lanes hold 1,
+    every fourth lane holds 2.  With log2_size=5 (32 lanes / group), 8 lanes contribute a
+    factor of 2 → product ≤ 256.  Smaller log2_size only sees a subset."""
     for i in range(n):
-        field[i] = (i % 4) + 1
+        field[i] = 2 if (i % 4 == 0) else 1
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_mul(dtype, log2_size):
-    """Inclusive prefix product.  Inputs are clamped to [1, 4] so the 32-way product fits
-    comfortably in i32 (4**5 == 1024) and f32 (no overflow up to ~10^38)."""
+    """Inclusive prefix product.  Inputs are 1 / 2 mixed so the 32-way product is at
+    most 2**8 == 256 (well within i32 and f32-exact)."""
     _check_inclusive_scan(subgroup.inclusive_mul, lambda a, b: a * b, dtype, log2_size, _init_small_int_or_float)
 
 
