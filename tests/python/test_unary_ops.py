@@ -132,7 +132,7 @@ def test_clz():
     def test_i32(x: qd.int32) -> qd.int32:
         return qd.math.clz(x)
 
-    # assert test_i32(0) == 32
+    assert test_i32(0) == 32
     assert test_i32(1) == 31
     assert test_i32(2) == 30
     assert test_i32(3) == 30
@@ -140,6 +140,32 @@ def test_clz():
     assert test_i32(5) == 29
     assert test_i32(1023) == 22
     assert test_i32(1024) == 21
+    # Sign-bit / all-bits-set cases. These exercise the unsigned-MSB semantics
+    # (clz must count over the bit pattern, so clz(-1) == 0). Before the
+    # FindUMsb fix, the SPIR-V path returned 32 for clz(-1).
+    assert test_i32(-1) == 0
+    assert test_i32(-2) == 0
+    assert test_i32(0x7FFFFFFF) == 1
+
+
+# clz on i64. Until i64 lowerings landed on AMDGPU and SPIR-V, this could only run on
+# CPU and CUDA; AMDGPU and SPIR-V (Vulkan / Metal) now decompose 64-bit clz themselves.
+@test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda, qd.amdgpu, qd.vulkan])
+def test_clz_i64():
+    @qd.kernel
+    def test_i64(x: qd.int64) -> qd.int32:
+        return qd.math.clz(x)
+
+    assert test_i64(0) == 64
+    assert test_i64(1) == 63
+    assert test_i64(2) == 62
+    assert test_i64(1 << 31) == 32
+    assert test_i64(1 << 32) == 31
+    assert test_i64(1 << 62) == 1
+    # Top bit set on i64 (sign bit) -> 0xFFFFFFFFFFFFFFFF interpreted as -1.
+    assert test_i64(-1) == 0
+    # Spans both halves: bit 32 set with low half also non-zero.
+    assert test_i64((1 << 32) | 0xFF) == 31
 
 
 @test_utils.test(arch=[qd.metal])
