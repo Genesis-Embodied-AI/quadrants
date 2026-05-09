@@ -6,18 +6,20 @@ Atomic read-modify-write operations on a single memory location. They do not syn
 
 All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y)` atomically and returns the **old** value of `x`. `x` must be a writable memory target (a field element, ndarray element, or matrix slot); scalars and constant expressions are not allowed.
 
-| Op             | Semantics                              | i32 | u32 | i64 | u64 | f32 | f64 |
-|----------------|----------------------------------------|-----|-----|-----|-----|-----|-----|
-| `atomic_add`   | `x += y`                               | yes | yes | yes | yes | yes | \*  |
-| `atomic_sub`   | `x -= y`                               | yes | yes | yes | yes | yes | \*  |
-| `atomic_mul`   | `x *= y`                               | yes | yes | yes | yes | yes | \*  |
-| `atomic_min`   | `x = min(x, y)`                        | yes | yes | yes | yes | yes | \*  |
-| `atomic_max`   | `x = max(x, y)`                        | yes | yes | yes | yes | yes | \*  |
-| `atomic_and`   | `x &= y`                               | yes | yes | yes | yes | —   | —   |
-| `atomic_or`    | `x \|= y`                              | yes | yes | yes | yes | —   | —   |
-| `atomic_xor`   | `x ^= y`                               | yes | yes | yes | yes | —   | —   |
+| Op             | Semantics                              | i32 | u32 | i64  | u64  | f32 | f64 |
+|----------------|----------------------------------------|-----|-----|------|------|-----|-----|
+| `atomic_add`   | `x += y`                               | yes | yes | yes† | yes† | yes | \*  |
+| `atomic_sub`   | `x -= y`                               | yes | yes | yes† | yes† | yes | \*  |
+| `atomic_mul`   | `x *= y`                               | yes | yes | yes† | yes† | yes | \*  |
+| `atomic_min`   | `x = min(x, y)`                        | yes | yes | yes† | yes† | yes | \*  |
+| `atomic_max`   | `x = max(x, y)`                        | yes | yes | yes† | yes† | yes | \*  |
+| `atomic_and`   | `x &= y`                               | yes | yes | yes† | yes† | —   | —   |
+| `atomic_or`    | `x \|= y`                              | yes | yes | yes† | yes† | —   | —   |
+| `atomic_xor`   | `x ^= y`                               | yes | yes | yes† | yes† | —   | —   |
 
 \* `f64` atomic add / sub / mul / min / max is hardware-dependent: supported on CUDA sm_60+ for `add`, falls back to a CAS loop elsewhere or raises at codegen time on older targets and on backends that do not lower a CAS loop. Prefer `f32` on hot paths if portability matters.
+
+† `i64` / `u64` atomic RMW is **not portable to Metal**. Metal Shading Language only exposes 64-bit atomics as `atomic_fetch_min` / `atomic_fetch_max` on `uint64`, starting at Apple GPU family 9 (M3 / A17 and newer); `atomic_add` / `sub` / `mul` and the bitwise family are unavailable on every Apple GPU. The Metal RHI today over-advertises `spirv_has_atomic_int64` (gated on Apple7 / Mac2 in `quadrants/rhi/metal/metal_device.mm`), so trying to use 64-bit integer atomics under Metal currently fails at pipeline create time with `RhiResult=-1` ("SPIR-V shader was rejected by the backend"). Use `i32` / `u32` if you need cross-Metal portability. CUDA, AMDGPU, and Vulkan with `VK_KHR_shader_atomic_int64` are unaffected.
 
 There is no `atomic_cas` (compare-and-swap) exposed in Python today. The C++ runtime uses CmpXchg internally; surfacing it requires extending `AtomicOpType`.
 
