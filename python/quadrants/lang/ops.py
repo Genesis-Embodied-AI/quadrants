@@ -1142,9 +1142,9 @@ def ifte(cond, x1, x2):
 def clz(a):
     """Count the number of leading zero bits in ``a``.
 
-    Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the result is always
-    returned as an ``i32`` in ``[0, bitwidth(a)]`` (``clz(0) == bitwidth(a)``). The count is over the
-    unsigned bit pattern, so ``clz(-1) == 0`` regardless of input signedness.
+    Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the result is always returned as an
+    ``i32`` in ``[0, bitwidth(a)]`` (``clz(0) == bitwidth(a)``). The count is over the unsigned bit pattern, so
+    ``clz(-1) == 0`` regardless of input signedness.
     """
 
     def _clz(x):

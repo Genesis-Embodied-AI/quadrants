@@ -184,8 +184,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       }
     }
     else if (op == UnaryOpType::clz) {
-      // clz operates on the unsigned bit pattern, so u32 / u64 lower to the same llvm.ctlz
-      // call as i32 / i64; LLVM IR is signless for integers.
+      // clz operates on the unsigned bit pattern, so u32 / u64 lower to the same llvm.ctlz call as i32 / i64; LLVM IR
+      // is signless for integers.
       auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {

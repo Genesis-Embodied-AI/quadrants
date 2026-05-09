@@ -278,10 +278,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         QD_NOT_IMPLEMENTED
       }
     } else if (op == UnaryOpType::clz) {
-      // clz operates on the unsigned bit pattern, so u32 and u64 are valid inputs and route
-      // to the same libdevice intrinsics as their signed counterparts. LLVM IR is signless
-      // for integers, so passing a `qd.u32` operand to `__nv_clz` (which has signature
-      // `int(int)`) requires no explicit bitcast.
+      // clz operates on the unsigned bit pattern, so u32 and u64 are valid inputs and route to the same libdevice
+      // intrinsics as their signed counterparts. LLVM IR is signless for integers, so passing a `qd.u32` operand to
+      // `__nv_clz` (which has signature `int(int)`) requires no explicit bitcast.
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
         stmt->ret_type = PrimitiveType::i32;
