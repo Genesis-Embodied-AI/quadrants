@@ -387,17 +387,43 @@ bool AdStackCache::try_llvm_per_task_ad_stack_cache_hit(const void *attribs_key,
   return true;
 }
 
+namespace {
+// FNV-1a 64-bit, folded to 32-bit; never returns 0 (reserved sentinel). Used to derive a content-stable
+// `registry_id` from the (kernel_name, task_id_in_kernel) pair. We need a deterministic hash because the id is baked as
+// an immediate into LLVM IR / SPIR-V at codegen time and read back by the host on overflow: `std::hash<std::string>`
+// is implementation-defined and not stable across stdlib versions, so we cannot rely on it producing the same id at
+// codegen time and at offline-cache-reload-driven runtime registration.
+inline uint32_t fnv1a32_for_registry(const std::string &kernel_name, int task_id_in_kernel) {
+  constexpr uint64_t kFnvOffsetBasis = 0xcbf29ce484222325ULL;
+  constexpr uint64_t kFnvPrime = 0x100000001b3ULL;
+  uint64_t h = kFnvOffsetBasis;
+  for (unsigned char c : kernel_name) {
+    h ^= c;
+    h *= kFnvPrime;
+  }
+  // Domain separator so `(name + str(N))` and `(name_with_extra_chars)` cannot accidentally collide.
+  h ^= ':';
+  h *= kFnvPrime;
+  uint64_t t = static_cast<uint64_t>(static_cast<uint32_t>(task_id_in_kernel));
+  for (int i = 0; i < 8; ++i) {
+    h ^= (t >> (i * 8)) & 0xFFu;
+    h *= kFnvPrime;
+  }
+  uint32_t r = static_cast<uint32_t>(h ^ (h >> 32));
+  return r == 0 ? 1u : r;
+}
+}  // namespace
+
 uint32_t AdStackCache::register_adstack_sizing_info(const void *identity_key,
                                                     const std::string &kernel_name,
                                                     int task_id_in_kernel,
                                                     std::vector<int> allocated_max_sizes,
                                                     std::vector<SerializedSizeExpr> size_exprs) {
   std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
-  // Idempotent re-registration: same `identity_key` yields the same id across re-compiles and updates the
-  // entry's metadata + size_exprs in place. The key is just an opaque dedup token - the registry never
-  // dereferences it; all data needed by the diagnose path is copied into the entry below.
-  auto it = adstack_sizing_info_id_by_ptr_.find(identity_key);
-  if (it != adstack_sizing_info_id_by_ptr_.end()) {
+  // Idempotent re-registration: same `identity_key` yields the same id across re-compiles and updates the entry's
+  // metadata + size_exprs in place. The key is just an opaque dedup token - the registry never dereferences it; all
+  // data needed by the diagnose path is copied into the entry below.
+  if (auto it = adstack_sizing_info_id_by_ptr_.find(identity_key); it != adstack_sizing_info_id_by_ptr_.end()) {
     auto &entry = adstack_sizing_info_registry_[it->second];
     entry.kernel_name = kernel_name;
     entry.task_id_in_kernel = task_id_in_kernel;
@@ -405,32 +431,116 @@ uint32_t AdStackCache::register_adstack_sizing_info(const void *identity_key,
     entry.size_exprs = std::move(size_exprs);
     return it->second;
   }
-  uint32_t id = static_cast<uint32_t>(adstack_sizing_info_registry_.size());
+  // Content-stable hash. Same (kernel_name, task_id_in_kernel) yields the same id across `Program` lifetimes,
+  // re-compiles, and offline-cache reloads. The codegen-emitted overflow `cmpxchg(0, registry_id)` writes this same
+  // value, so the host lookup of the cmpxchg slot resolves the offending kernel + task without a pre-launch `register`
+  // call from the runtime.
+  uint32_t id = fnv1a32_for_registry(kernel_name, task_id_in_kernel);
+  // Linear-probe past hash collisions (different `(kernel_name, task_id_in_kernel)` pairs that hash to the same id).
+  // Vanishingly rare with a 32-bit FNV-1a (~1.2e-4 collision probability for 1000 distinct keys via birthday bound).
+  // Same-content / different-identity_key (re-codegen of the same source after a `qd.reset()` produces a fresh
+  // `ad_stack` at a new address but the hash inputs are unchanged) MUST keep the existing id; otherwise the codegen-
+  // baked immediate in the cached LLVM IR points at one entry while the runtime registration mints another, defeating
+  // the content-stable contract. Detect that case by comparing `(kernel_name, task_id_in_kernel)` against the slot's
+  // already-stored values; the `identity_key`-equal case cannot land here because the early-out above already returned
+  // for any already-registered key. Skip id 0 (reserved sentinel).
+  while (true) {
+    auto reg_it = adstack_sizing_info_registry_.find(id);
+    if (reg_it == adstack_sizing_info_registry_.end()) {
+      break;
+    }
+    if (reg_it->second.kernel_name == kernel_name && reg_it->second.task_id_in_kernel == task_id_in_kernel) {
+      // Same content (same hash inputs), different `identity_key`. Update in place and add the new identity_key to
+      // the reverse lookup so the new pointer resolves to this same id; the previous identity_key's entry stays valid
+      // and continues to resolve here too.
+      reg_it->second.allocated_max_sizes = std::move(allocated_max_sizes);
+      reg_it->second.size_exprs = std::move(size_exprs);
+      adstack_sizing_info_id_by_ptr_.emplace(identity_key, id);
+      return id;
+    }
+    ++id;
+    if (id == 0) {
+      ++id;  // skip the sentinel
+    }
+  }
   AdStackSizingInfoEntry entry;
   entry.identity_key = identity_key;
   entry.kernel_name = kernel_name;
   entry.task_id_in_kernel = task_id_in_kernel;
   entry.allocated_max_sizes = std::move(allocated_max_sizes);
   entry.size_exprs = std::move(size_exprs);
-  adstack_sizing_info_registry_.push_back(std::move(entry));
+  adstack_sizing_info_registry_.emplace(id, std::move(entry));
   adstack_sizing_info_id_by_ptr_.emplace(identity_key, id);
   return id;
 }
 
 void AdStackCache::update_adstack_sizing_info_size_exprs(uint32_t id, std::vector<SerializedSizeExpr> size_exprs) {
   std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
-  if (id == 0 || id >= adstack_sizing_info_registry_.size()) {
+  if (id == 0) {
     return;
   }
-  adstack_sizing_info_registry_[id].size_exprs = std::move(size_exprs);
+  auto it = adstack_sizing_info_registry_.find(id);
+  if (it == adstack_sizing_info_registry_.end()) {
+    return;
+  }
+  it->second.size_exprs = std::move(size_exprs);
+}
+
+void AdStackCache::ensure_runtime_registry_ids_for_max_reducer(std::vector<OffloadedTask> &tasks) {
+  for (auto &task : tasks) {
+    auto &ad_stack = task.ad_stack;
+    if (ad_stack.max_reducer_specs.empty()) {
+      continue;
+    }
+    // Fast-path gate: the `&ad_stack` identity key is stable across launches of the same kernel handle (it lives in
+    // `KernelLauncher::contexts_[i].offloaded_tasks`), so once we have populated the registry for it we skip every
+    // subsequent launch in O(1). Without this gate, the steady-state hot path would rebuild `allocated_max_sizes` +
+    // `size_exprs` and move them into `register_adstack_sizing_info` on every launch even though the entry is already
+    // there - which costs a measurable fraction of the recovered FPS on long reverse-mode loops.
+    if (is_adstack_sizing_info_registered(static_cast<const void *>(&ad_stack))) {
+      continue;
+    }
+    // After offline-cache load, `ad_stack.registry_id` carries the codegen-baked content-stable hash (now serialised),
+    // which already matches the immediate baked into the LLVM IR's overflow `cmpxchg`. The dispatcher and the
+    // metadata-publish substitution helper read `registry_id` directly off the ad_stack, so they work without us
+    // touching the `Program`-level registry. We still re-populate that registry here on the FIRST launch so the
+    // diagnose-on-overflow path can resolve the cmpxchg-recorded id to a kernel + task name; without this seed the
+    // `Program` registry would stay empty for cache-loaded kernels and an overflow would print the generic dual-cause
+    // fallback. Same `(kernel_name, task_id_in_kernel)` always hashes to the same id, so the registered id matches the
+    // one we already have on `ad_stack`.
+    std::vector<int> allocated_max_sizes;
+    allocated_max_sizes.reserve(ad_stack.allocas.size());
+    for (const auto &a : ad_stack.allocas) {
+      allocated_max_sizes.push_back(static_cast<int>(a.max_size_compile_time));
+    }
+    std::vector<SerializedSizeExpr> size_exprs(ad_stack.size_exprs.begin(), ad_stack.size_exprs.end());
+    uint32_t id = register_adstack_sizing_info(static_cast<const void *>(&ad_stack), ad_stack.kernel_name,
+                                               ad_stack.task_id_in_kernel, std::move(allocated_max_sizes),
+                                               std::move(size_exprs));
+    // Defensive: if `registry_id` was never populated (very-stale cache, fresh codegen path that skipped the task-START
+    // register call due to a null `Program *`), seed it now from the just-minted id. New kernels already have this set
+    // by `codegen_llvm.cpp::finalize_offloaded_task_function`.
+    if (ad_stack.registry_id == 0) {
+      ad_stack.registry_id = id;
+    }
+  }
+}
+
+bool AdStackCache::is_adstack_sizing_info_registered(const void *identity_key) const {
+  std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
+  return adstack_sizing_info_id_by_ptr_.find(identity_key) != adstack_sizing_info_id_by_ptr_.end();
 }
 
 std::optional<AdStackCache::AdStackSizingInfoEntry> AdStackCache::lookup_adstack_sizing_info(uint32_t id) const {
   std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
-  if (id == 0 || id >= adstack_sizing_info_registry_.size()) {
+  if (id == 0) {
     return std::nullopt;
   }
-  return adstack_sizing_info_registry_[id];
+  auto it = adstack_sizing_info_registry_.find(id);
+  if (it == adstack_sizing_info_registry_.end()) {
+    return std::nullopt;
+  }
+  return it->second;
 }
 
 std::string AdStackCache::diagnose_adstack_overflow_message(uint32_t task_id) const {

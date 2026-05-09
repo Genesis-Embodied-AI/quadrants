@@ -274,9 +274,20 @@ void LlvmRuntimeExecutor::publish_per_task_bound_count_device(std::size_t task_i
 void LlvmRuntimeExecutor::dispatch_max_reducers_for_tasks(const std::vector<OffloadedTask> &tasks,
                                                            LaunchContextBuilder *ctx,
                                                            void *device_runtime_context_ptr) {
-  // Address of the launcher's stable per-kernel-handle vector serves as the launch-cache key. The vector outlives
-  // the call (kept by `KernelLauncher::contexts_[i].offloaded_tasks`) so the address is reused on every launch of
-  // the same kernel handle.
+  // Seed the per-`Program` adstack-overflow registry from the cache-loaded tasks so the diagnose path can resolve
+  // any cmpxchg-recorded id back to a kernel + task name. With content-hashed `registry_id` (now serialised) the
+  // dispatcher and the metadata-publish substitution helper already see the correct id directly off the ad_stack,
+  // but the `Program` registry stays empty across cache reloads until something registers; without this seed, an
+  // overflow on a freshly cache-loaded kernel would print the generic dual-cause fallback instead of the kernel +
+  // task identity. Idempotent (same hash inputs yield the same id) and cheap (one map lookup per task), and only
+  // walks tasks whose `ad_stack.max_reducer_specs` is non-empty. The cast away const is safe: the OffloadedTasks
+  // live in `KernelLauncher::contexts_[...].offloaded_tasks` (non-const launcher storage), and the const-ref
+  // parameter binding is purely ergonomic for the read-only-after-this-point dispatch path below.
+  Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
+  if (prog != nullptr) {
+    auto &mutable_tasks = const_cast<std::vector<OffloadedTask> &>(tasks);
+    prog->adstack_cache().ensure_runtime_registry_ids_for_max_reducer(mutable_tasks);
+  }
   std::vector<const AdStackSizingInfo *> ad_stacks_view;
   ad_stacks_view.reserve(tasks.size());
   for (const auto &t : tasks) {

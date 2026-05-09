@@ -1952,6 +1952,11 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     // visited. Metadata + size_exprs are filled in at `finalize_offloaded_task_function` time below
     // (idempotent re-registration on the same identity_key updates the entry in place). Identity
     // key here is the raw `&current_task->ad_stack` address; the registry never derefs it.
+    // `kernel_name` and `task_id_in_kernel` are also stashed on the ad_stack so the offline-cache reload path
+    // (`AdStackCache::ensure_runtime_registry_ids_for_max_reducer`) can re-derive the identity hash without
+    // parsing the task function name.
+    current_task->ad_stack.kernel_name = kernel_name;
+    current_task->ad_stack.task_id_in_kernel = task_codegen_id;
     uint32_t id = prog->adstack_cache().register_adstack_sizing_info(
         static_cast<const void *>(&current_task->ad_stack), kernel_name, task_codegen_id, /*allocated_max_sizes=*/{},
         /*size_exprs=*/{});
@@ -2057,7 +2062,10 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
       // Update the entry with the live metadata + per-alloca size_exprs. The size_exprs are copied
       // into the registry so the diagnose path can walk them without dereferencing the launcher's
       // unstable `OffloadedTask::ad_stack` pointer (freed by `current_task = nullptr` after
-      // by-value `offloaded_tasks.push_back(*current_task)`).
+      // by-value `offloaded_tasks.push_back(*current_task)`). Mirror the identity-pair fields here too
+      // in case the task START registration above was skipped (no allocas at the time, prog null, etc.).
+      current_task->ad_stack.kernel_name = kernel_name;
+      current_task->ad_stack.task_id_in_kernel = task_codegen_id;
       uint32_t id = prog->adstack_cache().register_adstack_sizing_info(
           static_cast<const void *>(&current_task->ad_stack), kernel_name, task_codegen_id,
           std::move(allocated_max_sizes), current_task->ad_stack.size_exprs);
