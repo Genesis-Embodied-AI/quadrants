@@ -92,12 +92,6 @@ One edge case: kernel calls inside a `qd.ad.Tape` with `validation=True` will no
 
 Coverage probes change the compiled kernel, so the offline cache will see them as new kernels and recompile. This is expected and does not affect correctness, but the first run with coverage enabled will be slower if you normally rely on cached kernels.
 
-## CI integration
-
-The CI workflow posts a compact coverage summary as a PR comment on each push, showing per-file coverage percentages and missing line ranges. The full annotated report (with per-line hit/miss markers) is published as a GitHub Check — the PR comment includes a link to it. A **new comment** is created each time (rather than editing the previous one) so that the PR timeline shows a clear chronological sequence of commits and their corresponding coverage results.
-
-The report covers only Python files (`.py`) and only lines added or modified in the PR diff — unchanged lines are not reported. C++ files are not included in the coverage report.
-
 ## Under the hood
 
 When `QD_KERNEL_COVERAGE=1` is set, quadrants rewrites the Python AST of each `@qd.kernel` and `@qd.func` before compilation. It inserts lightweight probe statements (`field[probe_id] = 1`) at each source line. These probes compile as ordinary field stores and execute on the device alongside your kernel code.

@@ -2,7 +2,7 @@ import numbers
 import threading
 import weakref
 from types import FunctionType, MethodType
-from typing import TYPE_CHECKING, Any, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence
 
 import numpy as np
 
@@ -24,6 +24,7 @@ from quadrants.lang.exception import (
     QuadrantsRuntimeError,
     QuadrantsSyntaxError,
     QuadrantsTypeError,
+    handle_exception_from_cpp,
 )
 from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field, ScalarField
@@ -576,7 +577,13 @@ class PyQuadrants:
             return
         self.materialize()
         assert self._prog is not None
-        self._prog.synchronize()
+        try:
+            self._prog.synchronize()
+        except Exception as e:
+            wrapped = handle_exception_from_cpp(e)
+            if wrapped is e:
+                raise
+            raise wrapped from None
 
 
 pyquadrants = PyQuadrants()
@@ -584,6 +591,14 @@ pyquadrants = PyQuadrants()
 
 def get_runtime() -> PyQuadrants:
     return pyquadrants
+
+
+_reset_hooks: list[Callable[[], None]] = []
+
+
+def on_reset(hook: Callable[[], None]) -> None:
+    """Register a callback to be invoked on ``reset()``.  Invalidates module-level caches without coupling."""
+    _reset_hooks.append(hook)
 
 
 def reset():
@@ -597,9 +612,9 @@ def reset():
     for k in old_kernels:
         k.reset()
     _qd_core.reset_default_compile_config()
-    from quadrants.lang._func_base import _frozen_dc_plans  # pylint: disable=C0415
 
-    _frozen_dc_plans.clear()
+    for hook in _reset_hooks:
+        hook()
 
 
 @quadrants_scope

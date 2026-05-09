@@ -62,6 +62,7 @@ user_api[qd] = [
     "DEBUG",
     "DeviceCapability",
     "ERROR",
+    "Event",
     "Field",
     "FieldsBuilder",
     "Format",
@@ -76,6 +77,7 @@ user_api[qd] = [
     "SNode",
     "ScalarField",
     "ScalarNdarray",
+    "Stream",
     "Struct",
     "StructField",
     "TRACE",
@@ -124,6 +126,8 @@ user_api[qd] = [
     "clock_freq_hz",
     "cos",
     "cpu",
+    "create_event",
+    "create_stream",
     "cuda",
     "data_oriented",
     "dataclass",
@@ -162,6 +166,7 @@ user_api[qd] = [
     "ikl",
     "il",
     "init",
+    "interop",
     "int16",
     "int32",
     "int64",
@@ -222,6 +227,7 @@ user_api[qd] = [
     "static_assert",
     "static_print",
     "stop_grad",
+    "stream_parallel",
     "svd",
     "sym_eig",
     "sync",
@@ -454,6 +460,7 @@ user_api[qd.VectorNdarray] = [
     "to_numpy",
     "to_torch",
 ]
+user_api[qd.interop] = ["get_mps_command_queue"]
 user_api[qd.sparse] = ["grid", "usage"]
 
 

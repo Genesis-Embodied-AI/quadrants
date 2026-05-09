@@ -17,7 +17,12 @@ void MetalProgramImpl::materialize_runtime(KernelProfilerBase *profiler, uint64 
   *result_buffer_ptr =
       (uint64 *)HostMemoryPool::get_instance().allocate(sizeof(uint64) * quadrants_result_buffer_entries, 8);
 
-  device_ = std::unique_ptr<metal::MetalDevice>(metal::MetalDevice::create());
+  if (config->external_metal_command_queue != 0) {
+    device_ = std::unique_ptr<metal::MetalDevice>(
+        metal::MetalDevice::create_with_external_queue(config->external_metal_command_queue));
+  } else {
+    device_ = std::unique_ptr<metal::MetalDevice>(metal::MetalDevice::create());
+  }
 
   gfx::GfxRuntime::Params params;
   params.device = device_.get();

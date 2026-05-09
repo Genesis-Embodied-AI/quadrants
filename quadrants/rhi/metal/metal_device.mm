@@ -412,7 +412,24 @@ MetalCommandList::MetalCommandList(const MetalDevice &device,
   }
 }
 
-MetalCommandList::~MetalCommandList() { [cmdbuf_ release]; }
+MetalCommandList::~MetalCommandList() {
+  flush_pending_encoder();
+  [cmdbuf_ release];
+}
+
+// End the persistent compute encoder if one is open. Called before any op that
+// needs a different encoder type (blit / render) and before the cmdbuf is
+// returned for commit, so a long chain of `dispatch()` calls collapses to a
+// single MTLComputeCommandEncoder while incompatible ops still observe the
+// right per-encoder boundary that Metal's hazard tracking relies on.
+void MetalCommandList::flush_pending_encoder() {
+  if (current_compute_encoder_ != nil) {
+    [current_compute_encoder_ endEncoding];
+    [current_compute_encoder_ release];
+    current_compute_encoder_ = nullptr;
+    compute_encoder_resident_alloc_ids_.clear();
+  }
+}
 
 void MetalCommandList::bind_pipeline(Pipeline *p) noexcept {
   RHI_ASSERT(p != nullptr);
@@ -470,6 +487,7 @@ void MetalCommandList::track_physical_buffer(DeviceAllocation alloc) noexcept {
 
 void MetalCommandList::buffer_copy(DevicePtr dst, DevicePtr src,
                                    size_t size) noexcept {
+  flush_pending_encoder();
   const MetalMemory &src_memory = device_->get_memory(src.alloc_id);
   const MetalMemory &dst_memory = device_->get_memory(dst.alloc_id);
 
@@ -497,6 +515,7 @@ void MetalCommandList::buffer_copy(DevicePtr dst, DevicePtr src,
 void MetalCommandList::buffer_fill(DevicePtr ptr, size_t size,
                                    uint32_t data) noexcept {
   RHI_ASSERT(data == 0);
+  flush_pending_encoder();
 
   const MetalMemory &memory = device_->get_memory(ptr.alloc_id);
 
@@ -531,7 +550,23 @@ RhiResult MetalCommandList::dispatch(uint32_t x, uint32_t y,
       current_shader_resource_set_->resources();
 
   @autoreleasepool {
-    MTLComputeCommandEncoder_id encoder = [cmdbuf_ computeCommandEncoder];
+    // Reuse the persistent compute encoder across consecutive dispatches in
+    // this cmdlist. MTLComputeCommandEncoder defaults to MTLDispatchTypeSerial,
+    // so per-dispatch ordering inside one encoder is the same as separate
+    // encoders, but we save the ~700 us of encoder-end / encoder-begin gap that
+    // the Metal System Trace surfaces between every quadrants dispatch. The
+    // encoder is torn down by `flush_pending_encoder` whenever an
+    // encoder-incompatible op (blit / render / cmdbuf finalize) needs to start.
+    if (current_compute_encoder_ == nullptr) {
+      // `[cmdbuf_ computeCommandEncoder]` returns an autoreleased encoder.
+      // Retain it so the encoder survives past the enclosing `@autoreleasepool`
+      // drain into the next `dispatch()` call; without this the autoreleased
+      // encoder is freed before we end it, and Metal's
+      // `_MTLCommandEncoder dealloc` asserts "Command encoder released without
+      // endEncoding". Released by `flush_pending_encoder` after `endEncoding`.
+      current_compute_encoder_ = [[cmdbuf_ computeCommandEncoder] retain];
+    }
+    MTLComputeCommandEncoder_id encoder = current_compute_encoder_;
 
     for (const MetalShaderResource &resource : shader_resources) {
       switch (resource.ty) {
@@ -556,16 +591,24 @@ RhiResult MetalCommandList::dispatch(uint32_t x, uint32_t y,
     }
 
     for (const DeviceAllocation &alloc : tracked_physical_buffers_) {
-      const MetalMemory &mem = device_->get_memory(alloc.alloc_id);
-      [encoder useResource:mem.mtl_buffer()
-                     usage:MTLResourceUsageRead | MTLResourceUsageWrite];
+      // `useResource:` only needs to be issued once per (encoder, resource)
+      // pair: a resource declared resident at one point in the encoder stays
+      // resident until the encoder ends. Skip re-declaring any allocation we
+      // already announced in the current encoder lifetime; this drops the
+      // per-dispatch driver work on benches that bind the same physical buffer
+      // (e.g. the ndarray data ptr and adstack heap on every backward kernel)
+      // into every dispatch.
+      if (compute_encoder_resident_alloc_ids_.insert(alloc.alloc_id).second) {
+        const MetalMemory &mem = device_->get_memory(alloc.alloc_id);
+        [encoder useResource:mem.mtl_buffer()
+                       usage:MTLResourceUsageRead | MTLResourceUsageWrite];
+      }
     }
     tracked_physical_buffers_.clear();
 
     [encoder setComputePipelineState:mtl_compute_pipeline_state];
     [encoder dispatchThreadgroups:MTLSizeMake(x, y, z)
             threadsPerThreadgroup:MTLSizeMake(local_x, local_y, local_z)];
-    [encoder endEncoding];
   };
 
   return RhiResult::success;
@@ -578,6 +621,7 @@ void MetalCommandList::begin_renderpass(int x0, int y0, int x1, int y1,
                                         std::vector<float> *clear_colors,
                                         DeviceAllocation *depth_attachment,
                                         bool depth_clear) {
+  flush_pending_encoder();
   current_renderpass_details_.clear_depth = depth_clear;
 
   int rendertarget_height = 0;
@@ -727,6 +771,7 @@ bool MetalCommandList::is_renderpass_active() const {
 void MetalCommandList::set_renderpass_active() { is_renderpass_active_ = true; }
 
 MTLRenderCommandEncoder_id MetalCommandList::pre_draw_setup() {
+  flush_pending_encoder();
   const RasterParams *raster_params = current_pipeline_->raster_params();
 
   MTLRenderPassDescriptor *rpd = create_render_pass_desc(
@@ -938,6 +983,7 @@ void MetalCommandList::buffer_to_image(DeviceAllocation dst_img,
   buffer_image_copy_params_to_mtl(params, src_buf.offset,
                                   dst_image.mtl_texture(), &mtl_params);
 
+  flush_pending_encoder();
   @autoreleasepool {
     MTLBlitCommandEncoder_id encoder = [cmdbuf_ blitCommandEncoder];
     [encoder copyFromBuffer:src_buffer.mtl_buffer()
@@ -965,6 +1011,7 @@ void MetalCommandList::image_to_buffer(DevicePtr dst_buf,
   buffer_image_copy_params_to_mtl(params, dst_buf.offset,
                                   src_image.mtl_texture(), &mtl_params);
 
+  flush_pending_encoder();
   @autoreleasepool {
     MTLBlitCommandEncoder_id encoder = [cmdbuf_ blitCommandEncoder];
     [encoder copyFromTexture:src_image.mtl_texture()
@@ -989,6 +1036,7 @@ void MetalCommandList::copy_image(DeviceAllocation dst_img,
   const MetalImage &src_image = device_->get_image(src_img.alloc_id);
   const MetalImage &dst_image = device_->get_image(dst_img.alloc_id);
 
+  flush_pending_encoder();
   @autoreleasepool {
     MTLBlitCommandEncoder_id encoder = [cmdbuf_ blitCommandEncoder];
     [encoder
@@ -1013,21 +1061,32 @@ void MetalCommandList::blit_image(DeviceAllocation dst_img,
   copy_image(dst_img, src_img, dst_img_layout, src_img_layout, params);
 }
 
-MTLCommandBuffer_id MetalCommandList::finalize() { return cmdbuf_; }
+MTLCommandBuffer_id MetalCommandList::finalize() {
+  flush_pending_encoder();
+  return cmdbuf_;
+}
 
 MetalStream::MetalStream(const MetalDevice &device,
-                         MTLCommandQueue_id mtl_command_queue)
-    : device_(&device), mtl_command_queue_(mtl_command_queue) {}
+                         MTLCommandQueue_id mtl_command_queue, bool owns_queue)
+    : device_(&device), mtl_command_queue_(mtl_command_queue),
+      owns_queue_(owns_queue) {}
 MetalStream::~MetalStream() { destroy(); }
 
 MetalStream *MetalStream::create(const MetalDevice &device) {
   MTLCommandQueue_id compute_queue = [device.mtl_device() newCommandQueue];
-  return new MetalStream(device, compute_queue);
+  return new MetalStream(device, compute_queue, /*owns_queue=*/true);
+}
+MetalStream *
+MetalStream::create_with_external_queue(const MetalDevice &device,
+                                        MTLCommandQueue_id external_queue) {
+  return new MetalStream(device, external_queue, /*owns_queue=*/false);
 }
 void MetalStream::destroy() {
   if (!is_destroyed_) {
     command_sync();
-    [mtl_command_queue_ release];
+    if (owns_queue_) {
+      [mtl_command_queue_ release];
+    }
     is_destroyed_ = true;
   }
 }
@@ -1212,8 +1271,15 @@ void MetalSurface::resize(uint32_t width, uint32_t height) {
   layer_.drawableSize = CGSizeMake(width_, height_);
 }
 
-MetalDevice::MetalDevice(MTLDevice_id mtl_device) : mtl_device_(mtl_device) {
-  compute_stream_ = std::unique_ptr<MetalStream>(MetalStream::create(*this));
+MetalDevice::MetalDevice(MTLDevice_id mtl_device,
+                         MTLCommandQueue_id external_command_queue)
+    : mtl_device_(mtl_device) {
+  if (external_command_queue != nil) {
+    compute_stream_ = std::unique_ptr<MetalStream>(
+        MetalStream::create_with_external_queue(*this, external_command_queue));
+  } else {
+    compute_stream_ = std::unique_ptr<MetalStream>(MetalStream::create(*this));
+  }
 
   default_sampler_ = create_sampler(mtl_device);
 
@@ -1224,8 +1290,13 @@ MetalDevice::~MetalDevice() { destroy(); }
 
 MetalDevice *MetalDevice::create() {
   MTLDevice_id mtl_device = MTLCreateSystemDefaultDevice();
-
   return new MetalDevice(mtl_device);
+}
+MetalDevice *
+MetalDevice::create_with_external_queue(uint64_t external_queue_ptr) {
+  MTLDevice_id mtl_device = MTLCreateSystemDefaultDevice();
+  auto *queue = reinterpret_cast<MTLCommandQueue_id>(external_queue_ptr);
+  return new MetalDevice(mtl_device, queue);
 }
 void MetalDevice::destroy() {
   if (!is_destroyed_) {

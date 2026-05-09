@@ -7,13 +7,17 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Linker/Linker.h"
 #include "quadrants/analysis/offline_cache_util.h"
+#include "quadrants/ir/analysis.h"
+#include "quadrants/ir/snode.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/extension.h"
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 #include "quadrants/codegen/llvm/struct_llvm.h"
 #include "quadrants/util/file_sequence_writer.h"
 #include "quadrants/codegen/codegen_utils.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/AsmParser/Parser.h"
 #include "quadrants/codegen/ir_dump.h"
@@ -1938,6 +1942,21 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   func = llvm::Function::Create(task_function_type, llvm::Function::ExternalLinkage, task_kernel_name, module.get());
 
   current_task = std::make_unique<OffloadedTask>(task_kernel_name);
+  // Pre-register the per-task AdStackSizingInfo so the registry id is assigned BEFORE codegen visits any
+  // `AdStackPushStmt`. Metadata (allocated_max_sizes) is filled in at `finalize_offloaded_task_function`
+  // time after the alloca scan completes; the registry call is idempotent on the same `ad_stack_ptr` so
+  // the second call updates the entry in place. Skipping registration when `prog == nullptr` (C++-only
+  // tests) leaves `registry_id == 0`, which the codegen-emitted cmpxchg short-circuits.
+  if (prog != nullptr) {
+    // Reserve a registry id at task START so codegen can bake the immediate before any push site is
+    // visited. Metadata + size_exprs are filled in at `finalize_offloaded_task_function` time below
+    // (idempotent re-registration on the same identity_key updates the entry in place). Identity
+    // key here is the raw `&current_task->ad_stack` address; the registry never derefs it.
+    uint32_t id = prog->adstack_cache().register_adstack_sizing_info(
+        static_cast<const void *>(&current_task->ad_stack), kernel_name, task_codegen_id, /*allocated_max_sizes=*/{},
+        /*size_exprs=*/{});
+    current_task->ad_stack.registry_id = id;
+  }
 
   for (auto &arg : func->args()) {
     kernel_args.push_back(&arg);
@@ -1975,6 +1994,75 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
     current_task->ad_stack.allocas = ad_stack_allocas_info_;
     current_task->ad_stack.size_exprs = ad_stack_size_exprs_;
     current_task->ad_stack.bound_expr = ad_stack_static_bound_expr_;
+    // Recognize `MaxOverRange` nodes the runtime can reduce in parallel via the dedicated max-reducer dispatch instead
+    // of letting the per-thread sizer enumerate. Indexing matches `ad_stack_size_exprs_` (same iteration order as the
+    // pre-scan above). Skip on CPU: the host evaluator's `MaxOverRange` loop in `program/adstack/eval.cpp` does the
+    // same serial walk, and dispatching the runtime helper would only add per-launch setup cost (params blob encode,
+    // body bytecode encode, observation bookkeeping, JIT call) with no compute parallelism to amortize. The host
+    // evaluator handles every iteration count up to its own cap (`UINT32_MAX` on CPU; see `eval.cpp`). On CUDA /
+    // AMDGPU the parallel reducer is the whole point of the dispatch and the recognizer stays active.
+    if (!arch_is_cpu(compile_config.arch)) {
+      current_task->ad_stack.max_reducer_specs = recognize_adstack_max_reducer_specs(ad_stack_size_exprs_);
+    }
+    // Snodes the task body mutates. Persisted on `OffloadedTask::snode_writes` so the LLVM
+    // launcher can invalidate the per-task adstack metadata cache when a kernel that runs in
+    // between mutated a SNode an enclosing `size_expr::FieldLoad` reads. Mirrors the SPIR-V
+    // analogue in `spirv_codegen.cpp`. Sorted + deduplicated for stable serialisation.
+    if (current_offload != nullptr) {
+      auto snode_rw = irpass::analysis::gather_snode_read_writes(current_offload);
+      current_task->snode_writes.reserve(snode_rw.second.size());
+      for (auto *s : snode_rw.second) {
+        if (s != nullptr) {
+          current_task->snode_writes.push_back(s->id);
+        }
+      }
+      std::sort(current_task->snode_writes.begin(), current_task->snode_writes.end());
+      current_task->snode_writes.erase(
+          std::unique(current_task->snode_writes.begin(), current_task->snode_writes.end()),
+          current_task->snode_writes.end());
+      // Ndarray args this task writes to. Same role as `snode_writes` but for ndarray data;
+      // covers `size_expr::ExternalTensorRead` invalidation. The first element of each
+      // `arg_id_path` key is the kernel-arg slot, which is what `Program::ndarray_data_gen_`
+      // is keyed by (via the bound DeviceAllocation).
+      auto arr_access = irpass::detect_external_ptr_access_in_task(current_offload);
+      for (const auto &kv : arr_access) {
+        if (kv.first.empty()) {
+          continue;
+        }
+        const uint32_t access_bits = static_cast<uint32_t>(kv.second);
+        if ((access_bits & static_cast<uint32_t>(irpass::ExternalPtrAccess::WRITE)) != 0) {
+          current_task->arr_writes.push_back(kv.first.front());
+        }
+        if ((access_bits & static_cast<uint32_t>(irpass::ExternalPtrAccess::READ)) != 0) {
+          current_task->arr_reads.push_back(kv.first.front());
+        }
+      }
+      std::sort(current_task->arr_writes.begin(), current_task->arr_writes.end());
+      current_task->arr_writes.erase(std::unique(current_task->arr_writes.begin(), current_task->arr_writes.end()),
+                                     current_task->arr_writes.end());
+      std::sort(current_task->arr_reads.begin(), current_task->arr_reads.end());
+      current_task->arr_reads.erase(std::unique(current_task->arr_reads.begin(), current_task->arr_reads.end()),
+                                    current_task->arr_reads.end());
+    }
+    // Register the per-task AdStackSizingInfo with the Program-side identity registry. The id is baked
+    // into the lazy-claim overflow path's `cmpxchg(0, id)` so the host raise site can name the offending
+    // kernel + task in its diagnostic message. Empty alloca list = no adstack pushes in this task; skip
+    // registration to keep the registry compact.
+    if (!current_task->ad_stack.allocas.empty() && prog != nullptr) {
+      std::vector<int> allocated_max_sizes;
+      allocated_max_sizes.reserve(current_task->ad_stack.allocas.size());
+      for (const auto &a : current_task->ad_stack.allocas) {
+        allocated_max_sizes.push_back(static_cast<int>(a.max_size_compile_time));
+      }
+      // Update the entry with the live metadata + per-alloca size_exprs. The size_exprs are copied
+      // into the registry so the diagnose path can walk them without dereferencing the launcher's
+      // unstable `OffloadedTask::ad_stack` pointer (freed by `current_task = nullptr` after
+      // by-value `offloaded_tasks.push_back(*current_task)`).
+      uint32_t id = prog->adstack_cache().register_adstack_sizing_info(
+          static_cast<const void *>(&current_task->ad_stack), kernel_name, task_codegen_id,
+          std::move(allocated_max_sizes), current_task->ad_stack.size_exprs);
+      current_task->ad_stack.registry_id = id;
+    }
   }
 
   // entry_block should jump to the body after all allocas are inserted
@@ -2408,10 +2496,12 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
 
   // Per-task capacity slot for the defense-in-depth bounds check: clamp the claimed row at `capacity - 1` so any
   // overshoot stays in-bounds. For tasks without a captured `bound_expr` the launcher writes UINT32_MAX into this slot
-  // so the clamp is inert. The divergence-overflow signal that the SPIR-V codegen emits via OpAtomicUMax is not yet
-  // wired on the LLVM side - it requires a `__atomic_or_n` against `runtime->adstack_overflow_flag` and a matching
-  // runtime-side getter; in its absence we still get the in-bounds clamp, so the kernel cannot silently corrupt the
-  // heap end. Surfacing the divergence is future work.
+  // so the clamp is inert. On overshoot (`claimed_row > capacity - 1`) the codegen also OR-1's the host-visible
+  // adstack overflow flag (`runtime->adstack_overflow_flag_dev_ptr`, which the host allocated as pinned UVA-mapped
+  // memory in `LlvmRuntimeExecutor::materialize_runtime`) so the host poll surfaces the divergence at the next
+  // Quadrants Python entry. The atomic crosses the host/device boundary cleanly because the slot is in
+  // pinned host memory; required hardware envelope is the same Pascal+ / GFX9+ that the existing pinned-host
+  // H2D-async pattern already requires.
   llvm::Value *capacities_base = call("LLVMRuntime_get_adstack_bound_row_capacities", get_runtime());
   llvm::Value *capacity_slot_ptr = builder->CreateGEP(i32ty, capacities_base, task_id_i64);
   llvm::Value *capacity = builder->CreateLoad(i32ty, capacity_slot_ptr);
@@ -2426,6 +2516,38 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
   llvm::Value *cmp = builder->CreateICmpUGT(claimed_row, clamp_upper);
   llvm::Value *clamped_row = builder->CreateSelect(cmp, clamp_upper, claimed_row);
   builder->CreateStore(clamped_row, row_id_var);
+
+  // Overflow signal: on `claimed_row > clamp_upper`, atomically OR 1 into the pinned-host overflow flag and
+  // record the offending task identity in the companion `adstack_overflow_task_id_dev_ptr` slot via a
+  // `cmpxchg(0, registry_id)`. Only the FIRST overflowing thread's id sticks; subsequent threads observe
+  // a non-zero value and their cmpxchg fails harmlessly. The condition is hoisted to a structured if so
+  // the not-overflowing fast path skips both atomics entirely - one function call to fetch the pointers
+  // plus one CreateICmpUGT comparison (the same compare we already emitted for the clamp).
+  auto *current_function = builder->GetInsertBlock()->getParent();
+  auto *overflow_then_block = llvm::BasicBlock::Create(*llvm_context, "adstack_overflow_signal", current_function);
+  auto *overflow_merge_block = llvm::BasicBlock::Create(*llvm_context, "adstack_overflow_merge", current_function);
+  builder->CreateCondBr(cmp, overflow_then_block, overflow_merge_block);
+  builder->SetInsertPoint(overflow_then_block);
+  {
+    auto *i64ty_local = llvm::Type::getInt64Ty(*llvm_context);
+    llvm::Value *flag_ptr = call("LLVMRuntime_get_adstack_overflow_flag_dev_ptr", get_runtime());
+    llvm::Value *one_i64 = llvm::ConstantInt::get(i64ty_local, 1);
+    builder->CreateAtomicRMW(llvm::AtomicRMWInst::Or, flag_ptr, one_i64, llvm::MaybeAlign(),
+                             llvm::AtomicOrdering::Monotonic);
+    // Record the registry id (0 means "not registered"; skip the cmpxchg in that case so the slot stays
+    // zero and the host raise site falls through to the generic dual-cause message). Each offload task
+    // emits its own lazy-claim block, so the immediate is task-local at codegen time.
+    if (current_task != nullptr && current_task->ad_stack.registry_id != 0) {
+      llvm::Value *task_id_ptr = call("LLVMRuntime_get_adstack_overflow_task_id_dev_ptr", get_runtime());
+      llvm::Value *expected_zero = llvm::ConstantInt::get(i64ty_local, 0);
+      llvm::Value *new_id =
+          llvm::ConstantInt::get(i64ty_local, static_cast<uint64_t>(current_task->ad_stack.registry_id));
+      builder->CreateAtomicCmpXchg(task_id_ptr, expected_zero, new_id, llvm::MaybeAlign(),
+                                   llvm::AtomicOrdering::Monotonic, llvm::AtomicOrdering::Monotonic);
+    }
+    builder->CreateBr(overflow_merge_block);
+  }
+  builder->SetInsertPoint(overflow_merge_block);
 }
 
 // Return (creating on first call) the per-stack `alloca i64` that holds the live push count for this stack on the
@@ -2686,7 +2808,11 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
     llvm::Value *max_size_addr = builder->CreateGEP(i64ty, ad_stack_max_sizes_ptr_llvm_, stack_id_i64);
     llvm::Value *max_size = builder->CreateLoad(i64ty, max_size_addr);
     llvm::Value *stack_base = get_ad_stack_base_llvm(stack);
-    call("stack_push", get_runtime(), stack_base, max_size, tlctx->get_constant(stack->element_size_in_bytes()));
+    auto *i64ty_local = llvm::Type::getInt64Ty(*llvm_context);
+    llvm::Value *registry_id_const = llvm::ConstantInt::get(
+        i64ty_local, current_task != nullptr ? static_cast<uint64_t>(current_task->ad_stack.registry_id) : 0u);
+    call("stack_push", get_runtime(), stack_base, max_size, tlctx->get_constant(stack->element_size_in_bytes()),
+         registry_id_const);
     auto primal_ptr = call("stack_top_primal", stack_base, tlctx->get_constant(stack->element_size_in_bytes()));
     primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(tlctx->get_data_type(stmt->ret_type), 0));
     builder->CreateStore(llvm_val[stmt->v], primal_ptr);

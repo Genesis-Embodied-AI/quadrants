@@ -1,5 +1,7 @@
 #pragma once
 
+#include <deque>
+
 #include "quadrants/codegen/llvm/compiled_kernel_data.h"
 #include "quadrants/runtime/llvm/kernel_launcher.h"
 
@@ -19,7 +21,17 @@ class KernelLauncher : public LLVM::KernelLauncher {
     // serial), so no launch-time gtmp resolution is needed on this backend.
     std::vector<AdStackSizingInfo> ad_stacks;
     std::vector<std::size_t> num_threads_per_task;
+    // Per-task snode-write set / arg-write set / arg-read set, copied off `OffloadedTask::snode_writes` /
+    // `arr_writes` / `arr_reads` at register time. Used by `launch_llvm_kernel` to bump
+    // `Program::snode_write_gen_` / `ndarray_data_gen_` before each launch so the per-task adstack metadata cache
+    // invalidates when this kernel mutates a SNode / ndarray a downstream `size_expr` reads, plus the read-only
+    // `kNone` host-array case where the data pointer stays stable across launches but the user's content can change.
+    std::vector<std::vector<int>> snode_writes_per_task;
+    std::vector<std::vector<int>> arr_writes_per_task;
+    std::vector<std::vector<int>> arr_reads_per_task;
     const std::vector<std::pair<int, Callable::Parameter>> *parameters;
+    // arg_ids of the array-typed entries in `parameters`, precomputed at register time.
+    std::vector<int> array_arg_ids;
   };
 
  public:
@@ -38,7 +50,8 @@ class KernelLauncher : public LLVM::KernelLauncher {
                                             const std::vector<AdStackSizingInfo> &ad_stacks,
                                             const std::vector<std::size_t> &num_threads_per_task);
 
-  std::vector<Context> contexts_;
+  // `std::deque` so references to existing entries survive an `emplace_back` from a nested launch.
+  std::deque<Context> contexts_;
 };
 
 }  // namespace cpu
