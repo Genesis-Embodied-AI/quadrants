@@ -16,7 +16,7 @@ class DemoteOperations : public BasicStmtVisitor {
   DemoteOperations() {
   }
 
-  Stmt *transform_pow_op_impl(IRBuilder &builder, Stmt *lhs, Stmt *rhs) {
+  Stmt *transform_pow_op_impl(IRBuilder &builder, Stmt *lhs, Stmt *rhs, bool precise) {
     auto lhs_type = lhs->ret_type.get_element_type();
     auto rhs_type = rhs->ret_type.get_element_type();
 
@@ -45,9 +45,14 @@ class DemoteOperations : public BasicStmtVisitor {
         auto _ = builder.get_if_guard(if_stmt, true);
         auto current_result = builder.create_local_load(result);
         auto new_result = builder.create_mul(current_result, current_a);
+        // Propagate `qd.precise(...)` onto the synthesized mul chain: otherwise demote_operations runs before alg_simp
+        // / codegen and the mul-chain expansion of `x**n` silently drops the IEEE-strict tag the user wrote on the
+        // original pow stmt.
+        new_result->precise = precise;
         builder.create_local_store(result, new_result);
       }
       auto new_a = builder.create_mul(current_a, current_a);
+      new_a->precise = precise;
       builder.create_local_store(a, new_a);
       auto new_b = builder.create_sar(current_b, one_rhs);
       builder.create_local_store(b, new_b);
@@ -58,6 +63,7 @@ class DemoteOperations : public BasicStmtVisitor {
         auto _ = builder.get_if_guard(if_stmt, true);
         auto current_result = builder.create_local_load(result);
         auto new_result = builder.create_div(one_lhs, current_result);
+        new_result->precise = precise;
         builder.create_local_store(result, new_result);
       }
     }
@@ -68,7 +74,7 @@ class DemoteOperations : public BasicStmtVisitor {
   void transform_pow_op_scalar(BinaryOpStmt *stmt, Stmt *lhs, Stmt *rhs) {
     IRBuilder builder;
 
-    auto final_result = transform_pow_op_impl(builder, lhs, rhs);
+    auto final_result = transform_pow_op_impl(builder, lhs, rhs, stmt->precise);
 
     stmt->replace_usages_with(final_result);
     modifier.insert_before(stmt, VecStatement(std::move(builder.extract_ir()->statements)));
@@ -112,7 +118,7 @@ class DemoteOperations : public BasicStmtVisitor {
       modifier.insert_before(stmt, std::move(rhs_load));
 
       IRBuilder builder;
-      auto cur_result = transform_pow_op_impl(builder, cur_lhs, cur_rhs);
+      auto cur_result = transform_pow_op_impl(builder, cur_lhs, cur_rhs, stmt->precise);
 
       modifier.insert_before(stmt, VecStatement(std::move(builder.extract_ir()->statements)));
       ret_stmts.push_back(cur_result);
@@ -163,8 +169,13 @@ class DemoteOperations : public BasicStmtVisitor {
   }
 
   std::unique_ptr<Stmt> demote_ffloor(BinaryOpStmt *stmt, Stmt *lhs, Stmt *rhs) {
-    auto div = Stmt::make<BinaryOpStmt>(BinaryOpType::div, lhs, rhs);
-    auto floor = Stmt::make<UnaryOpStmt>(UnaryOpType::floor, div.get());
+    auto div = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::div, lhs, rhs);
+    // Propagate `qd.precise(...)` onto the synthesized FP div / floor: otherwise demote_operations replaces the precise
+    // floordiv with untagged stmts before alg_simp / codegen see it, and the IEEE-strict tag is silently lost for
+    // `qd.precise(a // b)` on FP operands.
+    div->precise = stmt->precise;
+    auto floor = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::floor, div.get());
+    floor->precise = stmt->precise;
     modifier.insert_before(stmt, std::move(div));
     return floor;
   }
