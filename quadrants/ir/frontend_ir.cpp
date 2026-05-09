@@ -960,13 +960,11 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
   }
 
   auto const &ret_element_type = ret_type.get_element_type();
-  if (op_type == AtomicOpType::bit_and || op_type == AtomicOpType::bit_or ||
-      op_type == AtomicOpType::bit_xor) {
+  if (op_type == AtomicOpType::bit_and || op_type == AtomicOpType::bit_or || op_type == AtomicOpType::bit_xor) {
     if (!is_integral(ret_element_type) || !is_integral(val_dtype)) {
       ErrorEmitter(QuadrantsTypeError(), this,
-                   fmt::format("'atomic_{}' requires integer operands, got '{}' and '{}'",
-                               atomic_op_type_name(op_type), dest->ret_type->to_string(),
-                               val->ret_type->to_string()));
+                   fmt::format("'atomic_{}' requires integer operands, got '{}' and '{}'", atomic_op_type_name(op_type),
+                               dest->ret_type->to_string(), val->ret_type->to_string()));
     }
   }
   if (ret_element_type != val_dtype) {
