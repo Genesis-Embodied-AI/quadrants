@@ -704,13 +704,10 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
 
   size_t runtime_objects_prealloc_size = 0;
   void *runtime_objects_prealloc_buffer = nullptr;
-  // Process-lifetime device pointer for the per-thread RandState array on
-  // GPU backends. Hoisted out of the per-init runtime-objects preallocation
-  // to avoid the ~400 MiB per-cycle hipMalloc/hipFree pair, which under
-  // multi-process contention was a major contributor to AMDGPU
-  // HSA_STATUS_ERROR_OUT_OF_RESOURCES. nullptr on CPU (rand-states are still
-  // bumped from `runtime_objects_chunk` there). See
-  // `persistent_rand_state_buffer.h` for the lifetime contract.
+  // Process-lifetime device pointer for the per-thread RandState array on GPU backends. Hoisted out of the per-init
+  // runtime-objects preallocation to avoid the ~400 MiB per-cycle hipMalloc/hipFree pair, which under multi-process
+  // contention was a major contributor to AMDGPU HSA_STATUS_ERROR_OUT_OF_RESOURCES. nullptr on CPU (rand-states are
+  // still bumped from `runtime_objects_chunk` there). See `persistent_rand_state_buffer.h` for the lifetime contract.
   void *external_rand_states_buffer = nullptr;
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_CUDA) || defined(QD_WITH_AMDGPU)
@@ -726,9 +723,9 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
     }
 
     runtime_jit->call<void *, int32_t, int32_t, int32_t>("runtime_get_memory_requirements", temp_result_ptr,
-                                                          num_rand_states,
-                                                          /*use_preallocated_buffer=*/1,
-                                                          /*external_rand_states_buffer=*/1);
+                                                         num_rand_states,
+                                                         /*use_preallocated_buffer=*/1,
+                                                         /*external_rand_states_buffer=*/1);
     runtime_objects_prealloc_size = size_t(fetch_result<uint64_t>(0, (uint64_t *)temp_result_ptr));
     temp_result_alloc.reset();
     size_t result_buffer_size = sizeof(uint64) * quadrants_result_buffer_entries;

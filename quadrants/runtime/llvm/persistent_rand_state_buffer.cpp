@@ -13,9 +13,8 @@
 namespace quadrants::lang {
 
 PersistentRandStateBuffer &PersistentRandStateBuffer::get_instance() {
-  // Heap-allocated and intentionally leaked: the singleton owns a raw HIP/CUDA
-  // driver allocation, and freeing it at static-destructor time would race
-  // the driver context's own teardown. Same pattern used by the AMDGPU
+  // Heap-allocated and intentionally leaked: the singleton owns a raw HIP/CUDA driver allocation, and freeing it at
+  // static-destructor time would race the driver context's own teardown. Same pattern used by the AMDGPU
   // persistent-runtime-JIT cache.
   static auto *instance = new PersistentRandStateBuffer();
   return *instance;
@@ -33,8 +32,8 @@ void *PersistentRandStateBuffer::get_or_grow(Arch arch, std::size_t bytes_requir
     return buffer_;
   }
 
-  // Free the prior (smaller) allocation before growing. This is the only
-  // free path; on process exit the singleton is leaked deliberately.
+  // Free the prior (smaller) allocation before growing. This is the only free path; on process exit the singleton is
+  // leaked deliberately.
   if (buffer_ != nullptr) {
     if (arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
