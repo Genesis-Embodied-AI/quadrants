@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -183,24 +184,33 @@ class AdStackCache {
     void *devalloc;
     uint64_t gen;
   };
+  // Cache entry stores the dispatched result map via shared ownership so the per-launch fast path can repoint
+  // `LlvmRuntimeExecutor::current_max_reducer_results_` to it without copying, and so a snapshot taken by
+  // `publish_adstack_metadata` survives a recursive snode-reader-kernel reentry that may rewrite the executor
+  // transient. The result map is logically `const` once recorded; mutation should happen by replacing the entry,
+  // not by reaching through the `shared_ptr`.
   struct MaxReducerLaunchCacheEntry {
-    std::unordered_map<uint64_t, int64_t> result;
+    std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> result;
     std::vector<std::pair<int, uint64_t>> snode_gens;
     std::vector<ArgGenObservation> arg_gens;
   };
-  // Replay the recorded dependency snapshot for `launch_cache_key`. Returns true (and populates `out_result`) when
-  // every recorded dep still matches the live `(snode_write_gen, ndarray_data_gen)`; false otherwise. A miss leaves
-  // the entry in place so a subsequent `record_max_reducer_launch_cache` can overwrite it.
-  bool try_max_reducer_launch_cache_hit(const void *launch_cache_key,
-                                        LaunchContextBuilder *ctx,
-                                        std::unordered_map<uint64_t, int64_t> &out_result);
+  // Replay the recorded dependency snapshot for `launch_cache_key`. Returns true (and populates `out_result` with
+  // the cache entry's `shared_ptr`) when every recorded dep still matches the live `(snode_write_gen,
+  // ndarray_data_gen)`; false otherwise. A miss leaves the entry in place so a subsequent
+  // `record_max_reducer_launch_cache` can overwrite it.
+  bool try_max_reducer_launch_cache_hit(
+      const void *launch_cache_key,
+      LaunchContextBuilder *ctx,
+      std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> &out_result);
   // Aggregate every spec's observation deps (resolved via `lookup_max_reducer_reads`) into a deduplicated snapshot
-  // and store it under `launch_cache_key` alongside `result`. Called at the end of every successful run of
+  // and store `result` under `launch_cache_key`. Called at the end of every successful run of
   // `dispatch_max_reducers_for_tasks` (both full-cache-hit and any-cache-miss paths) so the next launch's
-  // `try_max_reducer_launch_cache_hit` short-circuits the per-spec walk. `ctx` must be non-null.
+  // `try_max_reducer_launch_cache_hit` short-circuits the per-spec walk. `ctx` must be non-null. `result` is
+  // moved into the cache entry; the caller should `make_shared` it once and pass the same `shared_ptr` down to
+  // `LlvmRuntimeExecutor::current_max_reducer_results_` to avoid materialising a second copy.
   void record_max_reducer_launch_cache(const void *launch_cache_key,
                                        const std::vector<const AdStackSizingInfo *> &ad_stacks,
-                                       const std::unordered_map<uint64_t, int64_t> &result,
+                                       std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> result,
                                        LaunchContextBuilder *ctx);
   void invalidate_max_reducer_launch() {
     max_reducer_launch_cache_.clear();

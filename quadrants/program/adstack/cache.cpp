@@ -171,9 +171,10 @@ void AdStackCache::record_max_reducer_eval(uint32_t registry_id,
   ++max_reducer_dispatch_count_;
 }
 
-bool AdStackCache::try_max_reducer_launch_cache_hit(const void *launch_cache_key,
-                                                    LaunchContextBuilder *ctx,
-                                                    std::unordered_map<uint64_t, int64_t> &out_result) {
+bool AdStackCache::try_max_reducer_launch_cache_hit(
+    const void *launch_cache_key,
+    LaunchContextBuilder *ctx,
+    std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> &out_result) {
   if (launch_cache_key == nullptr || ctx == nullptr) {
     return false;
   }
@@ -195,14 +196,18 @@ bool AdStackCache::try_max_reducer_launch_cache_hit(const void *launch_cache_key
       return false;
     }
   }
+  // Hand back a `shared_ptr` copy of the cached result. Refcount bump only - no map copy. The cache entry retains
+  // its own ownership, so the caller's transient stays valid even after a recursive reentry rewrites the executor's
+  // `current_max_reducer_results_` field.
   out_result = entry.result;
   return true;
 }
 
-void AdStackCache::record_max_reducer_launch_cache(const void *launch_cache_key,
-                                                   const std::vector<const AdStackSizingInfo *> &ad_stacks,
-                                                   const std::unordered_map<uint64_t, int64_t> &result,
-                                                   LaunchContextBuilder *ctx) {
+void AdStackCache::record_max_reducer_launch_cache(
+    const void *launch_cache_key,
+    const std::vector<const AdStackSizingInfo *> &ad_stacks,
+    std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> result,
+    LaunchContextBuilder *ctx) {
   if (launch_cache_key == nullptr || ctx == nullptr) {
     return;
   }
@@ -212,7 +217,7 @@ void AdStackCache::record_max_reducer_launch_cache(const void *launch_cache_key,
   // fresh `record_max_reducer_eval` or a still-warm `populate_max_reducer_body_observations` call earlier in this
   // launch.
   MaxReducerLaunchCacheEntry entry;
-  entry.result = result;
+  entry.result = std::move(result);
   std::unordered_map<int, uint64_t> snode_gens_map;
   std::unordered_map<int, std::pair<void *, uint64_t>> arg_gens_map;
   for (const auto *ad_stack_ptr : ad_stacks) {
