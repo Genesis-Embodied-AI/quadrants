@@ -1053,7 +1053,13 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     // i.e. clz(0xFFFFFFFF) == 0. FindSMsb returns -1 for negative inputs (it finds the MSB of the absolute value's
     // bit pattern, ignoring the sign bit), which would yield clz(-1) == 32. CUDA's __nv_clz and the LLVM ctlz
     // intrinsic both operate on the unsigned bit pattern; FindUMsb gives matching semantics.
+    //
+    // All arithmetic happens in i32 regardless of the operand's signedness or width, then the result is cast
+    // to dst_type at the very end. This keeps i32 / u32 / i64 / u64 inputs on the same code path: dispatch on
+    // bit width only.
     uint32_t FindUMsb_id = 75;
+    auto i32_t = ir_->i32_type();
+    spirv::Value clz_i32;
     if (data_type_bits(src_dt) == 64) {
       // GLSL.std.450 FindUMsb is defined for 32-bit integers only. Synthesise the 64-bit case
       // by splitting the operand into hi/lo i32 halves, calling FindUMsb on each, and selecting:
@@ -1063,7 +1069,6 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
       //   hi == 0, lo == 0 -> 32 + (31 - (-1)) = 64
       //   hi == 0, lo != 0 -> 32 + (31 - FindUMsb(lo))
       //   hi != 0          -> 31 - FindUMsb(hi)
-      auto i32_t = ir_->i32_type();
       auto u64_t = ir_->u64_type();
       auto val_u64 = ir_->cast(u64_t, operand_val);
       auto thirty_two_u64 = ir_->uint_immediate_number(u64_t, 32);
@@ -1078,16 +1083,19 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
       auto hi_clz = ir_->sub(bit31, hi_msb);
       auto lo_clz_full = ir_->sub(bit63, lo_msb);
       auto hi_zero = ir_->eq(hi, zero_i32);
-      auto clz_i32 = ir_->select(hi_zero, lo_clz_full, hi_clz);
-      // dst_type matches the operand width (i64 for i64 input). Widen the i32 count back out so
-      // the value registered for this stmt has the type the rest of the pipeline expects.
-      val = ir_->cast(dst_type, clz_i32);
+      clz_i32 = ir_->select(hi_zero, lo_clz_full, hi_clz);
+    } else if (data_type_bits(src_dt) == 32) {
+      // Cast operand to i32 so FindUMsb's result type matches our i32 arithmetic. For i32 input this is a
+      // no-op; for u32 input cast() emits an OpBitcast.
+      auto val_i32 = ir_->cast(i32_t, operand_val);
+      auto msb = ir_->call_glsl450(i32_t, FindUMsb_id, val_i32);
+      auto bit31 = ir_->int_immediate_number(i32_t, 31);
+      clz_i32 = ir_->sub(bit31, msb);
     } else {
-      spirv::Value msb = ir_->call_glsl450(dst_type, FindUMsb_id, operand_val);
-      spirv::Value bitcnt = ir_->int_immediate_number(ir_->i32_type(), 32);
-      spirv::Value one = ir_->int_immediate_number(ir_->i32_type(), 1);
-      val = ir_->sub(ir_->sub(bitcnt, msb), one);
+      QD_NOT_IMPLEMENTED
     }
+    // Convert the i32 leading-zero count to the dst_type the pipeline expects (i32 / u32 / i64 / u64).
+    val = ir_->cast(dst_type, clz_i32);
   }
 #define UNARY_OP_TO_SPIRV(op, instruction, instruction_id, max_bits)                           \
   else if (stmt->op_type == UnaryOpType::op) {                                                 \
