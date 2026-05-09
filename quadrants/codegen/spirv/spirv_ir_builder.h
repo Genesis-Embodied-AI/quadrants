@@ -500,6 +500,9 @@ class IRBuilder {
   SType f32_type() const {
     return t_fp32_;
   }
+  SType v4_u32_type() const {
+    return t_v4_uint_;
+  }
 
   SType i16_type() const {
     return t_int16_;

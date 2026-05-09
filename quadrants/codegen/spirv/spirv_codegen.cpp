@@ -1456,7 +1456,7 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     auto predicate = ir_->query_value(stmt->args[0]->raw_name());
     auto pred_bool =
         ir_->make_value(spv::OpINotEqual, ir_->bool_type(), predicate, ir_->int_immediate_number(ir_->i32_type(), 0));
-    auto ballot_vec = ir_->make_value(spv::OpGroupNonUniformBallot, ir_->t_v4_uint_,
+    auto ballot_vec = ir_->make_value(spv::OpGroupNonUniformBallot, ir_->v4_u32_type(),
                                       ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), pred_bool);
     val = ir_->make_value(spv::OpCompositeExtract, ir_->u32_type(), ballot_vec, 0);
   } else if (shuffle_ops.find(stmt->func_name) != shuffle_ops.end()) {
