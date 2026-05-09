@@ -627,23 +627,13 @@ def test_atomic_bitwise_int_widths(op, seed, arg, expected, dtype):
 
 # Pins the doc claim that bitwise atomics on float dtypes raise a type
 # error at trace time (atomics page: "Integer dtypes only -- passing
-# f32 / f64 raises a type error at trace time").
-#
-# As of this commit the claim is not enforced: AtomicOpExpression::type_check
-# in quadrants/ir/frontend_ir.cpp validates that val is a PrimitiveType
-# but does not check is_integral for bit_and / bit_or / bit_xor, and the
-# program SIGABRTs in launch_kernel on CUDA instead of raising. Skipped
-# (not xfailed) because the failure is a hard process abort that takes
-# down the pytest worker.
+# f32 / f64 raises a type error at trace time"). Enforced by the
+# is_integral check in AtomicOpExpression::type_check
+# (quadrants/ir/frontend_ir.cpp) for bit_and / bit_or / bit_xor.
 @pytest.mark.parametrize("op", ["and", "or", "xor"])
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
 def test_atomic_bitwise_on_float_field_raises(op, dtype):
-    pytest.skip(
-        "TODO: AtomicOpExpression::type_check does not reject bitwise atomics "
-        "on float dtypes; CUDA aborts in launch_kernel instead of raising at "
-        "trace time. Re-enable once the frontend check lands."
-    )
     test_utils.skip_if_f64_unsupported(dtype)
     f = qd.field(dtype, shape=())
     f[None] = 0
