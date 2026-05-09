@@ -4,7 +4,7 @@ Block-level primitives operate on the threads of a single CUDA thread block (CTA
 
 Block ops live under `qd.simt.block`. They are written so the same Python source compiles to the right vendor primitive on each backend. As of this writing every op on this page is portable across CUDA, AMDGPU, Vulkan, and Metal; the only remaining caveat (called out in the support-table footnote below) is a perf trade-off for the emulated `block.sync_*_nonzero` ops on non-CUDA backends, not a correctness gap. If a future op is added that is not yet portable, the Python layer will raise `ValueError` at trace time on the unsupported backend.
 
-The closely-related grid-level fence (`qd.simt.grid.memfence()`) is documented at the end of this page, since users picking between a block-scope and a device-scope fence need to see both side by side.
+The closely-related device-scope memory fence is documented separately in [grid](grid.md). Users picking between a block-scope and a device-scope fence should read that page for the device-scope side.
 
 ## What's available
 
@@ -18,7 +18,8 @@ The closely-related grid-level fence (`qd.simt.grid.memfence()`) is documented a
 | `block.SharedArray(shape, dtype)`               | yes  | yes    | yes    | yes   |
 | `block.global_thread_idx()`                     | yes  | yes    | yes    | yes   |
 | `block.thread_idx()`                            | yes  | yes    | yes    | yes   |
-| `grid.memfence()` (device-scope, see below)     | yes  | no     | no     | no    |
+
+The device-scope memory fence at the entire-grid level is documented in [grid](grid.md), with its own per-backend support table and lowering details.
 
 Vulkan and Metal share a SPIR-V codegen path (Metal goes through MoltenVK → MSL); they are listed as separate columns because a couple of ops have Metal-specific caveats called out below. Footnoted entries are still functional, just with the limitations the footnote describes.
 
@@ -41,7 +42,7 @@ Concretely:
 
 Calling `sync()` from a path that not all threads reach (a divergent `if`, an early `return`, etc.) is a classic GPU deadlock and applies to all backends.
 
-The corresponding distinction at device scope is `grid.memfence()` (memory fence across the entire grid, no thread synchronization), documented in the [Grid-scope fence](#grid-scope-fence-qdsimtgridmemfence) section below. There is no block-style "device barrier" — to synchronize threads across blocks, finish the kernel and launch a new one.
+The corresponding distinction at device scope is the grid-scope memory fence (memory fence across the entire grid, no thread synchronization), documented in [grid](grid.md). There is no block-style "device barrier" — to synchronize threads across blocks, finish the kernel and launch a new one.
 
 ## Semantics
 
@@ -116,18 +117,9 @@ This is the thread's index *within its own block / workgroup*. To get the across
 
 Today only the X dimension is exposed (1-D blocks). For 2-D / 3-D blocks the calling code should compute the linear index from `block.thread_idx()` and the block-Y / Z dimensions itself, or stick to 1-D blocks (the dominant Quadrants idiom — `qd.loop_config(block_dim=N)` always sets the X extent).
 
-## Grid-scope fence: `qd.simt.grid.memfence()`
-
-**Planned rename: `qd.simt.grid.mem_fence()`** (note the underscore). This op will be renamed in a future release for consistency with the planned `block.mem_fence()`. The current name (`grid.memfence()`) remains the only spelling available today; the rest of this section uses it.
-
-`grid.memfence()` is the device-scope counterpart of `block.mem_sync()` (to be renamed `block.mem_fence()` in a future release). It orders memory operations across the entire grid, so writes made by one block become visible to other blocks after the fence. CUDA only today; lowers to `__threadfence()` (`nvvm_membar_gl`).
-
-Use it when you need cross-block coordination via global memory (decoupled look-back scan, inter-block flag publishing, single-pass reductions, etc.). For coordination within a single block, prefer `block.mem_sync()` — it is cheaper.
-
-There is no built-in grid-wide barrier (cooperative-groups-style); the only way to converge threads across blocks is to finish the kernel and launch a new one.
-
 ## Related
 
+- [grid](grid.md) — the device-scope counterpart of `block.mem_fence()`. For coordination within a single block, prefer `block.mem_fence()` — it is cheaper.
 - [parallelization](parallelization.md) — kernel-launch and grid-stride patterns.
 - [subgroup](subgroup.md) — primitives that operate within a single subgroup (warp / wavefront), one tier below block scope.
 - [tile16](tile16.md) — `Tile16x16` register-resident tiles, built on `subgroup.shuffle`.
