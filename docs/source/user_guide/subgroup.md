@@ -6,7 +6,7 @@ Subgroup ops live under `qd.simt.subgroup` and are written so the same Python so
 
 ## What's available
 
-The full Python API is grouped here by category. The first column lists each op, the next three columns indicate which backend currently lowers it. Cells marked "no" either raise from the Python wrapper, fail to link in the runtime, or return `None` from a `# TODO` stub — in every case the op is unusable on that backend today.
+The full Python API is grouped here by category. The first column lists each op, the next three columns indicate which backend currently lowers it.
 
 ### Data movement
 
