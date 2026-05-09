@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -55,7 +56,11 @@ class KernelLauncher : public LLVM::KernelLauncher {
                                             const std::vector<OffloadedTask> &offloaded_tasks,
                                             void *device_context_ptr);
 
-  std::vector<Context> contexts_;
+  // std::deque (not std::vector): `publish_adstack_metadata`'s host-eval branch recursively registers snode-reader
+  // kernels via this same launcher, calling `contexts_.resize()` while a parent `launch_llvm_kernel` frame still
+  // holds a reference into the container.  std::deque never invalidates references on push_back / resize, so the
+  // parent's `launcher_ctx` reference survives the child's registration.
+  std::deque<Context> contexts_;
   GraphManager graph_manager_;
   // `result_buffer` stays launcher-global: kernels write to it, the host reads it back synchronously before any
   // other kernel runs as a reader, so recursive snode-reader launches that reuse the buffer cannot smuggle stale

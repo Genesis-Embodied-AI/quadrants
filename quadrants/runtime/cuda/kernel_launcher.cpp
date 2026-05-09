@@ -86,6 +86,18 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // the cleared counter and UINT32_MAX-defaulted capacity arrays.
     executor->publish_adstack_lazy_claim_buffers(offloaded_tasks.size());
   }
+  // Max-reducer dispatch. Runs before the per-task loop so each `publish_adstack_metadata` call sees the result map via
+  // the executor's `current_max_reducer_results_` and can substitute captured `MaxOverRange`s inside its encoder. Gated
+  // on whether any task has captured specs so forward-only and reverse-mode-without-recognized-MaxOverRange kernels pay
+  // zero per-launch overhead (the dispatch otherwise clears the transient map, walks `offloaded_tasks`, and constructs
+  // a `CudaDefaultStreamPinGuard` RAII guard on every kernel launch). Mirrors the `any_lazy_task` gate above on
+  // `publish_adstack_lazy_claim_buffers`.
+  const bool any_max_reducer_task =
+      std::any_of(offloaded_tasks.begin(), offloaded_tasks.end(),
+                  [](const OffloadedTask &t) { return !t.ad_stack.max_reducer_specs.empty(); });
+  if (any_max_reducer_task) {
+    executor->dispatch_max_reducers_for_tasks(offloaded_tasks, &ctx, device_context_ptr);
+  }
 
   // Per-task adstack setup + grid-dim capping. Shared by serial and stream-parallel paths.
   auto prepare_task = [&](std::size_t task_index, const OffloadedTask &task) -> int {
@@ -365,17 +377,28 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   if (ctx.result_buffer_size > 0) {
     ctx.get_context().result_buffer = (uint64 *)device_result_buffer;
   }
+  // When launching on an explicit stream (active_stream != nullptr), two calls to the same kernel on different streams
+  // would race on the shared per-handle arg_buffer: the second call's memcpy can overwrite the buffer while the first
+  // kernel is still reading it.  Allocate a per-call ephemeral buffer in that case; the stream-ordered free below
+  // ensures the memory stays live until the kernel finishes.
+  const bool use_persistent_scratch = (active_stream == nullptr);
   char *device_arg_buffer = nullptr;
+  void *ephemeral_arg_buffer = nullptr;
   if (ctx.arg_buffer_size > 0) {
-    if (ctx.arg_buffer_size > launcher_ctx.arg_buffer_capacity) {
-      if (launcher_ctx.arg_buffer_dev_ptr != nullptr) {
-        CUDADriver::get_instance().mem_free_async(launcher_ctx.arg_buffer_dev_ptr, nullptr);
+    if (use_persistent_scratch) {
+      if (ctx.arg_buffer_size > launcher_ctx.arg_buffer_capacity) {
+        if (launcher_ctx.arg_buffer_dev_ptr != nullptr) {
+          CUDADriver::get_instance().mem_free_async(launcher_ctx.arg_buffer_dev_ptr, nullptr);
+        }
+        const std::size_t new_cap = std::max<std::size_t>(ctx.arg_buffer_size, 2 * launcher_ctx.arg_buffer_capacity);
+        CUDADriver::get_instance().malloc_async(&launcher_ctx.arg_buffer_dev_ptr, new_cap, nullptr);
+        launcher_ctx.arg_buffer_capacity = new_cap;
       }
-      const std::size_t new_cap = std::max<std::size_t>(ctx.arg_buffer_size, 2 * launcher_ctx.arg_buffer_capacity);
-      CUDADriver::get_instance().malloc_async(&launcher_ctx.arg_buffer_dev_ptr, new_cap, nullptr);
-      launcher_ctx.arg_buffer_capacity = new_cap;
+      device_arg_buffer = static_cast<char *>(launcher_ctx.arg_buffer_dev_ptr);
+    } else {
+      CUDADriver::get_instance().malloc_async(&ephemeral_arg_buffer, ctx.arg_buffer_size, active_stream);
+      device_arg_buffer = static_cast<char *>(ephemeral_arg_buffer);
     }
-    device_arg_buffer = static_cast<char *>(launcher_ctx.arg_buffer_dev_ptr);
     CUDADriver::get_instance().memcpy_host_to_device_async(device_arg_buffer, ctx.get_context().arg_buffer,
                                                            ctx.arg_buffer_size, active_stream);
     ctx.get_context().arg_buffer = device_arg_buffer;
@@ -399,13 +422,23 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       break;
     }
   }
-  needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().supports_pageable_memory_access();
+  // Gate the HMM-shortcut on whether the device walks host page tables directly (attribute 100). This is a sharper
+  // predicate than `supports_pageable_memory_access` (attribute 88, which is also true on Turing-class HMM where
+  // the legacy fault-and-migrate path is unsafe under multi-process pressure). On Ampere+ the device reads host
+  // memory through host page tables and the staging is redundant; on Turing/Volta we always stage.
+  needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().uses_host_page_tables();
   void *device_context_ptr = nullptr;
+  void *ephemeral_context_ptr = nullptr;
   if (needs_sizer_device_ctx) {
-    if (launcher_ctx.runtime_context_dev_ptr == nullptr) {
-      CUDADriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext), nullptr);
+    if (use_persistent_scratch) {
+      if (launcher_ctx.runtime_context_dev_ptr == nullptr) {
+        CUDADriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext), nullptr);
+      }
+      device_context_ptr = launcher_ctx.runtime_context_dev_ptr;
+    } else {
+      CUDADriver::get_instance().malloc_async(&ephemeral_context_ptr, sizeof(RuntimeContext), active_stream);
+      device_context_ptr = ephemeral_context_ptr;
     }
-    device_context_ptr = launcher_ctx.runtime_context_dev_ptr;
     CUDADriver::get_instance().memcpy_host_to_device_async(device_context_ptr, &ctx.get_context(),
                                                            sizeof(RuntimeContext), active_stream);
   }
@@ -419,8 +452,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   } else {
     launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
   }
-  // Persistent scratch: no per-launch free for the per-handle `arg_buffer` / `runtime_context` or the launcher-
-  // global `result_buffer`. All live until launcher destruction; the dtor handles the final `mem_free_async`.
+  // Persistent scratch (default-stream path): no per-launch free for the per-handle `arg_buffer` / `runtime_context`
+  // or the launcher-global `result_buffer`. All live until launcher destruction; the dtor handles the final
+  // `mem_free_async`.  Ephemeral buffers (explicit-stream path) are freed below.
   if (ctx.result_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_device_to_host_async(host_result_buffer, device_result_buffer,
                                                            ctx.result_buffer_size, active_stream);
@@ -439,6 +473,14 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     }
   } else if (ctx.result_buffer_size > 0) {
     CUDADriver::get_instance().stream_synchronize(active_stream);
+  }
+  // Free per-call ephemeral buffers (explicit-stream path).  The free is stream-ordered: it won't execute until all
+  // preceding work on active_stream (including the kernel reads) has completed.
+  if (ephemeral_arg_buffer != nullptr) {
+    CUDADriver::get_instance().mem_free_async(ephemeral_arg_buffer, active_stream);
+  }
+  if (ephemeral_context_ptr != nullptr) {
+    CUDADriver::get_instance().mem_free_async(ephemeral_context_ptr, active_stream);
   }
 }
 

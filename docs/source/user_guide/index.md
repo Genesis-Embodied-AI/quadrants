@@ -48,7 +48,10 @@ autodiff
 :maxdepth: 1
 :titlesonly:
 
+atomics
 block
+grid
+math
 subgroup
 tile16
 ```
