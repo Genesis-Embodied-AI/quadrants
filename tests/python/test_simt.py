@@ -822,7 +822,9 @@ def test_subgroup_ballot_popcount():
     sz = sg_size[0]
     actual_popcount = bin(bv).count("1")
     expected = min(sz, N)
-    assert actual_popcount == expected, f"popcount({bv:#x}) = {actual_popcount}, expected {expected} (subgroup size {sz})"
+    assert (
+        actual_popcount == expected
+    ), f"popcount({bv:#x}) = {actual_popcount}, expected {expected} (subgroup size {sz})"
 
 
 @test_utils.test(arch=qd.gpu)
