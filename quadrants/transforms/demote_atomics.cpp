@@ -155,8 +155,8 @@ class DemoteAtomics : public BasicStmtVisitor {
       auto new_stmts = VecStatement();
       Stmt *load;
       if (stmt->op_type == AtomicOpType::xchg) {
-        // atomic_exchange has no binary equivalent: the new value is just `val`,
-        // independent of the old value. Demoted form is load + store(val).
+        // atomic_exchange has no binary equivalent: the new value is just `val`, independent of the old value.
+        // Demoted form is load + store(val).
         if (is_local) {
           load = new_stmts.push_back<LocalLoadStmt>(ptr);
           new_stmts.push_back<LocalStoreStmt>(ptr, val);

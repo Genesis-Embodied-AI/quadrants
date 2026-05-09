@@ -755,3 +755,26 @@ def test_atomic_exchange_vector_field_fanout():
     assert f[None][0] == test_utils.approx(1.5, rel=1e-5)
     assert f[None][1] == test_utils.approx(2.5, rel=1e-5)
     assert f[None][2] == test_utils.approx(3.5, rel=1e-5)
+
+
+# Pins that matrix-typed atomic_exchange fans out to one scalar OpAtomicExchange per component, completing the
+# vector + matrix coverage promised in atomics.md ("Vector / matrix arguments fan out per component"). Mirrors
+# test_atomic_add_matrix_field_fanout. After N exchanges each writing the same matrix, the slot must equal that
+# matrix exactly (last writer wins per element, no all-or-nothing across the 2x3 components).
+@test_utils.test(arch=qd.gpu)
+def test_atomic_exchange_matrix_field_fanout():
+    N = 64
+    m = qd.Matrix.field(2, 3, qd.f32, shape=())
+    m[None] = qd.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    contrib = qd.Matrix([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+
+    @qd.kernel
+    def kern():
+        for _ in range(N):
+            qd.atomic_exchange(m[None], contrib)
+
+    kern()
+    for i in range(2):
+        for j in range(3):
+            expected = i * 3 + j + 1
+            assert m[None][i, j] == test_utils.approx(expected, rel=1e-5)
