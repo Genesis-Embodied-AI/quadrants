@@ -191,6 +191,11 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         i++;
       }
 
+      // Drain the default stream so the arg_buffer upload (memcpy_host_to_device_async on `active_stream`) is visible
+      // to pool streams before they dereference `ctx.arg_buffer`.  Pool streams are CU_STREAM_NON_BLOCKING and do not
+      // implicitly synchronize with the default stream.
+      CUDADriver::get_instance().stream_synchronize(active_stream);
+
       std::map<int, void *> stream_by_id;
       for (size_t j = group_start; j < i; j++) {
         int sid = offloaded_tasks[j].stream_parallel_group_id;

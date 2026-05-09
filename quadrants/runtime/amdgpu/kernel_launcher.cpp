@@ -151,6 +151,11 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         i++;
       }
 
+      // Drain the default stream so the RuntimeContext / arg_buffer uploads (memcpy_host_to_device_async on
+      // `active_stream`) are visible to the pool streams.  Pool streams are created with HIP_STREAM_NON_BLOCKING, so
+      // they do not implicitly synchronize with the default stream.
+      AMDGPUDriver::get_instance().stream_synchronize(active_stream);
+
       std::map<int, void *> stream_by_id;
       for (size_t j = group_start; j < i; j++) {
         int sid = offloaded_tasks[j].stream_parallel_group_id;
