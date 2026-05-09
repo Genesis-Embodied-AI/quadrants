@@ -464,7 +464,7 @@ def test_warp_sync():
         assert a[i] == i % 16 + 16
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_block_sync():
     N = 1024
     a = qd.field(dtype=qd.u32, shape=N)
