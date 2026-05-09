@@ -151,10 +151,12 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         i++;
       }
 
-      // Drain the default stream so the RuntimeContext / arg_buffer uploads (memcpy_host_to_device_async on
-      // `active_stream`) are visible to the pool streams.  Pool streams are created with HIP_STREAM_NON_BLOCKING, so
-      // they do not implicitly synchronize with the default stream.
-      AMDGPUDriver::get_instance().stream_synchronize(active_stream);
+      // Record an event on the default stream so pool streams can wait for the RuntimeContext / arg_buffer uploads
+      // (memcpy_host_to_device_async on `active_stream`) without stalling the CPU.  Pool streams are created with
+      // HIP_STREAM_NON_BLOCKING and do not implicitly synchronize with the default stream.
+      void *upload_event = nullptr;
+      AMDGPUDriver::get_instance().event_create(&upload_event, 0x2 /*hipEventDisableTiming*/);
+      AMDGPUDriver::get_instance().event_record(upload_event, active_stream);
 
       std::map<int, void *> stream_by_id;
       for (size_t j = group_start; j < i; j++) {
@@ -165,6 +167,9 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
       }
 
       try {
+        for (auto &[sid, s] : stream_by_id) {
+          AMDGPUDriver::get_instance().stream_wait_event(s, upload_event, 0);
+        }
         for (size_t j = group_start; j < i; j++) {
           const auto &t = offloaded_tasks[j];
           int effective_grid_dim = prepare_task(j, t);
@@ -181,12 +186,14 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         for (auto &[sid, s] : stream_by_id) {
           AMDGPUContext::get_instance().release_stream(s);
         }
+        AMDGPUDriver::get_instance().event_destroy(upload_event);
         AMDGPUContext::get_instance().set_stream(active_stream);
         throw;
       }
       for (auto &[sid, s] : stream_by_id) {
         AMDGPUContext::get_instance().release_stream(s);
       }
+      AMDGPUDriver::get_instance().event_destroy(upload_event);
 
       AMDGPUContext::get_instance().set_stream(active_stream);
     }

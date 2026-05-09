@@ -191,10 +191,12 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         i++;
       }
 
-      // Drain the default stream so the arg_buffer upload (memcpy_host_to_device_async on `active_stream`) is visible
-      // to pool streams before they dereference `ctx.arg_buffer`.  Pool streams are CU_STREAM_NON_BLOCKING and do not
-      // implicitly synchronize with the default stream.
-      CUDADriver::get_instance().stream_synchronize(active_stream);
+      // Record an event on the default stream so pool streams can wait for the arg_buffer upload
+      // (memcpy_host_to_device_async on `active_stream`) without stalling the CPU.  Pool streams are
+      // CU_STREAM_NON_BLOCKING and do not implicitly synchronize with the default stream.
+      void *upload_event = nullptr;
+      CUDADriver::get_instance().event_create(&upload_event, 0x2 /*CU_EVENT_DISABLE_TIMING*/);
+      CUDADriver::get_instance().event_record(upload_event, active_stream);
 
       std::map<int, void *> stream_by_id;
       for (size_t j = group_start; j < i; j++) {
@@ -205,6 +207,9 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
       }
 
       try {
+        for (auto &[sid, s] : stream_by_id) {
+          CUDADriver::get_instance().stream_wait_event(s, upload_event, 0);
+        }
         for (size_t j = group_start; j < i; j++) {
           const auto &t = offloaded_tasks[j];
           int effective_grid_dim = prepare_task(j, t);
@@ -221,12 +226,14 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         for (auto &[sid, s] : stream_by_id) {
           CUDAContext::get_instance().release_stream(s);
         }
+        CUDADriver::get_instance().event_destroy(upload_event);
         CUDAContext::get_instance().set_stream(active_stream);
         throw;
       }
       for (auto &[sid, s] : stream_by_id) {
         CUDAContext::get_instance().release_stream(s);
       }
+      CUDADriver::get_instance().event_destroy(upload_event);
 
       CUDAContext::get_instance().set_stream(active_stream);
     }
