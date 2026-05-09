@@ -319,13 +319,13 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     SizeExprLaunchScope launch_scope;
     // Snapshot the dispatched-results map for this kernel before the per-stack walk. The body of any captured
     // `MaxOverRange` may host-resolve a `FieldLoad` leaf via `read_field_with_launch_cache`, which dispatches a
-    // snode-reader kernel that reenters `dispatch_max_reducers_for_tasks` and rewrites
-    // `current_max_reducer_results_` to point at that recursive call's result map. Reading the live executor field
-    // per stack would let that recursive overwrite turn `stack_id == 0` 's substitution branch into `stack_id == 1`
-    // 's empty-map fallback - whose host walk then trips the per-task sizer's `1<<24` cap on out-of-grammar shapes
-    // that the recognizer DID capture. Pin the snapshot via a `shared_ptr` copy (refcount bump only, no map data
-    // copied) so the substitution loop stays self-consistent and the cache-entry's allocation stays alive even if
-    // the executor's transient gets repointed mid-walk.
+    // snode-reader kernel that reenters `dispatch_max_reducers_for_tasks` and rewrites `current_max_reducer_results_`
+    // to point at that recursive call's result map. Reading the live executor field per stack would let that recursive
+    // overwrite turn `stack_id == 0` 's substitution branch into `stack_id == 1` 's empty-map fallback - whose host
+    // walk then trips the per-task sizer's `1<<24` cap on out-of-grammar shapes that the recognizer DID capture. Pin
+    // the snapshot via a `shared_ptr` copy (refcount bump only, no map data copied) so the substitution loop stays
+    // self-consistent and the cache-entry's allocation stays alive even if the executor's transient gets repointed
+    // mid-walk.
     const auto local_max_reducer_results = current_max_reducer_results_;
     std::vector<uint64_t> host_max_sizes(n_stacks);
     for (std::size_t i = 0; i < n_stacks; ++i) {

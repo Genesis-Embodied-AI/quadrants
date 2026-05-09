@@ -329,11 +329,11 @@ def test_max_reducer_registry_seeded_on_offline_cache_reload(curr_arch):
         first_run_dispatches >= 1
     ), f"first run with cache_miss should dispatch at least once; got {first_run_dispatches}"
 
-    # Second init: cache hit, codegen skipped, kernels loaded from disk. The per-spec
-    # `AdStackCache::max_reducer_cache_` is in-memory only and starts fresh, so the dispatcher must still fire on
-    # the FIRST launch of the cache-loaded kernel - this is the test's load-bearing assertion. Without the
-    # registry-seeding helper, the dispatcher's `if (registry_id == 0) continue` gate would skip the spec
-    # (because the per-`Program` registry is empty at this point) and the counter would stay at zero.
+    # Second init: cache hit, codegen skipped, kernels loaded from disk. The per-spec `AdStackCache::max_reducer_cache_`
+    # is in-memory only and starts fresh, so the dispatcher must still fire on the FIRST launch of the cache-loaded
+    # kernel - this is the test's load-bearing assertion. Without the registry-seeding helper, the dispatcher's
+    # `if (registry_id == 0) continue` gate would skip the spec (because the per-`Program` registry is empty at this
+    # point) and the counter would stay at zero.
     qd.init(arch=curr_arch, enable_fallback=False, ad_stack_experimental_enabled=True, **current_thread_ext_options())
     second_run_dispatches = helper()
     assert (
