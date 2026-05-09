@@ -1533,9 +1533,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">clz</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Count the number of leading zero bits in ``a``.</span>
 
-<span class="sd">    Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the result is always</span>
-<span class="sd">    returned as an ``i32`` in ``[0, bitwidth(a)]`` (``clz(0) == bitwidth(a)``). The count is over the</span>
-<span class="sd">    unsigned bit pattern, so ``clz(-1) == 0`` regardless of input signedness.</span>
+<span class="sd">    Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the result is always returned as an</span>
+<span class="sd">    ``i32`` in ``[0, bitwidth(a)]`` (``clz(0) == bitwidth(a)``). The count is over the unsigned bit pattern, so</span>
+<span class="sd">    ``clz(-1) == 0`` regardless of input signedness.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_clz</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
