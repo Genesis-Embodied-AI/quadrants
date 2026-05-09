@@ -613,16 +613,12 @@ void LlvmRuntimeExecutor::finalize() {
     // Release unused memory from cuda memory pool
     synchronize();
 
-    // Trim the driver's default async-alloc mempool back to the driver. The
-    // mempool's release-threshold (set to 128 MiB at context construction)
-    // would otherwise keep up to that many bytes of freed pages cached, which
-    // shows up to other co-tenant processes on the same device as memory
-    // still in use. Aligning post-`qd.reset()` driver-visible free VRAM with
-    // the user-facing contract that `qd.reset()` releases everything
-    // Quadrants allocated materially reduces multi-process
-    // `HSA_STATUS_ERROR_OUT_OF_RESOURCES` failures across `pytest-xdist`
-    // workers (see perso_hugh/doc/amdgpu_test_suite_oom_followup.md). No-op
-    // on devices without mempool support.
+    // Trim the driver's default async-alloc mempool back to the driver. The mempool's release-threshold (set to 128
+    // MiB at context construction) would otherwise keep up to that many bytes of freed pages cached, which shows up to
+    // other co-tenant processes on the same device as memory still in use. Aligning post-`qd.reset()` driver-visible
+    // free VRAM with the user-facing contract that `qd.reset()` releases everything Quadrants allocated materially
+    // reduces multi-process `HSA_STATUS_ERROR_OUT_OF_RESOURCES` failures across `pytest-xdist` workers (see
+    // perso_hugh/doc/amdgpu_test_suite_oom_followup.md). No-op on devices without mempool support.
 #if defined(QD_WITH_CUDA)
     if (config_.arch == Arch::cuda) {
       CUDAContext::get_instance().trim_default_mem_pool();

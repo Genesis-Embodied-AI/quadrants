@@ -89,11 +89,9 @@ class CUDAContext {
     return supports_mem_pool_;
   }
 
-  // Force the default device memory pool to release every cached page back
-  // to the driver. Symmetric with the AMDGPU side and called from
-  // `LlvmRuntimeExecutor::finalize` (i.e. `qd.reset()`); see
-  // `AMDGPUContext::trim_default_mem_pool` for the rationale. No-op when
-  // mempool support is unavailable.
+  // Force the default device memory pool to release every cached page back to the driver. Symmetric with the AMDGPU
+  // side and called from `LlvmRuntimeExecutor::finalize` (i.e. `qd.reset()`); see
+  // `AMDGPUContext::trim_default_mem_pool` for the rationale. No-op when mempool support is unavailable.
   void trim_default_mem_pool();
 
   // True when the device can coherently dereference plain host pointers (`malloc` / `new`) from kernel code via HMM /
