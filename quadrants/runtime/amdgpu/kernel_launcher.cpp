@@ -179,8 +179,14 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                 {(void *)&context_pointer}, {arg_size});
         }
 
+        // Join: record an event on each pool stream and make the default stream wait, so subsequent serial work on
+        // active_stream orders after the parallel group without stalling the CPU.
         for (auto &[sid, s] : stream_by_id) {
-          AMDGPUDriver::get_instance().stream_synchronize(s);
+          void *done = nullptr;
+          AMDGPUDriver::get_instance().event_create(&done, 0x2 /*hipEventDisableTiming*/);
+          AMDGPUDriver::get_instance().event_record(done, s);
+          AMDGPUDriver::get_instance().stream_wait_event(active_stream, done, 0);
+          AMDGPUDriver::get_instance().event_destroy(done);
         }
       } catch (...) {
         for (auto &[sid, s] : stream_by_id) {
