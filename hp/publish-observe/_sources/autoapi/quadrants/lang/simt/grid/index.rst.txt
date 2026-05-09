@@ -1,0 +1,63 @@
+quadrants.lang.simt.grid
+========================
+
+.. py:module:: quadrants.lang.simt.grid
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.simt.grid.arch_uses_spv
+   quadrants.lang.simt.grid.mem_fence
+   quadrants.lang.simt.grid.publish
+   quadrants.lang.simt.grid.observe
+   quadrants.lang.simt.grid.memfence
+
+
+Module Contents
+---------------
+
+.. py:function:: arch_uses_spv(arch)
+
+.. py:function:: mem_fence()
+
+.. py:function:: publish(target, value)
+
+   Device-scope publish: store *value* into *target* with cross-workgroup
+   visibility guarantees.  All prior plain stores by the calling thread are
+   ordered before this store and become visible to any thread that
+   :func:`observe`\s *target* (or any later address).
+
+   On CUDA, AMDGPU and native Vulkan the implementation is a device-scope
+   memory fence followed by a plain store.  On Metal (and Vulkan-on-macOS,
+   which is MoltenVK lowering to MSL) the store goes through
+   ``atomic_exchange`` so that cross-workgroup ordering is backed by the
+   MSL atomic-ordering spec in addition to the empirical fence behaviour.
+
+   :param target: A writable field subscript (e.g. ``flags[i]``).
+   :param value: The value to publish.  Must be promotable to *target*'s dtype.
+
+
+.. py:function:: observe(target)
+
+   Device-scope observe: atomically read *target* and ensure that
+   subsequent plain loads by the calling thread see all stores that were
+   ordered before the corresponding :func:`publish`.
+
+   The read is implemented as ``atomic_or(target, 0)`` (a no-op RMW that
+   returns the current value) on every backend, which both defeats LICM in
+   spin-wait loops and satisfies Metal's requirement that cross-workgroup
+   ordering go through atomic operations.  A device-scope memory fence
+   follows the atomic read.
+
+   :param target: A readable field subscript (e.g. ``flags[i]``).
+                  Must be an integer dtype (``atomic_or`` is not defined
+                  on floats).
+
+   :returns: The current value of *target*.
+
+
+.. py:function:: memfence()
+
