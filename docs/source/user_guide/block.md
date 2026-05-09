@@ -42,7 +42,7 @@ Concretely:
 
 Calling `sync()` from a path that not all threads reach (a divergent `if`, an early `return`, etc.) is a classic GPU deadlock and applies to all backends.
 
-The corresponding distinction at device scope is the grid-scope memory fence (memory fence across the entire grid, no thread synchronization), documented in [grid](grid.md). There is no block-style "device barrier" — to synchronize threads across blocks, finish the kernel and launch a new one.
+The corresponding distinction at device scope is the grid-scope memory fence (memory fence across the entire grid, no thread synchronization), documented in [grid](grid.md).
 
 ## Semantics
 
