@@ -605,11 +605,14 @@ def test_atomic_add_int_contention(dtype):
 # Pins the doc-table claim that atomic_and / atomic_or / atomic_xor are
 # "yes" on every integer dtype on every GPU backend. Existing coverage
 # only exercises i32 (test_atomic_{and,or,xor}_expr_evaled).
-@pytest.mark.parametrize("op,seed,arg,expected", [
-    ("and", 0xFF0F, 0x0FF0, 0x0F00),
-    ("or",  0x00F0, 0x0F00, 0x0FF0),
-    ("xor", 0xFF0F, 0x0FF0, 0xF0FF),
-])
+@pytest.mark.parametrize(
+    "op,seed,arg,expected",
+    [
+        ("and", 0xFF0F, 0x0FF0, 0x0F00),
+        ("or", 0x00F0, 0x0F00, 0x0FF0),
+        ("xor", 0xFF0F, 0x0FF0, 0xF0FF),
+    ],
+)
 @pytest.mark.parametrize("dtype", [qd.u32, qd.i64, qd.u64])
 @test_utils.test(arch=qd.gpu)
 def test_atomic_bitwise_int_widths(op, seed, arg, expected, dtype):
