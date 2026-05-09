@@ -184,10 +184,15 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       }
     }
     else if (op == UnaryOpType::clz) {
+      // clz operates on the unsigned bit pattern, so u32 / u64 lower to the same llvm.ctlz
+      // call as i32 / i64; LLVM IR is signless for integers.
       auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
-      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
         llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
-      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64)) {
+        stmt->ret_type = PrimitiveType::i32;
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
         auto clz64 = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
         llvm_val[stmt] = builder->CreateTrunc(clz64, llvm::Type::getInt32Ty(*llvm_context));
         stmt->ret_type = PrimitiveType::i32;
