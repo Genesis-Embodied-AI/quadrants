@@ -4871,6 +4871,50 @@ def test_max_reducer_dispatch_counts_advance_on_input_mutation():
     assert prog._get_max_reducer_dispatch_count() > pre_mutation
 
 
+@test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal], require=qd.extension.adstack)
+def test_max_reducer_per_kernel_registry_id_isolation():
+    # Two `qd.template()` instantiations of the same kernel hash to distinct registry ids so the per-spec max-reducer
+    # cache keyed by `(registry_id, stack_id, mor_node_idx)` does not leak entries across them. GPU only: the max-
+    # reducer dispatch is GPU-specific.
+    #
+    # Internal details: a single `@qd.kernel` definition takes a `qd.template()` flag and selects between two distinct
+    # reverse-mode bodies that write to different loss fields. Each instantiation captures a `MaxOverRange` spec at the
+    # same `(stack_id, mor_node_idx)` coordinates because the bodies are structurally identical, and they share the same
+    # `arr` so a stale entry would pass the observation freshness check (same devalloc, same write gen). The dispatch-
+    # count delta on the second instantiation pins that the SPIR-V launcher registers each task with the real kernel
+    # name so the registry slot is unique per kernel handle.
+    arr = qd.ndarray(qd.i32, shape=(2,))
+    arr.from_numpy(np.array([0, 2], dtype=np.int32))
+
+    x = qd.field(qd.f32, shape=(2,), needs_grad=True)
+    loss_a = qd.field(qd.f32, shape=(), needs_grad=True)
+    loss_b = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1), flag: qd.template()):
+        for i in range(a.shape[0]):
+            accum = 0.0
+            for j in range(a[i]):
+                accum = accum + x[j] * x[j]
+            if qd.static(flag):
+                loss_a[None] += accum
+            else:
+                loss_b[None] += accum
+
+    prog = impl.get_runtime().prog
+    prog._reset_max_reducer_dispatch_count()
+
+    compute(arr, False)
+    compute.grad(arr, False)
+    qd.sync()
+    after_false = prog._get_max_reducer_dispatch_count()
+
+    compute(arr, True)
+    compute.grad(arr, True)
+    qd.sync()
+    assert prog._get_max_reducer_dispatch_count() > after_false
+
+
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_max_reducer_grammar_fallback():
     # Pins the recognizer's grammar gate. A reverse-mode kernel whose inner trip count is a compile-time constant (no
