@@ -679,8 +679,8 @@ def test_subgroup_shuffle_up(dtype):
 
     foo()
 
-    # Lane 1 reads from lane 0, lane 2 from lane 1, lane 3 from lane 2
-    # (within the guaranteed min subgroup of 4 lanes, lane 0's result is undefined).
+    # Lane 1 reads from lane 0, lane 2 from lane 1, lane 3 from lane 2 (within the guaranteed min subgroup of 4 lanes,
+    # lane 0's result is undefined).
     assert dst[1] == src[0]
     assert dst[2] == src[1]
     assert dst[3] == src[2]
@@ -689,8 +689,8 @@ def test_subgroup_shuffle_up(dtype):
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_xor(dtype):
-    """shuffle_xor: each lane reads from lane_id ^ mask. Wrapper version of the manual XOR
-    pattern tested in test_subgroup_shuffle_xor_pattern."""
+    """shuffle_xor: each lane reads from lane_id ^ mask. Wrapper version of the manual XOR pattern tested in
+    test_subgroup_shuffle_xor_pattern."""
     _skip_if_f64_unsupported(dtype)
     N = 64
     src = qd.field(dtype=dtype, shape=N)
@@ -716,8 +716,7 @@ def test_subgroup_shuffle_xor(dtype):
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_broadcast_first(dtype):
-    """broadcast_first: every lane gets lane 0's value. Portable @qd.func wrapper over
-    broadcast(value, 0)."""
+    """broadcast_first: every lane gets lane 0's value. Portable @qd.func wrapper over broadcast(value, 0)."""
     _skip_if_f64_unsupported(dtype)
     N = 64
     a = qd.field(dtype=dtype, shape=N)
@@ -822,9 +821,9 @@ def test_subgroup_reduce_all_add(dtype, log2_size):
             assert abs(dst[i] - expected) < 1e-4 * abs(expected), f"lane {i}: got {dst[i]}, expected {expected}"
 
 
-# Portable Hillis-Steele inclusive scans share the same kernel + Python verification
-# pattern; the only thing that varies is the operator and which dtypes are legal for it.
-# `_check_inclusive_scan` factors out the kernel launch, dtype skip, and per-lane check.
+# Portable Hillis-Steele inclusive scans share the same kernel + Python verification pattern; the only thing that
+# varies is the operator and which dtypes are legal for it.  `_check_inclusive_scan` factors out the kernel launch,
+# dtype skip, and per-lane check.
 
 _INT_DTYPES = (qd.i32, qd.i64, qd.u64)
 
@@ -845,12 +844,11 @@ def _check_inclusive_scan(scan_func, py_op, dtype, log2_size, src_init):
     foo()
 
     group_size = 1 << log2_size
-    # Verify every group across the full 64-lane launch.  group_size <= 32 by the size
-    # contract, so each group fits inside one CUDA / Metal / RDNA subgroup.  Lanes 0-31
-    # and 32-63 form two independent subgroups that run the scan side by side; checking
-    # both, plus every group within each subgroup when log2_size < 5, exercises (a) the
-    # `lane_in_group >= offset` mask that isolates partial-subgroup groups from each
-    # other and (b) the absence of cross-subgroup leakage in the underlying shuffle_up.
+    # Verify every group across the full 64-lane launch.  group_size <= 32 by the size contract, so each group fits
+    # inside one CUDA / Metal / RDNA subgroup.  Lanes 0-31 and 32-63 form two independent subgroups that run the scan
+    # side by side; checking both, plus every group within each subgroup when log2_size < 5, exercises (a) the
+    # `lane_in_group >= offset` mask that isolates partial-subgroup groups from each other and (b) the absence of
+    # cross-subgroup leakage in the underlying shuffle_up.
     for g in range(N // group_size):
         group_base = g * group_size
         running = src[group_base]
@@ -871,15 +869,14 @@ def _check_inclusive_scan(scan_func, py_op, dtype, log2_size, src_init):
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_add(dtype, log2_size):
-    """Portable inclusive prefix sum: lane k of each 2**log2_size group has
-    sum(src[group_base..group_base+k+1])."""
+    """Portable inclusive prefix sum: lane k of each 2**log2_size group has sum(src[group_base..group_base+k+1])."""
     _check_inclusive_scan(subgroup.inclusive_add, lambda a, b: a + b, dtype, log2_size, _init_field)
 
 
 def _init_small_int_or_float(field, n, dtype):
-    """Bound the 32-way product to 2**8 == 256 (i32-safe, f32-exact): most lanes hold 1,
-    every fourth lane holds 2.  With log2_size=5 (32 lanes / group), 8 lanes contribute a
-    factor of 2 → product ≤ 256.  Smaller log2_size only sees a subset."""
+    """Bound the 32-way product to 2**8 == 256 (i32-safe, f32-exact): most lanes hold 1, every fourth lane holds 2.
+    With log2_size=5 (32 lanes / group), 8 lanes contribute a factor of 2 → product ≤ 256.  Smaller log2_size only sees
+    a subset."""
     for i in range(n):
         field[i] = 2 if (i % 4 == 0) else 1
 
@@ -888,14 +885,14 @@ def _init_small_int_or_float(field, n, dtype):
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_mul(dtype, log2_size):
-    """Inclusive prefix product.  Inputs are 1 / 2 mixed so the 32-way product is at
-    most 2**8 == 256 (well within i32 and f32-exact)."""
+    """Inclusive prefix product.  Inputs are 1 / 2 mixed so the 32-way product is at most 2**8 == 256 (well within i32
+    and f32-exact)."""
     _check_inclusive_scan(subgroup.inclusive_mul, lambda a, b: a * b, dtype, log2_size, _init_small_int_or_float)
 
 
 def _init_varied_int_or_float(field, n, dtype):
-    """Mix increasing and decreasing values so prefix-min / prefix-max have non-trivial
-    transitions across the group."""
+    """Mix increasing and decreasing values so prefix-min / prefix-max have non-trivial transitions across the
+    group."""
     for i in range(n):
         # 11, 7, 13, 3, 17, 5, 19, ...  -- varied, non-monotonic, non-negative
         field[i] = ((i * 7 + 11) % 23) + 1
@@ -918,8 +915,8 @@ def test_subgroup_inclusive_max(dtype, log2_size):
 
 
 def _init_bitwise_int(field, n, dtype):
-    """Initialise with bit-varied integer values so prefix &/|/^ have meaningful
-    transitions (bits flip on and off across lanes)."""
+    """Initialise with bit-varied integer values so prefix &/|/^ have meaningful transitions (bits flip on and off
+    across lanes)."""
     for i in range(n):
         field[i] = (i * 5 + 0x37) & 0xFF
 
@@ -953,9 +950,9 @@ def test_subgroup_inclusive_xor(dtype, log2_size):
 
 # --- Exclusive scans ------------------------------------------------------------------
 #
-# Same kernel + verification shape as the inclusive tests above; the only differences are
-# (1) lane 0 of each group is expected to hold the operator's identity, and (2) for
-# min/max the wrapper takes an explicit `identity` arg that we pass through here.
+# Same kernel + verification shape as the inclusive tests above; the only differences are (1) lane 0 of each group is
+# expected to hold the operator's identity, and (2) for min/max the wrapper takes an explicit `identity` arg that we
+# pass through here.
 
 
 def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_init, *, takes_identity_arg=False):
@@ -985,9 +982,8 @@ def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_i
     foo()
 
     group_size = 1 << log2_size
-    # Verify every group across the full 64-lane launch (see `_check_inclusive_scan`
-    # for the rationale).  exclusive[group_base] == identity; exclusive[group_base + k]
-    # for k > 0 == op-reduce(src[group_base..group_base + k]).
+    # Verify every group across the full 64-lane launch (see `_check_inclusive_scan` for the rationale).
+    # exclusive[group_base] == identity; exclusive[group_base + k] for k > 0 == op-reduce(src[group_base..group_base + k]).
     for g in range(N // group_size):
         group_base = g * group_size
         for k in range(group_size):
@@ -1027,9 +1023,8 @@ def test_subgroup_exclusive_mul(dtype, log2_size):
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_min(dtype, log2_size):
-    """Exclusive prefix min.  Lane 0 of each group is the explicit `identity` we pass.
-    Use a sentinel larger than any element produced by `_init_varied_int_or_float` (max
-    is 23)."""
+    """Exclusive prefix min.  Lane 0 of each group is the explicit `identity` we pass.  Use a sentinel larger than any
+    element produced by `_init_varied_int_or_float` (max is 23)."""
     identity = 1_000_000 if dtype == qd.i32 else 1e30
     _check_exclusive_scan(
         subgroup.exclusive_min,
@@ -1046,9 +1041,8 @@ def test_subgroup_exclusive_min(dtype, log2_size):
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_max(dtype, log2_size):
-    """Exclusive prefix max.  Lane 0 of each group is the explicit `identity` we pass.
-    Use a sentinel smaller than any element produced by `_init_varied_int_or_float` (min
-    is 1)."""
+    """Exclusive prefix max.  Lane 0 of each group is the explicit `identity` we pass.  Use a sentinel smaller than
+    any element produced by `_init_varied_int_or_float` (min is 1)."""
     identity = -1_000_000 if dtype == qd.i32 else -1e30
     _check_exclusive_scan(
         subgroup.exclusive_max,
@@ -1094,22 +1088,19 @@ def test_subgroup_exclusive_xor(dtype, log2_size):
     _check_exclusive_scan(subgroup.exclusive_xor, lambda a, b: a ^ b, 0, dtype, log2_size, _init_bitwise_int)
 
 
-# Voting / predicate ops.  All three are group-scoped over 2**log2_size lanes; the
-# scenario tables below exercise (a) every-lane-true / every-lane-false, (b) a single
-# odd lane in one group with the rest all-true / all-false (group isolation), and (c)
-# a sparse pattern that lands several groups in the all-true case and several in the
-# mixed case so the per-group reduction is the only thing distinguishing them.  We
-# verify every group across the full 64-lane launch (so log2_size in {1..4} covers the
-# multi-group case and log2_size==5 covers the full-warp / CUDA fast-path case, and
-# the launch spans two CUDA / Metal / RDNA subgroups so cross-subgroup leakage would
-# also be caught).
+# Voting / predicate ops.  All three are group-scoped over 2**log2_size lanes; the scenario tables below exercise (a)
+# every-lane-true / every-lane-false, (b) a single odd lane in one group with the rest all-true / all-false (group
+# isolation), and (c) a sparse pattern that lands several groups in the all-true case and several in the mixed case so
+# the per-group reduction is the only thing distinguishing them.  We verify every group across the full 64-lane launch
+# (so log2_size in {1..4} covers the multi-group case and log2_size==5 covers the full-warp / CUDA fast-path case, and
+# the launch spans two CUDA / Metal / RDNA subgroups so cross-subgroup leakage would also be caught).
 
 
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_all_true(log2_size):
-    """``all_true(predicate, log2_size)`` is ``i32(all(predicate != 0))`` over each
-    ``2**log2_size`` group, broadcast to every lane in the group."""
+    """``all_true(predicate, log2_size)`` is ``i32(all(predicate != 0))`` over each ``2**log2_size`` group, broadcast
+    to every lane in the group."""
     N = 64
     src = qd.field(dtype=qd.i32, shape=N)
     dst = qd.field(dtype=qd.i32, shape=N)
@@ -1141,16 +1132,16 @@ def test_subgroup_all_true(log2_size):
     mixed[3] = 0
     run_and_check("zero-at-3", mixed)
     run_and_check("sparse-zeros", [(0 if (i % 7 == 0) else 1) for i in range(N)])
-    # Non-binary truthy values: locks the `predicate != 0` cast.  Values include 0,
-    # positive ints, and negatives -- anything non-zero must count as true.
+    # Non-binary truthy values: locks the `predicate != 0` cast.  Values include 0, positive ints, and negatives --
+    # anything non-zero must count as true.
     run_and_check("nonbinary-mixed", [((i * 17) % 13) - 6 for i in range(N)])
 
 
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_any_true(log2_size):
-    """``any_true(predicate, log2_size)`` is ``i32(any(predicate != 0))`` over each
-    ``2**log2_size`` group, broadcast to every lane in the group."""
+    """``any_true(predicate, log2_size)`` is ``i32(any(predicate != 0))`` over each ``2**log2_size`` group, broadcast
+    to every lane in the group."""
     N = 64
     src = qd.field(dtype=qd.i32, shape=N)
     dst = qd.field(dtype=qd.i32, shape=N)
@@ -1182,8 +1173,8 @@ def test_subgroup_any_true(log2_size):
     one_at[3] = 1
     run_and_check("one-at-3", one_at)
     run_and_check("sparse-ones", [(1 if (i % 7 == 0) else 0) for i in range(N)])
-    # Non-binary truthy values: locks the `predicate != 0` cast.  Same pattern as
-    # `test_subgroup_all_true`; mixes 0, positive, and negative ints.
+    # Non-binary truthy values: locks the `predicate != 0` cast.  Same pattern as `test_subgroup_all_true`; mixes 0,
+    # positive, and negative ints.
     run_and_check("nonbinary-mixed", [((i * 17) % 13) - 6 for i in range(N)])
 
 
@@ -1191,10 +1182,9 @@ def test_subgroup_any_true(log2_size):
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_all_equal(dtype, log2_size):
-    """``all_equal(value, log2_size)`` is ``i32(all values equal)`` over each
-    ``2**log2_size`` group, broadcast to every lane in the group.  Equality is the
-    backend's native ``==``; we restrict scenarios to exactly-representable values
-    (small integers / their f32+f64 castings) so float ``==`` is unambiguous."""
+    """``all_equal(value, log2_size)`` is ``i32(all values equal)`` over each ``2**log2_size`` group, broadcast to
+    every lane in the group.  Equality is the backend's native ``==``; we restrict scenarios to exactly-representable
+    values (small integers / their f32+f64 castings) so float ``==`` is unambiguous."""
     _skip_if_f64_unsupported(dtype)
     N = 64
     src = qd.field(dtype=dtype, shape=N)
@@ -1238,10 +1228,9 @@ def test_subgroup_all_equal(dtype, log2_size):
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_all_equal_float_contract(dtype, log2_size):
-    """``all_equal`` on floats uses the backend's native ``==``: ``NaN != NaN`` and
-    ``+0.0 == -0.0``, matching SPIR-V ``OpGroupNonUniformAllEqual``.  Locks both
-    contracts so a future refactor (e.g. swapping in ``__match_all_sync`` on CUDA)
-    can't silently regress to bit-equality."""
+    """``all_equal`` on floats uses the backend's native ``==``: ``NaN != NaN`` and ``+0.0 == -0.0``, matching SPIR-V
+    ``OpGroupNonUniformAllEqual``.  Locks both contracts so a future refactor (e.g. swapping in ``__match_all_sync`` on
+    CUDA) can't silently regress to bit-equality."""
     _skip_if_f64_unsupported(dtype)
     N = 64
     src = qd.field(dtype=dtype, shape=N)
@@ -1270,16 +1259,14 @@ def test_subgroup_all_equal_float_contract(dtype, log2_size):
 
     nan = float("nan")
 
-    # +0.0 == -0.0 on the backend, so groups mixing +/- zero are all-equal.  Lane 0 of
-    # each group is +0.0 (group_base is always even for log2_size >= 1), every other
-    # lane in the group compares its value with +0.0 and gets True.
+    # +0.0 == -0.0 on the backend, so groups mixing +/- zero are all-equal.  Lane 0 of each group is +0.0 (group_base
+    # is always even for log2_size >= 1), every other lane in the group compares its value with +0.0 and gets True.
     run_and_check(
         "plus_minus_zero",
         [(-0.0 if (i & 1) else 0.0) for i in range(N)],
         lambda g: 1,
     )
-    # NaN != NaN: a group containing any NaN reports 0.  Place NaN at the start of
-    # every group so every group fails.
+    # NaN != NaN: a group containing any NaN reports 0.  Place NaN at the start of every group so every group fails.
     run_and_check(
         "nan_at_group_start",
         [(nan if (i % group_size) == 0 else 1.0) for i in range(N)],
@@ -1316,11 +1303,10 @@ def test_subgroup_invocation_id_range():
 def test_subgroup_sync():
     """Smoke test that ``subgroup.sync()`` traces, codegens, and runs on every GPU backend.
 
-    Verifies the trivial "sync inside a uniform-CF kernel doesn't break the emitted code"
-    contract on CUDA (``__syncwarp(0xFFFFFFFF)``), AMDGPU (``llvm.amdgcn.wave.barrier``),
-    and SPIR-V (``OpControlBarrier(Subgroup, Subgroup, 0)``).  We do not attempt to test
-    reconvergence semantics here — that would require deliberately divergent control flow
-    plus a memory-visible side-channel and is too flaky to be a unit test.
+    Verifies the trivial "sync inside a uniform-CF kernel doesn't break the emitted code" contract on CUDA
+    (``__syncwarp(0xFFFFFFFF)``), AMDGPU (``llvm.amdgcn.wave.barrier``), and SPIR-V
+    (``OpControlBarrier(Subgroup, Subgroup, 0)``).  We do not attempt to test reconvergence semantics here — that would
+    require deliberately divergent control flow plus a memory-visible side-channel and is too flaky to be a unit test.
     """
     N = 64
     a = qd.field(dtype=qd.i32, shape=N)
@@ -1343,9 +1329,9 @@ def test_subgroup_mem_fence():
     backend: CUDA (``__threadfence_block()``), AMDGPU (LLVM workgroup-scope ``fence``), and
     SPIR-V (``OpMemoryBarrier(Subgroup, AcquireRelease | UniformMemory | WorkgroupMemory)``).
 
-    Like ``test_subgroup_sync``, we verify only that the kernel compiles and runs.  Testing
-    actual memory-ordering semantics requires constructing a producer/consumer race that
-    only the fence makes legal, which is hard to write portably and easy to make flaky.
+    Like ``test_subgroup_sync``, we verify only that the kernel compiles and runs.  Testing actual memory-ordering
+    semantics requires constructing a producer/consumer race that only the fence makes legal, which is hard to write
+    portably and easy to make flaky.
     """
     N = 64
     a = qd.field(dtype=qd.i32, shape=N)
@@ -1366,10 +1352,9 @@ def test_subgroup_mem_fence():
 def test_subgroup_group_size():
     """``subgroup.group_size()`` returns the active subgroup size.
 
-    Lowers to a constant ``32`` on CUDA, ``llvm.amdgcn.wavefrontsize`` on AMDGPU
-    (constant-folded by the AMDGPU backend to 32 or 64 depending on wavefront mode), and
-    ``OpSubgroupSize`` on SPIR-V.  We verify (a) every lane sees the same value and (b)
-    that value is one of the sizes the spec actually allows on real hardware ({32, 64}).
+    Lowers to a constant ``32`` on CUDA, ``llvm.amdgcn.wavefrontsize`` on AMDGPU (constant-folded by the AMDGPU backend
+    to 32 or 64 depending on wavefront mode), and ``OpSubgroupSize`` on SPIR-V.  We verify (a) every lane sees the same
+    value and (b) that value is one of the sizes the spec actually allows on real hardware ({32, 64}).
     """
     N = 128
     a = qd.field(dtype=qd.i32, shape=N)
@@ -1391,12 +1376,12 @@ def test_subgroup_group_size():
 def test_subgroup_elect():
     """``subgroup.elect()`` returns ``1`` on lane 0 of every subgroup, ``0`` elsewhere.
 
-    Implemented as a ``@qd.func`` wrapper over ``invocation_id() == 0``, so it works on
-    every backend that lowers ``invocation_id``.  We verify, in a single kernel, that:
+    Implemented as a ``@qd.func`` wrapper over ``invocation_id() == 0``, so it works on every backend that lowers
+    ``invocation_id``.  We verify, in a single kernel, that:
 
     * ``elect()`` returns 0 or 1.
-    * Every elected lane has ``invocation_id() == 0``, and every non-elected lane has
-      ``invocation_id() != 0`` — i.e. lane 0 is exactly the elected one.
+    * Every elected lane has ``invocation_id() == 0``, and every non-elected lane has ``invocation_id() != 0`` — i.e.
+      lane 0 is exactly the elected one.
     * The total elected count equals ``N / group_size()`` — one per subgroup.
     """
     N = 256
@@ -1434,10 +1419,10 @@ def _drain_deprecation_warnings(records):
 
 
 def test_subgroup_barrier_deprecation_warn_once(monkeypatch):
-    """``subgroup.barrier()`` is a deprecated alias for ``subgroup.sync()``.  It must emit a
-    single ``DeprecationWarning`` on first use (regardless of how many times it is called) and
-    forward to ``sync()``.  Pure-Python unit test: ``sync`` is monkey-patched to a no-op so
-    the test does not require a Quadrants kernel context."""
+    """``subgroup.barrier()`` is a deprecated alias for ``subgroup.sync()``.  It must emit a single
+    ``DeprecationWarning`` on first use (regardless of how many times it is called) and forward to ``sync()``.
+    Pure-Python unit test: ``sync`` is monkey-patched to a no-op so the test does not require a Quadrants kernel
+    context."""
     import warnings as _w
 
     from quadrants.lang.simt import subgroup as sg
@@ -1461,8 +1446,8 @@ def test_subgroup_barrier_deprecation_warn_once(monkeypatch):
 
 
 def test_subgroup_memory_barrier_deprecation_warn_once(monkeypatch):
-    """``subgroup.memory_barrier()`` is a deprecated alias for ``subgroup.mem_fence()``.
-    Mirror of ``test_subgroup_barrier_deprecation_warn_once``."""
+    """``subgroup.memory_barrier()`` is a deprecated alias for ``subgroup.mem_fence()``.  Mirror of
+    ``test_subgroup_barrier_deprecation_warn_once``."""
     import warnings as _w
 
     from quadrants.lang.simt import subgroup as sg
