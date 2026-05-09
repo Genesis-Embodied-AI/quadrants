@@ -44,13 +44,13 @@ TEST(DiagnoseAdstackOverflow, RegistryAndLookup) {
   EXPECT_FALSE(prog.adstack_cache().lookup_adstack_sizing_info(static_cast<uint32_t>(0xfffffffful)).has_value());
 }
 
-// `register_adstack_sizing_info` content-stable hash dedup. Two registrations with the same
-// `(kernel_name, task_id_in_kernel)` pair but different `identity_key`s (the runtime case: a re-codegen of the
-// same source after a `qd.reset()` produces a fresh `ad_stack` at a new heap address but the hash inputs are
-// unchanged) must resolve to the same id - otherwise the codegen-baked immediate in the cached LLVM IR would
-// point at one entry while the runtime registration mints another, and the diagnose-on-overflow path would
-// look up the wrong (or empty) entry. Pins the linear-probe loop's same-content branch, which the
-// `RegistryAndLookup` test above does not cover (it only re-uses the same identity_key).
+// `register_adstack_sizing_info` content-stable hash dedup. Two registrations with the same `(kernel_name,
+// task_id_in_kernel)` pair but different `identity_key`s (the runtime case: a re-codegen of the same source after a
+// `qd.reset()` produces a fresh `ad_stack` at a new heap address but the hash inputs are unchanged) must resolve to the
+// same id - otherwise the codegen-baked immediate in the cached LLVM IR would point at one entry while the runtime
+// registration mints another, and the diagnose-on-overflow path would look up the wrong (or empty) entry. Pins the
+// linear-probe loop's same-content branch, which the `RegistryAndLookup` test above does not cover (it only re-uses the
+// same identity_key).
 TEST(DiagnoseAdstackOverflow, RegistryContentStableDedupAcrossIdentityKeys) {
   Program prog(host_arch());
 
@@ -87,9 +87,9 @@ TEST(DiagnoseAdstackOverflow, RegistryContentStableDedupAcrossIdentityKeys) {
                                                         /*size_exprs=*/{});
   EXPECT_EQ(id_a, id_b_redo);
 
-  // A different `(kernel_name, task_id_in_kernel)` pair must hash to a different id (assuming no collision -
-  // 32-bit FNV-1a collision probability for a handful of distinct keys is vanishingly low). Pins that the
-  // dedup branch above only triggers on actual content match, not on every re-registration.
+  // A different `(kernel_name, task_id_in_kernel)` pair must hash to a different id (assuming no collision - 32-bit
+  // FNV-1a collision probability for a handful of distinct keys is vanishingly low). Pins that the dedup branch above
+  // only triggers on actual content match, not on every re-registration.
   int dummy_c = 0;
   uint32_t id_c =
       prog.adstack_cache().register_adstack_sizing_info(static_cast<const void *>(&dummy_c), "compute_other",

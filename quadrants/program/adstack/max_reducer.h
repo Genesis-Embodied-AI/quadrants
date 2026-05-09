@@ -22,10 +22,10 @@ class Program;
 using MaxReducerResultMap = std::unordered_map<uint64_t, int64_t>;
 // Read-only shared ownership of a `MaxReducerResultMap`. The launch cache stores entries via this alias so the
 // per-launch fast path can repoint `LlvmRuntimeExecutor::current_max_reducer_results_` to the cached map without
-// copying it, and so consumers in `publish_adstack_metadata` can snapshot a stable view (`shared_ptr` copy =
-// refcount bump) that survives a recursive snode-reader-kernel reentry into `dispatch_max_reducers_for_tasks`.
-// `const` because cache entries are write-once at record time and read-only thereafter; the per-launch transient
-// is rebuilt or repointed, never mutated in place.
+// copying it, and so consumers in `publish_adstack_metadata` can snapshot a stable view (`shared_ptr` copy = refcount
+// bump) that survives a recursive snode-reader-kernel reentry into `dispatch_max_reducers_for_tasks`. `const` because
+// cache entries are write-once at record time and read-only thereafter; the per-launch transient is rebuilt or
+// repointed, never mutated in place.
 using MaxReducerResultMapPtr = std::shared_ptr<const MaxReducerResultMap>;
 
 // extract a captured `MaxOverRange`'s body subtree from `expr` and emit it as a flat `[AdStackSizeExprDeviceNode x

@@ -274,15 +274,15 @@ void LlvmRuntimeExecutor::publish_per_task_bound_count_device(std::size_t task_i
 void LlvmRuntimeExecutor::dispatch_max_reducers_for_tasks(const std::vector<OffloadedTask> &tasks,
                                                           LaunchContextBuilder *ctx,
                                                           void *device_runtime_context_ptr) {
-  // Seed the per-`Program` adstack-overflow registry from the cache-loaded tasks so the diagnose path can resolve
-  // any cmpxchg-recorded id back to a kernel + task name. With content-hashed `registry_id` (now serialised) the
-  // dispatcher and the metadata-publish substitution helper already see the correct id directly off the ad_stack,
-  // but the `Program` registry stays empty across cache reloads until something registers; without this seed, an
-  // overflow on a freshly cache-loaded kernel would print the generic dual-cause fallback instead of the kernel +
-  // task identity. Idempotent (same hash inputs yield the same id) and cheap (one map lookup per task), and only
-  // walks tasks whose `ad_stack.max_reducer_specs` is non-empty. The cast away const is safe: the OffloadedTasks
-  // live in `KernelLauncher::contexts_[...].offloaded_tasks` (non-const launcher storage), and the const-ref
-  // parameter binding is purely ergonomic for the read-only-after-this-point dispatch path below.
+  // Seed the per-`Program` adstack-overflow registry from the cache-loaded tasks so the diagnose path can resolve any
+  // cmpxchg-recorded id back to a kernel + task name. With content-hashed `registry_id` (now serialised) the dispatcher
+  // and the metadata-publish substitution helper already see the correct id directly off the ad_stack, but the
+  // `Program` registry stays empty across cache reloads until something registers; without this seed, an overflow on a
+  // freshly cache-loaded kernel would print the generic dual-cause fallback instead of the kernel + task identity.
+  // Idempotent (same hash inputs yield the same id) and cheap (one map lookup per task), and only walks tasks whose
+  // `ad_stack.max_reducer_specs` is non-empty. The cast away const is safe: the OffloadedTasks live in
+  // `KernelLauncher::contexts_[...].offloaded_tasks` (non-const launcher storage), and the const-ref parameter binding
+  // is purely ergonomic for the read-only-after-this-point dispatch path below.
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
   if (prog != nullptr) {
     auto &mutable_tasks = const_cast<std::vector<OffloadedTask> &>(tasks);
@@ -316,8 +316,8 @@ void LlvmRuntimeExecutor::dispatch_max_reducers_impl(const void *launch_cache_ke
   using quadrants::lang::LlvmAdStackMaxReducerDeviceParams;
   using quadrants::lang::MaxReducerResultMap;
 
-  // Reset the per-launch transient to a fresh empty map so a kernel without captured specs (or an early-out below)
-  // sees a non-null shared_ptr to an empty map. Consumers in `publish_adstack_metadata` dereference the pointer
+  // Reset the per-launch transient to a fresh empty map so a kernel without captured specs (or an early-out below) sees
+  // a non-null shared_ptr to an empty map. Consumers in `publish_adstack_metadata` dereference the pointer
   // unconditionally; keeping it non-null here removes a per-task null check.
   auto empty_results = std::make_shared<const MaxReducerResultMap>();
   current_max_reducer_results_ = empty_results;
@@ -330,9 +330,9 @@ void LlvmRuntimeExecutor::dispatch_max_reducers_impl(const void *launch_cache_ke
 
   // Per-launch fast-path: when the kernel handle's recorded dependency snapshot still matches live state, the
   // dispatched results are unchanged and we can skip the per-spec cache walk + result-map rebuild entirely. See
-  // `AdStackCache::try_max_reducer_launch_cache_hit` for the deps-replay contract; the matching record path runs at
-  // the bottom of this function on every successful dispatch. The cache hands back a `shared_ptr` copy of its
-  // entry's map, so the assignment below is a refcount bump - no map data is copied.
+  // `AdStackCache::try_max_reducer_launch_cache_hit` for the deps-replay contract; the matching record path runs at the
+  // bottom of this function on every successful dispatch. The cache hands back a `shared_ptr` copy of its entry's map,
+  // so the assignment below is a refcount bump - no map data is copied.
   if (cache != nullptr && launch_cache_key != nullptr) {
     std::shared_ptr<const MaxReducerResultMap> hit;
     if (cache->try_max_reducer_launch_cache_hit(launch_cache_key, ctx, hit)) {
@@ -341,8 +341,8 @@ void LlvmRuntimeExecutor::dispatch_max_reducers_impl(const void *launch_cache_ke
     }
   }
 
-  // Slow path builds its result map locally; we wrap it in a `shared_ptr` once at the end so the cache entry and
-  // the executor transient share the same allocation.
+  // Slow path builds its result map locally; we wrap it in a `shared_ptr` once at the end so the cache entry and the
+  // executor transient share the same allocation.
   MaxReducerResultMap result;
 
   // Pin the device context's `stream_` to the legacy default stream for the whole dispatch + DtoH read sequence.
@@ -403,10 +403,10 @@ void LlvmRuntimeExecutor::dispatch_max_reducers_impl(const void *launch_cache_ke
     }
   }
   if (pending.empty()) {
-    // All specs hit the per-spec cache. Record the kernel-level entry so the next launch can short-circuit
-    // before the per-spec walk: we still walked one hash + observation replay per spec to reach this point,
-    // and the per-launch fast path above eliminates that redundant work. Wrap the result in a `shared_ptr` once
-    // so the cache entry and the executor transient share the same allocation.
+    // All specs hit the per-spec cache. Record the kernel-level entry so the next launch can short-circuit before the
+    // per-spec walk: we still walked one hash + observation replay per spec to reach this point, and the per-launch
+    // fast path above eliminates that redundant work. Wrap the result in a `shared_ptr` once so the cache entry and the
+    // executor transient share the same allocation.
     auto result_ptr = std::make_shared<const MaxReducerResultMap>(std::move(result));
     if (cache != nullptr) {
       cache->record_max_reducer_launch_cache(launch_cache_key, ad_stacks, result_ptr, ctx);
@@ -686,10 +686,10 @@ void LlvmRuntimeExecutor::dispatch_max_reducers_impl(const void *launch_cache_ke
     }
   }
 
-  // Record the kernel-level launch cache so the next launch on the same kernel handle can short-circuit at the
-  // top of this function. Without this, even after the per-spec cache is fully warm we still pay an O(specs)
-  // hash-lookup-and-observation-replay loop per launch. The shared_ptr wrapping happens once here so the cache
-  // entry and the executor transient share the same allocation.
+  // Record the kernel-level launch cache so the next launch on the same kernel handle can short-circuit at the top of
+  // this function. Without this, even after the per-spec cache is fully warm we still pay an O(specs)
+  // hash-lookup-and-observation-replay loop per launch. The shared_ptr wrapping happens once here so the cache entry
+  // and the executor transient share the same allocation.
   auto result_ptr = std::make_shared<const MaxReducerResultMap>(std::move(result));
   if (cache != nullptr) {
     cache->record_max_reducer_launch_cache(launch_cache_key, ad_stacks, result_ptr, ctx);

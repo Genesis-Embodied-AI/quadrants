@@ -188,10 +188,10 @@ class LlvmRuntimeExecutor {
   // `runtime_eval_adstack_max_reduce` via the runtime JIT as a grid-strided launch with an `atomic_max_i64` reduction.
   // CUDA and AMDGPU only; on CPU the recognizer is skipped at codegen time so this path runs zero dispatches. The
   // result map (keyed by `(registry_id, stack_id, mor_node_idx)` packed via the same encoding the gfx variant uses)
-  // lands in `current_max_reducer_results_` for the per-task `publish_adstack_metadata` loop to pick up. Caller
-  // invokes this BEFORE the per-task `publish_adstack_metadata` loop. Returns `void` because callers consume the
-  // result through `current_max_reducer_results_` rather than the return value; this keeps the post-cache-hit fast
-  // path free of result-map copies.
+  // lands in `current_max_reducer_results_` for the per-task `publish_adstack_metadata` loop to pick up. Caller invokes
+  // this BEFORE the per-task `publish_adstack_metadata` loop. Returns `void` because callers consume the result through
+  // `current_max_reducer_results_` rather than the return value; this keeps the post-cache-hit fast path free of
+  // result-map copies.
   void dispatch_max_reducers_for_tasks(const std::vector<AdStackSizingInfo> &ad_stacks,
                                        LaunchContextBuilder *ctx,
                                        void *device_runtime_context_ptr);
@@ -214,11 +214,11 @@ class LlvmRuntimeExecutor {
   /* ---- Adstack helpers --- */
   /* ----------------------- */
   // Shared implementation for both `dispatch_max_reducers_for_tasks` overloads. Takes a stable per-kernel-handle
-  // `launch_cache_key` (the address of the caller's `tasks` / `ad_stacks` vector) and a non-owning pointer view of
-  // the per-task `AdStackSizingInfo`s. Avoids the per-launch deep copy of `AdStackSizingInfo` the OffloadedTask
-  // overload used to do, and short-circuits on a kernel-level dependency-fingerprint hit before walking specs (logic
-  // factored into `AdStackCache::try_max_reducer_launch_cache_hit` / `record_max_reducer_launch_cache`). Result lands
-  // in `current_max_reducer_results_`; returns `void` to keep the cache-hit fast path free of result-map copies.
+  // `launch_cache_key` (the address of the caller's `tasks` / `ad_stacks` vector) and a non-owning pointer view of the
+  // per-task `AdStackSizingInfo`s. Avoids the per-launch deep copy of `AdStackSizingInfo` the OffloadedTask overload
+  // used to do, and short-circuits on a kernel-level dependency-fingerprint hit before walking specs (logic factored
+  // into `AdStackCache::try_max_reducer_launch_cache_hit` / `record_max_reducer_launch_cache`). Result lands in
+  // `current_max_reducer_results_`; returns `void` to keep the cache-hit fast path free of result-map copies.
   void dispatch_max_reducers_impl(const void *launch_cache_key,
                                   const std::vector<const AdStackSizingInfo *> &ad_stacks,
                                   LaunchContextBuilder *ctx,
@@ -366,11 +366,11 @@ class LlvmRuntimeExecutor {
   void *runtime_adstack_max_reducer_outputs_field_ptr_{nullptr};
 
   // Per-launch transient: shared, read-only view of the `MaxReducerResultMap` populated by
-  // `dispatch_max_reducers_for_tasks` and read by `publish_adstack_metadata`. Held as a `shared_ptr<const map>` so
-  // the per-launch fast path can repoint this field to the cached entry's map without copying it (refcount bump
-  // only), and so a `publish_adstack_metadata` snapshot survives a recursive snode-reader-kernel reentry that may
-  // rewrite this field. Reset to a fresh empty map at the top of every `dispatch_max_reducers_for_tasks` call so a
-  // kernel without captured specs sees an empty view.
+  // `dispatch_max_reducers_for_tasks` and read by `publish_adstack_metadata`. Held as a `shared_ptr<const map>` so the
+  // per-launch fast path can repoint this field to the cached entry's map without copying it (refcount bump only), and
+  // so a `publish_adstack_metadata` snapshot survives a recursive snode-reader-kernel reentry that may rewrite this
+  // field. Reset to a fresh empty map at the top of every `dispatch_max_reducers_for_tasks` call so a kernel without
+  // captured specs sees an empty view.
   std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> current_max_reducer_results_;
 
   // Host-owned storage for the per-kernel lazy-claim arrays: `adstack_row_counters_alloc_`: u32[num_tasks] atomic

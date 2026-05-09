@@ -188,8 +188,8 @@ class AdStackCache {
   // Cache entry stores the dispatched result map via shared ownership so the per-launch fast path can repoint
   // `LlvmRuntimeExecutor::current_max_reducer_results_` to it without copying, and so a snapshot taken by
   // `publish_adstack_metadata` survives a recursive snode-reader-kernel reentry that may rewrite the executor's
-  // transient. The result map is logically `const` once recorded; mutation should happen by replacing the entry, not
-  // by reaching through the `shared_ptr`.
+  // transient. The result map is logically `const` once recorded; mutation should happen by replacing the entry, not by
+  // reaching through the `shared_ptr`.
   struct MaxReducerLaunchCacheEntry {
     std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> result;
     std::vector<std::pair<int, uint64_t>> snode_gens;
@@ -293,10 +293,10 @@ class AdStackCache {
   void update_adstack_sizing_info_size_exprs(uint32_t id, std::vector<SerializedSizeExpr> size_exprs);
   // Re-populate the per-`Program` registry for offline-cache-loaded LLVM kernels. `registry_id` is now content-stable
   // (`fnv1a32(kernel_name + ":" + task_id_in_kernel)`) and serialised, so the dispatcher and metadata-publish gates
-  // already see the right id without us touching anything; this loop exists purely to seed the `Program`-level
-  // registry so `diagnose_adstack_overflow_message` can resolve the cmpxchg-recorded id on the rare overflow path.
-  // Idempotent (same hash inputs yield the same id, so re-registration on every launch is a single map lookup) and
-  // only walks tasks whose `ad_stack.max_reducer_specs` is non-empty (forward-only and reverse-mode-without-recognized
+  // already see the right id without us touching anything; this loop exists purely to seed the `Program`-level registry
+  // so `diagnose_adstack_overflow_message` can resolve the cmpxchg-recorded id on the rare overflow path. Idempotent
+  // (same hash inputs yield the same id, so re-registration on every launch is a single map lookup) and only walks
+  // tasks whose `ad_stack.max_reducer_specs` is non-empty (forward-only and reverse-mode-without-recognized
   // -MaxOverRange tasks pay zero overhead). Mirrors the SPIR-V `adstack_sizer_launch.cpp` runtime re-registration loop.
   void ensure_runtime_registry_ids_for_max_reducer(std::vector<OffloadedTask> &tasks);
   // Returns a *copy* of the registry entry (not a pointer into the underlying vector) so the caller can safely hold the

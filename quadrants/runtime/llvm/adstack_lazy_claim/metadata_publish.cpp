@@ -337,8 +337,8 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
         // path passes the live `expr` pointer directly so `size_expr_cache_` (keyed by `SerializedSizeExpr *`) stays
         // warm across launches; the non-empty branch builds a stack-local substituted tree and routes through
         // `evaluate_adstack_size_expr_no_cache` so the transient pointer never aliases unrelated cache entries. The
-        // `shared_ptr` is initialised to a non-null empty-map sentinel by `dispatch_max_reducers_impl`, so the deref
-        // is always safe.
+        // `shared_ptr` is initialised to a non-null empty-map sentinel by `dispatch_max_reducers_impl`, so the deref is
+        // always safe.
         if (!local_max_reducer_results || local_max_reducer_results->empty()) {
           v = evaluate_adstack_size_expr(*expr, prog, ctx);
         } else {
@@ -456,8 +456,8 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
       std::vector<uint8_t> bytecode;
       // The encoder reads the result map by `const &`. `current_max_reducer_results_` is a `shared_ptr<const map>`
       // initialised to a non-null empty-map sentinel by `dispatch_max_reducers_impl`, so the deref is safe; defend
-      // anyway against the path where `dispatch_max_reducers_impl` was never invoked (forward-only kernels) by
-      // falling back to a stack-local empty map.
+      // anyway against the path where `dispatch_max_reducers_impl` was never invoked (forward-only kernels) by falling
+      // back to a stack-local empty map.
       static const MaxReducerResultMap kEmptyResults{};
       const MaxReducerResultMap &results_view =
           current_max_reducer_results_ ? *current_max_reducer_results_ : kEmptyResults;

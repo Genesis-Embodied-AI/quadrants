@@ -196,8 +196,8 @@ bool AdStackCache::try_max_reducer_launch_cache_hit(
       return false;
     }
   }
-  // Hand back a `shared_ptr` copy of the cached result. Refcount bump only - no map copy. The cache entry retains
-  // its own ownership, so the caller's transient stays valid even after a recursive reentry rewrites the executor's
+  // Hand back a `shared_ptr` copy of the cached result. Refcount bump only - no map copy. The cache entry retains its
+  // own ownership, so the caller's transient stays valid even after a recursive reentry rewrites the executor's
   // `current_max_reducer_results_` field.
   out_result = entry.result;
   return true;
@@ -387,10 +387,10 @@ bool AdStackCache::try_llvm_per_task_ad_stack_cache_hit(const void *attribs_key,
 }
 
 namespace {
-// FNV-1a 64-bit, folded to 32-bit; never returns 0 (reserved sentinel). Used to derive a content-stable
-// `registry_id` from the (kernel_name, task_id_in_kernel) pair. We need a deterministic hash because the id is baked as
-// an immediate into LLVM IR / SPIR-V at codegen time and read back by the host on overflow: `std::hash<std::string>`
-// is implementation-defined and not stable across stdlib versions, so we cannot rely on it producing the same id at
+// FNV-1a 64-bit, folded to 32-bit; never returns 0 (reserved sentinel). Used to derive a content-stable `registry_id`
+// from the (kernel_name, task_id_in_kernel) pair. We need a deterministic hash because the id is baked as an immediate
+// into LLVM IR / SPIR-V at codegen time and read back by the host on overflow: `std::hash<std::string>` is
+// implementation-defined and not stable across stdlib versions, so we cannot rely on it producing the same id at
 // codegen time and at offline-cache-reload-driven runtime registration.
 inline uint32_t fnv1a32_for_registry(const std::string &kernel_name, int task_id_in_kernel) {
   constexpr uint64_t kFnvOffsetBasis = 0xcbf29ce484222325ULL;
@@ -449,9 +449,9 @@ uint32_t AdStackCache::register_adstack_sizing_info(const void *identity_key,
       break;
     }
     if (reg_it->second.kernel_name == kernel_name && reg_it->second.task_id_in_kernel == task_id_in_kernel) {
-      // Same content (same hash inputs), different `identity_key`. Update in place and add the new identity_key to
-      // the reverse lookup so the new pointer resolves to this same id; the previous identity_key's entry stays valid
-      // and continues to resolve here too.
+      // Same content (same hash inputs), different `identity_key`. Update in place and add the new identity_key to the
+      // reverse lookup so the new pointer resolves to this same id; the previous identity_key's entry stays valid and
+      // continues to resolve here too.
       reg_it->second.allocated_max_sizes = std::move(allocated_max_sizes);
       reg_it->second.size_exprs = std::move(size_exprs);
       adstack_sizing_info_id_by_ptr_.emplace(identity_key, id);
