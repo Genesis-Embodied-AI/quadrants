@@ -2,36 +2,30 @@
 
 Block-level primitives operate on the threads of a single CUDA thread block (CTA) / AMDGPU workgroup / Vulkan or Metal workgroup. They include thread barriers, memory fences, shared memory, and per-thread indexing helpers — the building blocks for cooperation among threads of the same block.
 
-Block ops live under `qd.simt.block`. They are written so the same Python source compiles to the right vendor primitive on each backend. As of this writing every op on this page is portable across CUDA, AMDGPU, Vulkan, and Metal; the only remaining caveats (called out in the support-table footnotes below) are Metal's cross-workgroup memory-ordering on older Apple hardware and a perf trade-off for the emulated `block.sync_*_nonzero` ops on non-CUDA backends. Neither is a correctness gap. If a future op is added that is not yet portable, the Python layer will raise `ValueError` at trace time on the unsupported backend.
+Block ops live under `qd.simt.block`. They are written so the same Python source compiles to the right vendor primitive on each backend. As of this writing every op on this page is portable across CUDA, AMDGPU, Vulkan, and Metal; the only remaining caveat (called out in the support-table footnote below) is a perf trade-off for the emulated `block.sync_*_nonzero` ops on non-CUDA backends, not a correctness gap. If a future op is added that is not yet portable, the Python layer will raise `ValueError` at trace time on the unsupported backend.
 
-The closely-related grid-level fence (`qd.simt.grid.mem_fence()`) is documented at the end of this page, since users picking between a block-scope and a device-scope fence need to see both side by side.
+The closely-related device-scope memory fence `qd.simt.grid.mem_fence()` is documented separately in [grid](grid.md). Users picking between a block-scope and a device-scope fence should read that page for the device-scope side.
 
 ## What's available
 
 | Op                                              | CUDA | AMDGPU | Vulkan | Metal |
 |-------------------------------------------------|------|--------|--------|-------|
 | `block.sync()`                                  | yes  | yes    | yes    | yes   |
-| `block.sync_all_nonzero(predicate)`             | yes  | yes\*\* | yes\*\* | yes\*\* |
-| `block.sync_any_nonzero(predicate)`             | yes  | yes\*\* | yes\*\* | yes\*\* |
-| `block.sync_count_nonzero(predicate)`           | yes  | yes\*\* | yes\*\* | yes\*\* |
+| `block.sync_all_nonzero(predicate)`             | yes  | yes\*  | yes\*  | yes\* |
+| `block.sync_any_nonzero(predicate)`             | yes  | yes\*  | yes\*  | yes\* |
+| `block.sync_count_nonzero(predicate)`           | yes  | yes\*  | yes\*  | yes\* |
 | `block.mem_fence()`                             | yes  | yes    | yes    | yes   |
 | `block.SharedArray(shape, dtype)`               | yes  | yes    | yes    | yes   |
 | `block.global_thread_idx()`                     | yes  | yes    | yes    | yes   |
 | `block.thread_idx()`                            | yes  | yes    | yes    | yes   |
-| `grid.mem_fence()` (device-scope, see below)    | yes  | yes    | yes    | yes\* |
+
+The device-scope memory fence `qd.simt.grid.mem_fence()` is portable across the same four backends, with its own Metal / Vulkan-on-macOS atomic-only-ordering caveat. Full table, per-backend lowering, and the producer-consumer caveat live in [grid](grid.md).
 
 Vulkan and Metal share a SPIR-V codegen path (Metal goes through MoltenVK → MSL); they are listed as separate columns because a couple of ops have Metal-specific caveats called out below. Footnoted entries are still functional, just with the limitations the footnote describes.
 
-\* On Metal, `grid.mem_fence()` lowers (via MoltenVK / SPIRV-Cross → MSL) to `atomic_thread_fence(metal::memory_scope_device)`, available since MSL 2.0 (macOS 10.13+ / iOS 11+). Per the Metal Shading Language specification, `atomic_thread_fence` only synchronizes *atomic* and *relaxed-atomic* memory accesses across the device, not plain (non-atomic) loads / stores. So a Metal-portable cross-workgroup producer-consumer pattern needs the produced value itself to be published through an atomic op (e.g. `qd.atomic_or(a[i], 1)`); CUDA, AMDGPU, and native Vulkan (Linux / Windows) order non-atomic stores around `grid.mem_fence()` strictly. The same Metal limitation applies to **Vulkan on macOS**, since on macOS Vulkan is really MoltenVK lowering SPIR-V to MSL — treat `qd.vulkan` on Darwin the same as `qd.metal` for `grid.mem_fence()` purposes. Empirically validate any other pattern, or split into two kernel launches.
+\* On AMDGPU, Vulkan, and Metal the `block.sync_{all,any,count}_nonzero(p)` ops are *emulated* via shared memory (one shared `i32` slot + 2 block barriers + a single `atomic_add` per contributing thread) rather than a single hardware-fused barrier-with-reduction. CUDA has the fused NVPTX `barrier.cta.red.{and,or,popc}.aligned.all.sync` family of intrinsics so it stays on the fast path; the other backends do not have a direct analog (in particular, SPIR-V `OpGroupNonUniform*` only operates at subgroup scope reliably across Vulkan + Metal). All three reductions are routed through `atomic_add` rather than `atomic_or` / `atomic_and`: the latter trip a Metal-specific bug where `OpAtomicOr` on threadgroup memory silently no-ops via MoltenVK / SPIRV-Cross. The emulation is correct and portable but costs two `block.sync()`s plus one shared-memory atomic per call instead of a single barrier instruction; if you have an inner loop calling these ops millions of times, consider whether you can batch the predicate before reducing it.
 
-\*\* On AMDGPU, Vulkan, and Metal the `block.sync_{all,any,count}_nonzero(p)` ops are *emulated* via shared memory (one shared `i32` slot + 2 block barriers + a single `atomic_add` per contributing thread) rather than a single hardware-fused barrier-with-reduction. CUDA has the fused NVPTX `barrier.cta.red.{and,or,popc}.aligned.all.sync` family of intrinsics so it stays on the fast path; the other backends do not have a direct analog (in particular, SPIR-V `OpGroupNonUniform*` only operates at subgroup scope reliably across Vulkan + Metal). All three reductions are routed through `atomic_add` rather than `atomic_or` / `atomic_and`: the latter trip a Metal-specific bug where `OpAtomicOr` on threadgroup memory silently no-ops via MoltenVK / SPIRV-Cross. The emulation is correct and portable but costs two `block.sync()`s plus one shared-memory atomic per call instead of a single barrier instruction; if you have an inner loop calling these ops millions of times, consider whether you can batch the predicate before reducing it.
-
-Naming note: two of the names on this page were recently renamed for consistency with the project's "fence vs barrier" terminology and to use a consistent `mem_fence` spelling. The old names are still available as deprecated aliases that emit a `DeprecationWarning`:
-
-- `block.mem_sync()` → `block.mem_fence()`.
-- `grid.memfence()` → `grid.mem_fence()` (note the underscore).
-
-New code should use the `mem_fence` spellings. The aliases are retained for backward compatibility and may be removed in a future release.
+Naming note: `block.mem_sync()` was recently renamed to `block.mem_fence()` for consistency with the project's "fence vs barrier" terminology. The old name is still available as a deprecated alias that emits `DeprecationWarning` on first use; new code should use `block.mem_fence()`. (`qd.simt.grid.memfence()` was renamed to `qd.simt.grid.mem_fence()` in the same change — see [grid](grid.md) for that side.)
 
 ## Barrier vs fence: the distinction that matters
 
@@ -48,7 +42,7 @@ Concretely:
 
 Calling `sync()` from a path that not all threads reach (a divergent `if`, an early `return`, etc.) is a classic GPU deadlock and applies to all backends.
 
-The corresponding distinction at device scope is `grid.mem_fence()` (memory fence across the entire grid, no thread synchronization). There is no block-style "device barrier" — to synchronize threads across blocks, finish the kernel and launch a new one.
+The corresponding distinction at device scope is `qd.simt.grid.mem_fence()` (memory fence across the entire grid, no thread synchronization), documented in [grid](grid.md). There is no block-style "device barrier" — to synchronize threads across blocks, finish the kernel and launch a new one.
 
 ## Semantics
 
@@ -123,23 +117,9 @@ This is the thread's index *within its own block / workgroup*. To get the across
 
 Today only the X dimension is exposed (1-D blocks). For 2-D / 3-D blocks the calling code should compute the linear index from `block.thread_idx()` and the block-Y / Z dimensions itself, or stick to 1-D blocks (the dominant Quadrants idiom — `qd.loop_config(block_dim=N)` always sets the X extent).
 
-## Grid-scope fence: `qd.simt.grid.mem_fence()`
-
-`grid.mem_fence()` is the device-scope counterpart of `block.mem_fence()`. It orders memory operations across the entire grid, so writes made by one block become visible to other blocks after the fence. Per-backend lowering:
-
-- CUDA: `__threadfence()` (`nvvm_membar_gl`).
-- AMDGPU: LLVM IR `fence acquire_release syncscope("agent")`, lowered by the AMDGCN backend to the appropriate `s_waitcnt` / cache-flush sequence (emitted via a body-replacement in `llvm_context.cpp`, see `block.mem_fence()` above for why we don't use the Clang builtin).
-- Vulkan: `OpMemoryBarrier(ScopeDevice, AcquireRelease | UniformMemory | WorkgroupMemory)`.
-- Metal: same SPIR-V op as Vulkan, translated by MoltenVK to MSL `atomic_thread_fence(metal::memory_scope_device)` (see Metal caveat in the support table).
-
-Use it when you need cross-block coordination via global memory (decoupled look-back scan, inter-block flag publishing, single-pass reductions, etc.). For coordination within a single block, prefer `block.mem_fence()` — it is cheaper.
-
-There is no built-in grid-wide barrier (cooperative-groups-style); the only way to converge threads across blocks is to finish the kernel and launch a new one.
-
-The deprecated alias `grid.memfence()` calls `grid.mem_fence()` and emits a `DeprecationWarning` on first use.
-
 ## Related
 
+- [grid](grid.md) — `qd.simt.grid.mem_fence()`, the device-scope counterpart of `block.mem_fence()`, with its own per-backend lowering and Metal / Vulkan-on-macOS portability caveat. For coordination within a single block, prefer `block.mem_fence()` — it is cheaper.
 - [parallelization](parallelization.md) — kernel-launch and grid-stride patterns.
 - [subgroup](subgroup.md) — primitives that operate within a single subgroup (warp / wavefront), one tier below block scope.
 - [tile16](tile16.md) — `Tile16x16` register-resident tiles, built on `subgroup.shuffle`.
