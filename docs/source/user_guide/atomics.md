@@ -68,6 +68,21 @@ Atomic subtract and atomic multiply. `atomic_sub` is supported natively on most 
 - **`f64` atomics fall off the fast path** on most backends; if you only need monotonic accumulation, consider Kahan summation in registers and a single atomic-add at the end of the block.
 - **`atomic_mul` is generally a CAS loop** under the hood; don't put it on the hot path.
 
+### Atomic visibility scope across backends
+
+Every `qd.atomic_*` is emitted at **device-wide scope**: visible to all threads on the GPU executing the kernel, but not required to be coherent with the host CPU mid-kernel. The host only observes results once the kernel completes, at which point the launcher's stream-sync flushes everything regardless. Choosing device scope (rather than the strongest "system" scope) lets every backend lower the op to a single hardware atomic instruction instead of a software CAS retry loop, which matters for correctness as much as for speed: under heavy contention, a CAS loop on a non-converging op like `atomic_xor` can livelock.
+
+You don't normally need to think about scope as a user. It's listed here so the per-backend behaviour is explicit:
+
+| Backend | Scope spelling in the IR | Hardware lowering for `atomic_xor` (representative) |
+|---|---|---|
+| CPU (x86_64) | LLVM `seq_cst` (System) | `lock xor` — single instruction; no fast/slow scope split exists |
+| CUDA (NVPTX) | LLVM `seq_cst` (System) | `atom.xor.b32` — single PTX op |
+| AMDGPU | LLVM `seq_cst syncscope("agent")` | `flat_atomic_xor` / `global_atomic_xor` — single instruction |
+| Vulkan / Metal (SPIR-V) | SPIR-V `Scope = Device` | `OpAtomicXor` — single op |
+
+CPU and CUDA lower system-scope atomics directly to a single hardware instruction, so they leave the LLVM default alone. AMDGPU's LLVM backend, in contrast, refuses to use its native single-instruction atomics at system scope (it would have to add cache-flush instructions that don't exist for that op), and silently falls back to a CAS loop; setting `syncscope("agent")` is what unlocks the native `flat_atomic_xor` / `global_atomic_xor`. SPIR-V backends spell the same idea with the `Device` scope token. The user-visible semantics are identical across all four.
+
 ## Related
 
 - [math](math.md) — `qd.math.*`, including the bit-counting helpers (`popcnt`, `clz`) commonly paired with atomics in select / compact patterns.

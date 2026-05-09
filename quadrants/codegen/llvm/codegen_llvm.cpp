@@ -110,6 +110,26 @@ CodeGenStmtGuard make_while_after_loop_guard(TaskCodeGenLLVM *cg) {
                           [cg](llvm::BasicBlock *saved_stmt) { cg->current_while_after_loop = saved_stmt; });
 }
 
+// Pick the LLVM syncscope for a user-facing atomic op. On AMDGPU, the default System scope makes the backend
+// refuse the native single-instruction atomics (`global_atomic_xor`, `flat_atomic_xor`, ...) and fall back to a
+// `flat_atomic_cmpswap` retry loop bracketed by cache-flush instructions, because System scope demands mid-kernel
+// visibility to the host CPU. That CAS loop livelocks under high contention for non-converging ops like xor,
+// causing `test_reduction_single_i32[arch=amdgpu-5]` to hang. `agent` scope is the largest scope a Quadrants
+// kernel ever needs (one kernel = one device; the host only reads results after kernel completion, which forces
+// a full cache flush regardless), and it lets the AMDGPU backend emit the native atomics. CUDA/NVPTX and CPU
+// already lower System-scope seq_cst atomics to single-instruction hardware atomics, so they keep the System
+// default. SPIR-V backends spell the same "Device" scope explicitly in `spirv_codegen.cpp`. See
+// `docs/source/user_guide/atomics.md` for the per-backend scope summary.
+//
+// Internal runtime atomics that touch pinned host memory (e.g. the adstack overflow flag the host polls during
+// kernel execution) deliberately do NOT use this helper; they need System scope for correctness.
+llvm::SyncScope::ID kernel_atomic_syncscope(llvm::LLVMContext *ctx, Arch arch) {
+  if (arch == Arch::amdgpu) {
+    return ctx->getOrInsertSyncScopeID("agent");
+  }
+  return llvm::SyncScope::System;
+}
+
 }  // namespace
 
 // TaskCodeGenLLVM
@@ -1284,7 +1304,8 @@ llvm::Value *TaskCodeGenLLVM::integral_type_atomic(AtomicOpStmt *stmt) {
   bin_op[AtomicOpType::bit_xor] = llvm::AtomicRMWInst::BinOp::Xor;
   QD_ASSERT(bin_op.find(stmt->op_type) != bin_op.end());
   return builder->CreateAtomicRMW(bin_op.at(stmt->op_type), llvm_val[stmt->dest], llvm_val[stmt->val],
-                                  llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent);
+                                  llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                  kernel_atomic_syncscope(llvm_context, current_arch()));
 }
 
 llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(llvm::Value *dest,
@@ -1310,7 +1331,8 @@ llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(llvm::Value *dest,
     dest = builder->CreateBitCast(dest, typeIntPtr);
     auto atomicCmpXchg = builder->CreateAtomicCmpXchg(
         dest, builder->CreateBitCast(old_val, typeIntTy), builder->CreateBitCast(new_val, typeIntTy),
-        llvm::MaybeAlign(0), AtomicOrdering::SequentiallyConsistent, AtomicOrdering::SequentiallyConsistent);
+        llvm::MaybeAlign(0), AtomicOrdering::SequentiallyConsistent, AtomicOrdering::SequentiallyConsistent,
+        kernel_atomic_syncscope(llvm_context, current_arch()));
     // Check whether CAS was succussful
     auto ok = builder->CreateExtractValue(atomicCmpXchg, 1);
     builder->CreateCondBr(builder->CreateNot(ok), body, after_loop);
@@ -1350,7 +1372,8 @@ llvm::Value *TaskCodeGenLLVM::real_type_atomic(AtomicOpStmt *stmt) {
   switch (op) {
     case AtomicOpType::add:
       return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FAdd, llvm_val[stmt->dest], llvm_val[stmt->val],
-                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent);
+                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      kernel_atomic_syncscope(llvm_context, current_arch()));
     case AtomicOpType::mul:
       return atomic_op_using_cas(
           llvm_val[stmt->dest], llvm_val[stmt->val], [&](auto v1, auto v2) { return builder->CreateFMul(v1, v2); },
