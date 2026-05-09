@@ -205,6 +205,16 @@ void AMDGPUContext::launch(void *func,
   }
 }
 
+void AMDGPUContext::trim_default_mem_pool() {
+  if (!supports_mem_pool_) {
+    return;
+  }
+  void *default_mem_pool = nullptr;
+  driver_.device_get_default_mem_pool(&default_mem_pool, 0 /*device ordinal*/);
+  // `min_bytes_to_keep = 0` releases every cached page back to the driver.
+  driver_.mem_pool_trim_to(default_mem_pool, 0u);
+}
+
 AMDGPUContext::~AMDGPUContext() {
   // Currently unreachable: singleton is heap-allocated via `new` in get_instance() and never deleted.
   for (auto *s : stream_pool_) {

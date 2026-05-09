@@ -4,6 +4,7 @@
 #include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 #include "quadrants/rhi/cuda/cuda_driver.h"
+#include "quadrants/rhi/cuda/cuda_stream_pin.h"
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/program.h"
@@ -190,6 +191,20 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         i++;
       }
 
+      // Run all per-task adstack setup on active_stream before recording the fence event, so that
+      // publish_adstack_metadata's async H2D copies are covered by the event that pool streams wait on.
+      std::vector<int> grid_dims(i - group_start);
+      for (size_t j = group_start; j < i; j++) {
+        grid_dims[j - group_start] = prepare_task(j, offloaded_tasks[j]);
+      }
+
+      // Record an event on the default stream so pool streams can wait for the arg_buffer upload and any per-task
+      // metadata copies (memcpy_host_to_device_async on `active_stream`) without stalling the CPU.  Pool streams are
+      // CU_STREAM_NON_BLOCKING and do not implicitly synchronize with the default stream.
+      void *upload_event = nullptr;
+      CUDADriver::get_instance().event_create(&upload_event, 0x2 /*CU_EVENT_DISABLE_TIMING*/);
+      CUDADriver::get_instance().event_record(upload_event, active_stream);
+
       std::map<int, void *> stream_by_id;
       for (size_t j = group_start; j < i; j++) {
         int sid = offloaded_tasks[j].stream_parallel_group_id;
@@ -199,28 +214,38 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
       }
 
       try {
+        for (auto &[sid, s] : stream_by_id) {
+          CUDADriver::get_instance().stream_wait_event(s, upload_event, 0);
+        }
         for (size_t j = group_start; j < i; j++) {
           const auto &t = offloaded_tasks[j];
-          int effective_grid_dim = prepare_task(j, t);
           CUDAContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
-          QD_TRACE("Launching kernel {}<<<{}, {}>>>", t.name, effective_grid_dim, t.block_dim);
-          cuda_module->launch(t.name, effective_grid_dim, t.block_dim, t.dynamic_shared_array_bytes,
+          QD_TRACE("Launching kernel {}<<<{}, {}>>>", t.name, grid_dims[j - group_start], t.block_dim);
+          cuda_module->launch(t.name, grid_dims[j - group_start], t.block_dim, t.dynamic_shared_array_bytes,
                               {&ctx.get_context()}, {});
         }
 
+        // Join: record an event on each pool stream and make the default stream wait, so subsequent serial work on
+        // active_stream orders after the parallel group without stalling the CPU.
         for (auto &[sid, s] : stream_by_id) {
-          CUDADriver::get_instance().stream_synchronize(s);
+          void *done = nullptr;
+          CUDADriver::get_instance().event_create(&done, 0x2 /*CU_EVENT_DISABLE_TIMING*/);
+          CUDADriver::get_instance().event_record(done, s);
+          CUDADriver::get_instance().stream_wait_event(active_stream, done, 0);
+          CUDADriver::get_instance().event_destroy(done);
         }
       } catch (...) {
         for (auto &[sid, s] : stream_by_id) {
           CUDAContext::get_instance().release_stream(s);
         }
+        CUDADriver::get_instance().event_destroy(upload_event);
         CUDAContext::get_instance().set_stream(active_stream);
         throw;
       }
       for (auto &[sid, s] : stream_by_id) {
         CUDAContext::get_instance().release_stream(s);
       }
+      CUDADriver::get_instance().event_destroy(upload_event);
 
       CUDAContext::get_instance().set_stream(active_stream);
     }
@@ -284,6 +309,23 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   std::unordered_map<ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher> device_ptrs;
 
   auto *active_stream = CUDAContext::get_instance().get_stream();
+
+  // Default-stream fast path: every HtoD / DtoH / kernel-dispatch in this launcher already routes through
+  // `active_stream`, so when entry `stream_ == nullptr` AND every offloaded task launches on the same `active_stream`
+  // (i.e. `stream_parallel_group_id == 0`), the entire chain serialises on the legacy default stream. The
+  // `stream_synchronize` barriers between phases collapse to no-ops the surrounding sync DtoH (host-blocking on
+  // pageable host memory) already drains, and the `CudaDefaultStreamPinGuard` re-pins `CUDAContext::stream_` to
+  // nullptr defensively across the launch in case an inner helper temporarily swaps it. Outside the fast path -
+  // user-supplied stream OR any task on `stream_parallel_group_id != 0` (per-group acquired streams differ from
+  // `active_stream`) - the cross-stream barriers below are load-bearing for HtoD / kernel / DtoH visibility and the
+  // pin guard would silently override the user-requested stream at the kernel-launch site, so the guard stays
+  // disengaged and main's sync semantics remain untouched. Closes the cross-stream-visibility break that
+  // `cuMemAllocAsync`-pool buffers show on pre-Ampere hardware (Turing T4 faults at `cuLaunchKernel` with
+  // `illegal-address` when consumer + producer streams differ) on the default-stream path.
+  const bool all_sgid_zero = std::all_of(offloaded_tasks.begin(), offloaded_tasks.end(),
+                                         [](const OffloadedTask &t) { return t.stream_parallel_group_id == 0; });
+  const bool default_stream_path = (active_stream == nullptr) && all_sgid_zero;
+  CudaDefaultStreamPinGuard cuda_pin(/*engage=*/default_stream_path);
 
   char *device_result_buffer{nullptr};
   // Launcher-global persistent `result_buffer`. See `kernel_launcher.h` for why this one is shared across handles
@@ -370,7 +412,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       }
     }
   }
-  if (transfers.size() > 0) {
+  // On the default-stream fast path the post-HtoD `stream_synchronize` is redundant: HtoD goes on the null stream and
+  // the subsequent `cuda_module->launch` reads `CUDAContext::stream_` (pinned to nullptr) so the kernel dispatch
+  // serialises with the HtoD by null-stream ordering. Outside the fast path the barrier remains load-bearing because
+  // HtoD on `active_stream` is async and per-group launches read it from a different stream.
+  if (transfers.size() > 0 && !default_stream_path) {
     CUDADriver::get_instance().stream_synchronize(active_stream);
   }
   char *host_result_buffer = (char *)ctx.get_context().result_buffer;
@@ -459,19 +505,32 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     CUDADriver::get_instance().memcpy_device_to_host_async(host_result_buffer, device_result_buffer,
                                                            ctx.result_buffer_size, active_stream);
   }
-  // copy data back to host
+  // Copy data back to host. On the default-stream fast path the kernel ran on the null stream, so a sync
+  // `cuMemcpyDtoH` (host-blocking, on null stream) sees the kernel's writes without an explicit cross-stream barrier
+  // and host-drains the prior async `memcpy_device_to_host_async(host_result_buffer, ...)` queued on the same null
+  // stream - the explicit `stream_synchronize(nullptr)` calls collapse to no-ops. Outside the fast path the barriers
+  // remain load-bearing for cross-stream visibility (per-group kernel writes vs `active_stream` DtoH).
   if (transfers.size() > 0) {
-    CUDADriver::get_instance().stream_synchronize(active_stream);
+    if (!default_stream_path) {
+      CUDADriver::get_instance().stream_synchronize(active_stream);
+    }
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       auto &idx = itr->first;
-      CUDADriver::get_instance().memcpy_device_to_host_async(itr->second.first, (void *)device_ptrs[idx],
-                                                             ctx.array_runtime_sizes[idx.arg_id], active_stream);
+      if (default_stream_path) {
+        CUDADriver::get_instance().memcpy_device_to_host(itr->second.first, (void *)device_ptrs[idx],
+                                                         ctx.array_runtime_sizes[idx.arg_id]);
+      } else {
+        CUDADriver::get_instance().memcpy_device_to_host_async(itr->second.first, (void *)device_ptrs[idx],
+                                                               ctx.array_runtime_sizes[idx.arg_id], active_stream);
+      }
     }
-    CUDADriver::get_instance().stream_synchronize(active_stream);
+    if (!default_stream_path) {
+      CUDADriver::get_instance().stream_synchronize(active_stream);
+    }
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       executor->deallocate_memory_on_device(itr->second.second);
     }
-  } else if (ctx.result_buffer_size > 0) {
+  } else if (ctx.result_buffer_size > 0 && !default_stream_path) {
     CUDADriver::get_instance().stream_synchronize(active_stream);
   }
   // Free per-call ephemeral buffers (explicit-stream path).  The free is stream-ordered: it won't execute until all
