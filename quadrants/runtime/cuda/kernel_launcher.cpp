@@ -191,8 +191,15 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         i++;
       }
 
-      // Record an event on the default stream so pool streams can wait for the arg_buffer upload
-      // (memcpy_host_to_device_async on `active_stream`) without stalling the CPU.  Pool streams are
+      // Run all per-task adstack setup on active_stream before recording the fence event, so that
+      // publish_adstack_metadata's async H2D copies are covered by the event that pool streams wait on.
+      std::vector<int> grid_dims(i - group_start);
+      for (size_t j = group_start; j < i; j++) {
+        grid_dims[j - group_start] = prepare_task(j, offloaded_tasks[j]);
+      }
+
+      // Record an event on the default stream so pool streams can wait for the arg_buffer upload and any per-task
+      // metadata copies (memcpy_host_to_device_async on `active_stream`) without stalling the CPU.  Pool streams are
       // CU_STREAM_NON_BLOCKING and do not implicitly synchronize with the default stream.
       void *upload_event = nullptr;
       CUDADriver::get_instance().event_create(&upload_event, 0x2 /*CU_EVENT_DISABLE_TIMING*/);
@@ -212,10 +219,9 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         }
         for (size_t j = group_start; j < i; j++) {
           const auto &t = offloaded_tasks[j];
-          int effective_grid_dim = prepare_task(j, t);
           CUDAContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
-          QD_TRACE("Launching kernel {}<<<{}, {}>>>", t.name, effective_grid_dim, t.block_dim);
-          cuda_module->launch(t.name, effective_grid_dim, t.block_dim, t.dynamic_shared_array_bytes,
+          QD_TRACE("Launching kernel {}<<<{}, {}>>>", t.name, grid_dims[j - group_start], t.block_dim);
+          cuda_module->launch(t.name, grid_dims[j - group_start], t.block_dim, t.dynamic_shared_array_bytes,
                               {&ctx.get_context()}, {});
         }
 
