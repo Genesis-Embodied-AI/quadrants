@@ -4,6 +4,7 @@ from quadrants._kernels import (
     blit_from_field_to_field,
     scan_add_inclusive,
     sort_stage,
+    subgroup_inclusive_add_warp_i32,
     uniform_add,
     warp_shfl_up_i32,
 )
@@ -11,7 +12,6 @@ from quadrants.lang.impl import current_cfg, field
 from quadrants.lang.kernel_impl import data_oriented
 from quadrants.lang.misc import cuda, vulkan
 from quadrants.lang.runtime_ops import sync
-from quadrants.lang.simt import subgroup
 from quadrants.types.primitive_types import i32
 
 
@@ -83,7 +83,10 @@ class PrefixSumExecutor:
         if current_cfg().arch == cuda:
             inclusive_add = warp_shfl_up_i32
         elif current_cfg().arch == vulkan:
-            inclusive_add = subgroup.inclusive_add
+            # `subgroup.inclusive_add` now takes `(value, log2_size)`; the prefix-sum kernel passes the primitive as a
+            # template callable invoked with a single argument, so use the adapter that pre-binds `log2_size=5` (full
+            # 32-lane warp/wave scan).
+            inclusive_add = subgroup_inclusive_add_warp_i32
         else:
             raise RuntimeError(f"{str(current_cfg().arch)} is not supported for prefix sum.")
 

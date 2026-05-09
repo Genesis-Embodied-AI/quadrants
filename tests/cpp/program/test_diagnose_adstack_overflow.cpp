@@ -44,6 +44,61 @@ TEST(DiagnoseAdstackOverflow, RegistryAndLookup) {
   EXPECT_FALSE(prog.adstack_cache().lookup_adstack_sizing_info(static_cast<uint32_t>(0xfffffffful)).has_value());
 }
 
+// `register_adstack_sizing_info` content-stable hash dedup. Two registrations with the same `(kernel_name,
+// task_id_in_kernel)` pair but different `identity_key`s (the runtime case: a re-codegen of the same source after a
+// `qd.reset()` produces a fresh `ad_stack` at a new heap address but the hash inputs are unchanged) must resolve to the
+// same id - otherwise the codegen-baked immediate in the cached LLVM IR would point at one entry while the runtime
+// registration mints another, and the diagnose-on-overflow path would look up the wrong (or empty) entry. Pins the
+// linear-probe loop's same-content branch, which the `RegistryAndLookup` test above does not cover (it only re-uses the
+// same identity_key).
+TEST(DiagnoseAdstackOverflow, RegistryContentStableDedupAcrossIdentityKeys) {
+  Program prog(host_arch());
+
+  int dummy_a = 0;
+  int dummy_b = 0;  // Different identity_key, same content.
+  uint32_t id_a = prog.adstack_cache().register_adstack_sizing_info(static_cast<const void *>(&dummy_a), "compute_grad",
+                                                                    /*task=*/3,
+                                                                    /*allocated_max_sizes=*/{16, 32},
+                                                                    /*size_exprs=*/{});
+  uint32_t id_b = prog.adstack_cache().register_adstack_sizing_info(static_cast<const void *>(&dummy_b), "compute_grad",
+                                                                    /*task=*/3,
+                                                                    /*allocated_max_sizes=*/{8, 4},
+                                                                    /*size_exprs=*/{});
+  EXPECT_NE(id_a, 0u);
+  // Same content yields the same id even though `identity_key` differs.
+  EXPECT_EQ(id_a, id_b);
+  // The second call's metadata wins (latest re-registration overwrites the entry in place).
+  auto entry = prog.adstack_cache().lookup_adstack_sizing_info(id_b);
+  ASSERT_TRUE(entry.has_value());
+  EXPECT_EQ(entry->kernel_name, "compute_grad");
+  EXPECT_EQ(entry->task_id_in_kernel, 3);
+  EXPECT_EQ(entry->allocated_max_sizes, std::vector<int>({8, 4}));
+  // Both identity_keys now resolve to the same id - re-registering with either pointer returns id_a.
+  uint32_t id_a_redo =
+      prog.adstack_cache().register_adstack_sizing_info(static_cast<const void *>(&dummy_a), "compute_grad",
+                                                        /*task=*/3,
+                                                        /*allocated_max_sizes=*/{1, 2},
+                                                        /*size_exprs=*/{});
+  EXPECT_EQ(id_a, id_a_redo);
+  uint32_t id_b_redo =
+      prog.adstack_cache().register_adstack_sizing_info(static_cast<const void *>(&dummy_b), "compute_grad",
+                                                        /*task=*/3,
+                                                        /*allocated_max_sizes=*/{1, 2},
+                                                        /*size_exprs=*/{});
+  EXPECT_EQ(id_a, id_b_redo);
+
+  // A different `(kernel_name, task_id_in_kernel)` pair must hash to a different id (assuming no collision - 32-bit
+  // FNV-1a collision probability for a handful of distinct keys is vanishingly low). Pins that the dedup branch above
+  // only triggers on actual content match, not on every re-registration.
+  int dummy_c = 0;
+  uint32_t id_c =
+      prog.adstack_cache().register_adstack_sizing_info(static_cast<const void *>(&dummy_c), "compute_other",
+                                                        /*task=*/3,
+                                                        /*allocated_max_sizes=*/{1},
+                                                        /*size_exprs=*/{});
+  EXPECT_NE(id_a, id_c);
+}
+
 // Diagnose with an unknown / sentinel id falls back to the generic dual-cause body without crashing.
 // The body must mention BOTH causes (DLPack bypass and Quadrants bug) so the user has actionable
 // recovery information regardless of whether the runtime captured the offending task identity.
