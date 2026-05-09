@@ -1427,19 +1427,6 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                    ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsWorkgroupMemoryMask |
                                                                   spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
-  } else if (stmt->func_name == "gridMemoryBarrier") {
-    // Device-scope memory fence (orders memory ops across the entire grid). On Vulkan this lowers
-    // to an `OpMemoryBarrier(ScopeDevice, ...)` with acquire-release semantics on workgroup +
-    // uniform (= storage-buffer in Vulkan's mapping) memory; that is sufficient for the canonical
-    // use cases (decoupled look-back scan, inter-block flag publishing). MoltenVK translates this
-    // to MSL `atomic_thread_fence(metal::memory_scope_device)` (MSL 2.0+, macOS 10.13+ /
-    // iOS 11+); on pre-A11 Apple GPUs / very old macOS Intel GPUs the cross-workgroup ordering
-    // guarantees are weaker and users should validate empirically.
-    ir_->make_inst(spv::OpMemoryBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeDevice),
-                   ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsUniformMemoryMask |
-                                                                  spv::MemorySemanticsWorkgroupMemoryMask |
-                                                                  spv::MemorySemanticsAcquireReleaseMask));
-    val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "subgroupElect") {
     val = ir_->make_value(spv::OpGroupNonUniformElect, ir_->bool_type(),
                           ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup));
