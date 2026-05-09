@@ -107,6 +107,7 @@ user_api[qd] = [
     "atan2",
     "atomic_add",
     "atomic_and",
+    "atomic_exchange",
     "atomic_max",
     "atomic_min",
     "atomic_mul",
