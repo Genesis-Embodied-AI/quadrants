@@ -412,8 +412,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       // `+wavefrontsize32` / `+wavefrontsize64` target feature.  Returning the intrinsic
       // (rather than a Quadrants-side constant) lets LLVM pick the right value for the
       // active wavefront mode without Quadrants having to track it.
-      llvm_val[stmt] =
-          builder->CreateIntrinsic(Intrinsic::amdgcn_wavefrontsize, ArrayRef<llvm::Value *>{});
+      llvm_val[stmt] = builder->CreateIntrinsic(Intrinsic::amdgcn_wavefrontsize, ArrayRef<llvm::Value *>{});
     } else if (stmt->func_name == "subgroupBarrier") {
       // Wave-scope thread reconvergence barrier.  `llvm.amdgcn.wave.barrier` is the LLVM
       // intrinsic AMDGPU exposes for wave-level sync: on chips where waves are lockstep

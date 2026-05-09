@@ -1441,11 +1441,10 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     // it.  Match the pattern used for `workgroupMemoryBarrier` above: AcquireRelease with the
     // storage classes Quadrants kernels actually touch (uniform buffers + workgroup-shared
     // memory).
-    ir_->make_inst(
-        spv::OpMemoryBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup),
-        ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsUniformMemoryMask |
-                                                       spv::MemorySemanticsWorkgroupMemoryMask |
-                                                       spv::MemorySemanticsAcquireReleaseMask));
+    ir_->make_inst(spv::OpMemoryBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup),
+                   ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsUniformMemoryMask |
+                                                                  spv::MemorySemanticsWorkgroupMemoryMask |
+                                                                  spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "subgroupSize") {
     val = ir_->cast(ir_->i32_type(), ir_->get_subgroup_size());

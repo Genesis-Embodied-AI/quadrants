@@ -4,15 +4,14 @@ from quadrants._kernels import (
     blit_from_field_to_field,
     scan_add_inclusive,
     sort_stage,
-    uniform_add,
     subgroup_inclusive_add_warp_i32,
+    uniform_add,
     warp_shfl_up_i32,
 )
 from quadrants.lang.impl import current_cfg, field
 from quadrants.lang.kernel_impl import data_oriented
 from quadrants.lang.misc import cuda, vulkan
 from quadrants.lang.runtime_ops import sync
-from quadrants.lang.simt import subgroup
 from quadrants.types.primitive_types import i32
 
 

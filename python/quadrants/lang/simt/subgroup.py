@@ -1,4 +1,4 @@
-# pyright: reportInvalidTypeForm=false
+# pyright: reportInvalidTypeForm=false, reportOperatorIssue=false
 
 import warnings
 
@@ -26,8 +26,7 @@ def barrier():
     if not _barrier_deprecation_warned:
         _barrier_deprecation_warned = True
         warnings.warn(
-            "qd.simt.subgroup.barrier() is deprecated; use qd.simt.subgroup.sync() instead "
-            "(matching block.sync()).",
+            "qd.simt.subgroup.barrier() is deprecated; use qd.simt.subgroup.sync() instead " "(matching block.sync()).",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -100,9 +99,7 @@ def all_true(predicate, log2_size: template()):
     """
     p = i32(predicate != 0)
     if impl.static(impl.current_cfg().arch == _qd_core.cuda and log2_size == 5):
-        return impl.call_internal(
-            "cuda_all_sync_i32", u32(0xFFFFFFFF), p, with_runtime_context=False
-        )
+        return impl.call_internal("cuda_all_sync_i32", u32(0xFFFFFFFF), p, with_runtime_context=False)
     for i in impl.static(range(log2_size)):
         mask = impl.static(1 << i)
         p = p & shuffle_xor(p, u32(mask))
@@ -119,9 +116,7 @@ def any_true(predicate, log2_size: template()):
     """
     p = i32(predicate != 0)
     if impl.static(impl.current_cfg().arch == _qd_core.cuda and log2_size == 5):
-        return impl.call_internal(
-            "cuda_any_sync_i32", u32(0xFFFFFFFF), p, with_runtime_context=False
-        )
+        return impl.call_internal("cuda_any_sync_i32", u32(0xFFFFFFFF), p, with_runtime_context=False)
     for i in impl.static(range(log2_size)):
         mask = impl.static(1 << i)
         p = p | shuffle_xor(p, u32(mask))

@@ -860,13 +860,11 @@ def _check_inclusive_scan(scan_func, py_op, dtype, log2_size, src_init):
             global_lane = group_base + k
             got = dst[global_lane]
             if dtype in _INT_DTYPES:
-                assert got == running, (
-                    f"group {g} lane {k} (global {global_lane}): got {got}, expected {running}"
-                )
+                assert got == running, f"group {g} lane {k} (global {global_lane}): got {got}, expected {running}"
             else:
-                assert abs(got - running) < 1e-4 * max(abs(running), 1.0), (
-                    f"group {g} lane {k} (global {global_lane}): got {got}, expected {running}"
-                )
+                assert abs(got - running) < 1e-4 * max(
+                    abs(running), 1.0
+                ), f"group {g} lane {k} (global {global_lane}): got {got}, expected {running}"
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
@@ -908,9 +906,7 @@ def _init_varied_int_or_float(field, n, dtype):
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_min(dtype, log2_size):
     """Inclusive prefix min."""
-    _check_inclusive_scan(
-        subgroup.inclusive_min, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float
-    )
+    _check_inclusive_scan(subgroup.inclusive_min, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float)
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
@@ -918,9 +914,7 @@ def test_subgroup_inclusive_min(dtype, log2_size):
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_max(dtype, log2_size):
     """Inclusive prefix max."""
-    _check_inclusive_scan(
-        subgroup.inclusive_max, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float
-    )
+    _check_inclusive_scan(subgroup.inclusive_max, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float)
 
 
 def _init_bitwise_int(field, n, dtype):
@@ -978,6 +972,7 @@ def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_i
             qd.loop_config(block_dim=N)
             for i in range(N):
                 dst[i] = scan_func(src[i], log2_size, identity_value)
+
     else:
 
         @qd.kernel
@@ -1005,13 +1000,11 @@ def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_i
             global_lane = group_base + k
             got = dst[global_lane]
             if dtype in _INT_DTYPES:
-                assert got == expected, (
-                    f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
-                )
+                assert got == expected, f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
             else:
-                assert abs(got - expected) < 1e-4 * max(abs(expected), 1.0), (
-                    f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
-                )
+                assert abs(got - expected) < 1e-4 * max(
+                    abs(expected), 1.0
+                ), f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
@@ -1019,9 +1012,7 @@ def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_i
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_add(dtype, log2_size):
     """Exclusive prefix sum.  Lane 0 of each group is 0."""
-    _check_exclusive_scan(
-        subgroup.exclusive_add, lambda a, b: a + b, 0, dtype, log2_size, _init_field
-    )
+    _check_exclusive_scan(subgroup.exclusive_add, lambda a, b: a + b, 0, dtype, log2_size, _init_field)
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
@@ -1029,9 +1020,7 @@ def test_subgroup_exclusive_add(dtype, log2_size):
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_mul(dtype, log2_size):
     """Exclusive prefix product.  Lane 0 of each group is 1."""
-    _check_exclusive_scan(
-        subgroup.exclusive_mul, lambda a, b: a * b, 1, dtype, log2_size, _init_small_int_or_float
-    )
+    _check_exclusive_scan(subgroup.exclusive_mul, lambda a, b: a * b, 1, dtype, log2_size, _init_small_int_or_float)
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
@@ -1084,9 +1073,7 @@ def test_subgroup_exclusive_and(dtype, log2_size):
         identity = -1
     else:  # u64
         identity = (1 << 64) - 1
-    _check_exclusive_scan(
-        subgroup.exclusive_and, lambda a, b: a & b, identity, dtype, log2_size, _init_bitwise_int
-    )
+    _check_exclusive_scan(subgroup.exclusive_and, lambda a, b: a & b, identity, dtype, log2_size, _init_bitwise_int)
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
@@ -1095,9 +1082,7 @@ def test_subgroup_exclusive_and(dtype, log2_size):
 def test_subgroup_exclusive_or(dtype, log2_size):
     """Exclusive prefix bitwise-OR.  Lane 0 of each group is 0."""
     _skip_if_f64_unsupported(dtype)
-    _check_exclusive_scan(
-        subgroup.exclusive_or, lambda a, b: a | b, 0, dtype, log2_size, _init_bitwise_int
-    )
+    _check_exclusive_scan(subgroup.exclusive_or, lambda a, b: a | b, 0, dtype, log2_size, _init_bitwise_int)
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
@@ -1106,9 +1091,7 @@ def test_subgroup_exclusive_or(dtype, log2_size):
 def test_subgroup_exclusive_xor(dtype, log2_size):
     """Exclusive prefix bitwise-XOR.  Lane 0 of each group is 0."""
     _skip_if_f64_unsupported(dtype)
-    _check_exclusive_scan(
-        subgroup.exclusive_xor, lambda a, b: a ^ b, 0, dtype, log2_size, _init_bitwise_int
-    )
+    _check_exclusive_scan(subgroup.exclusive_xor, lambda a, b: a ^ b, 0, dtype, log2_size, _init_bitwise_int)
 
 
 # Voting / predicate ops.  All three are group-scoped over 2**log2_size lanes; the
@@ -1148,9 +1131,9 @@ def test_subgroup_all_true(log2_size):
             expected = int(all(src_values[base + k] != 0 for k in range(group_size)))
             for k in range(group_size):
                 got = dst[base + k]
-                assert got == expected, (
-                    f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
-                )
+                assert (
+                    got == expected
+                ), f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
 
     run_and_check("all-1", [1] * N)
     run_and_check("all-0", [0] * N)
@@ -1189,9 +1172,9 @@ def test_subgroup_any_true(log2_size):
             expected = int(any(src_values[base + k] != 0 for k in range(group_size)))
             for k in range(group_size):
                 got = dst[base + k]
-                assert got == expected, (
-                    f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
-                )
+                assert (
+                    got == expected
+                ), f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
 
     run_and_check("all-1", [1] * N)
     run_and_check("all-0", [0] * N)
@@ -1235,9 +1218,9 @@ def test_subgroup_all_equal(dtype, log2_size):
             expected = int(all(src_values[base + k] == base_val for k in range(group_size)))
             for k in range(group_size):
                 got = dst[base + k]
-                assert got == expected, (
-                    f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
-                )
+                assert (
+                    got == expected
+                ), f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
 
     run_and_check("all-same", [42] * N)
     run_and_check("all-distinct", list(range(N)))
@@ -1281,9 +1264,9 @@ def test_subgroup_all_equal_float_contract(dtype, log2_size):
             expected = expected_per_group(g)
             for k in range(group_size):
                 got = dst[base + k]
-                assert got == expected, (
-                    f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
-                )
+                assert (
+                    got == expected
+                ), f"{label} group {g} lane {k} (global {base + k}): got {got}, expected {expected}"
 
     nan = float("nan")
 
@@ -1443,9 +1426,7 @@ def test_subgroup_elect():
         else:
             assert lane_id[i] != 0, f"non-elected lane has invocation_id=0 at i={i}"
 
-    assert total_elected == N // sg, (
-        f"expected {N // sg} elected lanes (N={N} / sg_size={sg}), got {total_elected}"
-    )
+    assert total_elected == N // sg, f"expected {N // sg} elected lanes (N={N} / sg_size={sg}), got {total_elected}"
 
 
 def _drain_deprecation_warnings(records):
