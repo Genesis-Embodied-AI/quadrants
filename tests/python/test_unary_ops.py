@@ -94,7 +94,7 @@ def test_frexp():
     assert get_exp(1.4) == 1
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan])
+@test_utils.test()
 def test_popcnt():
     @qd.kernel
     def test_i32(x: qd.int32) -> qd.int32:
@@ -126,7 +126,7 @@ def test_popcnt():
     assert test_u64(10000) == 5
 
 
-@test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda, qd.amdgpu, qd.vulkan])
+@test_utils.test()
 def test_clz():
     @qd.kernel
     def test_i32(x: qd.int32) -> qd.int32:
@@ -148,9 +148,10 @@ def test_clz():
     assert test_i32(0x7FFFFFFF) == 1
 
 
-# clz on i64. Until i64 lowerings landed on AMDGPU and SPIR-V, this could only run on
-# CPU and CUDA; AMDGPU and SPIR-V (Vulkan / Metal) now decompose 64-bit clz themselves.
-@test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda, qd.amdgpu, qd.vulkan])
+# clz on i64 — runs on every supported backend. CPU / CUDA use their native 64-bit
+# leading-zero ops; AMDGPU lowers via llvm.ctlz; SPIR-V (Vulkan / Metal) synthesises
+# the 64-bit case from a hi/lo FindUMsb decomposition.
+@test_utils.test()
 def test_clz_i64():
     @qd.kernel
     def test_i64(x: qd.int64) -> qd.int32:
@@ -166,24 +167,6 @@ def test_clz_i64():
     assert test_i64(-1) == 0
     # Spans both halves: bit 32 set with low half also non-zero.
     assert test_i64((1 << 32) | 0xFF) == 31
-
-
-@test_utils.test(arch=[qd.metal])
-def test_popcnt_metal():
-    @qd.kernel
-    def test_i32(x: qd.int32) -> qd.int32:
-        return qd.math.popcnt(x)
-
-    @qd.kernel
-    def test_u32(x: qd.uint32) -> qd.int32:
-        return qd.math.popcnt(x)
-
-    assert test_i32(100) == 3
-    assert test_i32(1000) == 6
-    assert test_i32(10000) == 5
-    assert test_u32(100) == 3
-    assert test_u32(1000) == 6
-    assert test_u32(10000) == 5
 
 
 @test_utils.test()
