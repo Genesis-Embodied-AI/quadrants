@@ -1,3 +1,5 @@
+#include <map>
+
 #include "quadrants/runtime/amdgpu/kernel_launcher.h"
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
@@ -69,8 +71,18 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // the cleared counter and UINT32_MAX-defaulted capacity arrays.
     executor->publish_adstack_lazy_claim_buffers(offloaded_tasks.size());
   }
-  std::size_t task_index = 0;
-  for (const auto &task : offloaded_tasks) {
+  // Max-reducer dispatch. Mirrors the CUDA launcher; results land in `current_max_reducer_results_` for
+  // `publish_adstack_metadata` to substitute into per-stack `SerializedSizeExpr` trees. Gated on whether any task has
+  // captured specs so forward-only and reverse-mode-without-recognized-MaxOverRange kernels pay no per-launch overhead.
+  const bool any_max_reducer_task =
+      std::any_of(offloaded_tasks.begin(), offloaded_tasks.end(),
+                  [](const OffloadedTask &t) { return !t.ad_stack.max_reducer_specs.empty(); });
+  if (any_max_reducer_task) {
+    executor->dispatch_max_reducers_for_tasks(offloaded_tasks, &ctx, context_pointer);
+  }
+
+  // Per-task adstack setup + grid-dim capping. Shared by serial and stream-parallel paths.
+  auto prepare_task = [&](std::size_t task_index, const OffloadedTask &task) -> int {
     int effective_grid_dim = task.grid_dim;
     if (!task.ad_stack.allocas.empty()) {
       // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without this the sizer
@@ -108,7 +120,6 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         executor->ensure_per_task_float_heap_post_reducer(task_index, task.ad_stack, n_threads_amdgpu, &ctx);
       }
     }
-    ++task_index;
     // Match the heap-row count resolved above: adstack-bearing tasks dispatch at most `kAdStackMaxConcurrentThreads`.
     // The runtime grid-strided loop walks the full element list / range with `i += grid_dim()` so a smaller grid
     // completes the same workload sequentially per slot.
@@ -121,9 +132,58 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         effective_grid_dim = 1;
       }
     }
-    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, effective_grid_dim, task.block_dim);
-    amdgpu_module->launch(task.name, effective_grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
-                          {(void *)&context_pointer}, {arg_size});
+    return effective_grid_dim;
+  };
+
+  auto *active_stream = AMDGPUContext::get_instance().get_stream();
+  for (size_t i = 0; i < offloaded_tasks.size();) {
+    const auto &task = offloaded_tasks[i];
+    if (task.stream_parallel_group_id == 0) {
+      int effective_grid_dim = prepare_task(i, task);
+      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, effective_grid_dim, task.block_dim);
+      amdgpu_module->launch(task.name, effective_grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
+                            {(void *)&context_pointer}, {arg_size});
+      i++;
+    } else {
+      size_t group_start = i;
+      while (i < offloaded_tasks.size() && offloaded_tasks[i].stream_parallel_group_id != 0) {
+        i++;
+      }
+
+      std::map<int, void *> stream_by_id;
+      for (size_t j = group_start; j < i; j++) {
+        int sid = offloaded_tasks[j].stream_parallel_group_id;
+        if (stream_by_id.find(sid) == stream_by_id.end()) {
+          stream_by_id[sid] = AMDGPUContext::get_instance().acquire_stream();
+        }
+      }
+
+      try {
+        for (size_t j = group_start; j < i; j++) {
+          const auto &t = offloaded_tasks[j];
+          int effective_grid_dim = prepare_task(j, t);
+          AMDGPUContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
+          QD_TRACE("Launching kernel {}<<<{}, {}>>>", t.name, effective_grid_dim, t.block_dim);
+          amdgpu_module->launch(t.name, effective_grid_dim, t.block_dim, t.dynamic_shared_array_bytes,
+                                {(void *)&context_pointer}, {arg_size});
+        }
+
+        for (auto &[sid, s] : stream_by_id) {
+          AMDGPUDriver::get_instance().stream_synchronize(s);
+        }
+      } catch (...) {
+        for (auto &[sid, s] : stream_by_id) {
+          AMDGPUContext::get_instance().release_stream(s);
+        }
+        AMDGPUContext::get_instance().set_stream(active_stream);
+        throw;
+      }
+      for (auto &[sid, s] : stream_by_id) {
+        AMDGPUContext::get_instance().release_stream(s);
+      }
+
+      AMDGPUContext::get_instance().set_stream(active_stream);
+    }
   }
 }
 
@@ -136,7 +196,8 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
   do {
     launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
     counter_val = 0;
-    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+    auto *stream = AMDGPUContext::get_instance().get_stream();
+    AMDGPUDriver::get_instance().stream_synchronize(stream);
     AMDGPUDriver::get_instance().memcpy_device_to_host(&counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
   } while (counter_val != 0);
 }
@@ -166,6 +227,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   // Change from std::vector<int> to ArgArrayPtrKey
   std::unordered_map<ArgArrayPtrKey, std::pair<void *, DeviceAllocation>, ArgArrayPtrKeyHasher> transfers;
   std::unordered_map<ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher> device_ptrs;
+
+  auto *active_stream = AMDGPUContext::get_instance().get_stream();
 
   char *device_result_buffer{nullptr};
   // Here we have to guarantee the result_result_buffer isn't nullptr
@@ -213,14 +276,16 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
           device_ptrs[data_ptr_idx] = executor->get_device_alloc_info_ptr(devalloc);
           transfers[data_ptr_idx] = {data_ptr, devalloc};
 
-          AMDGPUDriver::get_instance().memcpy_host_to_device((void *)device_ptrs[data_ptr_idx], data_ptr, arr_sz);
+          AMDGPUDriver::get_instance().memcpy_host_to_device_async((void *)device_ptrs[data_ptr_idx], data_ptr, arr_sz,
+                                                                   active_stream);
           if (grad_ptr != nullptr) {
             DeviceAllocation grad_devalloc =
                 executor->allocate_memory_on_device(arr_sz, (uint64 *)device_result_buffer);
             device_ptrs[grad_ptr_idx] = executor->get_device_alloc_info_ptr(grad_devalloc);
             transfers[grad_ptr_idx] = {grad_ptr, grad_devalloc};
 
-            AMDGPUDriver::get_instance().memcpy_host_to_device((void *)device_ptrs[grad_ptr_idx], grad_ptr, arr_sz);
+            AMDGPUDriver::get_instance().memcpy_host_to_device_async((void *)device_ptrs[grad_ptr_idx], grad_ptr,
+                                                                     arr_sz, active_stream);
           } else {
             device_ptrs[grad_ptr_idx] = nullptr;
           }
@@ -250,35 +315,50 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     }
   }
   if (transfers.size() > 0) {
-    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+    AMDGPUDriver::get_instance().stream_synchronize(active_stream);
   }
   char *host_result_buffer = (char *)ctx.get_context().result_buffer;
   if (ctx.result_buffer_size > 0) {
-    // Malloc_Async and Free_Async are available after ROCm 5.4
     ctx.get_context().result_buffer = (uint64 *)device_result_buffer;
   }
+  // Same explicit-stream race avoidance as the CUDA launcher: when active_stream != nullptr, allocate per-call
+  // ephemeral buffers so concurrent launches on different streams can't clobber each other.
+  const bool use_persistent_scratch = (active_stream == nullptr);
   char *device_arg_buffer = nullptr;
+  void *ephemeral_arg_buffer = nullptr;
   if (ctx.arg_buffer_size > 0) {
-    if (ctx.arg_buffer_size > launcher_ctx.arg_buffer_capacity) {
-      if (launcher_ctx.arg_buffer_dev_ptr != nullptr) {
-        AMDGPUDriver::get_instance().mem_free_async(launcher_ctx.arg_buffer_dev_ptr, nullptr);
+    if (use_persistent_scratch) {
+      if (ctx.arg_buffer_size > launcher_ctx.arg_buffer_capacity) {
+        if (launcher_ctx.arg_buffer_dev_ptr != nullptr) {
+          AMDGPUDriver::get_instance().mem_free_async(launcher_ctx.arg_buffer_dev_ptr, nullptr);
+        }
+        const std::size_t new_cap = std::max<std::size_t>(ctx.arg_buffer_size, 2 * launcher_ctx.arg_buffer_capacity);
+        AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.arg_buffer_dev_ptr, new_cap, nullptr);
+        launcher_ctx.arg_buffer_capacity = new_cap;
       }
-      const std::size_t new_cap = std::max<std::size_t>(ctx.arg_buffer_size, 2 * launcher_ctx.arg_buffer_capacity);
-      AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.arg_buffer_dev_ptr, new_cap, nullptr);
-      launcher_ctx.arg_buffer_capacity = new_cap;
+      device_arg_buffer = static_cast<char *>(launcher_ctx.arg_buffer_dev_ptr);
+    } else {
+      AMDGPUDriver::get_instance().malloc_async(&ephemeral_arg_buffer, ctx.arg_buffer_size, active_stream);
+      device_arg_buffer = static_cast<char *>(ephemeral_arg_buffer);
     }
-    device_arg_buffer = static_cast<char *>(launcher_ctx.arg_buffer_dev_ptr);
     AMDGPUDriver::get_instance().memcpy_host_to_device_async(device_arg_buffer, ctx.get_context().arg_buffer,
-                                                             ctx.arg_buffer_size, nullptr);
+                                                             ctx.arg_buffer_size, active_stream);
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
   int arg_size = sizeof(RuntimeContext *);
-  if (launcher_ctx.runtime_context_dev_ptr == nullptr) {
-    AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext), nullptr);
+  void *ephemeral_context_ptr = nullptr;
+  void *context_pointer = nullptr;
+  if (use_persistent_scratch) {
+    if (launcher_ctx.runtime_context_dev_ptr == nullptr) {
+      AMDGPUDriver::get_instance().malloc_async(&launcher_ctx.runtime_context_dev_ptr, sizeof(RuntimeContext), nullptr);
+    }
+    context_pointer = launcher_ctx.runtime_context_dev_ptr;
+  } else {
+    AMDGPUDriver::get_instance().malloc_async(&ephemeral_context_ptr, sizeof(RuntimeContext), active_stream);
+    context_pointer = ephemeral_context_ptr;
   }
-  void *context_pointer = launcher_ctx.runtime_context_dev_ptr;
   AMDGPUDriver::get_instance().memcpy_host_to_device_async(context_pointer, &ctx.get_context(), sizeof(RuntimeContext),
-                                                           nullptr);
+                                                           active_stream);
 
   // Adstack-cache invalidation bump - see `bump_writes_for_kernel_llvm` in `program/adstack_size_expr_eval.{h,cpp}`.
   bump_writes_for_kernel_llvm(executor->get_program(), &ctx, offloaded_tasks);
@@ -290,22 +370,36 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
   }
   QD_TRACE("Launching kernel");
-  // Persistent scratch: no per-launch free for arg_buffer. The scratch lives until the launcher is destroyed.
+  // Persistent scratch (default-stream path): no per-launch free for the per-handle `arg_buffer` / `runtime_context`
+  // or the launcher-global `result_buffer`. All live until launcher destruction; the dtor handles the final
+  // `mem_free_async`.  Ephemeral buffers (explicit-stream path) are freed below.
   if (ctx.result_buffer_size > 0) {
-    AMDGPUDriver::get_instance().memcpy_device_to_host(host_result_buffer, device_result_buffer,
-                                                       ctx.result_buffer_size);
+    AMDGPUDriver::get_instance().memcpy_device_to_host_async(host_result_buffer, device_result_buffer,
+                                                             ctx.result_buffer_size, active_stream);
   }
-  if (transfers.size()) {
+  if (transfers.size() > 0) {
+    AMDGPUDriver::get_instance().stream_synchronize(active_stream);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       auto &idx = itr->first;
-      auto arg_id = idx.arg_id;
-      AMDGPUDriver::get_instance().memcpy_device_to_host(itr->second.first, (void *)device_ptrs[idx],
-                                                         ctx.array_runtime_sizes[arg_id]);
+      AMDGPUDriver::get_instance().memcpy_device_to_host_async(itr->second.first, (void *)device_ptrs[idx],
+                                                               ctx.array_runtime_sizes[idx.arg_id], active_stream);
+    }
+    AMDGPUDriver::get_instance().stream_synchronize(active_stream);
+    for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       executor->deallocate_memory_on_device(itr->second.second);
     }
+  } else if (ctx.result_buffer_size > 0) {
+    AMDGPUDriver::get_instance().stream_synchronize(active_stream);
   }
   // Persistent scratch: no per-launch free for the per-handle `arg_buffer` / `runtime_context` or the launcher-global
   // `result_buffer`. All three live until the launcher is destroyed; the dtor handles the final `mem_free_async`.
+  // Ephemeral buffers (explicit-stream path) are freed here.
+  if (ephemeral_arg_buffer != nullptr) {
+    AMDGPUDriver::get_instance().mem_free_async(ephemeral_arg_buffer, active_stream);
+  }
+  if (ephemeral_context_ptr != nullptr) {
+    AMDGPUDriver::get_instance().mem_free_async(ephemeral_context_ptr, active_stream);
+  }
 }
 
 KernelLauncher::~KernelLauncher() {

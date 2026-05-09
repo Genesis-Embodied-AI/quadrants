@@ -91,17 +91,15 @@ def _vulkan_debug_warmup():
 @pytest.fixture(autouse=True)
 def wanted_arch(request, req_arch, req_options):
     if req_arch is not None:
-        if req_arch == qd.cuda:
+        if req_arch in (qd.cuda, qd.amdgpu):
             if not request.node.get_closest_marker("run_in_serial"):
                 # Optimization only apply to non-serial tests, since serial tests
                 # are picked out exactly because of extensive resource consumption.
                 # Separation of serial/non-serial tests is done by the test runner
                 # through `-m run_in_serial` / `-m not run_in_serial`.
-                req_options = {
-                    "device_memory_GB": 0.3,
-                    "cuda_stack_limit": 1024,
-                    **req_options,
-                }
+                req_options = {"device_memory_GB": 0.3, **req_options}
+                if req_arch == qd.cuda:
+                    req_options = {"cuda_stack_limit": 1024, **req_options}
             else:
                 # Serial tests run without aggressive resource optimization
                 req_options = {"device_memory_GB": 1, **req_options}

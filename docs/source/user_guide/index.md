@@ -48,7 +48,10 @@ autodiff
 :maxdepth: 1
 :titlesonly:
 
+atomics
 block
+grid
+math
 subgroup
 tile16
 ```
@@ -60,6 +63,7 @@ tile16
 
 fastcache
 graph
+streams
 perf_dispatch
 init_options
 ```

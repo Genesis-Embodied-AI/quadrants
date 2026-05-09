@@ -81,6 +81,11 @@ struct AdStackSizingInfo {
   // ids are assigned per `Program` lifetime, not per-kernel-content; a deserialised task re-registers
   // itself at the next launch.
   uint32_t registry_id{0};
+  // Per-task list of `MaxOverRange` nodes the runtime reduces in parallel via a dedicated max-reducer dispatch (see the
+  // max-reducer recognizer). Empty when no captured `size_expr` contains a recognized shape. Each entry references one
+  // alloca's `size_expr` by `(stack_id, mor_node_idx)`; the runtime substitutes the dispatched value as a `Const` into
+  // the tree before the per-thread sizer walks it.
+  std::vector<StaticAdStackMaxReducerSpec> max_reducer_specs;
   QD_IO_DEF(per_thread_stride,
             per_thread_stride_float,
             per_thread_stride_int,
@@ -92,7 +97,8 @@ struct AdStackSizingInfo {
             end_offset_bytes,
             allocas,
             size_exprs,
-            bound_expr);
+            bound_expr,
+            max_reducer_specs);
 };
 
 class OffloadedTask {
@@ -101,6 +107,7 @@ class OffloadedTask {
   int block_dim{0};
   int grid_dim{0};
   int dynamic_shared_array_bytes{0};
+  int stream_parallel_group_id{0};
   AdStackSizingInfo ad_stack{};
 
   // Snode IDs this task writes to (read-modify-write counts as a write). Computed at codegen time
@@ -126,9 +133,22 @@ class OffloadedTask {
   explicit OffloadedTask(const std::string &name = "",
                          int block_dim = 0,
                          int grid_dim = 0,
-                         int dynamic_shared_array_bytes = 0)
-      : name(name), block_dim(block_dim), grid_dim(grid_dim), dynamic_shared_array_bytes(dynamic_shared_array_bytes) {};
-  QD_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes, ad_stack, snode_writes, arr_writes, arr_reads);
+                         int dynamic_shared_array_bytes = 0,
+                         int stream_parallel_group_id = 0)
+      : name(name),
+        block_dim(block_dim),
+        grid_dim(grid_dim),
+        dynamic_shared_array_bytes(dynamic_shared_array_bytes),
+        stream_parallel_group_id(stream_parallel_group_id) {};
+  QD_IO_DEF(name,
+            block_dim,
+            grid_dim,
+            dynamic_shared_array_bytes,
+            stream_parallel_group_id,
+            ad_stack,
+            snode_writes,
+            arr_writes,
+            arr_reads);
 };
 
 struct LLVMCompiledTask {

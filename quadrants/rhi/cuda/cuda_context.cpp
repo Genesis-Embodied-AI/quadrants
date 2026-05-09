@@ -11,7 +11,9 @@
 
 namespace quadrants::lang {
 
-CUDAContext::CUDAContext() : profiler_(nullptr), driver_(CUDADriver::get_instance_without_context()), stream_(nullptr) {
+thread_local void *CUDAContext::stream_ = nullptr;
+
+CUDAContext::CUDAContext() : profiler_(nullptr), driver_(CUDADriver::get_instance_without_context()) {
   // CUDA initialization
   dev_count_ = 0;
   driver_.init(0);
@@ -76,6 +78,11 @@ CUDAContext::CUDAContext() : profiler_(nullptr), driver_(CUDADriver::get_instanc
   driver_.device_get_attribute(&device_supports_pageable_memory_access, CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS,
                                device_);
   supports_pageable_memory_access_ = device_supports_pageable_memory_access != 0;
+
+  int device_uses_host_page_tables = 0;
+  driver_.device_get_attribute(&device_uses_host_page_tables,
+                               CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS_USES_HOST_PAGE_TABLES, device_);
+  uses_host_page_tables_ = device_uses_host_page_tables != 0;
 
   mcpu_ = fmt::format("sm_{}", compute_capability_);
 
@@ -167,13 +174,11 @@ void CUDAContext::launch(void *func,
 }
 
 CUDAContext::~CUDAContext() {
-  // TODO: restore these?
-  /*
-  CUDADriver::get_instance().cuMemFree(context_buffer);
-  for (auto cudaModule: cudaModules)
-      CUDADriver::get_instance().cuModuleUnload(cudaModule);
-  CUDADriver::get_instance().cuCtxDestroy(context);
-  */
+  // Currently unreachable: singleton is heap-allocated via `new` in get_instance() and never deleted.
+  for (auto *s : stream_pool_) {
+    driver_.stream_destroy(s);
+  }
+  stream_pool_.clear();
 }
 
 CUDAContext &CUDAContext::get_instance() {
