@@ -276,7 +276,10 @@ def inclusive_add(value, log2_size: template()):
 
 @func
 def inclusive_mul(value, log2_size: template()):
-    """Inclusive prefix product across ``2**log2_size`` consecutive lanes.  See `inclusive_add` for the size contract."""
+    """Inclusive prefix product across ``2**log2_size`` consecutive lanes.
+
+    See `inclusive_add` for the size contract.
+    """
     return _inclusive_scan(value, _bin_mul, log2_size)
 
 

@@ -1030,9 +1030,8 @@ f64 amdgpu_shuffle_down_f64(i32 offset, f64 value) {
   return u.d;
 }
 
-// Mirrors `amdgpu_shuffle_down`: `ds_bpermute` is a generic gather, so `shuffle_up`
-// is just `shuffle_down` with the source lane index decremented instead of
-// incremented. The same DPP fast-path FIXME applies here too.
+// Mirrors `amdgpu_shuffle_down`: `ds_bpermute` is a generic gather, so `shuffle_up` is just `shuffle_down` with the
+// source lane index decremented instead of incremented. The same DPP fast-path FIXME applies here too.
 i32 amdgpu_shuffle_up_i32(i32 offset, i32 value) {
   return amdgpu_ds_bpermute((amdgpu_lane_id() - offset) * 4, value);
 }
@@ -1133,9 +1132,8 @@ f64 cuda_shuffle_down_f64(i32 offset, f64 value) {
   return u.d;
 }
 
-// `shfl.sync.up.b32` clamp byte is 0 (no clamp at low boundary), unlike
-// `shfl.sync.down.b32` which uses 0x1f. See `qd.simt.warp.shfl_up_*` (which uses
-// width=0) and the NVVM IR / PTX ISA documentation for `shfl.sync.up.b32`.
+// `shfl.sync.up.b32` clamp byte is 0 (no clamp at low boundary), unlike `shfl.sync.down.b32` which uses 0x1f. See
+// `qd.simt.warp.shfl_up_*` (which uses width=0) and the NVVM IR / PTX ISA documentation for `shfl.sync.up.b32`.
 i32 cuda_shuffle_up_i32(i32 offset, i32 value) {
   return cuda_shfl_up_sync_i32(0xFFFFFFFF, value, offset, 0);
 }

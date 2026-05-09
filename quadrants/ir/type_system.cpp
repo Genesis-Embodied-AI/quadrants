@@ -337,8 +337,8 @@ void Operations::init_internals() {
   // workgroupBarrier, workgroupMemoryBarrier, localInvocationId,
   // vkGlobalThreadIdx, subgroupBarrier, subgroupMemoryBarrier, subgroupElect,
   // subgroupBroadcast, subgroupSize, subgroupInvocationId,
-  // (subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}: portable ``@qd.func`` Hillis-Steele
-  // scans over `subgroupShuffleUp`; no internal ops needed.)
+  // (subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}: portable ``@qd.func`` Hillis-Steele scans over
+  // `subgroupShuffleUp`; no internal ops needed.)
 
   auto ValueT = tyvar("ValueT");
 

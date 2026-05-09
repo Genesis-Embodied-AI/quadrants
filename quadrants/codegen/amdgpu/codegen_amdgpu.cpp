@@ -406,27 +406,24 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
     } else if (stmt->func_name == "subgroupSize") {
-      // AMDGPU wavefront size is 32 (RDNA / wave32) or 64 (CDNA, GFX9, RDNA wave64).  The
-      // `llvm.amdgcn.wavefrontsize` intrinsic returns the wavefront size as i32; the AMDGPU
-      // backend folds it to 32 or 64 at codegen time based on the function's
-      // `+wavefrontsize32` / `+wavefrontsize64` target feature.  Returning the intrinsic
-      // (rather than a Quadrants-side constant) lets LLVM pick the right value for the
-      // active wavefront mode without Quadrants having to track it.
+      // AMDGPU wavefront size is 32 (RDNA / wave32) or 64 (CDNA, GFX9, RDNA wave64).  The `llvm.amdgcn.wavefrontsize`
+      // intrinsic returns the wavefront size as i32; the AMDGPU backend folds it to 32 or 64 at codegen time based on
+      // the function's `+wavefrontsize32` / `+wavefrontsize64` target feature.  Returning the intrinsic (rather than a
+      // Quadrants-side constant) lets LLVM pick the right value for the active wavefront mode without Quadrants
+      // having to track it.
       llvm_val[stmt] = builder->CreateIntrinsic(Intrinsic::amdgcn_wavefrontsize, ArrayRef<llvm::Value *>{});
     } else if (stmt->func_name == "subgroupBarrier") {
-      // Wave-scope thread reconvergence barrier.  `llvm.amdgcn.wave.barrier` is the LLVM
-      // intrinsic AMDGPU exposes for wave-level sync: on chips where waves are lockstep
-      // (GCN) it acts as a compiler reordering barrier; on RDNA it lowers to a real
-      // wave-scope hardware barrier.  Caller contract is uniform CF + all lanes active.
+      // Wave-scope thread reconvergence barrier.  `llvm.amdgcn.wave.barrier` is the LLVM intrinsic AMDGPU exposes for
+      // wave-level sync: on chips where waves are lockstep (GCN) it acts as a compiler reordering barrier; on RDNA it
+      // lowers to a real wave-scope hardware barrier.  Caller contract is uniform CF + all lanes active.
       builder->CreateIntrinsic(Intrinsic::amdgcn_wave_barrier, ArrayRef<llvm::Value *>{});
       llvm_val[stmt] = tlctx->get_constant(0);
     } else if (stmt->func_name == "subgroupMemoryBarrier") {
-      // Subgroup-scope memory fence.  AMDGPU has no first-class wave-scope memory fence
-      // intrinsic, so we emit an LLVM `fence seq_cst` with workgroup syncscope.  The
-      // AMDGPU backend lowers this to the appropriate `s_waitcnt` / cache-flush sequence.
-      // Workgroup scope is over-strict for the subgroup-scope ask but correct (orders
-      // memory across the whole workgroup, of which the subgroup is a subset) and matches
-      // what we do on CUDA (`block_memfence`).
+      // Subgroup-scope memory fence.  AMDGPU has no first-class wave-scope memory fence intrinsic, so we emit an LLVM
+      // `fence seq_cst` with workgroup syncscope.  The AMDGPU backend lowers this to the appropriate `s_waitcnt` /
+      // cache-flush sequence.  Workgroup scope is over-strict for the subgroup-scope ask but correct (orders memory
+      // across the whole workgroup, of which the subgroup is a subset) and matches what we do on CUDA
+      // (`block_memfence`).
       builder->CreateFence(llvm::AtomicOrdering::SequentiallyConsistent,
                            llvm_context->getOrInsertSyncScopeID("workgroup"));
       llvm_val[stmt] = tlctx->get_constant(0);
@@ -504,8 +501,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     return nullptr;
   }
 
-  // FIXME: Same DPP fast-path opportunity as `emit_amdgpu_shuffle_down` —
-  // currently emulates `shuffle_up` via `ds_bpermute` (~50 cycle latency).
+  // FIXME: Same DPP fast-path opportunity as `emit_amdgpu_shuffle_down` — currently emulates `shuffle_up` via
+  // `ds_bpermute` (~50 cycle latency).
   llvm::Value *emit_amdgpu_shuffle_up(llvm::Value *value, DataType dt, llvm::Value *offset) {
     if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::u32))
       return call("amdgpu_shuffle_up_i32", offset, value);

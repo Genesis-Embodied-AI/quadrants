@@ -1401,12 +1401,11 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 3);
   }
 
-  // Note: the SPIR-V-only `subgroupAdd` / `subgroupMul` / `subgroupMin` / `subgroupMax` /
-  // `subgroupAnd` / `subgroupOr` / `subgroupXor` reductions have been removed.  Likewise
-  // `subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}` are gone: all seven are implemented
-  // as portable ``@qd.func`` Hillis-Steele scans over `subgroupShuffleUp` in Python, so
-  // the SPIR-V codegen branch and the matching internal-op registrations have been
-  // removed.
+  // Note: the SPIR-V-only `subgroupAdd` / `subgroupMul` / `subgroupMin` / `subgroupMax` / `subgroupAnd` /
+  // `subgroupOr` / `subgroupXor` reductions have been removed.  Likewise the
+  // `subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}` ops are gone: all seven are implemented as portable ``@qd.func``
+  // Hillis-Steele scans over `subgroupShuffleUp` in Python, so the SPIR-V codegen branch and the matching internal-op
+  // registrations have been removed.
 
   const std::unordered_set<std::string> shuffle_ops{"subgroupShuffleDown", "subgroupShuffleUp", "subgroupShuffle"};
 
@@ -1434,13 +1433,11 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                    ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), ir_->const_i32_zero_);
     val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "subgroupMemoryBarrier") {
-    // The Memory Semantics operand of OpMemoryBarrier must include both an ordering bit
-    // (Acquire / Release / AcquireRelease / SequentiallyConsistent) and at least one storage
-    // class (UniformMemory / WorkgroupMemory / ImageMemory / ...).  The previous emission used
-    // 0 for Semantics, which is invalid SPIR-V and behaves as a no-op on drivers that accept
-    // it.  Match the pattern used for `workgroupMemoryBarrier` above: AcquireRelease with the
-    // storage classes Quadrants kernels actually touch (uniform buffers + workgroup-shared
-    // memory).
+    // The Memory Semantics operand of OpMemoryBarrier must include both an ordering bit (Acquire / Release /
+    // AcquireRelease / SequentiallyConsistent) and at least one storage class (UniformMemory / WorkgroupMemory /
+    // ImageMemory / ...).  The previous emission used 0 for Semantics, which is invalid SPIR-V and behaves as a no-op
+    // on drivers that accept it.  Match the pattern used for `workgroupMemoryBarrier` above: AcquireRelease with the
+    // storage classes Quadrants kernels actually touch (uniform buffers + workgroup-shared memory).
     ir_->make_inst(spv::OpMemoryBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup),
                    ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsUniformMemoryMask |
                                                                   spv::MemorySemanticsWorkgroupMemoryMask |

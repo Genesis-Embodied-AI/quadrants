@@ -983,7 +983,8 @@ def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_i
 
     group_size = 1 << log2_size
     # Verify every group across the full 64-lane launch (see `_check_inclusive_scan` for the rationale).
-    # exclusive[group_base] == identity; exclusive[group_base + k] for k > 0 == op-reduce(src[group_base..group_base + k]).
+    # exclusive[group_base] == identity; exclusive[group_base + k] for k > 0
+    # == op-reduce(src[group_base..group_base + k]).
     for g in range(N // group_size):
         group_base = g * group_size
         for k in range(group_size):
