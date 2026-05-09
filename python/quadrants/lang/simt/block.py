@@ -30,8 +30,8 @@ def sync_all_nonzero(predicate):
         # Hardware-fused barrier+reduction on NVPTX (`barrier.cta.red.and.aligned.all.sync`).
         return impl.call_internal("block_barrier_and_i32", predicate, with_runtime_context=False)
     if arch == _qd_core.amdgpu or arch_uses_spv(arch):
-        # AMDGPU and SPIR-V (Vulkan / Metal) emulate via shared memory + 2 barriers + an
-        # atomic; see `_block_reduce_*_emulated` below for the pattern.
+        # AMDGPU and SPIR-V (Vulkan / Metal) emulate via shared memory + 2 barriers + an atomic; see
+        # `_block_reduce_*_emulated` below for the pattern.
         return _block_reduce_all_nonzero_emulated(predicate)
     raise ValueError(f"qd.block.sync_all_nonzero is not supported for arch {arch}")
 
@@ -119,25 +119,23 @@ class SharedArray:
         )
 
 
-# Shared-memory emulation of CUDA's hardware-fused barrier-with-reduction ops, used on backends
-# that lack a direct equivalent (AMDGPU has no NVPTX `barrier.cta.red.*` analog; SPIR-V's
-# `OpGroupNonUniform*` only operate at subgroup scope reliably across Vulkan + Metal).
+# Shared-memory emulation of CUDA's hardware-fused barrier-with-reduction ops, used on backends that lack a direct
+# equivalent (AMDGPU has no NVPTX `barrier.cta.red.*` analog; SPIR-V's `OpGroupNonUniform*` only operate at subgroup
+# scope reliably across Vulkan + Metal).
 #
-# Pattern: lane 0 zeroes a 1-element shared `i32` -> block.sync() -> every thread atomically
-# folds its predicate into the slot -> block.sync() -> every thread reads the broadcasted
-# result. Costs 2 barriers + 1 atomic (vs. CUDA's hardware fast path of 1 barrier+reduction).
-# Slower than the CUDA path but functionally equivalent and portable. Each call-site allocates
-# a fresh `SharedArray` so multiple calls in the same kernel do not alias each other.
+# Pattern: lane 0 zeroes a 1-element shared `i32` -> block.sync() -> every thread atomically folds its predicate into
+# the slot -> block.sync() -> every thread reads the broadcasted result. Costs 2 barriers + 1 atomic (vs. CUDA's
+# hardware fast path of 1 barrier+reduction). Slower than the CUDA path but functionally equivalent and portable. Each
+# call-site allocates a fresh `SharedArray` so multiple calls in the same kernel do not alias each other.
 #
-# IMPORTANT: every thread must participate in the `atomic_add` call unconditionally (guarding
-# with `if predicate: atomic_add(...)` is NOT safe). On Metal, `workgroupBarrier` does not
-# propagate atomic writes from divergent branches to threads that did not enter the branch --
-# non-participating SIMD groups never see the updated slot. By having every thread call
-# `atomic_add(counter, select(...))` the control flow stays uniform, the barrier synchronises
-# correctly, and all threads read the final count.
+# IMPORTANT: every thread must participate in the `atomic_add` call unconditionally (guarding with
+# `if predicate: atomic_add(...)` is NOT safe). On Metal, `workgroupBarrier` does not propagate atomic writes from
+# divergent branches to threads that did not enter the branch -- non-participating SIMD groups never see the updated
+# slot. By having every thread call `atomic_add(counter, select(...))` the control flow stays uniform, the barrier
+# synchronises correctly, and all threads read the final count.
 #
-# We also use `atomic_add` rather than `atomic_or` because Metal / MoltenVK silently no-ops
-# `OpAtomicOr` on threadgroup memory in some configurations.
+# We also use `atomic_add` rather than `atomic_or` because Metal / MoltenVK silently no-ops `OpAtomicOr` on threadgroup
+# memory in some configurations.
 @_func
 def _block_reduce_count_nonzero_emulated(predicate: _i32) -> _i32:
     counter = SharedArray((1,), _i32)
