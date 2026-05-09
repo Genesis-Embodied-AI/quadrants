@@ -778,3 +778,31 @@ def test_atomic_exchange_matrix_field_fanout():
         for j in range(3):
             expected = i * 3 + j + 1
             assert m[None][i, j] == test_utils.approx(expected, rel=1e-5)
+
+
+# Pins the new xchg branch in demote_atomics.cpp's DemoteAtomics::visit(AtomicOpStmt*). Unlike every other atomic
+# op (which demotes to load + binop + store), xchg demotes to a bare load + store(val) because the new value is
+# independent of the old. When the destination is a thread-local (a Python variable inside a kernel, not a field),
+# the atomic has no contention and the demote pass kicks in. Mirrors test_atomic_add_demoted exactly.
+@test_utils.test()
+def test_atomic_exchange_demoted():
+    x = qd.field(qd.i32)
+    y = qd.field(qd.i32)
+    new_val = 42
+    qd.root.dense(qd.i, n).place(x, y)
+
+    @qd.kernel
+    def func():
+        for i in range(n):
+            s = i
+            # Both exchanges should get demoted (s is thread-local).
+            x[i] = qd.atomic_exchange(s, new_val)
+            y[i] = qd.atomic_exchange(s, new_val + 1)
+
+    func()
+
+    for i in range(n):
+        # First xchg returns the initial value of s (= i); after it, s == new_val.
+        # Second xchg returns new_val (proving the first xchg actually wrote new_val into s).
+        assert x[i] == i
+        assert y[i] == new_val
