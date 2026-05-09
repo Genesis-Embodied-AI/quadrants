@@ -1742,13 +1742,13 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       // Metal even though the same emulation works on Vulkan (whose drivers happen to
       // tolerate the over-strong scope).
       const bool is_workgroup = addr_ptr.stype.storage_class == spv::StorageClassWorkgroup;
-      const auto scope_const = ir_->int_immediate_number(
-          ir_->i32_type(), is_workgroup ? spv::ScopeWorkgroup : spv::ScopeDevice);
-      const auto memory_class_mask = is_workgroup ? spv::MemorySemanticsWorkgroupMemoryMask
-                                                  : spv::MemorySemanticsUniformMemoryMask;
-      ir_->make_inst(spv::OpMemoryBarrier, scope_const,
-                     ir_->uint_immediate_number(ir_->u32_type(),
-                                                spv::MemorySemanticsAcquireReleaseMask | memory_class_mask));
+      const auto scope_const =
+          ir_->int_immediate_number(ir_->i32_type(), is_workgroup ? spv::ScopeWorkgroup : spv::ScopeDevice);
+      const auto memory_class_mask =
+          is_workgroup ? spv::MemorySemanticsWorkgroupMemoryMask : spv::MemorySemanticsUniformMemoryMask;
+      ir_->make_inst(
+          spv::OpMemoryBarrier, scope_const,
+          ir_->uint_immediate_number(ir_->u32_type(), spv::MemorySemanticsAcquireReleaseMask | memory_class_mask));
       val = ir_->make_value(op, ret_type, addr_ptr,
                             /*scope=*/scope_const,
                             /*semantics=*/ir_->const_i32_zero_, data);

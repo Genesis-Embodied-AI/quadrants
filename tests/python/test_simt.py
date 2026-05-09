@@ -488,16 +488,20 @@ def test_block_sync():
 
 # The test relies on `grid.mem_fence()` ordering each block's *non-atomic* `a[i] = 1` write
 # before the subsequent per-block atomic-add counter. CUDA and AMDGPU honor this strictly
-# via their `mem_fence` intrinsics; Vulkan honors it via `OpMemoryBarrier(ScopeDevice, ...)`.
-# Metal does NOT, even on Apple Silicon: MSL `atomic_thread_fence(memory_scope_device)` --
-# which is what MoltenVK / SPIRV-Cross translate `OpMemoryBarrier(ScopeDevice, ...)` to --
-# only orders *atomic* memory accesses across the device, not plain stores; this is a
-# documented Metal limitation called out in the `grid.mem_fence()` Metal caveat in
-# `block.md`. So we exclude Metal here. Workloads that need cross-workgroup ordering on
-# Metal have to publish through atomic stores (e.g. `qd.atomic_or(a[i], 1)`) rather than
-# rely on a plain store + fence.
+# via their `mem_fence` intrinsics; native Vulkan (Linux / Windows) honors it via
+# `OpMemoryBarrier(ScopeDevice, ...)`. Metal does NOT, even on Apple Silicon: MSL
+# `atomic_thread_fence(memory_scope_device)` -- which is what MoltenVK / SPIRV-Cross
+# translate `OpMemoryBarrier(ScopeDevice, ...)` to -- only orders *atomic* memory accesses
+# across the device, not plain stores; this is a documented Metal limitation called out in
+# the `grid.mem_fence()` Metal caveat in `block.md`. So we exclude the native `metal`
+# backend, and additionally skip `vulkan` on macOS at runtime, since on macOS Vulkan is
+# really MoltenVK lowering SPIR-V to MSL and inherits the same limitation. Workloads that
+# need cross-workgroup ordering on Metal (or Vulkan-on-Mac) have to publish through atomic
+# stores (e.g. `qd.atomic_or(a[i], 1)`) rather than rely on a plain store + fence.
 @test_utils.test(arch=qd.gpu, exclude=qd.metal)
 def test_grid_mem_fence():
+    if qd.lang.impl.current_cfg().arch == qd.vulkan and platform.system() == "Darwin":
+        pytest.skip("Vulkan on macOS is MoltenVK->Metal; non-atomic stores are not ordered by grid.mem_fence")
     N = 1000
     BLOCK_SIZE = 1
     a = qd.field(dtype=qd.u32, shape=N)
