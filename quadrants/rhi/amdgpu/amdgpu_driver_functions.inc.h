@@ -49,6 +49,7 @@ PER_AMDGPU_FUNCTION(mem_get_attributes, hipPointerGetAttributes, void *, void *)
 // Module and kernels
 PER_AMDGPU_FUNCTION(module_get_function, hipModuleGetFunction, void **, void *, const char *);
 PER_AMDGPU_FUNCTION(module_load_data, hipModuleLoadData, void **, const void *);
+PER_AMDGPU_FUNCTION(module_unload, hipModuleUnload, void *);
 PER_AMDGPU_FUNCTION(launch_kernel,
                     hipModuleLaunchKernel,
                     void *,

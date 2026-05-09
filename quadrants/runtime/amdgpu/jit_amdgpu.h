@@ -51,6 +51,19 @@ class JITModuleAMDGPU : public JITModule {
   explicit JITModuleAMDGPU(void *module) : module_(module) {
   }
 
+  // Without this destructor the underlying `hipModule_t` (loaded by `hipModuleLoadData` in `add_module`) is never
+  // released, so every `qd.init` adds another module's worth of GPU code memory (~80 KB measured per init/reset
+  // cycle with a trivial program; more for programs with many user kernels). The leak is monotonic across
+  // `qd.init`/`qd.reset` cycles within a single process. Mirror `hipModuleLoadData` with `hipModuleUnload` here so
+  // the destructor of the owning `unique_ptr` (held by `JITSession::modules`) plugs the leak end-to-end.
+  ~JITModuleAMDGPU() override {
+    if (module_ != nullptr) {
+      AMDGPUContext::get_instance().make_current();
+      AMDGPUDriver::get_instance().module_unload.call_with_warning(module_);
+      module_ = nullptr;
+    }
+  }
+
   void *lookup_function(const std::string &name) override {
     AMDGPUContext::get_instance().make_current();
     void *func = nullptr;
