@@ -485,11 +485,9 @@ def test_atomic_mul_f32():
     assert mul_kernel() == 5040.0
 
 
-# Pins the doc claim that atomic_mul works (via CAS loop) under
-# multi-thread contention on every GPU backend, for both ints and
-# floats including f64. Existing coverage is single-thread only
-# (test_atomic_mul_f32, test_atomic_mul_expr_evaled). Values chosen
-# so the product is representable exactly in i32 / f32 / f64.
+# Pins the doc claim that atomic_mul works (via CAS loop) under multi-thread contention on every GPU backend, for
+# both ints and floats including f64. Existing coverage is single-thread only (test_atomic_mul_f32,
+# test_atomic_mul_expr_evaled). Values chosen so the product is representable exactly in i32 / f32 / f64.
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
 def test_atomic_mul_contention(dtype):
@@ -520,12 +518,10 @@ def test_atomic_mul_contention(dtype):
         assert arr[0] == test_utils.approx(float(expected), rel=rtol)
 
 
-# Pins the doc claim that floating-point atomic_min / atomic_max use
-# minNum / maxNum-style NaN semantics: when exactly one operand is NaN,
-# the non-NaN value is written back. Asserted on every GPU backend and
-# both arg orders. CPU is intentionally out of scope here -- the doc
-# explicitly warns that the CPU CAS path uses naive </</> > comparisons
-# with order-dependent results.
+# Pins the doc claim that floating-point atomic_min / atomic_max use minNum / maxNum-style NaN semantics: when
+# exactly one operand is NaN, the non-NaN value is written back. Asserted on every GPU backend and both arg orders.
+# CPU is intentionally out of scope here -- the doc explicitly warns that the CPU CAS path uses naive < / >
+# comparisons with order-dependent results.
 @pytest.mark.parametrize("op", ["min", "max"])
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
@@ -562,9 +558,8 @@ def test_atomic_min_max_nan_arg(op, dtype):
     assert float(f[None]) == 7.0
 
 
-# Pins the doc claim that vector/matrix arguments to atomic ops fan out to one
-# scalar atomic per component (no all-or-nothing guarantee across components,
-# but every component must be summed exactly).
+# Pins the doc claim that vector/matrix arguments to atomic ops fan out to one scalar atomic per component (no
+# all-or-nothing guarantee across components, but every component must be summed exactly).
 @test_utils.test(arch=qd.gpu)
 def test_atomic_add_vector_field_fanout():
     N = 256
@@ -585,15 +580,12 @@ def test_atomic_add_vector_field_fanout():
 def _skip_if_no_int64_atomic_rmw(dtype):
     """Skip when the device cannot do general-purpose 64-bit integer atomic RMW.
 
-    Metal sets ``spirv_has_atomic_int64=1`` on Apple7+ / Mac2 in
-    ``metal_device.mm`` (the gate is misnamed ``feature_floating_point_atomics``),
-    but MSL only exposes 64-bit atomics as ``atomic_fetch_min/max`` on ``uint64``
-    starting at Apple9 (M3+, A17+); ``atomic_add`` / ``and`` / ``or`` / ``xor``
-    are not available at all. The pipeline create then fails with RhiResult=-1
-    ("SPIR-V shader was rejected by the backend"). Tightening the Metal cap
-    itself is intentionally out of scope here -- the cap is consumed by adstack
-    fallbacks in ``runtime/gfx`` and lowering it needs a separate audit -- so we
-    just skip the affected dtypes on Metal instead.
+    Metal sets ``spirv_has_atomic_int64=1`` on Apple7+ / Mac2 in ``metal_device.mm`` (the gate is misnamed
+    ``feature_floating_point_atomics``), but MSL only exposes 64-bit atomics as ``atomic_fetch_min/max`` on
+    ``uint64`` starting at Apple9 (M3+, A17+); ``atomic_add`` / ``and`` / ``or`` / ``xor`` are not available at
+    all. The pipeline create then fails with RhiResult=-1 ("SPIR-V shader was rejected by the backend"). Tightening
+    the Metal cap itself is intentionally out of scope here -- the cap is consumed by adstack fallbacks in
+    ``runtime/gfx`` and lowering it needs a separate audit -- so we just skip the affected dtypes on Metal instead.
     """
     if dtype not in (qd.i64, qd.u64):
         return
@@ -605,9 +597,8 @@ def _skip_if_no_int64_atomic_rmw(dtype):
             pytest.skip("Vulkan device does not advertise spirv_has_atomic_int64")
 
 
-# Pins the doc-table claim that atomic_add is "yes" on every integer
-# dtype (i32 / u32 / i64 / u64) on every GPU backend. Existing coverage
-# only exercises i32 (run_atomic_add_global_case) and u64 min/max
+# Pins the doc-table claim that atomic_add is "yes" on every integer dtype (i32 / u32 / i64 / u64) on every GPU
+# backend. Existing coverage only exercises i32 (run_atomic_add_global_case) and u64 min/max
 # (test_atomic_min_max_uint).
 @pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.i64, qd.u64])
 @test_utils.test(arch=qd.gpu)
@@ -626,9 +617,8 @@ def test_atomic_add_int_contention(dtype):
     assert int(f[None]) == N
 
 
-# Pins the doc-table claim that atomic_and / atomic_or / atomic_xor are
-# "yes" on every integer dtype on every GPU backend. Existing coverage
-# only exercises i32 (test_atomic_{and,or,xor}_expr_evaled).
+# Pins the doc-table claim that atomic_and / atomic_or / atomic_xor are "yes" on every integer dtype on every GPU
+# backend. Existing coverage only exercises i32 (test_atomic_{and,or,xor}_expr_evaled).
 @pytest.mark.parametrize(
     "op,seed,arg,expected",
     [
@@ -653,11 +643,9 @@ def test_atomic_bitwise_int_widths(op, seed, arg, expected, dtype):
     assert int(f[None]) == expected
 
 
-# Pins the doc claim that bitwise atomics on float dtypes raise a type
-# error at trace time (atomics page: "Integer dtypes only -- passing
-# f32 / f64 raises a type error at trace time"). Enforced by the
-# is_integral check in AtomicOpExpression::type_check
-# (quadrants/ir/frontend_ir.cpp) for bit_and / bit_or / bit_xor.
+# Pins the doc claim that bitwise atomics on float dtypes raise a type error at trace time (atomics page: "Integer
+# dtypes only -- passing f32 / f64 raises a type error at trace time"). Enforced by the is_integral check in
+# AtomicOpExpression::type_check (quadrants/ir/frontend_ir.cpp) for bit_and / bit_or / bit_xor.
 @pytest.mark.parametrize("op", ["and", "or", "xor"])
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)

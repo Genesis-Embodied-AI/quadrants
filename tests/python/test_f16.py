@@ -254,9 +254,11 @@ def test_atomic_add_f16():
 
     @qd.kernel
     def foo():
+        # Parallel sum
         for i in range(1000):
             f[0] += 1.12
 
+        # Serial sum
         for _ in range(1):
             for i in range(1000):
                 f[1] = f[1] + 1.12
@@ -273,9 +275,11 @@ def test_atomic_max_f16():
 
     @qd.kernel
     def foo():
+        # Parallel max
         for i in range(1000):
             qd.atomic_max(f[0], 1.12 * i)
 
+        # Serial max
         for _ in range(1):
             for i in range(1000):
                 f[1] = qd.max(1.12 * i, f[1])
@@ -292,9 +296,11 @@ def test_atomic_min_f16():
 
     @qd.kernel
     def foo():
+        # Parallel min
         for i in range(1000):
             qd.atomic_min(f[0], -3.13 * i)
 
+        # Serial min
         for _ in range(1):
             for i in range(1000):
                 f[1] = qd.min(-3.13 * i, f[1])
