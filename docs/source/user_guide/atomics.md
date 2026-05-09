@@ -21,14 +21,7 @@ All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y
 
 There is no `atomic_cas` (compare-and-swap) exposed in Python today. The C++ runtime uses CmpXchg internally; surfacing it requires extending `AtomicOpType`.
 
-All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_sync()` (block scope) or `qd.simt.grid.memfence()` (device scope).
-
-**Backend caveat for the fence-pair pattern.** Both fence helpers have current portability gaps that affect the patterns recommended on this page:
-
-- `qd.simt.block.mem_sync()` is supported on CUDA and SPIR-V; on AMDGPU it raises `ValueError("qd.block.mem_sync is not supported for arch ...")` at trace time.
-- `qd.simt.grid.memfence()` is fully implemented only on CUDA. On AMDGPU it currently links as a silent no-op (cross-block ordering will fail without any diagnostic); on SPIR-V it fails at codegen.
-
-On AMDGPU specifically, neither fence-pair recipe works as documented yet; cross-platform code that needs an atomic plus a fence must restructure around the kernel-launch boundary or be CUDA-bound until the AMDGPU lowerings land.
+All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.mem_fence()` (device scope). Both fences are portable across CUDA, AMDGPU, Vulkan, and Metal — see [block](block.md) and [grid](grid.md) for the per-backend lowering and the Metal / Vulkan-on-macOS atomic-only-ordering caveat that affects `grid.mem_fence()`.
 
 ## Semantics
 
@@ -46,7 +39,7 @@ old = qd.atomic_add(x, y)
 Properties common to every `qd.atomic_*`:
 
 - **Returns the old value**, not the new one. This matches CUDA's `atomicAdd` and is what enables building reservation patterns: `slot = qd.atomic_add(counter, 1)` gives every thread a unique index.
-- **Per-location atomicity, no fence on the rest of memory.** Writes you issued before an atomic on `x` are not necessarily visible to other threads after they observe the new `x`. Pair the atomic with `qd.simt.block.mem_sync()` or `qd.simt.grid.memfence()` if you need that ordering.
+- **Per-location atomicity, no fence on the rest of memory.** Writes you issued before an atomic on `x` are not necessarily visible to other threads after they observe the new `x`. Pair the atomic with `qd.simt.block.mem_fence()` or `qd.simt.grid.mem_fence()` if you need that ordering.
 - **Vector / matrix arguments fan out element-wise.** `qd.atomic_add(field_of_vec3, qd.Vector([1.0, 2.0, 3.0]))` issues three independent scalar atomic-adds, one per component. There is no all-or-nothing guarantee across the components.
 
 ### `qd.atomic_min(x, y)` / `qd.atomic_max(x, y)`
@@ -64,14 +57,14 @@ Atomic subtract and atomic multiply. `atomic_sub` is supported natively on most 
 ## Performance and portability notes
 
 - **Atomic contention is the silent killer of throughput.** The cost of `qd.atomic_add(counter, 1)` from every thread is dominated by serialization at the location, not by the per-thread arithmetic. If many threads hit the same slot, prefer a two-stage scheme: per-warp / per-block reduction first (`qd.simt.block.reduce` if available, or `qd.simt.subgroup.reduce_add`), then a single atomic per warp / block.
-- **Pair atomics with the right fence scope.** A bare atomic only orders the location it touches. To make other writes visible to readers that observe the new atomic value, follow the atomic with a fence: block-scope (`qd.simt.block.mem_sync()`) for shared-memory publishing, or grid-scope (`qd.simt.grid.memfence()`) for cross-block coordination.
+- **Pair atomics with the right fence scope.** A bare atomic only orders the location it touches. To make other writes visible to readers that observe the new atomic value, follow the atomic with a fence: block-scope (`qd.simt.block.mem_fence()`) for shared-memory publishing, or grid-scope (`qd.simt.grid.mem_fence()`) for cross-block coordination.
 - **`f64` atomics fall off the fast path** on most backends; if you only need monotonic accumulation, consider Kahan summation in registers and a single atomic-add at the end of the block.
 - **`atomic_mul` is generally a CAS loop** under the hood; don't put it on the hot path.
 
 ## Related
 
 - [math](math.md) — `qd.math.*`, including the bit-counting helpers (`popcnt`, `clz`) commonly paired with atomics in select / compact patterns.
-- `qd.simt.block.*` — block-scope barriers and memory fences (`qd.simt.block.mem_sync()`).
+- `qd.simt.block.*` — block-scope barriers and memory fences (`qd.simt.block.mem_fence()`); see [block](block.md).
 - `qd.simt.subgroup.*` — warp-scope reductions and shuffles, the recommended pre-aggregation step before an atomic.
-- `qd.simt.grid.*` — device-scope memory fence (`qd.simt.grid.memfence()`).
+- `qd.simt.grid.*` — device-scope memory fence (`qd.simt.grid.mem_fence()`); see [grid](grid.md).
 - [parallelization](parallelization.md) — thread-synchronization patterns and how atomics fit into the broader synchronization story.
