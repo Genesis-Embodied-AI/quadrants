@@ -465,23 +465,23 @@ Quadrants computes that worst case at launch time - in this example, the max of 
 
 ### Evaluation paths
 
-The compiler picks one of two evaluation paths to compute the maximum based on the backend and the bound expression's structure:
+The compiler picks one of two evaluation paths to compute the maximum based on the bound expression's structure:
 
-- **Parallel (GPU only):** the maximum is computed with a tiny parallel reduction kernel for efficiency. The reducer accepts a common subset of bound expressions:
+- **Parallel:** the maximum is computed with a tiny parallel reduction kernel for efficiency. The reducer accepts a common subset of bound expressions:
   - **Integer ndarray or field read** up to 32 bits wide, indexed by literal constants or outer-loop variables: `arr[i, j]`, `field[i]`.
   - **Shape term**: `arr.shape[k]`.
   - **Literal integer constant**: `42`.
   - **Arithmetic combinator**: any `+`, `-`, `*`, `max` of the above.
-- **Sequential:** the fallback path, used whenever the parallel path doesn't support the bound expression. Quadrants walks the bound expression one outer-loop iteration at a time on a single thread (host-side on CPU, single-thread on-device kernel on GPU); the adstack is sized identically, only the upfront cost differs. This path accepts everything the parallel path does, plus:
+- **Sequential:** the fallback path, used whenever the parallel path doesn't support the bound expression. Quadrants walks the bound expression one outer-loop iteration at a time on a single thread; the adstack is sized identically, only the upfront cost differs. This path accepts everything the parallel path does, plus:
   - **Arithmetic-indexed read**: `arr[i // 2]`, `arr[i % 4]`.
   - **Indirect / nested read**: `arr1[arr2[i]]`, `my_field[arr[i]]`.
 
 ### Nested loops
 
-Quadrants supports arbitrarily nested loops. When the bound expression itself contains another enclosed loop whose own bound expression must be reduced first, the enclosing bound expression takes the parallel path only if every nested bound expression is also supported by the parallel path; otherwise it falls back to the sequential walk. This keeps the runtime from mixing parallel and sequential evaluators inside a single bound expression, which would otherwise force per-iteration kernel launches.
+Quadrants supports arbitrarily nested loops. When the bound expression itself contains another enclosed loop whose own bound expression must be reduced first, the enclosing bound expression takes the parallel path only if every nested bound expression also fits the parallel-path grammar; otherwise it falls back to the sequential walk. This keeps the runtime from mixing parallel and sequential evaluators inside a single bound expression, which would otherwise force per-iteration kernel launches.
 
 ### Sequential walk cap
 
-The sequential walk's outer loop is artificially capped at 2^24 = 16 777 216 iterations on GPU backends to keep the walk time bounded; past that the kernel raises `RuntimeError: ... iteration count ... exceeds the 16777216 guard`. In the example above, the iteration count of the enclosed loop takes the sequential path because of the `i // 2` index, so it would raise at launch on GPU backends if `arr.shape[0] > (1 << 24)`.
+The sequential walk's outer loop is artificially capped at 2^24 = 16 777 216 iterations to keep both the walk time and the read-tracking memory bounded; past that the kernel raises `RuntimeError: ... iteration count ... exceeds the 16777216 guard`. In the example above, the iteration count of the enclosed loop takes the sequential path because of the `i // 2` index, so it would raise at launch if `arr.shape[0] > (1 << 24)`.
 
 To circumvent this limitation, rewrite the bound expression to unlock the parallel path (e.g. precompute `bounds[i] = arr[i // 2]` into a persistent separate buffer, pass `bounds` in as an input, and use `for j in range(bounds[i]):`), or keep the outer loop count below 2^24.

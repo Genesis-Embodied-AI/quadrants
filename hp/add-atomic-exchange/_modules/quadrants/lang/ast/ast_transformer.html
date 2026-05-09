@@ -457,11 +457,7 @@
 <div class="viewcode-block" id="ASTTransformer.build_assign_annotated">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_assign_annotated">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_assign_annotated</span><span class="p">(</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
-        <span class="n">target</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">,</span>
-        <span class="n">value</span><span class="p">,</span>
-        <span class="n">is_static_assign</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
-        <span class="n">annotation</span><span class="p">:</span> <span class="n">Type</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">is_static_assign</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">annotation</span><span class="p">:</span> <span class="n">Type</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Build an annotated assignment like this: target: annotation = value.</span>
 
@@ -513,10 +509,7 @@
 <div class="viewcode-block" id="ASTTransformer.build_assign_unpack">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_assign_unpack">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_assign_unpack</span><span class="p">(</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
-        <span class="n">node_target</span><span class="p">:</span> <span class="nb">list</span> <span class="o">|</span> <span class="n">ast</span><span class="o">.</span><span class="n">Tuple</span><span class="p">,</span>
-        <span class="n">values</span><span class="p">,</span>
-        <span class="n">is_static_assign</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node_target</span><span class="p">:</span> <span class="nb">list</span> <span class="o">|</span> <span class="n">ast</span><span class="o">.</span><span class="n">Tuple</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">is_static_assign</span><span class="p">:</span> <span class="nb">bool</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Build the unpack assignments like this: (target1, target2) = (value1, value2).</span>
 <span class="sd">        The function should be called only if the node target is a tuple.</span>
@@ -1014,8 +1007,7 @@
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;The return type is not supported now!&quot;</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">create_kernel_exprgroup_return</span><span class="p">(</span>
-                <span class="n">expr</span><span class="o">.</span><span class="n">make_expr_group</span><span class="p">(</span><span class="n">return_exprs</span><span class="p">),</span>
-                <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">)),</span>
+                <span class="n">expr</span><span class="o">.</span><span class="n">make_expr_group</span><span class="p">(</span><span class="n">return_exprs</span><span class="p">),</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">return_data</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span>
@@ -2026,27 +2018,6 @@
             <span class="n">ctx</span><span class="o">.</span><span class="n">set_loop_status</span><span class="p">(</span><span class="n">LoopStatus</span><span class="o">.</span><span class="n">Continue</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">insert_continue_stmt</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">)))</span>
-        <span class="k">return</span> <span class="kc">None</span></div>
-
-
-    <span class="nd">@staticmethod</span>
-<div class="viewcode-block" id="ASTTransformer.build_With">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_With">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_With</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">items</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;with&#39; in Quadrants kernels only supports a single context manager&quot;</span><span class="p">)</span>
-        <span class="n">item</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">optional_vars</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;with ... as ...&#39; is not supported in Quadrants kernels&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">context_expr</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;with&#39; in Quadrants kernels requires a call expression&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_stream_parallel_with</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;with&#39; in Quadrants kernels only supports qd.stream_parallel()&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func&quot;</span><span class="p">)</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_stream_parallel</span><span class="p">()</span>
-        <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">end_stream_parallel</span><span class="p">()</span>
         <span class="k">return</span> <span class="kc">None</span></div>
 
 
