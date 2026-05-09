@@ -140,17 +140,15 @@ def test_clz():
     assert test_i32(5) == 29
     assert test_i32(1023) == 22
     assert test_i32(1024) == 21
-    # Sign-bit / all-bits-set cases. These exercise the unsigned-MSB semantics
-    # (clz must count over the bit pattern, so clz(-1) == 0). Before the
-    # FindUMsb fix, the SPIR-V path returned 32 for clz(-1).
+    # Sign-bit / all-bits-set cases. These exercise the unsigned-MSB semantics (clz must count over the
+    # bit pattern, so clz(-1) == 0). Before the FindUMsb fix, the SPIR-V path returned 32 for clz(-1).
     assert test_i32(-1) == 0
     assert test_i32(-2) == 0
     assert test_i32(0x7FFFFFFF) == 1
 
 
-# clz on i64 — runs on every supported backend. CPU / CUDA use their native 64-bit
-# leading-zero ops; AMDGPU lowers via llvm.ctlz; SPIR-V (Vulkan / Metal) synthesises
-# the 64-bit case from a hi/lo FindUMsb decomposition.
+# clz on i64 — runs on every supported backend. CPU / CUDA use their native 64-bit leading-zero ops; AMDGPU
+# lowers via llvm.ctlz; SPIR-V (Vulkan / Metal) synthesises the 64-bit case from a hi/lo FindUMsb decomposition.
 @test_utils.test()
 def test_clz_i64():
     @qd.kernel

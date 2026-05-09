@@ -1049,11 +1049,10 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
   } else if (stmt->op_type == UnaryOpType::popcnt) {
     val = ir_->popcnt(operand_val);
   } else if (stmt->op_type == UnaryOpType::clz) {
-    // Use FindUMsb (75) rather than FindSMsb (74): clz() must count leading zeros over the
-    // unsigned bit pattern, i.e. clz(0xFFFFFFFF) == 0. FindSMsb returns -1 for negative
-    // inputs (it finds the MSB of the absolute value's bit pattern, ignoring the sign bit),
-    // which would yield clz(-1) == 32. CUDA's __nv_clz and the LLVM ctlz intrinsic both
-    // operate on the unsigned bit pattern; FindUMsb gives matching semantics.
+    // Use FindUMsb (75) rather than FindSMsb (74): clz() must count leading zeros over the unsigned bit pattern,
+    // i.e. clz(0xFFFFFFFF) == 0. FindSMsb returns -1 for negative inputs (it finds the MSB of the absolute value's
+    // bit pattern, ignoring the sign bit), which would yield clz(-1) == 32. CUDA's __nv_clz and the LLVM ctlz
+    // intrinsic both operate on the unsigned bit pattern; FindUMsb gives matching semantics.
     uint32_t FindUMsb_id = 75;
     if (data_type_bits(src_dt) == 64) {
       // GLSL.std.450 FindUMsb is defined for 32-bit integers only. Synthesise the 64-bit case
