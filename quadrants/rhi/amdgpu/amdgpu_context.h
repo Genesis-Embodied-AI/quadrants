@@ -3,6 +3,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <thread>
+#include <vector>
 
 #include "quadrants/program/kernel_profiler.h"
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
@@ -24,6 +25,8 @@ class AMDGPUContext {
   AMDGPUDriver &driver_;
   bool debug_{false};
   bool supports_mem_pool_{false};
+  static thread_local void *stream_;
+  std::vector<void *> stream_pool_;
 
  public:
   AMDGPUContext();
@@ -76,6 +79,14 @@ class AMDGPUContext {
     return supports_mem_pool_;
   }
 
+  // Force the default device memory pool to release every cached page back to the driver. Called by
+  // `LlvmRuntimeExecutor::finalize` (i.e. `qd.reset()`) to align actual driver-visible free VRAM with the user-facing
+  // contract that `qd.reset()` releases everything Quadrants allocated. Without this, up to the configured release
+  // threshold (128 MiB at construction) of freed pages stays cached in the pool and shows up as "used" to other
+  // processes on the same VF, materially raising the chance of multi-process `HSA_STATUS_ERROR_OUT_OF_RESOURCES`
+  // failures across pytest-xdist workers. No-op if the device does not advertise mempool support.
+  void trim_default_mem_pool();
+
   ~AMDGPUContext();
 
   class ContextGuard {
@@ -111,6 +122,31 @@ class AMDGPUContext {
 
   std::unique_lock<std::mutex> get_lock_guard() {
     return std::unique_lock<std::mutex>(lock_);
+  }
+
+  void set_stream(void *stream) {
+    stream_ = stream;
+  }
+
+  void *get_stream() const {
+    return stream_;
+  }
+
+  void *acquire_stream() {
+    std::lock_guard<std::mutex> _(lock_);
+    if (!stream_pool_.empty()) {
+      auto s = stream_pool_.back();
+      stream_pool_.pop_back();
+      return s;
+    }
+    void *s = nullptr;
+    AMDGPUDriver::get_instance().stream_create(&s, 0x1 /*HIP_STREAM_NON_BLOCKING*/);
+    return s;
+  }
+
+  void release_stream(void *s) {
+    std::lock_guard<std::mutex> _(lock_);
+    stream_pool_.push_back(s);
   }
 
   static AMDGPUContext &get_instance();
