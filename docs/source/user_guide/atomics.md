@@ -23,8 +23,6 @@ There is no `atomic_cas` (compare-and-swap) exposed in Python today. The C++ run
 
 All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.memfence()` (device scope).
 
-**Backend caveat for the device-scope fence.** `qd.simt.grid.memfence()` is fully implemented only on CUDA. On AMDGPU it currently links as a silent no-op (cross-block ordering will fail without any diagnostic); on SPIR-V it fails at codegen. Cross-platform code that needs an atomic plus a device-scope fence must restructure around the kernel-launch boundary or be CUDA-bound until the AMDGPU / SPIR-V lowerings land. The block-scope `qd.simt.block.mem_fence()` is portable across CUDA, AMDGPU, Vulkan, and Metal — see [block](block.md) for the per-backend lowering.
-
 ## Semantics
 
 ### `qd.atomic_add(x, y)` — and the rest of the family
