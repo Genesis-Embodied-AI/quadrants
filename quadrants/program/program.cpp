@@ -66,6 +66,7 @@ Program::Program(Arch desired_arch)
   config = default_compile_config;
   config.arch = desired_arch;
   config.fit();
+  stream_manager_ = StreamManager(config.arch);
 
   profiler = make_profiler(config.arch, config.kernel_profiler);
   if (arch_uses_llvm(config.arch)) {
