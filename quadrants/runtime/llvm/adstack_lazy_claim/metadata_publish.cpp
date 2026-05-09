@@ -462,8 +462,7 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
       const MaxReducerResultMap &results_view =
           current_max_reducer_results_ ? *current_max_reducer_results_ : kEmptyResults;
       if (program_impl_ != nullptr && program_impl_->program != nullptr) {
-        bytecode =
-            encode_adstack_size_expr_device_bytecode(ad_stack, program_impl_->program, ctx, results_view);
+        bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, program_impl_->program, ctx, results_view);
       } else {
         // No program attached (rare: C++-only tests that construct Program without a full runtime). Fall through
         // to compile-time bounds by emitting an empty-tree bytecode - the device interpreter sees

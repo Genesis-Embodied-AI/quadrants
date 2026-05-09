@@ -272,8 +272,8 @@ void LlvmRuntimeExecutor::publish_per_task_bound_count_device(std::size_t task_i
 }
 
 void LlvmRuntimeExecutor::dispatch_max_reducers_for_tasks(const std::vector<OffloadedTask> &tasks,
-                                                           LaunchContextBuilder *ctx,
-                                                           void *device_runtime_context_ptr) {
+                                                          LaunchContextBuilder *ctx,
+                                                          void *device_runtime_context_ptr) {
   // Seed the per-`Program` adstack-overflow registry from the cache-loaded tasks so the diagnose path can resolve
   // any cmpxchg-recorded id back to a kernel + task name. With content-hashed `registry_id` (now serialised) the
   // dispatcher and the metadata-publish substitution helper already see the correct id directly off the ad_stack,
@@ -297,8 +297,8 @@ void LlvmRuntimeExecutor::dispatch_max_reducers_for_tasks(const std::vector<Offl
 }
 
 void LlvmRuntimeExecutor::dispatch_max_reducers_for_tasks(const std::vector<AdStackSizingInfo> &ad_stacks,
-                                                           LaunchContextBuilder *ctx,
-                                                           void *device_runtime_context_ptr) {
+                                                          LaunchContextBuilder *ctx,
+                                                          void *device_runtime_context_ptr) {
   std::vector<const AdStackSizingInfo *> ad_stacks_view;
   ad_stacks_view.reserve(ad_stacks.size());
   for (const auto &a : ad_stacks) {

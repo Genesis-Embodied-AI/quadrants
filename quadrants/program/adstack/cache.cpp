@@ -203,11 +203,10 @@ bool AdStackCache::try_max_reducer_launch_cache_hit(
   return true;
 }
 
-void AdStackCache::record_max_reducer_launch_cache(
-    const void *launch_cache_key,
-    const std::vector<const AdStackSizingInfo *> &ad_stacks,
-    std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> result,
-    LaunchContextBuilder *ctx) {
+void AdStackCache::record_max_reducer_launch_cache(const void *launch_cache_key,
+                                                   const std::vector<const AdStackSizingInfo *> &ad_stacks,
+                                                   std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> result,
+                                                   LaunchContextBuilder *ctx) {
   if (launch_cache_key == nullptr || ctx == nullptr) {
     return;
   }
@@ -514,9 +513,9 @@ void AdStackCache::ensure_runtime_registry_ids_for_max_reducer(std::vector<Offlo
       allocated_max_sizes.push_back(static_cast<int>(a.max_size_compile_time));
     }
     std::vector<SerializedSizeExpr> size_exprs(ad_stack.size_exprs.begin(), ad_stack.size_exprs.end());
-    uint32_t id = register_adstack_sizing_info(static_cast<const void *>(&ad_stack), ad_stack.kernel_name,
-                                               ad_stack.task_id_in_kernel, std::move(allocated_max_sizes),
-                                               std::move(size_exprs));
+    uint32_t id =
+        register_adstack_sizing_info(static_cast<const void *>(&ad_stack), ad_stack.kernel_name,
+                                     ad_stack.task_id_in_kernel, std::move(allocated_max_sizes), std::move(size_exprs));
     // Defensive: if `registry_id` was never populated (very-stale cache, fresh codegen path that skipped the task-START
     // register call due to a null `Program *`), seed it now from the just-minted id. New kernels already have this set
     // by `codegen_llvm.cpp::finalize_offloaded_task_function`.
