@@ -38,12 +38,13 @@ class AdStackCache {
   }
 
   // One input read observed during a `evaluate_adstack_size_expr` walk. The cache entry records these so a subsequent
-  // lookup re-reads the same inputs and compares to `observed_value`; a single mismatch forces a full re-walk.
-  // `observed_gen` snapshots `snode_write_gen` (FieldLoadObs) or `ndarray_data_gen` (ExternalReadObs) at record
-  // time. The replay walk uses it as a fast-path short-circuit: if the gen counter has not advanced, the value
-  // cannot have changed and the dispatch (reader kernel for SNode reads, device-pointer deref for ndarray reads)
-  // is skipped. ExternalShapeObs reads the args buffer per launch (cheap host memory access), so it does not need
-  // a gen and leaves this field at 0.
+  // lookup checks whether each recorded input is still consistent; a single mismatch forces a full re-walk.
+  // FieldLoadObs / ExternalReadObs use the per-buffer gen counter (`snode_write_gen` / `ndarray_data_gen`) snapshotted
+  // in `observed_gen` as the sole staleness signal: a gen-counter advance unconditionally invalidates the cache, even
+  // if the read cells happen to be untouched. The bump invariant is therefore required: every kernel write,
+  // `Ndarray.write` / `fill`, and `SNodeRwAccessorsBank` writer kernel must bump the matching gen counter for the
+  // cache to stay correct. `observed_value` is unused for these kinds. ExternalShapeObs has no gen counter (shapes
+  // live in launch-arg metadata, not buffer content) and falls back to value comparison against `observed_value`.
   struct SizeExprReadObservation {
     enum Kind : uint8_t { FieldLoadObs, ExternalShapeObs, ExternalReadObs };
     Kind kind;

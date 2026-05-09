@@ -1,6 +1,8 @@
 #include "quadrants/program/adstack/eval.h"
 
 #include <algorithm>
+#include <climits>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <unordered_map>
@@ -10,6 +12,8 @@
 #include "quadrants/common/logging.h"
 #include "quadrants/ir/snode.h"
 #include "quadrants/ir/type.h"
+#include "quadrants/program/program.h"
+#include "quadrants/rhi/arch.h"
 #include "quadrants/ir/type_factory.h"
 #include "quadrants/ir/type_utils.h"
 #include "quadrants/program/launch_context_builder.h"
@@ -80,9 +84,9 @@ int64_t evaluate_field_load(const SerializedSizeExprNode &node,
     obs.indices = std::move(indices);
     obs.arg_shape_axis = 0;
     obs.prim_dt = 0;
-    obs.observed_value = v;
-    // Snapshot the SNode's write gen so the next replay can fast-skip when no kernel has written this SNode
-    // since record time (the dominant case for a steady-state reverse-mode loop with stable bounds).
+    // Snapshot the SNode's write gen so the next replay can short-circuit when no kernel has written this SNode since
+    // record time (the dominant case for a steady-state reverse-mode loop with stable bounds). The gen counter is the
+    // sole staleness signal for FieldLoadObs; `observed_value` is unused for this kind.
     obs.observed_gen = prog->adstack_cache().snode_write_gen(node.snode_id);
     reads->push_back(std::move(obs));
   }
@@ -177,12 +181,11 @@ int64_t evaluate_external_tensor_read(const SerializedSizeExprNode &node,
     obs.arg_id_path = node.arg_id_path;
     obs.arg_shape_axis = 0;
     obs.prim_dt = static_cast<int>(prim_dt);
-    obs.observed_value = v;
     obs.observed_devalloc = data_ptr;
     if (prog != nullptr) {
-      // Snapshot the ndarray's data gen so the next replay can fast-skip when no kernel / Ndarray API write
-      // has touched the underlying buffer since record time. Mirrors the FieldLoad fast-skip; covers the same
-      // steady-state hot path for ndarray-bounded reverse-mode loops.
+      // Snapshot the ndarray's data gen so the next replay can short-circuit when no kernel / Ndarray API write has
+      // touched the underlying buffer since record time. Mirrors the FieldLoad fast-skip; the gen counter is the sole
+      // staleness signal for ExternalReadObs (`observed_value` is unused for this kind).
       obs.observed_gen = prog->adstack_cache().ndarray_data_gen(data_ptr);
     }
     reads->push_back(std::move(obs));
@@ -218,6 +221,84 @@ int64_t evaluate_external_tensor_shape(const SerializedSizeExprNode &node, Launc
   return v;
 }
 
+// Enumerate one observation per static FieldLoad / ExternalTensorRead / ExternalTensorShape leaf in the subtree rooted
+// at `node_idx`, regardless of whether the evaluator would visit it during a `MaxOverRange` walk. A nested
+// `MaxOverRange` whose `end <= begin` for some outer iterations does not visit its body, but its leaves still need to
+// be registered with the cache so a subsequent launch where that range becomes non-empty correctly invalidates on a
+// buffer mutation. Used by the `MaxOverRange` arm of `evaluate_node` to pre-walk the body once before the per-iteration
+// evaluation runs with `reads = nullptr`, so the observation count stays at O(unique body leaves) regardless of N.
+void enumerate_static_observations(const SerializedSizeExpr &expr,
+                                   int32_t node_idx,
+                                   Program *prog,
+                                   LaunchContextBuilder *ctx,
+                                   ReadSink *reads) {
+  if (reads == nullptr) {
+    return;
+  }
+  QD_ASSERT_INFO(node_idx >= 0 && static_cast<std::size_t>(node_idx) < expr.nodes.size(),
+                 "SerializedSizeExpr enumerate_static_observations node_idx {} out of bounds (size={})", node_idx,
+                 expr.nodes.size());
+  const auto &node = expr.nodes[node_idx];
+  switch (static_cast<SizeExpr::Kind>(node.kind)) {
+    case SizeExpr::Kind::FieldLoad: {
+      AdStackCache::SizeExprReadObservation obs;
+      obs.kind = AdStackCache::SizeExprReadObservation::FieldLoadObs;
+      obs.snode_id = node.snode_id;
+      obs.arg_shape_axis = 0;
+      obs.prim_dt = 0;
+      if (prog != nullptr) {
+        obs.observed_gen = prog->adstack_cache().snode_write_gen(node.snode_id);
+      }
+      reads->push_back(std::move(obs));
+      break;
+    }
+    case SizeExpr::Kind::ExternalTensorRead: {
+      if (ctx == nullptr || node.arg_id_path.empty()) {
+        break;
+      }
+      int arg_id = node.arg_id_path[0];
+      ArgArrayPtrKey key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+      auto it = ctx->array_ptrs.find(key);
+      if (it == ctx->array_ptrs.end()) {
+        break;
+      }
+      AdStackCache::SizeExprReadObservation obs;
+      obs.kind = AdStackCache::SizeExprReadObservation::ExternalReadObs;
+      obs.snode_id = 0;
+      obs.arg_id_path = node.arg_id_path;
+      obs.arg_shape_axis = 0;
+      obs.prim_dt = static_cast<int>(node.const_value);
+      obs.observed_devalloc = it->second;
+      if (prog != nullptr) {
+        obs.observed_gen = prog->adstack_cache().ndarray_data_gen(it->second);
+      }
+      reads->push_back(std::move(obs));
+      break;
+    }
+    case SizeExpr::Kind::ExternalTensorShape:
+      // Reuse the regular shape evaluator: it pushes the obs with the current shape value, which is what the
+      // value-comparison replay path needs since shapes have no gen counter. The shape value depends only on the
+      // launch context, not on `bound_vars`, so recording it outside the iteration loop is safe.
+      evaluate_external_tensor_shape(node, ctx, reads);
+      break;
+    case SizeExpr::Kind::Add:
+    case SizeExpr::Kind::Sub:
+    case SizeExpr::Kind::Mul:
+    case SizeExpr::Kind::Max:
+      enumerate_static_observations(expr, node.operand_a, prog, ctx, reads);
+      enumerate_static_observations(expr, node.operand_b, prog, ctx, reads);
+      break;
+    case SizeExpr::Kind::MaxOverRange:
+      enumerate_static_observations(expr, node.operand_a, prog, ctx, reads);
+      enumerate_static_observations(expr, node.operand_b, prog, ctx, reads);
+      enumerate_static_observations(expr, node.body_node_idx, prog, ctx, reads);
+      break;
+    case SizeExpr::Kind::Const:
+    case SizeExpr::Kind::BoundVariable:
+      break;
+  }
+}
+
 int64_t evaluate_node(const SerializedSizeExpr &expr,
                       int32_t node_idx,
                       std::unordered_map<int32_t, int64_t> &bound_vars,
@@ -248,11 +329,17 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
     case SizeExpr::Kind::MaxOverRange: {
       int64_t begin = evaluate_node(expr, node.operand_a, bound_vars, prog, ctx, reads);
       int64_t end = evaluate_node(expr, node.operand_b, bound_vars, prog, ctx, reads);
-      // Guard against pathological trip counts. The evaluator walks `[begin, end)` linearly and re-evaluates the
-      // body at every i; a range of several million would stall the launch hot path for seconds. Real reverse-mode
-      // trip counts sit well below this cap (a few hundred to a few thousand in practice); anything above is
-      // almost certainly a pre-pass grammar bug the user should file, and a clear QD_ERROR beats a silent hang.
-      constexpr int64_t kMaxOverRangeIterations = int64_t{1} << 24;
+      // Guard against pathological trip counts. The evaluator walks `[begin, end)` linearly and re-evaluates the body
+      // at every i; on Metal / Vulkan / CUDA / AMDGPU the recognizer-captured `MaxOverRange` shapes are dispatched in
+      // parallel by the max-reducer and substituted to a `Const` before the host evaluator walks the tree, so any
+      // shape that lands here above the `1<<24` cap is out-of-grammar and a clear QD_ERROR beats a silent hang. On
+      // CPU the recognizer is intentionally skipped (see the matching `arch_is_cpu` gate in
+      // `codegen/llvm/codegen_llvm.cpp::finalize_offloaded_task_function`: the runtime max-reducer would do the same
+      // serial walk this loop already does, so the dispatch's per-launch setup overhead is pure cost). With the
+      // recognizer skipped, every CPU `MaxOverRange` lands here, and observation memory is bounded by the
+      // structural pre-walk above so lifting the cap to `UINT32_MAX` is memory-safe.
+      const bool prog_is_cpu = (prog != nullptr) && arch_is_cpu(prog->compile_config().arch);
+      const int64_t kMaxOverRangeIterations = prog_is_cpu ? int64_t{UINT32_MAX} : (int64_t{1} << 24);
       QD_ERROR_IF(end > begin && end - begin > kMaxOverRangeIterations,
                   "SerializedSizeExpr MaxOverRange iteration count {} exceeds the {} guard; refusing to enumerate. "
                   "Shrink the enclosing reverse-mode loop or restructure the `SizeExpr` source kernel.",
@@ -264,9 +351,15 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
       auto prev_it = bound_vars.find(node.var_id);
       bool had_prev = prev_it != bound_vars.end();
       int64_t prev_val = had_prev ? prev_it->second : 0;
+      // Pre-walk the body subtree once to register every static read leaf with the cache (see
+      // `enumerate_static_observations` above). The per-iteration evaluation below runs with `reads = nullptr`, so it
+      // does not push observations during the loop, keeping memory bounded at O(unique body leaves) regardless of N.
+      // The structural enumeration is independent of which iterations execute, so a nested `MaxOverRange` whose body
+      // is conditionally visited (e.g., empty inner range on some outer iterations) still gets its leaves registered.
+      enumerate_static_observations(expr, node.body_node_idx, prog, ctx, reads);
       for (int64_t i = begin; i < end; ++i) {
         bound_vars[node.var_id] = i;
-        int64_t v = evaluate_node(expr, node.body_node_idx, bound_vars, prog, ctx, reads);
+        int64_t v = evaluate_node(expr, node.body_node_idx, bound_vars, prog, ctx, nullptr);
         if (v > result) {
           result = v;
         }
