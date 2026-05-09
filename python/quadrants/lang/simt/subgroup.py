@@ -357,9 +357,9 @@ def _exclusive_scan(value, op: template(), identity, log2_size: template()):
 def exclusive_add(value, log2_size: template()):
     """Exclusive prefix sum across ``2**log2_size`` consecutive lanes.
 
-    Lane ``i`` (with ``i > 0``) within each group of ``2**log2_size`` lanes returns
-    ``v[group_start] + v[group_start + 1] + ... + v[i - 1]``.  Lane 0 of each group returns the additive identity
-    (zero, in ``value``'s dtype).
+    Lane ``i`` (with ``i > 0``) within each group of ``2**log2_size`` lanes returns ``v[group_start] +
+    v[group_start + 1] + ... + v[i - 1]``.  Lane 0 of each group returns the additive identity (zero, in ``value``'s
+    dtype).
     """
     return _exclusive_scan(value, _bin_add, value - value, log2_size)
 
