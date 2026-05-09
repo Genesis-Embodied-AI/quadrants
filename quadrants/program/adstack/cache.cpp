@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "quadrants/codegen/llvm/llvm_compiled_data.h"
 #include "quadrants/common/logging.h"
 #include "quadrants/ir/type.h"
 #include "quadrants/ir/type_factory.h"
@@ -168,6 +169,91 @@ void AdStackCache::record_max_reducer_eval(uint32_t registry_id,
   max_reducer_cache_[pack_max_reducer_key(registry_id, stack_id, mor_node_idx)] =
       MaxReducerCacheEntry{result, std::move(reads)};
   ++max_reducer_dispatch_count_;
+}
+
+bool AdStackCache::try_max_reducer_launch_cache_hit(const void *launch_cache_key,
+                                                    LaunchContextBuilder *ctx,
+                                                    std::unordered_map<uint64_t, int64_t> &out_result) {
+  if (launch_cache_key == nullptr || ctx == nullptr) {
+    return false;
+  }
+  auto it = max_reducer_launch_cache_.find(launch_cache_key);
+  if (it == max_reducer_launch_cache_.end()) {
+    return false;
+  }
+  const auto &entry = it->second;
+  for (const auto &kv : entry.snode_gens) {
+    if (snode_write_gen(kv.first) != kv.second) {
+      return false;
+    }
+  }
+  for (const auto &dep : entry.arg_gens) {
+    ArgArrayPtrKey key{dep.arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+    auto ap_it = ctx->array_ptrs.find(key);
+    void *current_devalloc = (ap_it == ctx->array_ptrs.end()) ? nullptr : ap_it->second;
+    if (current_devalloc != dep.devalloc || ndarray_data_gen(current_devalloc) != dep.gen) {
+      return false;
+    }
+  }
+  out_result = entry.result;
+  return true;
+}
+
+void AdStackCache::record_max_reducer_launch_cache(const void *launch_cache_key,
+                                                   const std::vector<const AdStackSizingInfo *> &ad_stacks,
+                                                   const std::unordered_map<uint64_t, int64_t> &result,
+                                                   LaunchContextBuilder *ctx) {
+  if (launch_cache_key == nullptr || ctx == nullptr) {
+    return;
+  }
+  // Aggregate every spec's observation deps into a deduplicated `(snode_id -> gen)` map and `(arg_id -> (devalloc,
+  // gen))` map. The fast-path replay walks these maps once per launch; deduplication keeps the replay O(distinct deps)
+  // instead of O(specs * obs/spec). `lookup_max_reducer_reads` returns the per-spec observations recorded by either a
+  // fresh `record_max_reducer_eval` or a still-warm `populate_max_reducer_body_observations` call earlier in this
+  // launch.
+  MaxReducerLaunchCacheEntry entry;
+  entry.result = result;
+  std::unordered_map<int, uint64_t> snode_gens_map;
+  std::unordered_map<int, std::pair<void *, uint64_t>> arg_gens_map;
+  for (const auto *ad_stack_ptr : ad_stacks) {
+    if (ad_stack_ptr == nullptr) {
+      continue;
+    }
+    const auto &ad_stack = *ad_stack_ptr;
+    if (ad_stack.max_reducer_specs.empty() || ad_stack.registry_id == 0) {
+      continue;
+    }
+    for (const auto &spec : ad_stack.max_reducer_specs) {
+      const auto *reads = lookup_max_reducer_reads(ad_stack.registry_id, spec.stack_id, spec.mor_node_idx);
+      if (reads == nullptr) {
+        continue;
+      }
+      for (const auto &obs : *reads) {
+        if (obs.kind == SizeExprReadObservation::FieldLoadObs) {
+          if (obs.snode_id >= 0) {
+            snode_gens_map[obs.snode_id] = snode_write_gen(obs.snode_id);
+          }
+        } else if (obs.kind == SizeExprReadObservation::ExternalReadObs) {
+          if (!obs.arg_id_path.empty()) {
+            const int arg_id = obs.arg_id_path[0];
+            ArgArrayPtrKey key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+            auto ap_it = ctx->array_ptrs.find(key);
+            void *devalloc = (ap_it == ctx->array_ptrs.end()) ? nullptr : ap_it->second;
+            arg_gens_map[arg_id] = {devalloc, ndarray_data_gen(devalloc)};
+          }
+        }
+      }
+    }
+  }
+  entry.snode_gens.reserve(snode_gens_map.size());
+  for (const auto &kv : snode_gens_map) {
+    entry.snode_gens.emplace_back(kv.first, kv.second);
+  }
+  entry.arg_gens.reserve(arg_gens_map.size());
+  for (const auto &kv : arg_gens_map) {
+    entry.arg_gens.push_back({kv.first, kv.second.first, kv.second.second});
+  }
+  max_reducer_launch_cache_[launch_cache_key] = std::move(entry);
 }
 
 bool AdStackCache::try_spirv_bytecode_cache_hit(Program *prog,

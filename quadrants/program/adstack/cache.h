@@ -16,6 +16,7 @@ namespace quadrants::lang {
 
 class LaunchContextBuilder;
 class Program;
+struct AdStackSizingInfo;
 
 // Adstack-specific state owned by `Program` and routed through `program->adstack_cache().method(...)`. Holds two
 // orthogonal pieces:
@@ -166,6 +167,44 @@ class AdStackCache {
   const std::vector<SizeExprReadObservation> *lookup_max_reducer_reads(uint32_t registry_id,
                                                                        int32_t stack_id,
                                                                        int32_t mor_node_idx) const;
+
+  // Per-kernel-handle launch cache for the max-reducer dispatcher. Skips the per-spec hash-lookup-and-observation-
+  // replay loop in `dispatch_max_reducers_for_tasks` when the kernel handle's dependency snapshot is unchanged
+  // since the previous launch. Key is the address of the launcher's stable per-handle vector
+  // (`KernelLauncher::contexts_[i].offloaded_tasks` for CUDA / AMDGPU, `ad_stacks` for the CPU launcher); the
+  // address is reused on every launch of the same kernel handle so it serves as a stable identity. Stores the
+  // dispatched result map plus a deduplicated `(snode_id, gen)` / `(arg_id, devalloc, gen)` snapshot covering
+  // every spec's observation deps. The fast path replays the snapshot in O(distinct deps) and short-circuits on
+  // full match; this collapses the steady-state per-launch cost from O(specs) hash lookups + observation replays
+  // + result-map rebuilds (the dominant chunk of the regression introduced when the dispatcher first landed) to
+  // a small dependency walk and a single map copy. Slow path falls through to the per-spec cache.
+  struct ArgGenObservation {
+    int arg_id;
+    void *devalloc;
+    uint64_t gen;
+  };
+  struct MaxReducerLaunchCacheEntry {
+    std::unordered_map<uint64_t, int64_t> result;
+    std::vector<std::pair<int, uint64_t>> snode_gens;
+    std::vector<ArgGenObservation> arg_gens;
+  };
+  // Replay the recorded dependency snapshot for `launch_cache_key`. Returns true (and populates `out_result`) when
+  // every recorded dep still matches the live `(snode_write_gen, ndarray_data_gen)`; false otherwise. A miss leaves
+  // the entry in place so a subsequent `record_max_reducer_launch_cache` can overwrite it.
+  bool try_max_reducer_launch_cache_hit(const void *launch_cache_key,
+                                        LaunchContextBuilder *ctx,
+                                        std::unordered_map<uint64_t, int64_t> &out_result);
+  // Aggregate every spec's observation deps (resolved via `lookup_max_reducer_reads`) into a deduplicated snapshot
+  // and store it under `launch_cache_key` alongside `result`. Called at the end of every successful run of
+  // `dispatch_max_reducers_for_tasks` (both full-cache-hit and any-cache-miss paths) so the next launch's
+  // `try_max_reducer_launch_cache_hit` short-circuits the per-spec walk. `ctx` must be non-null.
+  void record_max_reducer_launch_cache(const void *launch_cache_key,
+                                       const std::vector<const AdStackSizingInfo *> &ad_stacks,
+                                       const std::unordered_map<uint64_t, int64_t> &result,
+                                       LaunchContextBuilder *ctx);
+  void invalidate_max_reducer_launch() {
+    max_reducer_launch_cache_.clear();
+  }
   // Monotone counter, incremented once per `record_max_reducer_eval` call. Reset only by the surrounding test harness
   // via `reset_max_reducer_dispatch_count`. Used by the regression tests to pin the cache short-circuit: a second
   // launch with unchanged inputs must not advance the counter, and a host mutation must.
@@ -189,6 +228,7 @@ class AdStackCache {
     invalidate_per_task_ad_stack();
     invalidate_llvm_per_task_ad_stack();
     invalidate_max_reducer();
+    invalidate_max_reducer_launch();
   }
 
   uint64_t snode_write_gen(int snode_id) const {
@@ -319,6 +359,8 @@ class AdStackCache {
   // See `max_reducer_dispatch_count` for the contract. Bumped at every `record_max_reducer_eval` call (i.e. once per
   // cache miss that fired a real dispatch); cache hits do not bump it.
   uint64_t max_reducer_dispatch_count_{0};
+  // Per-kernel-handle launch-level result cache; see `try_max_reducer_launch_cache_hit` for the contract.
+  std::unordered_map<const void *, MaxReducerLaunchCacheEntry> max_reducer_launch_cache_;
   std::unordered_map<int, uint64_t> snode_write_gen_;
   std::unordered_map<void *, uint64_t> ndarray_data_gen_;
 

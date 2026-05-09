@@ -198,7 +198,8 @@ class LlvmRuntimeExecutor {
                                                                         void *device_runtime_context_ptr);
   // Convenience overload that extracts each task's `ad_stack` and forwards to the primary entry point. Lets the CUDA /
   // AMDGPU per-arch launchers call into the dispatcher with the `OffloadedTask` list they already hold, without each
-  // launcher copy-pasting the per-task `ad_stack` extraction loop.
+  // launcher copy-pasting the per-task `ad_stack` extraction loop. Forwards a pointer-view of the per-task `ad_stack`s
+  // to `dispatch_max_reducers_impl` (no deep copy of the `AdStackSizingInfo`s).
   std::unordered_map<uint64_t, int64_t> dispatch_max_reducers_for_tasks(const std::vector<OffloadedTask> &tasks,
                                                                         LaunchContextBuilder *ctx,
                                                                         void *device_runtime_context_ptr);
@@ -210,6 +211,20 @@ class LlvmRuntimeExecutor {
   void *get_runtime_temporaries_device_ptr();
 
  private:
+  /* ----------------------- */
+  /* ---- Adstack helpers --- */
+  /* ----------------------- */
+  // Shared implementation for both `dispatch_max_reducers_for_tasks` overloads. Takes a stable per-kernel-handle
+  // `launch_cache_key` (the address of the caller's `tasks` / `ad_stacks` vector) and a non-owning pointer view of
+  // the per-task `AdStackSizingInfo`s. Avoids the per-launch deep copy of `AdStackSizingInfo` the OffloadedTask
+  // overload used to do, and short-circuits on a kernel-level dependency-fingerprint hit before walking specs (logic
+  // factored into `AdStackCache::try_max_reducer_launch_cache_hit` / `record_max_reducer_launch_cache`).
+  std::unordered_map<uint64_t, int64_t> dispatch_max_reducers_impl(
+      const void *launch_cache_key,
+      const std::vector<const AdStackSizingInfo *> &ad_stacks,
+      LaunchContextBuilder *ctx,
+      void *device_runtime_context_ptr);
+
   /* ----------------------- */
   /* ------ Allocation ----- */
   /* ----------------------- */
