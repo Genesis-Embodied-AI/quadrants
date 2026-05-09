@@ -132,6 +132,10 @@ def test_clz():
     def test_i32(x: qd.int32) -> qd.int32:
         return qd.math.clz(x)
 
+    @qd.kernel
+    def test_u32(x: qd.uint32) -> qd.int32:
+        return qd.math.clz(x)
+
     assert test_i32(0) == 32
     assert test_i32(1) == 31
     assert test_i32(2) == 30
@@ -146,13 +150,28 @@ def test_clz():
     assert test_i32(-2) == 0
     assert test_i32(0x7FFFFFFF) == 1
 
+    # u32 inputs lower to the same intrinsic on every backend (LLVM IR is signless for integers; SPIR-V
+    # FindUMsb is unsigned by definition). Pre-generalisation, CUDA / AMDGPU rejected u32 with
+    # QD_NOT_IMPLEMENTED and required a bit_cast through qd.i32 as a workaround.
+    assert test_u32(0) == 32
+    assert test_u32(1) == 31
+    assert test_u32(0x7FFFFFFF) == 1
+    assert test_u32(0x80000000) == 0
+    assert test_u32(0xFFFFFFFF) == 0
 
-# clz on i64 — runs on every supported backend. CPU / CUDA use their native 64-bit leading-zero ops; AMDGPU
-# lowers via llvm.ctlz; SPIR-V (Vulkan / Metal) synthesises the 64-bit case from a hi/lo FindUMsb decomposition.
+
+# clz on 64-bit ints — runs on every supported backend. CPU / CUDA use native 64-bit leading-zero ops
+# (`__nv_clzll`); AMDGPU lowers via llvm.ctlz; SPIR-V (Vulkan / Metal) synthesises the 64-bit case from a
+# hi/lo FindUMsb decomposition. u64 routes through the same paths as i64 since the operation is on the
+# bit pattern.
 @test_utils.test()
 def test_clz_i64():
     @qd.kernel
     def test_i64(x: qd.int64) -> qd.int32:
+        return qd.math.clz(x)
+
+    @qd.kernel
+    def test_u64(x: qd.uint64) -> qd.int32:
         return qd.math.clz(x)
 
     assert test_i64(0) == 64
@@ -165,6 +184,14 @@ def test_clz_i64():
     assert test_i64(-1) == 0
     # Spans both halves: bit 32 set with low half also non-zero.
     assert test_i64((1 << 32) | 0xFF) == 31
+
+    # u64 mirrors i64 with sign-bit / all-bits-set cases that are awkward to express as signed literals.
+    assert test_u64(0) == 64
+    assert test_u64(1) == 63
+    assert test_u64(1 << 32) == 31
+    assert test_u64(1 << 63) == 0
+    assert test_u64(0xFFFFFFFFFFFFFFFF) == 0
+    assert test_u64(0x7FFFFFFFFFFFFFFF) == 1
 
 
 @test_utils.test()
