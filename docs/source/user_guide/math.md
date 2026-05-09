@@ -46,12 +46,6 @@ def msb(x: qd.i32) -> qd.i32:
     return 31 - qd.math.clz(x)
 ```
 
-## Performance and portability notes
-
-- `qd.math.popcnt` is supported on CUDA and AMDGPU (i32 / u32 / i64 / u64) and SPIR-V (any integer width).
-- `qd.math.clz` accepts i32 / u32 / i64 / u64 on every backend. Signed / unsigned variants share an LLVM intrinsic (`llvm.ctlz` on CPU / AMDGPU, `__nv_clz` / `__nv_clzll` on CUDA) or a `FindUMsb`-based lowering (SPIR-V), so the choice between `qd.i32` and `qd.u32` for `clz` is a frontend convenience only.
-- The SPIR-V 64-bit `clz` lowering costs roughly two `FindUMsb` ext-inst calls plus a select; on hot paths where bit-counting drives throughput, prefer reducing to 32-bit values first (e.g. work over the high and low halves explicitly) so the codegen emits a single `FindUMsb`.
-
 ## Related
 
 - [atomics](atomics.md) — atomic read-modify-write operations on global / shared memory; commonly paired with bit-counting in select / compact patterns.
