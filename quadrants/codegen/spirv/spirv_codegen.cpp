@@ -1731,16 +1731,14 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
         data = ir_->make_value(spv::OpBitcast, ret_type, data);
       }
 
-      // Pick the SPIR-V `Scope` and `MemorySemantics` memory-class flag based on the storage
-      // class of the atomic's target pointer. Workgroup (shared) memory atomics need
-      // `Workgroup` scope and `WorkgroupMemory` semantics; device-buffer atomics need `Device`
-      // + `UniformMemory`. Without this distinction MoltenVK / SPIRV-Cross translates a
-      // workgroup-storage `OpAtomicOr` with `Device` scope to MSL
-      // `atomic_fetch_or_explicit(..., memory_scope_device)` on a `threadgroup atomic_int`,
-      // which is mismatched and silently does not update the threadgroup-shared slot. This
-      // surfaced as `block.sync_{any,all,count}_nonzero` returning the initialiser value on
-      // Metal even though the same emulation works on Vulkan (whose drivers happen to
-      // tolerate the over-strong scope).
+      // Pick the SPIR-V `Scope` and `MemorySemantics` memory-class flag based on the storage class of the atomic's
+      // target pointer. Workgroup (shared) memory atomics need `Workgroup` scope and `WorkgroupMemory` semantics;
+      // device-buffer atomics need `Device` + `UniformMemory`. Without this distinction MoltenVK / SPIRV-Cross
+      // translates a workgroup-storage `OpAtomicOr` with `Device` scope to MSL
+      // `atomic_fetch_or_explicit(..., memory_scope_device)` on a `threadgroup atomic_int`, which is mismatched and
+      // silently does not update the threadgroup-shared slot. This surfaced as
+      // `block.sync_{any,all,count}_nonzero` returning the initialiser value on Metal even though the same emulation
+      // works on Vulkan (whose drivers happen to tolerate the over-strong scope).
       const bool is_workgroup = addr_ptr.stype.storage_class == spv::StorageClassWorkgroup;
       const auto scope_const =
           ir_->int_immediate_number(ir_->i32_type(), is_workgroup ? spv::ScopeWorkgroup : spv::ScopeDevice);

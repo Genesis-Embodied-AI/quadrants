@@ -383,11 +383,10 @@ class IRBuilder {
       ib_.add(gl_global_invocation_id_);
     }
     if (gl_local_invocation_id_.id != 0) {
-      // Mirror `gl_global_invocation_id_` above. `get_local_invocation_id()` declares the
-      // `BuiltIn LocalInvocationId` Input variable lazily on first use but does NOT push it into
-      // `global_values`, so it is missed by both the pre-1.4 (no global_values iteration) and
-      // the post-1.4 path (global_values doesn't contain it). Without this, SPIR-V validation
-      // fails with `VUID-VkShaderModuleCreateInfo-pCode-08737` once any kernel calls
+      // Mirror `gl_global_invocation_id_` above. `get_local_invocation_id()` declares the `BuiltIn LocalInvocationId`
+      // Input variable lazily on first use but does NOT push it into `global_values`, so it is missed by both the
+      // pre-1.4 (no global_values iteration) and the post-1.4 path (global_values doesn't contain it). Without this,
+      // SPIR-V validation fails with `VUID-VkShaderModuleCreateInfo-pCode-08737` once any kernel calls
       // `qd.simt.block.thread_idx()` on Vulkan / Metal.
       ib_.add(gl_local_invocation_id_);
     }
