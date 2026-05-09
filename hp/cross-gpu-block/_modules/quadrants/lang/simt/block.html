@@ -357,8 +357,8 @@
         <span class="c1"># Hardware-fused barrier+reduction on NVPTX (`barrier.cta.red.and.aligned.all.sync`).</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_and_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">or</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
-        <span class="c1"># AMDGPU and SPIR-V (Vulkan / Metal) emulate via shared memory + 2 barriers + an</span>
-        <span class="c1"># atomic; see `_block_reduce_*_emulated` below for the pattern.</span>
+        <span class="c1"># AMDGPU and SPIR-V (Vulkan / Metal) emulate via shared memory + 2 barriers + an atomic; see</span>
+        <span class="c1"># `_block_reduce_*_emulated` below for the pattern.</span>
         <span class="k">return</span> <span class="n">_block_reduce_all_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span>
     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_all_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
@@ -477,25 +477,23 @@
 
 
 
-<span class="c1"># Shared-memory emulation of CUDA&#39;s hardware-fused barrier-with-reduction ops, used on backends</span>
-<span class="c1"># that lack a direct equivalent (AMDGPU has no NVPTX `barrier.cta.red.*` analog; SPIR-V&#39;s</span>
-<span class="c1"># `OpGroupNonUniform*` only operate at subgroup scope reliably across Vulkan + Metal).</span>
+<span class="c1"># Shared-memory emulation of CUDA&#39;s hardware-fused barrier-with-reduction ops, used on backends that lack a direct</span>
+<span class="c1"># equivalent (AMDGPU has no NVPTX `barrier.cta.red.*` analog; SPIR-V&#39;s `OpGroupNonUniform*` only operate at subgroup</span>
+<span class="c1"># scope reliably across Vulkan + Metal).</span>
 <span class="c1">#</span>
-<span class="c1"># Pattern: lane 0 zeroes a 1-element shared `i32` -&gt; block.sync() -&gt; every thread atomically</span>
-<span class="c1"># folds its predicate into the slot -&gt; block.sync() -&gt; every thread reads the broadcasted</span>
-<span class="c1"># result. Costs 2 barriers + 1 atomic (vs. CUDA&#39;s hardware fast path of 1 barrier+reduction).</span>
-<span class="c1"># Slower than the CUDA path but functionally equivalent and portable. Each call-site allocates</span>
-<span class="c1"># a fresh `SharedArray` so multiple calls in the same kernel do not alias each other.</span>
+<span class="c1"># Pattern: lane 0 zeroes a 1-element shared `i32` -&gt; block.sync() -&gt; every thread atomically folds its predicate into</span>
+<span class="c1"># the slot -&gt; block.sync() -&gt; every thread reads the broadcasted result. Costs 2 barriers + 1 atomic (vs. CUDA&#39;s</span>
+<span class="c1"># hardware fast path of 1 barrier+reduction). Slower than the CUDA path but functionally equivalent and portable. Each</span>
+<span class="c1"># call-site allocates a fresh `SharedArray` so multiple calls in the same kernel do not alias each other.</span>
 <span class="c1">#</span>
-<span class="c1"># IMPORTANT: every thread must participate in the `atomic_add` call unconditionally (guarding</span>
-<span class="c1"># with `if predicate: atomic_add(...)` is NOT safe). On Metal, `workgroupBarrier` does not</span>
-<span class="c1"># propagate atomic writes from divergent branches to threads that did not enter the branch --</span>
-<span class="c1"># non-participating SIMD groups never see the updated slot. By having every thread call</span>
-<span class="c1"># `atomic_add(counter, select(...))` the control flow stays uniform, the barrier synchronises</span>
-<span class="c1"># correctly, and all threads read the final count.</span>
+<span class="c1"># IMPORTANT: every thread must participate in the `atomic_add` call unconditionally (guarding with</span>
+<span class="c1"># `if predicate: atomic_add(...)` is NOT safe). On Metal, `workgroupBarrier` does not propagate atomic writes from</span>
+<span class="c1"># divergent branches to threads that did not enter the branch -- non-participating SIMD groups never see the updated</span>
+<span class="c1"># slot. By having every thread call `atomic_add(counter, select(...))` the control flow stays uniform, the barrier</span>
+<span class="c1"># synchronises correctly, and all threads read the final count.</span>
 <span class="c1">#</span>
-<span class="c1"># We also use `atomic_add` rather than `atomic_or` because Metal / MoltenVK silently no-ops</span>
-<span class="c1"># `OpAtomicOr` on threadgroup memory in some configurations.</span>
+<span class="c1"># We also use `atomic_add` rather than `atomic_or` because Metal / MoltenVK silently no-ops `OpAtomicOr` on threadgroup</span>
+<span class="c1"># memory in some configurations.</span>
 <span class="nd">@_func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_count_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
     <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
