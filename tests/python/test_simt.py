@@ -542,6 +542,7 @@ def test_grid_memfence_deprecated_alias():
 
     assert a[0] == 11
 
+
 # The old SPIR-V-only no-arg subgroup reductions (`subgroup.reduce_add` / `reduce_mul` / `reduce_min`
 # / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`) and their Vulkan-specific tests have
 # been removed.  See `test_subgroup_reduce_add` / `test_subgroup_reduce_all_add` below for the

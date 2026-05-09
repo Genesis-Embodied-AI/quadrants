@@ -540,7 +540,6 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       };
       patch_fence("grid_mem_fence", "agent");
 
-
       link_module_with_amdgpu_libdevice(module);
       patch_amdgpu_kernel_dim("block_dim", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), 0));
       patch_amdgpu_kernel_dim("grid_dim", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), 0));
