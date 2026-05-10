@@ -272,6 +272,16 @@ class AdStackCache {
   bool any_external_read_observed() const {
     return any_external_read_observed_;
   }
+  // Per-devalloc refinement of `any_external_read_observed()`: was this exact `DeviceAllocation *` ever named by a
+  // recorded ExternalReadObs or by a per-task `arg_gens` snapshot? Bump-writes uses this after resolving each arg's
+  // devalloc to decide whether the bump itself can be skipped: if no cached entry depends on this devalloc, the
+  // `bump_ndarray_data_gen` update is dead work because nothing reads back the advanced counter. Stale pointers
+  // (Ndarrays that were destroyed and whose holder was reclaimed by a new allocation) at most cost an extra bump on
+  // the recycled address; the cache entry that originally observed the freed pointer is self-invalidated on its next
+  // lookup since `data_ptr == observed_devalloc` will fail against the new binding.
+  bool is_devalloc_observed(void *devalloc_ptr) const {
+    return observed_devalloc_ptrs_.find(devalloc_ptr) != observed_devalloc_ptrs_.end();
+  }
   uint64_t ndarray_data_gen(void *devalloc_ptr) const {
     auto it = ndarray_data_gen_.find(devalloc_ptr);
     return it == ndarray_data_gen_.end() ? 0u : it->second;
@@ -394,13 +404,18 @@ class AdStackCache {
 
  private:
   // Register every `FieldLoadObs` and `ExternalReadObs` entry of `reads` into `observed_snode_ids_` /
-  // `any_external_read_observed_`. Called from each `record_*` site so the per-id gate consulted by bump-writes sees
-  // the latest observation footprint before the next launch.
+  // `any_external_read_observed_` / `observed_devalloc_ptrs_`. Called from each `record_*` site so the per-id gate
+  // consulted by bump-writes sees the latest observation footprint before the next launch.
   void note_observations(const std::vector<SizeExprReadObservation> &reads);
   // Per-task variant: snapshots from `record_per_task_ad_stack` / `record_llvm_per_task_ad_stack` ship `snode_gens` /
   // `arg_gens` lists directly rather than `SizeExprReadObservation`s, so we route them through this overload to keep
-  // the observation footprint in sync no matter which cache layer holds the entry.
-  void note_per_task_dependencies(const std::vector<std::pair<int, uint64_t>> &snode_gens, bool any_arg_gens);
+  // the observation footprint in sync no matter which cache layer holds the entry. The arg_gens tuple shape matches
+  // both `PerTaskAdStackCacheEntry` and `LlvmPerTaskAdStackCacheEntry`; the `MaxReducerLaunchCacheEntry` overload
+  // below adapts its `ArgGenObservation` struct.
+  void note_per_task_dependencies(const std::vector<std::pair<int, uint64_t>> &snode_gens,
+                                  const std::vector<std::tuple<int, void *, uint64_t>> &arg_gens);
+  void note_per_task_dependencies(const std::vector<std::pair<int, uint64_t>> &snode_gens,
+                                  const std::vector<ArgGenObservation> &arg_gens);
 
   Program *prog_{nullptr};
   std::unordered_map<const SerializedSizeExpr *, SizeExprCacheEntry> size_expr_cache_;
@@ -442,10 +457,13 @@ class AdStackCache {
   const LaunchContextBuilder *pending_launch_ctx_{nullptr};
   // Backing storage for `has_any_recordings()`. See accessor doc for behavior and reset rules.
   bool any_recordings_{false};
-  // Backing storage for `is_snode_observed()` / `any_external_read_observed()`. Grow monotonically: every `record_*`
-  // call routes its observation list (and per-task snapshot lists) through `note_*_observed` helpers in cache.cpp so
-  // a freshly captured snapshot is reflected before the next `bump_writes_for_kernel_*` call queries them.
+  // Backing storage for `is_snode_observed()` / `any_external_read_observed()` / `is_devalloc_observed()`. All grow
+  // monotonically: every `record_*` call routes its observation list (and per-task snapshot lists) through the
+  // `note_*` helpers in cache.cpp so a freshly captured snapshot is reflected before the next
+  // `bump_writes_for_kernel_*` call queries them. The devalloc set may hold stale pointers across Ndarray destruction
+  // / reuse; see `is_devalloc_observed` for why that is correctness-safe.
   std::unordered_set<int> observed_snode_ids_;
+  std::unordered_set<void *> observed_devalloc_ptrs_;
   bool any_external_read_observed_{false};
 };
 

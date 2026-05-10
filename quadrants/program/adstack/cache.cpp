@@ -67,17 +67,41 @@ void AdStackCache::note_observations(const std::vector<SizeExprReadObservation> 
       observed_snode_ids_.insert(obs.snode_id);
     } else if (obs.kind == SizeExprReadObservation::ExternalReadObs) {
       any_external_read_observed_ = true;
+      if (obs.observed_devalloc != nullptr) {
+        observed_devalloc_ptrs_.insert(obs.observed_devalloc);
+      }
     }
   }
 }
 
 void AdStackCache::note_per_task_dependencies(const std::vector<std::pair<int, uint64_t>> &snode_gens,
-                                              bool any_arg_gens) {
+                                              const std::vector<std::tuple<int, void *, uint64_t>> &arg_gens) {
   for (const auto &kv : snode_gens) {
     observed_snode_ids_.insert(kv.first);
   }
-  if (any_arg_gens) {
+  if (!arg_gens.empty()) {
     any_external_read_observed_ = true;
+    for (const auto &tup : arg_gens) {
+      void *devalloc = std::get<1>(tup);
+      if (devalloc != nullptr) {
+        observed_devalloc_ptrs_.insert(devalloc);
+      }
+    }
+  }
+}
+
+void AdStackCache::note_per_task_dependencies(const std::vector<std::pair<int, uint64_t>> &snode_gens,
+                                              const std::vector<ArgGenObservation> &arg_gens) {
+  for (const auto &kv : snode_gens) {
+    observed_snode_ids_.insert(kv.first);
+  }
+  if (!arg_gens.empty()) {
+    any_external_read_observed_ = true;
+    for (const auto &dep : arg_gens) {
+      if (dep.devalloc != nullptr) {
+        observed_devalloc_ptrs_.insert(dep.devalloc);
+      }
+    }
   }
 }
 
@@ -282,8 +306,9 @@ void AdStackCache::record_max_reducer_launch_cache(const void *launch_cache_key,
     entry.arg_gens.push_back({kv.first, kv.second.first, kv.second.second});
   }
   // Mirror the deduplicated dependency footprint into the per-id observed sets; safe to do after `entry` is finalised
-  // because `note_per_task_dependencies` only reads the snode-gen pair's first element and the arg-gens emptiness.
-  note_per_task_dependencies(entry.snode_gens, !entry.arg_gens.empty());
+  // because `note_per_task_dependencies` reads the snode-gen pair's first element and walks the `arg_gens` list to
+  // pull each `(arg_id, devalloc, gen)` triple's devalloc into `observed_devalloc_ptrs_`.
+  note_per_task_dependencies(entry.snode_gens, entry.arg_gens);
   max_reducer_launch_cache_[launch_cache_key] = std::move(entry);
   any_recordings_ = true;
 }
@@ -321,7 +346,7 @@ void AdStackCache::record_per_task_ad_stack(const void *attribs_key,
                                             uint32_t stride_int,
                                             std::vector<std::pair<int, uint64_t>> snode_gens,
                                             std::vector<std::tuple<int, void *, uint64_t>> arg_gens) {
-  note_per_task_dependencies(snode_gens, !arg_gens.empty());
+  note_per_task_dependencies(snode_gens, arg_gens);
   per_task_ad_stack_cache_[attribs_key] = PerTaskAdStackCacheEntry{std::move(metadata), stride_float, stride_int,
                                                                    std::move(snode_gens), std::move(arg_gens)};
   any_recordings_ = true;
@@ -374,7 +399,7 @@ void AdStackCache::record_llvm_per_task_ad_stack(const void *attribs_key,
                                                  uint64_t stride_int,
                                                  std::vector<std::pair<int, uint64_t>> snode_gens,
                                                  std::vector<std::tuple<int, void *, uint64_t>> arg_gens) {
-  note_per_task_dependencies(snode_gens, !arg_gens.empty());
+  note_per_task_dependencies(snode_gens, arg_gens);
   llvm_per_task_ad_stack_cache_[attribs_key] =
       LlvmPerTaskAdStackCacheEntry{std::move(offsets), std::move(max_sizes),  stride_combined,    stride_float,
                                    stride_int,         std::move(snode_gens), std::move(arg_gens)};

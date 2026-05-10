@@ -123,10 +123,16 @@ void bump_writes_for_kernel_llvm(Program *prog,
   if (!cache.any_external_read_observed()) {
     return;
   }
+  // Per-devalloc refinement on top of the `any_external_read_observed()` gate above: after the unavoidable `find`
+  // resolves the arg slot to a `DeviceAllocation *`, skip the bump update for devallocs no cached entry observes.
+  // Cache entries hold `observed_devalloc` per ExternalReadObs / `arg_gens` snapshot, aggregated into
+  // `observed_devalloc_ptrs_` at record time. A first-time observation of `devalloc` adds it to the set, so the
+  // immediately-following kernel write picks up the gate and the cache lookup detects the mismatch on the next
+  // launch.
   auto bump_data_ptr = [&](int arg_id) {
     ArgArrayPtrKey data_key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
     auto it = ctx->array_ptrs.find(data_key);
-    if (it != ctx->array_ptrs.end() && it->second != nullptr) {
+    if (it != ctx->array_ptrs.end() && it->second != nullptr && cache.is_devalloc_observed(it->second)) {
       cache.bump_ndarray_data_gen(it->second);
     }
   };
