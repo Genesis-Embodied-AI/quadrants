@@ -13,9 +13,9 @@ All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y
 | `atomic_mul`   | `x *= y`                               | yes | yes | yes† | yes† | yes | \*  |
 | `atomic_min`   | `x = min(x, y)`                        | yes | yes | yes† | yes† | yes | \*  |
 | `atomic_max`   | `x = max(x, y)`                        | yes | yes | yes† | yes† | yes | \*  |
-| `atomic_and`   | `x &= y`                               | yes | yes | yes† | yes† | —   | —   |
-| `atomic_or`    | `x \|= y`                              | yes | yes | yes† | yes† | —   | —   |
-| `atomic_xor`      | `x ^= y`                            | yes | yes | yes† | yes† | —    | —    |
+| `atomic_and`   | `x &= y`                               | yes | yes | yes† | yes† | -   | -   |
+| `atomic_or`    | `x \|= y`                              | yes | yes | yes† | yes† | -   | -   |
+| `atomic_xor`      | `x ^= y`                            | yes | yes | yes† | yes† | -    | -    |
 | `atomic_exchange` | `x = y`, return old `x`             | yes | yes | yes† | yes† | yes  | yes‡ |
 
 \* `f64` atomic add / sub / mul / min / max is hardware-dependent: supported on CUDA sm_60+ for `add`, falls back to a CAS loop elsewhere or raises at codegen time on older targets and on backends that do not lower a CAS loop. Prefer `f32` on hot paths if portability matters.
@@ -24,9 +24,9 @@ All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y
 
 ‡ `atomic_exchange` on `f16`, on shared (`qd.simt.block.SharedArray`) float arrays, and on f64 in workgroup memory is not yet wired up. Global-memory `atomic_exchange` on every other dtype/backend combination listed above is supported; the SPIR-V path bitcasts through the corresponding uint type so no `spirv_has_atomic_float_*` capability is required.
 
-There is no `atomic_cas` (compare-and-swap) exposed in Python today. `atomic_exchange` covers the unconditional-swap subset (which lowers to a single instruction on every backend); a true CAS would let you build arbitrary atomic RMW operations with a retry loop, but surfacing it requires extending `AtomicOpType` to return both the old value *and* a success flag — out of scope for the current API.
+There is no `atomic_cas` (compare-and-swap) exposed in Python today. `atomic_exchange` covers the unconditional-swap subset (which lowers to a single instruction on every backend); a true CAS would let you build arbitrary atomic RMW operations with a retry loop, but surfacing it requires extending `AtomicOpType` to return both the old value *and* a success flag - out of scope for the current API.
 
-All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_sync()` (block scope) or `qd.simt.grid.memfence()` (device scope).
+All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space - to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_sync()` (block scope) or `qd.simt.grid.memfence()` (device scope).
 
 **Backend caveat for the fence-pair pattern.** Both fence helpers have current portability gaps that affect the patterns recommended on this page:
 
@@ -37,7 +37,7 @@ On AMDGPU specifically, neither fence-pair recipe works as documented yet; cross
 
 ## Semantics
 
-### `qd.atomic_add(x, y)` — and the rest of the family
+### `qd.atomic_add(x, y)` - and the rest of the family
 
 ```python
 old = qd.atomic_add(x, y)
@@ -56,19 +56,19 @@ Properties common to every `qd.atomic_*`:
 
 ### `qd.atomic_min(x, y)` / `qd.atomic_max(x, y)`
 
-Atomically writes back `min(x, y)` (resp. `max(x, y)`). Returns the old value of `x`. Floating-point min/max use **`minNum` / `maxNum`-style** semantics: if exactly one input is `NaN`, the **non-`NaN`** value is written back. This matches the f16 path's use of LLVM `llvm.minnum` / `llvm.maxnum` intrinsics (`quadrants/codegen/llvm/codegen_llvm.cpp:1337-1342`) and the GPU-native paths (CUDA sm_80+ `atomicMin`/`atomicMax` for floats, SPIR-V `FMin` / `FMax`). The f32 / f64 CPU CAS-loop path (`quadrants/runtime/llvm/runtime_module/atomic.h::min_f32` / `max_f32`) uses naive `<` / `>` comparisons, which give asymmetric NaN behaviour depending on operand order — do not rely on a particular result when either input is `NaN` on the CPU backend. Behaviour when *both* inputs are `NaN` is backend-dependent across the board.
+Atomically writes back `min(x, y)` (resp. `max(x, y)`). Returns the old value of `x`. Floating-point min/max use **`minNum` / `maxNum`-style** semantics: if exactly one input is `NaN`, the **non-`NaN`** value is written back. This matches the f16 path's use of LLVM `llvm.minnum` / `llvm.maxnum` intrinsics (`quadrants/codegen/llvm/codegen_llvm.cpp:1337-1342`) and the GPU-native paths (CUDA sm_80+ `atomicMin`/`atomicMax` for floats, SPIR-V `FMin` / `FMax`). The f32 / f64 CPU CAS-loop path (`quadrants/runtime/llvm/runtime_module/atomic.h::min_f32` / `max_f32`) uses naive `<` / `>` comparisons, which give asymmetric NaN behaviour depending on operand order - do not rely on a particular result when either input is `NaN` on the CPU backend. Behaviour when *both* inputs are `NaN` is backend-dependent across the board.
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
-Bitwise atomics. Integer dtypes only — passing `f32` / `f64` raises a type error at trace time.
+Bitwise atomics. Integer dtypes only - passing `f32` / `f64` raises a type error at trace time.
 
 ### `qd.atomic_sub(x, y)` / `qd.atomic_mul(x, y)`
 
-Atomic subtract and atomic multiply. `atomic_sub` is supported natively on most backends; `atomic_mul` on integer types lowers to a CAS loop on hardware without a native multiply atomic and is intentionally not heavily optimised — prefer reducing to a different scheme on hot paths.
+Atomic subtract and atomic multiply. `atomic_sub` is supported natively on most backends; `atomic_mul` on integer types lowers to a CAS loop on hardware without a native multiply atomic and is intentionally not heavily optimised - prefer reducing to a different scheme on hot paths.
 
 ### `qd.atomic_exchange(x, y)`
 
-Atomically writes `y` into `x` and returns the old value of `x`. Unlike the other `qd.atomic_*` ops the new value of `x` does **not** depend on its old value — `x` is unconditionally overwritten. The exchange always succeeds; there is no retry / failure path.
+Atomically writes `y` into `x` and returns the old value of `x`. Unlike the other `qd.atomic_*` ops the new value of `x` does **not** depend on its old value - `x` is unconditionally overwritten. The exchange always succeeds; there is no retry / failure path.
 
 ```python
 old = qd.atomic_exchange(x, y)
@@ -100,8 +100,8 @@ Vector / matrix arguments fan out per component, same as the rest of the `qd.ato
 
 ## Related
 
-- [math](math.md) — `qd.math.*`, including the bit-counting helpers (`popcnt`, `clz`) commonly paired with atomics in select / compact patterns.
-- `qd.simt.block.*` — block-scope barriers and memory fences (`qd.simt.block.mem_sync()`).
-- `qd.simt.subgroup.*` — warp-scope reductions and shuffles, the recommended pre-aggregation step before an atomic.
-- `qd.simt.grid.*` — device-scope memory fence (`qd.simt.grid.memfence()`).
-- [parallelization](parallelization.md) — thread-synchronization patterns and how atomics fit into the broader synchronization story.
+- [math](math.md) - `qd.math.*`, including the bit-counting helpers (`popcnt`, `clz`) commonly paired with atomics in select / compact patterns.
+- `qd.simt.block.*` - block-scope barriers and memory fences (`qd.simt.block.mem_sync()`).
+- `qd.simt.subgroup.*` - warp-scope reductions and shuffles, the recommended pre-aggregation step before an atomic.
+- `qd.simt.grid.*` - device-scope memory fence (`qd.simt.grid.memfence()`).
+- [parallelization](parallelization.md) - thread-synchronization patterns and how atomics fit into the broader synchronization story.
