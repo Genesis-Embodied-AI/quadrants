@@ -18,6 +18,8 @@ The closely-related grid-level fence (`qd.simt.grid.memfence()`) is documented a
 | `block.SharedArray(shape, dtype)`               | yes  | yes    | yes                     |
 | `block.global_thread_idx()`                     | yes  | yes    | —                       |
 | `block.thread_idx()`                            | no   | no     | yes                     |
+| `block.reduce_{add,min,max}(v, tid, ...)`       | yes  | yes    | yes                     |
+| `block.reduce_all_{add,min,max}(v, tid, ...)`   | yes  | yes    | yes                     |
 | `grid.memfence()` (device-scope, see below)     | yes  | no     | no                      |
 
 Calling a backend marked "no" raises `ValueError` from the Python layer at trace time. `global_thread_idx()` is verified on CUDA and AMDGPU; the SPIR-V codepath in the wrapper exists but is currently unreachable due to a control-flow quirk in the dispatch and is therefore left undocumented here.
@@ -101,6 +103,37 @@ On CUDA / AMDGPU this is the natural way to identify which work-item a thread sh
 ### `block.thread_idx()`
 
 Returns the local thread index within the block. Currently only implemented on SPIR-V backends (Vulkan / Metal); on CUDA / AMDGPU it raises. On CUDA / AMDGPU, use `global_thread_idx()` together with `qd.loop_config(block_dim=...)` and recover the in-block index via `global_thread_idx() % block_dim`.
+
+### `block.reduce_{add,min,max}(value, tid, block_dim, log2_warp, dtype)`
+
+Block-scope reductions following CUB's `BLOCK_REDUCE_WARP_REDUCTIONS` strategy: each warp reduces its lanes via a `shuffle_down` tree, lane 0 of each warp publishes the warp aggregate to shared memory, then thread 0 sequentially folds the warp aggregates with the same operator. The result is valid in **thread 0 only**; other threads retain partial values. For the broadcast-to-every-thread variants see `block.reduce_all_{add,min,max}` below.
+
+Arguments:
+
+- `value`: per-thread input.
+- `tid`: calling thread's block-local index. Pass `i % block_dim` from a `qd.loop_config(block_dim=...)` kernel, or `qd.simt.block.thread_idx()` on backends that expose it.
+- `block_dim`: threads per block (compile-time `template()`; must be a multiple of `2**log2_warp`).
+- `log2_warp`: `log2(warp_size)`, compile-time `template()`. Pass 5 on CUDA / Metal / RDNA AMDGPU (wave32) and 6 on CDNA AMDGPU (wave64).
+- `dtype`: scalar dtype for the inter-warp shared-memory staging slot; must match `value`'s type.
+
+Cost: `log2_warp` shuffles + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / 2**log2_warp) - 1` ops on thread 0. When the block is exactly one warp the shared-memory path is short-circuited at trace time.
+
+```python
+@qd.kernel
+def kern(src: qd.types.ndarray(ndim=1), out: qd.types.ndarray(ndim=1)):
+    qd.loop_config(block_dim=128)
+    for i in range(N):
+        tid = i % 128
+        agg = qd.simt.block.reduce_add(src[i], tid, 128, 5, qd.f32)
+        if tid == 0:
+            out[i // 128] = agg
+```
+
+A generic `block.reduce(value, tid, block_dim, log2_warp, op, dtype)` is also available for custom associative operators (e.g. bitwise ops, custom monoids). It accepts an `op: template()` `@qd.func` taking `(a, b)` and returning the same type as `value`.
+
+### `block.reduce_all_{add,min,max}(value, tid, block_dim, log2_warp, dtype)`
+
+The broadcast variants of the above. Identical semantics, but the result is published to a one-slot `SharedArray` and read back by every thread after a second `block.sync()`. Use this when downstream code on every thread needs the block-wide aggregate (e.g. normalising each thread's value by the block sum). Cost: one extra `block.sync()` plus one shared-memory hop vs. the lane-0-only variants. The corresponding generic form is `block.reduce_all(value, tid, block_dim, log2_warp, op, dtype)`.
 
 ## Grid-scope fence: `qd.simt.grid.memfence()`
 

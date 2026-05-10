@@ -5,7 +5,7 @@ import pytest
 from pytest import approx
 
 import quadrants as qd
-from quadrants.lang.simt import subgroup
+from quadrants.lang.simt import block, subgroup
 
 from tests import test_utils
 
@@ -524,6 +524,242 @@ def _init_field(field, n, dtype):
     int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(n):
         field[i] = (i + 1) if dtype in int_dtypes else 1.0000000000001 * (i + 1)
+
+
+# --- Block reduce tests ----------------------------------------------------------------
+#
+# `qd.simt.block.reduce_{add,min,max}` is a CUB-style two-stage block reduce:
+# per-warp `shuffle_down` tree, lane 0 of each warp publishes the warp aggregate
+# to shared memory, then thread 0 sequentially folds the warp aggregates.  Result
+# is valid in thread 0 only; the `reduce_all_*` variants broadcast it to every
+# thread via one extra `block.sync()` plus a one-slot shared-memory hop.
+#
+# We exercise three block sizes that span the relevant regimes: 32 (single warp,
+# the shared-memory path is short-circuited at trace time), 128 (multi-warp on
+# wave32 backends), and 256 (multi-warp on every backend).  ``log2_warp`` is
+# pinned to 5 throughout — qipc and CUB both assume wave32 here, and Quadrants
+# lays it on as a template knob so future wave64 callers can pass 6 without an
+# API change.
+
+_BLOCK_REDUCE_DTYPES = [qd.i32, qd.f32]
+_BLOCK_REDUCE_BLOCK_DIMS = [32, 128, 256]
+
+
+def _ref_reduce_add(values):
+    return sum(values)
+
+
+def _ref_reduce_min(values):
+    return min(values)
+
+
+def _ref_reduce_max(values):
+    return max(values)
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_reduce_add(dtype, block_dim):
+    """Block sum-reduce: thread 0 of each block holds `sum(src[block_base:block_base+block_dim])`."""
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=NUM_BLOCKS)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            agg = block.reduce_add(src[i], tid, block_dim, 5, dtype)
+            if tid == 0:
+                dst[i // block_dim] = agg
+
+    _init_field(src, N, dtype)
+    foo()
+
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_reduce_add(block_vals)
+        if dtype == qd.i32:
+            assert dst[b] == expected, f"block {b}: got {dst[b]}, expected {expected}"
+        else:
+            assert abs(dst[b] - expected) < 1e-4 * abs(expected), f"block {b}: got {dst[b]}, expected {expected}"
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_reduce_min(dtype, block_dim):
+    """Block min-reduce: thread 0 of each block holds `min(src[block_base:block_base+block_dim])`."""
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=NUM_BLOCKS)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            agg = block.reduce_min(src[i], tid, block_dim, 5, dtype)
+            if tid == 0:
+                dst[i // block_dim] = agg
+
+    # Permuted (non-monotone) initialisation so the min depends on lanes other than the first / last.
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for i in range(N):
+        v = ((i * 1009) % 997) + 1  # in [1, 997]; stable hash, no collisions w/ block_dim values up to 256
+        src[i] = v if dtype in int_dtypes else 1.0 * v
+    foo()
+
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_reduce_min(block_vals)
+        if dtype == qd.i32:
+            assert dst[b] == expected, f"block {b}: got {dst[b]}, expected {expected}"
+        else:
+            assert abs(dst[b] - expected) < 1e-5, f"block {b}: got {dst[b]}, expected {expected}"
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_reduce_max(dtype, block_dim):
+    """Block max-reduce: thread 0 of each block holds `max(src[block_base:block_base+block_dim])`."""
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=NUM_BLOCKS)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            agg = block.reduce_max(src[i], tid, block_dim, 5, dtype)
+            if tid == 0:
+                dst[i // block_dim] = agg
+
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for i in range(N):
+        v = ((i * 1009) % 997) + 1
+        src[i] = v if dtype in int_dtypes else 1.0 * v
+    foo()
+
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_reduce_max(block_vals)
+        if dtype == qd.i32:
+            assert dst[b] == expected, f"block {b}: got {dst[b]}, expected {expected}"
+        else:
+            assert abs(dst[b] - expected) < 1e-5, f"block {b}: got {dst[b]}, expected {expected}"
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_reduce_all_add(dtype, block_dim):
+    """Block sum-reduce broadcast: every thread of each block holds the block-wide sum.
+
+    Verifies the broadcast variant by writing the per-thread output to a flat field, then asserting every thread of a
+    given block reads the same aggregate.
+    """
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            dst[i] = block.reduce_all_add(src[i], tid, block_dim, 5, dtype)
+
+    _init_field(src, N, dtype)
+    foo()
+
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_reduce_add(block_vals)
+        for j in range(block_dim):
+            actual = dst[b * block_dim + j]
+            if dtype == qd.i32:
+                assert actual == expected, f"block {b} thread {j}: got {actual}, expected {expected}"
+            else:
+                assert abs(actual - expected) < 1e-4 * abs(
+                    expected
+                ), f"block {b} thread {j}: got {actual}, expected {expected}"
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_reduce_all_min(dtype, block_dim):
+    """Block min-reduce broadcast: every thread reads the block-wide min."""
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            dst[i] = block.reduce_all_min(src[i], tid, block_dim, 5, dtype)
+
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for i in range(N):
+        v = ((i * 1009) % 997) + 1
+        src[i] = v if dtype in int_dtypes else 1.0 * v
+    foo()
+
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_reduce_min(block_vals)
+        for j in range(block_dim):
+            actual = dst[b * block_dim + j]
+            if dtype == qd.i32:
+                assert actual == expected, f"block {b} thread {j}: got {actual}, expected {expected}"
+            else:
+                assert abs(actual - expected) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected}"
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_reduce_all_max(dtype, block_dim):
+    """Block max-reduce broadcast: every thread reads the block-wide max."""
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            dst[i] = block.reduce_all_max(src[i], tid, block_dim, 5, dtype)
+
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for i in range(N):
+        v = ((i * 1009) % 997) + 1
+        src[i] = v if dtype in int_dtypes else 1.0 * v
+    foo()
+
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_reduce_max(block_vals)
+        for j in range(block_dim):
+            actual = dst[b * block_dim + j]
+            if dtype == qd.i32:
+                assert actual == expected, f"block {b} thread {j}: got {actual}, expected {expected}"
+            else:
+                assert abs(actual - expected) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected}"
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
