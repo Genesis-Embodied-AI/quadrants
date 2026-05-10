@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "quadrants/ir/adstack_size_expr.h"
@@ -249,13 +250,27 @@ class AdStackCache {
     ++snode_write_gen_[snode_id];
   }
   // One-way switch flipped true the first time any `record_*` populates a cache. Read by the per-launch
-  // `bump_writes_for_kernel_*` helpers to short-circuit the per-arg / per-snode gen-counter bumps when no sizer /
-  // per-task / max-reducer cache entry exists; forward-only programs never record and therefore pay zero per-launch
+  // `bump_writes_for_kernel_*` helpers to short-circuit the per-arg / per-snode gen-counter bumps when no sizer,
+  // per-task, or max-reducer cache entry exists; forward-only programs never record and therefore pay zero per-launch
   // bump-writes overhead on the ndarray path where the bump loop would otherwise touch every kernel-bound arg slot.
   // Not reset by `invalidate_*` because the cost of a stale `true` (a few extra map inserts per launch) is dwarfed by
   // the cost of repeated invalidate-then-record cycles, which never happen in steady state.
   bool has_any_recordings() const {
     return any_recordings_;
+  }
+  // Per-id refinement of `has_any_recordings()`: was `snode_id` ever named in a recorded observation's read set or in
+  // a per-task `snode_gens` snapshot? Bump-writes calls in mixed programs (some forward kernels, some autodiff ones)
+  // use this to skip `snode_write_gen_` updates for snodes that no cached entry depends on; the gen-counter for an
+  // unobserved snode stays at 0 and the very first `record_*` on that snode records `observed_gen = 0`, which the
+  // subsequent first observed-write bumps to 1 and invalidates as expected.
+  bool is_snode_observed(int snode_id) const {
+    return observed_snode_ids_.find(snode_id) != observed_snode_ids_.end();
+  }
+  // Has any recorded entry observed a value through `ExternalTensorRead` (i.e. depends on an ndarray's data content)?
+  // Bump-writes consults this to skip the entire `array_ptrs.find` + `bump_ndarray_data_gen` loops when no cached entry
+  // could depend on an ndarray, even if `has_any_recordings()` is true because some snode-only entry already exists.
+  bool any_external_read_observed() const {
+    return any_external_read_observed_;
   }
   uint64_t ndarray_data_gen(void *devalloc_ptr) const {
     auto it = ndarray_data_gen_.find(devalloc_ptr);
@@ -378,6 +393,15 @@ class AdStackCache {
   const DiagnoseLaunchSnapshot *get_diagnose_snapshot() const;
 
  private:
+  // Register every `FieldLoadObs` and `ExternalReadObs` entry of `reads` into `observed_snode_ids_` /
+  // `any_external_read_observed_`. Called from each `record_*` site so the per-id gate consulted by bump-writes sees
+  // the latest observation footprint before the next launch.
+  void note_observations(const std::vector<SizeExprReadObservation> &reads);
+  // Per-task variant: snapshots from `record_per_task_ad_stack` / `record_llvm_per_task_ad_stack` ship `snode_gens` /
+  // `arg_gens` lists directly rather than `SizeExprReadObservation`s, so we route them through this overload to keep
+  // the observation footprint in sync no matter which cache layer holds the entry.
+  void note_per_task_dependencies(const std::vector<std::pair<int, uint64_t>> &snode_gens, bool any_arg_gens);
+
   Program *prog_{nullptr};
   std::unordered_map<const SerializedSizeExpr *, SizeExprCacheEntry> size_expr_cache_;
   std::unordered_map<const void *, SpirvBytecodeCacheEntry> spirv_bytecode_cache_;
@@ -416,8 +440,13 @@ class AdStackCache {
   DiagnoseLaunchSnapshot diagnose_snapshot_;
   // Transient ctx handoff for the lazy LLVM capture path. See `set_pending_launch_ctx`.
   const LaunchContextBuilder *pending_launch_ctx_{nullptr};
-  // Backing storage for `has_any_recordings()`. See accessor doc for the contract.
+  // Backing storage for `has_any_recordings()`. See accessor doc for behavior and reset rules.
   bool any_recordings_{false};
+  // Backing storage for `is_snode_observed()` / `any_external_read_observed()`. Grow monotonically: every `record_*`
+  // call routes its observation list (and per-task snapshot lists) through `note_*_observed` helpers in cache.cpp so
+  // a freshly captured snapshot is reflected before the next `bump_writes_for_kernel_*` call queries them.
+  std::unordered_set<int> observed_snode_ids_;
+  bool any_external_read_observed_{false};
 };
 
 // Snapshot the live ndarray data pointer + generation counter into each `ExternalReadObs` record. The encoder emits the

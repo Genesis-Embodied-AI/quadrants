@@ -61,6 +61,26 @@ bool replay_observation_is_fresh(const AdStackCache::SizeExprReadObservation &ob
 
 }  // namespace
 
+void AdStackCache::note_observations(const std::vector<SizeExprReadObservation> &reads) {
+  for (const auto &obs : reads) {
+    if (obs.kind == SizeExprReadObservation::FieldLoadObs) {
+      observed_snode_ids_.insert(obs.snode_id);
+    } else if (obs.kind == SizeExprReadObservation::ExternalReadObs) {
+      any_external_read_observed_ = true;
+    }
+  }
+}
+
+void AdStackCache::note_per_task_dependencies(const std::vector<std::pair<int, uint64_t>> &snode_gens,
+                                              bool any_arg_gens) {
+  for (const auto &kv : snode_gens) {
+    observed_snode_ids_.insert(kv.first);
+  }
+  if (any_arg_gens) {
+    any_external_read_observed_ = true;
+  }
+}
+
 bool AdStackCache::try_size_expr_cache_hit(Program *prog,
                                            const SerializedSizeExpr *expr_key,
                                            LaunchContextBuilder *ctx,
@@ -83,6 +103,7 @@ bool AdStackCache::try_size_expr_cache_hit(Program *prog,
 void AdStackCache::record_size_expr_eval(const SerializedSizeExpr *expr_key,
                                          int64_t result,
                                          std::vector<SizeExprReadObservation> reads) {
+  note_observations(reads);
   size_expr_cache_[expr_key] = SizeExprCacheEntry{result, std::move(reads)};
   any_recordings_ = true;
 }
@@ -167,6 +188,7 @@ void AdStackCache::record_max_reducer_eval(uint32_t registry_id,
                                            int32_t mor_node_idx,
                                            int64_t result,
                                            std::vector<SizeExprReadObservation> reads) {
+  note_observations(reads);
   max_reducer_cache_[pack_max_reducer_key(registry_id, stack_id, mor_node_idx)] =
       MaxReducerCacheEntry{result, std::move(reads)};
   ++max_reducer_dispatch_count_;
@@ -259,6 +281,9 @@ void AdStackCache::record_max_reducer_launch_cache(const void *launch_cache_key,
   for (const auto &kv : arg_gens_map) {
     entry.arg_gens.push_back({kv.first, kv.second.first, kv.second.second});
   }
+  // Mirror the deduplicated dependency footprint into the per-id observed sets; safe to do after `entry` is finalised
+  // because `note_per_task_dependencies` only reads the snode-gen pair's first element and the arg-gens emptiness.
+  note_per_task_dependencies(entry.snode_gens, !entry.arg_gens.empty());
   max_reducer_launch_cache_[launch_cache_key] = std::move(entry);
   any_recordings_ = true;
 }
@@ -285,6 +310,7 @@ bool AdStackCache::try_spirv_bytecode_cache_hit(Program *prog,
 void AdStackCache::record_spirv_bytecode_eval(const void *attribs_key,
                                               std::vector<uint8_t> bytecode,
                                               std::vector<SizeExprReadObservation> reads) {
+  note_observations(reads);
   spirv_bytecode_cache_[attribs_key] = SpirvBytecodeCacheEntry{std::move(bytecode), std::move(reads)};
   any_recordings_ = true;
 }
@@ -295,6 +321,7 @@ void AdStackCache::record_per_task_ad_stack(const void *attribs_key,
                                             uint32_t stride_int,
                                             std::vector<std::pair<int, uint64_t>> snode_gens,
                                             std::vector<std::tuple<int, void *, uint64_t>> arg_gens) {
+  note_per_task_dependencies(snode_gens, !arg_gens.empty());
   per_task_ad_stack_cache_[attribs_key] = PerTaskAdStackCacheEntry{std::move(metadata), stride_float, stride_int,
                                                                    std::move(snode_gens), std::move(arg_gens)};
   any_recordings_ = true;
@@ -347,6 +374,7 @@ void AdStackCache::record_llvm_per_task_ad_stack(const void *attribs_key,
                                                  uint64_t stride_int,
                                                  std::vector<std::pair<int, uint64_t>> snode_gens,
                                                  std::vector<std::tuple<int, void *, uint64_t>> arg_gens) {
+  note_per_task_dependencies(snode_gens, !arg_gens.empty());
   llvm_per_task_ad_stack_cache_[attribs_key] =
       LlvmPerTaskAdStackCacheEntry{std::move(offsets), std::move(max_sizes),  stride_combined,    stride_float,
                                    stride_int,         std::move(snode_gens), std::move(arg_gens)};
