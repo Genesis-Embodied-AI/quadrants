@@ -172,7 +172,12 @@ def _reduce(value, tid, block_dim: template(), log2_warp: template(), op: templa
         return warp_agg
 
     warp_id = tid // WARP_SIZE
-    lane_id = invocation_id()
+    # Use the **logical** lane (``tid & (WARP_SIZE-1)``) instead of ``invocation_id()``: on wave64 hardware
+    # (CDNA AMDGPU) the hardware-lane index runs 0..63 inside one wave but logical warp 1 starts at lane 32, so
+    # ``invocation_id() == 0`` would skip every other logical warp's publish.  ``tid & (WARP_SIZE-1)`` matches
+    # what CUB does on CUDA's wave32 (``threadIdx.x & 31``) and stays correct when the hardware wave is wider
+    # than the logical warp.
+    lane_id = tid & impl.static(WARP_SIZE - 1)
 
     shared = SharedArray(impl.static((NUM_WARPS,)), dtype)
     if lane_id == 0:
@@ -296,7 +301,8 @@ def _inclusive_block(value, tid, block_dim: template(), log2_warp: template(), o
         return inclusive
 
     warp_id = tid // WARP_SIZE
-    lane_id = invocation_id()
+    # Logical lane within the 32-lane warp (see ``_reduce`` for the wave32-vs-wave64 rationale).
+    lane_id = tid & impl.static(WARP_SIZE - 1)
 
     shared = SharedArray(impl.static((NUM_WARPS,)), dtype)
     if lane_id == impl.static(WARP_SIZE - 1):
@@ -335,7 +341,8 @@ def _exclusive_block(
         return exclusive
 
     warp_id = tid // WARP_SIZE
-    lane_id = invocation_id()
+    # Logical lane within the 32-lane warp (see ``_reduce`` for the wave32-vs-wave64 rationale).
+    lane_id = tid & impl.static(WARP_SIZE - 1)
 
     shared = SharedArray(impl.static((NUM_WARPS,)), dtype)
     if lane_id == impl.static(WARP_SIZE - 1):
