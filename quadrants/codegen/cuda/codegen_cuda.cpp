@@ -4,6 +4,8 @@
 #include <set>
 #include <functional>
 
+#include "llvm/IR/InlineAsm.h"
+
 #include "quadrants/common/core.h"
 #include "quadrants/util/io.h"
 #include "quadrants/ir/ir.h"
@@ -762,6 +764,18 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           /* offset=*/llvm_val[stmt->args[1]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("cuda_lane_id");
+    } else if (stmt->func_name == "cuda_fns_u32") {
+      // Emit PTX inline asm directly: `fns.b32 dst, mask, base, offset`. The hardware op is
+      // available since SM 5.0, and __nv_fns is *not* in the slim_libdevice.10.bc we ship (only
+      // popc / clz / ffs are kept), so we cannot route through libdevice the way popcnt / clz / ffs
+      // do. Inline asm produces a single PTX instruction; LLVM's NVPTX backend rewrites $0..$3 to
+      // PTX-style %r register operands.
+      auto i32_ty = llvm::Type::getInt32Ty(*llvm_context);
+      auto func_ty = llvm::FunctionType::get(i32_ty, {i32_ty, i32_ty, i32_ty}, false);
+      auto inline_asm = llvm::InlineAsm::get(func_ty, "fns.b32 $0, $1, $2, $3;", "=r,r,r,r",
+                                             /*hasSideEffects=*/false);
+      llvm_val[stmt] = builder->CreateCall(
+          inline_asm, {llvm_val[stmt->args[0]], llvm_val[stmt->args[1]], llvm_val[stmt->args[2]]});
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }
