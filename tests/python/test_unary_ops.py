@@ -74,6 +74,19 @@ def test_logic_not_invalid():
         test(1.0)
 
 
+# Mirrors test_bit_not_invalid / test_logic_not_invalid: ffs is integer-only at the frontend.
+# Real-typed operand must raise QuadrantsTypeError with the same diagnostic, before any codegen
+# is reached — this is what gates ffs on a usefully restricted operand domain on every backend.
+@test_utils.test(print_full_traceback=False)
+def test_ffs_invalid():
+    @qd.kernel
+    def test(x: qd.f32) -> qd.i32:
+        return qd.math.ffs(x)
+
+    with pytest.raises(QuadrantsTypeError, match=r"takes integral inputs only"):
+        test(1.0)
+
+
 @test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_frexp():
     if qd.lang.impl.current_cfg().arch == qd.amdgpu:
@@ -367,6 +380,18 @@ def test_fns():
     # offset == 0: bit-at-base test.
     assert fns_kernel(0xE, 1, 0) == 1
     assert fns_kernel(0xE, 0, 0) == NOT_FOUND
+
+    # Maximum-magnitude offsets. PTX `fns` admits |offset| up to 32 (the bit width of the mask),
+    # which the exhaustive sweep above does not cover. These cases force the search to walk the
+    # entire mask before finding (or failing to find) the requested bit, and would catch an
+    # off-by-one in the loop bound or the early-exit guard on either implementation.
+    assert fns_kernel(0xFFFFFFFF, 0, 32) == 31  # 32nd set bit walking up from 0 in all-set mask
+    assert fns_kernel(0xFFFFFFFF, 31, -32) == 0  # 32nd-from-top walking down from 31 in all-set mask
+    assert fns_kernel(0xFFFFFFFF, 0, 33) == NOT_FOUND  # only 32 set bits exist
+    assert fns_kernel(0xFFFFFFFF, 31, -33) == NOT_FOUND
+    # Single-bit masks with large offsets must still return NOT_FOUND rather than walk past the end.
+    assert fns_kernel(0x1, 0, 32) == NOT_FOUND
+    assert fns_kernel(0x80000000, 31, -32) == NOT_FOUND
 
 
 @test_utils.test()
