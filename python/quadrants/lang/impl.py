@@ -788,10 +788,8 @@ def create_field_member(dtype, name, needs_grad, needs_dual):
         if prog.config().debug:
             # adjoint checkbit
             x_grad_checkbit = Expr(prog.make_id_expr(""))
-            dtype = u8
-            if prog.config().arch == _qd_core.vulkan:
-                dtype = i32
-            x_grad_checkbit.ptr = _qd_core.expr_field(x_grad_checkbit.ptr, cook_dtype(dtype))
+            checkbit_dtype = i32 if prog.config().arch == _qd_core.vulkan else u8
+            x_grad_checkbit.ptr = _qd_core.expr_field(x_grad_checkbit.ptr, cook_dtype(checkbit_dtype))
             x_grad_checkbit.ptr.set_name(name + ".grad_checkbit")
             x_grad_checkbit.ptr.set_grad_type(SNodeGradType.ADJOINT_CHECKBIT)
             x.ptr.set_adjoint_checkbit(x_grad_checkbit.ptr)
@@ -807,7 +805,7 @@ def create_field_member(dtype, name, needs_grad, needs_dual):
     elif needs_grad or needs_dual:
         raise QuadrantsRuntimeError(f"{dtype} is not supported for field with `needs_grad=True` or `needs_dual=True`.")
 
-    return x, x_grad, x_dual
+    return x, x_grad, x_dual, x_grad_checkbit
 
 
 @python_scope
@@ -820,7 +818,7 @@ def _field(
     needs_grad=False,
     needs_dual=False,
 ):
-    x, x_grad, x_dual = create_field_member(dtype, name, needs_grad, needs_dual)
+    x, x_grad, x_dual, x_grad_checkbit = create_field_member(dtype, name, needs_grad, needs_dual)
     x = ScalarField(x)
     if x_grad:
         x_grad = ScalarField(x_grad)
@@ -828,6 +826,9 @@ def _field(
     if x_dual:
         x_dual = ScalarField(x_dual)
         x._set_dual(x_dual)
+    x_grad_checkbit_field = None
+    if x_grad_checkbit and needs_grad:
+        x_grad_checkbit_field = ScalarField(x_grad_checkbit)
 
     if shape is None:
         if offset is not None:
@@ -883,6 +884,15 @@ def _field(
         _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x, offset=phys_offset)
         if needs_grad:
             _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_grad, offset=phys_offset)
+            if x_grad_checkbit_field is not None:
+                # Place the debug-mode adjoint checkbit in its own dense container, sibling to primal/adjoint denses.
+                # Adding it as a child of the primal's dense (the legacy `make_lazy_place` path) changes that dense's
+                # cell layout from `{primal}` to `{primal, checkbit}`, which silently corrupts kernel codegen for
+                # non-validation reverse-mode kernels - gradients drop to zero in tests like the Genesis rigid-solver
+                # finite-difference vs analytic check.
+                _create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                    x_grad_checkbit_field, offset=phys_offset
+                )
         if needs_dual:
             _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_dual, offset=phys_offset)
         if order is not None:

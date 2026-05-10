@@ -10,7 +10,7 @@ from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._logging import warn
 from quadrants.lang import impl
 from quadrants.lang._metal_interop import metal_needs_interop_sync, mps_sync_if_metal
-from quadrants.lang.exception import QuadrantsSyntaxError
+from quadrants.lang.exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 from quadrants.lang.util import (
     in_python_scope,
     python_scope,
@@ -416,6 +416,42 @@ class Field:
         """Sets corresponding dual field (forward mode)."""
         self.dual = dual
 
+    def has_grad(self) -> bool:
+        """Whether this field's adjoint (reverse-mode gradient) SNode is allocated.
+
+        ``self.grad`` is non-``None`` for every real-dtype field (the wrapper is allocated up-front so
+        ``qd.root.lazy_grad()`` can populate it later); the actual placed-or-not signal is whether the underlying
+        SNode has been placed via ``needs_grad=True``, ``qd.root.lazy_grad()``, or an explicit
+        ``qd.root.dense(...).place(field.grad)``. Mirrors ``self.snode.ptr.has_adjoint()``.
+        """
+        return self.grad is not None and self.grad._loop_range() is not None
+
+    def has_dual(self) -> bool:
+        """Whether this field's dual (forward-mode gradient) SNode is allocated.
+
+        Same semantics as :meth:`has_grad` for the dual companion. Mirrors ``self.snode.ptr.has_dual()``.
+        """
+        return self.dual is not None and self.dual._loop_range() is not None
+
+    def _require_placed(self) -> None:
+        """Raise ``QuadrantsRuntimeError`` if this field's underlying SNode has never been placed.
+
+        ``create_field_member`` allocates an adjoint / dual ``FieldExpression`` for every real-dtype field so that
+        ``qd.root.lazy_grad()`` / ``qd.root.lazy_dual()`` can place it on demand, but ``_field()`` only calls
+        ``place_child`` when ``needs_grad`` / ``needs_dual`` is set. Reaching the wrapper directly and writing or
+        reading it (e.g. ``field.grad.fill(0.0)``) before the SNode is placed used to crash deep inside ``fill_field``
+        AST compilation with ``AttributeError: 'NoneType' object has no attribute 'data_type'``. Surface the same
+        situation as a clear ``QuadrantsRuntimeError`` so callers see the actual problem instead of a stack frame in
+        kernel template instantiation.
+        """
+        if self._loop_range() is not None:
+            return
+        raise QuadrantsRuntimeError(
+            "Field has no allocation. Allocate via `qd.field(..., needs_grad=True)` / `needs_dual=True`, "
+            "`qd.root.lazy_grad()` / `qd.root.lazy_dual()`, or `qd.root.dense(...).place(field)` "
+            "before calling `fill` / read / write."
+        )
+
     @python_scope
     def fill(self, val: int | float) -> None:
         raise NotImplementedError()
@@ -583,6 +619,7 @@ class ScalarField(Field):
 
     def fill(self, val):
         """Fills this scalar field with a specified value."""
+        self._require_placed()
         if in_python_scope():
             from quadrants._kernels import fill_field  # pylint: disable=C0415
 
@@ -603,6 +640,7 @@ class ScalarField(Field):
             copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
                 ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
+        self._require_placed()
         if copy is not True:
             arr = _try_zerocopy_numpy(self, copy=copy, is_scalar=True)
             if arr is not None:
@@ -636,6 +674,7 @@ class ScalarField(Field):
             copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
                 ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
+        self._require_placed()
         if copy is not True:
             result = _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
             if result is not None:
@@ -667,6 +706,7 @@ class ScalarField(Field):
     @python_scope
     def from_numpy(self, arr):
         """Copies the data from a `numpy.ndarray` into this field."""
+        self._require_placed()
         if not arr.flags.c_contiguous:
             import numpy as np  # pylint: disable=C0415
 
@@ -675,11 +715,13 @@ class ScalarField(Field):
 
     @python_scope
     def __setitem__(self, key, value):
+        self._require_placed()
         self._initialize_host_accessors()
         self.host_accessors[0].setter(value, *self._pad_key(key))  # type: ignore
 
     @python_scope
     def __getitem__(self, key):
+        self._require_placed()
         self._initialize_host_accessors()
         # Check for potential slicing behaviour
         # for instance: x[0, :]
