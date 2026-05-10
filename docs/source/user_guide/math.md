@@ -8,13 +8,14 @@ This page currently documents only the bit-counting helpers. The broader `qd.mat
 
 Single-thread integer-register operations. They do not access memory and do not synchronize threads — each thread independently transforms a value in its own register.
 
-| Op                  | CUDA                | AMDGPU                | SPIR-V (Vulkan / Metal)        | x64 (CPU)           |
-|---------------------|---------------------|-----------------------|--------------------------------|---------------------|
-| `qd.math.popcnt(x)` | i32, u32, i64, u64  | i32, u32, i64, u64    | i32, u32, i64, u64 (`OpBitCount`) | i32, u32, i64, u64  |
-| `qd.math.clz(x)`    | i32, u32, i64, u64  | i32, u32, i64, u64    | i32, u32, i64, u64 (`FindUMsb`-based) \*  | i32, u32, i64, u64  |
-| `qd.math.ffs(x)`    | i32, u32, i64, u64  | i32, u32, i64, u64    | i32, u32, i64, u64 (`FindILsb`-based) \*  | i32, u32, i64, u64  |
+| Op                                       | CUDA                | AMDGPU                | SPIR-V (Vulkan / Metal)        | x64 (CPU)           |
+|------------------------------------------|---------------------|-----------------------|--------------------------------|---------------------|
+| `qd.math.popcnt(x)`                      | i32, u32, i64, u64  | i32, u32, i64, u64    | i32, u32, i64, u64 (`OpBitCount`) | i32, u32, i64, u64  |
+| `qd.math.clz(x)`                         | i32, u32, i64, u64  | i32, u32, i64, u64    | i32, u32, i64, u64 (`FindUMsb`-based) \*  | i32, u32, i64, u64  |
+| `qd.math.ffs(x)`                         | i32, u32, i64, u64  | i32, u32, i64, u64    | i32, u32, i64, u64 (`FindILsb`-based) \*  | i32, u32, i64, u64  |
+| `qd.math.fns(mask, base, offset)`        | u32 (PTX `fns` instruction) | u32 (portable @qd.func) | u32 (portable @qd.func)        | u32 (portable @qd.func) |
 
-All three ops **return `i32` on every backend**, regardless of input width. This matches CUDA libdevice (`__nv_popc` / `__nv_clz` / `__nv_ffs` all return `int`) and the natural width of the AMDGPU SALU bit-count / leading-zero instructions (`s_bcnt1_i32_b64`, `s_flbit_i32_b64`); SPIR-V and x64 truncate down to `i32` so the same kernel source has the same return type everywhere. The result is always non-negative and fits in 7 bits (`popcnt` ≤ 64, `clz` ≤ 64, `ffs` ≤ 64).
+All four ops **return `i32` on every backend**, regardless of input width. This matches CUDA libdevice (`__nv_popc` / `__nv_clz` / `__nv_ffs` all return `int`) and the natural width of the AMDGPU SALU bit-count / leading-zero instructions (`s_bcnt1_i32_b64`, `s_flbit_i32_b64`); SPIR-V and x64 truncate down to `i32` so the same kernel source has the same return type everywhere. The result is always non-negative and fits in 7 bits (`popcnt` ≤ 64, `clz` ≤ 64, `ffs` ≤ 64, `fns` ≤ 31 plus the `0xFFFFFFFF` not-found sentinel for the `u32` case).
 
 \* On SPIR-V the 64-bit path (i64 / u64) for `clz` and `ffs` is synthesised from two ext-inst calls on the 32-bit halves plus an `OpSelect`, since `GLSL.std.450 FindUMsb` and `FindILsb` are both 32-bit-only. The runtime device must advertise the `Int64` SPIR-V capability (Vulkan: `shaderInt64`); this is the same precondition any other 64-bit op would impose. On unsupported integer widths (e.g. `i8`, `i16`, `u16`) `clz`, `popcnt` and `ffs` hit `QD_NOT_IMPLEMENTED` on every backend.
 
@@ -29,6 +30,18 @@ Counts leading zero bits in `x` and returns an `i32`. For a 32-bit input, `clz(0
 ### `qd.math.ffs(x)`
 
 Finds the lowest set bit in `x` and returns its **1-indexed** position as an `i32`, with `ffs(0) == 0` (matching the CUDA `__ffs` convention). Otherwise the result is in `[1, bitwidth(x)]`, e.g. `ffs(1) == 1`, `ffs(2) == 2`, `ffs(0x80000000) == 32`. The count is over the unsigned bit pattern, so `ffs(-1) == 1` regardless of input signedness. On CUDA, lowers to libdevice's `__nv_ffs` (32-bit) / `__nv_ffsll` (64-bit), which already encode the `ffs(0) == 0` contract. On CPU and AMDGPU, lowers to `llvm.cttz` with `is_zero_undef = false` plus an explicit `select` for the zero case (cttz returns bitwidth on zero, so `cttz + 1` would otherwise yield `bitwidth + 1`). On SPIR-V, the 32-bit case lowers to `GLSL.std.450 FindILsb` plus a `+1` and a zero-input select; the 64-bit case is synthesised from a hi/lo decomposition that consults the low half first (since "first" set bit means lowest-indexed) and falls back to the high half offset by 32 when the low half is zero.
+
+### `qd.math.fns(mask, base, offset)`
+
+Find the `|offset|`-th set bit in a 32-bit `mask`, scanning from bit position `base` in the direction implied by the sign of `offset`. Mirrors the CUDA `__nv_fns` / PTX `fns.b32` instruction; takes three `u32 / u32 / i32` operands and returns a `u32`. Returns `0xFFFFFFFF` when the requested set bit does not exist.
+
+* `offset > 0`: scan upward (towards higher bit indices) starting at `base` (inclusive). Returns the bit position of the `offset`-th set bit found at or above `base`.
+* `offset < 0`: scan downward (towards lower bit indices) starting at `base` (inclusive). Returns the bit position of the `|offset|`-th set bit found at or below `base`.
+* `offset == 0`: returns `base` if `mask & (1 << base)` is non-zero, else `0xFFFFFFFF`.
+
+On CUDA, lowers to a single `fns.b32` PTX instruction (available since SM 5.0) emitted via inline asm, since the slim libdevice we ship does not include `__nv_fns`. On CPU, AMDGPU and SPIR-V, lowers to a portable `@qd.func` that loops over the 32 bit positions; the body is fully unrolled by each backend's lowering pipeline.
+
+The CUDA fast path is the typical use case for QIPC-style work-stealing patterns where a thread needs to identify the *n*-th cooperating peer in a `__ballot` mask without a serial scan.
 
 ## Examples
 
