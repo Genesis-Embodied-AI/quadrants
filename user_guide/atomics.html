@@ -411,95 +411,58 @@
 <section id="what-s-available">
 <h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
 <p>All atomic ops follow the same shape: <code class="docutils literal notranslate"><span class="pre">qd.atomic_op(x,</span> <span class="pre">y)</span></code> performs <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">op(x,</span> <span class="pre">y)</span></code> atomically and returns the <strong>old</strong> value of <code class="docutils literal notranslate"><span class="pre">x</span></code>. <code class="docutils literal notranslate"><span class="pre">x</span></code> must be a writable memory target (a field element, ndarray element, or matrix slot); scalars and constant expressions are not allowed.</p>
+<p>“int” below means any of <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code>. “Floats” means any of <code class="docutils literal notranslate"><span class="pre">f16</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code>. Unless otherwise noted, “native” means the op lowers to a single hardware atomic instruction (or its SPIR-V / LLVM-IR equivalent), and “CAS” means a software compare-and-swap loop emitted around a non-atomic compute.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Op</p></th>
-<th class="head"><p>Semantics</p></th>
-<th class="head"><p>i32</p></th>
-<th class="head"><p>u32</p></th>
-<th class="head"><p>i64</p></th>
-<th class="head"><p>u64</p></th>
-<th class="head"><p>f32</p></th>
-<th class="head"><p>f64</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+<th class="head"><p>CPU</p></th>
 </tr>
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_add</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">+=</span> <span class="pre">y</span></code></p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>*</p></td>
+<td><p>int / f32 native; f64 native (sm_60+)</p></td>
+<td><p>int / f32 native; f64 hardware-dependent</p></td>
+<td><p>int native; f16 / f32 / f64 capability-gated, else CAS</p></td>
+<td><p>int / f32 / f64 native; f16 via CAS</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">-=</span> <span class="pre">y</span></code></p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>*</p></td>
+<td><p>rewritten to <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> at IR-construction time — see note below</p></td>
+<td><p>(same)</p></td>
+<td><p>(same)</p></td>
+<td><p>(same)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">*=</span> <span class="pre">y</span></code></p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>*</p></td>
+<td><p>CAS on every dtype</p></td>
+<td><p>CAS</p></td>
+<td><p>CAS</p></td>
+<td><p>CAS</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_min</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">min(x,</span> <span class="pre">y)</span></code></p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>*</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_min</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_max</span></code></p></td>
+<td><p>int native; floats via CAS</p></td>
+<td><p>int native; floats via CAS</p></td>
+<td><p>int native; floats via CAS</p></td>
+<td><p>int native; floats via CAS</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_max</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">max(x,</span> <span class="pre">y)</span></code></p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>*</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_and</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">&amp;=</span> <span class="pre">y</span></code></p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>—</p></td>
-<td><p>—</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_or</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">|=</span> <span class="pre">y</span></code></p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>—</p></td>
-<td><p>—</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_xor</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">^=</span> <span class="pre">y</span></code></p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>—</p></td>
-<td><p>—</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_and</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_or</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_xor</span></code></p></td>
+<td><p>int only (native)</p></td>
+<td><p>int only (native)</p></td>
+<td><p>int only (native)</p></td>
+<td><p>int only (native)</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>* <code class="docutils literal notranslate"><span class="pre">f64</span></code> atomic add / sub / mul / min / max is hardware-dependent: supported on CUDA sm_60+ for <code class="docutils literal notranslate"><span class="pre">add</span></code>, falls back to a CAS loop elsewhere or raises at codegen time on older targets and on backends that do not lower a CAS loop. Prefer <code class="docutils literal notranslate"><span class="pre">f32</span></code> on hot paths if portability matters.</p>
+<p>A few cross-cutting notes that the cells above abbreviate:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is not a separate op in the IR.</strong> <code class="docutils literal notranslate"><span class="pre">quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten</span></code> rewrites every <code class="docutils literal notranslate"><span class="pre">atomic_sub(x,</span> <span class="pre">y)</span></code> into <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> before codegen sees it, so per-backend support and per-dtype behaviour are exactly those of <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>.</p></li>
+<li><p><strong>CAS-loop ops are noticeably slower than native atomics</strong>, especially under contention — every contending thread retries the load + compare-exchange until it wins. Prefer pre-aggregating into a register or shared array and issuing a single atomic at the end of the block where possible.</p></li>
+<li><p><strong>f16 floats always use a CAS loop</strong> (no native f16 atomic on any backend except SPIR-V with the right capability bit).</p></li>
+<li><p><strong>On CPU, “native” does not guarantee a single machine instruction.</strong> On x86 and other architectures without hardware float atomics, the compiler backend lowers native float <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> (and integer <code class="docutils literal notranslate"><span class="pre">min</span></code> / <code class="docutils literal notranslate"><span class="pre">max</span></code>) to a CAS loop in machine code. Under high contention the performance is similar to the explicit “CAS” entries; the difference is that “native” ops benefit from hardware acceleration where available.</p></li>
+<li><p><strong>SPIR-V capability bits</strong> (<code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float_add</span></code>, <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float64_add</span></code>, <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float16_add</span></code>) decide whether <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> lowers to native <code class="docutils literal notranslate"><span class="pre">OpAtomicFAddEXT</span></code> or a uint-backed CAS — the dispatch happens per-call inside <code class="docutils literal notranslate"><span class="pre">quadrants/codegen/spirv/spirv_codegen.cpp</span></code>.</p></li>
+</ul>
 <p>There is no <code class="docutils literal notranslate"><span class="pre">atomic_cas</span></code> (compare-and-swap) exposed in Python today. The C++ runtime uses CmpXchg internally; surfacing it requires extending <code class="docutils literal notranslate"><span class="pre">AtomicOpType</span></code>.</p>
 <p>All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>). They are sequentially consistent on the location they touch; they are <strong>not</strong> memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_sync()</span></code> (block scope) or <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code> (device scope).</p>
 <p><strong>Backend caveat for the fence-pair pattern.</strong> Both fence helpers have current portability gaps that affect the patterns recommended on this page:</p>
@@ -538,7 +501,7 @@
 </section>
 <section id="qd-atomic-sub-x-y-qd-atomic-mul-x-y">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_sub(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_mul(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-sub-x-y-qd-atomic-mul-x-y" title="Link to this heading">#</a></h3>
-<p>Atomic subtract and atomic multiply. <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is supported natively on most backends; <code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> on integer types lowers to a CAS loop on hardware without a native multiply atomic and is intentionally not heavily optimised — prefer reducing to a different scheme on hot paths.</p>
+<p>Atomic subtract and atomic multiply. <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is rewritten to <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> at IR-construction time (<code class="docutils literal notranslate"><span class="pre">quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten</span></code>), so its per-backend behaviour is identical to <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>. <code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> always lowers to a CAS loop — no LLVM AtomicRMW or SPIR-V <code class="docutils literal notranslate"><span class="pre">OpAtomic*</span></code> op corresponds to multiply — and is intentionally not heavily optimised; prefer reducing to a different scheme on hot paths.</p>
 </section>
 </section>
 <section id="performance-and-portability-notes">
