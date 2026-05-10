@@ -85,8 +85,8 @@ Lowers to one native instruction on every backend (CUDA `atomicExch`, AMDGPU `bu
 my_old_task = qd.atomic_exchange(slot, NO_TASK)
 if my_old_task != NO_TASK:
     process(my_old_task)
-# Whatever was in `slot` is now mine to process; I left NO_TASK behind for the next worker.  No retry needed
-# — exchange always succeeds.
+# Whatever was in `slot` is now mine to process; I left NO_TASK behind for the next worker.  No retry needed - exchange
+# always succeeds.
 ```
 
 Vector / matrix arguments fan out per component, same as the rest of the `qd.atomic_*` family: a `qd.atomic_exchange(field_of_vec3, qd.Vector([...]))` issues three independent scalar exchanges, one per slot, with no all-or-nothing guarantee across the components.
