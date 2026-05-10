@@ -416,6 +416,23 @@ class Field:
         """Sets corresponding dual field (forward mode)."""
         self.dual = dual
 
+    def has_grad(self) -> bool:
+        """Whether this field's adjoint (reverse-mode gradient) SNode is allocated.
+
+        ``self.grad`` is non-``None`` for every real-dtype field (the wrapper is allocated up-front so
+        ``qd.root.lazy_grad()`` can populate it later); the actual placed-or-not signal is whether the underlying
+        SNode has been placed via ``needs_grad=True``, ``qd.root.lazy_grad()``, or an explicit
+        ``qd.root.dense(...).place(field.grad)``. Mirrors ``self.snode.ptr.has_adjoint()``.
+        """
+        return self.grad is not None and self.grad._loop_range() is not None
+
+    def has_dual(self) -> bool:
+        """Whether this field's dual (forward-mode gradient) SNode is allocated.
+
+        Same semantics as :meth:`has_grad` for the dual companion. Mirrors ``self.snode.ptr.has_dual()``.
+        """
+        return self.dual is not None and self.dual._loop_range() is not None
+
     def _require_placed(self) -> None:
         """Raise ``QuadrantsRuntimeError`` if this field's underlying SNode has never been placed.
 

@@ -252,16 +252,28 @@ a.copy_from(b)   # raises: cross-backend copy unsupported
 
 If you genuinely need to move data across backends, route it through Torch: `a.from_torch(b.to_torch())`.
 
-## Known asymmetry: real-dtype `.grad` stub on the field backend
+## Known asymmetry: real-dtype `.grad` placeholder on the field backend
 
-For tensors of a real (`f32` / `f64`) dtype allocated **without** `needs_grad=True`, the field backend currently allocates a zombie gradient stub anyway, so `t.grad` returns a wrapper around it. The ndarray backend correctly reports `t.grad is None` in the same case:
+For tensors of a real (`f32` / `f64`) dtype allocated **without** `needs_grad=True`, the field backend exposes `t.grad` as a wrapper around an un-placed gradient placeholder, allowing for late manual allocation via `qd.root.place(t.grad)` / `qd.root.lazy_grad()`. The ndarray backend reports `t.grad is None` in the same case:
 
 ```python
 t_field = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD)
 t_nd    = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 
-t_field.grad   # currently a Tensor wrapper around a zombie field
+t_field.grad   # Tensor wrapper around an un-placed grad field (ready for manual placement)
 t_nd.grad      # None
 ```
 
-Use `needs_grad=True` if you intend to read `.grad`. Integer dtypes are symmetric (`grad is None` on both backends regardless of `needs_grad`).
+Use `needs_grad=True` for the common case of "I want a writable gradient now". Integer dtypes are symmetric (`grad is None` on both backends regardless of `needs_grad`).
+
+Use `Tensor.has_grad()` / `Tensor.has_dual()` to check whether the gradient storage is actually allocated, regardless of whether the allocation came from `needs_grad=True` or a manual `qd.root.place(field.grad)`:
+
+```python
+t_field.has_grad()   # False -- the placeholder has not been placed
+t_nd.has_grad()      # False
+
+ng = qd.tensor(qd.f32, shape=(4,), needs_grad=True)
+ng.has_grad()        # True
+```
+
+Reading or writing `.grad` on an un-allocated gradient raises `QuadrantsRuntimeError("Field has no allocation. ...")` - the failure is loud, never silent. Use `has_grad()` as the pre-check in generic code paths that may receive either a `needs_grad` tensor or a plain one. `has_dual()` mirrors it for the forward-mode dual companion.
