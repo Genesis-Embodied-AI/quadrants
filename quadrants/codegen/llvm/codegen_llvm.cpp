@@ -1357,9 +1357,9 @@ llvm::Value *TaskCodeGenLLVM::real_type_atomic(AtomicOpStmt *stmt) {
           llvm_val[stmt->dest], llvm_val[stmt->val], [&](auto v1, auto v2) { return builder->CreateFMul(v1, v2); },
           stmt->val->ret_type);
     case AtomicOpType::xchg:
-      // LLVM AtomicRMW Xchg accepts FP types directly since LLVM 14, lowering to the natively-atomic swap
-      // instruction (CUDA atomicExch / AMDGPU buffer_atomic_swap / x86 xchg). f16 falls through to the f16
-      // CAS-emulation block above.
+      // LLVM AtomicRMW Xchg accepts FP types directly since LLVM 14, lowering to the natively-atomic swap instruction
+      // (CUDA atomicExch / AMDGPU buffer_atomic_swap / x86 xchg). f16 falls through to the f16 CAS-emulation block
+      // above.
       return builder->CreateAtomicRMW(llvm::AtomicRMWInst::Xchg, llvm_val[stmt->dest], llvm_val[stmt->val],
                                       llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent);
     default:

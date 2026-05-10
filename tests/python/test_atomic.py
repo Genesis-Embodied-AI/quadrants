@@ -737,9 +737,9 @@ def test_atomic_exchange_swap_under_contention(dtype):
     ), f"atomic_exchange lost or duplicated values: missing={contributed - seen}, extra={seen - contributed}"
 
 
-# Pins that vector-typed atomic_exchange fans out to one scalar OpAtomicExchange per component, mirroring
-# the existing fan-out semantics for atomic_add (test_atomic_add_vector_field_fanout). After N exchanges
-# each writing the same vector, the slot must equal that vector exactly (last writer wins per component).
+# Pins that vector-typed atomic_exchange fans out to one scalar OpAtomicExchange per component, mirroring the
+# existing fan-out semantics for atomic_add (test_atomic_add_vector_field_fanout). After N exchanges each writing
+# the same vector, the slot must equal that vector exactly (last writer wins per component).
 @test_utils.test(arch=qd.gpu)
 def test_atomic_exchange_vector_field_fanout():
     N = 64

@@ -1434,9 +1434,9 @@ def atomic_xor(x, y):
 def atomic_exchange(x, y):
     """Atomically swap the value of `x` with `y`, and return the old value of `x`.
 
-    Unlike the other `qd.atomic_*` ops, the new value of `x` does not depend on its old value: `x` is
-    unconditionally overwritten with `y`. Useful for lock-free hand-off / claim-a-slot patterns where you
-    want to atomically grab whatever was at a location while leaving a fresh value behind.
+    Unlike the other `qd.atomic_*` ops, the new value of `x` does not depend on its old value: `x` is unconditionally
+    overwritten with `y`. Useful for lock-free hand-off / claim-a-slot patterns where you want to atomically grab
+    whatever was at a location while leaving a fresh value behind.
 
     `x` must be a writable target, constant expressions or scalars are not allowed.
 
