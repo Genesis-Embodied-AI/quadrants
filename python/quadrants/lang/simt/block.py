@@ -26,6 +26,9 @@ from quadrants.lang.simt.subgroup import (
 from quadrants.lang.simt.subgroup import _exclusive_scan as _subgroup_exclusive_scan
 from quadrants.lang.simt.subgroup import _inclusive_scan as _subgroup_inclusive_scan
 from quadrants.lang.simt.subgroup import (
+    mem_fence as subgroup_mem_fence,
+)
+from quadrants.lang.simt.subgroup import (
     sync as subgroup_sync,
 )
 from quadrants.lang.util import quadrants_scope
@@ -463,6 +466,22 @@ def exclusive_max(value, tid, block_dim: template(), log2_warp: template(), iden
 
 
 @func
+def _warp_sync_fence():
+    """Warp-scope barrier + memory fence — CUDA ``__syncwarp`` semantics across every backend.
+
+    Why both ops: on CUDA, `subgroup.sync()` already lowers to `__syncwarp` which folds in a memory fence, so the
+    extra `subgroup.mem_fence()` is redundant (a `__threadfence_block`).  On SPIR-V, however, the codegen emits
+    `subgroupBarrier` as `OpControlBarrier(ScopeSubgroup, ScopeSubgroup, 0)` — i.e. with **no** memory semantics — so
+    a bare `subgroup.sync()` does *not* publish prior shared-memory writes to other lanes.  The radix rank algorithm
+    relies on the CUB `__syncwarp` invariant that, after the barrier, every lane sees every other lane's prior
+    `atomic_or` / `atomic_add` to shared memory; pairing the barrier with `subgroup.mem_fence()` (which emits a real
+    `OpMemoryBarrier(ScopeSubgroup, AcquireRelease | UniformMemory | WorkgroupMemory)`) restores that invariant.
+    """
+    subgroup_sync()
+    subgroup_mem_fence()
+
+
+@func
 def radix_rank_match_atomic_or(
     key,
     tid,
@@ -521,7 +540,7 @@ def radix_rank_match_atomic_or(
         bin_idx = lane + impl.static(b * WARP_THREADS)
         smem[warp_idx * RADIX_DIGITS + bin_idx] = i32(0)
         smem[MM_OFF + warp_idx * RADIX_DIGITS + bin_idx] = i32(0)
-    subgroup_sync()
+    _warp_sync_fence()
 
     # CUB lines 984-989: each thread atomic-adds 1 to its warp's bin for ``digit``.
     digit = cast(bit_and(bit_shr(key, u32(bit_start)), u32(NUM_BITS_MASK)), i32)
@@ -559,7 +578,7 @@ def radix_rank_match_atomic_or(
     # CUB line 1069: every thread ORs its lane_mask into the per-digit match mask of its warp.  Threads with the same
     # digit collide on the same shared-memory cell and produce a bitmask of "lanes in this warp that share this digit".
     atomic_or(smem[match_idx], lane_mask)
-    subgroup_sync()  # CUB line 1070 (WARP_SYNC).
+    _warp_sync_fence()  # CUB line 1070 (WARP_SYNC).
 
     # CUB line 1071-1074: read the bin_mask back and find the leader (highest matching lane) + intra-warp rank.
     bin_mask = cast(smem[match_idx], u32)
@@ -577,7 +596,7 @@ def radix_rank_match_atomic_or(
     # CUB lines 1081-1083: leader resets the match mask so subsequent passes (or items_per_thread > 1) start clean.
     if lane == leader:
         smem[match_idx] = i32(0)
-    subgroup_sync()  # CUB line 1085 (WARP_SYNC).
+    _warp_sync_fence()  # CUB line 1085 (WARP_SYNC).
 
     rank = warp_offset + cast(popc, i32) - i32(1)
 
