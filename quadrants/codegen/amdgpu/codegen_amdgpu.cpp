@@ -169,6 +169,15 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     UNARY_STD(exp)
     UNARY_STD(log)
     UNARY_STD(sqrt)
+    else if (op == UnaryOpType::clz) {
+      // LLVM's `ctlz` intrinsic works on any integer type (signed or unsigned, any width); the second arg is the
+      // `is_zero_undef` flag, set to 0 so `ctlz(0) == bitwidth`.  Without this, qd.clz on AMDGPU hits the catch-all
+      // QD_NOT_IMPLEMENTED below — needed for `subgroup.segmented_reduce_add` and other ballot-mask scans.
+      auto input_type = input->getType();
+      llvm_val[stmt] =
+          builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
+                                   {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
+    }
     else {
       QD_P(unary_op_type_name(op));
       QD_NOT_IMPLEMENTED
