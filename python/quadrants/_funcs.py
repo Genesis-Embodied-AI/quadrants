@@ -542,7 +542,7 @@ def polar_decompose(A, dt=None):
         return _polar_decompose2d(A, dt)
     if A.n == 3:
         return _polar_decompose3d(A, dt)
-    raise Exception("Polar decomposition only supports 2D and 3D matrices.")
+    raise Exception("Polar decomposition only supports 2×2 and 3×3 matrices.")
 
 
 def svd(A, dt=None):
@@ -563,7 +563,7 @@ def svd(A, dt=None):
         return _svd2d(A, dt)
     if A.n == 3:
         return _svd3d(A, dt)
-    raise Exception("SVD only supports 2D and 3D matrices.")
+    raise Exception("SVD only supports 2×2 and 3×3 matrices.")
 
 
 def eig(A, dt=None):
@@ -583,7 +583,7 @@ def eig(A, dt=None):
         dt = impl.get_runtime().default_fp
     if A.n == 2:
         return _eig2x2(A, dt)
-    raise Exception("Eigen solver only supports 2D matrices.")
+    raise Exception("Eigen solver only supports 2×2 matrices.")
 
 
 def sym_eig(A, dt=None):
@@ -721,7 +721,7 @@ def solve(A, b, dt=None):
         x (qd.Vector(n, 1)): the solution of Ax=b.
     """
     assert A.n == A.m, "Only square matrix is supported"
-    assert A.n >= 2 and A.n <= 3, "Only 2D and 3D matrices are supported"
+    assert A.n >= 2 and A.n <= 3, "Only 2×2 and 3×3 matrices are supported"
     assert A.m == b.n, "Matrix and Vector dimension dismatch"
     if dt is None:
         dt = impl.get_runtime().default_fp
@@ -730,7 +730,7 @@ def solve(A, b, dt=None):
         return _gauss_elimination_2x2(Ab, dt)
     if A.n == 3:
         return _gauss_elimination_3x3(Ab, dt)
-    raise Exception("Solver only supports 2D and 3D matrices.")
+    raise Exception("Solver only supports 2×2 and 3×3 matrices.")
 
 
 @func

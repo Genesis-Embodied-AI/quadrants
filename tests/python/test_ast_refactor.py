@@ -998,7 +998,7 @@ def test_raise():
 
     with pytest.raises(
         qd.QuadrantsCompilationError,
-        match="Polar decomposition only supports 2D and 3D matrices.",
+        match="Polar decomposition only supports 2×2 and 3×3 matrices.",
     ):
 
         @qd.kernel
