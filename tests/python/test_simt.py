@@ -821,6 +821,114 @@ def test_subgroup_reduce_all_add(dtype, log2_size):
             assert abs(dst[i] - expected) < 1e-4 * abs(expected), f"lane {i}: got {dst[i]}, expected {expected}"
 
 
+# Min / max reductions share the same kernel + verifier shape as `reduce_add` / `reduce_all_add`.
+# `_check_reduce_lane0` and `_check_reduce_all` factor it out so the four tests below stay one-liners.
+# Non-monotonic input (`_init_varied_int_or_float`) is required so each group's min / max actually depends on the
+# reduction running over every lane in the group, not just the first or last one.
+
+
+def _check_reduce_lane0(reduce_func, py_op, dtype, log2_size, src_init):
+    """Verify lane-0 reductions: lane 0 of each 2**log2_size group holds op-reduce(src[group_base..]).
+
+    Checks every group across the full 64-lane launch (two independent subgroups) so we exercise both the in-group
+    reduction tree and the absence of cross-subgroup leakage.
+    """
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = reduce_func(src[i], log2_size)
+
+    src_init(src, N, dtype)
+    foo()
+
+    group_size = 1 << log2_size
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for g in range(N // group_size):
+        group_base = g * group_size
+        expected = src[group_base]
+        for k in range(1, group_size):
+            expected = py_op(expected, src[group_base + k])
+        got = dst[group_base]
+        if dtype in int_dtypes:
+            assert got == expected, f"group {g} lane 0 (global {group_base}): got {got}, expected {expected}"
+        else:
+            assert abs(got - expected) < 1e-5 * max(
+                abs(expected), 1.0
+            ), f"group {g} lane 0 (global {group_base}): got {got}, expected {expected}"
+
+
+def _check_reduce_all(reduce_func, py_op, dtype, log2_size, src_init):
+    """Verify broadcast reductions: every lane of each 2**log2_size group holds op-reduce(src[group_base..])."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = reduce_func(src[i], log2_size)
+
+    src_init(src, N, dtype)
+    foo()
+
+    group_size = 1 << log2_size
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for g in range(N // group_size):
+        group_base = g * group_size
+        expected = src[group_base]
+        for k in range(1, group_size):
+            expected = py_op(expected, src[group_base + k])
+        for k in range(group_size):
+            global_lane = group_base + k
+            got = dst[global_lane]
+            if dtype in int_dtypes:
+                assert got == expected, f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
+            else:
+                assert abs(got - expected) < 1e-5 * max(
+                    abs(expected), 1.0
+                ), f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_reduce_min(dtype, log2_size):
+    """Portable shuffle_down tree min: lane 0 of each 2**log2_size group has the group min."""
+    _check_reduce_lane0(subgroup.reduce_min, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float)
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_reduce_max(dtype, log2_size):
+    """Portable shuffle_down tree max: lane 0 of each 2**log2_size group has the group max."""
+    _check_reduce_lane0(subgroup.reduce_max, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float)
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_reduce_all_min(dtype, log2_size):
+    """Portable butterfly min: every lane in each 2**log2_size group has the group min."""
+    _check_reduce_all(subgroup.reduce_all_min, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float)
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_reduce_all_max(dtype, log2_size):
+    """Portable butterfly max: every lane in each 2**log2_size group has the group max."""
+    _check_reduce_all(subgroup.reduce_all_max, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float)
+
+
 # Portable Hillis-Steele inclusive scans share the same kernel + Python verification pattern; the only thing that
 # varies is the operator and which dtypes are legal for it.  `_check_inclusive_scan` factors out the kernel launch,
 # dtype skip, and per-lane check.

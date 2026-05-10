@@ -1,4 +1,4 @@
-# pyright: reportInvalidTypeForm=false, reportOperatorIssue=false
+# pyright: reportInvalidTypeForm=false, reportOperatorIssue=false, reportArgumentType=false
 
 import warnings
 
@@ -190,9 +190,74 @@ def reduce_all_add(value, log2_size: template()):
     return value
 
 
-# reduce_mul / reduce_min / reduce_max / reduce_and / reduce_or / reduce_xor (no-arg, SPIR-V-only)
-# have been removed.  Build sized portable replacements on top of `shuffle_down` / `shuffle`
-# following the same pattern as `reduce_add` / `reduce_all_add` above when needed.
+@func
+def reduce_min(value, log2_size: template()):
+    """Min of ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
+
+    The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial mins.
+    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
+    (32 on CUDA / Metal / RDNA, 64 on CDNA).
+
+    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
+    shuffle+min operations in the calling kernel's IR.
+
+    Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic
+    (``fminnm`` on PTX, ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether
+    NaN propagates or is suppressed.  Avoid NaN inputs if you need a portable result.
+    """
+    for i in impl.static(range(log2_size)):
+        offset = impl.static(1 << (log2_size - 1 - i))
+        value = min(value, shuffle_down(value, u32(offset)))
+    return value
+
+
+@func
+def reduce_max(value, log2_size: template()):
+    """Max of ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
+
+    See `reduce_min` for the size contract, the unrolling shape, and the NaN caveat (with ``qd.max``
+    in place of ``qd.min``).  The result is valid in lane 0 of each group; other lanes hold partial
+    maxes.
+    """
+    for i in impl.static(range(log2_size)):
+        offset = impl.static(1 << (log2_size - 1 - i))
+        value = max(value, shuffle_down(value, u32(offset)))
+    return value
+
+
+@func
+def reduce_all_min(value, log2_size: template()):
+    """Min of ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.
+
+    The result is broadcast to all ``2**log2_size`` lanes.  Same size contract, unrolling shape,
+    and NaN caveat as `reduce_min`.  Use this when every lane needs the reduction (e.g. to subtract
+    the min, or to branch on it uniformly): same shuffle count as `reduce_min`, no extra broadcast
+    needed.
+    """
+    lane = invocation_id()
+    for i in impl.static(range(log2_size)):
+        mask = impl.static(1 << i)
+        value = min(value, shuffle(value, u32(lane ^ mask)))
+    return value
+
+
+@func
+def reduce_all_max(value, log2_size: template()):
+    """Max of ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.
+
+    The result is broadcast to all ``2**log2_size`` lanes.  See `reduce_all_min` (with ``qd.max``
+    in place of ``qd.min``).
+    """
+    lane = invocation_id()
+    for i in impl.static(range(log2_size)):
+        mask = impl.static(1 << i)
+        value = max(value, shuffle(value, u32(lane ^ mask)))
+    return value
+
+
+# reduce_mul / reduce_and / reduce_or / reduce_xor (no-arg, SPIR-V-only) have been removed.  Build
+# sized portable replacements on top of `shuffle_down` / `shuffle` following the same pattern as
+# `reduce_add` / `reduce_all_add` above when needed.
 
 
 # --- Inclusive scans -------------------------------------------------------------------
@@ -449,6 +514,10 @@ __all__ = [
     "broadcast_first",
     "reduce_add",
     "reduce_all_add",
+    "reduce_min",
+    "reduce_max",
+    "reduce_all_min",
+    "reduce_all_max",
     "inclusive_add",
     "inclusive_mul",
     "inclusive_min",

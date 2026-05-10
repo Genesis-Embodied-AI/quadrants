@@ -64,6 +64,10 @@ CUDA shortcut: when `log2_size == 5` (full warp), `all_true` / `any_true` lower 
 |---------------------------------------------|------|--------|-------------------------|------------------------------|
 | `subgroup.reduce_add(v, log2_size)`         | yes  | yes\*  | yes                     | any type supporting `+`      |
 | `subgroup.reduce_all_add(v, log2_size)`     | yes  | yes    | yes                     | any type supporting `+`      |
+| `subgroup.reduce_min(v, log2_size)`         | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.reduce_max(v, log2_size)`         | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.reduce_all_min(v, log2_size)`     | yes  | yes    | yes                     | integer + float              |
+| `subgroup.reduce_all_max(v, log2_size)`     | yes  | yes    | yes                     | integer + float              |
 | `subgroup.inclusive_add(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
 | `subgroup.inclusive_mul(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
 | `subgroup.inclusive_min(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
@@ -79,7 +83,7 @@ CUDA shortcut: when `log2_size == 5` (full warp), `all_true` / `any_true` lower 
 | `subgroup.exclusive_or(v, log2_size)`       | yes  | yes\*  | yes                     | integer                      |
 | `subgroup.exclusive_xor(v, log2_size)`      | yes  | yes\*  | yes                     | integer                      |
 
-The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_min` / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add(value)` with no `log2_size`) have been removed in favour of the portable sized API (`reduce_add(v, log2_size)` / `reduce_all_add(v, log2_size)`). For reductions other than sum, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern.
+The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add(value)` with no `log2_size`) have been removed in favour of the portable sized API. For reductions other than the ones listed above, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern as `reduce_add` / `reduce_all_add`.
 
 ## Semantics
 
@@ -189,6 +193,22 @@ Same sum as `reduce_add`, but broadcast to **every lane** in each `2**log2_size`
 - Same `log2_size` template + size-cap contract as `reduce_add`.
 - Use this when every lane needs the reduction result (e.g. to divide by the sum, or to branch on it uniformly). It costs exactly the same number of shuffles as `reduce_add` but leaves the answer in all lanes, so it replaces a `reduce_add` + `shuffle`/broadcast pair.
 - Uses `subgroup.shuffle` under the hood.
+
+### `reduce_min(value, log2_size)` / `reduce_max(value, log2_size)`
+
+Min / max of `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. Result valid in **lane 0** of each group; other lanes hold partial mins / maxes.
+
+- Same `log2_size` template + size-cap contract as `reduce_add`. Body unrolls into exactly `log2_size` `shuffle_down + min` (or `max`) pairs.
+- Accepts integer (`i32`, `u32`, `i64`, `u64`) and float (`f32`, `f64`) dtypes. Lowers via `qd.min` / `qd.max`, which dispatch to the backend's native min/max intrinsic.
+- Float NaN handling is implementation-defined: PTX uses `fminnm` / `fmaxnm` (NaN-suppressing), AMDGPU uses `llvm.minnum` / `llvm.maxnum` (NaN-suppressing), SPIR-V uses `OpFMin` / `OpFMax` (NaN-propagating in some drivers). Avoid NaN inputs if you need a portable result.
+- Decorated with `@qd.func` and inlined into the calling kernel.
+
+### `reduce_all_min(value, log2_size)` / `reduce_all_max(value, log2_size)`
+
+Same min / max as `reduce_min` / `reduce_max`, but broadcast to **every lane** in each `2**log2_size` group via a `shuffle_xor` butterfly. Same number of shuffles as the lane-0 forms.
+
+- Use over `reduce_min` + broadcast / `reduce_max` + broadcast when every lane needs the result (e.g. to subtract the group min, or to clamp to the group max).
+- Same dtypes, size-cap contract, and float-NaN caveat as `reduce_min` / `reduce_max`.
 
 ### `inclusive_add` / `inclusive_mul` / `inclusive_min` / `inclusive_max` / `inclusive_and` / `inclusive_or` / `inclusive_xor`
 
