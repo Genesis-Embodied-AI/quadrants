@@ -1224,6 +1224,49 @@ def test_subgroup_segmented_reduce_min_truthy_predicate():
         assert dst_binary[i] == dst_truthy[i], f"lane {i}: binary={dst_binary[i]}, truthy={dst_truthy[i]}"
 
 
+@pytest.mark.parametrize("log2_size", [0, 1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_segmented_reduce_add_block64(log2_size):
+    """Run ``segmented_reduce_add`` with ``block_dim=64`` and identical patterns in both 32-lane halves.
+
+    On wave32 hardware (CUDA, RDNA wave32, Vulkan / Metal on most desktop GPUs) this dispatches as two independent
+    32-lane subgroups, so each half exercises the lanes-0..31 path that the existing N=32 tests already cover.
+
+    On wave64 hardware (AMDGPU CDNA, GFX9, RDNA explicit-wave64) this runs as a single 64-lane wavefront.  Lanes
+    32..63 then need correct results inside their own ``log2_size`` group — which only works after the half-local
+    ``_segment_head_distance`` rewrite (this commit).  Without the fix, lanes 32..63 hit u32 overshift / out-of-range
+    bit-mask arithmetic and produce garbage.
+
+    The test is structured so it passes on wave32 either way; the wave64 fix is what makes it pass on wave64.  We
+    don't have wave64 hardware to test on right now (MI300X pending), but this case will then exercise it.
+    """
+    N = 64
+    src = qd.field(dtype=qd.i32, shape=N)
+    head = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.segmented_reduce_add(src[i], head[i], log2_size)
+
+    head_lanes_in_half = {0, 3, 7, 12, 19, 25}
+    for i in range(N):
+        src[i] = (i % 32) + 1  # 1..32 mirrored in each half
+        head[i] = 1 if (i % 32) in head_lanes_in_half else 0
+
+    foo()
+
+    src_py_half = [j + 1 for j in range(32)]
+    head_py_half = [1 if j in head_lanes_in_half else 0 for j in range(32)]
+    expected_half = _python_segmented_reduce(src_py_half, head_py_half, 1 << log2_size, lambda a, b: a + b)
+    for i in range(N):
+        ref = expected_half[i % 32]
+        got = dst[i]
+        assert got == ref, f"lane {i} (half-local {i % 32}): got {got}, expected {ref}"
+
+
 # Portable Hillis-Steele inclusive scans share the same kernel + Python verification pattern; the only thing that
 # varies is the operator and which dtypes are legal for it.  `_check_inclusive_scan` factors out the kernel launch,
 # dtype skip, and per-lane check.

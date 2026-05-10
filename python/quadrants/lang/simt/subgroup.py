@@ -7,7 +7,7 @@ from quadrants.lang import impl
 from quadrants.lang.kernel_impl import func
 from quadrants.lang.ops import clz
 from quadrants.types.annotations import template
-from quadrants.types.primitive_types import i32, u32
+from quadrants.types.primitive_types import i32, u32, u64
 
 
 def sync():
@@ -385,11 +385,14 @@ def reduce_all_max(value, log2_size: template()):
 # group) whose ``head_flag`` is non-zero.  If no such lane exists the algorithm treats the group's first lane as an
 # implicit head, so a segment that runs from ``group_base`` to the lane is still aggregated correctly.
 #
-# Implementation: one ``ballot`` to materialise a u32 of head positions, then a Hillis-Steele inclusive scan bounded
-# by ``distance >= offset`` (where ``distance = lane - segment_head``).  ``segment_head`` comes from
-# ``31 - clz(effective_mask & ((1 << (lane + 1)) - 1))`` with an OR-injected virtual head at ``group_base`` to
-# guarantee a non-zero ``lower``.  Cost: 1 ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` ops — the same shape
-# as `inclusive_add` / `inclusive_min` / `inclusive_max`, plus a single-instruction setup.
+# Implementation: one ``ballot_full_subgroup`` to materialise a u64 of head positions across the whole subgroup, then
+# a Hillis-Steele inclusive scan bounded by ``distance >= offset`` (where ``distance = lane - segment_head``).
+# ``segment_head`` comes from ``31 - clz(effective_mask & ((1 << (lane + 1)) - 1))`` with an OR-injected virtual head
+# at ``group_base`` to guarantee a non-zero ``lower``.  We work in half-local 32-lane coordinates so the bit-mask
+# arithmetic stays in u32 even on wave64; ``2**log2_size <= 32`` guarantees segments never cross a half boundary, so
+# half-local distance equals absolute distance and the downstream ``shuffle_up`` partners stay in-half.  Cost: 1
+# ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` ops — the same shape as `inclusive_add` / `inclusive_min` /
+# `inclusive_max`, plus a single-instruction setup.
 #
 # No identity argument is required (unlike `exclusive_min` / `exclusive_max`) because the per-lane ``distance >=
 # offset`` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never
@@ -402,23 +405,42 @@ def _segment_head_distance(head_flag, log2_size: template()):
     ``2**log2_size`` lanes.  Returns ``0`` at the segment head, ``1, 2, ...`` for later lanes within the segment.
 
     Shared by `segmented_reduce_add` / `_min` / `_max`; see the module-level note for the algorithm.
+
+    Wave32 vs wave64: the documented contract is ``2**log2_size <= 32``, so segments never cross a 32-lane boundary.
+    But on wave64 lanes 32..63 still execute this helper and need correct results within their own group.  We pull
+    a u64 ``ballot_full_subgroup`` mask, shift the relevant 32-lane half down to bits 0..31, and run the rest of the
+    bit-mask algorithm in half-local lane coordinates (``lane_in_half = lane - half_base``).  Half-local ``distance``
+    equals absolute ``distance`` because both ``lane`` and the recovered ``segment_head`` are offset by the same
+    ``half_base``, so `segmented_reduce_*`'s downstream ``distance >= offset`` guard still works in absolute terms.
+    On wave32 this collapses to the original code (high 32 bits of the u64 are always zero, ``half_base == 0`` always).
     """
-    # ``ballot_first_n(p, 32)`` — the segmented-reduce family caps ``log2_size`` at 5 (groups of 32 lanes), so a 32-bit
-    # ballot is sufficient on every backend; on wave64 lanes 32..63 simply don't appear in the mask, which matches the
-    # ``2**log2_size <= 32`` documented contract.
-    head_mask = ballot_first_n(i32(head_flag != 0), 32)
+    # u64 mask covering the entire subgroup.  Wave32: high 32 bits are zero by definition.  Wave64: all 64 bits are
+    # meaningful and we need both halves to handle lanes 32..63 correctly.
+    full_mask = ballot_full_subgroup(i32(head_flag != 0))
     lane = invocation_id()
-    group_base = u32(lane) & u32(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFF))
+    # Which 32-lane half this lane belongs to: 0 on wave32 (always), 0 or 32 on wave64.  ``& ~31`` rounds down to a
+    # multiple of 32.
+    half_base = u32(lane) & u32(~31 & 0xFFFFFFFF)
+    # Slide the relevant 32 bits down to bits 0..31 of a u32.  ``head_mask >> half_base`` discards the other half;
+    # the truncating cast to u32 then drops everything above bit 31.  On wave32 ``half_base`` is always 0 and the
+    # high 32 bits of ``full_mask`` are zero, so this is a no-op shift + truncate (LLVM folds it).
+    head_mask = u32(full_mask >> u64(half_base))
+    # Half-local lane index — always in ``[0, 32)``, so all the u32 shifts below are well-defined.
+    lane_in_half = i32(lane) - i32(half_base)
+    group_base = u32(lane_in_half) & u32(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFF))
     bits_in_group = u32(impl.static((2 ** (1 << log2_size) - 1) & 0xFFFFFFFF))
     group_mask = bits_in_group << group_base
     effective_mask = (head_mask & group_mask) | (u32(1) << group_base)
-    inclusive_mask = u32(0xFFFFFFFF) >> u32(i32(31) - lane)
+    inclusive_mask = u32(0xFFFFFFFF) >> u32(i32(31) - lane_in_half)
     lower = effective_mask & inclusive_mask
     # `clz` follows the input type on most backends (CUDA explicitly normalizes to i32; AMDGPU LLVM `ctlz` returns
     # input type; SPIR-V FindUMsb returns the input type).  Wrap the result in `i32(...)` so the subsequent arithmetic
     # is uniformly signed-32-bit and SPIR-V's strict-type `sub` is happy.
     segment_head = i32(31) - i32(clz(lower))
-    return lane - segment_head
+    # ``segment_head`` is in half-local coords; ``lane_in_half - segment_head`` is the same as absolute
+    # ``lane - segment_head_abs`` (both shifted by ``half_base``), so the distance returned here is consistent
+    # with what ``segmented_reduce_*`` callers expect for the ``distance >= offset`` shuffle-up bound.
+    return lane_in_half - segment_head
 
 
 @func
@@ -431,9 +453,10 @@ def segmented_reduce_add(value, head_flag, log2_size: template()):
 
     Caller contract:
 
-    * ``2**log2_size`` must not exceed 32 (the underlying ``ballot`` returns a ``u32`` covering the first 32 lanes; on
-      AMDGPU CDNA wave64 only the low 32 lanes contribute).  ``log2_size`` is a ``qd.template()`` compile-time
-      constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.
+    * ``2**log2_size`` must not exceed 32: segments are scoped to a single 32-lane half of the subgroup so the
+      bit-mask bookkeeping stays in u32 internally.  On wave64 the high 32 lanes are handled correctly via a separate
+      half-local ballot — see ``_segment_head_distance`` for the wave64 details.  ``log2_size`` is a ``qd.template()``
+      compile-time constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.
     * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values work.
     * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``.
     """
