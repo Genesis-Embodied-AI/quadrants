@@ -131,9 +131,6 @@ def test_popcnt():
 
 @test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda, qd.amdgpu, qd.vulkan])
 def test_clz():
-    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: AMDGPU codegen does not lower this op.")
-
     @qd.kernel
     def test_i32(x: qd.int32) -> qd.int32:
         return qd.math.clz(x)
@@ -146,6 +143,55 @@ def test_clz():
     assert test_i32(5) == 29
     assert test_i32(1023) == 22
     assert test_i32(1024) == 21
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan])
+def test_clz_u32():
+    """``qd.math.clz`` on ``u32`` — covers values with the top bit set (which silently broke on SPIR-V before it
+    started dispatching ``FindUMsb`` for unsigned inputs, and was rejected outright on CUDA before the intrinsic was
+    extended past i32).  Metal is excluded because Metal goes through SPIR-V which has the 64-bit caveat — the 32-bit
+    path works on Metal too in principle, included separately if needed."""
+
+    @qd.kernel
+    def test_u32(x: qd.uint32) -> qd.int32:
+        return qd.math.clz(x)
+
+    assert test_u32(1) == 31
+    assert test_u32(0x80000000) == 0
+    assert test_u32(0xFFFFFFFF) == 0
+    assert test_u32(0x40000000) == 1
+    assert test_u32(0x00010000) == 15
+    assert test_u32(0x00000001) == 31
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+def test_clz_i64():
+    """``qd.math.clz`` on ``i64`` — exercises the 64-bit intrinsic path (``__nv_clzll`` on CUDA, polymorphic
+    ``llvm.ctlz`` on AMDGPU).  Vulkan / Metal are excluded because the SPIR-V lowering is hard-coded to 32 bits."""
+
+    @qd.kernel
+    def test(x: qd.int64) -> qd.int32:
+        return qd.math.clz(x)
+
+    assert test(1) == 63
+    assert test(2) == 62
+    assert test(1 << 32) == 31
+    assert test(1 << 62) == 1
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+def test_clz_u64():
+    """``qd.math.clz`` on ``u64`` — covers values with the top bit set (rejected outright on CUDA before the intrinsic
+    was extended).  SPIR-V excluded for the same 32-bit reason as `test_clz_i64`."""
+
+    @qd.kernel
+    def test(x: qd.uint64) -> qd.int32:
+        return qd.math.clz(x)
+
+    assert test(1) == 63
+    assert test(1 << 63) == 0
+    assert test(0xFFFFFFFFFFFFFFFF) == 0
+    assert test(1 << 32) == 31
 
 
 @test_utils.test(arch=[qd.metal])
