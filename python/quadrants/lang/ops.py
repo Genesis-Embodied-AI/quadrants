@@ -1180,13 +1180,18 @@ def ffs(a):
     signedness.
     """
 
-    def _ffs(x):
-        if x == 0:
-            return 0
-        i = 0
-        while (x >> i) & 1 == 0:
-            i += 1
-        return i + 1
+    def _ffs(_):
+        # No Python fallback: ffs is bitwidth-dependent (an i32 that wraps around to 0 should return 0,
+        # but the same numeric value in Python's arbitrary-precision int would return its real bit
+        # position). Once the value reaches here it's a plain Python int with no width attached, so
+        # there's no single answer that matches native backends. This path is only hit on the
+        # `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR
+        # / codegen and never see it. Same treatment as popcnt / clz for consistency.
+        raise NotImplementedError(
+            "qd.math.ffs has no Python fallback: the result depends on the operand's bitwidth "
+            "(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend "
+            "(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal)."
+        )
 
     return _unary_operation(_qd_core.expr_ffs, _ffs, a)
 
