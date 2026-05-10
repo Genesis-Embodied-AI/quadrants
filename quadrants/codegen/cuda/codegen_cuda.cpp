@@ -292,6 +292,21 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       } else {
         QD_NOT_IMPLEMENTED
       }
+    } else if (op == UnaryOpType::ffs) {
+      // ffs(x): 1-indexed position of the lowest set bit, with `ffs(0) == 0` (CUDA __ffs convention).
+      // libdevice's `__nv_ffs` / `__nv_ffsll` already produce exactly that contract. As with clz, LLVM
+      // IR is signless for integers, so u32 / u64 lower to the same intrinsic as their signed counterparts.
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
+        stmt->ret_type = PrimitiveType::i32;
+        llvm_val[stmt] = call("__nv_ffs", input);
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        stmt->ret_type = PrimitiveType::i32;
+        llvm_val[stmt] = call("__nv_ffsll", input);
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
     } else if (op == UnaryOpType::log) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
         // logf has fast-math option
