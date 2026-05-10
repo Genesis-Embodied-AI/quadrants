@@ -18,18 +18,20 @@ Algorithm (Golub & Van Loan, §8.5):
 
 The outer sweep loop is a runtime ``range`` so compile time stays bounded
 even at N=12 (the inner ``(p, q)`` and per-row ``static(range)`` updates
-already give straight-line code per Givens step). For runtime ``range``
-inside an ``@qd.func`` to actually iterate, the calling ``@qd.kernel``
-must have its own outermost ``for _tid in range(...)`` — see
+already give straight-line code per Givens step). The sweep loop is
+explicitly tagged ``loop_config(serialize=True)``, so a calling
+``@qd.kernel`` without its own outermost ``for ... in range(...)`` will
+still execute the sweeps sequentially on a single thread instead of
+parallelizing them — see
 ``perso_hugh/doc/quadrants_runtime_range_in_func_parallelized_gotcha_20260510.md``
-for the gotcha. Tests in ``tests/python/test_eig.py`` follow that
-convention.
+for the underlying gotcha that this directive sidesteps.
 """
 
 from quadrants.lang import ops
 from quadrants.lang.impl import static
 from quadrants.lang.kernel_impl import func
 from quadrants.lang.matrix import Matrix, Vector
+from quadrants.lang.misc import loop_config
 
 _CONSIDER_AS_ZERO = 1e-30
 _MAX_SWEEPS = 12
@@ -62,6 +64,7 @@ def sym_eig_general(A, dt):
             eigvecs[i, j] = zero
         eigvecs[i, i] = one
 
+    loop_config(serialize=True)
     for _sweep in range(_MAX_SWEEPS):
         for p in static(range(N)):
             for q in static(range(N)):

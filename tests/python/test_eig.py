@@ -280,8 +280,7 @@ def _test_sym_eig_general(n, dt, factory):
 
     @qd.kernel
     def run():
-        for _tid in range(1):
-            eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
+        eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
 
     run()
     eigvals_qd = eigvals.to_numpy().astype(np_dt)
@@ -341,8 +340,7 @@ def _test_make_spd(n, dt, factory):
 
     @qd.kernel
     def run():
-        for _tid in range(1):
-            A_spd[None] = qd.make_spd(A[None], dt)
+        A_spd[None] = qd.make_spd(A[None], dt)
 
     run()
     A_spd_qd = A_spd.to_numpy().astype(np_dt)
@@ -398,8 +396,7 @@ def _test_sym_eig_trivial(n, dt, A_np, expected_eigvals):
 
     @qd.kernel
     def run():
-        for _tid in range(1):
-            eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
+        eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
 
     run()
     tol = 5e-3 if dt == qd.f32 else 1e-9
@@ -432,13 +429,11 @@ def _test_make_spd_idempotent(n, dt, factory):
 
     @qd.kernel
     def run_first():
-        for _tid in range(1):
-            A_spd_1[None] = qd.make_spd(A[None], dt)
+        A_spd_1[None] = qd.make_spd(A[None], dt)
 
     @qd.kernel
     def run_second():
-        for _tid in range(1):
-            A_spd_2[None] = qd.make_spd(A_spd_1[None], dt)
+        A_spd_2[None] = qd.make_spd(A_spd_1[None], dt)
 
     run_first()
     run_second()
@@ -475,8 +470,7 @@ def test_make_spd_negative_definite_zero_f64(n):
 
     @qd.kernel
     def run():
-        for _tid in range(1):
-            A_spd[None] = qd.make_spd(A[None], qd.f64)
+        A_spd[None] = qd.make_spd(A[None], qd.f64)
 
     run()
     tol = 1e-9
@@ -493,7 +487,6 @@ def test_sym_eig_above_cap_raises():
 
         @qd.kernel
         def run():
-            for _tid in range(1):
-                _ = qd.sym_eig(A[None], qd.f64)
+            _ = qd.sym_eig(A[None], qd.f64)
 
         run()
