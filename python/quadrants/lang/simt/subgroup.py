@@ -205,16 +205,15 @@ def reduce_all_add(value, log2_size: template()):
 def reduce_min(value, log2_size: template()):
     """Min of ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
 
-    The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial mins.
-    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
-    (32 on CUDA / Metal / RDNA, 64 on CDNA).
+    The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial mins.  Caller must ensure
+    ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal / RDNA, 64 on CDNA).
 
-    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
-    shuffle+min operations in the calling kernel's IR.
+    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size`` shuffle+min operations in
+    the calling kernel's IR.
 
-    Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic
-    (``fminnm`` on PTX, ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether
-    NaN propagates or is suppressed.  Avoid NaN inputs if you need a portable result.
+    Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic (``fminnm`` on PTX,
+    ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether NaN propagates or is suppressed.
+    Avoid NaN inputs if you need a portable result.
     """
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << (log2_size - 1 - i))
@@ -226,9 +225,8 @@ def reduce_min(value, log2_size: template()):
 def reduce_max(value, log2_size: template()):
     """Max of ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
 
-    See `reduce_min` for the size contract, the unrolling shape, and the NaN caveat (with ``qd.max``
-    in place of ``qd.min``).  The result is valid in lane 0 of each group; other lanes hold partial
-    maxes.
+    See `reduce_min` for the size contract, the unrolling shape, and the NaN caveat (with ``qd.max`` in place of
+    ``qd.min``).  The result is valid in lane 0 of each group; other lanes hold partial maxes.
     """
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << (log2_size - 1 - i))
@@ -240,10 +238,9 @@ def reduce_max(value, log2_size: template()):
 def reduce_all_min(value, log2_size: template()):
     """Min of ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.
 
-    The result is broadcast to all ``2**log2_size`` lanes.  Same size contract, unrolling shape,
-    and NaN caveat as `reduce_min`.  Use this when every lane needs the reduction (e.g. to subtract
-    the min, or to branch on it uniformly): same shuffle count as `reduce_min`, no extra broadcast
-    needed.
+    The result is broadcast to all ``2**log2_size`` lanes.  Same size contract, unrolling shape, and NaN caveat as
+    `reduce_min`.  Use this when every lane needs the reduction (e.g. to subtract the min, or to branch on it
+    uniformly): same shuffle count as `reduce_min`, no extra broadcast needed.
     """
     lane = invocation_id()
     for i in impl.static(range(log2_size)):
@@ -273,35 +270,33 @@ def reduce_all_max(value, log2_size: template()):
 
 # --- Segmented reduce ------------------------------------------------------------------
 #
-# `segmented_reduce_add(value, head_flag, log2_size)` runs a per-lane inclusive sum where every lane with
-# ``head_flag != 0`` resets the running sum: lane ``i`` ends up holding ``value[head_below..i]``-sum, where
-# ``head_below`` is the largest lane ``<= i`` (within the lane's ``2**log2_size`` group) whose ``head_flag``
-# is non-zero.  If no such lane exists the algorithm treats the group's first lane as an implicit head, so
-# a segment that runs from ``group_base`` to the lane is still summed correctly.
+# `segmented_reduce_add(value, head_flag, log2_size)` runs a per-lane inclusive sum where every lane with ``head_flag
+# != 0`` resets the running sum: lane ``i`` ends up holding ``value[head_below..i]``-sum, where ``head_below`` is the
+# largest lane ``<= i`` (within the lane's ``2**log2_size`` group) whose ``head_flag`` is non-zero.  If no such lane
+# exists the algorithm treats the group's first lane as an implicit head, so a segment that runs from ``group_base``
+# to the lane is still summed correctly.
 #
-# Implementation: one ``ballot`` to materialise a u32 of head positions, then a Hillis-Steele inclusive sum
-# bounded by ``distance >= offset`` (where ``distance = lane - segment_head``).  ``segment_head`` comes from
-# ``31 - clz(effective_mask & ((1 << (lane + 1)) - 1))`` with an OR-injected virtual head at ``group_base``
-# to guarantee a non-zero ``lower``.  Cost: 1 ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` adds —
-# the same shape as `inclusive_add`, plus a single-instruction setup.
+# Implementation: one ``ballot`` to materialise a u32 of head positions, then a Hillis-Steele inclusive sum bounded by
+# ``distance >= offset`` (where ``distance = lane - segment_head``).  ``segment_head`` comes from ``31 -
+# clz(effective_mask & ((1 << (lane + 1)) - 1))`` with an OR-injected virtual head at ``group_base`` to guarantee a
+# non-zero ``lower``.  Cost: 1 ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` adds — the same shape as
+# `inclusive_add`, plus a single-instruction setup.
 
 
 @func
 def segmented_reduce_add(value, head_flag, log2_size: template()):
     """Per-lane inclusive sum that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.
 
-    Lane ``i`` returns ``sum(value[head_below..i+1])``, where ``head_below`` is the largest lane index ``<=
-    i`` (within the lane's ``2**log2_size`` group) whose ``head_flag`` is non-zero.  If no such lane exists
-    inside the group, the group's first lane is treated as an implicit head, so the result is the inclusive
-    sum from ``group_base`` to ``i``.
+    Lane ``i`` returns ``sum(value[head_below..i+1])``, where ``head_below`` is the largest lane index ``<= i`` (within
+    the lane's ``2**log2_size`` group) whose ``head_flag`` is non-zero.  If no such lane exists inside the group, the
+    group's first lane is treated as an implicit head, so the result is the inclusive sum from ``group_base`` to ``i``.
 
     Caller contract:
 
-    * ``2**log2_size`` must not exceed 32 (the underlying ``ballot`` returns a ``u32`` covering the first 32
-      lanes; on AMDGPU CDNA wave64 only the low 32 lanes contribute).  ``log2_size`` is a ``qd.template()``
-      compile-time constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.
-    * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values
-      work.
+    * ``2**log2_size`` must not exceed 32 (the underlying ``ballot`` returns a ``u32`` covering the first 32 lanes; on
+      AMDGPU CDNA wave64 only the low 32 lanes contribute).  ``log2_size`` is a ``qd.template()`` compile-time
+      constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.
+    * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values work.
     * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``.
     """
     head_mask = ballot(i32(head_flag != 0))

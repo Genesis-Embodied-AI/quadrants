@@ -970,9 +970,8 @@ def test_subgroup_segmented_reduce_add(dtype, log2_size):
             dst[i] = subgroup.segmented_reduce_add(src[i], head[i], log2_size)
 
     _init_varied_int_or_float(src, N, dtype)
-    # Head pattern: heads at lanes 0, 3, 7, 12, 19, 25 — varied gaps, plus one group where the group base
-    # is not a head (e.g. for log2_size=2, lane 4 is a group base but not a head, exercising the implicit
-    # head fallback).
+    # Head pattern: heads at lanes 0, 3, 7, 12, 19, 25 — varied gaps, plus one group where the group base is not a head
+    # (e.g. for log2_size=2, lane 4 is a group base but not a head, exercising the implicit head fallback).
     head_lanes = {0, 3, 7, 12, 19, 25}
     heads_py = [1 if i in head_lanes else 0 for i in range(N)]
     for i in range(N):
