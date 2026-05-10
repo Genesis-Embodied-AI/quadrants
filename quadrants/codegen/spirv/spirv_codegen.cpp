@@ -1049,11 +1049,16 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
   } else if (stmt->op_type == UnaryOpType::popcnt) {
     val = ir_->popcnt(operand_val);
   } else if (stmt->op_type == UnaryOpType::clz) {
-    uint32_t FindMSB_id = 74;
-    spirv::Value msb = ir_->call_glsl450(dst_type, FindMSB_id, operand_val);
+    // GLSL.std.450 has separate FindSMsb (#74) and FindUMsb (#75); both return a value of the same type as their
+    // operand.  The unsigned form is required for u32 / u64 inputs whose top bit may be set, otherwise FindSMsb
+    // treats them as negative and the result is undefined for values like 0xFFFFFFFF (no most-significant 0-bit).
+    bool input_signed = is_signed(stmt->operand->ret_type);
+    uint32_t FindMSB_id = input_signed ? 74 : 75;
+    spirv::Value msb = ir_->call_glsl450(operand_val.stype, FindMSB_id, operand_val);
+    spirv::Value msb_i32 = input_signed ? msb : ir_->cast(ir_->i32_type(), msb);
     spirv::Value bitcnt = ir_->int_immediate_number(ir_->i32_type(), 32);
     spirv::Value one = ir_->int_immediate_number(ir_->i32_type(), 1);
-    val = ir_->sub(ir_->sub(bitcnt, msb), one);
+    val = ir_->sub(ir_->sub(bitcnt, msb_i32), one);
   }
 #define UNARY_OP_TO_SPIRV(op, instruction, instruction_id, max_bits)                           \
   else if (stmt->op_type == UnaryOpType::op) {                                                 \

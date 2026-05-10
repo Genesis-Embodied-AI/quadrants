@@ -312,7 +312,10 @@ def segmented_reduce_add(value, head_flag, log2_size: template()):
     effective_mask = (head_mask & group_mask) | (u32(1) << group_base)
     inclusive_mask = u32(0xFFFFFFFF) >> u32(i32(31) - lane)
     lower = effective_mask & inclusive_mask
-    segment_head = i32(31) - clz(lower)
+    # `clz` follows the input type on most backends (CUDA explicitly normalizes to i32; AMDGPU LLVM `ctlz` returns
+    # input type; SPIR-V FindUMsb returns the input type).  Wrap the result in `i32(...)` so the subsequent arithmetic
+    # is uniformly signed-32-bit and SPIR-V's strict-type `sub` is happy.
+    segment_head = i32(31) - i32(clz(lower))
     distance = lane - segment_head
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << i)

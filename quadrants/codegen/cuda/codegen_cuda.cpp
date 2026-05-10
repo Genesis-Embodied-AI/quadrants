@@ -278,10 +278,14 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         QD_NOT_IMPLEMENTED
       }
     } else if (op == UnaryOpType::clz) {
-      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
+      // __nv_clz / __nv_clzll are declared on signed types but operate on the underlying bit pattern, so it's safe to
+      // route u32 / u64 through the same intrinsics.  Without this, qd.clz(u32(...)) hits QD_NOT_IMPLEMENTED.
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
         stmt->ret_type = PrimitiveType::i32;
         llvm_val[stmt] = call("__nv_clz", input);
-      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64)) {
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
         llvm_val[stmt] = call("__nv_clzll", input);
       } else {
         QD_NOT_IMPLEMENTED
