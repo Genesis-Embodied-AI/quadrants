@@ -370,6 +370,90 @@ def test_mat_inverse_size(n):
     np.testing.assert_almost_equal(m_np, np.linalg.inv(M))
 
 
+# ---------------------------------------------------------------------------
+# Matrix.inverse for N up to 12 (LU with partial pivoting).
+#
+# qipc's ABD diagonal preconditioner needs Matrix.inverse at sizes up to
+# 12×12. The existing closed-form path (≤ 4×4) is preserved; sizes 5–12
+# dispatch to a generic LU-with-partial-pivoting impl.
+# ---------------------------------------------------------------------------
+
+
+def _inverse_diagonally_dominant(n_, dt_):
+    """Random N×N with a strong diagonal — well-conditioned, non-symmetric."""
+    np_dt = np.float32 if dt_ == qd.f32 else np.float64
+    rng = np.random.default_rng(0xD0B7 + n_)
+    M = rng.standard_normal((n_, n_)).astype(np_dt)
+    M += np.eye(n_, dtype=np_dt) * (n_ + 1)
+    return M
+
+
+def _inverse_spd(n_, dt_):
+    """Symmetric positive-definite (qipc's ABD preconditioner is SPD)."""
+    np_dt = np.float32 if dt_ == qd.f32 else np.float64
+    rng = np.random.default_rng(0x5BD0 + n_)
+    A = rng.standard_normal((n_, n_)).astype(np_dt)
+    return (A @ A.T + np.eye(n_, dtype=np_dt) * 2.0).astype(np_dt)
+
+
+def _inverse_pivoting_required(n_, dt_):
+    """Permuted upper-triangular: top-left entry is zero so no-pivot LU would fail."""
+    np_dt = np.float32 if dt_ == qd.f32 else np.float64
+    rng = np.random.default_rng(0xB1C7 + n_)
+    M = np.triu(rng.standard_normal((n_, n_)).astype(np_dt))
+    np.fill_diagonal(M, np.arange(1.0, n_ + 1.0, dtype=np_dt))
+    P = np.eye(n_, dtype=np_dt)
+    perm = list(reversed(range(n_)))
+    return (P[perm] @ M).astype(np_dt)
+
+
+def _test_inverse_at_size(n_, dt_, factory):
+    m = qd.Matrix.field(n_, n_, dtype=dt_, shape=())
+    inv = qd.Matrix.field(n_, n_, dtype=dt_, shape=())
+    M = factory(n_, dt_)
+    assert np.abs(np.linalg.det(M)) > 1e-6, "test factory produced near-singular input"
+    m.from_numpy(M)
+
+    @qd.kernel
+    def run():
+        inv[None] = m[None].inverse()
+
+    run()
+
+    inv_np = inv.to_numpy()
+    expected = np.linalg.inv(M)
+    cond = float(np.linalg.cond(M))
+    eps = np.finfo(np.float32 if dt_ == qd.f32 else np.float64).eps
+    tol = 50 * cond * eps + (1e-5 if dt_ == qd.f32 else 1e-12)
+
+    np.testing.assert_allclose(
+        inv_np, expected, rtol=tol, atol=tol,
+        err_msg=f"size {n_}, factory {factory.__name__}, cond={cond:.2e}",
+    )
+    # Round-trip M @ M⁻¹ ≈ I.
+    np.testing.assert_allclose(M @ inv_np, np.eye(n_), rtol=tol, atol=tol)
+
+
+@pytest.mark.parametrize("n", [5, 6, 7, 8, 9, 10, 11, 12])
+@pytest.mark.parametrize(
+    "factory",
+    [_inverse_diagonally_dominant, _inverse_spd, _inverse_pivoting_required],
+)
+@test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
+def test_inverse_large_f32(n, factory):
+    _test_inverse_at_size(n, qd.f32, factory)
+
+
+@pytest.mark.parametrize("n", [5, 6, 7, 8, 9, 10, 11, 12])
+@pytest.mark.parametrize(
+    "factory",
+    [_inverse_diagonally_dominant, _inverse_spd, _inverse_pivoting_required],
+)
+@test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
+def test_inverse_large_f64(n, factory):
+    _test_inverse_at_size(n, qd.f64, factory)
+
+
 @test_utils.test()
 def test_matrix_factories():
     a = qd.Vector.field(3, dtype=qd.i32, shape=3)
