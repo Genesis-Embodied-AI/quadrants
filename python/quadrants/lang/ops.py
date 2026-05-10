@@ -1171,6 +1171,26 @@ def clz(a):
     return _unary_operation(_qd_core.expr_clz, _clz, a)
 
 
+def ffs(a):
+    """Find first (lowest) set bit in ``a``.
+
+    Returns the 1-indexed position of the lowest set bit in ``a`` as an ``i32``, with ``ffs(0) == 0``
+    (the CUDA ``__ffs`` convention). Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported
+    backend; the count is over the unsigned bit pattern, so ``ffs(-1) == 1`` regardless of input
+    signedness.
+    """
+
+    def _ffs(x):
+        if x == 0:
+            return 0
+        i = 0
+        while (x >> i) & 1 == 0:
+            i += 1
+        return i + 1
+
+    return _unary_operation(_qd_core.expr_ffs, _ffs, a)
+
+
 @writeback_binary
 def atomic_add(x, y):
     """Atomically compute `x + y`, store the result in `x`,

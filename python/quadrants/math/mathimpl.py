@@ -823,6 +823,11 @@ def clz(x):
     return ops.clz(x)
 
 
+@func
+def ffs(x):
+    return ops.ffs(x)
+
+
 __all__ = [
     "acos",
     "asin",
@@ -839,6 +844,7 @@ __all__ = [
     "e",
     "exp",
     "eye",
+    "ffs",
     "floor",
     "fract",
     "inf",
