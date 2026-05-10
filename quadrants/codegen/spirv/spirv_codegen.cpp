@@ -1100,6 +1100,49 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     // dst_type is i32 across every backend (set by type_check for popcnt / clz), so this cast is a no-op
     // for the i32 result we just computed; ir_->cast() returns the value unchanged when types match.
     val = ir_->cast(dst_type, clz_i32);
+  } else if (stmt->op_type == UnaryOpType::ffs) {
+    // ffs(x): 1-indexed position of the lowest set bit in x; 0 when x == 0 (CUDA __ffs convention).
+    // GLSL.std.450 FindILsb (id 73) returns the 0-indexed lowest set bit, or -1 on a zero input. We map:
+    //   ffs(x) = (x == 0) ? 0 : FindILsb(x) + 1
+    // All arithmetic in i32, then cast back to dst_type. 64-bit inputs are synthesised by inspecting the
+    // low half first (since "first" = lowest-indexed bit); if the low half is zero we use the high half
+    // offset by 32. The bias has to be 32 (not 33) when applied to FindILsb(hi) directly, since +1 is
+    // built into the lo-half arm via `lo_lsb + 1`; for the hi-half arm we use `hi_lsb + 33`.
+    uint32_t FindILsb_id = 73;
+    auto i32_t = ir_->i32_type();
+    auto zero_i32 = ir_->int_immediate_number(i32_t, 0);
+    auto one_i32 = ir_->int_immediate_number(i32_t, 1);
+    spirv::Value ffs_i32;
+    if (data_type_bits(src_dt) == 64) {
+      auto u64_t = ir_->u64_type();
+      auto val_u64 = ir_->cast(u64_t, operand_val);
+      auto thirty_two_u64 = ir_->uint_immediate_number(u64_t, 32);
+      auto hi_u64 = ir_->make_value(spv::OpShiftRightLogical, u64_t, val_u64, thirty_two_u64);
+      auto hi = ir_->cast(i32_t, hi_u64);
+      auto lo = ir_->cast(i32_t, val_u64);
+      auto lo_lsb = ir_->call_glsl450(i32_t, FindILsb_id, lo);
+      auto hi_lsb = ir_->call_glsl450(i32_t, FindILsb_id, hi);
+      auto thirty_three_i32 = ir_->int_immediate_number(i32_t, 33);
+      auto lo_plus_one = ir_->add(lo_lsb, one_i32);
+      auto hi_plus_thirty_three = ir_->add(hi_lsb, thirty_three_i32);
+      auto lo_zero = ir_->eq(lo, zero_i32);
+      auto hi_zero = ir_->eq(hi, zero_i32);
+      auto both_zero = ir_->logical_and(lo_zero, hi_zero);
+      auto half_pos = ir_->select(lo_zero, hi_plus_thirty_three, lo_plus_one);
+      ffs_i32 = ir_->select(both_zero, zero_i32, half_pos);
+    } else if (data_type_bits(src_dt) == 32) {
+      // Cast operand to i32 so FindILsb's result type matches our i32 arithmetic. For i32 input this is a
+      // no-op; for u32 input cast() emits an OpBitcast.
+      auto val_i32 = ir_->cast(i32_t, operand_val);
+      auto lsb = ir_->call_glsl450(i32_t, FindILsb_id, val_i32);
+      auto lsb_plus_one = ir_->add(lsb, one_i32);
+      auto is_zero = ir_->eq(val_i32, zero_i32);
+      ffs_i32 = ir_->select(is_zero, zero_i32, lsb_plus_one);
+    } else {
+      QD_NOT_IMPLEMENTED
+    }
+    // Convert the i32 first-set-bit position to the dst_type the pipeline expects (i32 / u32 / i64 / u64).
+    val = ir_->cast(dst_type, ffs_i32);
   }
 #define UNARY_OP_TO_SPIRV(op, instruction, instruction_id, max_bits)                           \
   else if (stmt->op_type == UnaryOpType::op) {                                                 \
