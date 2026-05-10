@@ -788,10 +788,8 @@ def create_field_member(dtype, name, needs_grad, needs_dual):
         if prog.config().debug:
             # adjoint checkbit
             x_grad_checkbit = Expr(prog.make_id_expr(""))
-            dtype = u8
-            if prog.config().arch == _qd_core.vulkan:
-                dtype = i32
-            x_grad_checkbit.ptr = _qd_core.expr_field(x_grad_checkbit.ptr, cook_dtype(dtype))
+            checkbit_dtype = i32 if prog.config().arch == _qd_core.vulkan else u8
+            x_grad_checkbit.ptr = _qd_core.expr_field(x_grad_checkbit.ptr, cook_dtype(checkbit_dtype))
             x_grad_checkbit.ptr.set_name(name + ".grad_checkbit")
             x_grad_checkbit.ptr.set_grad_type(SNodeGradType.ADJOINT_CHECKBIT)
             x.ptr.set_adjoint_checkbit(x_grad_checkbit.ptr)
