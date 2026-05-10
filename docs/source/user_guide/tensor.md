@@ -264,7 +264,7 @@ t_field.grad   # Tensor wrapper around an un-placed grad field (ready for manual
 t_nd.grad      # None
 ```
 
-Use `needs_grad=True` for the common case of "I want a writable gradient now". Integer dtypes are symmetric (`grad is None` on both backends regardless of `needs_grad`).
+Pass `needs_grad=True` at tensor creation to automatically allocate gradient storage with default memory layout if needed: floating-point tensors get a grad buffer of the same shape and dtype as the primal, whereas integer-dtype tensors never get a grad buffer - `needs_grad=True` is a no-op there.
 
 Use `Tensor.has_grad()` / `Tensor.has_dual()` to check whether the gradient storage is actually allocated, regardless of whether the allocation came from `needs_grad=True` or a manual `qd.root.place(field.grad)`:
 
