@@ -902,3 +902,50 @@ def test_vector_field_to_numpy_copy_true_independent():
     f.from_numpy(np.array([[99, 88, 77], [66, 55, 44]], dtype=np.float32))
     qd.sync()
     np.testing.assert_allclose(arr, [[1, 2, 3], [4, 5, 6]])
+
+
+@test_utils.test(debug=True)
+def test_debug_needs_grad_zerocopy_view_indices_match():
+    """Writes through a zero-copy torch view of a ``needs_grad`` field land at the same indices in the field.
+
+    Internal details: pins that a standalone ``needs_grad`` field's primal dense container has a single-member cell in
+    debug mode, so the DLPack contiguous strides exported by ``field_to_dlpack`` match the actual per-cell byte stride.
+    Adding any sibling place child (e.g. an adjoint-checkbit) to the same dense doubles the cell stride while DLPack
+    keeps reporting tight strides, and writes via the torch view land at half-cell offsets.
+    """
+    _skip_if_no_zerocopy()
+    N = 16
+    x = qd.field(qd.f32, shape=(N,), needs_grad=True)
+    view = x.to_torch(copy=False)
+    view[7] = 7.0
+    view[10] = 10.0
+    if qd.cfg.arch == qd.metal:
+        torch.mps.synchronize()
+    out = x.to_numpy()
+    expected = np.zeros(N, dtype=np.float32)
+    expected[7] = 7.0
+    expected[10] = 10.0
+    np.testing.assert_allclose(out, expected)
+
+
+@test_utils.test(debug=True)
+def test_debug_needs_grad_parent_is_single_child():
+    """A standalone ``needs_grad`` field accepts ``to_torch(copy=False)`` in debug mode.
+
+    Internal details: pins ``parent.get_num_ch() == 1`` for the primal dense, which is what ``_is_aos_struct_member``
+    checks to allow zero-copy export. Anything that adds a sibling place child to the primal's dense (notably the
+    adjoint-checkbit when it is placed there instead of in its own root-level dense) trips that check and makes
+    ``_can_zerocopy_field`` reject the field with ``ValueError: Zero-copy not available``.
+    """
+    _skip_if_no_zerocopy()
+    x = qd.field(qd.f32, shape=(16, 1), needs_grad=True)
+
+    @qd.kernel
+    def touch():
+        x[0, 0] = x[0, 0]
+
+    touch()
+    parent = x.parent()._snode.ptr
+    assert parent.get_num_ch() == 1
+    view = x.to_torch(copy=False)
+    assert tuple(view.shape) == (16, 1)
