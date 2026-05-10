@@ -18,6 +18,8 @@ Device-wide algorithms — primitives that consume and produce whole arrays, exe
 In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `qd.field` — `parallel_sort` reaches into `snode.ptr.offset` internally, so `ndarray` is **not** supported and will fail at trace time with an `AttributeError`.
 
 ```python
+import quadrants as qd
+
 keys = qd.field(qd.i32, shape=(N,))
 qd.algorithms.parallel_sort(keys)
 ```
@@ -93,9 +95,9 @@ flags  = qd.field(qd.i32, shape=(N,))   # 0 or 1 per element
 offsets = qd.field(qd.i32, shape=(N,))
 
 @qd.kernel
-def populate(input: qd.types.NDArray[qd.f32, 1], threshold: qd.f32) -> None:
+def populate(data: qd.types.NDArray[qd.f32, 1], threshold: qd.f32) -> None:
     for i in range(N):
-        flags[i] = 1 if input[i] > threshold else 0
+        flags[i] = 1 if data[i] > threshold else 0
 
 @qd.kernel
 def copy_flags() -> None:
@@ -104,7 +106,7 @@ def copy_flags() -> None:
 
 scan = qd.algorithms.PrefixSumExecutor(N)
 
-populate(input, 0.5)
+populate(data, 0.5)
 copy_flags()
 scan.run(offsets)
 # offsets[i] is now the 1-based output position of element i if it was selected.
