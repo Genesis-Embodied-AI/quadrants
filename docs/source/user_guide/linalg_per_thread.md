@@ -1,6 +1,10 @@
-# Matrix decompositions and solvers
+# Per-thread linear algebra
 
-Small matrix decompositions and linear solvers — the kinds of operations a thread does on a small matrix held in registers (2×2 or 3×3 for SVD / polar / general eig / solve, up to 12×12 for symmetric eig and SPD projection). They are a different category from the element-wise / arithmetic matrix operations covered in [matrix_vector](matrix_vector.md): each entry point here implements a *numerical algorithm* (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.
+Small matrix decompositions and linear solvers that run **per thread, in registers, with no cross-thread cooperation** — every thread independently decomposes / solves its own 2×2 .. 12×12 matrix. No shared memory, no syncs, no atomics on shared state, no warp / subgroup primitives. A 1000-element kernel runs 1000 copies of the algorithm in parallel, each on its own data.
+
+This is a different category from the element-wise / arithmetic matrix operations covered in [matrix_vector_per_thread](matrix_vector_per_thread.md) (also per-thread, but closed-form rather than iterative), and from the cross-thread / sparse linear algebra under `qd.linalg.*` (CG, sparse direct solvers — covered separately).
+
+Each entry point here implements a *numerical algorithm* (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.
 
 All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.make_spd`, `qd.polar_decompose`, `qd.eig`, `qd.solve`) and are intended to be called from inside a `@qd.kernel` or `@qd.func`. They run per thread — each thread independently decomposes its own matrix.
 
@@ -198,6 +202,7 @@ The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `
 
 ## Related
 
-- [matrix_vector](matrix_vector.md) — element-wise / arithmetic matrix operations (`@`, `inverse`, `determinant`, `transpose`, dot, cross, norm, `outer_product`). Covers the operations whose implementation is a single closed-form formula.
+- [matrix_vector](matrix_vector.md) — `qd.Matrix` / `qd.Vector` data types, fields, ndarrays, type annotations.
+- [matrix_vector_per_thread](matrix_vector_per_thread.md) — element-wise / arithmetic matrix operations (`@`, `inverse`, `determinant`, `transpose`, `dot`, `cross`, `norm`, `outer_product`, `frobenius_inner`). Per-thread, but closed-form rather than iterative.
 - `qd.math.*` — scalar math helpers (`qd.math.dot`, `qd.math.cross`, `qd.math.length`, etc.) that operate on vectors / matrices but are not decompositions.
-- `qd.linalg.*` — sparse-matrix linear algebra (CG, sparse solvers); a different namespace and a different problem class.
+- `qd.linalg.*` — cross-thread / sparse-matrix linear algebra (CG, sparse solvers); a different namespace and a different problem class.
