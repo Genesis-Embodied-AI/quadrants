@@ -20,6 +20,8 @@ The closely-related grid-level fence (`qd.simt.grid.memfence()`) is documented a
 | `block.thread_idx()`                            | no   | no     | yes                     |
 | `block.reduce_{add,min,max}(v, tid, ...)`       | yes  | yes    | yes                     |
 | `block.reduce_all_{add,min,max}(v, tid, ...)`   | yes  | yes    | yes                     |
+| `block.inclusive_{add,min,max}(v, tid, ...)`    | yes  | yes    | yes                     |
+| `block.exclusive_{add,min,max}(v, tid, ...)`    | yes  | yes    | yes                     |
 | `grid.memfence()` (device-scope, see below)     | yes  | no     | no                      |
 
 Calling a backend marked "no" raises `ValueError` from the Python layer at trace time. `global_thread_idx()` is verified on CUDA and AMDGPU; the SPIR-V codepath in the wrapper exists but is currently unreachable due to a control-flow quirk in the dispatch and is therefore left undocumented here.
@@ -134,6 +136,33 @@ A generic `block.reduce(value, tid, block_dim, log2_warp, op, dtype)` is also av
 ### `block.reduce_all_{add,min,max}(value, tid, block_dim, log2_warp, dtype)`
 
 The broadcast variants of the above. Identical semantics, but the result is published to a one-slot `SharedArray` and read back by every thread after a second `block.sync()`. Use this when downstream code on every thread needs the block-wide aggregate (e.g. normalising each thread's value by the block sum). Cost: one extra `block.sync()` plus one shared-memory hop vs. the lane-0-only variants. The corresponding generic form is `block.reduce_all(value, tid, block_dim, log2_warp, op, dtype)`.
+
+### `block.inclusive_{add,min,max}(value, tid, block_dim, log2_warp, dtype)`
+
+Block-scope inclusive prefix scans following CUB's `BLOCK_SCAN_WARP_SCANS` strategy: each warp does a Hillis-Steele scan via `subgroup` shuffles, the last lane of each warp publishes the warp aggregate to shared memory, then every thread sequentially folds the cross-warp prefix and applies its own warp's prefix to its scan value. **All threads receive a valid result.** After the call, thread `i` holds `op(v[0], v[1], ..., v[i])`.
+
+Args match `block.reduce_add` (`value, tid, block_dim, log2_warp, dtype`). Cost: per-warp Hillis-Steele tree (`log2_warp` shuffles) + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / 2**log2_warp) - 1` ops on every thread (cross-warp prefix is computed redundantly to avoid a second barrier — same trade-off CUB makes). When the block is exactly one warp the shared-memory path is short-circuited at trace time.
+
+```python
+@qd.kernel
+def kern(src: qd.types.ndarray(ndim=1), out: qd.types.ndarray(ndim=1)):
+    qd.loop_config(block_dim=128)
+    for i in range(N):
+        tid = i % 128
+        out[i] = qd.simt.block.inclusive_add(src[i], tid, 128, 5, qd.i32)
+```
+
+The corresponding generic form is `block.inclusive_scan(value, tid, block_dim, log2_warp, op, dtype)` for custom monoids.
+
+### `block.exclusive_{add,min,max}(value, tid, block_dim, log2_warp[, identity], dtype)`
+
+Block-scope exclusive prefix scans. Same strategy and cost profile as `inclusive_*`, but each thread receives the prefix `op(v[0], ..., v[i-1])` instead — and thread 0 receives the operator's identity.
+
+- `exclusive_add`: identity is the additive zero; derived from `value - value` so callers do not need to pass it. After the call, thread 0 holds 0.
+- `exclusive_min(..., identity, dtype)`: pass `identity` greater than or equal to every legal element of the input — typically `+∞` for floats or the dtype's maximum for integers. Thread 0 holds `identity`. There is no portable type-extreme derivable from `value` alone, so this op takes an explicit `identity` argument (mirrors `subgroup.exclusive_min`).
+- `exclusive_max(..., identity, dtype)`: pass `identity` less than or equal to every legal element of the input — typically `-∞` for floats or the dtype's minimum for integers. Thread 0 holds `identity`.
+
+The corresponding generic form is `block.exclusive_scan(value, tid, block_dim, log2_warp, op, identity, dtype)`.
 
 ## Grid-scope fence: `qd.simt.grid.memfence()`
 

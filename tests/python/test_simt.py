@@ -762,6 +762,279 @@ def test_block_reduce_all_max(dtype, block_dim):
                 assert abs(actual - expected) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected}"
 
 
+# --- Block scan tests ------------------------------------------------------------------
+#
+# `qd.simt.block.{inclusive,exclusive}_{add,min,max}` is the CUB-style block scan: per-warp
+# Hillis-Steele scan via shuffle, last lane of each warp publishes the warp aggregate to
+# shared memory, then every thread sequentially folds the cross-warp prefix and applies its
+# own warp's prefix.  Every thread receives a valid result.
+#
+# We exercise the same three block sizes as block reduce (32 single-warp short-circuit, 128
+# / 256 multi-warp shared-mem) and assert per-thread against a sequential CPU oracle.  The
+# min / max tests use a permuted (non-monotone) input so the scan result genuinely depends
+# on every prefix step, not just the trailing or leading element.
+
+
+def _ref_inclusive_scan_add(values):
+    out = []
+    acc = 0
+    for v in values:
+        acc = acc + v
+        out.append(acc)
+    return out
+
+
+def _ref_exclusive_scan_add(values):
+    out = []
+    acc = 0
+    for v in values:
+        out.append(acc)
+        acc = acc + v
+    return out
+
+
+def _ref_inclusive_scan_op(values, op, identity):
+    out = []
+    acc = identity
+    first = True
+    for v in values:
+        acc = v if first else op(acc, v)
+        first = False
+        out.append(acc)
+    return out
+
+
+def _ref_exclusive_scan_op(values, op, identity):
+    out = []
+    acc = identity
+    for v in values:
+        out.append(acc)
+        acc = op(acc, v)
+    return out
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_inclusive_add(dtype, block_dim):
+    """Block inclusive prefix sum: thread `i` holds `sum(src[block_base..i])`."""
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            dst[i] = block.inclusive_add(src[i], tid, block_dim, 5, dtype)
+
+    _init_field(src, N, dtype)
+    foo()
+
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_inclusive_scan_add(block_vals)
+        for j in range(block_dim):
+            actual = dst[b * block_dim + j]
+            if dtype == qd.i32:
+                assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+            else:
+                assert abs(actual - expected[j]) < 1e-4 * abs(
+                    expected[j] + 1.0
+                ), f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_exclusive_add(dtype, block_dim):
+    """Block exclusive prefix sum: thread `i` holds `sum(src[block_base..i-1])`; thread 0 holds 0."""
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            dst[i] = block.exclusive_add(src[i], tid, block_dim, 5, dtype)
+
+    _init_field(src, N, dtype)
+    foo()
+
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_exclusive_scan_add(block_vals)
+        for j in range(block_dim):
+            actual = dst[b * block_dim + j]
+            if dtype == qd.i32:
+                assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+            else:
+                # First thread's expected is 0; gate the relative tolerance so it doesn't blow up.
+                tol_base = abs(expected[j]) if abs(expected[j]) > 1.0 else 1.0
+                assert (
+                    abs(actual - expected[j]) < 1e-4 * tol_base
+                ), f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_inclusive_min(dtype, block_dim):
+    """Block inclusive prefix min."""
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            dst[i] = block.inclusive_min(src[i], tid, block_dim, 5, dtype)
+
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for i in range(N):
+        v = ((i * 1009) % 997) + 1
+        src[i] = v if dtype in int_dtypes else 1.0 * v
+    foo()
+
+    py_min = lambda a, b: a if a < b else b  # noqa: E731 (intentional 1-line lambda for ref oracle)
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_inclusive_scan_op(block_vals, py_min, 0)
+        for j in range(block_dim):
+            actual = dst[b * block_dim + j]
+            if dtype == qd.i32:
+                assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+            else:
+                assert abs(actual - expected[j]) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_inclusive_max(dtype, block_dim):
+    """Block inclusive prefix max."""
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            dst[i] = block.inclusive_max(src[i], tid, block_dim, 5, dtype)
+
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for i in range(N):
+        v = ((i * 1009) % 997) + 1
+        src[i] = v if dtype in int_dtypes else 1.0 * v
+    foo()
+
+    py_max = lambda a, b: a if a > b else b  # noqa: E731
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_inclusive_scan_op(block_vals, py_max, 0)
+        for j in range(block_dim):
+            actual = dst[b * block_dim + j]
+            if dtype == qd.i32:
+                assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+            else:
+                assert abs(actual - expected[j]) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_exclusive_min(dtype, block_dim):
+    """Block exclusive prefix min; thread 0 holds the supplied identity."""
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    SENTINEL_INT = 1_000_000  # > every value we initialise (max is ~997 from the permuted hash)
+    SENTINEL_FLOAT = 1e9
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            if dtype == qd.i32:
+                dst[i] = block.exclusive_min(src[i], tid, block_dim, 5, SENTINEL_INT, dtype)
+            else:
+                dst[i] = block.exclusive_min(src[i], tid, block_dim, 5, SENTINEL_FLOAT, dtype)
+
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for i in range(N):
+        v = ((i * 1009) % 997) + 1
+        src[i] = v if dtype in int_dtypes else 1.0 * v
+    foo()
+
+    sentinel = SENTINEL_INT if dtype == qd.i32 else SENTINEL_FLOAT
+    py_min = lambda a, b: a if a < b else b  # noqa: E731
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_exclusive_scan_op(block_vals, py_min, sentinel)
+        for j in range(block_dim):
+            actual = dst[b * block_dim + j]
+            if dtype == qd.i32:
+                assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+            else:
+                assert abs(actual - expected[j]) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+
+
+@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
+@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@test_utils.test(arch=qd.gpu)
+def test_block_exclusive_max(dtype, block_dim):
+    """Block exclusive prefix max; thread 0 holds the supplied identity."""
+    NUM_BLOCKS = 4
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    SENTINEL_INT = -1_000_000
+    SENTINEL_FLOAT = -1e9
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            if dtype == qd.i32:
+                dst[i] = block.exclusive_max(src[i], tid, block_dim, 5, SENTINEL_INT, dtype)
+            else:
+                dst[i] = block.exclusive_max(src[i], tid, block_dim, 5, SENTINEL_FLOAT, dtype)
+
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    for i in range(N):
+        v = ((i * 1009) % 997) + 1
+        src[i] = v if dtype in int_dtypes else 1.0 * v
+    foo()
+
+    sentinel = SENTINEL_INT if dtype == qd.i32 else SENTINEL_FLOAT
+    py_max = lambda a, b: a if a > b else b  # noqa: E731
+    for b in range(NUM_BLOCKS):
+        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
+        expected = _ref_exclusive_scan_op(block_vals, py_max, sentinel)
+        for j in range(block_dim):
+            actual = dst[b * block_dim + j]
+            if dtype == qd.i32:
+                assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+            else:
+                assert abs(actual - expected[j]) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+
+
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_broadcast(dtype):
