@@ -201,6 +201,58 @@ def test_frobenius_inner_rectangular_f64(rows, cols):
     _test_frobenius_inner_rectangular(rows, cols, qd.f64)
 
 
+def _test_matmul_chain(dt):
+    """3-way matmul chain at qipc IPC sizes: (9×12) · (12×12) · (12×9) → (9×9).
+
+    Verifies that ``Matrix.__matmul__`` compiles and is numerically correct at the
+    largest size qipc needs. Quadrants imposes no enforced size cap on matmul, but
+    the unrolled `static(range)` triple loop produces ~1296 FMAs per intermediate,
+    so this test catches compile-time blow-up or back-end miscompiles at large
+    sizes.
+    """
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    A_np = np.random.default_rng(0xCA70).standard_normal((9, 12)).astype(np_dt)
+    B_np = np.random.default_rng(0xCA71).standard_normal((12, 12)).astype(np_dt)
+    C_np = np.random.default_rng(0xCA72).standard_normal((12, 9)).astype(np_dt)
+
+    A = qd.Matrix.field(9, 12, dtype=dt, shape=())
+    B = qd.Matrix.field(12, 12, dtype=dt, shape=())
+    C = qd.Matrix.field(12, 9, dtype=dt, shape=())
+    AB = qd.Matrix.field(9, 12, dtype=dt, shape=())
+    ABC_chained = qd.Matrix.field(9, 9, dtype=dt, shape=())
+    ABC_staged = qd.Matrix.field(9, 9, dtype=dt, shape=())
+
+    A.from_numpy(A_np)
+    B.from_numpy(B_np)
+    C.from_numpy(C_np)
+
+    @qd.kernel
+    def run():
+        ABC_chained[None] = A[None] @ B[None] @ C[None]
+        AB[None] = A[None] @ B[None]
+        ABC_staged[None] = AB[None] @ C[None]
+
+    run()
+
+    expected = A_np @ B_np @ C_np
+    tol = 5e-4 if dt == qd.f32 else 1e-10
+
+    np.testing.assert_allclose(ABC_chained.to_numpy(), expected, rtol=tol, atol=tol)
+    np.testing.assert_allclose(ABC_staged.to_numpy(), expected, rtol=tol, atol=tol)
+    np.testing.assert_allclose(AB.to_numpy(), A_np @ B_np, rtol=tol, atol=tol)
+    np.testing.assert_allclose(ABC_chained.to_numpy(), ABC_staged.to_numpy(), rtol=tol, atol=tol)
+
+
+@test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
+def test_matmul_chain_qipc_sizes_f32():
+    _test_matmul_chain(qd.f32)
+
+
+@test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
+def test_matmul_chain_qipc_sizes_f64():
+    _test_matmul_chain(qd.f64)
+
+
 @test_utils.test()
 def test_transpose():
     dim = 3
