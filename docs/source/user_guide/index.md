@@ -57,6 +57,14 @@ tile16
 ```
 
 ```{toctree}
+:caption: Algorithms
+:maxdepth: 1
+:titlesonly:
+
+algorithms
+```
+
+```{toctree}
 :caption: Performance
 :maxdepth: 1
 :titlesonly:

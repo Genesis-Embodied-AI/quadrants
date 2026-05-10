@@ -73,14 +73,21 @@ struct AdStackSizingInfo {
   // the actual gate-passing thread count; `nullopt` falls through to dispatched-threads worst-case sizing (no behavior
   // change versus a kernel without this metadata).
   std::optional<StaticAdStackBoundExpr> bound_expr;
-  // Identity in `Program::adstack_sizing_info_registry_`. Assigned at `finalize_offloaded_task_function`
-  // time after the registry idempotently maps `&this` to a u32 id. Baked as an immediate into the
-  // codegen-emitted lazy-claim `cmpxchg(0, registry_id)` so the host raise site can name the offending
-  // kernel + task in its diagnostic message. `0` means "not registered" - the lazy-claim emit short-
-  // circuits the cmpxchg in that case (no information to record). NOT serialised to the offline cache:
-  // ids are assigned per `Program` lifetime, not per-kernel-content; a deserialised task re-registers
-  // itself at the next launch.
+  // Identity in `AdStackCache::adstack_sizing_info_registry_`. Assigned by `register_adstack_sizing_info` as
+  // `fnv1a32(kernel_name + ":" + task_id_in_kernel)` - a content-stable hash of the unique identity pair below, so the
+  // same (kernel_name, task_id_in_kernel) yields the same id across re-compiles, across `Program` lifetimes, and across
+  // offline-cache reloads. Baked as an immediate into the codegen-emitted lazy-claim `cmpxchg(0, registry_id)` so the
+  // host raise site can name the offending kernel + task in its diagnostic message. `0` is reserved for "not
+  // registered" - the codegen short-circuits the cmpxchg in that case. Serialised to the offline cache: a deserialised
+  // task carries the same id the codegen produced, matching the immediate baked into its LLVM IR; the runtime
+  // re-populates the per-`Program` registry on the first launch via
+  // `AdStackCache::ensure_runtime_registry_ids_for_max_reducer`.
   uint32_t registry_id{0};
+  // Inputs to the content hash above. Persisted on the per-task adstack metadata (rather than parsed from
+  // `OffloadedTask::name`) so the runtime registration call can re-derive the registry entry's diagnostic labels
+  // without depending on the function-name format.
+  std::string kernel_name;
+  int32_t task_id_in_kernel{0};
   // Per-task list of `MaxOverRange` nodes the runtime reduces in parallel via a dedicated max-reducer dispatch (see the
   // max-reducer recognizer). Empty when no captured `size_expr` contains a recognized shape. Each entry references one
   // alloca's `size_expr` by `(stack_id, mor_node_idx)`; the runtime substitutes the dispatched value as a `Const` into
@@ -98,6 +105,9 @@ struct AdStackSizingInfo {
             allocas,
             size_exprs,
             bound_expr,
+            registry_id,
+            kernel_name,
+            task_id_in_kernel,
             max_reducer_specs);
 };
 
