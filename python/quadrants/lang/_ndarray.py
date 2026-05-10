@@ -378,6 +378,20 @@ class Ndarray:
         """
         self.grad = grad
 
+    def has_grad(self) -> bool:
+        """Whether this ndarray has a gradient companion ndarray allocated.
+
+        ``True`` iff the ndarray was allocated with ``needs_grad=True``.
+        """
+        return self.grad is not None
+
+    def has_dual(self) -> bool:
+        """Whether this ndarray has a dual companion ndarray allocated.
+
+        ``Ndarray`` does not support dual storage; always returns ``False``.
+        """
+        return False
+
     def __deepcopy__(self, memo=None):
         """Copies all elements to a new ndarray.
 

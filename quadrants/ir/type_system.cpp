@@ -282,6 +282,7 @@ void Operations::init_internals() {
 #undef INSERT_TRIPLET
 
   PLAIN_OP(linear_thread_idx, i32, true);
+  PLAIN_OP(block_thread_idx, i32, false);
   PLAIN_OP(test_stack, i32_void, true);
   PLAIN_OP(test_active_mask, i32_void, true);
   PLAIN_OP(test_shfl, i32_void, true);
@@ -312,6 +313,7 @@ void Operations::init_internals() {
   PLAIN_OP(block_barrier_and_i32, i32, false, i32);
   PLAIN_OP(block_barrier_or_i32, i32, false, i32);
   PLAIN_OP(block_barrier_count_i32, i32, false, i32);
+  PLAIN_OP(block_mem_fence, i32_void, false);
   PLAIN_OP(grid_memfence, i32_void, false);
   CUDA_VOTE_SYNC(all);
   CUDA_VOTE_SYNC(any);
@@ -345,6 +347,7 @@ void Operations::init_internals() {
   PLAIN_OP(workgroupBarrier, i32_void, false);
   PLAIN_OP(workgroupMemoryBarrier, i32_void, false);
   PLAIN_OP(localInvocationId, i32, false);
+  PLAIN_OP(globalInvocationId, i32, false);
   PLAIN_OP(vkGlobalThreadIdx, i32, false);
   PLAIN_OP(subgroupBarrier, i32_void, false);
   PLAIN_OP(subgroupMemoryBarrier, i32_void, false);

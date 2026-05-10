@@ -231,6 +231,14 @@ class Tensor:
             return None
         return wrap(g)
 
+    def has_grad(self) -> bool:
+        """Whether this tensor's adjoint storage is allocated."""
+        return self._impl.has_grad()
+
+    def has_dual(self) -> bool:
+        """Whether this tensor's dual storage is allocated."""
+        return self._impl.has_dual()
+
     # ------------------------------------------------------------------
     # Pickle (symmetric across backends)
     # ------------------------------------------------------------------
