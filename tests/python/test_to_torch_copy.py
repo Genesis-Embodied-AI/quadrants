@@ -949,3 +949,22 @@ def test_debug_needs_grad_parent_is_single_child():
     assert parent.get_num_ch() == 1
     view = x.to_torch(copy=False)
     assert tuple(view.shape) == (16, 1)
+
+
+@test_utils.test()
+def test_grad_fill_on_unallocated_field_raises_clearly():
+    """``field.grad.fill(...)`` on a field allocated without ``needs_grad`` raises a clear error, not a kernel crash.
+
+    Internal details: pins the ``_require_placed`` guard on ``ScalarField.fill`` / ``to_numpy`` / ``from_numpy`` /
+    ``__setitem__`` / ``__getitem__``. ``create_field_member`` always allocates the adjoint ``FieldExpression`` for
+    real-dtype fields, but ``_field()`` only places the SNode when ``needs_grad=True``; reaching the un-placed wrapper
+    via ``field.grad`` and writing to it used to crash deep in ``fill_field`` AST compilation with
+    ``AttributeError: 'NoneType' object has no attribute 'data_type'``. The guard surfaces a
+    ``QuadrantsRuntimeError`` instead so callers can ``try/except`` (or check) cleanly.
+    """
+    x = qd.tensor(dtype=qd.f32, shape=(16, 1), backend=qd.Backend.FIELD)
+    assert x.grad is not None
+    with pytest.raises(qd.QuadrantsRuntimeError, match="no allocation"):
+        x.grad.fill(0.0)
+    y = qd.tensor(dtype=qd.f32, shape=(4,), backend=qd.Backend.FIELD, needs_grad=True)
+    y.grad.fill(0.0)
