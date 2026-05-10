@@ -1,0 +1,25 @@
+quadrants.lang.runtime_ops
+==========================
+
+.. py:module:: quadrants.lang.runtime_ops
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.runtime_ops.sync
+
+
+Module Contents
+---------------
+
+.. py:function:: sync()
+
+   Synchronizes the default stream.
+
+   Blocks the calling thread until all work on the default GPU stream has completed.  Kernels launched on explicit
+   streams created via :func:`quadrants.create_stream` are **not** waited on — call ``stream.synchronize()`` for those.
+
+
