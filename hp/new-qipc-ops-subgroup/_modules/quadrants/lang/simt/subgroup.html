@@ -494,6 +494,83 @@
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupBroadcast&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
 
+<span class="c1"># --- Lane masks ------------------------------------------------------------------------</span>
+<span class="c1">#</span>
+<span class="c1"># Five trivial ``u32`` constants parametrised by a lane id, mirroring CUDA&#39;s ``__lanemask_{lt,le,eq,gt,ge}``.  They are</span>
+<span class="c1"># portable arithmetic wrappers (no backend intrinsic): every backend that lowers ``shl`` / ``sub`` / ``not`` lowers</span>
+<span class="c1"># them.  Pass ``invocation_id()`` to get the current lane&#39;s mask, or any other integer expression in ``[0, 31]`` to</span>
+<span class="c1"># query an arbitrary lane&#39;s mask.</span>
+<span class="c1">#</span>
+<span class="c1"># Caller contract: ``lane_id`` must be in ``[0, 31]`` (matching the ``u32`` return type, which represents 32 lanes).</span>
+<span class="c1"># Passing ``lane_id &gt;= 32`` triggers an undefined-behaviour shift on most backends.  AMDGPU CDNA wave64 callers can</span>
+<span class="c1"># build a 64-bit mask from two ``u32`` ballots if they need lanes 32..63.</span>
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="lanemask_lt">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.lanemask_lt">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">lanemask_lt</span><span class="p">(</span><span class="n">lane_id</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bitmask of lanes strictly below ``lane_id`` — bit ``i`` is set iff ``i &lt; lane_id``.</span>
+
+<span class="sd">    Pass ``invocation_id()`` for the classic CUDA ``__lanemask_lt()`` (current lane&#39;s mask).  Equivalent to</span>
+<span class="sd">    ``(u32(1) &lt;&lt; u32(lane_id)) - u32(1)``; inlined at trace time into 1 shift + 1 subtract.</span>
+
+<span class="sd">    See the module-level note for the ``lane_id ∈ [0, 31]`` contract and the AMDGPU CDNA wave64 caveat.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">u32</span><span class="p">(</span><span class="n">lane_id</span><span class="p">))</span> <span class="o">-</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="lanemask_le">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.lanemask_le">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">lanemask_le</span><span class="p">(</span><span class="n">lane_id</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bitmask of lanes ``&lt;= lane_id`` — bit ``i`` is set iff ``i &lt;= lane_id``.</span>
+
+<span class="sd">    Equivalent to ``lanemask_lt(lane_id) | lanemask_eq(lane_id)``.  See `lanemask_lt` for the contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">one_at_lane</span> <span class="o">=</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">u32</span><span class="p">(</span><span class="n">lane_id</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">one_at_lane</span> <span class="o">|</span> <span class="p">(</span><span class="n">one_at_lane</span> <span class="o">-</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="lanemask_eq">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.lanemask_eq">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">lanemask_eq</span><span class="p">(</span><span class="n">lane_id</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bitmask with exactly one bit set at ``lane_id`` — equivalent to ``u32(1) &lt;&lt; u32(lane_id)``.</span>
+
+<span class="sd">    See `lanemask_lt` for the contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">u32</span><span class="p">(</span><span class="n">lane_id</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="lanemask_gt">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.lanemask_gt">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">lanemask_gt</span><span class="p">(</span><span class="n">lane_id</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bitmask of lanes strictly above ``lane_id`` — bit ``i`` is set iff ``i &gt; lane_id``.</span>
+
+<span class="sd">    Equivalent to ``~lanemask_le(lane_id)``.  See `lanemask_lt` for the contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">one_at_lane</span> <span class="o">=</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">u32</span><span class="p">(</span><span class="n">lane_id</span><span class="p">)</span>
+    <span class="k">return</span> <span class="o">~</span><span class="p">(</span><span class="n">one_at_lane</span> <span class="o">|</span> <span class="p">(</span><span class="n">one_at_lane</span> <span class="o">-</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="lanemask_ge">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.lanemask_ge">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">lanemask_ge</span><span class="p">(</span><span class="n">lane_id</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bitmask of lanes ``&gt;= lane_id`` — bit ``i`` is set iff ``i &gt;= lane_id``.</span>
+
+<span class="sd">    Equivalent to ``~lanemask_lt(lane_id)``.  See `lanemask_lt` for the contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="o">~</span><span class="p">((</span><span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">u32</span><span class="p">(</span><span class="n">lane_id</span><span class="p">))</span> <span class="o">-</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span></div>
+
+
+
 <span class="nd">@func</span>
 <div class="viewcode-block" id="broadcast_first">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.broadcast_first">[docs]</a>
@@ -562,16 +639,15 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Min of ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.</span>
 
-<span class="sd">    The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial mins.</span>
-<span class="sd">    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target</span>
-<span class="sd">    (32 on CUDA / Metal / RDNA, 64 on CDNA).</span>
+<span class="sd">    The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial mins.  Caller must ensure</span>
+<span class="sd">    ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal / RDNA, 64 on CDNA).</span>
 
-<span class="sd">    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``</span>
-<span class="sd">    shuffle+min operations in the calling kernel&#39;s IR.</span>
+<span class="sd">    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size`` shuffle+min operations in</span>
+<span class="sd">    the calling kernel&#39;s IR.</span>
 
-<span class="sd">    Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic</span>
-<span class="sd">    (``fminnm`` on PTX, ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether</span>
-<span class="sd">    NaN propagates or is suppressed.  Avoid NaN inputs if you need a portable result.</span>
+<span class="sd">    Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic (``fminnm`` on PTX,</span>
+<span class="sd">    ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether NaN propagates or is suppressed.</span>
+<span class="sd">    Avoid NaN inputs if you need a portable result.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
         <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">log2_size</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">i</span><span class="p">))</span>
@@ -586,9 +662,8 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Max of ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.</span>
 
-<span class="sd">    See `reduce_min` for the size contract, the unrolling shape, and the NaN caveat (with ``qd.max``</span>
-<span class="sd">    in place of ``qd.min``).  The result is valid in lane 0 of each group; other lanes hold partial</span>
-<span class="sd">    maxes.</span>
+<span class="sd">    See `reduce_min` for the size contract, the unrolling shape, and the NaN caveat (with ``qd.max`` in place of</span>
+<span class="sd">    ``qd.min``).  The result is valid in lane 0 of each group; other lanes hold partial maxes.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
         <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">log2_size</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">i</span><span class="p">))</span>
@@ -603,10 +678,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Min of ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.</span>
 
-<span class="sd">    The result is broadcast to all ``2**log2_size`` lanes.  Same size contract, unrolling shape,</span>
-<span class="sd">    and NaN caveat as `reduce_min`.  Use this when every lane needs the reduction (e.g. to subtract</span>
-<span class="sd">    the min, or to branch on it uniformly): same shuffle count as `reduce_min`, no extra broadcast</span>
-<span class="sd">    needed.</span>
+<span class="sd">    The result is broadcast to all ``2**log2_size`` lanes.  Same size contract, unrolling shape, and NaN caveat as</span>
+<span class="sd">    `reduce_min`.  Use this when every lane needs the reduction (e.g. to subtract the min, or to branch on it</span>
+<span class="sd">    uniformly): same shuffle count as `reduce_min`, no extra broadcast needed.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">lane</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
@@ -640,38 +714,29 @@
 
 <span class="c1"># --- Segmented reduce ------------------------------------------------------------------</span>
 <span class="c1">#</span>
-<span class="c1"># `segmented_reduce_add(value, head_flag, log2_size)` runs a per-lane inclusive sum where every lane with</span>
-<span class="c1"># ``head_flag != 0`` resets the running sum: lane ``i`` ends up holding ``value[head_below..i]``-sum, where</span>
-<span class="c1"># ``head_below`` is the largest lane ``&lt;= i`` (within the lane&#39;s ``2**log2_size`` group) whose ``head_flag``</span>
-<span class="c1"># is non-zero.  If no such lane exists the algorithm treats the group&#39;s first lane as an implicit head, so</span>
-<span class="c1"># a segment that runs from ``group_base`` to the lane is still summed correctly.</span>
+<span class="c1"># `segmented_reduce_{add,min,max}(value, head_flag, log2_size)` runs a per-lane inclusive scan under ``+`` / ``min`` /</span>
+<span class="c1"># ``max`` where every lane with ``head_flag != 0`` resets the running aggregate: lane ``i`` ends up holding the scan of</span>
+<span class="c1"># ``value[head_below..i+1]``, where ``head_below`` is the largest lane ``&lt;= i`` (within the lane&#39;s ``2**log2_size``</span>
+<span class="c1"># group) whose ``head_flag`` is non-zero.  If no such lane exists the algorithm treats the group&#39;s first lane as an</span>
+<span class="c1"># implicit head, so a segment that runs from ``group_base`` to the lane is still aggregated correctly.</span>
 <span class="c1">#</span>
-<span class="c1"># Implementation: one ``ballot`` to materialise a u32 of head positions, then a Hillis-Steele inclusive sum</span>
-<span class="c1"># bounded by ``distance &gt;= offset`` (where ``distance = lane - segment_head``).  ``segment_head`` comes from</span>
-<span class="c1"># ``31 - clz(effective_mask &amp; ((1 &lt;&lt; (lane + 1)) - 1))`` with an OR-injected virtual head at ``group_base``</span>
-<span class="c1"># to guarantee a non-zero ``lower``.  Cost: 1 ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` adds —</span>
-<span class="c1"># the same shape as `inclusive_add`, plus a single-instruction setup.</span>
+<span class="c1"># Implementation: one ``ballot`` to materialise a u32 of head positions, then a Hillis-Steele inclusive scan bounded</span>
+<span class="c1"># by ``distance &gt;= offset`` (where ``distance = lane - segment_head``).  ``segment_head`` comes from</span>
+<span class="c1"># ``31 - clz(effective_mask &amp; ((1 &lt;&lt; (lane + 1)) - 1))`` with an OR-injected virtual head at ``group_base`` to</span>
+<span class="c1"># guarantee a non-zero ``lower``.  Cost: 1 ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` ops — the same shape</span>
+<span class="c1"># as `inclusive_add` / `inclusive_min` / `inclusive_max`, plus a single-instruction setup.</span>
+<span class="c1">#</span>
+<span class="c1"># No identity argument is required (unlike `exclusive_min` / `exclusive_max`) because the per-lane ``distance &gt;=</span>
+<span class="c1"># offset`` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never</span>
+<span class="c1"># combined with the local value.</span>
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="segmented_reduce_add">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Per-lane inclusive sum that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_segment_head_distance</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute ``lane - segment_head`` — how many lanes the current lane sits past its segment head, scoped to</span>
+<span class="sd">    ``2**log2_size`` lanes.  Returns ``0`` at the segment head, ``1, 2, ...`` for later lanes within the segment.</span>
 
-<span class="sd">    Lane ``i`` returns ``sum(value[head_below..i+1])``, where ``head_below`` is the largest lane index ``&lt;=</span>
-<span class="sd">    i`` (within the lane&#39;s ``2**log2_size`` group) whose ``head_flag`` is non-zero.  If no such lane exists</span>
-<span class="sd">    inside the group, the group&#39;s first lane is treated as an implicit head, so the result is the inclusive</span>
-<span class="sd">    sum from ``group_base`` to ``i``.</span>
-
-<span class="sd">    Caller contract:</span>
-
-<span class="sd">    * ``2**log2_size`` must not exceed 32 (the underlying ``ballot`` returns a ``u32`` covering the first 32</span>
-<span class="sd">      lanes; on AMDGPU CDNA wave64 only the low 32 lanes contribute).  ``log2_size`` is a ``qd.template()``</span>
-<span class="sd">      compile-time constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.</span>
-<span class="sd">    * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values</span>
-<span class="sd">      work.</span>
-<span class="sd">    * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``.</span>
+<span class="sd">    Shared by `segmented_reduce_add` / `_min` / `_max`; see the module-level note for the algorithm.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">head_mask</span> <span class="o">=</span> <span class="n">ballot</span><span class="p">(</span><span class="n">i32</span><span class="p">(</span><span class="n">head_flag</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">))</span>
     <span class="n">lane</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span>
@@ -685,12 +750,75 @@
     <span class="c1"># input type; SPIR-V FindUMsb returns the input type).  Wrap the result in `i32(...)` so the subsequent arithmetic</span>
     <span class="c1"># is uniformly signed-32-bit and SPIR-V&#39;s strict-type `sub` is happy.</span>
     <span class="n">segment_head</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="mi">31</span><span class="p">)</span> <span class="o">-</span> <span class="n">i32</span><span class="p">(</span><span class="n">clz</span><span class="p">(</span><span class="n">lower</span><span class="p">))</span>
-    <span class="n">distance</span> <span class="o">=</span> <span class="n">lane</span> <span class="o">-</span> <span class="n">segment_head</span>
+    <span class="k">return</span> <span class="n">lane</span> <span class="o">-</span> <span class="n">segment_head</span>
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="segmented_reduce_add">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_add">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Per-lane inclusive sum that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.</span>
+
+<span class="sd">    Lane ``i`` returns ``sum(value[head_below..i+1])``, where ``head_below`` is the largest lane index ``&lt;= i`` (within</span>
+<span class="sd">    the lane&#39;s ``2**log2_size`` group) whose ``head_flag`` is non-zero.  If no such lane exists inside the group, the</span>
+<span class="sd">    group&#39;s first lane is treated as an implicit head, so the result is the inclusive sum from ``group_base`` to ``i``.</span>
+
+<span class="sd">    Caller contract:</span>
+
+<span class="sd">    * ``2**log2_size`` must not exceed 32 (the underlying ``ballot`` returns a ``u32`` covering the first 32 lanes; on</span>
+<span class="sd">      AMDGPU CDNA wave64 only the low 32 lanes contribute).  ``log2_size`` is a ``qd.template()`` compile-time</span>
+<span class="sd">      constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.</span>
+<span class="sd">    * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values work.</span>
+<span class="sd">    * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">distance</span> <span class="o">=</span> <span class="n">_segment_head_distance</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
         <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">)</span>
         <span class="n">partner</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">offset</span><span class="p">))</span>
         <span class="k">if</span> <span class="n">distance</span> <span class="o">&gt;=</span> <span class="n">offset</span><span class="p">:</span>
             <span class="n">value</span> <span class="o">=</span> <span class="n">value</span> <span class="o">+</span> <span class="n">partner</span>
+    <span class="k">return</span> <span class="n">value</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="segmented_reduce_min">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Per-lane inclusive min that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.</span>
+
+<span class="sd">    Lane ``i`` returns ``min(value[head_below..i+1])``; see `segmented_reduce_add` for the head-flag semantics, the</span>
+<span class="sd">    ``2**log2_size &lt;= 32`` cap, and the truthy-predicate / uniform-CF contract.</span>
+
+<span class="sd">    Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic (``fminnm`` on</span>
+<span class="sd">    PTX, ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether NaN propagates or is suppressed.</span>
+<span class="sd">    Avoid NaN inputs if you need a portable result.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">distance</span> <span class="o">=</span> <span class="n">_segment_head_distance</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">)</span>
+        <span class="n">partner</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">offset</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">distance</span> <span class="o">&gt;=</span> <span class="n">offset</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">partner</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">value</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="segmented_reduce_max">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Per-lane inclusive max that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.</span>
+
+<span class="sd">    See `segmented_reduce_min` (with ``qd.max`` in place of ``qd.min``).  Same head-flag semantics, ``2**log2_size &lt;=</span>
+<span class="sd">    32`` cap, truthy-predicate / uniform-CF contract, and NaN caveat.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">distance</span> <span class="o">=</span> <span class="n">_segment_head_distance</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">)</span>
+        <span class="n">partner</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">offset</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">distance</span> <span class="o">&gt;=</span> <span class="n">offset</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">partner</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">value</span></div>
 
 
@@ -1002,6 +1130,11 @@
     <span class="s2">&quot;any_true&quot;</span><span class="p">,</span>
     <span class="s2">&quot;all_equal&quot;</span><span class="p">,</span>
     <span class="s2">&quot;broadcast_first&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;lanemask_lt&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;lanemask_le&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;lanemask_eq&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;lanemask_gt&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;lanemask_ge&quot;</span><span class="p">,</span>
     <span class="s2">&quot;reduce_add&quot;</span><span class="p">,</span>
     <span class="s2">&quot;reduce_all_add&quot;</span><span class="p">,</span>
     <span class="s2">&quot;reduce_min&quot;</span><span class="p">,</span>
@@ -1009,6 +1142,8 @@
     <span class="s2">&quot;reduce_all_min&quot;</span><span class="p">,</span>
     <span class="s2">&quot;reduce_all_max&quot;</span><span class="p">,</span>
     <span class="s2">&quot;segmented_reduce_add&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;segmented_reduce_min&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;segmented_reduce_max&quot;</span><span class="p">,</span>
     <span class="s2">&quot;inclusive_add&quot;</span><span class="p">,</span>
     <span class="s2">&quot;inclusive_mul&quot;</span><span class="p">,</span>
     <span class="s2">&quot;inclusive_min&quot;</span><span class="p">,</span>

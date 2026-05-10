@@ -18,6 +18,11 @@ Functions
    quadrants.lang.simt.subgroup.all_true
    quadrants.lang.simt.subgroup.any_true
    quadrants.lang.simt.subgroup.all_equal
+   quadrants.lang.simt.subgroup.lanemask_lt
+   quadrants.lang.simt.subgroup.lanemask_le
+   quadrants.lang.simt.subgroup.lanemask_eq
+   quadrants.lang.simt.subgroup.lanemask_gt
+   quadrants.lang.simt.subgroup.lanemask_ge
    quadrants.lang.simt.subgroup.broadcast_first
    quadrants.lang.simt.subgroup.reduce_add
    quadrants.lang.simt.subgroup.reduce_all_add
@@ -26,6 +31,8 @@ Functions
    quadrants.lang.simt.subgroup.reduce_all_min
    quadrants.lang.simt.subgroup.reduce_all_max
    quadrants.lang.simt.subgroup.segmented_reduce_add
+   quadrants.lang.simt.subgroup.segmented_reduce_min
+   quadrants.lang.simt.subgroup.segmented_reduce_max
    quadrants.lang.simt.subgroup.inclusive_add
    quadrants.lang.simt.subgroup.inclusive_mul
    quadrants.lang.simt.subgroup.inclusive_min
@@ -110,6 +117,44 @@ Module Contents
    ``log2_size == 5``, otherwise a ``log2_size``-deep ``shuffle_xor`` butterfly).
 
 
+.. py:function:: lanemask_lt(lane_id)
+
+   Bitmask of lanes strictly below ``lane_id`` — bit ``i`` is set iff ``i < lane_id``.
+
+   Pass ``invocation_id()`` for the classic CUDA ``__lanemask_lt()`` (current lane's mask).  Equivalent to
+   ``(u32(1) << u32(lane_id)) - u32(1)``; inlined at trace time into 1 shift + 1 subtract.
+
+   See the module-level note for the ``lane_id ∈ [0, 31]`` contract and the AMDGPU CDNA wave64 caveat.
+
+
+.. py:function:: lanemask_le(lane_id)
+
+   Bitmask of lanes ``<= lane_id`` — bit ``i`` is set iff ``i <= lane_id``.
+
+   Equivalent to ``lanemask_lt(lane_id) | lanemask_eq(lane_id)``.  See `lanemask_lt` for the contract.
+
+
+.. py:function:: lanemask_eq(lane_id)
+
+   Bitmask with exactly one bit set at ``lane_id`` — equivalent to ``u32(1) << u32(lane_id)``.
+
+   See `lanemask_lt` for the contract.
+
+
+.. py:function:: lanemask_gt(lane_id)
+
+   Bitmask of lanes strictly above ``lane_id`` — bit ``i`` is set iff ``i > lane_id``.
+
+   Equivalent to ``~lanemask_le(lane_id)``.  See `lanemask_lt` for the contract.
+
+
+.. py:function:: lanemask_ge(lane_id)
+
+   Bitmask of lanes ``>= lane_id`` — bit ``i`` is set iff ``i >= lane_id``.
+
+   Equivalent to ``~lanemask_lt(lane_id)``.  See `lanemask_lt` for the contract.
+
+
 .. py:function:: broadcast_first(value)
 
    Broadcast lane 0's ``value`` to every lane in the subgroup.
@@ -146,35 +191,32 @@ Module Contents
 
    Min of ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
 
-   The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial mins.
-   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
-   (32 on CUDA / Metal / RDNA, 64 on CDNA).
+   The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial mins.  Caller must ensure
+   ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal / RDNA, 64 on CDNA).
 
-   ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
-   shuffle+min operations in the calling kernel's IR.
+   ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size`` shuffle+min operations in
+   the calling kernel's IR.
 
-   Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic
-   (``fminnm`` on PTX, ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether
-   NaN propagates or is suppressed.  Avoid NaN inputs if you need a portable result.
+   Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic (``fminnm`` on PTX,
+   ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether NaN propagates or is suppressed.
+   Avoid NaN inputs if you need a portable result.
 
 
 .. py:function:: reduce_max(value, log2_size: template())
 
    Max of ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
 
-   See `reduce_min` for the size contract, the unrolling shape, and the NaN caveat (with ``qd.max``
-   in place of ``qd.min``).  The result is valid in lane 0 of each group; other lanes hold partial
-   maxes.
+   See `reduce_min` for the size contract, the unrolling shape, and the NaN caveat (with ``qd.max`` in place of
+   ``qd.min``).  The result is valid in lane 0 of each group; other lanes hold partial maxes.
 
 
 .. py:function:: reduce_all_min(value, log2_size: template())
 
    Min of ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.
 
-   The result is broadcast to all ``2**log2_size`` lanes.  Same size contract, unrolling shape,
-   and NaN caveat as `reduce_min`.  Use this when every lane needs the reduction (e.g. to subtract
-   the min, or to branch on it uniformly): same shuffle count as `reduce_min`, no extra broadcast
-   needed.
+   The result is broadcast to all ``2**log2_size`` lanes.  Same size contract, unrolling shape, and NaN caveat as
+   `reduce_min`.  Use this when every lane needs the reduction (e.g. to subtract the min, or to branch on it
+   uniformly): same shuffle count as `reduce_min`, no extra broadcast needed.
 
 
 .. py:function:: reduce_all_max(value, log2_size: template())
@@ -189,19 +231,37 @@ Module Contents
 
    Per-lane inclusive sum that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.
 
-   Lane ``i`` returns ``sum(value[head_below..i+1])``, where ``head_below`` is the largest lane index ``<=
-   i`` (within the lane's ``2**log2_size`` group) whose ``head_flag`` is non-zero.  If no such lane exists
-   inside the group, the group's first lane is treated as an implicit head, so the result is the inclusive
-   sum from ``group_base`` to ``i``.
+   Lane ``i`` returns ``sum(value[head_below..i+1])``, where ``head_below`` is the largest lane index ``<= i`` (within
+   the lane's ``2**log2_size`` group) whose ``head_flag`` is non-zero.  If no such lane exists inside the group, the
+   group's first lane is treated as an implicit head, so the result is the inclusive sum from ``group_base`` to ``i``.
 
    Caller contract:
 
-   * ``2**log2_size`` must not exceed 32 (the underlying ``ballot`` returns a ``u32`` covering the first 32
-     lanes; on AMDGPU CDNA wave64 only the low 32 lanes contribute).  ``log2_size`` is a ``qd.template()``
-     compile-time constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.
-   * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values
-     work.
+   * ``2**log2_size`` must not exceed 32 (the underlying ``ballot`` returns a ``u32`` covering the first 32 lanes; on
+     AMDGPU CDNA wave64 only the low 32 lanes contribute).  ``log2_size`` is a ``qd.template()`` compile-time
+     constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.
+   * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values work.
    * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``.
+
+
+.. py:function:: segmented_reduce_min(value, head_flag, log2_size: template())
+
+   Per-lane inclusive min that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.
+
+   Lane ``i`` returns ``min(value[head_below..i+1])``; see `segmented_reduce_add` for the head-flag semantics, the
+   ``2**log2_size <= 32`` cap, and the truthy-predicate / uniform-CF contract.
+
+   Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic (``fminnm`` on
+   PTX, ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether NaN propagates or is suppressed.
+   Avoid NaN inputs if you need a portable result.
+
+
+.. py:function:: segmented_reduce_max(value, head_flag, log2_size: template())
+
+   Per-lane inclusive max that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.
+
+   See `segmented_reduce_min` (with ``qd.max`` in place of ``qd.min``).  Same head-flag semantics, ``2**log2_size <=
+   32`` cap, truthy-predicate / uniform-CF contract, and NaN caveat.
 
 
 .. py:function:: inclusive_add(value, log2_size: template())
