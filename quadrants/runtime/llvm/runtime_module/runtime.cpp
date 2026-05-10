@@ -1298,7 +1298,7 @@ int32 block_barrier_count_i32(int32 predicate) {
 void warp_barrier(uint32 mask) {
 }
 
-void block_memfence() {
+void block_mem_fence() {
 }
 
 void grid_memfence() {

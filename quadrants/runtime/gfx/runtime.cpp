@@ -553,7 +553,8 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
                   [](const spirv::TaskAttributes &t) { return !t.ad_stack.max_reducer_specs.empty(); });
   quadrants::lang::MaxReducerResultMap max_reducer_results;
   if (any_max_reducer_task) {
-    max_reducer_results = dispatch_max_reducers(host_ctx, args_buffer.get(), any_arrays, task_attribs);
+    max_reducer_results = dispatch_max_reducers(host_ctx, args_buffer.get(), any_arrays, task_attribs,
+                                                ti_kernel->ti_kernel_attribs().name);
   }
 
   // Device-side adstack SizeExpr evaluation: every task with adstack allocas has its per-alloca `max_size` /
