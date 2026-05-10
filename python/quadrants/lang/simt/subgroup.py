@@ -332,17 +332,43 @@ def reduce_all_max(value, log2_size: template()):
 
 # --- Segmented reduce ------------------------------------------------------------------
 #
-# `segmented_reduce_add(value, head_flag, log2_size)` runs a per-lane inclusive sum where every lane with ``head_flag
-# != 0`` resets the running sum: lane ``i`` ends up holding ``value[head_below..i]``-sum, where ``head_below`` is the
-# largest lane ``<= i`` (within the lane's ``2**log2_size`` group) whose ``head_flag`` is non-zero.  If no such lane
-# exists the algorithm treats the group's first lane as an implicit head, so a segment that runs from ``group_base``
-# to the lane is still summed correctly.
+# `segmented_reduce_{add,min,max}(value, head_flag, log2_size)` runs a per-lane inclusive scan under ``+`` / ``min`` /
+# ``max`` where every lane with ``head_flag != 0`` resets the running aggregate: lane ``i`` ends up holding the scan of
+# ``value[head_below..i+1]``, where ``head_below`` is the largest lane ``<= i`` (within the lane's ``2**log2_size``
+# group) whose ``head_flag`` is non-zero.  If no such lane exists the algorithm treats the group's first lane as an
+# implicit head, so a segment that runs from ``group_base`` to the lane is still aggregated correctly.
 #
-# Implementation: one ``ballot`` to materialise a u32 of head positions, then a Hillis-Steele inclusive sum bounded by
-# ``distance >= offset`` (where ``distance = lane - segment_head``).  ``segment_head`` comes from ``31 -
-# clz(effective_mask & ((1 << (lane + 1)) - 1))`` with an OR-injected virtual head at ``group_base`` to guarantee a
-# non-zero ``lower``.  Cost: 1 ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` adds — the same shape as
-# `inclusive_add`, plus a single-instruction setup.
+# Implementation: one ``ballot`` to materialise a u32 of head positions, then a Hillis-Steele inclusive scan bounded
+# by ``distance >= offset`` (where ``distance = lane - segment_head``).  ``segment_head`` comes from
+# ``31 - clz(effective_mask & ((1 << (lane + 1)) - 1))`` with an OR-injected virtual head at ``group_base`` to
+# guarantee a non-zero ``lower``.  Cost: 1 ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` ops — the same shape
+# as `inclusive_add` / `inclusive_min` / `inclusive_max`, plus a single-instruction setup.
+#
+# No identity argument is required (unlike `exclusive_min` / `exclusive_max`) because the per-lane ``distance >=
+# offset`` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never
+# combined with the local value.
+
+
+@func
+def _segment_head_distance(head_flag, log2_size: template()):
+    """Compute ``lane - segment_head`` — how many lanes the current lane sits past its segment head, scoped to
+    ``2**log2_size`` lanes.  Returns ``0`` at the segment head, ``1, 2, ...`` for later lanes within the segment.
+
+    Shared by `segmented_reduce_add` / `_min` / `_max`; see the module-level note for the algorithm.
+    """
+    head_mask = ballot(i32(head_flag != 0))
+    lane = invocation_id()
+    group_base = u32(lane) & u32(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFF))
+    bits_in_group = u32(impl.static((2 ** (1 << log2_size) - 1) & 0xFFFFFFFF))
+    group_mask = bits_in_group << group_base
+    effective_mask = (head_mask & group_mask) | (u32(1) << group_base)
+    inclusive_mask = u32(0xFFFFFFFF) >> u32(i32(31) - lane)
+    lower = effective_mask & inclusive_mask
+    # `clz` follows the input type on most backends (CUDA explicitly normalizes to i32; AMDGPU LLVM `ctlz` returns
+    # input type; SPIR-V FindUMsb returns the input type).  Wrap the result in `i32(...)` so the subsequent arithmetic
+    # is uniformly signed-32-bit and SPIR-V's strict-type `sub` is happy.
+    segment_head = i32(31) - i32(clz(lower))
+    return lane - segment_head
 
 
 @func
@@ -361,24 +387,48 @@ def segmented_reduce_add(value, head_flag, log2_size: template()):
     * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values work.
     * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``.
     """
-    head_mask = ballot(i32(head_flag != 0))
-    lane = invocation_id()
-    group_base = u32(lane) & u32(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFF))
-    bits_in_group = u32(impl.static((2 ** (1 << log2_size) - 1) & 0xFFFFFFFF))
-    group_mask = bits_in_group << group_base
-    effective_mask = (head_mask & group_mask) | (u32(1) << group_base)
-    inclusive_mask = u32(0xFFFFFFFF) >> u32(i32(31) - lane)
-    lower = effective_mask & inclusive_mask
-    # `clz` follows the input type on most backends (CUDA explicitly normalizes to i32; AMDGPU LLVM `ctlz` returns
-    # input type; SPIR-V FindUMsb returns the input type).  Wrap the result in `i32(...)` so the subsequent arithmetic
-    # is uniformly signed-32-bit and SPIR-V's strict-type `sub` is happy.
-    segment_head = i32(31) - i32(clz(lower))
-    distance = lane - segment_head
+    distance = _segment_head_distance(head_flag, log2_size)
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << i)
         partner = shuffle_up(value, u32(offset))
         if distance >= offset:
             value = value + partner
+    return value
+
+
+@func
+def segmented_reduce_min(value, head_flag, log2_size: template()):
+    """Per-lane inclusive min that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.
+
+    Lane ``i`` returns ``min(value[head_below..i+1])``; see `segmented_reduce_add` for the head-flag semantics, the
+    ``2**log2_size <= 32`` cap, and the truthy-predicate / uniform-CF contract.
+
+    Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic (``fminnm`` on
+    PTX, ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether NaN propagates or is suppressed.
+    Avoid NaN inputs if you need a portable result.
+    """
+    distance = _segment_head_distance(head_flag, log2_size)
+    for i in impl.static(range(log2_size)):
+        offset = impl.static(1 << i)
+        partner = shuffle_up(value, u32(offset))
+        if distance >= offset:
+            value = min(value, partner)
+    return value
+
+
+@func
+def segmented_reduce_max(value, head_flag, log2_size: template()):
+    """Per-lane inclusive max that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.
+
+    See `segmented_reduce_min` (with ``qd.max`` in place of ``qd.min``).  Same head-flag semantics, ``2**log2_size <=
+    32`` cap, truthy-predicate / uniform-CF contract, and NaN caveat.
+    """
+    distance = _segment_head_distance(head_flag, log2_size)
+    for i in impl.static(range(log2_size)):
+        offset = impl.static(1 << i)
+        partner = shuffle_up(value, u32(offset))
+        if distance >= offset:
+            value = max(value, partner)
     return value
 
 
@@ -647,6 +697,8 @@ __all__ = [
     "reduce_all_min",
     "reduce_all_max",
     "segmented_reduce_add",
+    "segmented_reduce_min",
+    "segmented_reduce_max",
     "inclusive_add",
     "inclusive_mul",
     "inclusive_min",

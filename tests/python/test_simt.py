@@ -936,10 +936,15 @@ def test_subgroup_reduce_all_max(dtype, log2_size):
 # head when no real head exists.
 
 
-def _python_segmented_reduce_add(values, heads, group_size):
-    """Reference: lane i within each group_size-sized group holds sum(values[head_below..i+1])."""
+def _python_segmented_reduce(values, heads, group_size, op):
+    """Reference: lane i within each group_size-sized group holds ``op-reduce(values[head_below..i+1])``.
+
+    ``op`` is a binary function on Python scalars (e.g. ``operator.add``, ``min``, ``max``).
+    """
+    import functools as _ft
+
     n = len(values)
-    out = [0] * n
+    out = [None] * n
     for g_base in range(0, n, group_size):
         for k in range(group_size):
             i = g_base + k
@@ -948,8 +953,15 @@ def _python_segmented_reduce_add(values, heads, group_size):
             for h in range(g_base, i + 1):
                 if heads[h]:
                     head = h
-            out[i] = sum(values[head : i + 1])
+            out[i] = _ft.reduce(op, values[head : i + 1])
     return out
+
+
+def _python_segmented_reduce_add(values, heads, group_size):
+    """Reference: lane i within each group_size-sized group holds sum(values[head_below..i+1])."""
+    import operator as _op
+
+    return _python_segmented_reduce(values, heads, group_size, _op.add)
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
@@ -1064,6 +1076,146 @@ def test_subgroup_segmented_reduce_add_truthy_predicate():
     for i in range(N):
         src[i] = i + 1
         head[i] = 1 if i in {0, 5, 13, 22} else 0
+
+    run_binary()
+    run_truthy()
+
+    for i in range(N):
+        assert dst_binary[i] == dst_truthy[i], f"lane {i}: binary={dst_binary[i]}, truthy={dst_truthy[i]}"
+
+
+# Segmented reduce min / max — share the head-pattern + Python-verifier strategy with `segmented_reduce_add`, but the
+# input data is a *non-monotonic* sequence (via ``_init_varied_int_or_float``) so each segment's min / max actually
+# depends on the data and not just on the segment endpoints.
+
+
+def _check_segmented_reduce(qd_op, py_op, dtype, log2_size):
+    _skip_if_f64_unsupported(dtype)
+    N = 32  # ballot covers the first 32 lanes
+    src = qd.field(dtype=dtype, shape=N)
+    head = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = qd_op(src[i], head[i], log2_size)
+
+    _init_varied_int_or_float(src, N, dtype)
+    head_lanes = {0, 3, 7, 12, 19, 25}
+    heads_py = [1 if i in head_lanes else 0 for i in range(N)]
+    for i in range(N):
+        head[i] = heads_py[i]
+
+    foo()
+
+    src_py = [int(src[i]) if dtype in _INT_DTYPES else float(src[i]) for i in range(N)]
+    expected = _python_segmented_reduce(src_py, heads_py, 1 << log2_size, py_op)
+    for i in range(N):
+        got = dst[i]
+        ref = expected[i]
+        if dtype in _INT_DTYPES:
+            assert got == ref, f"lane {i}: got {got}, expected {ref}"
+        else:
+            assert abs(got - ref) < 1e-5 * max(abs(ref), 1.0), f"lane {i}: got {got}, expected {ref}"
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [0, 1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_segmented_reduce_min(dtype, log2_size):
+    """Segmented inclusive min, sized by ``log2_size`` (covers full warp at log2_size=5)."""
+    _check_segmented_reduce(subgroup.segmented_reduce_min, lambda a, b: min(a, b), dtype, log2_size)
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [0, 1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_segmented_reduce_max(dtype, log2_size):
+    """Segmented inclusive max, sized by ``log2_size`` (covers full warp at log2_size=5)."""
+    _check_segmented_reduce(subgroup.segmented_reduce_max, lambda a, b: max(a, b), dtype, log2_size)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_segmented_reduce_min_no_heads():
+    """No head flags set anywhere -> the whole group is one segment, equivalent to inclusive_min(v, log2_size)."""
+    N = 32
+    src = qd.field(dtype=qd.i32, shape=N)
+    head = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.segmented_reduce_min(src[i], head[i], 5)
+
+    src_vals = [(i * 7 + 11) % 23 + 1 for i in range(N)]
+    for i in range(N):
+        src[i] = src_vals[i]
+        head[i] = 0
+
+    foo()
+
+    expected = []
+    running = src_vals[0]
+    expected.append(running)
+    for i in range(1, N):
+        running = min(running, src_vals[i])
+        expected.append(running)
+    for i in range(N):
+        assert dst[i] == expected[i], f"lane {i}: got {dst[i]}, expected {expected[i]}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_segmented_reduce_max_every_lane_is_head():
+    """Every lane is a head -> output equals input (each segment is exactly one lane)."""
+    N = 32
+    src = qd.field(dtype=qd.i32, shape=N)
+    head = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.segmented_reduce_max(src[i], head[i], 5)
+
+    for i in range(N):
+        src[i] = (i * 13 + 5) % 29 - 7  # mixed-sign data so max isn't just monotone
+        head[i] = 1
+
+    foo()
+
+    for i in range(N):
+        assert dst[i] == src[i], f"lane {i}: got {dst[i]}, expected {src[i]}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_segmented_reduce_min_truthy_predicate():
+    """Non-binary truthy values (e.g. 7, 42) should be treated identically to 1."""
+    N = 32
+    src = qd.field(dtype=qd.i32, shape=N)
+    head = qd.field(dtype=qd.i32, shape=N)
+    dst_binary = qd.field(dtype=qd.i32, shape=N)
+    dst_truthy = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def run_binary():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst_binary[i] = subgroup.segmented_reduce_min(src[i], head[i], 5)
+
+    @qd.kernel
+    def run_truthy():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst_truthy[i] = subgroup.segmented_reduce_min(src[i], head[i] * 7, 5)
+
+    for i in range(N):
+        src[i] = (i * 11 + 3) % 17 + 1
+        head[i] = 1 if i in {0, 4, 9, 18, 27} else 0
 
     run_binary()
     run_truthy()

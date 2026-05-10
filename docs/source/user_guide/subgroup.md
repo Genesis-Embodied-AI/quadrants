@@ -75,6 +75,8 @@ CUDA shortcut: when `log2_size == 5` (full warp), `all_true` / `any_true` lower 
 | `subgroup.reduce_all_min(v, log2_size)`     | yes  | yes    | yes                     | integer + float              |
 | `subgroup.reduce_all_max(v, log2_size)`     | yes  | yes    | yes                     | integer + float              |
 | `subgroup.segmented_reduce_add(v, head_flag, log2_size)` | yes | yes\* | yes              | any type supporting `+`      |
+| `subgroup.segmented_reduce_min(v, head_flag, log2_size)` | yes | yes\* | yes              | integer + float              |
+| `subgroup.segmented_reduce_max(v, head_flag, log2_size)` | yes | yes\* | yes              | integer + float              |
 | `subgroup.inclusive_add(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
 | `subgroup.inclusive_mul(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
 | `subgroup.inclusive_min(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
@@ -228,14 +230,16 @@ Same min / max as `reduce_min` / `reduce_max`, but broadcast to **every lane** i
 - Use over `reduce_min` + broadcast / `reduce_max` + broadcast when every lane needs the result (e.g. to subtract the group min, or to clamp to the group max).
 - Same dtypes, size-cap contract, and float-NaN caveat as `reduce_min` / `reduce_max`.
 
-### `segmented_reduce_add(value, head_flag, log2_size)`
+### `segmented_reduce_add(value, head_flag, log2_size)` / `segmented_reduce_min(...)` / `segmented_reduce_max(...)`
 
-Per-lane inclusive sum that resets at every non-zero `head_flag`, scoped to `2**log2_size` consecutive lanes. Lane `i` returns `sum(value[head_below..i + 1])`, where `head_below` is the largest lane index `<= i` (within the lane's `2**log2_size` group) whose `head_flag` is non-zero. If no such lane exists inside the group, the group's first lane is treated as an implicit head, so the result is the inclusive sum from `group_base` to `i`.
+Per-lane inclusive scan under `+` / `min` / `max` that resets at every non-zero `head_flag`, scoped to `2**log2_size` consecutive lanes. Lane `i` returns the scan of `value[head_below..i + 1]`, where `head_below` is the largest lane index `<= i` (within the lane's `2**log2_size` group) whose `head_flag` is non-zero. If no such lane exists inside the group, the group's first lane is treated as an implicit head, so the result is the inclusive scan from `group_base` to `i`.
 
-- `value` is any type supporting `+` and `shuffle_up`. `head_flag` is any integer scalar; the lowering tests `head_flag != 0`, so non-binary truthy values (e.g. `7`, `42`) work.
+- `value` is any type supporting the operator (`+` and `shuffle_up` for `_add`; `qd.min`/`qd.max` and `shuffle_up` for `_min`/`_max`). `head_flag` is any integer scalar; the lowering tests `head_flag != 0`, so non-binary truthy values (e.g. `7`, `42`) work.
 - `log2_size` is a `qd.template()` — a compile-time constant. `2**log2_size` must not exceed 32: the underlying `subgroup.ballot` returns a `u32` covering the first 32 lanes, so on AMDGPU CDNA wave64 only the low 32 lanes contribute.
-- Implementation: one `subgroup.ballot(head_flag != 0)` to materialise a `u32` of head positions, then a Hillis-Steele inclusive sum bounded by `distance >= offset` where `distance = lane - segment_head`. `segment_head` is computed via `31 - clz(effective_mask & ((1 << (lane + 1)) - 1))`, with an OR-injected virtual head at `group_base` to guarantee a non-zero `lower`.
-- Cost: `1 ballot + 1 clz + log2_size shuffles + log2_size adds`, fully unrolled into the calling kernel's IR. Same shape as `inclusive_add`, plus one ballot and one `clz` for the per-lane segment-head lookup.
+- Implementation: one `subgroup.ballot(head_flag != 0)` to materialise a `u32` of head positions, then a Hillis-Steele inclusive scan bounded by `distance >= offset` where `distance = lane - segment_head`. `segment_head` is computed via `31 - clz(effective_mask & ((1 << (lane + 1)) - 1))`, with an OR-injected virtual head at `group_base` to guarantee a non-zero `lower`. The mask + `clz` setup is shared between all three ops via a small internal helper.
+- No identity argument is required (unlike `exclusive_min` / `exclusive_max`) because the per-lane `distance >= offset` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never combined with the local value.
+- Cost: `1 ballot + 1 clz + log2_size shuffles + log2_size ops`, fully unrolled into the calling kernel's IR. Same shape as `inclusive_add` / `inclusive_min` / `inclusive_max`, plus one ballot and one `clz` for the per-lane segment-head lookup.
+- Float NaN handling for `_min` / `_max` is implementation-defined (same caveat as `reduce_min` / `reduce_max`): PTX uses `fminnm` / `fmaxnm`, AMDGPU uses `llvm.minnum` / `llvm.maxnum`, SPIR-V uses `OpFMin` / `OpFMax`. Avoid NaN inputs if you need a portable result.
 - AMDGPU note (`*` in the table): `shuffle_up` goes through `ds_bpermute` (~50 cycle latency), same as the other reductions.
 
 ### `inclusive_add` / `inclusive_mul` / `inclusive_min` / `inclusive_max` / `inclusive_and` / `inclusive_or` / `inclusive_xor`
