@@ -287,6 +287,88 @@ def test_ffs_i64():
     assert test_u64(1 << 32) == 33
 
 
+def _np_fns(mask: int, base: int, offset: int) -> int:
+    """Pure-Python reference for qd.math.fns / CUDA __nv_fns (32-bit).
+
+    Mirrors PTX `fns` semantics so the kernel result can be diffed against this trivially.
+    """
+    NOT_FOUND = 0xFFFFFFFF
+    if offset == 0:
+        if 0 <= base < 32 and (mask >> base) & 1:
+            return base
+        return NOT_FOUND
+    if offset > 0:
+        n = offset
+        for pos in range(32):
+            if pos < base:
+                continue
+            if (mask >> pos) & 1:
+                n -= 1
+                if n == 0:
+                    return pos
+        return NOT_FOUND
+    n = -offset
+    for pos in range(31, -1, -1):
+        if pos > base:
+            continue
+        if (mask >> pos) & 1:
+            n -= 1
+            if n == 0:
+                return pos
+    return NOT_FOUND
+
+
+# fns(mask, base, offset) finds the |offset|-th set bit in `mask` starting from `base`,
+# scanning upward (offset > 0), downward (offset < 0), or returning `base` if exactly that bit
+# is set (offset == 0). On CUDA this lowers to libdevice __nv_fns (single-instruction PTX `fns`);
+# on every other backend it emits a portable @qd.func that loops over the 32 bit positions.
+# Both paths must agree with the pure-Python reference _np_fns.
+@test_utils.test()
+def test_fns():
+    @qd.kernel
+    def fns_kernel(mask: qd.uint32, base: qd.uint32, offset: qd.int32) -> qd.uint32:
+        return qd.math.fns(mask, base, offset)
+
+    # Exhaustive sweep over a handful of representative masks. Catches both the upward and
+    # downward search arms and the offset == 0 special case in a single loop.
+    test_masks = [
+        0x00000000,  # empty mask -> always NOT_FOUND
+        0xFFFFFFFF,  # all set -> trivial
+        0x00000001,  # single bit at position 0
+        0x80000000,  # single bit at position 31
+        0x0000000F,  # bits 0..3
+        0xF0000000,  # bits 28..31
+        0xAAAAAAAA,  # alternating bits
+        0x12345678,  # arbitrary
+    ]
+    for mask in test_masks:
+        for base in [0, 1, 4, 15, 16, 31]:
+            for offset in [-3, -2, -1, 0, 1, 2, 3, 5]:
+                expected = _np_fns(mask, base, offset)
+                got = fns_kernel(mask, base, offset)
+                assert got == expected, (
+                    f"fns(mask=0x{mask:08X}, base={base}, offset={offset}): got 0x{got:08X}, expected 0x{expected:08X}"
+                )
+
+    # Spot-check a few canonical examples directly so failures point at obvious cases first.
+    NOT_FOUND = 0xFFFFFFFF
+    # Search upward, multiple bits.
+    assert fns_kernel(0xF, 0, 1) == 0
+    assert fns_kernel(0xF, 0, 2) == 1
+    assert fns_kernel(0xF, 0, 4) == 3
+    assert fns_kernel(0xF, 0, 5) == NOT_FOUND
+    # base inside the set bits: skip bits below base.
+    assert fns_kernel(0xF, 2, 1) == 2
+    assert fns_kernel(0xF, 2, 2) == 3
+    # Search downward.
+    assert fns_kernel(0xF, 5, -1) == 3
+    assert fns_kernel(0xF, 5, -4) == 0
+    assert fns_kernel(0xF, 5, -5) == NOT_FOUND
+    # offset == 0: bit-at-base test.
+    assert fns_kernel(0xE, 1, 0) == 1
+    assert fns_kernel(0xE, 0, 0) == NOT_FOUND
+
+
 @test_utils.test()
 def test_sign():
     @qd.kernel
