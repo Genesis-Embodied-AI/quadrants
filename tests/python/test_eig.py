@@ -271,7 +271,8 @@ def _test_sym_eig_general(n, dt, factory):
 
     @qd.kernel
     def run():
-        eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
+        for _tid in range(1):
+            eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
 
     run()
     eigvals_qd = eigvals.to_numpy().astype(np_dt)
@@ -288,7 +289,7 @@ def _test_sym_eig_general(n, dt, factory):
     np.testing.assert_allclose(A_reconstructed, A_np, rtol=tol, atol=tol)
 
 
-@pytest.mark.parametrize("n", [4, 5, 6, 9])
+@pytest.mark.parametrize("n", [4, 5, 6, 9, 12])
 @pytest.mark.parametrize(
     "factory",
     [
@@ -304,7 +305,7 @@ def test_sym_eig_general_f32(n, factory):
     _test_sym_eig_general(n, qd.f32, factory)
 
 
-@pytest.mark.parametrize("n", [4, 5, 6, 9])
+@pytest.mark.parametrize("n", [4, 5, 6, 9, 12])
 @pytest.mark.parametrize(
     "factory",
     [
@@ -331,7 +332,8 @@ def _test_make_spd(n, dt, factory):
 
     @qd.kernel
     def run():
-        A_spd[None] = qd.make_spd(A[None], dt)
+        for _tid in range(1):
+            A_spd[None] = qd.make_spd(A[None], dt)
 
     run()
     A_spd_qd = A_spd.to_numpy().astype(np_dt)
@@ -351,7 +353,7 @@ def _test_make_spd(n, dt, factory):
     np.testing.assert_allclose(A_spd_qd, expected, rtol=tol, atol=tol)
 
 
-@pytest.mark.parametrize("n", [4, 6, 9])
+@pytest.mark.parametrize("n", [4, 6, 9, 12])
 @pytest.mark.parametrize(
     "factory",
     [_sym_eig_factory_indefinite, _sym_eig_factory_random, _sym_eig_factory_spd],
@@ -361,7 +363,7 @@ def test_make_spd_f32(n, factory):
     _test_make_spd(n, qd.f32, factory)
 
 
-@pytest.mark.parametrize("n", [4, 6, 9])
+@pytest.mark.parametrize("n", [4, 6, 9, 12])
 @pytest.mark.parametrize(
     "factory",
     [_sym_eig_factory_indefinite, _sym_eig_factory_random, _sym_eig_factory_spd],

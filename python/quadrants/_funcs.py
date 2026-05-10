@@ -592,14 +592,15 @@ def sym_eig(A, dt=None):
     Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
 
     Sizes ``A.n == 2`` and ``A.n == 3`` use the existing closed-form (Eigen3
-    ``computeDirect``) paths. Sizes ``4 ≤ A.n ≤ 9`` use cyclic Jacobi
+    ``computeDirect``) paths. Sizes ``4 ≤ A.n ≤ 12`` use cyclic Jacobi
     (:func:`quadrants._funcs_sym_eig_general.sym_eig_general`).
 
     .. note::
-       ``A.n == 12`` (used by qipc) is not yet supported because the fully
-       static-unrolled cyclic Jacobi implementation does not finish compiling
-       in a reasonable time at that size. A blocked / partially-runtime
-       implementation is tracked as a follow-up.
+       The cyclic Jacobi implementation has a runtime ``range`` over its
+       sweep budget. For that to iterate correctly, the calling
+       ``@qd.kernel`` must have its own outermost ``for _tid in range(...)``
+       loop wrapping the ``qd.sym_eig`` call (otherwise the kernel
+       parallelizes the sweep loop instead of running it sequentially).
 
     Args:
         A (qd.Matrix(n, n)): Symmetric Matrix for which the eigenvalues and right eigenvectors will be computed.
@@ -618,12 +619,9 @@ def sym_eig(A, dt=None):
     # pylint: disable=C0415
     from quadrants._funcs_sym_eig_general import sym_eig_general
 
-    if A.n <= 9:
+    if A.n <= 12:
         return sym_eig_general(A, dt)
-    raise Exception(
-        "Symmetric eigen solver currently supports sizes up to 9×9. "
-        "N=10..12 is tracked as a follow-up (compile-time scaling)."
-    )
+    raise Exception("Symmetric eigen solver currently supports sizes up to 12×12.")
 
 
 def make_spd(A, dt=None):

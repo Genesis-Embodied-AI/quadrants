@@ -3,8 +3,8 @@
 Cyclic Jacobi is the textbook robust algorithm for small symmetric EVD: it
 iteratively zeros out off-diagonal entries via Givens rotations until the
 matrix is (numerically) diagonal. Complexity is O(N^3) per sweep and
-convergence is quadratic near the solution, so 6 sweeps gives ~6 digits of
-accuracy in f32 and ~12 digits in f64 for ``N <= 9``.
+convergence is quadratic near the solution, so ``MAX_SWEEPS = 12`` is
+comfortably enough to hit f64 precision for any ``N <= 12``.
 
 Algorithm (Golub & Van Loan, §8.5):
 
@@ -16,17 +16,14 @@ Algorithm (Golub & Van Loan, §8.5):
 * Eigenvalues are ``diag(A_work)``; eigenvectors are columns of ``Q``.
 * Sort ascending.
 
-All loops are ``static(range)`` so each Givens step compiles into
-straight-line code. ``MAX_SWEEPS = 6`` keeps compile times bounded
-(~3 minutes for N=9 on CUDA) while still giving f64 precision.
-
-.. note::
-   ``N == 12`` is not yet supported via this path because the fully
-   static-unrolled cyclic Jacobi does not finish compiling in a reasonable
-   time at that size (>15 min). A blocked / partially-runtime
-   implementation, or porting qipc's Householder+QR pattern (which uses
-   compound-type ndarrays + ``template()`` mutation), is tracked as a
-   follow-up.
+The outer sweep loop is a runtime ``range`` so compile time stays bounded
+even at N=12 (the inner ``(p, q)`` and per-row ``static(range)`` updates
+already give straight-line code per Givens step). For runtime ``range``
+inside an ``@qd.func`` to actually iterate, the calling ``@qd.kernel``
+must have its own outermost ``for _tid in range(...)`` — see
+``perso_hugh/doc/quadrants_runtime_range_in_func_parallelized_gotcha_20260510.md``
+for the gotcha. Tests in ``tests/python/test_eig.py`` follow that
+convention.
 """
 
 from quadrants.lang import ops
@@ -35,7 +32,7 @@ from quadrants.lang.kernel_impl import func
 from quadrants.lang.matrix import Matrix, Vector
 
 _CONSIDER_AS_ZERO = 1e-30
-_MAX_SWEEPS = 6
+_MAX_SWEEPS = 12
 
 
 @func
@@ -65,7 +62,7 @@ def sym_eig_general(A, dt):
             eigvecs[i, j] = zero
         eigvecs[i, i] = one
 
-    for _sweep in static(range(_MAX_SWEEPS)):
+    for _sweep in range(_MAX_SWEEPS):
         for p in static(range(N)):
             for q in static(range(N)):
                 if static(p < q):
