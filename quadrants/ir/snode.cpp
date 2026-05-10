@@ -258,9 +258,20 @@ void SNode::lazy_dual() {
 }
 
 void SNode::allocate_adjoint_checkbit() {
+  // Lazy fallback for the `qd.root.lazy_grad()` path, where the adjoint is added after the primal is already placed.
+  // The eager `qd.field(..., needs_grad=True)` path places the checkbit directly in `_field()` so its FieldExpression
+  // already has a snode at this point - skip those to avoid the "This variable has been placed." error in
+  // `place_child`, and to keep the primal's dense container free of the checkbit sibling that confuses kernel codegen.
   make_lazy_place(this, snode_to_fields_, [this](std::unique_ptr<SNode> &c, std::vector<Expr> &new_adjoint_checkbits) {
     if (c->type == SNodeType::place && c->is_primal() && is_real(c->dt) && c->has_adjoint()) {
-      new_adjoint_checkbits.push_back(snode_to_fields_->at(c.get())->adjoint_checkbit);
+      auto &checkbit_expr = snode_to_fields_->at(c.get())->adjoint_checkbit;
+      if (checkbit_expr.expr == nullptr) {
+        return;
+      }
+      if (checkbit_expr.cast<FieldExpression>()->snode != nullptr) {
+        return;
+      }
+      new_adjoint_checkbits.push_back(checkbit_expr);
     }
   });
 }

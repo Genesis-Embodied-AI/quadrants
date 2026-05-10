@@ -192,3 +192,22 @@ def test_tensor_vec_ndarray_needs_grad_rejects_int_dtype():
 def test_tensor_mat_ndarray_needs_grad_rejects_int_dtype():
     with pytest.raises(qd.QuadrantsRuntimeError, match="needs_grad"):
         qd.Matrix.tensor(2, 2, qd.i32, shape=(3,), backend=qd.Backend.NDARRAY, needs_grad=True)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test()
+def test_has_grad_has_dual_reflect_storage_allocation(backend):
+    """``Tensor.has_grad()`` / ``has_dual()`` report whether the adjoint / dual storage is actually allocated.
+
+    Internal details: on the FIELD backend ``self.grad`` / ``self.dual`` are non-``None`` for every real-dtype field
+    (the wrapper is allocated up-front so ``qd.root.lazy_grad()`` / ``qd.root.lazy_dual()`` can populate it later), so
+    callers cannot rely on a plain ``is not None`` check to distinguish "allocated and writable" from "wrapper present
+    but un-placed". Pin that ``has_grad`` / ``has_dual`` mirror the SNode-level truth on FIELD and the storage-presence
+    truth on NDARRAY (where the grad ndarray is only allocated when ``needs_grad=True``).
+    """
+    x = qd.tensor(dtype=qd.f32, shape=(4,), backend=backend)
+    assert not x.has_grad()
+    assert not x.has_dual()
+    y = qd.tensor(dtype=qd.f32, shape=(4,), backend=backend, needs_grad=True)
+    assert y.has_grad()
+    assert not y.has_dual()

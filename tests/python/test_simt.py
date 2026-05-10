@@ -52,7 +52,7 @@ def test_all_nonzero():
         assert a[i] == 0
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_sync_all_nonzero():
     a = qd.field(dtype=qd.i32, shape=256)
     b = qd.field(dtype=qd.i32, shape=256)
@@ -108,7 +108,7 @@ def test_any_nonzero():
         assert a[i] == 1
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_sync_any_nonzero():
     a = qd.field(dtype=qd.i32, shape=256)
     b = qd.field(dtype=qd.i32, shape=256)
@@ -136,7 +136,7 @@ def test_sync_any_nonzero():
         assert a[i] == 1
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_sync_count_nonzero():
     a = qd.field(dtype=qd.i32, shape=256)
     b = qd.field(dtype=qd.i32, shape=256)
@@ -464,7 +464,7 @@ def test_warp_sync():
         assert a[i] == i % 16 + 16
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_block_sync():
     N = 1024
     a = qd.field(dtype=qd.u32, shape=N)
@@ -513,6 +513,192 @@ def test_grid_memfence():
         assert a[i] == i + 1
 
 
+# Smoke test for `block.mem_fence()`. We can't easily provoke a memory-ordering bug deterministically, so this just
+# ensures the call compiles and the kernel runs end-to-end on every supported GPU backend (CUDA / AMDGPU / Vulkan /
+# Metal).
+@test_utils.test(arch=qd.gpu)
+def test_block_mem_fence_smoke():
+    N = 32
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = i
+            qd.simt.block.mem_fence()
+            qd.simt.block.sync()
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i
+
+
+# Verify that `block.mem_fence()` can be called from divergent control flow without deadlocking. This is the property
+# that distinguishes a memory fence from a thread-converging barrier and was the user-facing motivation for the rename
+# `mem_sync -> mem_fence`. Before the CUDA dispatch was switched from `block_barrier` to `block_mem_fence` (i.e. NVPTX
+# `__syncthreads()` vs. `__threadfence_block()`), this test would hang on CUDA because thread 0 would wait at the
+# barrier forever for the other 31 lanes that early-return without reaching the call site. AMDGPU lowers to a
+# workgroup-scope `fence`, Vulkan / Metal lower to `OpMemoryBarrier(ScopeWorkgroup, ...)`; none of these require thread
+# convergence, so the divergent pattern is valid on every backend.
+@test_utils.test(arch=qd.gpu)
+def test_block_mem_fence_divergent_control_flow():
+    N = 32
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            tid = qd.simt.block.thread_idx()
+            if tid == 0:
+                qd.simt.block.mem_fence()
+            a[i] = tid
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i
+
+
+# NOTE: a producer-consumer memory-ordering test for `block.mem_fence()` (i.e. thread 0 publishes data + flag with a
+# fence between, another thread spin-waits on flag then reads data) was attempted in this PR and removed. Every variant
+# deadlocks on CUDA before pytest's process-level timeout fires:
+#
+# 1. Plain shared-memory load `while flag[0] == 0: pass` -- LLVM hoists the load out of the loop because there is no
+#    `volatile` qualifier and no memory-clobbering call inside the loop body. The consumer never re-reads the flag.
+#
+# 2. Plain shared-memory load with `block.mem_fence()` inside the loop body -- LLVM's `nvvm_membar_cta` intrinsic is
+#    `IntrInaccessibleMemOnly`, which clobbers the "inaccessible" memory category but does not invalidate the
+#    optimizer's cached view of `addrspace(3)` (shared memory) loads it has already seen. The flag load is still
+#    hoisted.
+#
+# 3. Atomic-add load `while qd.atomic_add(flag[0], 0) == 0: pass` -- adding zero appears to be elided somewhere in the
+#    Quadrants -> LLVM lowering pipeline; the loop also fails to terminate.
+#
+# 4. Atomic-or load `while qd.atomic_or(flag[0], 0) == 0: pass` -- same outcome as (3).
+#
+# Even if one of these did terminate, atomic-flagged variants would weaken the test -- atomic ops on shared memory are
+# relaxed-ordering at minimum and acq-rel on CUDA, so the atomic itself would provide much of the ordering that
+# `block.mem_fence()` is meant to provide independently.
+#
+# The fundamental gap is that Quadrants' Python API does not currently expose a `volatile`-flavored shared-array
+# primitive, which is the standard tool for writing producer-consumer ordering tests in CUDA / Vulkan / Metal. Adding
+# such a primitive (e.g. `block.SharedArray(..., volatile=True)`) is a Quadrants frontend feature outside this PR.
+#
+# What we do test, in lieu of a full producer-consumer ordering test:
+#   - `test_block_mem_fence_smoke`: end-to-end compile + run on every backend.
+#   - `test_block_mem_fence_divergent_control_flow`: the fence is a fence, not a thread-converging barrier. This
+#     catches the regression we actually fixed in this PR.
+#
+# The convergence test exercises every backend's mem_fence through divergent control flow, which is the hard
+# correctness property and the practical motivation for renaming `mem_sync -> mem_fence`. Pure memory-ordering
+# correctness against compiler reordering of adjacent shared-memory stores is left as a future enhancement.
+
+
+# Deprecation aliases: the old names still work, and emit DeprecationWarning on first use. pytest.warns enables
+# `simplefilter("always")` for its scope, bypassing the project-wide
+# `warnings.filterwarnings("once", ..., module="quadrants")` set in `quadrants/lang/misc.py`.
+@test_utils.test(arch=qd.gpu)
+def test_block_mem_sync_deprecated_alias():
+    a = qd.field(dtype=qd.i32, shape=1)
+
+    with pytest.warns(DeprecationWarning, match=r"qd\.simt\.block\.mem_sync"):
+
+        @qd.kernel
+        def foo():
+            a[0] = 7
+            qd.simt.block.mem_sync()
+
+        foo()
+
+    assert a[0] == 7
+
+
+# Portable test for `block.global_thread_idx()`. Runs on every supported GPU backend; in particular, verifies the
+# SPIR-V dispatch path that was previously unreachable due to a Python-side dispatch bug.
+@test_utils.test(arch=qd.gpu)
+def test_block_global_thread_idx_portable():
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = qd.simt.block.global_thread_idx()
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i
+
+
+# Portable test for `block.thread_idx()`. Sets `block_dim == grid_dim_total` (single-block launch) so the in-block
+# index equals the global index, then verifies on every GPU backend.
+@test_utils.test(arch=qd.gpu)
+def test_block_thread_idx_portable():
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = qd.simt.block.thread_idx()
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i
+
+
+# Multi-block coverage for `block.thread_idx()`: with block_dim=8 and loop total 32, the kernel runs across 4 blocks
+# and the in-block index must reset to 0 at each block boundary. Without this case, a regression that aliased
+# `block.thread_idx()` to `block.global_thread_idx()` (or vice versa) would slip past the single-block portable tests.
+# CUDA / AMDGPU lower this to the `tid.x` SREG; Vulkan / Metal lower it to `gl_LocalInvocationID.x` (which is what
+# required the `OpEntryPoint` interface fix earlier in this PR).
+@test_utils.test(arch=qd.gpu)
+def test_block_thread_idx_multi_block():
+    N = 32
+    BLOCK = 8
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=BLOCK)
+        for i in range(N):
+            a[i] = qd.simt.block.thread_idx()
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i % BLOCK
+
+
+# Multi-block coverage for `block.global_thread_idx()`: same shape as the test above, but the expected values span the
+# full grid (0..N-1) rather than wrapping per block. Together with `test_block_thread_idx_multi_block` this
+# distinguishes the two ops on every backend — a `global_thread_idx == thread_idx` aliasing regression fails one of the
+# two.
+@test_utils.test(arch=qd.gpu)
+def test_block_global_thread_idx_multi_block():
+    N = 32
+    BLOCK = 8
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=BLOCK)
+        for i in range(N):
+            a[i] = qd.simt.block.global_thread_idx()
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == i
+
+
 # The old SPIR-V-only no-arg subgroup reductions (`subgroup.reduce_add` / `reduce_mul` / `reduce_min`
 # / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`) and their Vulkan-specific tests have
 # been removed.  See `test_subgroup_reduce_add` / `test_subgroup_reduce_all_add` below for the
@@ -528,18 +714,17 @@ def _init_field(field, n, dtype):
 
 # --- Block reduce tests ----------------------------------------------------------------
 #
-# `qd.simt.block.reduce_{add,min,max}` is a CUB-style two-stage block reduce:
-# per-warp `shuffle_down` tree, lane 0 of each warp publishes the warp aggregate
-# to shared memory, then thread 0 sequentially folds the warp aggregates.  Result
-# is valid in thread 0 only; the `reduce_all_*` variants broadcast it to every
-# thread via one extra `block.sync()` plus a one-slot shared-memory hop.
+# `qd.simt.block.reduce_{add,min,max}` is a two-stage block reduce: per-warp
+# `shuffle_down` tree, lane 0 of each warp publishes the warp aggregate to shared
+# memory, then thread 0 sequentially folds the warp aggregates.  Result is valid
+# in thread 0 only; the `reduce_all_*` variants broadcast it to every thread via
+# one extra `block.sync()` plus a one-slot shared-memory hop.
 #
 # We exercise three block sizes that span the relevant regimes: 32 (single warp,
 # the shared-memory path is short-circuited at trace time), 128 (multi-warp on
 # wave32 backends), and 256 (multi-warp on every backend).  ``log2_warp`` is
-# pinned to 5 throughout — qipc and CUB both assume wave32 here, and Quadrants
-# lays it on as a template knob so future wave64 callers can pass 6 without an
-# API change.
+# pinned to 5 throughout — qipc assumes wave32 here, and Quadrants lays it on as
+# a template knob so future wave64 callers can pass 6 without an API change.
 
 _BLOCK_REDUCE_DTYPES = [qd.i32, qd.f32]
 _BLOCK_REDUCE_BLOCK_DIMS = [32, 128, 256]
@@ -764,7 +949,7 @@ def test_block_reduce_all_max(dtype, block_dim):
 
 # --- Block scan tests ------------------------------------------------------------------
 #
-# `qd.simt.block.{inclusive,exclusive}_{add,min,max}` is the CUB-style block scan: per-warp
+# `qd.simt.block.{inclusive,exclusive}_{add,min,max}` is a two-stage block scan: per-warp
 # Hillis-Steele scan via shuffle, last lane of each warp publishes the warp aggregate to
 # shared memory, then every thread sequentially folds the cross-warp prefix and applies its
 # own warp's prefix.  Every thread receives a valid result.
@@ -995,11 +1180,10 @@ def test_block_exclusive_min(dtype, block_dim):
 
 # --- Block radix rank tests ------------------------------------------------------------
 #
-# `qd.simt.block.radix_rank_match_atomic_or` is a faithful port of CUB's
-# `BlockRadixRankMatchEarlyCounts<WARP_MATCH_ATOMIC_OR>` on top of the new portable
-# subgroup primitives (lanemask_le, sync, shuffle) and the block exclusive scan we just
-# defined.  Block size and digit count are both 256 (one digit per thread); each thread
-# contributes one u32 key.
+# `qd.simt.block.radix_rank_match_atomic_or` implements the atomic-OR match-and-count
+# radix-rank strategy on top of the portable subgroup primitives (lanemask_le, sync,
+# shuffle) and the block exclusive scan defined above.  Block size and digit count are
+# both 256 (one digit per thread); each thread contributes one u32 key.
 #
 # We test the algorithm end-to-end against a CPU oracle:
 #
@@ -2498,8 +2682,12 @@ def test_subgroup_ballot_first_n_partial_truthy_per_lane():
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_ballot_full_subgroup_all_true():
     """``ballot_full_subgroup(1)`` with every lane voting true returns a u64 bitmask covering the whole subgroup.
-    On wave32 we expect ``0xFFFFFFFF`` (low 32 bits set, high 32 zero); on wave64 we expect ``0xFFFFFFFFFFFFFFFF``."""
-    N = 32
+    On wave32 we expect ``0xFFFFFFFF`` (low 32 bits set, high 32 zero); on wave64 we expect ``0xFFFFFFFFFFFFFFFF``.
+
+    Uses ``block_dim=64`` so every wave has every lane active on both wave32 (two full 32-lane waves) and wave64
+    (one full 64-lane wave) — required to satisfy the ``ballot_full_subgroup`` "all lanes active" contract on wave64.
+    """
+    N = 64
     result = qd.field(dtype=qd.u64, shape=N)
     sg_size = qd.field(dtype=qd.i32, shape=N)
 
@@ -2544,8 +2732,11 @@ def test_subgroup_ballot_full_subgroup_even_lanes():
 
     On wave32 we get ``0x0000000055555555`` (low 32 bits, high 32 zero); on wave64 we get
     ``0x5555555555555555`` (all 64 bits in the alternating pattern).
+
+    Uses ``block_dim=64`` to keep every lane active on wave64 (required by the ``ballot_full_subgroup`` "all lanes
+    active" contract); on wave32 the workgroup splits into two waves and each wave's ballot covers its own 32 lanes.
     """
-    N = 32
+    N = 64
     result = qd.field(dtype=qd.u64, shape=N)
     sg_size = qd.field(dtype=qd.i32, shape=N)
 

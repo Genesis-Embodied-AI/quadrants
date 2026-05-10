@@ -2,50 +2,54 @@
 
 Block-level primitives operate on the threads of a single CUDA thread block (CTA) / AMDGPU workgroup / Vulkan or Metal workgroup. They include thread barriers, memory fences, shared memory, and per-thread indexing helpers — the building blocks for cooperation among threads of the same block.
 
-Block ops live under `qd.simt.block`. They are written so the same Python source compiles to the right vendor primitive on each backend; calling a backend that has not implemented an op raises `ValueError` from the Python layer at trace time.
+Block ops live under `qd.simt.block`. They are written so the same Python source compiles to the right vendor primitive on each backend. As of this writing every op on this page is portable across CUDA, AMDGPU, Vulkan, and Metal; the only remaining caveat (called out in the support-table footnote below) is a perf trade-off for the emulated `block.sync_*_nonzero` ops on non-CUDA backends, not a correctness gap. If a future op is added that is not yet portable, the Python layer will raise `ValueError` at trace time on the unsupported backend.
 
-The closely-related grid-level fence (`qd.simt.grid.memfence()`) is documented at the end of this page, since users picking between a block-scope and a device-scope fence need to see both side by side.
+The closely-related device-scope memory fence is documented separately in [grid](grid.md). Users picking between a block-scope and a device-scope fence should read that page for the device-scope side.
 
 ## What's available
 
-| Op                                              | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) |
-|-------------------------------------------------|------|--------|-------------------------|
-| `block.sync()`                                  | yes  | yes    | yes                     |
-| `block.sync_all_nonzero(predicate)`             | yes  | no     | no                      |
-| `block.sync_any_nonzero(predicate)`             | yes  | no     | no                      |
-| `block.sync_count_nonzero(predicate)`           | yes  | no     | no                      |
-| `block.mem_sync()`                              | yes\*| no     | yes                     |
-| `block.SharedArray(shape, dtype)`               | yes  | yes    | yes                     |
-| `block.global_thread_idx()`                     | yes  | yes    | —                       |
-| `block.thread_idx()`                            | no   | no     | yes                     |
-| `block.reduce_{add,min,max}(v, tid, ...)`       | yes  | yes    | yes                     |
-| `block.reduce_all_{add,min,max}(v, tid, ...)`   | yes  | yes    | yes                     |
-| `block.inclusive_{add,min,max}(v, tid, ...)`    | yes  | yes    | yes                     |
-| `block.exclusive_{add,min,max}(v, tid, ...)`    | yes  | yes    | yes                     |
-| `block.radix_rank_match_atomic_or(...)`         | yes  | yes    | yes                     |
-| `grid.memfence()` (device-scope, see below)     | yes  | no     | no                      |
+| Op                                              | CUDA | AMDGPU  | Vulkan | Metal |
+|-------------------------------------------------|------|---------|--------|-------|
+| `block.sync()`                                  | yes  | yes     | yes    | yes   |
+| `block.sync_all_nonzero(predicate)`             | yes  | yes\*   | yes\*  | yes\* |
+| `block.sync_any_nonzero(predicate)`             | yes  | yes\*   | yes\*  | yes\* |
+| `block.sync_count_nonzero(predicate)`           | yes  | yes\*   | yes\*  | yes\* |
+| `block.mem_fence()`                             | yes  | yes     | yes    | yes   |
+| `block.SharedArray(shape, dtype)`               | yes  | yes     | yes    | yes   |
+| `block.global_thread_idx()`                     | yes  | yes     | yes    | yes   |
+| `block.thread_idx()`                            | yes  | yes     | yes    | yes   |
+| `block.reduce_{add,min,max}(v, tid, ...)`       | yes  | yes\*\* | yes    | yes   |
+| `block.reduce_all_{add,min,max}(v, tid, ...)`   | yes  | yes\*\* | yes    | yes   |
+| `block.inclusive_{add,min,max}(v, tid, ...)`    | yes  | yes\*\* | yes    | yes   |
+| `block.exclusive_{add,min,max}(v, tid, ...)`    | yes  | yes\*\* | yes    | yes   |
+| `block.radix_rank_match_atomic_or(...)`         | yes  | wave32  | yes    | yes   |
 
-Calling a backend marked "no" raises `ValueError` from the Python layer at trace time. `global_thread_idx()` is verified on CUDA and AMDGPU; the SPIR-V codepath in the wrapper exists but is currently unreachable due to a control-flow quirk in the dispatch and is therefore left undocumented here.
+Vulkan and Metal share a SPIR-V codegen path (Metal goes through MoltenVK → MSL); they are listed as separate columns because a couple of ops have Metal-specific caveats called out below. Footnoted entries are still functional, just with the limitations the footnote describes.
 
-\* On CUDA, `block.mem_sync()` currently lowers via `block_barrier` (i.e. `__syncthreads()`), which doubles as a memory fence but additionally requires thread convergence — meaning calling it from divergent control flow today deadlocks. A fix to lower `mem_sync()` to a pure `__threadfence_block()` is in flight as [quadrants#637](https://github.com/Genesis-Embodied-AI/quadrants/pull/637); once merged, the divergent-branch pattern shown in the `block.mem_sync()` semantics section below works as written. Until then, prefer calling `mem_sync()` from uniform control flow on CUDA.
+\* On AMDGPU, Vulkan, and Metal the `block.sync_{all,any,count}_nonzero(p)` ops are *emulated* via shared memory (one shared `i32` slot + 2 block barriers + a single `atomic_add` per contributing thread) rather than a single hardware-fused barrier-with-reduction. CUDA has the fused NVPTX `barrier.cta.red.{and,or,popc}.aligned.all.sync` family of intrinsics so it stays on the fast path; the other backends do not have a direct analog (in particular, SPIR-V `OpGroupNonUniform*` only operates at subgroup scope reliably across Vulkan + Metal). All three reductions are routed through `atomic_add` rather than `atomic_or` / `atomic_and`: the latter trip a Metal-specific bug where `OpAtomicOr` on threadgroup memory silently no-ops via MoltenVK / SPIRV-Cross. The emulation is correct and portable but costs two `block.sync()`s plus one shared-memory atomic per call instead of a single barrier instruction; if you have an inner loop calling these ops millions of times, consider whether you can batch the predicate before reducing it.
 
-Naming note: two of the names on this page are planned to be renamed in a future release, to align with the project's "fence vs barrier" terminology and to use a consistent `mem_fence` spelling:
+\*\* On AMDGPU the block reduce / scan ops require `log2_warp` to match the active hardware wave size: pass `5` on RDNA (wave32) and `6` on CDNA (wave64). Passing wave32 on a wave64 device gives wrong results because per-warp `shuffle_down` falls back to `ds_bpermute` whose OOB index wraps modulo the wave size (e.g. lane 48 with offset 16 reads lane 0 instead of returning the lane's own value as `__shfl_down_sync(width=32)` would on CUDA), contaminating the per-warp aggregate of the second logical 32-lane warp inside each wave. CUDA / Metal / RDNA Vulkan are wave32 in practice, so `log2_warp=5` is the natural choice there.
 
-- `block.mem_sync()` will be renamed to `block.mem_fence()`.
-- `grid.memfence()` will be renamed to `grid.mem_fence()` (note the underscore).
+`block.radix_rank_match_atomic_or` is **wave32-only** by construction: the atomic-OR match phase is keyed on a 32-lane `i32` ballot mask plus `clz` / `popcnt` of that mask. Calling it on CDNA AMDGPU (wave64) requires the kernel to launch with a 32-thread subgroup or to wait for a wave64 path (which would need a `u64` bin mask, `u64` `clz` / `popcnt`, and 64-lane `subgroup.shuffle`).
 
-The new names are not yet available; this page uses the current names throughout.
+Naming note: `block.mem_sync()` was recently renamed to `block.mem_fence()` for consistency with the project's "fence vs barrier" terminology. The old name is still available as a deprecated alias that emits `DeprecationWarning` on first use; new code should use `block.mem_fence()`.
 
 ## Barrier vs fence: the distinction that matters
 
 Two of these ops sound similar but have very different semantics, and mixing them up deadlocks the GPU. The summary:
 
 - `block.sync()` is a **thread-converging barrier**. Every thread in the block must reach the call site before any thread proceeds. It also implies a memory fence at block scope.
-- `block.mem_sync()` (to be renamed `block.mem_fence()` in a future release) is a **memory fence only**, at block scope. It orders memory operations but does not require thread convergence — it is safe to call from divergent control flow (e.g. inside `if tid == 0`).
+- `block.mem_fence()` is a **memory fence only**, at block scope. It orders memory operations but does not require thread convergence — it is safe to call from divergent control flow (e.g. inside `if tid == 0`).
 
-Concretely, on the SPIR-V backend `sync()` lowers to `workgroupBarrier` and `mem_sync()` lowers to `workgroupMemoryBarrier`. On CUDA, `sync()` lowers to `__syncthreads()`; `mem_sync()` is intended to lower to `__threadfence_block()` (a pure fence with no convergence requirement) — see the support-table caveat above. Calling `sync()` from a path that not all threads reach (a divergent `if`, an early `return`, etc.) is a classic GPU deadlock and applies to both backends.
+Concretely:
 
-The corresponding distinction at device scope is `grid.memfence()` (to be renamed `grid.mem_fence()` in a future release; memory fence across the entire grid, no thread synchronization). There is no block-style "device barrier" — to synchronize threads across blocks, finish the kernel and launch a new one.
+- CUDA: `sync()` lowers to `__syncthreads()`; `mem_fence()` lowers to `__threadfence_block()` (a pure fence with no convergence requirement).
+- AMDGPU: `sync()` lowers to `s_barrier`; `mem_fence()` lowers to `fence acquire_release syncscope("workgroup")`.
+- Vulkan / Metal (SPIR-V): `sync()` lowers to `workgroupBarrier`; `mem_fence()` lowers to `workgroupMemoryBarrier`.
+
+Calling `sync()` from a path that not all threads reach (a divergent `if`, an early `return`, etc.) is a classic GPU deadlock and applies to all backends.
+
+The corresponding distinction at device scope is the grid-scope memory fence (memory fence across the entire grid, no thread synchronization), documented in [grid](grid.md).
 
 ## Semantics
 
@@ -64,27 +68,32 @@ Block-wide barriers that also reduce a per-thread `i32` predicate across the blo
 - `sync_any_nonzero(p)` returns non-zero if `p` is non-zero on **any** thread (logical OR).
 - `sync_count_nonzero(p)` returns the number of threads for which `p` is non-zero (popcount).
 
-Each call performs both the synchronization (same convergence requirement as `sync()`) and the reduction in a single instruction. Only available on CUDA today; they lower to the NVPTX `barrier.cta.red` family of intrinsics (`block_barrier_and_i32`, `block_barrier_or_i32`, `block_barrier_count_i32`).
+Each call performs both the synchronization (same convergence requirement as `sync()`) and the reduction.
 
-### `block.mem_sync()`
+- On CUDA, this lowers to a single hardware-fused instruction from the NVPTX `barrier.cta.red` family — `block_barrier_and_i32`, `block_barrier_or_i32`, `block_barrier_count_i32`.
+- On AMDGPU, Vulkan, and Metal, there is no direct hardware-fused barrier-with-reduction, so the op is emulated in Quadrants Python (`_block_reduce_*_emulated` in `python/quadrants/lang/simt/block.py`) as: lane 0 zeroes a 1-element `SharedArray(i32)` → `block.sync()` → every thread folds its predicate via `qd.atomic_or` / `qd.atomic_add` → `block.sync()` → every thread reads the broadcasted result. Two block barriers plus one shared-memory atomic per call. See the support-table footnote for the perf trade-off.
 
-**Planned rename: `block.mem_fence()`.** This op will be renamed to `block.mem_fence()` in a future release. The current name (`mem_sync()`) remains the only spelling available today; the rest of this section uses it.
+### `block.mem_fence()`
 
-A block-scope memory fence. Orders memory operations issued by the calling thread so that prior writes are visible to other threads in the block before any subsequent read by the calling thread can be reordered ahead of the fence. It does **not** synchronize threads — no convergence requirement (subject to the CUDA caveat in the support table).
+A block-scope memory fence. Orders memory operations issued by the calling thread so that prior writes are visible to other threads in the block before any subsequent read by the calling thread can be reordered ahead of the fence. It does **not** synchronize threads — no convergence requirement, so it is safe to call from divergent control flow (e.g. inside `if tid == 0`) on every backend.
 
-- Lowers to `__threadfence_block()` (`nvvm_membar_cta`) — the intended target — on CUDA, and to `workgroupMemoryBarrier` on SPIR-V.
-- AMDGPU support is currently unimplemented and raises `ValueError` at trace time.
-- Use this when one thread in the block (e.g. lane 0) needs to publish data to shared memory and have the publication be visible to the rest of the block without forcing the publishing thread to wait at a barrier. The pattern is typically:
+- Lowers to `__threadfence_block()` (`nvvm_membar_cta`) — the intended target — on CUDA, to an LLVM IR `fence acquire_release syncscope("workgroup")` on AMDGPU (which the AMDGCN backend lowers to the appropriate `s_waitcnt` / cache-flush sequence; emitted via a body-replacement in `llvm_context.cpp` rather than `__builtin_amdgcn_fence`, since the `runtime.cpp` is built with a host-targeted clang that doesn't know AMDGCN builtins), and to `workgroupMemoryBarrier` on SPIR-V (Vulkan / Metal).
+- Use this when one thread in the block needs to publish data to shared memory and have other threads observe it via polling, without going through a thread-converging barrier. The canonical pattern is a flag-published producer + spin-waiting consumers:
 
   ```python
   if tid == 0:
       shared[...] = computed_value
-      qd.simt.block.mem_sync()
+      qd.simt.block.mem_fence()  # order the data write before the flag store
       shared_flag[0] = 1
-  qd.simt.block.sync()
+  else:
+      while shared_flag[0] == 0:
+          pass
+      use(shared[...])  # without the fence above, may observe stale shared[...]
   ```
 
-  The `mem_sync()` here orders the data write before the flag write; the `sync()` is what converges the other threads so they observe the published flag.
+  `block.sync()` does not work here — it deadlocks, because `tid == 0` and the other threads take divergent paths and never converge at a single call site. `block.sync()` would also be sufficient by itself (it implies a block-scope fence) when the producer and consumers *can* converge; reach for `block.mem_fence()` specifically when they cannot.
+
+The deprecated alias `block.mem_sync()` calls `block.mem_fence()` and emits a `DeprecationWarning` on first use.
 
 ### `block.SharedArray(shape, dtype)`
 
@@ -99,17 +108,28 @@ A worked example with `Tile16x16` interaction is in [tile16](tile16.md).
 
 ### `block.global_thread_idx()`
 
-Returns the global thread index of the calling thread within the kernel launch. Verified on CUDA and AMDGPU.
+Returns the global thread index of the calling thread within the kernel launch.
+
+On CUDA / AMDGPU this lowers to the in-block thread index (`nvvm_read_ptx_sreg_tid_x` / `amdgcn_workitem_id_x`) plus the grid offset that the offload framework adds; on Vulkan / Metal it lowers to `globalInvocationId` (MoltenVK maps this to MSL `thread_position_in_grid`).
 
 On CUDA / AMDGPU this is the natural way to identify which work-item a thread should process when the kernel uses `qd.loop_config(block_dim=...)` — together with `block_dim`, you can recover the in-block thread index via `global_thread_idx() % block_dim`.
 
 ### `block.thread_idx()`
 
-Returns the local thread index within the block. Currently only implemented on SPIR-V backends (Vulkan / Metal); on CUDA / AMDGPU it raises. On CUDA / AMDGPU, use `global_thread_idx()` together with `qd.loop_config(block_dim=...)` and recover the in-block index via `global_thread_idx() % block_dim`.
+Returns the in-block (workgroup-local) thread index of the calling thread. Available on every supported GPU backend.
+
+- CUDA: `nvvm_read_ptx_sreg_tid_x` (i.e. `threadIdx.x`).
+- AMDGPU: `amdgcn_workitem_id_x`.
+- Vulkan: `localInvocationId` (`gl_LocalInvocationID.x`).
+- Metal: same SPIR-V op as Vulkan; MoltenVK / SPIRV-Cross translates to MSL `thread_position_in_threadgroup`.
+
+This is the thread's index *within its own block / workgroup*. To get the across-grid index, use `block.global_thread_idx()`. The historical workaround on CUDA / AMDGPU of recovering the in-block index via `global_thread_idx() % block_dim` is still valid but no longer necessary; prefer the direct `block.thread_idx()` call for clarity.
+
+Today only the X dimension is exposed (1-D blocks). For 2-D / 3-D blocks the calling code should compute the linear index from `block.thread_idx()` and the block-Y / Z dimensions itself, or stick to 1-D blocks (the dominant Quadrants idiom — `qd.loop_config(block_dim=N)` always sets the X extent).
 
 ### `block.reduce_{add,min,max}(value, tid, block_dim, log2_warp, dtype)`
 
-Block-scope reductions following CUB's `BLOCK_REDUCE_WARP_REDUCTIONS` strategy: each warp reduces its lanes via a `shuffle_down` tree, lane 0 of each warp publishes the warp aggregate to shared memory, then thread 0 sequentially folds the warp aggregates with the same operator. The result is valid in **thread 0 only**; other threads retain partial values. For the broadcast-to-every-thread variants see `block.reduce_all_{add,min,max}` below.
+Block-scope reductions following the standard two-stage warp-reduction strategy: each warp reduces its lanes via a `shuffle_down` tree, lane 0 of each warp publishes the warp aggregate to shared memory, then thread 0 sequentially folds the warp aggregates with the same operator. The result is valid in **thread 0 only**; other threads retain partial values. For the broadcast-to-every-thread variants see `block.reduce_all_{add,min,max}` below.
 
 Arguments:
 
@@ -140,9 +160,9 @@ The broadcast variants of the above. Identical semantics, but the result is publ
 
 ### `block.inclusive_{add,min,max}(value, tid, block_dim, log2_warp, dtype)`
 
-Block-scope inclusive prefix scans following CUB's `BLOCK_SCAN_WARP_SCANS` strategy: each warp does a Hillis-Steele scan via `subgroup` shuffles, the last lane of each warp publishes the warp aggregate to shared memory, then every thread sequentially folds the cross-warp prefix and applies its own warp's prefix to its scan value. **All threads receive a valid result.** After the call, thread `i` holds `op(v[0], v[1], ..., v[i])`.
+Block-scope inclusive prefix scans via the standard two-stage warp-scan strategy: each warp does a Hillis-Steele scan via `subgroup` shuffles, the last lane of each warp publishes the warp aggregate to shared memory, then every thread sequentially folds the cross-warp prefix and applies its own warp's prefix to its scan value. **All threads receive a valid result.** After the call, thread `i` holds `op(v[0], v[1], ..., v[i])`.
 
-Args match `block.reduce_add` (`value, tid, block_dim, log2_warp, dtype`). Cost: per-warp Hillis-Steele tree (`log2_warp` shuffles) + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / 2**log2_warp) - 1` ops on every thread (cross-warp prefix is computed redundantly to avoid a second barrier — same trade-off CUB makes). When the block is exactly one warp the shared-memory path is short-circuited at trace time.
+Args match `block.reduce_add` (`value, tid, block_dim, log2_warp, dtype`). Cost: per-warp Hillis-Steele tree (`log2_warp` shuffles) + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / 2**log2_warp) - 1` ops on every thread (the cross-warp prefix is computed redundantly to avoid a second barrier). When the block is exactly one warp the shared-memory path is short-circuited at trace time.
 
 ```python
 @qd.kernel
@@ -167,13 +187,13 @@ The corresponding generic form is `block.exclusive_scan(value, tid, block_dim, l
 
 ### `block.radix_rank_match_atomic_or(key, tid, block_dim, log2_warp, radix_bits, bit_start, num_bits, bins, excl_prefix)`
 
-Block-level radix ranking, faithful port of CUB's `BlockRadixRankMatchEarlyCounts<WARP_MATCH_ATOMIC_OR>` from `cub/block/block_radix_rank.cuh` (the SM90 onesweep policy). Each thread holds one `u32` key; the function returns the key's stable rank within the block under the digit `(key >> bit_start) & ((1 << num_bits) - 1)`, and writes the per-digit count and exclusive-prefix arrays to two caller-supplied `block.SharedArray` outparams.
+Block-level radix ranking via the atomic-OR match-and-count strategy (the workhorse of an SM90-style onesweep radix sort). Each thread holds one `u32` key; the function returns the key's stable rank within the block under the digit `(key >> bit_start) & ((1 << num_bits) - 1)`, and writes the per-digit count and exclusive-prefix arrays to two caller-supplied `block.SharedArray` outparams.
 
 Constraints (currently):
 
 - `block_dim` must equal `1 << radix_bits` (each digit gets exactly one thread for the per-thread bin / exclusive-prefix output). Typical configuration is `radix_bits=8, block_dim=256`.
 - `log2_warp` must be 5 (warp size 32). The match path is built around 32-lane `i32` ballot masks; wave64 callers should pass 5 and arrange to launch with a 32-thread subgroup, or wait for a wave64 path.
-- One key per thread (CUB's `items_per_thread = 1`). Multi-item per thread is a future extension.
+- One key per thread (`items_per_thread = 1`). Multi-item per thread is a future extension.
 - `num_bits <= radix_bits`; `bit_start` is the offset of the digit's low bit.
 
 Args:
@@ -201,18 +221,9 @@ def kern(keys_in: qd.types.ndarray(ndim=1), ranks_out: qd.types.ndarray(ndim=1))
 
 The function inserts the necessary `block.sync()` retires before returning, so callers can read `bins` / `excl_prefix` immediately after the call without an extra barrier.
 
-## Grid-scope fence: `qd.simt.grid.memfence()`
-
-**Planned rename: `qd.simt.grid.mem_fence()`** (note the underscore). This op will be renamed in a future release for consistency with the planned `block.mem_fence()`. The current name (`grid.memfence()`) remains the only spelling available today; the rest of this section uses it.
-
-`grid.memfence()` is the device-scope counterpart of `block.mem_sync()` (to be renamed `block.mem_fence()` in a future release). It orders memory operations across the entire grid, so writes made by one block become visible to other blocks after the fence. CUDA only today; lowers to `__threadfence()` (`nvvm_membar_gl`).
-
-Use it when you need cross-block coordination via global memory (decoupled look-back scan, inter-block flag publishing, single-pass reductions, etc.). For coordination within a single block, prefer `block.mem_sync()` — it is cheaper.
-
-There is no built-in grid-wide barrier (cooperative-groups-style); the only way to converge threads across blocks is to finish the kernel and launch a new one.
-
 ## Related
 
+- [grid](grid.md) — the device-scope counterpart of `block.mem_fence()`. For coordination within a single block, prefer `block.mem_fence()` — it is cheaper.
 - [parallelization](parallelization.md) — kernel-launch and grid-stride patterns.
 - [subgroup](subgroup.md) — primitives that operate within a single subgroup (warp / wavefront), one tier below block scope.
 - [tile16](tile16.md) — `Tile16x16` register-resident tiles, built on `subgroup.shuffle`.
