@@ -22,7 +22,6 @@ All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.make_spd`, `qd.polar_
 A few patterns to note:
 
 - **Shapes are fixed.** Calling any of these on a matrix outside the supported shapes raises an exception at trace time (`"SVD only supports 2×2 and 3×3 matrices."`, etc.). For shapes up to the cap they compile down to per-thread straight-line code; beyond the cap there is no fallback today.
-- **`qd.sym_eig` and `qd.make_spd` need a top-level `for` in the calling kernel.** The cyclic-Jacobi implementation backing both ops contains a runtime `range` sweep loop. If the calling `@qd.kernel` doesn't have its own outermost `for ... in range(...)` loop, the kernel parallelizes the sweep loop across `MAX_SWEEPS` threads, each running a single sweep on a private copy of the locals — and you get a non-converged garbage result. Wrap the call in `for _tid in range(N_threads):` (use `range(1)` if you don't need parallelism). All other ops on this page are register arithmetic and don't share this constraint.
 - **All ops accept an optional `dt` argument.** When unspecified, it defaults to `impl.get_runtime().default_fp` — usually `qd.f32` unless overridden in `qd.init()`. Pass `dt=qd.f64` for the high-precision variant.
 - **Output shape matches the input shape.** A 3×3 input yields 3×3 outputs (and a length-3 vector for `solve` / eigenvalues); a 2×2 input yields 2×2 outputs.
 - **Real matrices only.** `qd.eig` returns complex results in a packed real layout (see below); the others all assume real-valued input and return real-valued output.
@@ -62,17 +61,6 @@ Calling at `N >= 13` raises (`"Symmetric eigen solver currently supports sizes u
 
 `A` is *assumed* symmetric; the implementation does not symmetrize first. If your matrix is only approximately symmetric (e.g. accumulated floating-point error), explicitly compute `(A + A.transpose()) * 0.5` before calling.
 
-**Caller pattern.** The N≥4 path uses a runtime sweep loop. The calling `@qd.kernel` must have a top-level `for ... in range(...)` loop, otherwise the sweep loop is parallelized and the result is garbage:
-
-```python
-@qd.kernel
-def evd_each(A_field, evals_field, evecs_field):
-    for i in range(A_field.shape[0]):              # ← required outer loop
-        evals_field[i], evecs_field[i] = qd.sym_eig(A_field[i], dt=qd.f64)
-```
-
-If you only need a single decomposition per kernel call, use `for _tid in range(1):`.
-
 ### `qd.make_spd(A, dt=None)`
 
 Project a symmetric matrix `A` to the closest positive semi-definite matrix in the Frobenius-norm sense. Implemented as `Q · diag(max(λ, 0)) · Qᵀ` where `A = Q · diag(λ) · Qᵀ` is the symmetric eigendecomposition computed by `qd.sym_eig`.
@@ -86,8 +74,6 @@ Use cases:
 - Producing a usable preconditioner from a not-quite-SPD matrix.
 
 `make_spd` is a Frobenius-projector onto the SPD cone: `make_spd(make_spd(A)) == make_spd(A)`. If `A` is already SPD it is returned essentially unchanged (up to `sym_eig` round-trip error); if `A` is negative-definite the result is the zero matrix.
-
-The same caller-pattern requirement as `qd.sym_eig` applies — wrap the call in a top-level `for ... in range(...)` in the kernel.
 
 ### `qd.polar_decompose(A, dt=None)`
 
