@@ -1686,8 +1686,8 @@ def test_subgroup_all_equal_float_contract(dtype, log2_size):
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_all_true():
-    """Ballot with all lanes voting true should return a full bitmask."""
+def test_subgroup_ballot_first_n_all_true():
+    """``ballot_first_n(p=1, n=32)`` with every lane voting true returns the full 32-bit bitmask (lanes 0..31)."""
     N = 32
     result = qd.field(dtype=qd.u32, shape=N)
 
@@ -1695,17 +1695,17 @@ def test_subgroup_ballot_all_true():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            result[i] = subgroup.ballot(1)
+            result[i] = subgroup.ballot_first_n(1, 32)
 
     foo()
 
     for i in range(N):
-        assert result[i] != 0, f"lane {i}: ballot returned 0, expected non-zero"
+        assert result[i] == 0xFFFFFFFF, f"lane {i}: ballot returned {result[i]:#x}, expected 0xFFFFFFFF"
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_all_false():
-    """Ballot with all lanes voting false should return zero."""
+def test_subgroup_ballot_first_n_all_false():
+    """``ballot_first_n(p=0, n=32)`` with every lane voting false returns zero."""
     N = 32
     result = qd.field(dtype=qd.u32, shape=N)
 
@@ -1713,7 +1713,7 @@ def test_subgroup_ballot_all_false():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            result[i] = subgroup.ballot(0)
+            result[i] = subgroup.ballot_first_n(0, 32)
 
     foo()
 
@@ -1722,8 +1722,8 @@ def test_subgroup_ballot_all_false():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_even_lanes():
-    """Even-numbered lanes vote true; odd lanes vote false."""
+def test_subgroup_ballot_first_n_even_lanes():
+    """Even-numbered lanes vote true; odd lanes vote false.  Result is the alternating bit pattern 0x55555555."""
     N = 32
     result = qd.field(dtype=qd.u32, shape=N)
 
@@ -1732,20 +1732,17 @@ def test_subgroup_ballot_even_lanes():
         qd.loop_config(block_dim=N)
         for i in range(N):
             lane = subgroup.invocation_id()
-            result[i] = subgroup.ballot(1 - lane % 2)
+            result[i] = subgroup.ballot_first_n(1 - lane % 2, 32)
 
     foo()
 
     mask = result[0]
-    assert mask & 0x1, "lane 0 should have voted true"
-    assert not (mask & 0x2), "lane 1 should have voted false"
-    assert mask & 0x4, "lane 2 should have voted true"
-    assert not (mask & 0x8), "lane 3 should have voted false"
+    assert mask == 0x55555555, f"got {mask:#x}, expected 0x55555555 (even lanes set, odd lanes clear)"
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_popcount():
-    """Verify popcount of ballot(1) equals the subgroup size."""
+def test_subgroup_ballot_first_n_popcount():
+    """popcount of ``ballot_first_n(1, 32)`` equals 32 (the u32 mask is full); group_size may be 32 or 64."""
     N = 32
     ballot_val = qd.field(dtype=qd.u32, shape=N)
     sg_size = qd.field(dtype=qd.i32, shape=N)
@@ -1754,7 +1751,7 @@ def test_subgroup_ballot_popcount():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            ballot_val[i] = subgroup.ballot(1)
+            ballot_val[i] = subgroup.ballot_first_n(1, 32)
             sg_size[i] = subgroup.group_size()
 
     foo()
@@ -1762,10 +1759,161 @@ def test_subgroup_ballot_popcount():
     bv = ballot_val[0]
     sz = sg_size[0]
     actual_popcount = bin(bv).count("1")
-    expected = min(sz, N)
-    assert (
-        actual_popcount == expected
-    ), f"popcount({bv:#x}) = {actual_popcount}, expected {expected} (subgroup size {sz})"
+    assert actual_popcount == 32, f"popcount({bv:#x}) = {actual_popcount}, expected 32 (subgroup size {sz})"
+
+
+@pytest.mark.parametrize("n", [1, 4, 8, 16, 24, 31, 32])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_ballot_first_n_partial(n):
+    """``ballot_first_n(1, n)`` with all lanes voting true returns ``(1 << n) - 1`` (or ``0xFFFFFFFF`` at ``n=32``).
+
+    Exercises the ``n < 32`` masking path: lanes ``[n, 32)`` must contribute zero to the result, so bits ``[n, 32)``
+    of the mask must be clear regardless of those lanes' actual predicates.  ``n == 32`` exercises the shortcut
+    (no masking).
+    """
+    N = 32
+    result = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            result[i] = subgroup.ballot_first_n(1, n)
+
+    foo()
+
+    expected = 0xFFFFFFFF if n == 32 else (1 << n) - 1
+    for i in range(N):
+        assert result[i] == expected, f"n={n} lane {i}: got {result[i]:#x}, expected {expected:#x}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_ballot_first_n_partial_truthy_per_lane():
+    """``ballot_first_n(predicate, n)`` with a per-lane-varying predicate: each lane votes ``lane & 1``, so the
+    result over the first ``n`` lanes is ``(0xAAAAAAAA & ((1 << n) - 1))``.  Verifies that the masking really does
+    select lanes ``< n`` and not e.g. ``< 32`` always."""
+    N = 32
+    result = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            result[i] = subgroup.ballot_first_n(lane % 2, 16)
+
+    foo()
+
+    expected = 0xAAAAAAAA & 0xFFFF  # lanes 0..15: bits 1, 3, 5, ..., 15 set; bits 16..31 clear
+    for i in range(N):
+        assert result[i] == expected, f"lane {i}: got {result[i]:#x}, expected {expected:#x}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_ballot_full_subgroup_all_true():
+    """``ballot_full_subgroup(1)`` with every lane voting true returns a u64 bitmask covering the whole subgroup.
+    On wave32 we expect ``0xFFFFFFFF`` (low 32 bits set, high 32 zero); on wave64 we expect ``0xFFFFFFFFFFFFFFFF``."""
+    N = 32
+    result = qd.field(dtype=qd.u64, shape=N)
+    sg_size = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            result[i] = subgroup.ballot_full_subgroup(1)
+            sg_size[i] = subgroup.group_size()
+
+    foo()
+
+    sz = sg_size[0]
+    assert sz in (32, 64), f"unexpected group_size {sz}"
+    expected = (1 << sz) - 1  # 0xFFFFFFFF on wave32, 0xFFFFFFFFFFFFFFFF on wave64
+    for i in range(N):
+        assert result[i] == expected, f"lane {i}: got {result[i]:#x}, expected {expected:#x} (subgroup size {sz})"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_ballot_full_subgroup_all_false():
+    """``ballot_full_subgroup(0)`` returns zero everywhere — verifies no spurious bits leak in from
+    uninitialised wave64 high-half lanes."""
+    N = 32
+    result = qd.field(dtype=qd.u64, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            result[i] = subgroup.ballot_full_subgroup(0)
+
+    foo()
+
+    for i in range(N):
+        assert result[i] == 0, f"lane {i}: got {result[i]:#x}, expected 0"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_ballot_full_subgroup_even_lanes():
+    """Even lanes vote true; odd lanes vote false.  Result: ``0x5555...`` over the whole subgroup width.
+
+    On wave32 we get ``0x0000000055555555`` (low 32 bits, high 32 zero); on wave64 we get
+    ``0x5555555555555555`` (all 64 bits in the alternating pattern).
+    """
+    N = 32
+    result = qd.field(dtype=qd.u64, shape=N)
+    sg_size = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            result[i] = subgroup.ballot_full_subgroup(1 - lane % 2)
+            sg_size[i] = subgroup.group_size()
+
+    foo()
+
+    sz = sg_size[0]
+    assert sz in (32, 64), f"unexpected group_size {sz}"
+    if sz == 32:
+        expected = 0x55555555
+    else:
+        expected = 0x5555555555555555
+    for i in range(N):
+        assert result[i] == expected, f"lane {i}: got {result[i]:#x}, expected {expected:#x} (sg_size {sz})"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_ballot_full_subgroup_high_half_only():
+    """Only lanes ``>= 32`` vote true.  On wave32 the result is zero (no such lanes exist); on wave64 the result is
+    ``0xFFFFFFFF00000000``.  This is the test that distinguishes a *correct* wave64 implementation from a wave32-only
+    one: a broken wave64 path that always uses the i32 ballot would silently report 0 here."""
+    N = 64
+    result = qd.field(dtype=qd.u64, shape=N)
+    sg_size = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            result[i] = subgroup.ballot_full_subgroup(qd.i32(lane >= qd.u32(32)))
+            sg_size[i] = subgroup.group_size()
+
+    foo()
+
+    sz = sg_size[0]
+    assert sz in (32, 64), f"unexpected group_size {sz}"
+    if sz == 32:
+        # No lane has lane_id >= 32, so the result is zero.
+        expected = 0
+    else:
+        # Lanes 32..63 vote true, lanes 0..31 vote false: result is 0xFFFFFFFF00000000.
+        expected = 0xFFFFFFFF00000000
+    for i in range(N):
+        # Each subgroup independently produces `expected`; check the first lane of each subgroup.
+        if i % sz == 0:
+            assert result[i] == expected, f"subgroup-leader lane {i}: got {result[i]:#x}, expected {expected:#x}"
 
 
 # Lane masks: each lane queries its own mask via ``invocation_id()`` and we cross-check against the closed-form

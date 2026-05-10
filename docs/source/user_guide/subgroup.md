@@ -44,11 +44,12 @@ The old names remain as deprecated aliases that emit a `DeprecationWarning` on f
 
 ### Voting and predicate ops
 
-`all_true` / `any_true` / `all_equal` take a `log2_size` template parameter and reduce over each `2**log2_size` group of consecutive lanes, broadcasting the `i32` (`0` or `1`) result to every lane in the group. Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`. `ballot` is full-subgroup only and returns a `u32` bitmask.
+`all_true` / `any_true` / `all_equal` take a `log2_size` template parameter and reduce over each `2**log2_size` group of consecutive lanes, broadcasting the `i32` (`0` or `1`) result to every lane in the group. Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`. The two `ballot` variants are full-subgroup only: `ballot_first_n(predicate, n)` returns a `u32` covering lanes `[0, n)` (with `n` a compile-time constant `<= 32`), and `ballot_full_subgroup(predicate)` returns a `u64` covering every lane in the subgroup (32 lanes on wave32, 64 on wave64).
 
 | Op                                          | CUDA          | AMDGPU | SPIR-V (Vulkan / Metal) |
 |---------------------------------------------|---------------|--------|-------------------------|
-| `subgroup.ballot(predicate)`                | yes           | yes    | yes                     |
+| `subgroup.ballot_first_n(predicate, n)`     | yes           | yes    | yes                     |
+| `subgroup.ballot_full_subgroup(predicate)`  | yes (u32 zext'd to u64) | yes (wave32 / wave64) | yes (uvec4 hi:lo packed to u64) |
 | `subgroup.all_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
 | `subgroup.any_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
 | `subgroup.all_equal(value, log2_size)`      | yes (fast at `log2_size==5`, transitively via `all_true`) | yes | yes |
@@ -235,8 +236,8 @@ Same min / max as `reduce_min` / `reduce_max`, but broadcast to **every lane** i
 Per-lane inclusive scan under `+` / `min` / `max` that resets at every non-zero `head_flag`, scoped to `2**log2_size` consecutive lanes. Lane `i` returns the scan of `value[head_below..i + 1]`, where `head_below` is the largest lane index `<= i` (within the lane's `2**log2_size` group) whose `head_flag` is non-zero. If no such lane exists inside the group, the group's first lane is treated as an implicit head, so the result is the inclusive scan from `group_base` to `i`.
 
 - `value` is any type supporting the operator (`+` and `shuffle_up` for `_add`; `qd.min`/`qd.max` and `shuffle_up` for `_min`/`_max`). `head_flag` is any integer scalar; the lowering tests `head_flag != 0`, so non-binary truthy values (e.g. `7`, `42`) work.
-- `log2_size` is a `qd.template()` — a compile-time constant. `2**log2_size` must not exceed 32: the underlying `subgroup.ballot` returns a `u32` covering the first 32 lanes, so on AMDGPU CDNA wave64 only the low 32 lanes contribute.
-- Implementation: one `subgroup.ballot(head_flag != 0)` to materialise a `u32` of head positions, then a Hillis-Steele inclusive scan bounded by `distance >= offset` where `distance = lane - segment_head`. `segment_head` is computed via `31 - clz(effective_mask & ((1 << (lane + 1)) - 1))`, with an OR-injected virtual head at `group_base` to guarantee a non-zero `lower`. The mask + `clz` setup is shared between all three ops via a small internal helper.
+- `log2_size` is a `qd.template()` — a compile-time constant. `2**log2_size` must not exceed 32: the underlying `subgroup.ballot_first_n(p, 32)` returns a `u32` covering the first 32 lanes, so on AMDGPU CDNA wave64 only the low 32 lanes contribute.
+- Implementation: one `subgroup.ballot_first_n(head_flag != 0, 32)` to materialise a `u32` of head positions, then a Hillis-Steele inclusive scan bounded by `distance >= offset` where `distance = lane - segment_head`. `segment_head` is computed via `31 - clz(effective_mask & ((1 << (lane + 1)) - 1))`, with an OR-injected virtual head at `group_base` to guarantee a non-zero `lower`. The mask + `clz` setup is shared between all three ops via a small internal helper.
 - No identity argument is required (unlike `exclusive_min` / `exclusive_max`) because the per-lane `distance >= offset` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never combined with the local value.
 - Cost: `1 ballot + 1 clz + log2_size shuffles + log2_size ops`, fully unrolled into the calling kernel's IR. Same shape as `inclusive_add` / `inclusive_min` / `inclusive_max`, plus one ballot and one `clz` for the per-lane segment-head lookup.
 - Float NaN handling for `_min` / `_max` is implementation-defined (same caveat as `reduce_min` / `reduce_max`): PTX uses `fminnm` / `fmaxnm`, AMDGPU uses `llvm.minnum` / `llvm.maxnum`, SPIR-V uses `OpFMin` / `OpFMax`. Avoid NaN inputs if you need a portable result.
@@ -263,14 +264,31 @@ Per-lane exclusive scan over `2**log2_size` consecutive lanes, under the binary 
 - All seven share a single `@qd.func` helper (`_exclusive_scan`) that runs the inclusive scan, shifts the result up by one lane via `shuffle_up`, and substitutes `identity` at lane 0 of each group. The lane-0 substitution is required because `shuffle_up` with offset 1 is implementation-defined at lane 0 (and `OpGroupNonUniformShuffleUp` calls it undefined outright).
 - AMDGPU performance note (`*` in the table): same `ds_bpermute` cost as `shuffle_up`. Cost is one inclusive scan plus one extra `shuffle_up` and a select.
 
-### `ballot(predicate)`
+### `ballot_first_n(predicate, n)`
 
-Returns a `u32` bitmask whose bit `i` is set iff lane `i`'s `predicate` is non-zero. Single hardware instruction on every backend: `__ballot_sync(0xFFFFFFFF, p)` on CUDA, `v_ballot_b32` on AMDGPU, `OpGroupNonUniformBallot` on SPIR-V.
+Returns a `u32` bitmask whose bit `i` is set iff `i < n` AND lane `i`'s `predicate` is non-zero. Bits `>= n` are always zero.
 
-- `predicate` is any integer scalar; the lowering tests `predicate != 0` at the start, so non-binary truthy values work.
-- The result covers the first 32 lanes only. On AMDGPU CDNA wave64 the high 32 bits are dropped, consistent with the `u32` return type — if you need the full wave64 mask you can build it with two `ballot`s and a bitwise concat.
-- Caller contract: uniform CF + all lanes active. Calling `ballot` from divergent control flow has implementation-defined behaviour (CUDA's `__ballot_sync` will deadlock if the active mask doesn't match `0xFFFFFFFF`).
-- Useful for stream compaction, segmented reductions, and any pattern that wants `clz` / `ffs` over a per-lane predicate.
+- `predicate` is any integer scalar; the lowering tests `predicate != 0` internally, so non-binary truthy values work.
+- `n` is a `qd.template()` compile-time constant in `[1, 32]`. Pass `n = 32` for "ballot over the 32 representable lanes" — the most common case, used internally by `segmented_reduce_*` and other ballot consumers.
+- Backend lowering:
+  - **CUDA**: `__ballot_sync(0xFFFFFFFF, predicate)`. Warps are always 32 lanes, so the `u32` result naturally packs every lane.
+  - **AMDGPU**: `llvm.amdgcn.ballot.i32`. Packs lanes 0..31 into the result; on wave64 lanes 32..63's predicates simply do not appear in the `i32` result, which matches the `n <= 32` contract.
+  - **SPIR-V**: `OpGroupNonUniformBallot` returns a `uvec4`; we extract component 0, which by spec contains the ballot bits for lanes 0..31.
+- For `n < 32` we mask the predicate by `lane < n` before issuing the ballot, so bits `[n, 32)` of the result are forced to zero regardless of those lanes' actual predicate values. At `n == 32` the masking is provably a no-op on every backend (lanes `>= 32` are either non-existent on wave32 or already not represented in the `u32` result on wave64), so the masking is elided at trace time and the call lowers to a single ballot intrinsic.
+- Caller contract: uniform CF + all lanes active. Calling from divergent control flow has implementation-defined behaviour (CUDA's `__ballot_sync` will deadlock if the active mask doesn't match `0xFFFFFFFF`).
+- Useful for stream compaction over the first 32 lanes, segmented reductions (which cap at 32-lane segments via `log2_size <= 5`), and any pattern that wants `clz` / `popcount` / `ffs` over a per-lane predicate within a `u32`.
+
+### `ballot_full_subgroup(predicate)`
+
+Returns a `u64` bitmask covering the entire subgroup. Bit `i` is set iff lane `i`'s `predicate` is non-zero, for all `i` in `[0, subgroup_size)`.
+
+- On wave32 backends (CUDA, RDNA wave32, most Vulkan / Metal) the high 32 bits of the result are always zero, since lanes `>= 32` do not exist. On wave64 backends (AMDGPU CDNA, GFX9, RDNA explicit-wave64) all 64 bits are meaningful.
+- Backend lowering:
+  - **CUDA**: `__ballot_sync(0xFFFFFFFF, p)` then zero-extend the `i32` result to `i64`.
+  - **AMDGPU**: `llvm.amdgcn.ballot.i64`. Returns the full 64-bit ballot on wave64; on wave32 the AMDGPU backend lowers it to the wave32 ballot zero-extended to 64 bits, so the API stays uniform across wavefront modes.
+  - **SPIR-V**: extract components 0 and 1 of the `OpGroupNonUniformBallot` `uvec4` (lanes 0..31 and 32..63 respectively) and pack them into a `u64` via `u64(hi) << 32 | u64(lo)`.
+- Use this when you need a subgroup-wide population count, prefix mask, or compaction that has to cover more than 32 lanes. Use `ballot_first_n(p, 32)` instead if you only care about the first 32 lanes — it's one register cheaper on wave64 and avoids the wider `u64` result type.
+- Caller contract: uniform CF + all lanes active.
 
 ### `all_true(predicate, log2_size)` / `any_true(predicate, log2_size)`
 
@@ -305,7 +323,7 @@ Closed-form `u32` lane-mask constants parametrised by a lane id. Bit `i` of the 
 - Returns `u32`. Bit 0 corresponds to lane 0, bit 31 to lane 31.
 - Caller contract: `lane_id` must be in `[0, 31]` (matching the `u32` return type, which represents 32 lanes). Passing `lane_id == 32` triggers an undefined-behaviour shift on most backends.
 - Implemented portably as a `@qd.func` over `<<`, `-`, `|`, `~`. Inlines at trace time into 1–3 ALU ops on every backend.
-- AMDGPU CDNA wave64 caveat: only the low 32 lanes are representable in this op. If you need a 64-bit mask spanning all wave64 lanes, build it manually from two `subgroup.ballot` calls (or two lane-mask calls and a bitwise concat).
+- AMDGPU CDNA wave64 caveat: only the low 32 lanes are representable in this op (the return type is `u32`). If you need a mask covering all 64 wave64 lanes, use `subgroup.ballot_full_subgroup` instead — it returns a `u64` and includes lanes 32..63.
 
 ## Examples
 
@@ -332,7 +350,7 @@ def count_positive(a: qd.types.ndarray(dtype=qd.f32, ndim=1),
                    counts: qd.types.ndarray(dtype=qd.u32, ndim=1)):
     qd.loop_config(block_dim=32)
     for i in range(a.shape[0]):
-        mask = subgroup.ballot(qd.i32(a[i] > 0.0))
+        mask = subgroup.ballot_first_n(qd.i32(a[i] > 0.0), 32)
         if subgroup.invocation_id() == 0:
             counts[i // 32] = mask
 ```
@@ -456,7 +474,7 @@ After the call, lane `k` (within each group of 32) holds `a[group_start] + a[gro
 - Shuffles are register-to-register on CUDA (`__shfl_sync`, `__shfl_down_sync`, `__shfl_up_sync`) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.
 - AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` all go through `ds_permute` / `ds_bpermute` today (LDS-routed, roughly tens of cycles).
 - `shuffle_xor` and `broadcast_first` are `@qd.func` wrappers over `shuffle` / `broadcast` and inline at trace time, so on every backend they cost exactly the same as the underlying op.
-- `ballot` is a single hardware instruction on every backend — one cycle on CUDA (`__ballot_sync`), one instruction on AMDGPU (`v_ballot_b32`), and `OpGroupNonUniformBallot` on SPIR-V.
+- Both `ballot_first_n` and `ballot_full_subgroup` lower to a single hardware instruction on every backend — one cycle on CUDA (`__ballot_sync`), one instruction on AMDGPU (`v_ballot_b32` / `v_ballot_b64`), and `OpGroupNonUniformBallot` on SPIR-V (extract one or two components of the result `uvec4`). At `n == 32` `ballot_first_n` elides the predicate-masking step entirely; at `n < 32` it inserts one extra multiply on the predicate.
 - `reduce_add` and `reduce_all_add` both issue exactly `log2_size` shuffles and `log2_size` adds per call. No barriers, no shared memory, no launch overhead (they inline).
 - Pick `reduce_all_add` over `reduce_add + broadcast` when you need the result in every lane — same cost, one fewer shuffle.
 - 64-bit dtypes (`i64`, `u64`, `f64`) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.

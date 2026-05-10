@@ -62,14 +62,56 @@ def elect():
     return i32(invocation_id() == 0)
 
 
-def ballot(predicate):
-    """Return a ``u32`` bitmask whose bit ``i`` is set iff lane ``i``'s ``predicate`` is non-zero.
+@func
+def ballot_first_n(predicate, n: template()):
+    """Return a ``u32`` bitmask whose bit ``i`` is set iff ``i < n`` AND lane ``i``'s ``predicate`` is non-zero.
 
-    Single hardware instruction on every backend (``__ballot_sync`` on CUDA, ``v_ballot_b32`` on AMDGPU,
-    ``OpGroupNonUniformBallot`` on SPIR-V).  The result covers the first 32 lanes; on AMDGPU CDNA wave64 only the low
-    32 bits are returned, consistent with the ``u32`` return type.  Caller contract: uniform CF + all lanes active.
+    ``n`` is a ``qd.template()`` compile-time constant in ``[1, 32]``; bits ``>= n`` of the result are always zero.
+    Pass ``n = 32`` for "ballot all 32 representable lanes" (the most common case, used by ``segmented_reduce_*`` and
+    every other consumer of the u32 ballot in this module).
+
+    Backend lowering:
+
+    * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` — the warp is always 32 lanes, so the ``u32`` result naturally
+      packs every lane.
+    * AMDGPU: ``llvm.amdgcn.ballot.i32`` — packs lanes 0..31 into the result; on wave64 lanes 32..63's predicates
+      simply do not appear in the ``i32`` result, which matches the ``ballot_first_n(p, n <= 32)`` contract.
+    * SPIR-V: ``OpGroupNonUniformBallot`` (returns a uvec4); we extract component 0 = lanes 0..31's ballot.
+
+    For ``n < 32`` we mask the predicate by ``lane < n`` before issuing the ballot, so bits ``[n, 32)`` of the result
+    are forced to zero regardless of what those lanes' actual predicates are.  At ``n == 32`` the masking is provably
+    a no-op on every backend (lanes ``>= 32`` are either non-existent on wave32 or already not represented in the u32
+    result on wave64), so we shortcut and emit the ballot directly with no extra arithmetic.
+
+    Caller contract: uniform CF + all lanes active.  If you need a mask covering more than 32 lanes (for wave64
+    callers who want the full subgroup), use `ballot_full_subgroup` and check the high 32 bits.
     """
-    return impl.call_internal("subgroupBallot", predicate, with_runtime_context=False)
+    if impl.static(n == 32):
+        return impl.call_internal("subgroupBallotU32", predicate, with_runtime_context=False)
+    lane = invocation_id()
+    masked = predicate * i32(u32(lane) < u32(impl.static(n)))
+    return impl.call_internal("subgroupBallotU32", masked, with_runtime_context=False)
+
+
+def ballot_full_subgroup(predicate):
+    """Return a ``u64`` bitmask covering the entire subgroup; bit ``i`` is set iff lane ``i``'s ``predicate`` is
+    non-zero.  On wave32 backends (CUDA, RDNA wave32, most Vulkan / Metal) the high 32 bits of the result are always
+    zero, since lanes ``>= 32`` do not exist; on wave64 backends (AMDGPU CDNA, GFX9, RDNA explicit-wave64) all 64 bits
+    are meaningful.  Use this when you need a subgroup-wide population count, prefix-mask, or compaction that has to
+    cover more than 32 lanes; use `ballot_first_n` when you only care about the first 32 lanes.
+
+    Backend lowering:
+
+    * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` zero-extended to ``u64`` — the warp is 32 lanes so the high half
+      is always zero.
+    * AMDGPU: ``llvm.amdgcn.ballot.i64`` — returns the full 64-bit ballot on wave64; on wave32 the AMDGPU backend
+      lowers it to the wave32 ballot zero-extended to 64 bits, so the API stays uniform across wavefront modes.
+    * SPIR-V: extract components 0 and 1 of the ``OpGroupNonUniformBallot`` uvec4 (lanes 0..31 and 32..63
+      respectively) and pack them: ``u64(hi) << 32 | u64(lo)``.
+
+    Caller contract: uniform CF + all lanes active.
+    """
+    return impl.call_internal("subgroupBallotU64", predicate, with_runtime_context=False)
 
 
 # --- Voting / predicate ops ------------------------------------------------------------
@@ -356,7 +398,10 @@ def _segment_head_distance(head_flag, log2_size: template()):
 
     Shared by `segmented_reduce_add` / `_min` / `_max`; see the module-level note for the algorithm.
     """
-    head_mask = ballot(i32(head_flag != 0))
+    # ``ballot_first_n(p, 32)`` — the segmented-reduce family caps ``log2_size`` at 5 (groups of 32 lanes), so a 32-bit
+    # ballot is sufficient on every backend; on wave64 lanes 32..63 simply don't appear in the mask, which matches the
+    # ``2**log2_size <= 32`` documented contract.
+    head_mask = ballot_first_n(i32(head_flag != 0), 32)
     lane = invocation_id()
     group_base = u32(lane) & u32(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFF))
     bits_in_group = u32(impl.static((2 ** (1 << log2_size) - 1) & 0xFFFFFFFF))
@@ -680,7 +725,8 @@ __all__ = [
     "barrier",
     "memory_barrier",
     "elect",
-    "ballot",
+    "ballot_first_n",
+    "ballot_full_subgroup",
     "all_true",
     "any_true",
     "all_equal",

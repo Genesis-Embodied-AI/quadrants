@@ -964,8 +964,17 @@ i32 amdgpu_ballot_w32(bool bit) {
   return 0;
 }
 
+i64 amdgpu_ballot_w64(bool bit) {
+  __builtin_trap();
+  return 0;
+}
+
 i32 amdgpu_ballot_i32(i32 predicate) {
   return amdgpu_ballot_w32((bool)predicate);
+}
+
+i64 amdgpu_ballot_u64(i32 predicate) {
+  return amdgpu_ballot_w64((bool)predicate);
 }
 
 i32 amdgpu_lane_id() {

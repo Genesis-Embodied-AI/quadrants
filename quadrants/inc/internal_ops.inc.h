@@ -30,7 +30,11 @@ PER_INTERNAL_OP(subgroupBroadcast)
 PER_INTERNAL_OP(subgroupShuffle)
 PER_INTERNAL_OP(subgroupShuffleDown)
 PER_INTERNAL_OP(subgroupShuffleUp)
-PER_INTERNAL_OP(subgroupBallot)
+// Two ballot variants: u32 covers lanes [0, 32) (the most common case, used by `subgroup.ballot_first_n`); u64 covers
+// the whole subgroup ([0, 32) on wave32 with the high 32 bits zero, [0, 64) on wave64).  See `subgroup.py` for the
+// public API and the per-backend codegen (CUDA / AMDGPU / SPIR-V) for the lowering details.
+PER_INTERNAL_OP(subgroupBallotU32)
+PER_INTERNAL_OP(subgroupBallotU64)
 PER_INTERNAL_OP(subgroupSize)
 PER_INTERNAL_OP(subgroupInvocationId)
 // subgroupAdd / subgroupMul / subgroupMin / subgroupMax / subgroupAnd / subgroupOr / subgroupXor removed: use portable

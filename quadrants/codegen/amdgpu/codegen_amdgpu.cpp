@@ -412,8 +412,16 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       llvm_val[stmt] = emit_amdgpu_shuffle_up(
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type, offset);
-    } else if (stmt->func_name == "subgroupBallot") {
+    } else if (stmt->func_name == "subgroupBallotU32") {
+      // ``llvm.amdgcn.ballot.i32`` packs lanes 0..31's predicates into the result.  On wave32 this covers the whole
+      // subgroup; on wave64 lanes 32..63's predicates simply do not appear in the i32 result, which is exactly what
+      // ``ballot_first_n(p, 32)`` (and any ``n <= 32``) wants.
       llvm_val[stmt] = call("amdgpu_ballot_i32", llvm_val[stmt->args[0]]);
+    } else if (stmt->func_name == "subgroupBallotU64") {
+      // ``llvm.amdgcn.ballot.i64`` returns a 64-bit ballot for the full subgroup: on wave64 every lane contributes;
+      // on wave32 only lanes 0..31 contribute and bits 32..63 of the result are zero.  Either way the i64 return is
+      // uniform across wavefront modes, which is what ``ballot_full_subgroup`` advertises to the user.
+      llvm_val[stmt] = call("amdgpu_ballot_u64", llvm_val[stmt->args[0]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
     } else if (stmt->func_name == "subgroupSize") {
