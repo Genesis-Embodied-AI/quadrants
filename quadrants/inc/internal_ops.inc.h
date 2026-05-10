@@ -69,6 +69,10 @@ PER_INTERNAL_OP(cuda_shfl_xor_sync_i32)
 PER_INTERNAL_OP(cuda_match_any_sync_i32)
 PER_INTERNAL_OP(cuda_match_all_sync_i32)
 PER_INTERNAL_OP(cuda_active_mask)
+// Libdevice find-n-th-set-bit (__nv_fns), exposed for the CUDA fast path of qd.math.fns.
+// The portable / non-CUDA implementation lives in Python (qd.math.fns) and uses popcnt + ffs;
+// see quadrants/python/quadrants/math/_fns.py.
+PER_INTERNAL_OP(cuda_fns_u32)
 PER_INTERNAL_OP(warp_barrier)
 
 // AMDGPU

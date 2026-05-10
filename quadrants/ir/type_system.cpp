@@ -330,6 +330,10 @@ void Operations::init_internals() {
   CUDA_MATCH_SYNC(all, i32);
   PLAIN_OP(cuda_active_mask, u32, false);
   PLAIN_OP(warp_barrier, i32_void, false, u32);
+  // (mask: u32, base: u32, offset: i32) -> u32. Direct libdevice __nv_fns wrapper; semantics match
+  // the CUDA / PTX `fns` instruction. Only valid on the CUDA backend; the portable Python
+  // implementation in qd.math.fns dispatches to this on CUDA only.
+  PLAIN_OP(cuda_fns_u32, u32, false, u32, u32, i32);
 
 #undef CUDA_MATCH_SYNC
 #undef CUDA_SHFL_SYNC
