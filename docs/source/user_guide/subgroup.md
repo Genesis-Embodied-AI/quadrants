@@ -52,6 +52,11 @@ The old names remain as deprecated aliases that emit a `DeprecationWarning` on f
 | `subgroup.all_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
 | `subgroup.any_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
 | `subgroup.all_equal(value, log2_size)`      | yes (fast at `log2_size==5`, transitively via `all_true`) | yes | yes |
+| `subgroup.lanemask_lt(lane_id)`             | yes           | yes    | yes                     |
+| `subgroup.lanemask_le(lane_id)`             | yes           | yes    | yes                     |
+| `subgroup.lanemask_eq(lane_id)`             | yes           | yes    | yes                     |
+| `subgroup.lanemask_gt(lane_id)`             | yes           | yes    | yes                     |
+| `subgroup.lanemask_ge(lane_id)`             | yes           | yes    | yes                     |
 
 CUDA shortcut: when `log2_size == 5` (full warp), `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF, p)` / `__any_sync(0xFFFFFFFF, p)` (one `vote.all` / `vote.any` instruction). The shortcut is selected at trace time via `qd.static()` on `impl.current_cfg().arch` and the compile-time `log2_size`, so partial-warp uses (and every other backend) cleanly fall back to a portable `shuffle_xor` butterfly with no branch in the emitted IR.
 
@@ -279,6 +284,24 @@ Returns `i32(1)` on every lane in each `2**log2_size` group iff every lane in th
 - `value` is any scalar dtype. Equality is the backend's native `==`: for floats this means `NaN != NaN` (a group with any `NaN` returns `0`) and `+0.0 == -0.0`, matching SPIR-V `OpGroupNonUniformAllEqual`. Callers wanting bit-equality on floats should `qd.bit_cast` to the same-width integer dtype first.
 - Implementation: each lane computes `group_base = invocation_id() & ~(2**log2_size - 1)`, reads the value at `group_base` via `shuffle`, compares to its own `value`, and `all_true`-reduces the equality bit. Inherits the CUDA full-warp shortcut transitively from `all_true`.
 - Cost: 1 shuffle + 1 `vote.all` on CUDA at `log2_size == 5`; 1 shuffle + `log2_size` butterfly shuffles otherwise. We deliberately do *not* use `__match_all_sync` on CUDA: it requires sm_70+ and uses bit-equality for floats, which would contradict this op's documented semantics.
+
+### `lanemask_lt(lane_id)` / `lanemask_le(lane_id)` / `lanemask_eq(lane_id)` / `lanemask_gt(lane_id)` / `lanemask_ge(lane_id)`
+
+Closed-form `u32` lane-mask constants parametrised by a lane id. Bit `i` of the result follows the relation in the suffix:
+
+| Op             | Bit `i` set iff | Closed form                            |
+|----------------|-----------------|----------------------------------------|
+| `lanemask_lt`  | `i <  lane_id`  | `(1 << lane_id) - 1`                   |
+| `lanemask_le`  | `i <= lane_id`  | `lt(lane_id) \| eq(lane_id)`            |
+| `lanemask_eq`  | `i == lane_id`  | `1 << lane_id`                         |
+| `lanemask_gt`  | `i >  lane_id`  | `~le(lane_id)`                         |
+| `lanemask_ge`  | `i >= lane_id`  | `~lt(lane_id)`                         |
+
+- `lane_id` is any integer scalar. Pass `subgroup.invocation_id()` to get the classic CUDA built-in form (current lane's mask), or any other expression to query an arbitrary lane's mask. The op is pure arithmetic — no shuffle, no ballot — so per-lane-varying `lane_id` works the same as a uniform one.
+- Returns `u32`. Bit 0 corresponds to lane 0, bit 31 to lane 31.
+- Caller contract: `lane_id` must be in `[0, 31]` (matching the `u32` return type, which represents 32 lanes). Passing `lane_id == 32` triggers an undefined-behaviour shift on most backends.
+- Implemented portably as a `@qd.func` over `<<`, `-`, `|`, `~`. Inlines at trace time into 1–3 ALU ops on every backend.
+- AMDGPU CDNA wave64 caveat: only the low 32 lanes are representable in this op. If you need a 64-bit mask spanning all wave64 lanes, build it manually from two `subgroup.ballot` calls (or two lane-mask calls and a bitwise concat).
 
 ## Examples
 

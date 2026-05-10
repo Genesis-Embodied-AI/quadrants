@@ -1616,6 +1616,161 @@ def test_subgroup_ballot_popcount():
     ), f"popcount({bv:#x}) = {actual_popcount}, expected {expected} (subgroup size {sz})"
 
 
+# Lane masks: each lane queries its own mask via ``invocation_id()`` and we cross-check against the closed-form
+# ``(1 << lane) - 1`` etc.  We cap at 32 lanes (the ``u32`` mask range), regardless of ``group_size()`` — wave64 lanes
+# 32..63 are not representable in this op.
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_lanemask_lt():
+    """``lanemask_lt(lane)`` returns ``(1 << lane) - 1`` for every lane in ``[0, 31]``."""
+    N = 32
+    out = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            out[i] = subgroup.lanemask_lt(subgroup.invocation_id())
+
+    foo()
+    for i in range(N):
+        expected = (1 << i) - 1
+        assert out[i] == expected, f"lane {i}: got {out[i]:#x}, expected {expected:#x}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_lanemask_le():
+    """``lanemask_le(lane)`` covers bits ``[0..lane]``; lane 31 must give ``0xFFFFFFFF``."""
+    N = 32
+    out = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            out[i] = subgroup.lanemask_le(subgroup.invocation_id())
+
+    foo()
+    for i in range(N):
+        expected = ((1 << i) | ((1 << i) - 1)) & 0xFFFFFFFF
+        assert out[i] == expected, f"lane {i}: got {out[i]:#x}, expected {expected:#x}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_lanemask_eq():
+    """``lanemask_eq(lane)`` is exactly one bit at ``lane``."""
+    N = 32
+    out = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            out[i] = subgroup.lanemask_eq(subgroup.invocation_id())
+
+    foo()
+    for i in range(N):
+        expected = 1 << i
+        assert out[i] == expected, f"lane {i}: got {out[i]:#x}, expected {expected:#x}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_lanemask_gt():
+    """``lanemask_gt(lane)`` covers bits strictly above ``lane``; lane 31 must give 0."""
+    N = 32
+    out = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            out[i] = subgroup.lanemask_gt(subgroup.invocation_id())
+
+    foo()
+    for i in range(N):
+        expected = (~(((1 << i) | ((1 << i) - 1)))) & 0xFFFFFFFF
+        assert out[i] == expected, f"lane {i}: got {out[i]:#x}, expected {expected:#x}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_lanemask_ge():
+    """``lanemask_ge(lane)`` covers bits ``>= lane``; lane 0 must give ``0xFFFFFFFF``."""
+    N = 32
+    out = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            out[i] = subgroup.lanemask_ge(subgroup.invocation_id())
+
+    foo()
+    for i in range(N):
+        expected = (~((1 << i) - 1)) & 0xFFFFFFFF
+        assert out[i] == expected, f"lane {i}: got {out[i]:#x}, expected {expected:#x}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_lanemask_explicit_lane_id():
+    """Pass an explicit (non-current-lane) ``lane_id`` to verify the op generalises beyond the CUDA built-in form
+    (which only takes the current lane).  Use a per-lane-varying expression so the kernel does not constant-fold."""
+    N = 32
+    out_lt = qd.field(dtype=qd.u32, shape=N)
+    out_eq = qd.field(dtype=qd.u32, shape=N)
+    out_ge = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            # `target = (lane * 3 + 1) % 32` is dynamically uniform across lanes only at call-site granularity, but the
+            # primitive itself is portable across per-lane-varying inputs (it's pure arithmetic, no shuffle / ballot).
+            target = (subgroup.invocation_id() * 3 + 1) % 32
+            out_lt[i] = subgroup.lanemask_lt(target)
+            out_eq[i] = subgroup.lanemask_eq(target)
+            out_ge[i] = subgroup.lanemask_ge(target)
+
+    foo()
+    for i in range(N):
+        target = (i * 3 + 1) % 32
+        assert out_lt[i] == (1 << target) - 1, f"lt lane {i}: target={target}, got {out_lt[i]:#x}"
+        assert out_eq[i] == (1 << target), f"eq lane {i}: target={target}, got {out_eq[i]:#x}"
+        assert out_ge[i] == ((~((1 << target) - 1)) & 0xFFFFFFFF), f"ge lane {i}: target={target}, got {out_ge[i]:#x}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_lanemask_consistency():
+    """Cross-check the family: ``lt | eq == le``, ``ge | lt == 0xFFFFFFFF``, ``gt & le == 0``, etc."""
+    N = 32
+    lt_f = qd.field(dtype=qd.u32, shape=N)
+    le_f = qd.field(dtype=qd.u32, shape=N)
+    eq_f = qd.field(dtype=qd.u32, shape=N)
+    gt_f = qd.field(dtype=qd.u32, shape=N)
+    ge_f = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            lt_f[i] = subgroup.lanemask_lt(lane)
+            le_f[i] = subgroup.lanemask_le(lane)
+            eq_f[i] = subgroup.lanemask_eq(lane)
+            gt_f[i] = subgroup.lanemask_gt(lane)
+            ge_f[i] = subgroup.lanemask_ge(lane)
+
+    foo()
+    for i in range(N):
+        lt, le, eq, gt, ge = lt_f[i], le_f[i], eq_f[i], gt_f[i], ge_f[i]
+        assert (lt | eq) == le, f"lane {i}: lt|eq = {lt | eq:#x}, le = {le:#x}"
+        assert (ge | lt) == 0xFFFFFFFF, f"lane {i}: ge|lt = {(ge | lt):#x}, expected 0xFFFFFFFF"
+        assert (gt & le) == 0, f"lane {i}: gt&le = {gt & le:#x}, expected 0"
+        assert (gt & eq) == 0, f"lane {i}: gt&eq = {gt & eq:#x}, expected 0"
+        assert (lt & eq) == 0, f"lane {i}: lt&eq = {lt & eq:#x}, expected 0"
+        assert (eq & ge) == eq, f"lane {i}: eq&ge = {eq & ge:#x}, expected {eq:#x}"
+
+
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_invocation_id_range():
     """Verify invocation IDs are non-negative."""

@@ -148,6 +148,68 @@ def broadcast(value, index):
     return impl.call_internal("subgroupBroadcast", value, index, with_runtime_context=False)
 
 
+# --- Lane masks ------------------------------------------------------------------------
+#
+# Five trivial ``u32`` constants parametrised by a lane id, mirroring CUDA's ``__lanemask_{lt,le,eq,gt,ge}``.  They are
+# portable arithmetic wrappers (no backend intrinsic): every backend that lowers ``shl`` / ``sub`` / ``not`` lowers
+# them.  Pass ``invocation_id()`` to get the current lane's mask, or any other integer expression in ``[0, 31]`` to
+# query an arbitrary lane's mask.
+#
+# Caller contract: ``lane_id`` must be in ``[0, 31]`` (matching the ``u32`` return type, which represents 32 lanes).
+# Passing ``lane_id >= 32`` triggers an undefined-behaviour shift on most backends.  AMDGPU CDNA wave64 callers can
+# build a 64-bit mask from two ``u32`` ballots if they need lanes 32..63.
+
+
+@func
+def lanemask_lt(lane_id):
+    """Bitmask of lanes strictly below ``lane_id`` — bit ``i`` is set iff ``i < lane_id``.
+
+    Pass ``invocation_id()`` for the classic CUDA ``__lanemask_lt()`` (current lane's mask).  Equivalent to
+    ``(u32(1) << u32(lane_id)) - u32(1)``; inlined at trace time into 1 shift + 1 subtract.
+
+    See the module-level note for the ``lane_id ∈ [0, 31]`` contract and the AMDGPU CDNA wave64 caveat.
+    """
+    return (u32(1) << u32(lane_id)) - u32(1)
+
+
+@func
+def lanemask_le(lane_id):
+    """Bitmask of lanes ``<= lane_id`` — bit ``i`` is set iff ``i <= lane_id``.
+
+    Equivalent to ``lanemask_lt(lane_id) | lanemask_eq(lane_id)``.  See `lanemask_lt` for the contract.
+    """
+    one_at_lane = u32(1) << u32(lane_id)
+    return one_at_lane | (one_at_lane - u32(1))
+
+
+@func
+def lanemask_eq(lane_id):
+    """Bitmask with exactly one bit set at ``lane_id`` — equivalent to ``u32(1) << u32(lane_id)``.
+
+    See `lanemask_lt` for the contract.
+    """
+    return u32(1) << u32(lane_id)
+
+
+@func
+def lanemask_gt(lane_id):
+    """Bitmask of lanes strictly above ``lane_id`` — bit ``i`` is set iff ``i > lane_id``.
+
+    Equivalent to ``~lanemask_le(lane_id)``.  See `lanemask_lt` for the contract.
+    """
+    one_at_lane = u32(1) << u32(lane_id)
+    return ~(one_at_lane | (one_at_lane - u32(1)))
+
+
+@func
+def lanemask_ge(lane_id):
+    """Bitmask of lanes ``>= lane_id`` — bit ``i`` is set iff ``i >= lane_id``.
+
+    Equivalent to ``~lanemask_lt(lane_id)``.  See `lanemask_lt` for the contract.
+    """
+    return ~((u32(1) << u32(lane_id)) - u32(1))
+
+
 @func
 def broadcast_first(value):
     """Broadcast lane 0's ``value`` to every lane in the subgroup.
@@ -573,6 +635,11 @@ __all__ = [
     "any_true",
     "all_equal",
     "broadcast_first",
+    "lanemask_lt",
+    "lanemask_le",
+    "lanemask_eq",
+    "lanemask_gt",
+    "lanemask_ge",
     "reduce_add",
     "reduce_all_add",
     "reduce_min",
