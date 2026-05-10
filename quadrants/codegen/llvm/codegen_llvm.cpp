@@ -1273,6 +1273,16 @@ llvm::Value *TaskCodeGenLLVM::integral_type_atomic(AtomicOpStmt *stmt) {
         llvm_val[stmt->dest], llvm_val[stmt->val], [&](auto v1, auto v2) { return builder->CreateMul(v1, v2); },
         stmt->val->ret_type);
   }
+  // Atomic compare-and-swap: lowers to a single LLVM cmpxchg. The instruction returns a {value, success}
+  // struct; we project field 0 (the loaded prior value), matching CUDA atomicCAS / SPIR-V OpAtomicCompareExchange.
+  // The user recovers success with `(returned == expected)`.
+  if (stmt->op_type == AtomicOpType::cas) {
+    QD_ASSERT(stmt->expected != nullptr);
+    auto cmpxchg = builder->CreateAtomicCmpXchg(
+        llvm_val[stmt->dest], llvm_val[stmt->expected], llvm_val[stmt->val], llvm::MaybeAlign(0),
+        llvm::AtomicOrdering::SequentiallyConsistent, llvm::AtomicOrdering::SequentiallyConsistent);
+    return builder->CreateExtractValue(cmpxchg, 0);
+  }
   // Atomic operators supported by LLVM
   std::unordered_map<AtomicOpType, llvm::AtomicRMWInst::BinOp> bin_op;
   bin_op[AtomicOpType::add] = llvm::AtomicRMWInst::BinOp::Add;

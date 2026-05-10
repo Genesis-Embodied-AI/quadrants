@@ -1759,6 +1759,22 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       val = ir_->float_atomic(stmt->op_type, addr_ptr, data, dt);
     }
   } else if (is_integral(dt)) {
+    if (stmt->op_type == AtomicOpType::cas) {
+      // OpAtomicCompareExchange takes (scope, sem_eq, sem_neq, value, comparator) and returns the value
+      // originally at `addr_ptr`. We surface that prior value to the user; success is recovered with
+      // `(returned == expected)`. Matches CUDA atomicCAS semantics.
+      QD_ASSERT(stmt->expected != nullptr);
+      spirv::Value expected_val = ir_->query_value(stmt->expected->raw_name());
+      ir_->make_inst(spv::OpMemoryBarrier, ir_->const_i32_one_,
+                     ir_->uint_immediate_number(ir_->u32_type(), spv::MemorySemanticsAcquireReleaseMask |
+                                                                     spv::MemorySemanticsUniformMemoryMask));
+      val = ir_->make_value(spv::OpAtomicCompareExchange, ret_type, addr_ptr,
+                            /*scope=*/ir_->const_i32_one_,
+                            /*semantics if equal=*/ir_->const_i32_zero_,
+                            /*semantics if unequal=*/ir_->const_i32_zero_, data, expected_val);
+      ir_->register_value(stmt->raw_name(), val);
+      return;
+    }
     bool use_native_atomics = false;
     spv::Op op;
     if (stmt->op_type == AtomicOpType::add) {

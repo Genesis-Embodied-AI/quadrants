@@ -1486,6 +1486,56 @@ def atomic_exchange(x, y):
     return impl.expr_init(expr.Expr(_qd_core.expr_atomic_xchg(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
+def atomic_cas(x, expected, desired):
+    """Atomically compare-and-swap: if the current value of `x` equals `expected`, write `desired` into `x`.
+    Returns the value originally at `x` (regardless of whether the swap happened).
+
+    The user determines whether the swap actually fired by comparing the returned value against `expected`::
+
+        old = qd.atomic_cas(x, expected, desired)
+        success = (old == expected)
+
+    This matches the shape of CUDA's `atomicCAS` and SPIR-V's `OpAtomicCompareExchange`. CAS is the basic
+    primitive on top of which arbitrary atomic read-modify-write operations can be built with a retry loop.
+
+    Currently integer dtypes only -- f32 / f64 will raise a trace-time type error. `x` must be a writable
+    target; constant expressions or scalars are not allowed.
+
+    Args:
+        x: the destination memory location (lvalue: field element, ndarray element, matrix slot).
+        expected: the value `x` is required to currently hold for the swap to fire.
+        desired: the value to write into `x` if `*x == expected`.
+
+    Returns:
+        The value originally at `x`.
+
+    Example::
+
+        >>> @qd.kernel
+        >>> def take_slot():
+        >>>     # Try to claim the slot only if it is currently empty (== 0).
+        >>>     old = qd.atomic_cas(slot[None], 0, my_id)
+        >>>     if old == 0:
+        >>>         # we won the race; the slot is ours
+        >>>         ...
+    """
+    if impl.is_python_backend():
+        old = x.item()
+        if old == expected:
+            x[()] = desired
+        return old
+    if not (is_quadrants_expr(x) and x.ptr.is_lvalue()):
+        raise QuadrantsSyntaxError("cannot use a non-writable target as the first operand of 'atomic_cas'")
+    expected_e = wrap_if_not_expr(expected)
+    desired_e = wrap_if_not_expr(desired)
+    return impl.expr_init(
+        expr.Expr(
+            _qd_core.expr_atomic_cas(x.ptr, expected_e.ptr, desired_e.ptr),
+            dbg_info=_qd_core.DebugInfo(stack_info()),
+        )
+    )
+
+
 @writeback_binary
 def assign(a, b):
     impl.get_runtime().compiling_callable.ast_builder().expr_assign(a.ptr, b.ptr, _qd_core.DebugInfo(stack_info()))
@@ -1569,6 +1619,7 @@ __all__ = [
     "atomic_add",
     "atomic_mul",
     "atomic_exchange",
+    "atomic_cas",
     "bit_cast",
     "bit_shr",
     "cast",

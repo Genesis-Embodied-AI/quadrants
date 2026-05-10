@@ -969,6 +969,26 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
                                dest->ret_type->to_string(), val->ret_type->to_string()));
     }
   }
+  if (op_type == AtomicOpType::cas) {
+    // First-pass CAS: integer dtypes only. f32 / f64 CAS would need the same uint-bitcast trick xchg uses
+    // in the SPIR-V codegen path; deferred until that lands here too.
+    if (!is_integral(ret_element_type) || !is_integral(val_dtype)) {
+      ErrorEmitter(QuadrantsTypeError(), this,
+                   fmt::format("'atomic_cas' requires integer operands, got dest '{}' and val '{}'",
+                               dest->ret_type->to_string(), val->ret_type->to_string()));
+    }
+    QD_ASSERT(expected.expr != nullptr);
+    QD_ASSERT_TYPE_CHECKED(expected);
+    auto expected_dtype = expected.get_rvalue_type();
+    if (expected_dtype->is<TensorType>()) {
+      expected_dtype = expected_dtype.get_element_type();
+    }
+    if (!is_integral(expected_dtype)) {
+      ErrorEmitter(QuadrantsTypeError(), this,
+                   fmt::format("'atomic_cas' requires integer 'expected' operand, got '{}'",
+                               expected->ret_type->to_string()));
+    }
+  }
   if (ret_element_type != val_dtype) {
     auto promoted = promoted_type(ret_element_type, val_dtype);
     if (ret_element_type != promoted) {
@@ -993,7 +1013,13 @@ void AtomicOpExpression::flatten(FlattenContext *ctx) {
   // expand rhs
   auto val_stmt = flatten_rvalue(val, ctx);
   auto dest_stmt = flatten_lvalue(dest, ctx);
-  stmt = ctx->push_back<AtomicOpStmt>(op_type, dest_stmt, val_stmt, dbg_info);
+  if (op_type == AtomicOpType::cas) {
+    QD_ASSERT(expected.expr != nullptr);
+    auto expected_stmt = flatten_rvalue(expected, ctx);
+    stmt = ctx->push_back<AtomicOpStmt>(op_type, dest_stmt, expected_stmt, val_stmt, dbg_info);
+  } else {
+    stmt = ctx->push_back<AtomicOpStmt>(op_type, dest_stmt, val_stmt, dbg_info);
+  }
   stmt->ret_type = stmt->as<AtomicOpStmt>()->dest->ret_type;
 }
 

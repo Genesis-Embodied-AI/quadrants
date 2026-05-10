@@ -164,6 +164,24 @@ class DemoteAtomics : public BasicStmtVisitor {
           load = new_stmts.push_back<GlobalLoadStmt>(ptr);
           new_stmts.push_back<GlobalStoreStmt>(ptr, val);
         }
+      } else if (stmt->op_type == AtomicOpType::cas) {
+        // atomic_cas demoted: the new value is `val` if `load(dest) == expected`, else `load(dest)` (no-op).
+        // We materialize this as `select(cmp, val, load)` followed by an unconditional store -- avoids needing
+        // an IfStmt rewrite here. The user-visible return value is the prior load (success is recovered by the
+        // caller via `(returned == expected)`), same as the native atomic-CAS path in codegen.
+        QD_ASSERT(stmt->expected != nullptr);
+        auto expected_v = stmt->expected;
+        if (is_local) {
+          load = new_stmts.push_back<LocalLoadStmt>(ptr);
+          auto cmp = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::cmp_eq, load, expected_v);
+          auto sel = new_stmts.push_back<TernaryOpStmt>(TernaryOpType::select, cmp, val, load);
+          new_stmts.push_back<LocalStoreStmt>(ptr, sel);
+        } else {
+          load = new_stmts.push_back<GlobalLoadStmt>(ptr);
+          auto cmp = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::cmp_eq, load, expected_v);
+          auto sel = new_stmts.push_back<TernaryOpStmt>(TernaryOpType::select, cmp, val, load);
+          new_stmts.push_back<GlobalStoreStmt>(ptr, sel);
+        }
       } else {
         auto bin_type = atomic_to_binary_op_type(stmt->op_type);
         if (is_local) {
