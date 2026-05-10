@@ -5,18 +5,32 @@ from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.expr import make_expr_group
 from quadrants.lang.kernel_impl import func
+from quadrants.lang.ops import (
+    atomic_add,
+    atomic_or,
+    bit_and,
+    bit_shr,
+    cast,
+    clz,
+    popcnt,
+)
 from quadrants.lang.simt.subgroup import (
     _bin_add,
     _bin_max,
     _bin_min,
     invocation_id,
+    lanemask_le,
+    shuffle,
     shuffle_down,
 )
 from quadrants.lang.simt.subgroup import _exclusive_scan as _subgroup_exclusive_scan
 from quadrants.lang.simt.subgroup import _inclusive_scan as _subgroup_inclusive_scan
+from quadrants.lang.simt.subgroup import (
+    sync as subgroup_sync,
+)
 from quadrants.lang.util import quadrants_scope
 from quadrants.types.annotations import template
-from quadrants.types.primitive_types import u32
+from quadrants.types.primitive_types import i32, u32
 
 
 def arch_uses_spv(arch):
@@ -409,3 +423,169 @@ def exclusive_max(value, tid, block_dim: template(), log2_warp: template(), iden
     `exclusive_min`.
     """
     return _exclusive_block(value, tid, block_dim, log2_warp, _bin_max, identity, dtype)
+
+
+# --- Block radix rank ------------------------------------------------------------------
+#
+# CUB-style block-level radix ranking, ported from
+# `cub/block/block_radix_rank.cuh::BlockRadixRankMatchEarlyCounts<WARP_MATCH_ATOMIC_OR>`.
+# Each thread holds a single ``u32`` key; the function returns the key's stable rank within
+# the block under the digit `(key >> bit_start) & ((1 << num_bits) - 1)`, and writes the
+# per-digit count and exclusive-prefix arrays to caller-supplied shared-memory outparams.
+#
+# The algorithm runs in six steps mirroring CUB:
+#
+# 1. ComputeHistogramsWarp (``cub/block/block_radix_rank.cuh:958-1016``): each warp builds a
+#    private digit histogram in shared memory.
+# 2. ComputeOffsetsWarpUpsweep (``cub:1018-1037``): every thread sums per-warp histograms
+#    column-wise to produce a block-wide bin count for digit ``= tid``, while rewriting the
+#    warp histogram entries into per-warp running exclusive prefixes.
+# 3. ExclusiveSum on the per-thread bin counts (``cub:1126``) — uses the block exclusive
+#    scan we just defined above.
+# 4. ComputeOffsetsWarpDownsweep (``cub:1039-1055``): add the block-wide exclusive prefix
+#    into every warp's offset entry.
+# 5. ComputeRanksItem ATOMIC_OR (``cub:1057-1088``): per-warp match via ``atomic_or`` on
+#    a per-digit lane-mask, then leader (highest set lane) does a single ``atomic_add`` on
+#    the warp offset and broadcasts via ``subgroup.shuffle``; each thread's rank is
+#    ``warp_offset + popc(bin_mask & lanemask_le) - 1``.
+# 6. Write bin count + exclusive prefix to the outparam shared arrays.
+#
+# Shared-memory layout (all i32, total ``2 * BLOCK_WARPS * RADIX_DIGITS`` ints, 4096 ints
+# = 16 KiB at the default 8-warp / 256-digit configuration):
+#
+#     warp_offsets / warp_histograms : [0, BLOCK_WARPS * RADIX_DIGITS)        (union; CUB)
+#     match_masks                    : [BLOCK_WARPS * RADIX_DIGITS, 2 * ...)
+#
+# WARP_SYNC in CUB is replaced by ``subgroup.sync()`` (lowers to ``__syncwarp`` on CUDA,
+# ``OpControlBarrier(ScopeSubgroup, ...)`` on SPIR-V, ``s_barrier`` on AMDGPU).
+# CUB's ``LaneMaskLe()`` PTX intrinsic is replaced by ``subgroup.lanemask_le(lane)`` from
+# the new portable subgroup primitives.
+
+
+@func
+def radix_rank_match_atomic_or(
+    key,
+    tid,
+    block_dim: template(),
+    log2_warp: template(),
+    radix_bits: template(),
+    bit_start: template(),
+    num_bits: template(),
+    bins,
+    excl_prefix,
+):
+    """Block-level radix rank using CUB's ``BlockRadixRankMatchEarlyCounts`` (``WARP_MATCH_ATOMIC_OR`` path).
+
+    Returns the calling thread's stable rank within the block under digit ``(key >> bit_start) & ((1 << num_bits) - 1)``.
+
+    Args:
+        key: ``u32`` key, one per thread.
+        tid: calling thread's block-local index.
+        block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 << radix_bits``: each digit gets exactly
+            one thread for the per-thread bin/excl_prefix output.
+        log2_warp: ``log2(warp_size)`` (template).  Must currently be 5 (warp size 32) — the ATOMIC_OR match path is
+            built around 32-lane ``i32`` ballot masks, so wave64 callers should pass 5 and arrange to launch with a
+            32-thread subgroup, or wait until a wave64 path lands.
+        radix_bits: number of bits in the digit (template).  Typical CUB SM90 onesweep value is 8, giving 256 digits.
+        bit_start: starting bit of the digit (template).  Used as ``key >> bit_start``.
+        num_bits: actual digit width in bits (template), with ``num_bits <= radix_bits``.  Bits ``[bit_start, bit_start +
+            num_bits)`` of ``key`` are extracted.
+        bins: ``block.SharedArray((1 << radix_bits,), i32)`` outparam.  After the call, ``bins[d]`` holds the count of
+            keys whose digit equals ``d``.  Caller is responsible for allocating this array exactly once per kernel.
+        excl_prefix: ``block.SharedArray((1 << radix_bits,), i32)`` outparam.  After the call, ``excl_prefix[d]`` holds
+            the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.
+
+    Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary ``block.sync()``
+    and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without a
+    further ``block.sync()`` (we sync internally before exit).
+
+    Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block exclusive
+    scan + ``BLOCK_WARPS`` ops per thread for the column-sum upsweep.  The shared-memory footprint is
+    ``2 * BLOCK_WARPS * RADIX_DIGITS`` i32 ints (16 KiB at the default ``log2_warp=5, radix_bits=8`` configuration).
+    """
+    WARP_THREADS = impl.static(1 << log2_warp)
+    RADIX_DIGITS = impl.static(1 << radix_bits)
+    BLOCK_WARPS = impl.static(block_dim // WARP_THREADS)
+    NUM_BITS_MASK = impl.static((1 << num_bits) - 1)
+    MM_OFF = impl.static(BLOCK_WARPS * RADIX_DIGITS)
+    BINS_PER_LANE = impl.static(RADIX_DIGITS // WARP_THREADS)
+
+    # CUB ``TempStorage``: union of warp_offsets / warp_histograms (same backing) + match_masks.  All i32.
+    smem = SharedArray(impl.static((2 * BLOCK_WARPS * RADIX_DIGITS,)), i32)
+
+    warp_idx = tid // WARP_THREADS
+    lane = cast(invocation_id(), i32)
+
+    # Step 1: zero per-warp histograms and match_masks (CUB lines 964-980).
+    for b in impl.static(range(BINS_PER_LANE)):
+        bin_idx = lane + impl.static(b * WARP_THREADS)
+        smem[warp_idx * RADIX_DIGITS + bin_idx] = i32(0)
+        smem[MM_OFF + warp_idx * RADIX_DIGITS + bin_idx] = i32(0)
+    subgroup_sync()
+
+    # CUB lines 984-989: each thread atomic-adds 1 to its warp's bin for ``digit``.
+    digit = cast(bit_and(bit_shr(key, u32(bit_start)), u32(NUM_BITS_MASK)), i32)
+    atomic_add(smem[warp_idx * RADIX_DIGITS + digit], i32(1))
+
+    sync()  # CUB line 1121 (CTA_SYNC) — publish per-warp histograms before column-sum.
+
+    # Step 2: per-thread column sum across warps for digit == tid (CUB lines 1018-1037).  Each thread collects the
+    # running exclusive prefix into ``bin_count`` while overwriting the warp histogram entries with their per-warp
+    # exclusive prefix.  After the loop, ``bin_count`` is the block-wide total for digit == tid.
+    bin_count = i32(0)
+    for j_warp in impl.static(range(BLOCK_WARPS)):
+        warp_count = smem[impl.static(j_warp * RADIX_DIGITS) + tid]
+        smem[impl.static(j_warp * RADIX_DIGITS) + tid] = bin_count
+        bin_count = bin_count + warp_count
+
+    # Step 3: BlockScan::ExclusiveSum on the per-thread bin counts (CUB line 1126).
+    exclusive_digit_prefix = exclusive_add(bin_count, tid, block_dim, log2_warp, i32)
+
+    # Step 4: ComputeOffsetsWarpDownsweep — fold the block-wide exclusive prefix into every warp's offset
+    # (CUB lines 1039-1055).
+    for j_warp in impl.static(range(BLOCK_WARPS)):
+        smem[impl.static(j_warp * RADIX_DIGITS) + tid] = (
+            smem[impl.static(j_warp * RADIX_DIGITS) + tid] + exclusive_digit_prefix
+        )
+
+    sync()  # CUB line 1129 — publish warp offsets before the per-key match phase.
+
+    # Step 5: ComputeRanksItem ATOMIC_OR (CUB lines 1057-1088).  Items_per_thread == 1, so the loop body runs once.
+    lane_mask = i32(1) << lane
+    lane_mask_le_v = lanemask_le(invocation_id())
+
+    match_idx = MM_OFF + warp_idx * RADIX_DIGITS + digit
+
+    # CUB line 1069: every thread ORs its lane_mask into the per-digit match mask of its warp.  Threads with the same
+    # digit collide on the same shared-memory cell and produce a bitmask of "lanes in this warp that share this digit".
+    atomic_or(smem[match_idx], lane_mask)
+    subgroup_sync()  # CUB line 1070 (WARP_SYNC).
+
+    # CUB line 1071-1074: read the bin_mask back and find the leader (highest matching lane) + intra-warp rank.
+    bin_mask = cast(smem[match_idx], u32)
+    leader = i32(31) - cast(clz(cast(bin_mask, i32)), i32)
+    popc = popcnt(bit_and(bin_mask, lane_mask_le_v))
+
+    # CUB lines 1075-1079: leader claims `popc` slots from this warp's slice of the warp_offsets entry.
+    warp_offset = i32(0)
+    if lane == leader:
+        warp_offset = atomic_add(smem[warp_idx * RADIX_DIGITS + digit], cast(popc, i32))
+
+    # CUB line 1080: leader broadcasts its claimed offset to every lane in the warp.
+    warp_offset = shuffle(warp_offset, cast(leader, u32))
+
+    # CUB lines 1081-1083: leader resets the match mask so subsequent passes (or items_per_thread > 1) start clean.
+    if lane == leader:
+        smem[match_idx] = i32(0)
+    subgroup_sync()  # CUB line 1085 (WARP_SYNC).
+
+    rank = warp_offset + cast(popc, i32) - i32(1)
+
+    # Step 6: publish bins + exclusive_digit_prefix to the caller-supplied outparams.  ``block_dim == RADIX_DIGITS`` so
+    # every thread writes exactly one digit.  Followed by a ``block.sync()`` so the caller can read these arrays
+    # without having to add their own retiring barrier.
+    bins[tid] = bin_count
+    excl_prefix[tid] = exclusive_digit_prefix
+    sync()
+
+    return rank

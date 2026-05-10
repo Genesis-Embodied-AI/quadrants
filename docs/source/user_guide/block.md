@@ -22,6 +22,7 @@ The closely-related grid-level fence (`qd.simt.grid.memfence()`) is documented a
 | `block.reduce_all_{add,min,max}(v, tid, ...)`   | yes  | yes    | yes                     |
 | `block.inclusive_{add,min,max}(v, tid, ...)`    | yes  | yes    | yes                     |
 | `block.exclusive_{add,min,max}(v, tid, ...)`    | yes  | yes    | yes                     |
+| `block.radix_rank_match_atomic_or(...)`         | yes  | yes    | yes                     |
 | `grid.memfence()` (device-scope, see below)     | yes  | no     | no                      |
 
 Calling a backend marked "no" raises `ValueError` from the Python layer at trace time. `global_thread_idx()` is verified on CUDA and AMDGPU; the SPIR-V codepath in the wrapper exists but is currently unreachable due to a control-flow quirk in the dispatch and is therefore left undocumented here.
@@ -163,6 +164,42 @@ Block-scope exclusive prefix scans. Same strategy and cost profile as `inclusive
 - `exclusive_max(..., identity, dtype)`: pass `identity` less than or equal to every legal element of the input — typically `-∞` for floats or the dtype's minimum for integers. Thread 0 holds `identity`.
 
 The corresponding generic form is `block.exclusive_scan(value, tid, block_dim, log2_warp, op, identity, dtype)`.
+
+### `block.radix_rank_match_atomic_or(key, tid, block_dim, log2_warp, radix_bits, bit_start, num_bits, bins, excl_prefix)`
+
+Block-level radix ranking, faithful port of CUB's `BlockRadixRankMatchEarlyCounts<WARP_MATCH_ATOMIC_OR>` from `cub/block/block_radix_rank.cuh` (the SM90 onesweep policy). Each thread holds one `u32` key; the function returns the key's stable rank within the block under the digit `(key >> bit_start) & ((1 << num_bits) - 1)`, and writes the per-digit count and exclusive-prefix arrays to two caller-supplied `block.SharedArray` outparams.
+
+Constraints (currently):
+
+- `block_dim` must equal `1 << radix_bits` (each digit gets exactly one thread for the per-thread bin / exclusive-prefix output). Typical configuration is `radix_bits=8, block_dim=256`.
+- `log2_warp` must be 5 (warp size 32). The match path is built around 32-lane `i32` ballot masks; wave64 callers should pass 5 and arrange to launch with a 32-thread subgroup, or wait for a wave64 path.
+- One key per thread (CUB's `items_per_thread = 1`). Multi-item per thread is a future extension.
+- `num_bits <= radix_bits`; `bit_start` is the offset of the digit's low bit.
+
+Args:
+
+- `key`: per-thread `u32` input.
+- `tid`: calling thread's block-local index.
+- `block_dim`, `log2_warp`, `radix_bits`, `bit_start`, `num_bits`: all compile-time `template()`.
+- `bins`: `block.SharedArray((1 << radix_bits,), qd.i32)`. After the call, `bins[d]` holds the count of keys whose digit equals `d`.
+- `excl_prefix`: `block.SharedArray((1 << radix_bits,), qd.i32)`. After the call, `excl_prefix[d]` holds the exclusive prefix sum of `bins` up to digit `d`.
+
+Cost: 2 `block.sync()` + a handful of `subgroup.sync()` calls + 1 block exclusive scan + per-key `atomic_or` + leader-only `atomic_add` on shared memory. Shared-memory footprint is `2 * BLOCK_WARPS * RADIX_DIGITS` ints = 16 KiB at the default `log2_warp=5, radix_bits=8` configuration (8 warps × 256 digits × 2 banks × 4 B).
+
+```python
+@qd.kernel
+def kern(keys_in: qd.types.ndarray(ndim=1), ranks_out: qd.types.ndarray(ndim=1)):
+    qd.loop_config(block_dim=256)
+    for i in range(256):
+        tid = i % 256
+        bins = qd.simt.block.SharedArray((256,), qd.i32)
+        excl = qd.simt.block.SharedArray((256,), qd.i32)
+        ranks_out[i] = qd.simt.block.radix_rank_match_atomic_or(
+            keys_in[i], tid, 256, 5, 8, 0, 8, bins, excl
+        )
+```
+
+The function inserts the necessary `block.sync()` retires before returning, so callers can read `bins` / `excl_prefix` immediately after the call without an extra barrier.
 
 ## Grid-scope fence: `qd.simt.grid.memfence()`
 

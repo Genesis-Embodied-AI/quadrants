@@ -993,6 +993,140 @@ def test_block_exclusive_min(dtype, block_dim):
                 assert abs(actual - expected[j]) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
 
 
+# --- Block radix rank tests ------------------------------------------------------------
+#
+# `qd.simt.block.radix_rank_match_atomic_or` is a faithful port of CUB's
+# `BlockRadixRankMatchEarlyCounts<WARP_MATCH_ATOMIC_OR>` on top of the new portable
+# subgroup primitives (lanemask_le, sync, shuffle) and the block exclusive scan we just
+# defined.  Block size and digit count are both 256 (one digit per thread); each thread
+# contributes one u32 key.
+#
+# We test the algorithm end-to-end against a CPU oracle:
+#
+#   - rank[i] = excl_prefix[digit[i]] + (#j < i with digit[j] == digit[i])
+#   - bins[d] = count of keys whose digit equals d
+#   - excl_prefix[d] = sum(bins[0..d-1])
+#
+# Inputs are mixed: a low-entropy distribution that hits every digit multiple times (so
+# the leader-election + atomic_or match path actually has work to do) and a uniform
+# random distribution (covers the case where most digits have ~1 key each).  Both
+# distributions also probe the warp-level dedup logic with multiple keys-per-warp landing
+# in the same digit bin.
+
+
+_RADIX_BITS = 8
+_RADIX_DIGITS = 1 << _RADIX_BITS  # 256
+_BLOCK_DIM_RR = _RADIX_DIGITS  # algorithm requires block_dim == RADIX_DIGITS
+
+
+def _ref_radix_rank(keys, bit_start, num_bits):
+    """CPU oracle for `block.radix_rank_match_atomic_or`.
+
+    Returns ``(ranks, bins, excl_prefix)`` over a single tile of ``len(keys)`` u32 keys.  ``ranks[i]`` is the stable
+    rank of ``keys[i]`` when keys are sorted by their ``[bit_start, bit_start + num_bits)`` digit; threads with the
+    same digit are ordered by their original index.
+    """
+    n = len(keys)
+    digits_count = 1 << num_bits
+    mask = (1 << num_bits) - 1
+    digits = [(int(k) >> bit_start) & mask for k in keys]
+    bins = [0] * digits_count
+    for d in digits:
+        bins[d] += 1
+    excl_prefix = [0] * digits_count
+    for d in range(1, digits_count):
+        excl_prefix[d] = excl_prefix[d - 1] + bins[d - 1]
+    ranks = [0] * n
+    seen = [0] * digits_count
+    for i in range(n):
+        d = digits[i]
+        ranks[i] = excl_prefix[d] + seen[d]
+        seen[d] += 1
+    return ranks, bins, excl_prefix
+
+
+@pytest.mark.parametrize(
+    "key_pattern,bit_start,num_bits",
+    [
+        ("low_entropy", 0, 8),  # 16 distinct digits each appearing 16 times — heavy match path traffic
+        ("uniform", 0, 8),  # full 8-bit uniform — most digits get 1 key, some get 0
+        ("uniform_high_bits", 8, 8),  # digit drawn from bits [8, 16) — exercises bit_start > 0
+    ],
+)
+@test_utils.test(arch=qd.gpu)
+def test_block_radix_rank_match_atomic_or(key_pattern, bit_start, num_bits):
+    """End-to-end test of `block.radix_rank_match_atomic_or` against a CPU oracle.
+
+    Single block of ``RADIX_DIGITS == 256`` threads with one key each; we verify per-thread ``rank`` plus the per-digit
+    ``bins`` and ``excl_prefix`` outparams.
+    """
+    keys_in = qd.field(dtype=qd.u32, shape=_BLOCK_DIM_RR)
+    ranks_out = qd.field(dtype=qd.i32, shape=_BLOCK_DIM_RR)
+    bins_out = qd.field(dtype=qd.i32, shape=_RADIX_DIGITS)
+    excl_prefix_out = qd.field(dtype=qd.i32, shape=_RADIX_DIGITS)
+
+    rng = np.random.default_rng(seed=1234)
+    if key_pattern == "low_entropy":
+        # Pick 16 distinct digit values and put 16 copies of each in random positions.  Picks land at every digit
+        # boundary that the [bit_start, bit_start+num_bits) extraction would isolate.
+        base_digits = rng.choice(_RADIX_DIGITS, size=16, replace=False)
+        keys_py = np.repeat(base_digits.astype(np.uint32), 16)
+        rng.shuffle(keys_py)
+        # Stuff the digit into the relevant bits, leave the rest random so bit_start > 0 still has work.
+        upper = rng.integers(0, 1 << 16, size=_BLOCK_DIM_RR, dtype=np.uint32)
+        keys_py = ((upper << np.uint32(8)) | keys_py.astype(np.uint32)).astype(np.uint32)
+    elif key_pattern == "uniform":
+        keys_py = rng.integers(0, 1 << 16, size=_BLOCK_DIM_RR, dtype=np.uint32)
+    elif key_pattern == "uniform_high_bits":
+        keys_py = rng.integers(0, 1 << 24, size=_BLOCK_DIM_RR, dtype=np.uint32)
+    else:
+        raise ValueError(key_pattern)
+
+    for i in range(_BLOCK_DIM_RR):
+        keys_in[i] = int(keys_py[i])
+
+    @qd.kernel
+    def kern():
+        qd.loop_config(block_dim=_BLOCK_DIM_RR)
+        for i in range(_BLOCK_DIM_RR):
+            tid = i % _BLOCK_DIM_RR
+            bins_smem = block.SharedArray((_RADIX_DIGITS,), qd.i32)
+            excl_smem = block.SharedArray((_RADIX_DIGITS,), qd.i32)
+            rank = block.radix_rank_match_atomic_or(
+                keys_in[i],
+                tid,
+                _BLOCK_DIM_RR,
+                5,
+                _RADIX_BITS,
+                bit_start,
+                num_bits,
+                bins_smem,
+                excl_smem,
+            )
+            ranks_out[i] = rank
+            if tid < _RADIX_DIGITS:
+                bins_out[tid] = bins_smem[tid]
+                excl_prefix_out[tid] = excl_smem[tid]
+
+    kern()
+
+    ref_ranks, ref_bins, ref_excl = _ref_radix_rank(keys_py.tolist(), bit_start, num_bits)
+
+    actual_bins = [bins_out[d] for d in range(_RADIX_DIGITS)]
+    assert actual_bins == ref_bins, f"bins mismatch (pattern={key_pattern})"
+
+    actual_excl = [excl_prefix_out[d] for d in range(_RADIX_DIGITS)]
+    assert actual_excl == ref_excl, f"excl_prefix mismatch (pattern={key_pattern})"
+
+    actual_ranks = [ranks_out[i] for i in range(_BLOCK_DIM_RR)]
+    # Ranks must be a permutation of [0, n) — uniqueness check first so any duplicate is caught even if the sorted
+    # invariant below silently masks it.
+    assert sorted(actual_ranks) == list(
+        range(_BLOCK_DIM_RR)
+    ), f"ranks not a permutation of [0, {_BLOCK_DIM_RR}) for pattern={key_pattern}"
+    assert actual_ranks == ref_ranks, f"ranks mismatch (pattern={key_pattern})"
+
+
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
 @pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
 @test_utils.test(arch=qd.gpu)
