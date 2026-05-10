@@ -581,8 +581,15 @@ def radix_rank_match_atomic_or(
     _warp_sync_fence()  # CUB line 1070 (WARP_SYNC).
 
     # CUB line 1071-1074: read the bin_mask back and find the leader (highest matching lane) + intra-warp rank.
+    # ``clz`` here MUST run on the u32 (FindUMsb on SPIR-V): casting to i32 first triggers SPIR-V's FindSMsb, which
+    # for negative i32 (top bit set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that's
+    # one less than the actual highest matching lane.  Concretely, with lane 31 holding the only key for its digit,
+    # bin_mask = 0x80000000; FindSMsb on -2147483648 returns 30 (highest 0-bit), so 31 - 30 = 1 elects lane 1
+    # instead of lane 31, and lane 31's shuffle reads from lane 1 (= 0) — observed as last-lane ranks off by one
+    # on Vulkan / Metal.  Now that the new subgroup branch dispatches FindUMsb for unsigned ``clz``, passing the
+    # u32 directly emits the right intrinsic on every backend.
     bin_mask = cast(smem[match_idx], u32)
-    leader = i32(31) - cast(clz(cast(bin_mask, i32)), i32)
+    leader = i32(31) - cast(clz(bin_mask), i32)
     popc = popcnt(bit_and(bin_mask, lane_mask_le_v))
 
     # CUB lines 1075-1079: leader claims `popc` slots from this warp's slice of the warp_offsets entry.
