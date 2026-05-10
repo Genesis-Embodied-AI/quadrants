@@ -5,6 +5,7 @@ import warnings
 from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.kernel_impl import func
+from quadrants.lang.ops import clz
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import i32, u32
 
@@ -270,6 +271,57 @@ def reduce_all_max(value, log2_size: template()):
 # `reduce_add` / `reduce_all_add` above when needed.
 
 
+# --- Segmented reduce ------------------------------------------------------------------
+#
+# `segmented_reduce_add(value, head_flag, log2_size)` runs a per-lane inclusive sum where every lane with
+# ``head_flag != 0`` resets the running sum: lane ``i`` ends up holding ``value[head_below..i]``-sum, where
+# ``head_below`` is the largest lane ``<= i`` (within the lane's ``2**log2_size`` group) whose ``head_flag``
+# is non-zero.  If no such lane exists the algorithm treats the group's first lane as an implicit head, so
+# a segment that runs from ``group_base`` to the lane is still summed correctly.
+#
+# Implementation: one ``ballot`` to materialise a u32 of head positions, then a Hillis-Steele inclusive sum
+# bounded by ``distance >= offset`` (where ``distance = lane - segment_head``).  ``segment_head`` comes from
+# ``31 - clz(effective_mask & ((1 << (lane + 1)) - 1))`` with an OR-injected virtual head at ``group_base``
+# to guarantee a non-zero ``lower``.  Cost: 1 ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` adds —
+# the same shape as `inclusive_add`, plus a single-instruction setup.
+
+
+@func
+def segmented_reduce_add(value, head_flag, log2_size: template()):
+    """Per-lane inclusive sum that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.
+
+    Lane ``i`` returns ``sum(value[head_below..i+1])``, where ``head_below`` is the largest lane index ``<=
+    i`` (within the lane's ``2**log2_size`` group) whose ``head_flag`` is non-zero.  If no such lane exists
+    inside the group, the group's first lane is treated as an implicit head, so the result is the inclusive
+    sum from ``group_base`` to ``i``.
+
+    Caller contract:
+
+    * ``2**log2_size`` must not exceed 32 (the underlying ``ballot`` returns a ``u32`` covering the first 32
+      lanes; on AMDGPU CDNA wave64 only the low 32 lanes contribute).  ``log2_size`` is a ``qd.template()``
+      compile-time constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.
+    * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values
+      work.
+    * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``.
+    """
+    head_mask = ballot(i32(head_flag != 0))
+    lane = invocation_id()
+    group_base = u32(lane) & u32(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFF))
+    bits_in_group = u32(impl.static((2 ** (1 << log2_size) - 1) & 0xFFFFFFFF))
+    group_mask = bits_in_group << group_base
+    effective_mask = (head_mask & group_mask) | (u32(1) << group_base)
+    inclusive_mask = u32(0xFFFFFFFF) >> u32(i32(31) - lane)
+    lower = effective_mask & inclusive_mask
+    segment_head = i32(31) - clz(lower)
+    distance = lane - segment_head
+    for i in impl.static(range(log2_size)):
+        offset = impl.static(1 << i)
+        partner = shuffle_up(value, u32(offset))
+        if distance >= offset:
+            value = value + partner
+    return value
+
+
 # --- Inclusive scans -------------------------------------------------------------------
 #
 # All seven inclusive scans share the same Hillis-Steele tree over `shuffle_up`; only the binary operator differs.
@@ -529,6 +581,7 @@ __all__ = [
     "reduce_max",
     "reduce_all_min",
     "reduce_all_max",
+    "segmented_reduce_add",
     "inclusive_add",
     "inclusive_mul",
     "inclusive_min",

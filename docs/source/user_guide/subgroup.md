@@ -44,10 +44,11 @@ The old names remain as deprecated aliases that emit a `DeprecationWarning` on f
 
 ### Voting and predicate ops
 
-All three take a `log2_size` template parameter and reduce over each `2**log2_size` group of consecutive lanes, broadcasting the `i32` (`0` or `1`) result to every lane in the group. Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`.
+`all_true` / `any_true` / `all_equal` take a `log2_size` template parameter and reduce over each `2**log2_size` group of consecutive lanes, broadcasting the `i32` (`0` or `1`) result to every lane in the group. Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`. `ballot` is full-subgroup only and returns a `u32` bitmask.
 
 | Op                                          | CUDA          | AMDGPU | SPIR-V (Vulkan / Metal) |
 |---------------------------------------------|---------------|--------|-------------------------|
+| `subgroup.ballot(predicate)`                | yes           | yes    | yes                     |
 | `subgroup.all_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
 | `subgroup.any_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
 | `subgroup.all_equal(value, log2_size)`      | yes (fast at `log2_size==5`, transitively via `all_true`) | yes | yes |
@@ -68,6 +69,7 @@ CUDA shortcut: when `log2_size == 5` (full warp), `all_true` / `any_true` lower 
 | `subgroup.reduce_max(v, log2_size)`         | yes  | yes\*  | yes                     | integer + float              |
 | `subgroup.reduce_all_min(v, log2_size)`     | yes  | yes    | yes                     | integer + float              |
 | `subgroup.reduce_all_max(v, log2_size)`     | yes  | yes    | yes                     | integer + float              |
+| `subgroup.segmented_reduce_add(v, head_flag, log2_size)` | yes | yes\* | yes              | any type supporting `+`      |
 | `subgroup.inclusive_add(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
 | `subgroup.inclusive_mul(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
 | `subgroup.inclusive_min(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
@@ -221,6 +223,16 @@ Same min / max as `reduce_min` / `reduce_max`, but broadcast to **every lane** i
 - Use over `reduce_min` + broadcast / `reduce_max` + broadcast when every lane needs the result (e.g. to subtract the group min, or to clamp to the group max).
 - Same dtypes, size-cap contract, and float-NaN caveat as `reduce_min` / `reduce_max`.
 
+### `segmented_reduce_add(value, head_flag, log2_size)`
+
+Per-lane inclusive sum that resets at every non-zero `head_flag`, scoped to `2**log2_size` consecutive lanes. Lane `i` returns `sum(value[head_below..i + 1])`, where `head_below` is the largest lane index `<= i` (within the lane's `2**log2_size` group) whose `head_flag` is non-zero. If no such lane exists inside the group, the group's first lane is treated as an implicit head, so the result is the inclusive sum from `group_base` to `i`.
+
+- `value` is any type supporting `+` and `shuffle_up`. `head_flag` is any integer scalar; the lowering tests `head_flag != 0`, so non-binary truthy values (e.g. `7`, `42`) work.
+- `log2_size` is a `qd.template()` — a compile-time constant. `2**log2_size` must not exceed 32: the underlying `subgroup.ballot` returns a `u32` covering the first 32 lanes, so on AMDGPU CDNA wave64 only the low 32 lanes contribute.
+- Implementation: one `subgroup.ballot(head_flag != 0)` to materialise a `u32` of head positions, then a Hillis-Steele inclusive sum bounded by `distance >= offset` where `distance = lane - segment_head`. `segment_head` is computed via `31 - clz(effective_mask & ((1 << (lane + 1)) - 1))`, with an OR-injected virtual head at `group_base` to guarantee a non-zero `lower`.
+- Cost: `1 ballot + 1 clz + log2_size shuffles + log2_size adds`, fully unrolled into the calling kernel's IR. Same shape as `inclusive_add`, plus one ballot and one `clz` for the per-lane segment-head lookup.
+- AMDGPU note (`*` in the table): `shuffle_up` goes through `ds_bpermute` (~50 cycle latency), same as the other reductions.
+
 ### `inclusive_add` / `inclusive_mul` / `inclusive_min` / `inclusive_max` / `inclusive_and` / `inclusive_or` / `inclusive_xor`
 
 Per-lane inclusive scan over `2**log2_size` consecutive lanes, under the binary operator named by the suffix. Lane `i` within each group of `2**log2_size` lanes returns `v[group_start] op v[group_start + 1] op ... op v[i]`.
@@ -241,6 +253,15 @@ Per-lane exclusive scan over `2**log2_size` consecutive lanes, under the binary 
 - `_min` and `_max` take an explicit `identity` argument because there is no portable type-extreme literal that can be derived from `value` alone — pass `+∞` (or the dtype's max) for `_min`, `-∞` (or the dtype's min) for `_max`.
 - All seven share a single `@qd.func` helper (`_exclusive_scan`) that runs the inclusive scan, shifts the result up by one lane via `shuffle_up`, and substitutes `identity` at lane 0 of each group. The lane-0 substitution is required because `shuffle_up` with offset 1 is implementation-defined at lane 0 (and `OpGroupNonUniformShuffleUp` calls it undefined outright).
 - AMDGPU performance note (`*` in the table): same `ds_bpermute` cost as `shuffle_up`. Cost is one inclusive scan plus one extra `shuffle_up` and a select.
+
+### `ballot(predicate)`
+
+Returns a `u32` bitmask whose bit `i` is set iff lane `i`'s `predicate` is non-zero. Single hardware instruction on every backend: `__ballot_sync(0xFFFFFFFF, p)` on CUDA, `v_ballot_b32` on AMDGPU, `OpGroupNonUniformBallot` on SPIR-V.
+
+- `predicate` is any integer scalar; the lowering tests `predicate != 0` at the start, so non-binary truthy values work.
+- The result covers the first 32 lanes only. On AMDGPU CDNA wave64 the high 32 bits are dropped, consistent with the `u32` return type — if you need the full wave64 mask you can build it with two `ballot`s and a bitwise concat.
+- Caller contract: uniform CF + all lanes active. Calling `ballot` from divergent control flow has implementation-defined behaviour (CUDA's `__ballot_sync` will deadlock if the active mask doesn't match `0xFFFFFFFF`).
+- Useful for stream compaction, segmented reductions, and any pattern that wants `clz` / `ffs` over a per-lane predicate.
 
 ### `all_true(predicate, log2_size)` / `any_true(predicate, log2_size)`
 

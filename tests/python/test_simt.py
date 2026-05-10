@@ -929,6 +929,150 @@ def test_subgroup_reduce_all_max(dtype, log2_size):
     _check_reduce_all(subgroup.reduce_all_max, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float)
 
 
+# Segmented reduce.  Tests use a head-flag pattern with multiple segments per group, varied widths, and at least one
+# group where lane 0 is *not* a head (so we exercise the implicit-head-at-group_base fallback).  The Python verifier
+# replicates the algorithm: lane i ends up holding sum(value[head_below..i+1]), where head_below is the largest lane
+# index <= i within the lane's 2**log2_size group whose head_flag is non-zero, with group_base treated as an implicit
+# head when no real head exists.
+
+
+def _python_segmented_reduce_add(values, heads, group_size):
+    """Reference: lane i within each group_size-sized group holds sum(values[head_below..i+1])."""
+    n = len(values)
+    out = [0] * n
+    for g_base in range(0, n, group_size):
+        for k in range(group_size):
+            i = g_base + k
+            # Find the highest lane <= i (within the group) that has a non-zero head, default to g_base.
+            head = g_base
+            for h in range(g_base, i + 1):
+                if heads[h]:
+                    head = h
+            out[i] = sum(values[head : i + 1])
+    return out
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [0, 1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_segmented_reduce_add(dtype, log2_size):
+    """Segmented inclusive sum, sized by ``log2_size`` (covers full warp at log2_size=5)."""
+    _skip_if_f64_unsupported(dtype)
+    N = 32  # ballot covers the first 32 lanes
+    src = qd.field(dtype=dtype, shape=N)
+    head = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.segmented_reduce_add(src[i], head[i], log2_size)
+
+    _init_varied_int_or_float(src, N, dtype)
+    # Head pattern: heads at lanes 0, 3, 7, 12, 19, 25 — varied gaps, plus one group where the group base
+    # is not a head (e.g. for log2_size=2, lane 4 is a group base but not a head, exercising the implicit
+    # head fallback).
+    head_lanes = {0, 3, 7, 12, 19, 25}
+    heads_py = [1 if i in head_lanes else 0 for i in range(N)]
+    for i in range(N):
+        head[i] = heads_py[i]
+
+    foo()
+
+    src_py = [int(src[i]) if dtype in _INT_DTYPES else float(src[i]) for i in range(N)]
+    expected = _python_segmented_reduce_add(src_py, heads_py, 1 << log2_size)
+    for i in range(N):
+        got = dst[i]
+        ref = expected[i]
+        if dtype in _INT_DTYPES:
+            assert got == ref, f"lane {i}: got {got}, expected {ref}"
+        else:
+            assert abs(got - ref) < 1e-5 * max(abs(ref), 1.0), f"lane {i}: got {got}, expected {ref}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_segmented_reduce_add_no_heads():
+    """No head flags set anywhere -> the whole group is one segment, equivalent to inclusive_add(v, log2_size)."""
+    N = 32
+    src = qd.field(dtype=qd.i32, shape=N)
+    head = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.segmented_reduce_add(src[i], head[i], 5)
+
+    for i in range(N):
+        src[i] = i + 1
+        head[i] = 0
+
+    foo()
+
+    # Inclusive prefix sum of 1..32: dst[k] = (k+1)*(k+2)/2
+    for i in range(N):
+        expected = (i + 1) * (i + 2) // 2
+        assert dst[i] == expected, f"lane {i}: got {dst[i]}, expected {expected}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_segmented_reduce_add_every_lane_is_head():
+    """Every lane is a head -> output equals input (each segment is exactly one lane)."""
+    N = 32
+    src = qd.field(dtype=qd.i32, shape=N)
+    head = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.segmented_reduce_add(src[i], head[i], 5)
+
+    for i in range(N):
+        src[i] = (i * 7 + 11) % 23 + 1
+        head[i] = 1
+
+    foo()
+
+    for i in range(N):
+        assert dst[i] == src[i], f"lane {i}: got {dst[i]}, expected {src[i]}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_segmented_reduce_add_truthy_predicate():
+    """Non-binary truthy values (e.g. 7, 42) should be treated identically to 1."""
+    N = 32
+    src = qd.field(dtype=qd.i32, shape=N)
+    head = qd.field(dtype=qd.i32, shape=N)
+    dst_binary = qd.field(dtype=qd.i32, shape=N)
+    dst_truthy = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def run_binary():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst_binary[i] = subgroup.segmented_reduce_add(src[i], head[i], 5)
+
+    @qd.kernel
+    def run_truthy():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst_truthy[i] = subgroup.segmented_reduce_add(src[i], head[i] * 42, 5)
+
+    for i in range(N):
+        src[i] = i + 1
+        head[i] = 1 if i in {0, 5, 13, 22} else 0
+
+    run_binary()
+    run_truthy()
+
+    for i in range(N):
+        assert dst_binary[i] == dst_truthy[i], f"lane {i}: binary={dst_binary[i]}, truthy={dst_truthy[i]}"
+
+
 # Portable Hillis-Steele inclusive scans share the same kernel + Python verification pattern; the only thing that
 # varies is the operator and which dtypes are legal for it.  `_check_inclusive_scan` factors out the kernel launch,
 # dtype skip, and per-lane check.
