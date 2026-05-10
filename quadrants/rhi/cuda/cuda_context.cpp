@@ -109,6 +109,15 @@ std::string CUDAContext::get_device_name() {
   return str;
 }
 
+void CUDAContext::trim_default_mem_pool() {
+  if (!supports_mem_pool_) {
+    return;
+  }
+  void *default_mem_pool = nullptr;
+  driver_.device_get_default_mem_pool(&default_mem_pool, device_);
+  driver_.mem_pool_trim_to(default_mem_pool, 0u);
+}
+
 int64_t CUDAContext::get_clock_rate_khz() const {
   int clock_rate_khz = 0;
   driver_.device_get_attribute(&clock_rate_khz, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device_);

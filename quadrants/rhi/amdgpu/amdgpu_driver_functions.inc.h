@@ -42,6 +42,7 @@ PER_AMDGPU_FUNCTION(mem_alloc_host, hipHostMalloc, void **, std::size_t, uint32)
 PER_AMDGPU_FUNCTION(mem_free_host, hipHostFree, void *);
 PER_AMDGPU_FUNCTION(device_get_default_mem_pool, hipDeviceGetDefaultMemPool, void **, int);
 PER_AMDGPU_FUNCTION(mem_pool_set_attribute, hipMemPoolSetAttribute, void *, uint32, void *);
+PER_AMDGPU_FUNCTION(mem_pool_trim_to, hipMemPoolTrimTo, void *, std::size_t);
 PER_AMDGPU_FUNCTION(mem_get_info, hipMemGetInfo, std::size_t *, std::size_t *);
 PER_AMDGPU_FUNCTION(mem_get_attribute, hipPointerGetAttribute, void *, uint32, void *);
 PER_AMDGPU_FUNCTION(mem_get_attributes, hipPointerGetAttributes, void *, void *);
@@ -49,6 +50,7 @@ PER_AMDGPU_FUNCTION(mem_get_attributes, hipPointerGetAttributes, void *, void *)
 // Module and kernels
 PER_AMDGPU_FUNCTION(module_get_function, hipModuleGetFunction, void **, void *, const char *);
 PER_AMDGPU_FUNCTION(module_load_data, hipModuleLoadData, void **, const void *);
+PER_AMDGPU_FUNCTION(module_unload, hipModuleUnload, void *);
 PER_AMDGPU_FUNCTION(launch_kernel,
                     hipModuleLaunchKernel,
                     void *,

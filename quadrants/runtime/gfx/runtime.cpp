@@ -210,11 +210,14 @@ class HostDeviceContextBlitter {
 
     if (require_sync) {
       if (readback_sizes.size()) {
+        // `readback_data` internally allocates a staging buffer, records a `buffer_copy` cmdlist, and submits it via
+        // `submit_synced` (which on every backend drains the compute stream's pending cmdbufs). Both Metal's
+        // `command_sync` and Vulkan's `vkQueueWaitIdle` drain everything queued, so the kernel cmdlist submitted just
+        // above completes as part of the same wait the readback already pays. A separate `wait_idle()` here would
+        // double the host-GPU round-trip per readback launch with no extra correctness; the `command_complete_sema`
+        // dependency edge is what the readback's submit honors on Vulkan, and Metal ignores `wait_semaphores` but
+        // drains in submission order so the kernel still completes before the staging buffer's `buffer_copy` runs.
         StreamSemaphore command_complete_sema = device_->get_compute_stream()->submit(cmdlist);
-
-        device_->wait_idle();
-
-        // In this case `readback_data` syncs
         QD_ASSERT(device_->readback_data(readback_dev_ptrs.data(), readback_host_ptrs.data(), readback_sizes.data(),
                                          int(readback_sizes.size()), {command_complete_sema}) == RhiResult::success);
       } else {

@@ -4,6 +4,7 @@ add_library(llvm_runtime)
 target_sources(llvm_runtime
   PRIVATE
     llvm_runtime_executor.cpp
+    persistent_rand_state_buffer.cpp
     adstack_lazy_claim/bound_eval.cpp
     adstack_lazy_claim/metadata_publish.cpp
     adstack_lazy_claim/heap_grow.cpp
