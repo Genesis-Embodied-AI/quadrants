@@ -259,6 +259,15 @@ def _sym_eig_factory_repeated_eigs(n, dt):
     return (Q @ np.diag(eigs) @ Q.T).astype(np_dt)
 
 
+def _sym_eig_factory_negative_definite(n, dt):
+    """Symmetric with all-negative eigenvalues — make_spd should produce a zero matrix."""
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    rng = np.random.default_rng(0xBEEF + n)
+    Q, _ = np.linalg.qr(rng.standard_normal((n, n)))
+    eigs = -np.linspace(0.5, 2.0, n)
+    return (Q @ np.diag(eigs) @ Q.T).astype(np_dt)
+
+
 def _test_sym_eig_general(n, dt, factory):
     np_dt = np.float32 if dt == qd.f32 else np.float64
     A_np = factory(n, dt)
@@ -371,3 +380,120 @@ def test_make_spd_f32(n, factory):
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_make_spd_f64(n, factory):
     _test_make_spd(n, qd.f64, factory)
+
+
+# ---------------------------------------------------------------------------
+# Edge-case + contract tests for sym_eig / make_spd.
+# ---------------------------------------------------------------------------
+
+
+def _test_sym_eig_trivial(n, dt, A_np, expected_eigvals):
+    """Run ``qd.sym_eig`` and assert it returns ``expected_eigvals`` (sorted asc)
+    plus an orthonormal eigenvector basis, on the trivial input ``A_np``."""
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    A = qd.Matrix.field(n, n, dtype=dt, shape=())
+    eigvals = qd.Vector.field(n, dtype=dt, shape=())
+    eigvecs = qd.Matrix.field(n, n, dtype=dt, shape=())
+    A.from_numpy(A_np.astype(np_dt))
+
+    @qd.kernel
+    def run():
+        for _tid in range(1):
+            eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
+
+    run()
+    tol = 5e-3 if dt == qd.f32 else 1e-9
+    eigvals_qd = np.sort(eigvals.to_numpy().astype(np_dt))
+    np.testing.assert_allclose(eigvals_qd, np.sort(expected_eigvals.astype(np_dt)), rtol=tol, atol=tol)
+    Q = eigvecs.to_numpy().astype(np_dt)
+    np.testing.assert_allclose(Q.T @ Q, np.eye(n), rtol=tol, atol=tol)
+
+
+@pytest.mark.parametrize("n", [4, 6, 9, 12])
+@pytest.mark.parametrize("alpha", [0.0, 1.0, -2.5])
+@test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
+def test_sym_eig_alpha_identity_f64(n, alpha):
+    """``α·I`` has every eigenvalue equal to ``α``. Covers the all-equal /
+    fully-degenerate case that the random / repeated factories don't hit
+    (``α=0`` also covers the zero-matrix case)."""
+    A_np = (alpha * np.eye(n)).astype(np.float64)
+    expected = np.full(n, alpha, dtype=np.float64)
+    _test_sym_eig_trivial(n, qd.f64, A_np, expected)
+
+
+def _test_make_spd_idempotent(n, dt, factory):
+    """``make_spd(make_spd(A)) ≈ make_spd(A)`` — defining property of a projector."""
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    A_np = factory(n, dt)
+    A = qd.Matrix.field(n, n, dtype=dt, shape=())
+    A_spd_1 = qd.Matrix.field(n, n, dtype=dt, shape=())
+    A_spd_2 = qd.Matrix.field(n, n, dtype=dt, shape=())
+    A.from_numpy(A_np)
+
+    @qd.kernel
+    def run_first():
+        for _tid in range(1):
+            A_spd_1[None] = qd.make_spd(A[None], dt)
+
+    @qd.kernel
+    def run_second():
+        for _tid in range(1):
+            A_spd_2[None] = qd.make_spd(A_spd_1[None], dt)
+
+    run_first()
+    run_second()
+
+    tol = 5e-3 if dt == qd.f32 else 1e-9
+    np.testing.assert_allclose(
+        A_spd_2.to_numpy().astype(np_dt),
+        A_spd_1.to_numpy().astype(np_dt),
+        rtol=tol,
+        atol=tol,
+    )
+
+
+@pytest.mark.parametrize("n", [4, 6, 9, 12])
+@pytest.mark.parametrize(
+    "factory",
+    [_sym_eig_factory_indefinite, _sym_eig_factory_negative_definite, _sym_eig_factory_spd],
+)
+@test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
+def test_make_spd_idempotent_f64(n, factory):
+    _test_make_spd_idempotent(n, qd.f64, factory)
+
+
+@pytest.mark.parametrize("n", [4, 6, 9, 12])
+@test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
+def test_make_spd_negative_definite_zero_f64(n):
+    """A symmetric matrix with all-negative eigenvalues projects to the zero
+    matrix (``Q · diag(max(λ, 0)) · Qᵀ`` with all ``λ < 0``)."""
+    np_dt = np.float64
+    A_np = _sym_eig_factory_negative_definite(n, qd.f64)
+    A = qd.Matrix.field(n, n, dtype=qd.f64, shape=())
+    A_spd = qd.Matrix.field(n, n, dtype=qd.f64, shape=())
+    A.from_numpy(A_np)
+
+    @qd.kernel
+    def run():
+        for _tid in range(1):
+            A_spd[None] = qd.make_spd(A[None], qd.f64)
+
+    run()
+    tol = 1e-9
+    np.testing.assert_allclose(A_spd.to_numpy().astype(np_dt), np.zeros((n, n)), rtol=tol, atol=tol)
+
+
+@test_utils.test(require=qd.extension.data64, default_fp=qd.f64, fast_math=False)
+def test_sym_eig_above_cap_raises():
+    """``qd.sym_eig`` only supports ``N <= 12``; calling at ``N = 13`` must raise
+    a clear error rather than silently producing wrong results."""
+    A = qd.Matrix.field(13, 13, dtype=qd.f64, shape=())
+    A.from_numpy(np.eye(13))
+    with pytest.raises(Exception, match="up to 12"):
+
+        @qd.kernel
+        def run():
+            for _tid in range(1):
+                _ = qd.sym_eig(A[None], qd.f64)
+
+        run()

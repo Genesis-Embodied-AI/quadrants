@@ -140,7 +140,23 @@ def mat_ops() -> None:
     inv = m.inverse()       # [[-2, 1], [1.5, -0.5]]
 ```
 
-`inverse()` and `determinant()` support matrices up to 4x4.
+- `determinant()` supports matrices up to 4×4 (closed-form expansion).
+- `inverse()` supports matrices up to 12×12. Sizes 1–4 use the closed-form cofactor expansion; sizes 5–12 use Gauss elimination with partial pivoting (fully unrolled). For the larger sizes, achievable precision scales as `cond(A) · eps` — a well-conditioned 12×12 in `f64` typically reconstructs to ~1e-12.
+
+### Frobenius inner product and norm
+
+```python
+@qd.func
+def inner_products() -> None:
+    a = qd.Matrix([[1.0, 2.0], [3.0, 4.0]])
+    b = qd.Matrix([[0.0, 1.0], [1.0, 0.0]])
+
+    s = a.frobenius_inner(b)   # 2 + 3 = 5.0   (sum_ij a[i,j] * b[i,j])
+    n = a.norm()               # sqrt(1 + 4 + 9 + 16) = sqrt(30)
+    n_sq = a.norm_sqr()        # 30.0  (== a.frobenius_inner(a))
+```
+
+`frobenius_inner(other)` requires both matrices to have the same shape and supports any size. It's the natural inner product on matrices viewed as vectors of length `n × m` and is the correct bilinear form behind `norm` / `norm_sqr` (`A.frobenius_inner(A) == A.norm_sqr()`).
 
 ### Matrix-vector multiply
 
