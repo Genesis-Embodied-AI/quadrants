@@ -209,3 +209,163 @@ def test_sym_eig3x3_f32(a00):
 @test_utils.test(require=qd.extension.data64, default_fp=qd.f64, fast_math=False)
 def test_sym_eig3x3_f64(a00):
     _test_sym_eig3x3(qd.f64, a00)
+
+
+# ---------------------------------------------------------------------------
+# Symmetric eigendecomposition for N >= 4 (Householder + implicit QR).
+#
+# qipc's ABD / contact Hessian make_spd projection needs sizes 6, 9, 12.
+# ---------------------------------------------------------------------------
+
+
+def _make_symmetric(M):
+    """Return ``(M + M.T) / 2`` cast to the same dtype as ``M``."""
+    return ((M + M.T) * 0.5).astype(M.dtype)
+
+
+def _sym_eig_factory_random(n, dt):
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    return _make_symmetric(np.random.default_rng(0xE160 + n).standard_normal((n, n)).astype(np_dt))
+
+
+def _sym_eig_factory_spd(n, dt):
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    A = np.random.default_rng(0x5BD0 + n).standard_normal((n, n)).astype(np_dt)
+    return ((A @ A.T) + np.eye(n) * 2.0).astype(np_dt)
+
+
+def _sym_eig_factory_indefinite(n, dt):
+    """Symmetric matrix with mix of positive and negative eigenvalues — exercises
+    make_spd's clamping path."""
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    rng = np.random.default_rng(0xCAFE + n)
+    Q, _ = np.linalg.qr(rng.standard_normal((n, n)))
+    eigs = np.linspace(-1.0, 2.0, n)
+    return (Q @ np.diag(eigs) @ Q.T).astype(np_dt)
+
+
+def _sym_eig_factory_diagonal(n, dt):
+    """Diagonal matrix — eigenvalues / vectors are trivial (sanity check)."""
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    return np.diag(np.linspace(1.0, float(n), n).astype(np_dt))
+
+
+def _sym_eig_factory_repeated_eigs(n, dt):
+    """Symmetric with two repeated eigenvalues and one well-separated."""
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    rng = np.random.default_rng(0xDEAD + n)
+    Q, _ = np.linalg.qr(rng.standard_normal((n, n)))
+    eigs = np.array([1.0] * (n // 2) + [3.0] * (n - n // 2))
+    return (Q @ np.diag(eigs) @ Q.T).astype(np_dt)
+
+
+def _test_sym_eig_general(n, dt, factory):
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    A_np = factory(n, dt)
+    assert np.allclose(A_np, A_np.T, atol=1e-5)
+
+    A = qd.Matrix.field(n, n, dtype=dt, shape=())
+    eigvals = qd.Vector.field(n, dtype=dt, shape=())
+    eigvecs = qd.Matrix.field(n, n, dtype=dt, shape=())
+    A.from_numpy(A_np)
+
+    @qd.kernel
+    def run():
+        eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
+
+    run()
+    eigvals_qd = eigvals.to_numpy().astype(np_dt)
+    eigvecs_qd = eigvecs.to_numpy().astype(np_dt)
+
+    eigvals_np = np.linalg.eigvalsh(A_np)
+    tol = 5e-3 if dt == qd.f32 else 1e-9
+
+    np.testing.assert_allclose(np.sort(eigvals_qd), np.sort(eigvals_np), rtol=tol, atol=tol)
+
+    Q = eigvecs_qd
+    np.testing.assert_allclose(Q.T @ Q, np.eye(n), rtol=tol, atol=tol)
+    A_reconstructed = Q @ np.diag(eigvals_qd) @ Q.T
+    np.testing.assert_allclose(A_reconstructed, A_np, rtol=tol, atol=tol)
+
+
+@pytest.mark.parametrize("n", [4, 5, 6, 9, 12])
+@pytest.mark.parametrize(
+    "factory",
+    [
+        _sym_eig_factory_random,
+        _sym_eig_factory_spd,
+        _sym_eig_factory_indefinite,
+        _sym_eig_factory_diagonal,
+        _sym_eig_factory_repeated_eigs,
+    ],
+)
+@test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
+def test_sym_eig_general_f32(n, factory):
+    _test_sym_eig_general(n, qd.f32, factory)
+
+
+@pytest.mark.parametrize("n", [4, 5, 6, 9, 12])
+@pytest.mark.parametrize(
+    "factory",
+    [
+        _sym_eig_factory_random,
+        _sym_eig_factory_spd,
+        _sym_eig_factory_indefinite,
+        _sym_eig_factory_diagonal,
+        _sym_eig_factory_repeated_eigs,
+    ],
+)
+@test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
+def test_sym_eig_general_f64(n, factory):
+    _test_sym_eig_general(n, qd.f64, factory)
+
+
+def _test_make_spd(n, dt, factory):
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    A_np = factory(n, dt)
+    assert np.allclose(A_np, A_np.T, atol=1e-5)
+
+    A = qd.Matrix.field(n, n, dtype=dt, shape=())
+    A_spd = qd.Matrix.field(n, n, dtype=dt, shape=())
+    A.from_numpy(A_np)
+
+    @qd.kernel
+    def run():
+        A_spd[None] = qd.make_spd(A[None], dt)
+
+    run()
+    A_spd_qd = A_spd.to_numpy().astype(np_dt)
+    spd_eigs = np.linalg.eigvalsh(A_spd_qd)
+    tol = 5e-3 if dt == qd.f32 else 1e-9
+
+    # Must be symmetric.
+    np.testing.assert_allclose(A_spd_qd, A_spd_qd.T, rtol=tol, atol=tol)
+    # Must be PSD: eigenvalues >= -tol.
+    assert spd_eigs.min() >= -tol, f"min eig of make_spd({factory.__name__}) = {spd_eigs.min()}"
+
+    # Reference: numpy reconstruct with eigenvalues clamped to >= 0.
+    eigs_np, vecs_np = np.linalg.eigh(A_np)
+    eigs_clamped = np.clip(eigs_np, 0.0, None)
+    expected = vecs_np @ np.diag(eigs_clamped) @ vecs_np.T
+
+    np.testing.assert_allclose(A_spd_qd, expected, rtol=tol, atol=tol)
+
+
+@pytest.mark.parametrize("n", [4, 6, 9, 12])
+@pytest.mark.parametrize(
+    "factory",
+    [_sym_eig_factory_indefinite, _sym_eig_factory_random, _sym_eig_factory_spd],
+)
+@test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
+def test_make_spd_f32(n, factory):
+    _test_make_spd(n, qd.f32, factory)
+
+
+@pytest.mark.parametrize("n", [4, 6, 9, 12])
+@pytest.mark.parametrize(
+    "factory",
+    [_sym_eig_factory_indefinite, _sym_eig_factory_random, _sym_eig_factory_spd],
+)
+@test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
+def test_make_spd_f64(n, factory):
+    _test_make_spd(n, qd.f64, factory)

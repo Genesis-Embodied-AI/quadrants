@@ -591,6 +591,11 @@ def sym_eig(A, dt=None):
 
     Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
 
+    Sizes ``A.n == 2`` and ``A.n == 3`` use the existing closed-form (Eigen3
+    ``computeDirect``) paths. Sizes ``4 ≤ A.n ≤ 12`` use Householder
+    tridiagonalisation + implicit QR with Wilkinson shift
+    (:func:`quadrants._funcs_sym_eig_general.sym_eig_general`).
+
     Args:
         A (qd.Matrix(n, n)): Symmetric Matrix for which the eigenvalues and right eigenvectors will be computed.
         dt (DataType): The datatype for the eigenvalues and right eigenvectors.
@@ -605,7 +610,34 @@ def sym_eig(A, dt=None):
         return _sym_eig2x2(A, dt)
     if A.n == 3:
         return _sym_eig3x3(A, dt)
-    raise Exception("Symmetric eigen solver only supports 2D and 3D matrices.")
+    # pylint: disable=C0415
+    from quadrants._funcs_sym_eig_general import sym_eig_general
+
+    if A.n <= 12:
+        return sym_eig_general(A, dt)
+    raise Exception("Symmetric eigen solver currently supports sizes up to 12×12.")
+
+
+def make_spd(A, dt=None):
+    """Project a symmetric matrix ``A`` to the nearest positive semi-definite
+    matrix in the Frobenius norm sense, by clamping its eigenvalues to ``≥ 0``.
+
+    Implemented as ``Q · diag(max(λ, 0)) · Qᵀ`` where ``A = Q diag(λ) Qᵀ`` is
+    the symmetric eigendecomposition computed by :func:`sym_eig`.
+
+    Args:
+        A (qd.Matrix(n, n)): Symmetric matrix.
+        dt (DataType): Element dtype.
+
+    Returns:
+        qd.Matrix(n, n): the SPD projection of ``A``.
+    """
+    if dt is None:
+        dt = impl.get_runtime().default_fp
+    # pylint: disable=C0415
+    from quadrants._funcs_sym_eig_general import make_spd as _make_spd
+
+    return _make_spd(A, dt)
 
 
 @func
@@ -701,4 +733,4 @@ def field_fill_quadrants_scope(F: template(), val: template()):
         F[I] = val
 
 
-__all__ = ["randn", "polar_decompose", "eig", "sym_eig", "svd", "solve"]
+__all__ = ["randn", "polar_decompose", "eig", "sym_eig", "make_spd", "svd", "solve"]
