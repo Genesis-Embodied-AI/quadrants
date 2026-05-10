@@ -774,8 +774,8 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       auto func_ty = llvm::FunctionType::get(i32_ty, {i32_ty, i32_ty, i32_ty}, false);
       auto inline_asm = llvm::InlineAsm::get(func_ty, "fns.b32 $0, $1, $2, $3;", "=r,r,r,r",
                                              /*hasSideEffects=*/false);
-      llvm_val[stmt] = builder->CreateCall(
-          inline_asm, {llvm_val[stmt->args[0]], llvm_val[stmt->args[1]], llvm_val[stmt->args[2]]});
+      llvm_val[stmt] =
+          builder->CreateCall(inline_asm, {llvm_val[stmt->args[0]], llvm_val[stmt->args[1]], llvm_val[stmt->args[2]]});
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }

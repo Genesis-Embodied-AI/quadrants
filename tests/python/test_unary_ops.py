@@ -359,9 +359,9 @@ def test_fns():
             for offset in [-3, -2, -1, 0, 1, 2, 3, 5]:
                 expected = _np_fns(mask, base, offset)
                 got = fns_kernel(mask, base, offset)
-                assert got == expected, (
-                    f"fns(mask=0x{mask:08X}, base={base}, offset={offset}): got 0x{got:08X}, expected 0x{expected:08X}"
-                )
+                assert (
+                    got == expected
+                ), f"fns(mask=0x{mask:08X}, base={base}, offset={offset}): got 0x{got:08X}, expected 0x{expected:08X}"
 
     # Spot-check a few canonical examples directly so failures point at obvious cases first.
     NOT_FOUND = 0xFFFFFFFF
