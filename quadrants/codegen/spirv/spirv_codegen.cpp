@@ -1047,7 +1047,10 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     auto v = ir_->call_glsl450(dst_type, 52, operand_val);
     ir_->store_variable(val, v);
   } else if (stmt->op_type == UnaryOpType::popcnt) {
-    val = ir_->popcnt(operand_val);
+    // OpBitCount returns the operand's type, so for a u64 input it produces a u64 result. type_check normalises
+    // the stmt's ret_type to i32 across every backend (CUDA / AMDGPU already do this in hardware), so we cast
+    // the OpBitCount result down to dst_type (== i32) here. For an i32 / u32 input the cast is a free OpBitcast.
+    val = ir_->cast(dst_type, ir_->popcnt(operand_val));
   } else if (stmt->op_type == UnaryOpType::clz) {
     // Use FindUMsb (75) rather than FindSMsb (74): clz() must count leading zeros over the unsigned bit pattern,
     // i.e. clz(0xFFFFFFFF) == 0. FindSMsb returns -1 for negative inputs (it finds the MSB of the absolute value's
@@ -1094,7 +1097,8 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     } else {
       QD_NOT_IMPLEMENTED
     }
-    // Convert the i32 leading-zero count to the dst_type the pipeline expects (i32 / u32 / i64 / u64).
+    // dst_type is i32 across every backend (set by type_check for popcnt / clz), so this cast is a no-op
+    // for the i32 result we just computed; ir_->cast() returns the value unchanged when types match.
     val = ir_->cast(dst_type, clz_i32);
   }
 #define UNARY_OP_TO_SPIRV(op, instruction, instruction_id, max_bits)                           \

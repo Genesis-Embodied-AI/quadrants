@@ -219,11 +219,15 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
     llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::sqrt, {input_type}, {input});
   }
   else if (op == UnaryOpType::popcnt) {
-    llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+    auto pop = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+    llvm_val[stmt] = builder->CreateZExtOrTrunc(pop, llvm::Type::getInt32Ty(*llvm_context));
+    stmt->ret_type = PrimitiveType::i32;
   }
   else if (op == UnaryOpType::clz) {
-    llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
-                                              {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
+    auto clz = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
+                                        {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
+    llvm_val[stmt] = builder->CreateZExtOrTrunc(clz, llvm::Type::getInt32Ty(*llvm_context));
+    stmt->ret_type = PrimitiveType::i32;
   }
   else {
     QD_P(unary_op_type_name(op));
