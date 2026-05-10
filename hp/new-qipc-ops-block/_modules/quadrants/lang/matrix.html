@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.matrix &#8212; Quadrants 0.7.6 documentation</title>
+    <title>quadrants.lang.matrix &#8212; Quadrants 0.7.8 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../_static/documentation_options.js?v=918ced64"></script>
+    <script src="../../../_static/documentation_options.js?v=ddeecabf"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.6" />
+  <meta name="docsearch:version" content="0.7.8" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
   
 </a></div>
     
@@ -1302,7 +1302,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span> <span class="o">*</span> <span class="n">m</span><span class="p">):</span>
                 <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">create_field_member</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="n">needs_grad</span><span class="p">,</span> <span class="n">needs_dual</span><span class="o">=</span><span class="n">needs_dual</span><span class="p">))</span>
-        <span class="n">entries</span><span class="p">,</span> <span class="n">entries_grad</span><span class="p">,</span> <span class="n">entries_dual</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">entries</span><span class="p">)</span>
+        <span class="n">entries</span><span class="p">,</span> <span class="n">entries_grad</span><span class="p">,</span> <span class="n">entries_dual</span><span class="p">,</span> <span class="n">entries_grad_checkbit</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">entries</span><span class="p">)</span>
 
         <span class="n">entries</span> <span class="o">=</span> <span class="n">MatrixField</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">element_dim</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">entries_grad</span><span class="p">):</span>
@@ -1311,6 +1311,9 @@
         <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">entries_dual</span><span class="p">):</span>
             <span class="n">entries_dual</span> <span class="o">=</span> <span class="n">MatrixField</span><span class="p">(</span><span class="n">entries_dual</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">element_dim</span><span class="p">)</span>
             <span class="n">entries</span><span class="o">.</span><span class="n">_set_dual</span><span class="p">(</span><span class="n">entries_dual</span><span class="p">)</span>
+        <span class="n">entries_grad_checkbit_field</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">needs_grad</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="n">e</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entries_grad_checkbit</span><span class="p">):</span>
+            <span class="n">entries_grad_checkbit_field</span> <span class="o">=</span> <span class="n">MatrixField</span><span class="p">(</span><span class="n">entries_grad_checkbit</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">element_dim</span><span class="p">)</span>
 
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">matrix_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span>
 
@@ -1364,6 +1367,11 @@
                         <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
                             <span class="n">ScalarField</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
                         <span class="p">)</span>
+                    <span class="k">if</span> <span class="n">entries_grad_checkbit_field</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entries_grad_checkbit_field</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
+                            <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
+                                <span class="n">ScalarField</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
+                            <span class="p">)</span>
                 <span class="k">if</span> <span class="n">needs_dual</span><span class="p">:</span>
                     <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entries_dual</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
                         <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
@@ -1375,6 +1383,10 @@
                     <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
                         <span class="n">entries_grad</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
                     <span class="p">)</span>
+                    <span class="k">if</span> <span class="n">entries_grad_checkbit_field</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
+                            <span class="n">entries_grad_checkbit_field</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
+                        <span class="p">)</span>
                 <span class="k">if</span> <span class="n">needs_dual</span><span class="p">:</span>
                     <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
                         <span class="n">entries_dual</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>

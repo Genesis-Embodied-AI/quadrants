@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.field &#8212; Quadrants 0.7.6 documentation</title>
+    <title>quadrants.lang.field &#8212; Quadrants 0.7.8 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../_static/documentation_options.js?v=918ced64"></script>
+    <script src="../../../../_static/documentation_options.js?v=ddeecabf"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.expr" href="../expr/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.6" />
+  <meta name="docsearch:version" content="0.7.8" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
   
 </a></div>
     
@@ -442,6 +442,23 @@ layout-tagged ndarrays use.</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.field.Field.has_grad">
+<span class="sig-name descname"><span class="pre">has_grad</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#Field.has_grad"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.Field.has_grad" title="Link to this definition">#</a></dt>
+<dd><p>Whether this field’s adjoint (reverse-mode gradient) SNode is allocated.</p>
+<p><code class="docutils literal notranslate"><span class="pre">self.grad</span></code> is non-<code class="docutils literal notranslate"><span class="pre">None</span></code> for every real-dtype field (the wrapper is allocated up-front so
+<code class="docutils literal notranslate"><span class="pre">qd.root.lazy_grad()</span></code> can populate it later); the actual placed-or-not signal is whether the underlying
+SNode has been placed via <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.root.lazy_grad()</span></code>, or an explicit
+<code class="docutils literal notranslate"><span class="pre">qd.root.dense(...).place(field.grad)</span></code>. Mirrors <code class="docutils literal notranslate"><span class="pre">self.snode.ptr.has_adjoint()</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.field.Field.has_dual">
+<span class="sig-name descname"><span class="pre">has_dual</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#Field.has_dual"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.Field.has_dual" title="Link to this definition">#</a></dt>
+<dd><p>Whether this field’s dual (forward-mode gradient) SNode is allocated.</p>
+<p>Same semantics as <a class="reference internal" href="#quadrants.lang.field.Field.has_grad" title="quadrants.lang.field.Field.has_grad"><code class="xref py py-meth docutils literal notranslate"><span class="pre">has_grad()</span></code></a> for the dual companion. Mirrors <code class="docutils literal notranslate"><span class="pre">self.snode.ptr.has_dual()</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.field.Field.fill">
 <em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">fill</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">val</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">float</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#Field.fill"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.Field.fill" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
@@ -689,6 +706,8 @@ capsules read-only; NumPy &lt; 2.1 cannot consume v1 capsules at all. If False (
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.layout"><code class="docutils literal notranslate"><span class="pre">Field.layout</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.dtype"><code class="docutils literal notranslate"><span class="pre">Field.dtype</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.parent"><code class="docutils literal notranslate"><span class="pre">Field.parent()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.has_grad"><code class="docutils literal notranslate"><span class="pre">Field.has_grad()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.has_dual"><code class="docutils literal notranslate"><span class="pre">Field.has_dual()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.fill"><code class="docutils literal notranslate"><span class="pre">Field.fill()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.to_numpy"><code class="docutils literal notranslate"><span class="pre">Field.to_numpy()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.field.Field.to_torch"><code class="docutils literal notranslate"><span class="pre">Field.to_torch()</span></code></a></li>

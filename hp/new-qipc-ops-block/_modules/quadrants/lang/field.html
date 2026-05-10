@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.field &#8212; Quadrants 0.7.6 documentation</title>
+    <title>quadrants.lang.field &#8212; Quadrants 0.7.8 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../_static/documentation_options.js?v=918ced64"></script>
+    <script src="../../../_static/documentation_options.js?v=ddeecabf"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.6" />
+  <meta name="docsearch:version" content="0.7.8" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
   
 </a></div>
     
@@ -329,7 +329,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">warn</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._metal_interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">metal_needs_interop_sync</span><span class="p">,</span> <span class="n">mps_sync_if_metal</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsSyntaxError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsRuntimeError</span><span class="p">,</span> <span class="n">QuadrantsSyntaxError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">in_python_scope</span><span class="p">,</span>
     <span class="n">python_scope</span><span class="p">,</span>
@@ -764,6 +764,48 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Sets corresponding dual field (forward mode).&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">dual</span> <span class="o">=</span> <span class="n">dual</span>
 
+<div class="viewcode-block" id="Field.has_grad">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.has_grad">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_grad</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Whether this field&#39;s adjoint (reverse-mode gradient) SNode is allocated.</span>
+
+<span class="sd">        ``self.grad`` is non-``None`` for every real-dtype field (the wrapper is allocated up-front so</span>
+<span class="sd">        ``qd.root.lazy_grad()`` can populate it later); the actual placed-or-not signal is whether the underlying</span>
+<span class="sd">        SNode has been placed via ``needs_grad=True``, ``qd.root.lazy_grad()``, or an explicit</span>
+<span class="sd">        ``qd.root.dense(...).place(field.grad)``. Mirrors ``self.snode.ptr.has_adjoint()``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad</span><span class="o">.</span><span class="n">_loop_range</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="Field.has_dual">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.has_dual">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_dual</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Whether this field&#39;s dual (forward-mode gradient) SNode is allocated.</span>
+
+<span class="sd">        Same semantics as :meth:`has_grad` for the dual companion. Mirrors ``self.snode.ptr.has_dual()``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dual</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">dual</span><span class="o">.</span><span class="n">_loop_range</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_require_placed</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Raise ``QuadrantsRuntimeError`` if this field&#39;s underlying SNode has never been placed.</span>
+
+<span class="sd">        ``create_field_member`` allocates an adjoint / dual ``FieldExpression`` for every real-dtype field so that</span>
+<span class="sd">        ``qd.root.lazy_grad()`` / ``qd.root.lazy_dual()`` can place it on demand, but ``_field()`` only calls</span>
+<span class="sd">        ``place_child`` when ``needs_grad`` / ``needs_dual`` is set. Reaching the wrapper directly and writing or</span>
+<span class="sd">        reading it (e.g. ``field.grad.fill(0.0)``) before the SNode is placed used to crash deep inside ``fill_field``</span>
+<span class="sd">        AST compilation with ``AttributeError: &#39;NoneType&#39; object has no attribute &#39;data_type&#39;``. Surface the same</span>
+<span class="sd">        situation as a clear ``QuadrantsRuntimeError`` so callers see the actual problem instead of a stack frame in</span>
+<span class="sd">        kernel template instantiation.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_loop_range</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span>
+            <span class="s2">&quot;Field has no allocation. Allocate via `qd.field(..., needs_grad=True)` / `needs_dual=True`, &quot;</span>
+            <span class="s2">&quot;`qd.root.lazy_grad()` / `qd.root.lazy_dual()`, or `qd.root.dense(...).place(field)` &quot;</span>
+            <span class="s2">&quot;before calling `fill` / read / write.&quot;</span>
+        <span class="p">)</span>
+
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="Field.fill">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.fill">[docs]</a>
@@ -960,6 +1002,7 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.fill">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Fills this scalar field with a specified value.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">in_python_scope</span><span class="p">():</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">fill_field</span>  <span class="c1"># pylint: disable=C0415</span>
 
@@ -983,6 +1026,7 @@
 <span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,</span>
 <span class="sd">                ``None`` uses zero-copy when available and falls back to a copy otherwise.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
             <span class="n">arr</span> <span class="o">=</span> <span class="n">_try_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1019,6 +1063,7 @@
 <span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,</span>
 <span class="sd">                ``None`` uses zero-copy when available and falls back to a copy otherwise.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">_try_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1053,6 +1098,7 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.from_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies the data from a `numpy.ndarray` into this field.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">arr</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">c_contiguous</span><span class="p">:</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>  <span class="c1"># pylint: disable=C0415</span>
 
@@ -1062,11 +1108,13 @@
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_initialize_host_accessors</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">host_accessors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">setter</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_pad_key</span><span class="p">(</span><span class="n">key</span><span class="p">))</span>  <span class="c1"># type: ignore</span>
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_initialize_host_accessors</span><span class="p">()</span>
         <span class="c1"># Check for potential slicing behaviour</span>
         <span class="c1"># for instance: x[0, :]</span>

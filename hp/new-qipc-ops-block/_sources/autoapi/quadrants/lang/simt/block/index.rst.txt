@@ -22,6 +22,7 @@ Functions
    quadrants.lang.simt.block.sync_all_nonzero
    quadrants.lang.simt.block.sync_any_nonzero
    quadrants.lang.simt.block.sync_count_nonzero
+   quadrants.lang.simt.block.mem_fence
    quadrants.lang.simt.block.mem_sync
    quadrants.lang.simt.block.thread_idx
    quadrants.lang.simt.block.global_thread_idx
@@ -56,6 +57,8 @@ Module Contents
 .. py:function:: sync_any_nonzero(predicate)
 
 .. py:function:: sync_count_nonzero(predicate)
+
+.. py:function:: mem_fence()
 
 .. py:function:: mem_sync()
 
@@ -182,7 +185,7 @@ Module Contents
 
 .. py:function:: radix_rank_match_atomic_or(key, tid, block_dim: template(), log2_warp: template(), radix_bits: template(), bit_start: template(), num_bits: template(), bins, excl_prefix)
 
-   Block-level radix rank using CUB's ``BlockRadixRankMatchEarlyCounts`` (``WARP_MATCH_ATOMIC_OR`` path).
+   Block-level radix rank via the atomic-OR match-and-count strategy.
 
    Returns the calling thread's stable rank within the block under digit ``(key >> bit_start) & ((1 << num_bits) - 1)``.
 
@@ -190,16 +193,16 @@ Module Contents
    :param tid: calling thread's block-local index.
    :param block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 << radix_bits``: each digit gets exactly
                      one thread for the per-thread bin/excl_prefix output.
-   :param log2_warp: ``log2(warp_size)`` (template).  Must currently be 5 (warp size 32) — the ATOMIC_OR match path is
+   :param log2_warp: ``log2(warp_size)`` (template).  Must currently be 5 (warp size 32) — the atomic-OR match path is
                      built around 32-lane ``i32`` ballot masks, so wave64 callers should pass 5 and arrange to launch with a
                      32-thread subgroup, or wait until a wave64 path lands.
-   :param radix_bits: number of bits in the digit (template).  Typical CUB SM90 onesweep value is 8, giving 256 digits.
+   :param radix_bits: number of bits in the digit (template).  Typical onesweep value is 8, giving 256 digits.
    :param bit_start: starting bit of the digit (template).  Used as ``key >> bit_start``.
    :param num_bits: actual digit width in bits (template), with ``num_bits <= radix_bits``.  Bits ``[bit_start, bit_start +
                     num_bits)`` of ``key`` are extracted.
-   :param bins: ``block.SharedArray((1 << radix_bits,), i32)`` outparam.  After the call, ``bins[d]`` holds the count of
-                keys whose digit equals ``d``.  Caller is responsible for allocating this array exactly once per kernel.
-   :param excl_prefix: ``block.SharedArray((1 << radix_bits,), i32)`` outparam.  After the call, ``excl_prefix[d]`` holds
+   :param bins: ``block.SharedArray((1 << radix_bits,), qd.i32)`` outparam.  After the call, ``bins[d]`` holds the count
+                of keys whose digit equals ``d``.  Caller is responsible for allocating this array exactly once per kernel.
+   :param excl_prefix: ``block.SharedArray((1 << radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]`` holds
                        the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.
 
    Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary ``block.sync()``

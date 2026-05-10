@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Tensors &#8212; Quadrants 0.7.6 documentation</title>
+    <title>Tensors &#8212; Quadrants 0.7.8 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=918ced64"></script>
+    <script src="../_static/documentation_options.js?v=ddeecabf"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Matrix decompositions and solvers" href="decompositions.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.6" />
+  <meta name="docsearch:version" content="0.7.8" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
   
 </a></div>
     
@@ -313,6 +313,10 @@
 <li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
@@ -649,17 +653,26 @@
 </div>
 <p>If you genuinely need to move data across backends, route it through Torch: <code class="docutils literal notranslate"><span class="pre">a.from_torch(b.to_torch())</span></code>.</p>
 </section>
-<section id="known-asymmetry-real-dtype-grad-stub-on-the-field-backend">
-<h2>Known asymmetry: real-dtype <code class="docutils literal notranslate"><span class="pre">.grad</span></code> stub on the field backend<a class="headerlink" href="#known-asymmetry-real-dtype-grad-stub-on-the-field-backend" title="Link to this heading">#</a></h2>
-<p>For tensors of a real (<code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code>) dtype allocated <strong>without</strong> <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code>, the field backend currently allocates a zombie gradient stub anyway, so <code class="docutils literal notranslate"><span class="pre">t.grad</span></code> returns a wrapper around it. The ndarray backend correctly reports <code class="docutils literal notranslate"><span class="pre">t.grad</span> <span class="pre">is</span> <span class="pre">None</span></code> in the same case:</p>
+<section id="known-asymmetry-real-dtype-grad-placeholder-on-the-field-backend">
+<h2>Known asymmetry: real-dtype <code class="docutils literal notranslate"><span class="pre">.grad</span></code> placeholder on the field backend<a class="headerlink" href="#known-asymmetry-real-dtype-grad-placeholder-on-the-field-backend" title="Link to this heading">#</a></h2>
+<p>For tensors of a real (<code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code>) dtype allocated <strong>without</strong> <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code>, the field backend exposes <code class="docutils literal notranslate"><span class="pre">t.grad</span></code> as a wrapper around an un-placed gradient placeholder, allowing for late manual allocation via <code class="docutils literal notranslate"><span class="pre">qd.root.place(t.grad)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.root.lazy_grad()</span></code>. The ndarray backend reports <code class="docutils literal notranslate"><span class="pre">t.grad</span> <span class="pre">is</span> <span class="pre">None</span></code> in the same case:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t_field</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">FIELD</span><span class="p">)</span>
 <span class="n">t_nd</span>    <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">NDARRAY</span><span class="p">)</span>
 
-<span class="n">t_field</span><span class="o">.</span><span class="n">grad</span>   <span class="c1"># currently a Tensor wrapper around a zombie field</span>
+<span class="n">t_field</span><span class="o">.</span><span class="n">grad</span>   <span class="c1"># Tensor wrapper around an un-placed grad field (ready for manual placement)</span>
 <span class="n">t_nd</span><span class="o">.</span><span class="n">grad</span>      <span class="c1"># None</span>
 </pre></div>
 </div>
-<p>Use <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> if you intend to read <code class="docutils literal notranslate"><span class="pre">.grad</span></code>. Integer dtypes are symmetric (<code class="docutils literal notranslate"><span class="pre">grad</span> <span class="pre">is</span> <span class="pre">None</span></code> on both backends regardless of <code class="docutils literal notranslate"><span class="pre">needs_grad</span></code>).</p>
+<p>Pass <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> at tensor creation to automatically allocate gradient storage with default memory layout if needed: floating-point tensors get a grad buffer of the same shape and dtype as the primal, whereas integer-dtype tensors never get a grad buffer - <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> is a no-op there.</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">Tensor.has_grad()</span></code> / <code class="docutils literal notranslate"><span class="pre">Tensor.has_dual()</span></code> to check whether the gradient storage is actually allocated, regardless of whether the allocation came from <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> or a manual <code class="docutils literal notranslate"><span class="pre">qd.root.place(field.grad)</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t_field</span><span class="o">.</span><span class="n">has_grad</span><span class="p">()</span>   <span class="c1"># False -- the placeholder has not been placed</span>
+<span class="n">t_nd</span><span class="o">.</span><span class="n">has_grad</span><span class="p">()</span>      <span class="c1"># False</span>
+
+<span class="n">ng</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">ng</span><span class="o">.</span><span class="n">has_grad</span><span class="p">()</span>        <span class="c1"># True</span>
+</pre></div>
+</div>
+<p>Reading or writing <code class="docutils literal notranslate"><span class="pre">.grad</span></code> on an un-allocated gradient raises <code class="docutils literal notranslate"><span class="pre">QuadrantsRuntimeError(&quot;Field</span> <span class="pre">has</span> <span class="pre">no</span> <span class="pre">allocation.</span> <span class="pre">...&quot;)</span></code> - the failure is loud, never silent. Use <code class="docutils literal notranslate"><span class="pre">has_grad()</span></code> as the pre-check in generic code paths that may receive either a <code class="docutils literal notranslate"><span class="pre">needs_grad</span></code> tensor or a plain one. <code class="docutils literal notranslate"><span class="pre">has_dual()</span></code> mirrors it for the forward-mode dual companion.</p>
 </section>
 </section>
 
@@ -723,7 +736,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#pickle">Pickle</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#wrapping-a-bare-tensor-qd-wrap">Wrapping a bare tensor: <code class="docutils literal notranslate"><span class="pre">qd.wrap</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cross-backend-copy-from-is-not-supported">Cross-backend <code class="docutils literal notranslate"><span class="pre">copy_from</span></code> is not supported</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#known-asymmetry-real-dtype-grad-stub-on-the-field-backend">Known asymmetry: real-dtype <code class="docutils literal notranslate"><span class="pre">.grad</span></code> stub on the field backend</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#known-asymmetry-real-dtype-grad-placeholder-on-the-field-backend">Known asymmetry: real-dtype <code class="docutils literal notranslate"><span class="pre">.grad</span></code> placeholder on the field backend</a></li>
 </ul>
   </nav></div>
 

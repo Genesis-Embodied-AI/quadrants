@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.simt.block &#8212; Quadrants 0.7.6 documentation</title>
+    <title>quadrants.lang.simt.block &#8212; Quadrants 0.7.8 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../_static/documentation_options.js?v=918ced64"></script>
+    <script src="../../../../_static/documentation_options.js?v=ddeecabf"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.6" />
+  <meta name="docsearch:version" content="0.7.8" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
   
 </a></div>
     
@@ -320,39 +320,19 @@
 <span></span><span class="c1"># type: ignore</span>
 <span class="c1"># pyright: reportInvalidTypeForm=false, reportOperatorIssue=false, reportArgumentType=false</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_expr_group</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ops</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">atomic_add</span><span class="p">,</span>
-    <span class="n">atomic_or</span><span class="p">,</span>
-    <span class="n">bit_and</span><span class="p">,</span>
-    <span class="n">bit_shr</span><span class="p">,</span>
-    <span class="n">cast</span><span class="p">,</span>
-    <span class="n">clz</span><span class="p">,</span>
-    <span class="n">popcnt</span><span class="p">,</span>
-<span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.subgroup</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">_bin_add</span><span class="p">,</span>
-    <span class="n">_bin_max</span><span class="p">,</span>
-    <span class="n">_bin_min</span><span class="p">,</span>
-    <span class="n">invocation_id</span><span class="p">,</span>
-    <span class="n">lanemask_le</span><span class="p">,</span>
-    <span class="n">shuffle</span><span class="p">,</span>
-    <span class="n">shuffle_down</span><span class="p">,</span>
-<span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.subgroup</span><span class="w"> </span><span class="kn">import</span> <span class="n">_exclusive_scan</span> <span class="k">as</span> <span class="n">_subgroup_exclusive_scan</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.subgroup</span><span class="w"> </span><span class="kn">import</span> <span class="n">_inclusive_scan</span> <span class="k">as</span> <span class="n">_subgroup_inclusive_scan</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.subgroup</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">mem_fence</span> <span class="k">as</span> <span class="n">subgroup_mem_fence</span><span class="p">,</span>
-<span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.subgroup</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">sync</span> <span class="k">as</span> <span class="n">subgroup_sync</span><span class="p">,</span>
-<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span> <span class="k">as</span> <span class="n">_func</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt</span><span class="w"> </span><span class="kn">import</span> <span class="n">subgroup</span> <span class="k">as</span> <span class="n">_subgroup</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.subgroup</span><span class="w"> </span><span class="kn">import</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">_bin_min</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">quadrants_scope</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.annotations</span><span class="w"> </span><span class="kn">import</span> <span class="n">template</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">i32</span><span class="p">,</span> <span class="n">u32</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">i32</span> <span class="k">as</span> <span class="n">_i32</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">u32</span> <span class="k">as</span> <span class="n">_u32</span>
 
 
 <div class="viewcode-block" id="arch_uses_spv">
@@ -379,7 +359,12 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">sync_all_nonzero</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="c1"># Hardware-fused barrier+reduction on NVPTX (`barrier.cta.red.and.aligned.all.sync`).</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_and_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">or</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="c1"># AMDGPU and SPIR-V (Vulkan / Metal) emulate via shared memory + 2 barriers + an atomic; see</span>
+        <span class="c1"># `_block_reduce_*_emulated` below for the pattern.</span>
+        <span class="k">return</span> <span class="n">_block_reduce_all_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span>
     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_all_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
@@ -390,6 +375,8 @@
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_or_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">or</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_block_reduce_any_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span>
     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_any_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
@@ -400,19 +387,33 @@
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_count_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">or</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_block_reduce_count_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span>
     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_count_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="mem_fence">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.mem_fence">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">mem_fence</span><span class="p">():</span>
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_mem_fence&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;workgroupMemoryBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.mem_fence is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="mem_sync">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.mem_sync">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">mem_sync</span><span class="p">():</span>
-    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
-    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;workgroupMemoryBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.mem_sync is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+        <span class="s2">&quot;qd.simt.block.mem_sync() is deprecated; use qd.simt.block.mem_fence() instead.&quot;</span><span class="p">,</span>
+        <span class="ne">DeprecationWarning</span><span class="p">,</span>
+        <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">mem_fence</span><span class="p">()</span></div>
 
 
 
@@ -420,6 +421,8 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.thread_idx">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">thread_idx</span><span class="p">():</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_thread_idx&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;localInvocationId&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.thread_idx is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
@@ -430,7 +433,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.global_thread_idx">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">global_thread_idx</span><span class="p">():</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
-    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">insert_thread_idx_expr</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;globalInvocationId&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -481,10 +484,10 @@
 
 <span class="c1"># --- Block reductions ------------------------------------------------------------------</span>
 <span class="c1">#</span>
-<span class="c1"># CUB-style two-stage block reduce (`BLOCK_REDUCE_WARP_REDUCTIONS`): each warp reduces its lanes via `shuffle_down`,</span>
-<span class="c1"># lane 0 of every warp publishes the warp aggregate to shared memory, a `block.sync()` retires the publish, and thread 0</span>
-<span class="c1"># sequentially folds the warp aggregates with `op`.  Cost: `log2_warp` shuffles + 1 shared-mem write/read per warp + 1</span>
-<span class="c1"># `block.sync` + (NUM_WARPS - 1) ops on thread 0.</span>
+<span class="c1"># Two-stage block reduce: each warp reduces its lanes via `shuffle_down`, lane 0 of every warp publishes the warp</span>
+<span class="c1"># aggregate to shared memory, a `block.sync()` retires the publish, and thread 0 sequentially folds the warp aggregates</span>
+<span class="c1"># with `op`.  Cost: `log2_warp` shuffles + 1 shared-mem write/read per warp + 1 `block.sync` + (NUM_WARPS - 1) ops on</span>
+<span class="c1"># thread 0.</span>
 <span class="c1">#</span>
 <span class="c1"># `_warp_reduce` mirrors `subgroup.reduce_add` / `_min` / `_max` but takes a generic template operator so the same</span>
 <span class="c1"># kernel skeleton covers add / min / max / mul / bitwise / custom monoids.  We don&#39;t reuse `subgroup.reduce_add` etc.</span>
@@ -492,7 +495,7 @@
 <span class="c1"># operators (used internally by `_reduce`, `_reduce_all`, and downstream block scans).</span>
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_warp_reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Tree-reduce ``value`` across ``2**log2_size`` consecutive lanes via ``shuffle_down`` under a generic ``op``.</span>
 
@@ -501,11 +504,11 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
         <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">log2_size</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">i</span><span class="p">))</span>
-        <span class="n">value</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">shuffle_down</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">offset</span><span class="p">)))</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">shuffle_down</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_u32</span><span class="p">(</span><span class="n">offset</span><span class="p">)))</span>
     <span class="k">return</span> <span class="n">value</span>
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope reduction under a generic associative ``op``.  Result is valid in **thread 0 only**; other threads</span>
 <span class="sd">    retain partial values.  Use ``_reduce_all`` if you need the result on every thread.</span>
@@ -529,9 +532,9 @@
     <span class="n">warp_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">//</span> <span class="n">WARP_SIZE</span>
     <span class="c1"># Use the **logical** lane (``tid &amp; (WARP_SIZE-1)``) instead of ``invocation_id()``: on wave64 hardware</span>
     <span class="c1"># (CDNA AMDGPU) the hardware-lane index runs 0..63 inside one wave but logical warp 1 starts at lane 32, so</span>
-    <span class="c1"># ``invocation_id() == 0`` would skip every other logical warp&#39;s publish.  ``tid &amp; (WARP_SIZE-1)`` matches</span>
-    <span class="c1"># what CUB does on CUDA&#39;s wave32 (``threadIdx.x &amp; 31``) and stays correct when the hardware wave is wider</span>
-    <span class="c1"># than the logical warp.</span>
+    <span class="c1"># ``invocation_id() == 0`` would skip every other logical warp&#39;s publish.  ``tid &amp; (WARP_SIZE-1)`` matches the</span>
+    <span class="c1"># standard ``threadIdx.x &amp; 31`` recipe on CUDA wave32 and stays correct when the hardware wave is wider than the</span>
+    <span class="c1"># logical warp.</span>
     <span class="n">lane_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">WARP_SIZE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
 
     <span class="n">shared</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">NUM_WARPS</span><span class="p">,)),</span> <span class="n">dtype</span><span class="p">)</span>
@@ -547,7 +550,7 @@
     <span class="k">return</span> <span class="n">result</span>
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block reduction whose result is broadcast to every thread.  Costs one extra ``block.sync()`` plus a one-slot</span>
 <span class="sd">    shared-memory broadcast vs. ``_reduce``.</span>
@@ -560,7 +563,7 @@
     <span class="k">return</span> <span class="n">bcast</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -573,7 +576,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_all">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -584,7 +587,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_add">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_add">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -601,7 +604,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_min">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_min">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -610,7 +613,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_max">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_max">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -619,7 +622,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_all_add">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all_add">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -630,7 +633,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_all_min">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all_min">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -639,7 +642,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_all_max">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all_max">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -650,13 +653,13 @@
 
 <span class="c1"># --- Block scans -----------------------------------------------------------------------</span>
 <span class="c1">#</span>
-<span class="c1"># CUB-style two-stage block scan (`BLOCK_SCAN_WARP_SCANS`).  Each warp does a Hillis-Steele</span>
-<span class="c1"># scan via `subgroup.{_inclusive_scan, _exclusive_scan}`, the last lane of every warp</span>
-<span class="c1"># publishes the warp aggregate to shared memory, then every thread sequentially folds the</span>
-<span class="c1"># warp prefixes and applies its own warp&#39;s prefix to its scan value.  All threads receive a</span>
-<span class="c1"># valid result; cost: one warp scan + 1 shared-mem write/read per warp + 1 `block.sync()` +</span>
-<span class="c1"># (NUM_WARPS - 1) ops on every thread (the cross-warp prefix is computed redundantly to</span>
-<span class="c1"># avoid a second barrier — same trade-off CUB makes).</span>
+<span class="c1"># Two-stage block scan.  Each warp does a Hillis-Steele scan via</span>
+<span class="c1"># `subgroup.{_inclusive_scan, _exclusive_scan}`, the last lane of every warp publishes the</span>
+<span class="c1"># warp aggregate to shared memory, then every thread sequentially folds the warp prefixes</span>
+<span class="c1"># and applies its own warp&#39;s prefix to its scan value.  All threads receive a valid result;</span>
+<span class="c1"># cost: one warp scan + 1 shared-mem write/read per warp + 1 `block.sync()` + (NUM_WARPS - 1)</span>
+<span class="c1"># ops on every thread (the cross-warp prefix is computed redundantly to avoid a second</span>
+<span class="c1"># barrier).</span>
 <span class="c1">#</span>
 <span class="c1"># Inclusive: warp aggregate at the last lane is just the inclusive value, written directly.</span>
 <span class="c1"># Exclusive: warp aggregate = `op(exclusive[last_lane], value[last_lane])`, since the</span>
@@ -664,7 +667,7 @@
 <span class="c1"># with one extra `op` on the publish path.</span>
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_inclusive_block</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive scan under a generic associative ``op``.  Every thread receives a valid result.</span>
 
@@ -674,7 +677,7 @@
     <span class="n">WARP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_warp</span><span class="p">)</span>
     <span class="n">NUM_WARPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">WARP_SIZE</span><span class="p">)</span>
 
-    <span class="n">inclusive</span> <span class="o">=</span> <span class="n">_subgroup_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">)</span>
+    <span class="n">inclusive</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">NUM_WARPS</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">inclusive</span>
@@ -704,7 +707,7 @@
     <span class="k">return</span> <span class="n">inclusive</span>
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_exclusive_block</span><span class="p">(</span>
     <span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()</span>
 <span class="p">):</span>
@@ -714,7 +717,7 @@
     <span class="n">WARP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_warp</span><span class="p">)</span>
     <span class="n">NUM_WARPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">WARP_SIZE</span><span class="p">)</span>
 
-    <span class="n">exclusive</span> <span class="o">=</span> <span class="n">_subgroup_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">)</span>
+    <span class="n">exclusive</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">NUM_WARPS</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">exclusive</span>
@@ -742,7 +745,7 @@
     <span class="k">return</span> <span class="n">exclusive</span>
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="inclusive_scan">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_scan">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -754,7 +757,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="exclusive_scan">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_scan">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">exclusive_scan</span><span class="p">(</span>
@@ -767,7 +770,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="inclusive_add">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_add">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">inclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -784,7 +787,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="inclusive_min">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_min">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">inclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -793,7 +796,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="inclusive_max">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_max">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">inclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -802,7 +805,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="exclusive_add">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_add">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">exclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -814,7 +817,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="exclusive_min">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_min">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">exclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -826,7 +829,7 @@
 
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="exclusive_max">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_max">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">exclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
@@ -840,42 +843,35 @@
 
 <span class="c1"># --- Block radix rank ------------------------------------------------------------------</span>
 <span class="c1">#</span>
-<span class="c1"># CUB-style block-level radix ranking, ported from</span>
-<span class="c1"># `cub/block/block_radix_rank.cuh::BlockRadixRankMatchEarlyCounts&lt;WARP_MATCH_ATOMIC_OR&gt;`.</span>
-<span class="c1"># Each thread holds a single ``u32`` key; the function returns the key&#39;s stable rank within</span>
-<span class="c1"># the block under the digit `(key &gt;&gt; bit_start) &amp; ((1 &lt;&lt; num_bits) - 1)`, and writes the</span>
-<span class="c1"># per-digit count and exclusive-prefix arrays to caller-supplied shared-memory outparams.</span>
+<span class="c1"># Block-level radix ranking via the atomic-OR match-and-count strategy.  Each thread holds a single ``u32`` key; the</span>
+<span class="c1"># function returns the key&#39;s stable rank within the block under the digit `(key &gt;&gt; bit_start) &amp; ((1 &lt;&lt; num_bits) - 1)`,</span>
+<span class="c1"># and writes the per-digit count and exclusive-prefix arrays to caller-supplied shared-memory outparams.</span>
 <span class="c1">#</span>
-<span class="c1"># The algorithm runs in six steps mirroring CUB:</span>
+<span class="c1"># The algorithm runs in six steps:</span>
 <span class="c1">#</span>
-<span class="c1"># 1. ComputeHistogramsWarp (``cub/block/block_radix_rank.cuh:958-1016``): each warp builds a</span>
-<span class="c1">#    private digit histogram in shared memory.</span>
-<span class="c1"># 2. ComputeOffsetsWarpUpsweep (``cub:1018-1037``): every thread sums per-warp histograms</span>
-<span class="c1">#    column-wise to produce a block-wide bin count for digit ``= tid``, while rewriting the</span>
-<span class="c1">#    warp histogram entries into per-warp running exclusive prefixes.</span>
-<span class="c1"># 3. ExclusiveSum on the per-thread bin counts (``cub:1126``) — uses the block exclusive</span>
-<span class="c1">#    scan we just defined above.</span>
-<span class="c1"># 4. ComputeOffsetsWarpDownsweep (``cub:1039-1055``): add the block-wide exclusive prefix</span>
-<span class="c1">#    into every warp&#39;s offset entry.</span>
-<span class="c1"># 5. ComputeRanksItem ATOMIC_OR (``cub:1057-1088``): per-warp match via ``atomic_or`` on</span>
-<span class="c1">#    a per-digit lane-mask, then leader (highest set lane) does a single ``atomic_add`` on</span>
-<span class="c1">#    the warp offset and broadcasts via ``subgroup.shuffle``; each thread&#39;s rank is</span>
-<span class="c1">#    ``warp_offset + popc(bin_mask &amp; lanemask_le) - 1``.</span>
+<span class="c1"># 1. ComputeHistogramsWarp: each warp builds a private digit histogram in shared memory via ``atomic_add``.</span>
+<span class="c1"># 2. ComputeOffsetsWarpUpsweep: every thread sums per-warp histograms column-wise to produce a block-wide bin count</span>
+<span class="c1">#    for digit ``= tid``, while rewriting the warp histogram entries into per-warp running exclusive prefixes.</span>
+<span class="c1"># 3. ExclusiveSum on the per-thread bin counts — uses the block exclusive scan defined above.</span>
+<span class="c1"># 4. ComputeOffsetsWarpDownsweep: add the block-wide exclusive prefix into every warp&#39;s offset entry.</span>
+<span class="c1"># 5. ComputeRanksItem (atomic-OR match): per-warp match via ``atomic_or`` on a per-digit lane-mask, then leader</span>
+<span class="c1">#    (highest set lane) does a single ``atomic_add`` on the warp offset and broadcasts via ``subgroup.shuffle``; each</span>
+<span class="c1">#    thread&#39;s rank is ``warp_offset + popc(bin_mask &amp; lanemask_le) - 1``.</span>
 <span class="c1"># 6. Write bin count + exclusive prefix to the outparam shared arrays.</span>
 <span class="c1">#</span>
-<span class="c1"># Shared-memory layout (all i32, total ``2 * BLOCK_WARPS * RADIX_DIGITS`` ints, 4096 ints</span>
-<span class="c1"># = 16 KiB at the default 8-warp / 256-digit configuration):</span>
+<span class="c1"># Shared-memory layout (all i32, total ``2 * BLOCK_WARPS * RADIX_DIGITS`` ints, 4096 ints = 16 KiB at the default</span>
+<span class="c1"># 8-warp / 256-digit configuration):</span>
 <span class="c1">#</span>
-<span class="c1">#     warp_offsets / warp_histograms : [0, BLOCK_WARPS * RADIX_DIGITS)        (union; CUB)</span>
+<span class="c1">#     warp_offsets / warp_histograms : [0, BLOCK_WARPS * RADIX_DIGITS)        (union backing)</span>
 <span class="c1">#     match_masks                    : [BLOCK_WARPS * RADIX_DIGITS, 2 * ...)</span>
 <span class="c1">#</span>
-<span class="c1"># WARP_SYNC in CUB is replaced by ``subgroup.sync()`` (lowers to ``__syncwarp`` on CUDA,</span>
-<span class="c1"># ``OpControlBarrier(ScopeSubgroup, ...)`` on SPIR-V, ``s_barrier`` on AMDGPU).</span>
-<span class="c1"># CUB&#39;s ``LaneMaskLe()`` PTX intrinsic is replaced by ``subgroup.lanemask_le(lane)`` from</span>
-<span class="c1"># the new portable subgroup primitives.</span>
+<span class="c1"># Warp-scope barriers use ``subgroup.sync()`` (lowers to ``__syncwarp`` on CUDA,</span>
+<span class="c1"># ``OpControlBarrier(ScopeSubgroup, ...)`` on SPIR-V, ``s_barrier`` on AMDGPU).  ``LaneMaskLe()`` (the PTX intrinsic</span>
+<span class="c1"># that gives a lane its less-than-or-equal lane mask) is replaced by ``subgroup.lanemask_le(lane)`` from the portable</span>
+<span class="c1"># subgroup primitives.</span>
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_warp_sync_fence</span><span class="p">():</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Warp-scope barrier + memory fence — CUDA ``__syncwarp`` semantics across every backend.</span>
 
@@ -883,15 +879,15 @@
 <span class="sd">    extra `subgroup.mem_fence()` is redundant (a `__threadfence_block`).  On SPIR-V, however, the codegen emits</span>
 <span class="sd">    `subgroupBarrier` as `OpControlBarrier(ScopeSubgroup, ScopeSubgroup, 0)` — i.e. with **no** memory semantics — so</span>
 <span class="sd">    a bare `subgroup.sync()` does *not* publish prior shared-memory writes to other lanes.  The radix rank algorithm</span>
-<span class="sd">    relies on the CUB `__syncwarp` invariant that, after the barrier, every lane sees every other lane&#39;s prior</span>
+<span class="sd">    relies on the `__syncwarp` invariant that, after the barrier, every lane sees every other lane&#39;s prior</span>
 <span class="sd">    `atomic_or` / `atomic_add` to shared memory; pairing the barrier with `subgroup.mem_fence()` (which emits a real</span>
 <span class="sd">    `OpMemoryBarrier(ScopeSubgroup, AcquireRelease | UniformMemory | WorkgroupMemory)`) restores that invariant.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">subgroup_sync</span><span class="p">()</span>
-    <span class="n">subgroup_mem_fence</span><span class="p">()</span>
+    <span class="n">_subgroup</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
+    <span class="n">_subgroup</span><span class="o">.</span><span class="n">mem_fence</span><span class="p">()</span>
 
 
-<span class="nd">@func</span>
+<span class="nd">@_func</span>
 <div class="viewcode-block" id="radix_rank_match_atomic_or">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.radix_rank_match_atomic_or">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">radix_rank_match_atomic_or</span><span class="p">(</span>
@@ -905,7 +901,7 @@
     <span class="n">bins</span><span class="p">,</span>
     <span class="n">excl_prefix</span><span class="p">,</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-level radix rank using CUB&#39;s ``BlockRadixRankMatchEarlyCounts`` (``WARP_MATCH_ATOMIC_OR`` path).</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-level radix rank via the atomic-OR match-and-count strategy.</span>
 
 <span class="sd">    Returns the calling thread&#39;s stable rank within the block under digit ``(key &gt;&gt; bit_start) &amp; ((1 &lt;&lt; num_bits) - 1)``.</span>
 
@@ -914,16 +910,16 @@
 <span class="sd">        tid: calling thread&#39;s block-local index.</span>
 <span class="sd">        block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 &lt;&lt; radix_bits``: each digit gets exactly</span>
 <span class="sd">            one thread for the per-thread bin/excl_prefix output.</span>
-<span class="sd">        log2_warp: ``log2(warp_size)`` (template).  Must currently be 5 (warp size 32) — the ATOMIC_OR match path is</span>
+<span class="sd">        log2_warp: ``log2(warp_size)`` (template).  Must currently be 5 (warp size 32) — the atomic-OR match path is</span>
 <span class="sd">            built around 32-lane ``i32`` ballot masks, so wave64 callers should pass 5 and arrange to launch with a</span>
 <span class="sd">            32-thread subgroup, or wait until a wave64 path lands.</span>
-<span class="sd">        radix_bits: number of bits in the digit (template).  Typical CUB SM90 onesweep value is 8, giving 256 digits.</span>
+<span class="sd">        radix_bits: number of bits in the digit (template).  Typical onesweep value is 8, giving 256 digits.</span>
 <span class="sd">        bit_start: starting bit of the digit (template).  Used as ``key &gt;&gt; bit_start``.</span>
 <span class="sd">        num_bits: actual digit width in bits (template), with ``num_bits &lt;= radix_bits``.  Bits ``[bit_start, bit_start +</span>
 <span class="sd">            num_bits)`` of ``key`` are extracted.</span>
-<span class="sd">        bins: ``block.SharedArray((1 &lt;&lt; radix_bits,), i32)`` outparam.  After the call, ``bins[d]`` holds the count of</span>
-<span class="sd">            keys whose digit equals ``d``.  Caller is responsible for allocating this array exactly once per kernel.</span>
-<span class="sd">        excl_prefix: ``block.SharedArray((1 &lt;&lt; radix_bits,), i32)`` outparam.  After the call, ``excl_prefix[d]`` holds</span>
+<span class="sd">        bins: ``block.SharedArray((1 &lt;&lt; radix_bits,), qd.i32)`` outparam.  After the call, ``bins[d]`` holds the count</span>
+<span class="sd">            of keys whose digit equals ``d``.  Caller is responsible for allocating this array exactly once per kernel.</span>
+<span class="sd">        excl_prefix: ``block.SharedArray((1 &lt;&lt; radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]`` holds</span>
 <span class="sd">            the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.</span>
 
 <span class="sd">    Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary ``block.sync()``</span>
@@ -941,83 +937,82 @@
     <span class="n">MM_OFF</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">BLOCK_WARPS</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span>
     <span class="n">BINS_PER_LANE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">RADIX_DIGITS</span> <span class="o">//</span> <span class="n">WARP_THREADS</span><span class="p">)</span>
 
-    <span class="c1"># CUB ``TempStorage``: union of warp_offsets / warp_histograms (same backing) + match_masks.  All i32.</span>
-    <span class="n">smem</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">2</span> <span class="o">*</span> <span class="n">BLOCK_WARPS</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">,)),</span> <span class="n">i32</span><span class="p">)</span>
+    <span class="c1"># ``TempStorage``: union of warp_offsets / warp_histograms (same backing) + match_masks.  All i32.</span>
+    <span class="n">smem</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">2</span> <span class="o">*</span> <span class="n">BLOCK_WARPS</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">,)),</span> <span class="n">_i32</span><span class="p">)</span>
 
     <span class="n">warp_idx</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">//</span> <span class="n">WARP_THREADS</span>
-    <span class="n">lane</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">invocation_id</span><span class="p">(),</span> <span class="n">i32</span><span class="p">)</span>
+    <span class="n">lane</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">(),</span> <span class="n">_i32</span><span class="p">)</span>
 
-    <span class="c1"># Step 1: zero per-warp histograms and match_masks (CUB lines 964-980).</span>
+    <span class="c1"># Step 1: zero per-warp histograms and match_masks.</span>
     <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BINS_PER_LANE</span><span class="p">)):</span>
         <span class="n">bin_idx</span> <span class="o">=</span> <span class="n">lane</span> <span class="o">+</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">b</span> <span class="o">*</span> <span class="n">WARP_THREADS</span><span class="p">)</span>
-        <span class="n">smem</span><span class="p">[</span><span class="n">warp_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">bin_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-        <span class="n">smem</span><span class="p">[</span><span class="n">MM_OFF</span> <span class="o">+</span> <span class="n">warp_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">bin_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">smem</span><span class="p">[</span><span class="n">warp_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">bin_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">smem</span><span class="p">[</span><span class="n">MM_OFF</span> <span class="o">+</span> <span class="n">warp_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">bin_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
     <span class="n">_warp_sync_fence</span><span class="p">()</span>
 
-    <span class="c1"># CUB lines 984-989: each thread atomic-adds 1 to its warp&#39;s bin for ``digit``.</span>
-    <span class="n">digit</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">bit_and</span><span class="p">(</span><span class="n">bit_shr</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">bit_start</span><span class="p">)),</span> <span class="n">u32</span><span class="p">(</span><span class="n">NUM_BITS_MASK</span><span class="p">)),</span> <span class="n">i32</span><span class="p">)</span>
-    <span class="n">atomic_add</span><span class="p">(</span><span class="n">smem</span><span class="p">[</span><span class="n">warp_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">digit</span><span class="p">],</span> <span class="n">i32</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+    <span class="c1"># Each thread atomic-adds 1 to its warp&#39;s bin for ``digit``.</span>
+    <span class="n">digit</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">bit_and</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">bit_shr</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">_u32</span><span class="p">(</span><span class="n">bit_start</span><span class="p">)),</span> <span class="n">_u32</span><span class="p">(</span><span class="n">NUM_BITS_MASK</span><span class="p">)),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">smem</span><span class="p">[</span><span class="n">warp_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">digit</span><span class="p">],</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
 
-    <span class="n">sync</span><span class="p">()</span>  <span class="c1"># CUB line 1121 (CTA_SYNC) — publish per-warp histograms before column-sum.</span>
+    <span class="n">sync</span><span class="p">()</span>  <span class="c1"># Publish per-warp histograms before column-sum.</span>
 
-    <span class="c1"># Step 2: per-thread column sum across warps for digit == tid (CUB lines 1018-1037).  Each thread collects the</span>
-    <span class="c1"># running exclusive prefix into ``bin_count`` while overwriting the warp histogram entries with their per-warp</span>
-    <span class="c1"># exclusive prefix.  After the loop, ``bin_count`` is the block-wide total for digit == tid.</span>
-    <span class="n">bin_count</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="c1"># Step 2: per-thread column sum across warps for digit == tid.  Each thread collects the running exclusive prefix</span>
+    <span class="c1"># into ``bin_count`` while overwriting the warp histogram entries with their per-warp exclusive prefix.  After the</span>
+    <span class="c1"># loop, ``bin_count`` is the block-wide total for digit == tid.</span>
+    <span class="n">bin_count</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">j_warp</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BLOCK_WARPS</span><span class="p">)):</span>
         <span class="n">warp_count</span> <span class="o">=</span> <span class="n">smem</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_warp</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span>
         <span class="n">smem</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_warp</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">bin_count</span>
         <span class="n">bin_count</span> <span class="o">=</span> <span class="n">bin_count</span> <span class="o">+</span> <span class="n">warp_count</span>
 
-    <span class="c1"># Step 3: BlockScan::ExclusiveSum on the per-thread bin counts (CUB line 1126).</span>
-    <span class="n">exclusive_digit_prefix</span> <span class="o">=</span> <span class="n">exclusive_add</span><span class="p">(</span><span class="n">bin_count</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">i32</span><span class="p">)</span>
+    <span class="c1"># Step 3: block-wide exclusive sum on the per-thread bin counts.</span>
+    <span class="n">exclusive_digit_prefix</span> <span class="o">=</span> <span class="n">exclusive_add</span><span class="p">(</span><span class="n">bin_count</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_i32</span><span class="p">)</span>
 
-    <span class="c1"># Step 4: ComputeOffsetsWarpDownsweep — fold the block-wide exclusive prefix into every warp&#39;s offset</span>
-    <span class="c1"># (CUB lines 1039-1055).</span>
+    <span class="c1"># Step 4: ComputeOffsetsWarpDownsweep — fold the block-wide exclusive prefix into every warp&#39;s offset.</span>
     <span class="k">for</span> <span class="n">j_warp</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BLOCK_WARPS</span><span class="p">)):</span>
         <span class="n">smem</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_warp</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
             <span class="n">smem</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_warp</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span> <span class="o">+</span> <span class="n">exclusive_digit_prefix</span>
         <span class="p">)</span>
 
-    <span class="n">sync</span><span class="p">()</span>  <span class="c1"># CUB line 1129 — publish warp offsets before the per-key match phase.</span>
+    <span class="n">sync</span><span class="p">()</span>  <span class="c1"># Publish warp offsets before the per-key match phase.</span>
 
-    <span class="c1"># Step 5: ComputeRanksItem ATOMIC_OR (CUB lines 1057-1088).  Items_per_thread == 1, so the loop body runs once.</span>
-    <span class="n">lane_mask</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">lane</span>
-    <span class="n">lane_mask_le_v</span> <span class="o">=</span> <span class="n">lanemask_le</span><span class="p">(</span><span class="n">invocation_id</span><span class="p">())</span>
+    <span class="c1"># Step 5: per-key atomic-OR match.  ``items_per_thread == 1``, so this runs once per thread.</span>
+    <span class="n">lane_mask</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">lane</span>
+    <span class="n">lane_mask_le_v</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">lanemask_le</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">())</span>
 
     <span class="n">match_idx</span> <span class="o">=</span> <span class="n">MM_OFF</span> <span class="o">+</span> <span class="n">warp_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">digit</span>
 
-    <span class="c1"># CUB line 1069: every thread ORs its lane_mask into the per-digit match mask of its warp.  Threads with the same</span>
-    <span class="c1"># digit collide on the same shared-memory cell and produce a bitmask of &quot;lanes in this warp that share this digit&quot;.</span>
-    <span class="n">atomic_or</span><span class="p">(</span><span class="n">smem</span><span class="p">[</span><span class="n">match_idx</span><span class="p">],</span> <span class="n">lane_mask</span><span class="p">)</span>
-    <span class="n">_warp_sync_fence</span><span class="p">()</span>  <span class="c1"># CUB line 1070 (WARP_SYNC).</span>
+    <span class="c1"># Every thread ORs its lane_mask into the per-digit match mask of its warp.  Threads with the same digit collide</span>
+    <span class="c1"># on the same shared-memory cell and produce a bitmask of &quot;lanes in this warp that share this digit&quot;.</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_or</span><span class="p">(</span><span class="n">smem</span><span class="p">[</span><span class="n">match_idx</span><span class="p">],</span> <span class="n">lane_mask</span><span class="p">)</span>
+    <span class="n">_warp_sync_fence</span><span class="p">()</span>
 
-    <span class="c1"># CUB line 1071-1074: read the bin_mask back and find the leader (highest matching lane) + intra-warp rank.</span>
-    <span class="c1"># ``clz`` here MUST run on the u32 (FindUMsb on SPIR-V): casting to i32 first triggers SPIR-V&#39;s FindSMsb, which</span>
-    <span class="c1"># for negative i32 (top bit set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that&#39;s</span>
-    <span class="c1"># one less than the actual highest matching lane.  Concretely, with lane 31 holding the only key for its digit,</span>
-    <span class="c1"># bin_mask = 0x80000000; FindSMsb on -2147483648 returns 30 (highest 0-bit), so 31 - 30 = 1 elects lane 1</span>
-    <span class="c1"># instead of lane 31, and lane 31&#39;s shuffle reads from lane 1 (= 0) — observed as last-lane ranks off by one</span>
-    <span class="c1"># on Vulkan / Metal.  Now that the new subgroup branch dispatches FindUMsb for unsigned ``clz``, passing the</span>
-    <span class="c1"># u32 directly emits the right intrinsic on every backend.</span>
-    <span class="n">bin_mask</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">smem</span><span class="p">[</span><span class="n">match_idx</span><span class="p">],</span> <span class="n">u32</span><span class="p">)</span>
-    <span class="n">leader</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="mi">31</span><span class="p">)</span> <span class="o">-</span> <span class="n">cast</span><span class="p">(</span><span class="n">clz</span><span class="p">(</span><span class="n">bin_mask</span><span class="p">),</span> <span class="n">i32</span><span class="p">)</span>
-    <span class="n">popc</span> <span class="o">=</span> <span class="n">popcnt</span><span class="p">(</span><span class="n">bit_and</span><span class="p">(</span><span class="n">bin_mask</span><span class="p">,</span> <span class="n">lane_mask_le_v</span><span class="p">))</span>
+    <span class="c1"># Read the bin_mask back and find the leader (highest matching lane) + intra-warp rank.  ``clz`` here MUST run on</span>
+    <span class="c1"># the u32 (FindUMsb on SPIR-V): casting to i32 first triggers SPIR-V&#39;s FindSMsb, which for negative i32 (top bit</span>
+    <span class="c1"># set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that&#39;s one less than the actual</span>
+    <span class="c1"># highest matching lane.  Concretely, with lane 31 holding the only key for its digit, bin_mask = 0x80000000;</span>
+    <span class="c1"># FindSMsb on -2147483648 returns 30 (highest 0-bit), so 31 - 30 = 1 elects lane 1 instead of lane 31, and lane</span>
+    <span class="c1"># 31&#39;s shuffle reads from lane 1 (= 0) — observed as last-lane ranks off by one on Vulkan / Metal.  Now that the</span>
+    <span class="c1"># subgroup layer dispatches FindUMsb for unsigned ``clz``, passing the u32 directly emits the right intrinsic on</span>
+    <span class="c1"># every backend.</span>
+    <span class="n">bin_mask</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">smem</span><span class="p">[</span><span class="n">match_idx</span><span class="p">],</span> <span class="n">_u32</span><span class="p">)</span>
+    <span class="n">leader</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">31</span><span class="p">)</span> <span class="o">-</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">clz</span><span class="p">(</span><span class="n">bin_mask</span><span class="p">),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="n">popc</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">popcnt</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">bit_and</span><span class="p">(</span><span class="n">bin_mask</span><span class="p">,</span> <span class="n">lane_mask_le_v</span><span class="p">))</span>
 
-    <span class="c1"># CUB lines 1075-1079: leader claims `popc` slots from this warp&#39;s slice of the warp_offsets entry.</span>
-    <span class="n">warp_offset</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="c1"># Leader claims `popc` slots from this warp&#39;s slice of the warp_offsets entry.</span>
+    <span class="n">warp_offset</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">lane</span> <span class="o">==</span> <span class="n">leader</span><span class="p">:</span>
-        <span class="n">warp_offset</span> <span class="o">=</span> <span class="n">atomic_add</span><span class="p">(</span><span class="n">smem</span><span class="p">[</span><span class="n">warp_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">digit</span><span class="p">],</span> <span class="n">cast</span><span class="p">(</span><span class="n">popc</span><span class="p">,</span> <span class="n">i32</span><span class="p">))</span>
+        <span class="n">warp_offset</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">smem</span><span class="p">[</span><span class="n">warp_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">digit</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">popc</span><span class="p">,</span> <span class="n">_i32</span><span class="p">))</span>
 
-    <span class="c1"># CUB line 1080: leader broadcasts its claimed offset to every lane in the warp.</span>
-    <span class="n">warp_offset</span> <span class="o">=</span> <span class="n">shuffle</span><span class="p">(</span><span class="n">warp_offset</span><span class="p">,</span> <span class="n">cast</span><span class="p">(</span><span class="n">leader</span><span class="p">,</span> <span class="n">u32</span><span class="p">))</span>
+    <span class="c1"># Leader broadcasts its claimed offset to every lane in the warp.</span>
+    <span class="n">warp_offset</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">warp_offset</span><span class="p">,</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">leader</span><span class="p">,</span> <span class="n">_u32</span><span class="p">))</span>
 
-    <span class="c1"># CUB lines 1081-1083: leader resets the match mask so subsequent passes (or items_per_thread &gt; 1) start clean.</span>
+    <span class="c1"># Leader resets the match mask so subsequent passes (or items_per_thread &gt; 1) start clean.</span>
     <span class="k">if</span> <span class="n">lane</span> <span class="o">==</span> <span class="n">leader</span><span class="p">:</span>
-        <span class="n">smem</span><span class="p">[</span><span class="n">match_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-    <span class="n">_warp_sync_fence</span><span class="p">()</span>  <span class="c1"># CUB line 1085 (WARP_SYNC).</span>
+        <span class="n">smem</span><span class="p">[</span><span class="n">match_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">_warp_sync_fence</span><span class="p">()</span>
 
-    <span class="n">rank</span> <span class="o">=</span> <span class="n">warp_offset</span> <span class="o">+</span> <span class="n">cast</span><span class="p">(</span><span class="n">popc</span><span class="p">,</span> <span class="n">i32</span><span class="p">)</span> <span class="o">-</span> <span class="n">i32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">rank</span> <span class="o">=</span> <span class="n">warp_offset</span> <span class="o">+</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">popc</span><span class="p">,</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 
     <span class="c1"># Step 6: publish bins + exclusive_digit_prefix to the caller-supplied outparams.  ``block_dim == RADIX_DIGITS`` so</span>
     <span class="c1"># every thread writes exactly one digit.  Followed by a ``block.sync()`` so the caller can read these arrays</span>
@@ -1028,6 +1023,56 @@
 
     <span class="k">return</span> <span class="n">rank</span></div>
 
+
+
+<span class="c1"># Shared-memory emulation of CUDA&#39;s hardware-fused barrier-with-reduction ops, used on backends that lack a direct</span>
+<span class="c1"># equivalent (AMDGPU has no NVPTX `barrier.cta.red.*` analog; SPIR-V&#39;s `OpGroupNonUniform*` only operate at subgroup</span>
+<span class="c1"># scope reliably across Vulkan + Metal).</span>
+<span class="c1">#</span>
+<span class="c1"># Pattern: lane 0 zeroes a 1-element shared `i32` -&gt; block.sync() -&gt; every thread atomically folds its predicate into</span>
+<span class="c1"># the slot -&gt; block.sync() -&gt; every thread reads the broadcasted result. Costs 2 barriers + 1 atomic (vs. CUDA&#39;s</span>
+<span class="c1"># hardware fast path of 1 barrier+reduction). Slower than the CUDA path but functionally equivalent and portable. Each</span>
+<span class="c1"># call-site allocates a fresh `SharedArray` so multiple calls in the same kernel do not alias each other.</span>
+<span class="c1">#</span>
+<span class="c1"># IMPORTANT: every thread must participate in the `atomic_add` call unconditionally (guarding with</span>
+<span class="c1"># `if predicate: atomic_add(...)` is NOT safe). On Metal, `workgroupBarrier` does not propagate atomic writes from</span>
+<span class="c1"># divergent branches to threads that did not enter the branch -- non-participating SIMD groups never see the updated</span>
+<span class="c1"># slot. By having every thread call `atomic_add(counter, select(...))` the control flow stays uniform, the barrier</span>
+<span class="c1"># synchronises correctly, and all threads read the final count.</span>
+<span class="c1">#</span>
+<span class="c1"># We also use `atomic_add` rather than `atomic_or` because Metal / MoltenVK silently no-ops `OpAtomicOr` on threadgroup</span>
+<span class="c1"># memory in some configurations.</span>
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_count_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_any_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">_ops</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+
+
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_all_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">_ops</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
 </pre></div>
 
                 </article>
