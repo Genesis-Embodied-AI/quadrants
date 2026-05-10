@@ -206,27 +206,6 @@ def test_clz_i64():
     assert test_u64(0x7FFFFFFFFFFFFFFF) == 1
 
 
-# Regression sentinel for the i32 return-type normalisation: popcnt / clz must return i32 from the type-checking pass
-# onward, not just at codegen time. If the inferred ret_type were the operand's type (i64), promotion of
-# `op(x: i64) + i64(1)` to i64 would skip the i32 -> i64 cast, and CUDA / AMDGPU codegen — which truncates the
-# libdevice / llvm.ctpop result to i32 — would emit `Add(i32, i64)` and trip an LLVM "operand type mismatch" assertion.
-# Direct-return tests above hide this because they don't compose the result with any other operand.
-@test_utils.test()
-def test_bit_ops_compound_i64():
-    @qd.kernel
-    def popcnt_plus_one(x: qd.int64) -> qd.int64:
-        return qd.math.popcnt(x) + qd.i64(1)
-
-    @qd.kernel
-    def clz_plus_one(x: qd.int64) -> qd.int64:
-        return qd.math.clz(x) + qd.i64(1)
-
-    assert popcnt_plus_one(0) == 1  # popcnt(0) = 0, +1 = 1
-    assert popcnt_plus_one(-1) == 65  # popcnt(0xFFF..F) = 64, +1 = 65 (all-bits-set as signed i64)
-    assert clz_plus_one(0) == 65  # clz(0) = 64, +1 = 65
-    assert clz_plus_one(1) == 64  # clz(1) = 63, +1 = 64
-
-
 # ffs(x) returns the 1-indexed position of the lowest set bit, with ffs(0) == 0 (CUDA __ffs convention).
 # CPU / CUDA / AMDGPU lower to the LLVM ctz intrinsic family; SPIR-V (Vulkan / Metal) lowers to FindILsb.
 # Signed and unsigned inputs share an intrinsic since the operation is on the bit pattern.
@@ -298,6 +277,34 @@ def test_ffs_i64():
     assert test_u64(0x8000000000000000) == 64
     # Bit 33 (1-indexed): exercises the low-half-zero, hi-half-non-zero path.
     assert test_u64(1 << 32) == 33
+
+
+# Regression sentinel for the i32 return-type normalisation: every bit-op (popcnt / clz / ffs) must
+# return i32 from the type-checking pass onward, not just at codegen time. If the inferred ret_type
+# were the operand's type (i64), promotion of `op(x: i64) + i64(1)` to i64 would skip the i32 → i64
+# cast, and CUDA / AMDGPU codegen — which truncates the libdevice / llvm.ctpop result to i32 —
+# would emit an `Add(i32, i64)` and trip an LLVM "operand type mismatch" assertion. Direct-return
+# tests above hide this because they don't compose the result with any other operand.
+@test_utils.test()
+def test_bit_ops_compound_i64():
+    @qd.kernel
+    def popcnt_plus_one(x: qd.int64) -> qd.int64:
+        return qd.math.popcnt(x) + qd.i64(1)
+
+    @qd.kernel
+    def clz_plus_one(x: qd.int64) -> qd.int64:
+        return qd.math.clz(x) + qd.i64(1)
+
+    @qd.kernel
+    def ffs_plus_one(x: qd.int64) -> qd.int64:
+        return qd.math.ffs(x) + qd.i64(1)
+
+    assert popcnt_plus_one(0) == 1  # popcnt(0) = 0, +1 = 1
+    assert popcnt_plus_one(-1) == 65  # popcnt(0xFFF..F) = 64, +1 = 65 (all-bits-set as signed i64)
+    assert clz_plus_one(0) == 65  # clz(0) = 64, +1 = 65
+    assert clz_plus_one(1) == 64  # clz(1) = 63, +1 = 64
+    assert ffs_plus_one(0) == 1  # ffs(0) = 0, +1 = 1
+    assert ffs_plus_one(1 << 32) == 34  # ffs((1<<32)) = 33, +1 = 34
 
 
 def _np_fns(mask: int, base: int, offset: int) -> int:
