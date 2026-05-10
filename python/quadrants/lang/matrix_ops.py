@@ -193,6 +193,16 @@ def norm_sqr(mat):
     return sum(mat * mat)
 
 
+@preconditions(
+    arg_at(0, assert_tensor),
+    arg_at(1, assert_tensor),
+    same_shapes,
+)
+@pyfunc
+def frobenius_inner(mat_x, mat_y):
+    return sum(mat_x * mat_y)
+
+
 @preconditions(arg_at(0, assert_tensor))
 @pyfunc
 def norm(mat, eps=0.0):

@@ -634,6 +634,32 @@ class Matrix(QuadrantsOperations):
 
         return matrix_ops.norm_sqr(self)
 
+    def frobenius_inner(self, other):
+        """Returns the Frobenius inner product :math:`\\langle A, B \\rangle = \\sum_{ij} A_{ij} B_{ij}`.
+
+        Both operands must have the same shape. Defined for any tensor shape (vector or
+        matrix); for matrices this is the standard Frobenius inner product, and
+        :meth:`norm_sqr` is the special case ``A.frobenius_inner(A)``.
+
+        Args:
+            other (:class:`~quadrants.Matrix`): The other operand. Must have the same
+                shape as ``self``.
+
+        Returns:
+            DataType: The scalar Frobenius inner product.
+
+        Example::
+
+            >>> A = qd.Matrix([[1.0, 2.0], [3.0, 4.0]])
+            >>> B = qd.Matrix([[5.0, 6.0], [7.0, 8.0]])
+            >>> A.frobenius_inner(B)
+            70.0
+        """
+        # pylint: disable=C0415
+        from quadrants.lang import matrix_ops
+
+        return matrix_ops.frobenius_inner(self, other)
+
     def max(self):
         """Returns the maximum element value."""
         # pylint: disable=C0415

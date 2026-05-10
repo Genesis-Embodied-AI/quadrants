@@ -126,6 +126,81 @@ def test_dot():
     assert c2[None] == 14.0
 
 
+def _test_frobenius_inner(n, dt):
+    """Frobenius inner product ⟨A, B⟩ = sum_ij A_ij B_ij at size n×n."""
+    A = qd.Matrix.field(n, n, dtype=dt, shape=())
+    B = qd.Matrix.field(n, n, dtype=dt, shape=())
+    out_method = qd.field(dtype=dt, shape=())
+    out_self = qd.field(dtype=dt, shape=())
+
+    rng = np.random.default_rng(0xF20B + n + (0 if dt == qd.f32 else 1))
+    A_np = rng.standard_normal((n, n)).astype(np.float32 if dt == qd.f32 else np.float64)
+    B_np = rng.standard_normal((n, n)).astype(np.float32 if dt == qd.f32 else np.float64)
+    A.from_numpy(A_np)
+    B.from_numpy(B_np)
+
+    @qd.kernel
+    def run():
+        out_method[None] = A[None].frobenius_inner(B[None])
+        out_self[None] = A[None].frobenius_inner(A[None])
+
+    run()
+
+    expected_AB = float(np.sum(A_np * B_np))
+    expected_AA = float(np.sum(A_np * A_np))
+    tol = 1e-4 if dt == qd.f32 else 1e-10
+    assert out_method[None] == test_utils.approx(expected_AB, rel=tol, abs=tol)
+    assert out_self[None] == test_utils.approx(expected_AA, rel=tol, abs=tol)
+    assert out_self[None] == test_utils.approx(A.to_numpy().__pow__(2).sum(), rel=tol, abs=tol)
+
+
+@pytest.mark.parametrize("n", [2, 3, 6, 9, 12])
+@test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
+def test_frobenius_inner_f32(n):
+    _test_frobenius_inner(n, qd.f32)
+
+
+@pytest.mark.parametrize("n", [2, 3, 6, 9, 12])
+@test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
+def test_frobenius_inner_f64(n):
+    _test_frobenius_inner(n, qd.f64)
+
+
+def _test_frobenius_inner_rectangular(rows, cols, dt):
+    """Frobenius inner product on non-square matrices (qipc uses 9×12, 12×3, etc.)."""
+    A = qd.Matrix.field(rows, cols, dtype=dt, shape=())
+    B = qd.Matrix.field(rows, cols, dtype=dt, shape=())
+    out = qd.field(dtype=dt, shape=())
+
+    rng = np.random.default_rng(0xFA7E + rows * 31 + cols)
+    A_np = rng.standard_normal((rows, cols)).astype(np.float32 if dt == qd.f32 else np.float64)
+    B_np = rng.standard_normal((rows, cols)).astype(np.float32 if dt == qd.f32 else np.float64)
+    A.from_numpy(A_np)
+    B.from_numpy(B_np)
+
+    @qd.kernel
+    def run():
+        out[None] = A[None].frobenius_inner(B[None])
+
+    run()
+
+    expected = float(np.sum(A_np * B_np))
+    tol = 1e-4 if dt == qd.f32 else 1e-10
+    assert out[None] == test_utils.approx(expected, rel=tol, abs=tol)
+
+
+@pytest.mark.parametrize("rows,cols", [(9, 12), (12, 3), (2, 4)])
+@test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
+def test_frobenius_inner_rectangular_f32(rows, cols):
+    _test_frobenius_inner_rectangular(rows, cols, qd.f32)
+
+
+@pytest.mark.parametrize("rows,cols", [(9, 12), (12, 3), (2, 4)])
+@test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
+def test_frobenius_inner_rectangular_f64(rows, cols):
+    _test_frobenius_inner_rectangular(rows, cols, qd.f64)
+
+
 @test_utils.test()
 def test_transpose():
     dim = 3
