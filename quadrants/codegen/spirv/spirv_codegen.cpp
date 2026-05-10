@@ -1097,8 +1097,8 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     } else {
       QD_NOT_IMPLEMENTED
     }
-    // dst_type is i32 across every backend (set by type_check for popcnt / clz), so this cast is a no-op
-    // for the i32 result we just computed; ir_->cast() returns the value unchanged when types match.
+    // dst_type is i32 across every backend (set by type_check for popcnt / clz / ffs), so this cast is a
+    // no-op for the i32 result we just computed; ir_->cast() returns the value unchanged when types match.
     val = ir_->cast(dst_type, clz_i32);
   } else if (stmt->op_type == UnaryOpType::ffs) {
     // ffs(x): 1-indexed position of the lowest set bit in x; 0 when x == 0 (CUDA __ffs convention).
@@ -1141,7 +1141,8 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     } else {
       QD_NOT_IMPLEMENTED
     }
-    // Convert the i32 first-set-bit position to the dst_type the pipeline expects (i32 / u32 / i64 / u64).
+    // dst_type is i32 across every backend (set by type_check for popcnt / clz / ffs), so this cast is a
+    // no-op for the i32 result we just computed.
     val = ir_->cast(dst_type, ffs_i32);
   }
 #define UNARY_OP_TO_SPIRV(op, instruction, instruction_id, max_bits)                           \
