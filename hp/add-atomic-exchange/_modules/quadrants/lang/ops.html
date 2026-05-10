@@ -1851,9 +1851,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">atomic_exchange</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically swap the value of `x` with `y`, and return the old value of `x`.</span>
 
-<span class="sd">    Unlike the other `qd.atomic_*` ops, the new value of `x` does not depend on its old value: `x` is</span>
-<span class="sd">    unconditionally overwritten with `y`. Useful for lock-free hand-off / claim-a-slot patterns where you</span>
-<span class="sd">    want to atomically grab whatever was at a location while leaving a fresh value behind.</span>
+<span class="sd">    Unlike the other `qd.atomic_*` ops, the new value of `x` does not depend on its old value: `x` is unconditionally</span>
+<span class="sd">    overwritten with `y`. Useful for lock-free hand-off / claim-a-slot patterns where you want to atomically grab</span>
+<span class="sd">    whatever was at a location while leaving a fresh value behind.</span>
 
 <span class="sd">    `x` must be a writable target, constant expressions or scalars are not allowed.</span>
 

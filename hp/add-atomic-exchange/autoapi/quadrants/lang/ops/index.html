@@ -1344,9 +1344,9 @@ are not allowed.</p>
 <dt class="sig sig-object py" id="quadrants.lang.ops.atomic_exchange">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atomic_exchange</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atomic_exchange"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atomic_exchange" title="Link to this definition">#</a></dt>
 <dd><p>Atomically swap the value of <cite>x</cite> with <cite>y</cite>, and return the old value of <cite>x</cite>.</p>
-<p>Unlike the other <cite>qd.atomic_*</cite> ops, the new value of <cite>x</cite> does not depend on its old value: <cite>x</cite> is
-unconditionally overwritten with <cite>y</cite>. Useful for lock-free hand-off / claim-a-slot patterns where you
-want to atomically grab whatever was at a location while leaving a fresh value behind.</p>
+<p>Unlike the other <cite>qd.atomic_*</cite> ops, the new value of <cite>x</cite> does not depend on its old value: <cite>x</cite> is unconditionally
+overwritten with <cite>y</cite>. Useful for lock-free hand-off / claim-a-slot patterns where you want to atomically grab
+whatever was at a location while leaving a fresh value behind.</p>
 <p><cite>x</cite> must be a writable target, constant expressions or scalars are not allowed.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
