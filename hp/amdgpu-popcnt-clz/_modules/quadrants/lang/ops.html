@@ -927,8 +927,17 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">popcnt</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_popcnt</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">bin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">&quot;1&quot;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_popcnt</span><span class="p">(</span><span class="n">_</span><span class="p">):</span>
+        <span class="c1"># No Python fallback: popcnt is bitwidth-dependent (a u64 with the top bit set should return 64,</span>
+        <span class="c1"># not 1), but once the value reaches here it&#39;s a plain Python int with no width attached. Worse,</span>
+        <span class="c1"># `bin(x).count(&quot;1&quot;)` quietly drops the sign and reports `popcnt(-1) == 1` instead of 32 / 64.</span>
+        <span class="c1"># The path is only hit on the `qd.python` backend or from ad-hoc module-level calls; native</span>
+        <span class="c1"># backends route through the IR / codegen and never see this.</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s2">&quot;qd.math.popcnt has no Python fallback: the result depends on the operand&#39;s bitwidth &quot;</span>
+            <span class="s2">&quot;(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend &quot;</span>
+            <span class="s2">&quot;(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal).&quot;</span>
+        <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_popcnt</span><span class="p">,</span> <span class="n">_popcnt</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 
@@ -1538,11 +1547,18 @@
 <span class="sd">    ``clz(-1) == 0`` regardless of input signedness.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_clz</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
-            <span class="k">if</span> <span class="mi">2</span><span class="o">**</span><span class="n">i</span> <span class="o">&gt;</span> <span class="n">x</span><span class="p">:</span>
-                <span class="k">return</span> <span class="mi">32</span> <span class="o">-</span> <span class="n">i</span>
-        <span class="k">return</span> <span class="mi">0</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_clz</span><span class="p">(</span><span class="n">_</span><span class="p">):</span>
+        <span class="c1"># No Python fallback: clz is bitwidth-dependent (`clz(0) == 32` for i32 but `64` for i64, and</span>
+        <span class="c1"># `clz(-1) == 0` requires interpreting -1 as the unsigned all-bits-set pattern at a known width).</span>
+        <span class="c1"># Once the value reaches here it&#39;s a plain Python int with no width attached, so no single</span>
+        <span class="c1"># answer is correct. The old hard-coded 32-bit implementation silently returned wrong values</span>
+        <span class="c1"># for negatives and 64-bit inputs. This path is only hit on the `qd.python` backend or from</span>
+        <span class="c1"># ad-hoc module-level calls; native backends route through the IR / codegen and never see it.</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s2">&quot;qd.math.clz has no Python fallback: the result depends on the operand&#39;s bitwidth &quot;</span>
+            <span class="s2">&quot;(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend &quot;</span>
+            <span class="s2">&quot;(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal).&quot;</span>
+        <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_clz</span><span class="p">,</span> <span class="n">_clz</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 
