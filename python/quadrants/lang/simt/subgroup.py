@@ -75,7 +75,10 @@ def ballot_first_n(predicate, n: template()):
     * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` — the warp is always 32 lanes, so the ``u32`` result naturally
       packs every lane.
     * AMDGPU: ``llvm.amdgcn.ballot.i32`` — packs lanes 0..31 into the result; on wave64 lanes 32..63's predicates
-      simply do not appear in the ``i32`` result, which matches the ``ballot_first_n(p, n <= 32)`` contract.
+      simply do not appear in the ``i32`` result, which matches the ``ballot_first_n(p, n <= 32)`` contract.  The
+      width-mismatch case is documented LLVM AMDGPU behaviour (SETCC at wavefront width, then zext/trunc to the
+      requested type), see https://github.com/llvm/llvm-project/pull/71556 and the longer comment in
+      ``codegen_amdgpu.cpp``.
     * SPIR-V: ``OpGroupNonUniformBallot`` (returns a uvec4); we extract component 0 = lanes 0..31's ballot.
 
     For ``n < 32`` we mask the predicate by ``lane < n`` before issuing the ballot, so bits ``[n, 32)`` of the result
@@ -105,7 +108,9 @@ def ballot_full_subgroup(predicate):
     * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` zero-extended to ``u64`` — the warp is 32 lanes so the high half
       is always zero.
     * AMDGPU: ``llvm.amdgcn.ballot.i64`` — returns the full 64-bit ballot on wave64; on wave32 the AMDGPU backend
-      lowers it to the wave32 ballot zero-extended to 64 bits, so the API stays uniform across wavefront modes.
+      lowers it to the wave32 ballot zero-extended to 64 bits, so the API stays uniform across wavefront modes (same
+      width-mismatch lowering as the ``ballot_first_n`` u32 form, see ``codegen_amdgpu.cpp`` and
+      https://github.com/llvm/llvm-project/pull/71556).
     * SPIR-V: extract components 0 and 1 of the ``OpGroupNonUniformBallot`` uvec4 (lanes 0..31 and 32..63
       respectively) and pack them: ``u64(hi) << 32 | u64(lo)``.
 

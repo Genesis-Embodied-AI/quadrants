@@ -415,12 +415,24 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     } else if (stmt->func_name == "subgroupBallotU32") {
       // ``llvm.amdgcn.ballot.i32`` packs lanes 0..31's predicates into the result.  On wave32 this covers the whole
       // subgroup; on wave64 lanes 32..63's predicates simply do not appear in the i32 result, which is exactly what
-      // ``ballot_first_n(p, 32)`` (and any ``n <= 32``) wants.
+      // ``ballot_first_n(p, 32)`` (and any ``n <= 32``) wants.  The width-mismatch case is well-defined LLVM AMDGPU
+      // behaviour, not undefined / target-specific: the SelectionDAG lowering in
+      // ``SIISelLowering::lowerBALLOTIntrinsic`` (see https://github.com/llvm/llvm-project/pull/71556) computes the
+      // SETCC at wavefront width and then zero-extends or truncates to the requested return type.  Concretely for
+      // ballot.i32 on wave64 that means a 64-wide SETCC followed by ``trunc to i32``, i.e. the low 32 bits = lanes
+      // 0..31's predicates.  As Matt Arsenault (AMDGPU LLVM lead) put it on that PR: "It's a synthetic operation to
+      // begin with and has a pretty clear meaning, just 0 the high bits.  It's still valid to read exec/exec_hi in
+      // wave32 mode, it's just the high bits are always 0.  This mirrors the same behavior."  We're on LLVM >= 22, well
+      // past the merge of #71556 (LLVM 18), so this is stable and we don't need a defensive ``ballot.i64 + trunc``
+      // lowering on AMDGPU.
       llvm_val[stmt] = call("amdgpu_ballot_i32", llvm_val[stmt->args[0]]);
     } else if (stmt->func_name == "subgroupBallotU64") {
       // ``llvm.amdgcn.ballot.i64`` returns a 64-bit ballot for the full subgroup: on wave64 every lane contributes;
       // on wave32 only lanes 0..31 contribute and bits 32..63 of the result are zero.  Either way the i64 return is
-      // uniform across wavefront modes, which is what ``ballot_full_subgroup`` advertises to the user.
+      // uniform across wavefront modes, which is what ``ballot_full_subgroup`` advertises to the user.  Same lowering
+      // pivot as the i32 case above (https://github.com/llvm/llvm-project/pull/71556): SETCC at wavefront width, then
+      // zext or trunc to the requested type — for ballot.i64 on wave32 that's a 32-wide SETCC followed by ``zext to
+      // i64``, with the high 32 bits explicitly zero by definition.
       llvm_val[stmt] = call("amdgpu_ballot_u64", llvm_val[stmt->args[0]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
