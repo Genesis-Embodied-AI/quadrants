@@ -984,9 +984,9 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
       expected_dtype = expected_dtype.get_element_type();
     }
     if (!is_integral(expected_dtype)) {
-      ErrorEmitter(QuadrantsTypeError(), this,
-                   fmt::format("'atomic_cas' requires integer 'expected' operand, got '{}'",
-                               expected->ret_type->to_string()));
+      ErrorEmitter(
+          QuadrantsTypeError(), this,
+          fmt::format("'atomic_cas' requires integer 'expected' operand, got '{}'", expected->ret_type->to_string()));
     }
   }
   if (ret_element_type != val_dtype) {

@@ -911,9 +911,9 @@ def test_atomic_cas_loop_increment_matches_atomic_add():
     # Both counters must reach N. atomic_add is the trustworthy reference; the CAS loop should match it
     # exactly when the loop converges, and lag if it doesn't (which would catch a broken CAS).
     assert int(counter_add[None]) == N
-    assert int(counter_cas[None]) == N, (
-        f"CAS-loop increment fell behind atomic_add: cas={int(counter_cas[None])}, add={int(counter_add[None])}"
-    )
+    assert (
+        int(counter_cas[None]) == N
+    ), f"CAS-loop increment fell behind atomic_add: cas={int(counter_cas[None])}, add={int(counter_add[None])}"
 
 
 # Pins the new cas branch in demote_atomics.cpp. Demotes to load + cmp_eq + select(cmp, val, load) + store

@@ -1278,9 +1278,9 @@ llvm::Value *TaskCodeGenLLVM::integral_type_atomic(AtomicOpStmt *stmt) {
   // The user recovers success with `(returned == expected)`.
   if (stmt->op_type == AtomicOpType::cas) {
     QD_ASSERT(stmt->expected != nullptr);
-    auto cmpxchg = builder->CreateAtomicCmpXchg(
-        llvm_val[stmt->dest], llvm_val[stmt->expected], llvm_val[stmt->val], llvm::MaybeAlign(0),
-        llvm::AtomicOrdering::SequentiallyConsistent, llvm::AtomicOrdering::SequentiallyConsistent);
+    auto cmpxchg = builder->CreateAtomicCmpXchg(llvm_val[stmt->dest], llvm_val[stmt->expected], llvm_val[stmt->val],
+                                                llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                                llvm::AtomicOrdering::SequentiallyConsistent);
     return builder->CreateExtractValue(cmpxchg, 0);
   }
   // Atomic operators supported by LLVM

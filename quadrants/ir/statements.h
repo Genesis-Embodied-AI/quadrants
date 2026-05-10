@@ -312,11 +312,7 @@ class AtomicOpStmt : public Stmt, public ir_traits::Store, public ir_traits::Loa
     QD_STMT_REG_FIELDS;
   }
 
-  AtomicOpStmt(AtomicOpType op_type,
-               Stmt *dest,
-               Stmt *expected,
-               Stmt *val,
-               const DebugInfo &dbg_info = DebugInfo())
+  AtomicOpStmt(AtomicOpType op_type, Stmt *dest, Stmt *expected, Stmt *val, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), op_type(op_type), dest(dest), val(val), expected(expected), is_reduction(false) {
     QD_STMT_REG_FIELDS;
   }
