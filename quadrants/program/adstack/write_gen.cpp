@@ -94,6 +94,16 @@ void bump_writes_for_kernel_llvm(Program *prog,
   if (prog == nullptr) {
     return;
   }
+  // Skip the per-task / per-arg gen-counter bumps when the adstack cache has never been recorded into: the bumps only
+  // exist so a later cache lookup can detect drift, and with no entries to drift against they are wasted work. Forward-
+  // only kernels (no `record_*` ever called against this `AdStackCache`) hit this gate on every launch and pay zero
+  // per-arg hashmap lookup, which matters on the CPU LLVM ndarray path where every kernel-bound arg slot would
+  // otherwise show up in `arr_writes_per_task` / `arr_reads_per_task`. The flag is one-way: the first sizer / per-task
+  // / max-reducer recording flips it true and every subsequent launch resumes the unconditional bump path so a later
+  // cache lookup never sees a missed bump.
+  if (!prog->adstack_cache().has_any_recordings()) {
+    return;
+  }
   auto bump_data_ptr = [&](int arg_id) {
     ArgArrayPtrKey data_key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
     auto it = ctx->array_ptrs.find(data_key);

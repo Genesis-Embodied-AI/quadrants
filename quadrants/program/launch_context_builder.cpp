@@ -4,6 +4,9 @@
 #undef QD_RUNTIME_HOST
 #include "fp16.h"
 
+#include "quadrants/program/adstack/cache.h"
+#include "quadrants/program/program.h"
+
 namespace quadrants::lang {
 
 namespace {
@@ -13,6 +16,24 @@ inline std::vector<T> concatenate_vector(const std::vector<T> &lhs, const std::v
   result.assign(lhs.begin(), lhs.end());
   result.insert(result.end(), rhs.begin(), rhs.end());
   return result;
+}
+
+// Per-arg `ndarray_shapes` capture exists solely to feed the adstack-overflow diagnose snapshot
+// (`AdStackCache::capture_diagnose_snapshot` reads this map). Skipping the writes when no cache entry has ever been
+// recorded is safe: an overflow can only surface from a reverse-mode launch, which itself populates the cache through
+// the sizer publish path, so a fresh program that has never recorded into the cache will not reach the diagnose path.
+// Reading `has_any_recordings()` is a single inline bool load; the alternative is a per-arg heap allocation for the
+// shape vector plus an unordered_map insert. Returns true if the kernel-side `Program` backref cannot be reached so
+// callers degrade safely (a launcher built pre-attach pays the capture cost rather than risking a missing snapshot at
+// diagnose time). The `static_cast` is sound because every concrete launcher kernel constructed through
+// `Kernel::make_launch_context` and friends is a `Callable` subclass; `CallableBase` is the launch-context type system
+// fallback but has no live instances in launcher paths.
+inline bool ndarray_shape_capture_needed(const CallableBase *kernel) {
+  const auto *callable = static_cast<const Callable *>(kernel);
+  if (callable == nullptr || callable->program == nullptr) {
+    return true;
+  }
+  return callable->program->adstack_cache().has_any_recordings();
 }
 }  // namespace
 
@@ -302,8 +323,9 @@ void LaunchContextBuilder::set_arg_external_array_with_shape(int arg_id,
   }
   set_array_runtime_size(arg_id, size);
   set_array_device_allocation_type(arg_id, DevAllocType::kNone);
-  std::vector<int> shape_int(shape.begin(), shape.end());
-  ndarray_shapes[arg_id] = shape_int;
+  if (ndarray_shape_capture_needed(kernel_)) {
+    ndarray_shapes[arg_id] = std::vector<int>(shape.begin(), shape.end());
+  }
   for (int i = 0; i < shape.size(); i++) {
     set_struct_arg(std::array{arg_id, 0, i}, (int32)shape[i]);
   }
@@ -324,6 +346,7 @@ void LaunchContextBuilder::set_args_ndarray(const std::vector<int> &args_id, con
   device_allocation_type.reserve(device_allocation_type.size() + num_arrs);
 
   QD_ASSERT(num_arrs == args_id.size());
+  const bool capture_shapes = ndarray_shape_capture_needed(kernel_);
   for (int i = 0; i < num_arrs; i++) {
     const int arg_id = args_id[i];
     const Ndarray &arr = *arrs[i];
@@ -332,7 +355,9 @@ void LaunchContextBuilder::set_args_ndarray(const std::vector<int> &args_id, con
     array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}] = (void *)ptr;
     set_array_device_allocation_type(arg_id, DevAllocType::kNdarray);
     const std::vector<int> &shape = arr.shape;
-    ndarray_shapes[arg_id] = shape;
+    if (capture_shapes) {
+      ndarray_shapes[arg_id] = shape;
+    }
     size_t total_size = 1;
     for (int32 i = 0; i < shape.size(); i++) {
       set_struct_arg(std::array{arg_id, 0, i}, (int32)shape[i]);
@@ -373,7 +398,9 @@ void LaunchContextBuilder::set_arg_ndarray_impl(int arg_id,
   // Set device allocation type and runtime size
   set_array_device_allocation_type(arg_id, DevAllocType::kNdarray);
   QD_ASSERT(shape.size() <= quadrants_max_num_indices);
-  ndarray_shapes[arg_id] = shape;
+  if (ndarray_shape_capture_needed(kernel_)) {
+    ndarray_shapes[arg_id] = shape;
+  }
   size_t total_size = 1;
   for (int i = 0; i < shape.size(); i++) {
     set_struct_arg(std::array{arg_id, 0, i}, (int32)shape[i]);

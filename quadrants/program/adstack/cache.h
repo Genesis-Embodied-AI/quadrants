@@ -248,6 +248,15 @@ class AdStackCache {
   void bump_snode_write_gen(int snode_id) {
     ++snode_write_gen_[snode_id];
   }
+  // One-way switch flipped true the first time any `record_*` populates a cache. Read by the per-launch
+  // `bump_writes_for_kernel_*` helpers to short-circuit the per-arg / per-snode gen-counter bumps when no sizer /
+  // per-task / max-reducer cache entry exists; forward-only programs never record and therefore pay zero per-launch
+  // bump-writes overhead on the ndarray path where the bump loop would otherwise touch every kernel-bound arg slot.
+  // Not reset by `invalidate_*` because the cost of a stale `true` (a few extra map inserts per launch) is dwarfed by
+  // the cost of repeated invalidate-then-record cycles, which never happen in steady state.
+  bool has_any_recordings() const {
+    return any_recordings_;
+  }
   uint64_t ndarray_data_gen(void *devalloc_ptr) const {
     auto it = ndarray_data_gen_.find(devalloc_ptr);
     return it == ndarray_data_gen_.end() ? 0u : it->second;
@@ -407,6 +416,8 @@ class AdStackCache {
   DiagnoseLaunchSnapshot diagnose_snapshot_;
   // Transient ctx handoff for the lazy LLVM capture path. See `set_pending_launch_ctx`.
   const LaunchContextBuilder *pending_launch_ctx_{nullptr};
+  // Backing storage for `has_any_recordings()`. See accessor doc for the contract.
+  bool any_recordings_{false};
 };
 
 // Snapshot the live ndarray data pointer + generation counter into each `ExternalReadObs` record. The encoder emits the

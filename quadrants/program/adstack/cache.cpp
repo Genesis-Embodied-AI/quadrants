@@ -84,6 +84,7 @@ void AdStackCache::record_size_expr_eval(const SerializedSizeExpr *expr_key,
                                          int64_t result,
                                          std::vector<SizeExprReadObservation> reads) {
   size_expr_cache_[expr_key] = SizeExprCacheEntry{result, std::move(reads)};
+  any_recordings_ = true;
 }
 
 namespace {
@@ -169,6 +170,7 @@ void AdStackCache::record_max_reducer_eval(uint32_t registry_id,
   max_reducer_cache_[pack_max_reducer_key(registry_id, stack_id, mor_node_idx)] =
       MaxReducerCacheEntry{result, std::move(reads)};
   ++max_reducer_dispatch_count_;
+  any_recordings_ = true;
 }
 
 bool AdStackCache::try_max_reducer_launch_cache_hit(
@@ -258,6 +260,7 @@ void AdStackCache::record_max_reducer_launch_cache(const void *launch_cache_key,
     entry.arg_gens.push_back({kv.first, kv.second.first, kv.second.second});
   }
   max_reducer_launch_cache_[launch_cache_key] = std::move(entry);
+  any_recordings_ = true;
 }
 
 bool AdStackCache::try_spirv_bytecode_cache_hit(Program *prog,
@@ -283,6 +286,7 @@ void AdStackCache::record_spirv_bytecode_eval(const void *attribs_key,
                                               std::vector<uint8_t> bytecode,
                                               std::vector<SizeExprReadObservation> reads) {
   spirv_bytecode_cache_[attribs_key] = SpirvBytecodeCacheEntry{std::move(bytecode), std::move(reads)};
+  any_recordings_ = true;
 }
 
 void AdStackCache::record_per_task_ad_stack(const void *attribs_key,
@@ -293,6 +297,7 @@ void AdStackCache::record_per_task_ad_stack(const void *attribs_key,
                                             std::vector<std::tuple<int, void *, uint64_t>> arg_gens) {
   per_task_ad_stack_cache_[attribs_key] = PerTaskAdStackCacheEntry{std::move(metadata), stride_float, stride_int,
                                                                    std::move(snode_gens), std::move(arg_gens)};
+  any_recordings_ = true;
 }
 
 bool AdStackCache::try_per_task_ad_stack_cache_hit(const void *attribs_key,
@@ -345,6 +350,7 @@ void AdStackCache::record_llvm_per_task_ad_stack(const void *attribs_key,
   llvm_per_task_ad_stack_cache_[attribs_key] =
       LlvmPerTaskAdStackCacheEntry{std::move(offsets), std::move(max_sizes),  stride_combined,    stride_float,
                                    stride_int,         std::move(snode_gens), std::move(arg_gens)};
+  any_recordings_ = true;
 }
 
 bool AdStackCache::try_llvm_per_task_ad_stack_cache_hit(const void *attribs_key,
