@@ -539,7 +539,24 @@
     <span class="n">inv</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">inverse</span><span class="p">()</span>       <span class="c1"># [[-2, 1], [1.5, -0.5]]</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">inverse()</span></code> and <code class="docutils literal notranslate"><span class="pre">determinant()</span></code> support matrices up to 4x4.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">determinant()</span></code> supports matrices up to 4×4 (closed-form expansion).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">inverse()</span></code> supports matrices up to 12×12. Sizes 1–4 use the closed-form cofactor expansion; sizes 5–12 use Gauss elimination with partial pivoting (fully unrolled). For the larger sizes, achievable precision scales as <code class="docutils literal notranslate"><span class="pre">cond(A)</span> <span class="pre">·</span> <span class="pre">eps</span></code> — a well-conditioned 12×12 in <code class="docutils literal notranslate"><span class="pre">f64</span></code> typically reconstructs to ~1e-12.</p></li>
+</ul>
+</section>
+<section id="frobenius-inner-product-and-norm">
+<h3>Frobenius inner product and norm<a class="headerlink" href="#frobenius-inner-product-and-norm" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">inner_products</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]])</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]])</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">frobenius_inner</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>   <span class="c1"># 2 + 3 = 5.0   (sum_ij a[i,j] * b[i,j])</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span>               <span class="c1"># sqrt(1 + 4 + 9 + 16) = sqrt(30)</span>
+    <span class="n">n_sq</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">norm_sqr</span><span class="p">()</span>        <span class="c1"># 30.0  (== a.frobenius_inner(a))</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">frobenius_inner(other)</span></code> requires both matrices to have the same shape and supports any size. It’s the natural inner product on matrices viewed as vectors of length <code class="docutils literal notranslate"><span class="pre">n</span> <span class="pre">×</span> <span class="pre">m</span></code> and is the correct bilinear form behind <code class="docutils literal notranslate"><span class="pre">norm</span></code> / <code class="docutils literal notranslate"><span class="pre">norm_sqr</span></code> (<code class="docutils literal notranslate"><span class="pre">A.frobenius_inner(A)</span> <span class="pre">==</span> <span class="pre">A.norm_sqr()</span></code>).</p>
 </section>
 <section id="matrix-vector-multiply">
 <h3>Matrix-vector multiply<a class="headerlink" href="#matrix-vector-multiply" title="Link to this heading">#</a></h3>
@@ -626,6 +643,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dot-and-cross-product">Dot and cross product</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#norm-and-normalize">Norm and normalize</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#matrix-operations">Matrix operations</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#frobenius-inner-product-and-norm">Frobenius inner product and norm</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#matrix-vector-multiply">Matrix-vector multiply</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#other-operations">Other operations</a></li>
 </ul>
