@@ -214,6 +214,79 @@ def test_bit_ops_compound_i64():
     assert clz_plus_one(1) == 64  # clz(1) = 63, +1 = 64
 
 
+# ffs(x) returns the 1-indexed position of the lowest set bit, with ffs(0) == 0 (CUDA __ffs convention).
+# CPU / CUDA / AMDGPU lower to the LLVM ctz intrinsic family; SPIR-V (Vulkan / Metal) lowers to FindILsb.
+# Signed and unsigned inputs share an intrinsic since the operation is on the bit pattern.
+@test_utils.test()
+def test_ffs():
+    @qd.kernel
+    def test_i32(x: qd.int32) -> qd.int32:
+        return qd.math.ffs(x)
+
+    @qd.kernel
+    def test_u32(x: qd.uint32) -> qd.int32:
+        return qd.math.ffs(x)
+
+    assert test_i32(0) == 0
+    assert test_i32(1) == 1
+    assert test_i32(2) == 2
+    assert test_i32(3) == 1
+    assert test_i32(4) == 3
+    assert test_i32(8) == 4
+    assert test_i32(0x7FFFFFFF) == 1
+    # MSB-only / sign-bit / all-bits-set: lowest set bit is the sign bit, so ffs == 32.
+    assert test_i32(-(1 << 31)) == 32
+    # All bits set -> -1 in two's complement; lowest set bit is bit 0.
+    assert test_i32(-1) == 1
+    # Non-trivial bit pattern: lowest set bit is at position 4 (1-indexed).
+    assert test_i32(0xF0) == 5
+    assert test_i32(0xF00) == 9
+
+    # u32 routes through the same intrinsic; signedness is irrelevant since ffs counts trailing zeros
+    # of the bit pattern.
+    assert test_u32(0) == 0
+    assert test_u32(1) == 1
+    assert test_u32(0x80000000) == 32
+    assert test_u32(0xFFFFFFFF) == 1
+    assert test_u32(0xFFFFFFFE) == 2
+
+
+# ffs on 64-bit ints. CPU / CUDA / AMDGPU lower to llvm.cttz / __nv_ffsll natively; SPIR-V (Vulkan / Metal)
+# synthesises from a hi/lo FindILsb decomposition: low half first since "first" = lowest-indexed bit.
+@test_utils.test()
+def test_ffs_i64():
+    @qd.kernel
+    def test_i64(x: qd.int64) -> qd.int32:
+        return qd.math.ffs(x)
+
+    @qd.kernel
+    def test_u64(x: qd.uint64) -> qd.int32:
+        return qd.math.ffs(x)
+
+    assert test_i64(0) == 0
+    assert test_i64(1) == 1
+    assert test_i64(2) == 2
+    # First bit at position 32 (in the high half) — exercises the SPIR-V hi/lo decomposition split.
+    assert test_i64(1 << 31) == 32
+    assert test_i64(1 << 32) == 33
+    assert test_i64(1 << 62) == 63
+    # All bits set -> -1; lowest set bit is bit 0.
+    assert test_i64(-1) == 1
+    # Lo half zero, hi half non-zero: result must come from the hi-half arm of the SPV select.
+    assert test_i64(1 << 40) == 41
+    # Both halves non-zero: low-half arm wins.
+    assert test_i64((1 << 40) | (1 << 8)) == 9
+
+    # u64 sign-bit / all-bits-set cases that are awkward to express as signed literals.
+    assert test_u64(0) == 0
+    assert test_u64(1) == 1
+    assert test_u64(1 << 63) == 64
+    assert test_u64(0xFFFFFFFFFFFFFFFF) == 1
+    assert test_u64(0x8000000000000000) == 64
+    # Bit 33 (1-indexed): exercises the low-half-zero, hi-half-non-zero path.
+    assert test_u64(1 << 32) == 33
+
+
 @test_utils.test()
 def test_sign():
     @qd.kernel
