@@ -806,3 +806,155 @@ def test_atomic_exchange_demoted():
         # Second xchg returns new_val (proving the first xchg actually wrote new_val into s).
         assert x[i] == i
         assert y[i] == new_val
+
+
+# Pins the documented semantics of qd.atomic_cas: returns the prior value of `dest`, swaps in `desired` only when
+# the prior value equals `expected`. Single-thread sanity covering both the success path (prior == expected) and
+# the failure path (prior != expected) for every integer dtype the codegen path supports today (i32 / u32 /
+# i64 / u64). f32 / f64 CAS is currently rejected at trace time -- a separate negative test pins that.
+@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.i64, qd.u64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_cas_returns_old_value(dtype):
+    _skip_if_no_int64_atomic_rmw(dtype)
+    f = qd.field(dtype, shape=())
+    out_succ = qd.field(dtype, shape=())
+    out_fail = qd.field(dtype, shape=())
+    f[None] = 7
+
+    @qd.kernel
+    def kern_success():
+        # expected == current -> swap fires, return prior (= 7).
+        out_succ[None] = qd.atomic_cas(f[None], qd.cast(7, dtype), qd.cast(42, dtype))
+
+    kern_success()
+    assert int(out_succ[None]) == 7
+    assert int(f[None]) == 42
+
+    @qd.kernel
+    def kern_failure():
+        # expected != current (current is now 42) -> swap is a no-op, return prior (= 42).
+        out_fail[None] = qd.atomic_cas(f[None], qd.cast(99, dtype), qd.cast(123, dtype))
+
+    kern_failure()
+    assert int(out_fail[None]) == 42
+    assert int(f[None]) == 42
+
+
+# Stress test for atomic CAS contention: N threads each attempt to flip a slot from INIT to their own unique id.
+# Atomicity requires that exactly ONE thread observes prior == INIT (the winner) and all the others observe
+# prior == winner_id (their CAS failed because the winner already wrote). Pins both: (a) exactly one thread
+# wins, and (b) the slot ends up with the winner's id (no torn writes).
+@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.i64, qd.u64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_cas_contention_single_winner(dtype):
+    _skip_if_no_int64_atomic_rmw(dtype)
+    N = 256
+    INIT = 0
+    slot = qd.field(dtype, shape=())
+    olds = qd.field(dtype, shape=(N,))
+    slot[None] = INIT
+
+    @qd.kernel
+    def kern():
+        for i in range(N):
+            # Each thread tries to flip the slot from INIT to (i + 1). Only the first one to land succeeds;
+            # everyone else observes the winner's (i+1) value as the prior.
+            olds[i] = qd.atomic_cas(slot[None], qd.cast(INIT, dtype), qd.cast(i + 1, dtype))
+
+    kern()
+
+    final = int(slot[None])
+    olds_seen = [int(olds[i]) for i in range(N)]
+    winners = [i for i in range(N) if olds_seen[i] == INIT]
+    assert len(winners) == 1, f"expected exactly one CAS winner, got {len(winners)}: indices {winners[:5]}..."
+    winner_id = winners[0] + 1
+    assert final == winner_id, f"slot ended with {final}, expected winner's id {winner_id}"
+    for i in range(N):
+        if i == winners[0]:
+            continue
+        # Every loser must have seen the winner's id (the only value the slot ever holds besides INIT).
+        assert olds_seen[i] == winner_id, f"loser {i} observed {olds_seen[i]}, expected winner {winner_id}"
+
+
+# Pins that a user-built CAS retry loop produces the same result as atomic_add. This is the canonical use case
+# for exposing CAS at all -- it lets users build atomic RMW operations the framework doesn't expose natively.
+# The loop is bounded (no while-True in kernels) so we run a fixed number of attempts per iteration; with N
+# iterations and a small contention factor, the loop converges in O(1) attempts on average.
+@test_utils.test(arch=qd.gpu)
+def test_atomic_cas_loop_increment_matches_atomic_add():
+    N = 128
+    counter_cas = qd.field(qd.i32, shape=())
+    counter_add = qd.field(qd.i32, shape=())
+    counter_cas[None] = 0
+    counter_add[None] = 0
+
+    @qd.kernel
+    def kern():
+        # Serialize the outer for-loop so the CAS retry budget below is bounded -- the point of this test is
+        # to validate the user-facing CAS-loop pattern, not to stress-test convergence under contention.
+        qd.loop_config(serialize=True)
+        for _ in range(N):
+            # Reference: atomic_add.
+            qd.atomic_add(counter_add[None], 1)
+            # CAS-loop equivalent of atomic_add: snapshot, compute new = snapshot + 1, try to swap. Under the
+            # serialized outer loop there is exactly one in-flight increment, so the CAS always succeeds first
+            # try; the bounded retry just demonstrates the pattern users would write.
+            done = 0
+            for _attempt in range(8):
+                if done == 0:
+                    expected = counter_cas[None]
+                    old = qd.atomic_cas(counter_cas[None], expected, expected + 1)
+                    if old == expected:
+                        done = 1
+
+    kern()
+    # Both counters must reach N. atomic_add is the trustworthy reference; the CAS loop should match it
+    # exactly when the loop converges, and lag if it doesn't (which would catch a broken CAS).
+    assert int(counter_add[None]) == N
+    assert int(counter_cas[None]) == N, (
+        f"CAS-loop increment fell behind atomic_add: cas={int(counter_cas[None])}, add={int(counter_add[None])}"
+    )
+
+
+# Pins the new cas branch in demote_atomics.cpp. Demotes to load + cmp_eq + select(cmp, val, load) + store
+# when the destination is a thread-local. Mirrors test_atomic_exchange_demoted; uses the success path to verify
+# the swap fires, and the failure path to verify the no-op leg keeps the old value.
+@test_utils.test()
+def test_atomic_cas_demoted():
+    x = qd.field(qd.i32)
+    y = qd.field(qd.i32)
+    qd.root.dense(qd.i, n).place(x, y)
+
+    @qd.kernel
+    def func():
+        for i in range(n):
+            s = i
+            # Success path: expected == s (= i), so swap fires; old returned == i, s now == 100 + i.
+            x[i] = qd.atomic_cas(s, i, 100 + i)
+            # Failure path: expected (= -1) != s (now 100 + i); swap is a no-op; old returned == 100 + i;
+            # s remains 100 + i. Pins that demoted CAS still returns the prior value on the no-op leg.
+            y[i] = qd.atomic_cas(s, -1, 999)
+
+    func()
+
+    for i in range(n):
+        assert x[i] == i, f"success-path CAS demoted: expected prior {i}, got {x[i]}"
+        assert y[i] == 100 + i, f"failure-path CAS demoted: expected prior {100 + i}, got {y[i]}"
+
+
+# Pins the doc claim that atomic_cas on float dtypes raises a type error at trace time. f32 / f64 CAS is not
+# yet wired up (would need the same uint-bitcast trick xchg uses); the type_check carve-out in
+# AtomicOpExpression::type_check rejects it cleanly until the lowering lands.
+@pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_cas_on_float_field_raises(dtype):
+    test_utils.skip_if_f64_unsupported(dtype)
+    f = qd.field(dtype, shape=())
+    f[None] = 0
+
+    @qd.kernel
+    def kern():
+        qd.atomic_cas(f[None], qd.cast(0, dtype), qd.cast(1, dtype))
+
+    with pytest.raises(qd.lang.exception.QuadrantsCompilationError):
+        kern()

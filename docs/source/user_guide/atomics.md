@@ -16,6 +16,7 @@ All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y
 | `atomic_min`, `atomic_max`                  | int native; floats via CAS                 | int native; floats via CAS            | int native; floats via CAS                             | int native; floats via CAS       |
 | `atomic_and`, `atomic_or`, `atomic_xor`     | int only (native)                          | int only (native)                     | int only (native)                                      | int only (native)                |
 | `atomic_exchange`                           | int / float native (`atomicExch`)          | int / float native (`*_atomic_swap`)  | int native; f32 / f64 global via uint-bitcast `OpAtomicExchange`; f16, shared float, workgroup f64 deferred‡ | int / float native (`xchg`)      |
+| `atomic_cas`                                | int native (`atomicCAS`)                   | int native (`*_atomic_cmpswap`)       | int native (`OpAtomicCompareExchange`); f32 / f64 rejected at trace time§                                 | int native (`cmpxchg`)           |
 
 A few cross-cutting notes that the cells above abbreviate:
 
@@ -30,7 +31,7 @@ A few cross-cutting notes that the cells above abbreviate:
 
 ‡ `atomic_exchange` on `f16`, on shared (`qd.simt.block.SharedArray`) float arrays, and on f64 in workgroup memory is not yet wired up. Global-memory `atomic_exchange` on every other dtype/backend combination listed above is supported; the SPIR-V path bitcasts through the corresponding uint type so no `spirv_has_atomic_float_*` capability is required.
 
-There is no `atomic_cas` (compare-and-swap) exposed in Python today. `atomic_exchange` covers the unconditional-swap subset (which lowers to a single instruction on every backend); a true CAS would let you build arbitrary atomic RMW operations with a retry loop, but surfacing it requires extending `AtomicOpType` to return both the old value *and* a success flag - out of scope for the current API.
+§ `atomic_cas` on `f32` / `f64` is rejected at trace time (raises `QuadrantsTypeError`). Adding it is straightforward -- the LLVM and SPIR-V CAS instructions both accept floats via the same uint-bitcast trick `atomic_exchange` uses today -- but the wiring is deferred until a follow-up. Integer CAS (`i32` / `u32` / `i64` / `u64`) is fully supported, and the `i64` / `u64` Metal caveat is the same as for the rest of the 64-bit integer atomic family.
 
 All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space - to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.mem_fence()` (device scope).
 
@@ -89,6 +90,41 @@ if my_old_task != NO_TASK:
 ```
 
 Vector / matrix arguments fan out per component, same as the rest of the `qd.atomic_*` family: a `qd.atomic_exchange(field_of_vec3, qd.Vector([...]))` issues three independent scalar exchanges, one per slot, with no all-or-nothing guarantee across the components.
+
+### `qd.atomic_cas(x, expected, desired)`
+
+Atomic compare-and-swap: writes `desired` into `x` if and only if `x` currently equals `expected`, and unconditionally returns the value originally at `x`. The user recovers whether the swap actually fired with one comparison:
+
+```python
+old = qd.atomic_cas(x, expected, desired)
+# Effect:
+#   tmp = load(x)
+#   if tmp == expected: store(x, desired)
+#   old = tmp
+# all three steps (load, conditional store, return-old) execute as a single atomic transaction on x.
+
+success = (old == expected)
+```
+
+This is the basic primitive on top of which arbitrary atomic read-modify-write operations can be built with a retry loop. Returning the prior value (rather than a `(prior, success)` pair) matches CUDA `atomicCAS` and SPIR-V `OpAtomicCompareExchange`; lowers to one native instruction on every backend (CUDA `atomicCAS`, AMDGPU `*_atomic_cmpswap`, SPIR-V `OpAtomicCompareExchange`, x86 `cmpxchg`).
+
+CAS-loop pattern for ops the framework doesn't expose natively (e.g. atomic-max-of-some-derived-quantity):
+
+```python
+@qd.kernel
+def cas_loop_max():
+    # Atomically: x = max(x, candidate). The framework already has atomic_max for primitives, but the same
+    # shape works for any reduction whose backend support is missing.
+    for _attempt in range(MAX_RETRIES):
+        cur = x[None]
+        new = qd.max(cur, candidate)
+        old = qd.atomic_cas(x[None], cur, new)
+        if old == cur:
+            break  # CAS landed; we're done.
+        # Otherwise some other thread won the race; loop back and re-read.
+```
+
+Currently restricted to integer dtypes (`i32` / `u32` / `i64` / `u64`); float CAS is rejected at trace time. The Metal `i64` / `u64` caveat in the support table footnote applies here too. There is no shared-memory CAS path yet.
 
 ## Performance and portability notes
 
