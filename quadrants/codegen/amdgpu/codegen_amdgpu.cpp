@@ -200,6 +200,25 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         QD_NOT_IMPLEMENTED
       }
     }
+    else if (op == UnaryOpType::ffs) {
+      // ffs(x): 1-indexed position of the lowest set bit; 0 when x == 0 (CUDA __ffs convention).
+      // Lower to llvm.cttz + 1 and a select for the zero case; the AMDGPU LLVM backend further lowers
+      // llvm.cttz to native bitfield-extract instructions. Same width-and-signedness gate as clz.
+      auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        auto cttz = builder->CreateIntrinsic(llvm::Intrinsic::cttz, {input_type}, {input, is_zero_undef});
+        auto plus_one = builder->CreateAdd(cttz, llvm::ConstantInt::get(input_type, 1));
+        auto is_zero = builder->CreateICmpEQ(input, llvm::ConstantInt::get(input_type, 0));
+        auto sel = builder->CreateSelect(is_zero, llvm::ConstantInt::get(input_type, 0), plus_one);
+        llvm_val[stmt] = builder->CreateZExtOrTrunc(sel, llvm::Type::getInt32Ty(*llvm_context));
+        stmt->ret_type = PrimitiveType::i32;
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
+    }
     else {
       QD_P(unary_op_type_name(op));
       QD_NOT_IMPLEMENTED
