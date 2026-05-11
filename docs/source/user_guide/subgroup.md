@@ -107,7 +107,7 @@ Every lane in the subgroup returns the `value` held by the lane whose subgroup-l
 ### Common to the data-movement ops
 
 - All shuffles / broadcasts are issued under a full active mask on CUDA (`0xFFFFFFFF`). Call them from uniform control flow; calling from divergent control flow is undefined on most backends. (This means: every thread has to execute the shuffle.)
-- Subgroup size is fixed per backend at compile time on the LLVM backends (32 on CUDA, 64 on AMDGPU — wave64 is forced on every AMDGPU target including RDNA, see [supported_systems](supported_systems.md)) and queried at runtime on SPIR-V (typically 32 on Vulkan compute on most GPUs). Use `subgroup.group_size()` on SPIR-V; on CUDA / AMDGPU use the compile-time constant.
+- Subgroup size is hard-coded per backend on the LLVM backends — 32 on CUDA, 64 on AMDGPU (wave64 is forced on every AMDGPU target including RDNA, see [supported_systems](supported_systems.md)) — so kernels can rely on those literal values. On SPIR-V it is queried at runtime via `subgroup.group_size()` (typically 32 on Vulkan compute on most GPUs).
 
 ### `invocation_id()`
 
