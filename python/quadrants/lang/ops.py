@@ -558,11 +558,10 @@ def bit_not(a):
 
 def popcnt(a):
     def _popcnt(_):
-        # No Python fallback: popcnt is bitwidth-dependent (a u64 with the top bit set should return 64,
-        # not 1), but once the value reaches here it's a plain Python int with no width attached. Worse,
-        # `bin(x).count("1")` quietly drops the sign and reports `popcnt(-1) == 1` instead of 32 / 64.
-        # The path is only hit on the `qd.python` backend or from ad-hoc module-level calls; native
-        # backends route through the IR / codegen and never see this.
+        # No Python fallback: popcnt is bitwidth-dependent (a u64 with the top bit set should return 64, not 1), but
+        # once the value reaches here it's a plain Python int with no width attached. Worse, `bin(x).count("1")`
+        # quietly drops the sign and reports `popcnt(-1) == 1` instead of 32 / 64. The path is only hit on the
+        # `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR / codegen.
         raise NotImplementedError(
             "qd.math.popcnt has no Python fallback: the result depends on the operand's bitwidth "
             "(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend "
@@ -1157,12 +1156,12 @@ def clz(a):
     """
 
     def _clz(_):
-        # No Python fallback: clz is bitwidth-dependent (`clz(0) == 32` for i32 but `64` for i64, and
-        # `clz(-1) == 0` requires interpreting -1 as the unsigned all-bits-set pattern at a known width).
-        # Once the value reaches here it's a plain Python int with no width attached, so no single
-        # answer is correct. The old hard-coded 32-bit implementation silently returned wrong values
-        # for negatives and 64-bit inputs. This path is only hit on the `qd.python` backend or from
-        # ad-hoc module-level calls; native backends route through the IR / codegen and never see it.
+        # No Python fallback: clz is bitwidth-dependent (`clz(0) == 32` for i32 but `64` for i64, and `clz(-1) == 0`
+        # requires interpreting -1 as the unsigned all-bits-set pattern at a known width). Once the value reaches here
+        # it's a plain Python int with no width attached, so no single answer is correct. The old hard-coded 32-bit
+        # implementation silently returned wrong values for negatives and 64-bit inputs. This path is only hit on the
+        # `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR / codegen and
+        # never see it.
         raise NotImplementedError(
             "qd.math.clz has no Python fallback: the result depends on the operand's bitwidth "
             "(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend "

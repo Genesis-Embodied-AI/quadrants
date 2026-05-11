@@ -144,15 +144,15 @@ def test_clz():
     assert test_i32(5) == 29
     assert test_i32(1023) == 22
     assert test_i32(1024) == 21
-    # Sign-bit / all-bits-set cases. These exercise the unsigned-MSB semantics (clz must count over the
-    # bit pattern, so clz(-1) == 0). Before the FindUMsb fix, the SPIR-V path returned 32 for clz(-1).
+    # Sign-bit / all-bits-set cases. These exercise the unsigned-MSB semantics (clz must count over the bit pattern,
+    # so clz(-1) == 0). Before the FindUMsb fix, the SPIR-V path returned 32 for clz(-1).
     assert test_i32(-1) == 0
     assert test_i32(-2) == 0
     assert test_i32(0x7FFFFFFF) == 1
 
-    # u32 inputs lower to the same intrinsic on every backend (LLVM IR is signless for integers; SPIR-V
-    # FindUMsb is unsigned by definition). Pre-generalisation, CUDA / AMDGPU rejected u32 with
-    # QD_NOT_IMPLEMENTED and required a bit_cast through qd.i32 as a workaround.
+    # u32 inputs lower to the same intrinsic on every backend (LLVM IR is signless for integers; SPIR-V FindUMsb is
+    # unsigned by definition). Pre-generalisation, CUDA / AMDGPU rejected u32 with QD_NOT_IMPLEMENTED and required a
+    # bit_cast through qd.i32 as a workaround.
     assert test_u32(0) == 32
     assert test_u32(1) == 31
     assert test_u32(0x7FFFFFFF) == 1
@@ -160,10 +160,9 @@ def test_clz():
     assert test_u32(0xFFFFFFFF) == 0
 
 
-# clz on 64-bit ints — runs on every supported backend. CPU / CUDA use native 64-bit leading-zero ops
-# (`__nv_clzll`); AMDGPU lowers via llvm.ctlz; SPIR-V (Vulkan / Metal) synthesises the 64-bit case from a
-# hi/lo FindUMsb decomposition. u64 routes through the same paths as i64 since the operation is on the
-# bit pattern.
+# clz on 64-bit ints — runs on every supported backend. CPU / CUDA use native 64-bit leading-zero ops (`__nv_clzll`);
+# AMDGPU lowers via llvm.ctlz; SPIR-V (Vulkan / Metal) synthesises the 64-bit case from a hi/lo FindUMsb decomposition.
+# u64 routes through the same paths as i64 since the operation is on the bit pattern.
 @test_utils.test()
 def test_clz_i64():
     @qd.kernel
@@ -194,12 +193,11 @@ def test_clz_i64():
     assert test_u64(0x7FFFFFFFFFFFFFFF) == 1
 
 
-# Regression sentinel for the i32 return-type normalisation: popcnt / clz must return i32 from the
-# type-checking pass onward, not just at codegen time. If the inferred ret_type were the operand's
-# type (i64), promotion of `op(x: i64) + i64(1)` to i64 would skip the i32 -> i64 cast, and
-# CUDA / AMDGPU codegen — which truncates the libdevice / llvm.ctpop result to i32 — would emit
-# `Add(i32, i64)` and trip an LLVM "operand type mismatch" assertion. Direct-return tests above
-# hide this because they don't compose the result with any other operand.
+# Regression sentinel for the i32 return-type normalisation: popcnt / clz must return i32 from the type-checking pass
+# onward, not just at codegen time. If the inferred ret_type were the operand's type (i64), promotion of
+# `op(x: i64) + i64(1)` to i64 would skip the i32 -> i64 cast, and CUDA / AMDGPU codegen — which truncates the
+# libdevice / llvm.ctpop result to i32 — would emit `Add(i32, i64)` and trip an LLVM "operand type mismatch" assertion.
+# Direct-return tests above hide this because they don't compose the result with any other operand.
 @test_utils.test()
 def test_bit_ops_compound_i64():
     @qd.kernel
