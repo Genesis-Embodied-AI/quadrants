@@ -86,8 +86,9 @@ def all_true(predicate, log2_size: template()):
     """AND-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane
     of the group iff every lane in the group has a non-zero ``predicate``, else ``0``.
 
-    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal /
-    RDNA, 64 on CDNA).  ``log2_size`` is a compile-time template; the body is fully unrolled.
+    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
+    on AMDGPU — wave64 is forced on every AMDGPU target).  ``log2_size`` is a compile-time template; the body is fully
+    unrolled.
     """
     p = i32(predicate != 0)
     if impl.static(impl.current_cfg().arch == _qd_core.cuda and log2_size == 5):
@@ -162,7 +163,7 @@ def reduce_add(value, log2_size: template()):
 
     The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.
     Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
-    (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).
+    (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target).
 
     ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
     shuffle+add operations in the calling kernel's IR.
@@ -268,8 +269,8 @@ def inclusive_add(value, log2_size: template()):
     """Inclusive prefix sum across ``2**log2_size`` consecutive lanes.
 
     Lane ``i`` within each group of ``2**log2_size`` lanes returns ``v[group_start] + v[group_start + 1] + ... + v[i]``.
-    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal /
-    RDNA, 64 on CDNA).
+    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
+    on AMDGPU — wave64 is forced on every AMDGPU target).
     """
     return _inclusive_scan(value, _bin_add, log2_size)
 

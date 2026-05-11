@@ -94,18 +94,48 @@ void bump_writes_for_kernel_llvm(Program *prog,
   if (prog == nullptr) {
     return;
   }
+  // Skip the per-task / per-arg gen-counter bumps when the adstack cache has never been recorded into: the bumps only
+  // exist so a later cache lookup can detect drift, and with no entries to drift against the work is wasted.
+  // Forward-only kernels (no `record_*` ever called against this `AdStackCache`) hit this gate on every launch and
+  // pay zero per-arg hashmap lookup, which matters on the CPU LLVM ndarray path where every kernel-bound arg slot
+  // would otherwise show up in `arr_writes_per_task` / `arr_reads_per_task`. The flag is one-way: the first sizer,
+  // per-task, or max-reducer recording flips it true and every subsequent launch resumes the unconditional bump path
+  // so a later cache lookup never sees a missed bump.
+  AdStackCache &cache = prog->adstack_cache();
+  if (!cache.has_any_recordings()) {
+    return;
+  }
+  // Per-id refinement of the program-wide `has_any_recordings()` gate. In a mixed program where some autodiff kernel
+  // has recorded but the kernel about to launch is forward-only, we still walk this kernel's static write set but skip
+  // the bump for any id no cached entry observes. The observation footprint grows monotonically as `record_*` fires;
+  // an id newly added to it on launch N is bumped from launch N+1 onward, and the launch-N record itself snapshots the
+  // current (un-bumped) gen, so a future kernel write to that id will bump-then-mismatch and the cache will invalidate
+  // exactly when it should. The ndarray loops are gated collectively on `any_external_read_observed()` rather than
+  // per-arg because the per-launch `array_ptrs.find` cost is what dominates on ndarray-heavy CPU workloads; if no
+  // cached entry depends on an ExternalRead, every find in the arg loops is wasted.
+  for (const auto &task_snodes : snode_writes_per_task) {
+    for (int snode_id : task_snodes) {
+      if (cache.is_snode_observed(snode_id)) {
+        cache.bump_snode_write_gen(snode_id);
+      }
+    }
+  }
+  if (!cache.any_external_read_observed()) {
+    return;
+  }
+  // Per-devalloc refinement on top of the `any_external_read_observed()` gate above: after the unavoidable `find`
+  // resolves the arg slot to a `DeviceAllocation *`, skip the bump update for devallocs no cached entry observes.
+  // Cache entries hold `observed_devalloc` per ExternalReadObs / `arg_gens` snapshot, aggregated into
+  // `observed_devalloc_ptrs_` at record time. A first-time observation of `devalloc` adds it to the set, so the
+  // immediately-following kernel write picks up the gate and the cache lookup detects the mismatch on the next
+  // launch.
   auto bump_data_ptr = [&](int arg_id) {
     ArgArrayPtrKey data_key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
     auto it = ctx->array_ptrs.find(data_key);
-    if (it != ctx->array_ptrs.end() && it->second != nullptr) {
-      prog->adstack_cache().bump_ndarray_data_gen(it->second);
+    if (it != ctx->array_ptrs.end() && it->second != nullptr && cache.is_devalloc_observed(it->second)) {
+      cache.bump_ndarray_data_gen(it->second);
     }
   };
-  for (const auto &task_snodes : snode_writes_per_task) {
-    for (int snode_id : task_snodes) {
-      prog->adstack_cache().bump_snode_write_gen(snode_id);
-    }
-  }
   for (const auto &task_args : arr_writes_per_task) {
     for (int arg_id : task_args) {
       bump_data_ptr(arg_id);
