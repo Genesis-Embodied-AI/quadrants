@@ -55,8 +55,8 @@ Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of
 
 | Backends                  | `f16`                                  | `f32`, `f64`                       | Both inputs `NaN`                          |
 |---------------------------|----------------------------------------|------------------------------------|--------------------------------------------|
-| CPU, CUDA, AMDGPU (LLVM)  | CAS over `llvm.minnum` / `llvm.maxnum` | LLVM `atomicrmw fmin` / `fmax`     | `NaN` (per LLVM `minnum` / `maxnum` spec)  |
-| Vulkan, Metal (SPIR-V)    | capability-gated, usually unsupported  | SPIR-V `FMin` / `FMax`             | undefined per spec; `NaN` in practice      |
+| CPU, CUDA, AMDGPU (LLVM)  | CAS over `llvm.minnum` / `llvm.maxnum` | LLVM `atomicrmw fmin` / `fmax`           | `NaN` (per LLVM `minnum` / `maxnum` spec)  |
+| Vulkan, Metal (SPIR-V)    | capability-gated, usually unsupported  | CAS loop with GLSL `FMin` / `FMax`       | undefined per spec; `NaN` in practice      |
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
@@ -79,12 +79,12 @@ Every `qd.atomic_*` is emitted at **device-wide scope**: visible to all threads 
 
 You don't normally need to think about scope as a user. It's listed here so the per-backend behaviour is explicit:
 
-| Backend | Scope spelling in the IR | Representative hardware lowering (`atomic_xor`; `f32`/`f64` float min/max) |
-|---|---|---|
-| CPU (x86_64) | LLVM `seq_cst` (System) | `lock xor`; float min/max via `atomicrmw fmin`/`fmax` |
-| CUDA (NVPTX) | LLVM `seq_cst` (System) | `atom.xor.b32` — single PTX op |
-| AMDGPU | LLVM `seq_cst syncscope("agent")` | `flat_atomic_xor` / `global_atomic_xor` — single instruction |
-| Vulkan / Metal (SPIR-V) | SPIR-V `Scope = Device` | `OpAtomicXor` — single op |
+| Backend                 | Scope spelling in the IR           | `atomic_xor` lowering                       | `f32` / `f64` min/max lowering                       |
+|-------------------------|------------------------------------|---------------------------------------------|------------------------------------------------------|
+| CPU (x86_64)            | LLVM `seq_cst` (System)            | `lock xor`                                  | `atomicrmw fmin`/`fmax`, expanded to CAS on x86      |
+| CUDA (NVPTX)            | LLVM `seq_cst` (System)            | `atom.xor.b32`                              | `atomicrmw fmin`/`fmax`, expanded to CAS (no native PTX op) |
+| AMDGPU                  | LLVM `seq_cst syncscope("agent")`  | `flat_atomic_xor` / `global_atomic_xor`     | `atomicrmw fmin`/`fmax`; native on supporting GFX ISAs, CAS otherwise |
+| Vulkan / Metal (SPIR-V) | SPIR-V `Scope = Device`            | `OpAtomicXor`                               | CAS loop with GLSL.std.450 `FMin` / `FMax` payload   |
 
 CPU and CUDA lower system-scope atomics directly to a single hardware instruction, so they leave the LLVM default alone. AMDGPU's LLVM backend, in contrast, refuses to use its native single-instruction atomics at system scope (it would have to add cache-flush instructions that don't exist for that op), and silently falls back to a CAS loop; setting `syncscope("agent")` is what unlocks the native `flat_atomic_xor` / `global_atomic_xor`. SPIR-V backends spell the same idea with the `Device` scope token. The user-visible semantics are identical across all four.
 
