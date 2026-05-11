@@ -71,9 +71,9 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
   // kernel wrappers each take a different code path. Required so the same wave64 runtime works on RDNA (gfx10+) hosts
   // in addition to CDNA.
   const char *kAmdgpuFeatures = "+wavefrontsize64,-wavefrontsize32";
-  std::unique_ptr<llvm::TargetMachine> machine(target->createTargetMachine(
-      triple_str, AMDGPUContext::get_instance().get_mcpu(), kAmdgpuFeatures, options, llvm::Reloc::PIC_,
-      llvm::CodeModel::Small, llvm::CodeGenOptLevel::Aggressive));
+  std::unique_ptr<llvm::TargetMachine> machine(
+      target->createTargetMachine(triple_str, AMDGPUContext::get_instance().get_mcpu(), kAmdgpuFeatures, options,
+                                  llvm::Reloc::PIC_, llvm::CodeModel::Small, llvm::CodeGenOptLevel::Aggressive));
 
   llvm_module->setDataLayout(machine->createDataLayout());
 
