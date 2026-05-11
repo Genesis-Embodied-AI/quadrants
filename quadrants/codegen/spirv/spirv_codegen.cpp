@@ -1687,8 +1687,17 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       // Shared float arrays use uint-backed CAS (width-aware for f16->u32).
       // Integer shared atomics don't need this - they use native OpAtomicIAdd
       // etc. directly on the shared pointer.
+      QD_ASSERT_INFO(stmt->op_type != AtomicOpType::xchg,
+                     "atomic_exchange on shared (workgroup) float arrays is not yet implemented for SPIR-V; would "
+                     "need uint-backing analogous to the shared float-add CAS path");
       val = shared_float_atomic(*ir_, stmt->op_type, addr_ptr, data, dt);
     } else {
+      // Global f16 xchg falls through here because the uint-bitcast xchg branch above explicitly excludes f16
+      // (it would need a width-mismatched bitcast, same as the f16 atomic-add CAS path). float_atomic itself has
+      // no xchg case and would otherwise abort with a generic QD_NOT_IMPLEMENTED -- promote to a clearer message.
+      QD_ASSERT_INFO(stmt->op_type != AtomicOpType::xchg,
+                     "atomic_exchange on f16 (global memory) is not yet implemented for SPIR-V; would need a "
+                     "width-mismatched uint-backed bitcast analogous to the f16 atomic-add CAS path");
       val = ir_->float_atomic(stmt->op_type, addr_ptr, data, dt);
     }
   } else if (is_integral(dt)) {

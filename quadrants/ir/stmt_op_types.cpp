@@ -106,6 +106,12 @@ std::string atomic_op_type_name(AtomicOpType type) {
   }
 }
 
+// Maps an atomic op to its plain binary equivalent (used by `demote_atomics` to lower thread-local atomics
+// to load + binop + store). NOT all atomic ops have a binary equivalent: `mul` is CAS-loop-emulated in the
+// codegen so it has no native binary form here, and `xchg` is structurally different (the new value of `dest`
+// does not depend on the old value, so there is no `op(old, val) -> new` to express). Both are intentionally
+// left out of this switch and any new caller MUST special-case them before dispatching here, otherwise this
+// function will hit `QD_NOT_IMPLEMENTED` at runtime. See `demote_atomics.cpp` for the reference handling.
 BinaryOpType atomic_to_binary_op_type(AtomicOpType type) {
   switch (type) {
 #define REGISTER_TYPE(i) \
