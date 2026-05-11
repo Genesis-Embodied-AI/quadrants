@@ -3,6 +3,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <thread>
+#include <vector>
 
 #include "quadrants/program/kernel_profiler.h"
 #include "quadrants/rhi/cuda/cuda_driver.h"
@@ -32,7 +33,8 @@ class CUDAContext {
   bool supports_mem_pool_;
   bool supports_pageable_memory_access_;
   bool uses_host_page_tables_;
-  void *stream_;
+  static thread_local void *stream_;
+  std::vector<void *> stream_pool_;
 
  public:
   CUDAContext();
@@ -86,6 +88,11 @@ class CUDAContext {
   bool supports_mem_pool() const {
     return supports_mem_pool_;
   }
+
+  // Force the default device memory pool to release every cached page back to the driver. Symmetric with the AMDGPU
+  // side and called from `LlvmRuntimeExecutor::finalize` (i.e. `qd.reset()`); see
+  // `AMDGPUContext::trim_default_mem_pool` for the rationale. No-op when mempool support is unavailable.
+  void trim_default_mem_pool();
 
   // True when the device can coherently dereference plain host pointers (`malloc` / `new`) from kernel code via HMM /
   // system-allocated memory. Maps `CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS` directly - 1 on Linux with an
@@ -143,6 +150,23 @@ class CUDAContext {
 
   void *get_stream() const {
     return stream_;
+  }
+
+  void *acquire_stream() {
+    std::lock_guard<std::mutex> _(lock_);
+    if (!stream_pool_.empty()) {
+      auto s = stream_pool_.back();
+      stream_pool_.pop_back();
+      return s;
+    }
+    void *s = nullptr;
+    CUDADriver::get_instance().stream_create(&s, 0x1 /*CU_STREAM_NON_BLOCKING*/);
+    return s;
+  }
+
+  void release_stream(void *s) {
+    std::lock_guard<std::mutex> _(lock_);
+    stream_pool_.push_back(s);
   }
 };
 

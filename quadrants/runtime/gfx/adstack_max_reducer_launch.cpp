@@ -95,7 +95,8 @@ uint64_t pack_max_reducer_key(uint32_t registry_id, int32_t stack_id, int32_t mo
 MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host_ctx,
                                                       DeviceAllocationGuard *args_buffer,
                                                       const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
-                                                      const std::vector<spirv::TaskAttributes> &task_attribs) {
+                                                      const std::vector<spirv::TaskAttributes> &task_attribs,
+                                                      const std::string &kernel_name) {
   MaxReducerResultMap result;
 
   // The shader builder requires `spirv_has_physical_storage_buffer` (PSB body-leaf reads through the kernel arg
@@ -138,8 +139,14 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
         allocated_max_sizes.push_back(static_cast<int>(a.max_size_compile_time));
         size_exprs.push_back(a.size_expr);
       }
+      // Pass the real kernel name + task index so `register_adstack_sizing_info`'s content-stable hash distinguishes
+      // tasks across different kernels. An empty kernel_name would collide every SPIR-V task with the same
+      // task_id_in_kernel into one registry slot, polluting `try_max_reducer_cache_hit` lookups across unrelated
+      // kernels and causing the per-spec substitution to silently miss when the cached `(stack_id, mor_node_idx)` came
+      // from a different kernel - the un-substituted MaxOverRange then leaks into the sizer shader, whose PSB load
+      // pulls float bytes from a stale arg-buffer slot and trips the `kMaxSaneStridePerThread` cap.
       mutable_attribs.registry_id = cache->register_adstack_sizing_info(
-          static_cast<const void *>(&mutable_attribs), /*kernel_name=*/std::string{}, static_cast<int>(ti),
+          static_cast<const void *>(&mutable_attribs), kernel_name, static_cast<int>(ti),
           std::move(allocated_max_sizes), std::move(size_exprs));
     }
     const uint32_t registry_id = mutable_attribs.registry_id;

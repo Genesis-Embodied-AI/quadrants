@@ -2,10 +2,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "quadrants/ir/adstack_size_expr.h"
@@ -16,6 +18,8 @@ namespace quadrants::lang {
 
 class LaunchContextBuilder;
 class Program;
+struct AdStackSizingInfo;
+class OffloadedTask;
 
 // Adstack-specific state owned by `Program` and routed through `program->adstack_cache().method(...)`. Holds two
 // orthogonal pieces:
@@ -38,12 +42,13 @@ class AdStackCache {
   }
 
   // One input read observed during a `evaluate_adstack_size_expr` walk. The cache entry records these so a subsequent
-  // lookup re-reads the same inputs and compares to `observed_value`; a single mismatch forces a full re-walk.
-  // `observed_gen` snapshots `snode_write_gen` (FieldLoadObs) or `ndarray_data_gen` (ExternalReadObs) at record
-  // time. The replay walk uses it as a fast-path short-circuit: if the gen counter has not advanced, the value
-  // cannot have changed and the dispatch (reader kernel for SNode reads, device-pointer deref for ndarray reads)
-  // is skipped. ExternalShapeObs reads the args buffer per launch (cheap host memory access), so it does not need
-  // a gen and leaves this field at 0.
+  // lookup checks whether each recorded input is still consistent; a single mismatch forces a full re-walk.
+  // FieldLoadObs / ExternalReadObs use the per-buffer gen counter (`snode_write_gen` / `ndarray_data_gen`) snapshotted
+  // in `observed_gen` as the sole staleness signal: a gen-counter advance unconditionally invalidates the cache, even
+  // if the read cells happen to be untouched. The bump invariant is therefore required: every kernel write,
+  // `Ndarray.write` / `fill`, and `SNodeRwAccessorsBank` writer kernel must bump the matching gen counter for the
+  // cache to stay correct. `observed_value` is unused for these kinds. ExternalShapeObs has no gen counter (shapes
+  // live in launch-arg metadata, not buffer content) and falls back to value comparison against `observed_value`.
   struct SizeExprReadObservation {
     enum Kind : uint8_t { FieldLoadObs, ExternalShapeObs, ExternalReadObs };
     Kind kind;
@@ -165,6 +170,52 @@ class AdStackCache {
   const std::vector<SizeExprReadObservation> *lookup_max_reducer_reads(uint32_t registry_id,
                                                                        int32_t stack_id,
                                                                        int32_t mor_node_idx) const;
+
+  // Per-kernel-handle launch cache for the max-reducer dispatcher. Skips the per-spec hash-lookup-and-observation
+  // -replay loop in `dispatch_max_reducers_for_tasks` when the kernel handle's dependency snapshot is unchanged since
+  // the previous launch. Key is the address of the launcher's stable per-handle vector
+  // (`KernelLauncher::contexts_[i].offloaded_tasks` for CUDA / AMDGPU, `ad_stacks` for the CPU launcher); the address
+  // is reused on every launch of the same kernel handle so it serves as a stable identity. Stores the dispatched result
+  // map plus a deduplicated `(snode_id, gen)` / `(arg_id, devalloc, gen)` snapshot covering every spec's observation
+  // deps. The fast path replays the snapshot in O(distinct deps) and short-circuits on full match; this collapses the
+  // steady-state per-launch cost from O(specs) hash lookups + observation replays + result-map rebuilds (the dominant
+  // chunk of the regression introduced when the dispatcher first landed) to a small dependency walk and a single map
+  // copy. Slow path falls through to the per-spec cache.
+  struct ArgGenObservation {
+    int arg_id;
+    void *devalloc;
+    uint64_t gen;
+  };
+  // Cache entry stores the dispatched result map via shared ownership so the per-launch fast path can repoint
+  // `LlvmRuntimeExecutor::current_max_reducer_results_` to it without copying, and so a snapshot taken by
+  // `publish_adstack_metadata` survives a recursive snode-reader-kernel reentry that may rewrite the executor's
+  // transient. The result map is logically `const` once recorded; mutation should happen by replacing the entry, not by
+  // reaching through the `shared_ptr`.
+  struct MaxReducerLaunchCacheEntry {
+    std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> result;
+    std::vector<std::pair<int, uint64_t>> snode_gens;
+    std::vector<ArgGenObservation> arg_gens;
+  };
+  // Replay the recorded dependency snapshot for `launch_cache_key`. Returns true (and populates `out_result` with the
+  // cache entry's `shared_ptr`) when every recorded dep still matches the live `(snode_write_gen, ndarray_data_gen)`;
+  // false otherwise. A miss leaves the entry in place so a subsequent `record_max_reducer_launch_cache` can overwrite
+  // it.
+  bool try_max_reducer_launch_cache_hit(const void *launch_cache_key,
+                                        LaunchContextBuilder *ctx,
+                                        std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> &out_result);
+  // Aggregate every spec's observation deps (resolved via `lookup_max_reducer_reads`) into a deduplicated snapshot and
+  // store `result` under `launch_cache_key`. Called at the end of every successful run of
+  // `dispatch_max_reducers_for_tasks` (both full-cache-hit and any-cache-miss paths) so the next launch's
+  // `try_max_reducer_launch_cache_hit` short-circuits the per-spec walk. `ctx` must be non-null. `result` is moved into
+  // the cache entry; the caller should `make_shared` it once and pass the same `shared_ptr` down to
+  // `LlvmRuntimeExecutor::current_max_reducer_results_` to avoid materialising a second copy.
+  void record_max_reducer_launch_cache(const void *launch_cache_key,
+                                       const std::vector<const AdStackSizingInfo *> &ad_stacks,
+                                       std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> result,
+                                       LaunchContextBuilder *ctx);
+  void invalidate_max_reducer_launch() {
+    max_reducer_launch_cache_.clear();
+  }
   // Monotone counter, incremented once per `record_max_reducer_eval` call. Reset only by the surrounding test harness
   // via `reset_max_reducer_dispatch_count`. Used by the regression tests to pin the cache short-circuit: a second
   // launch with unchanged inputs must not advance the counter, and a host mutation must.
@@ -188,6 +239,7 @@ class AdStackCache {
     invalidate_per_task_ad_stack();
     invalidate_llvm_per_task_ad_stack();
     invalidate_max_reducer();
+    invalidate_max_reducer_launch();
   }
 
   uint64_t snode_write_gen(int snode_id) const {
@@ -196,6 +248,39 @@ class AdStackCache {
   }
   void bump_snode_write_gen(int snode_id) {
     ++snode_write_gen_[snode_id];
+  }
+  // One-way switch flipped true the first time any `record_*` populates a cache. Read by the per-launch
+  // `bump_writes_for_kernel_*` helpers to short-circuit the per-arg / per-snode gen-counter bumps when no sizer,
+  // per-task, or max-reducer cache entry exists; forward-only programs never record and therefore pay zero per-launch
+  // bump-writes overhead on the ndarray path where the bump loop would otherwise touch every kernel-bound arg slot.
+  // Not reset by `invalidate_*` because the cost of a stale `true` (a few extra map inserts per launch) is dwarfed by
+  // the cost of repeated invalidate-then-record cycles, which never happen in steady state.
+  bool has_any_recordings() const {
+    return any_recordings_;
+  }
+  // Per-id refinement of `has_any_recordings()`: was `snode_id` ever named in a recorded observation's read set or in
+  // a per-task `snode_gens` snapshot? Bump-writes calls in mixed programs (some forward kernels, some autodiff ones)
+  // use this to skip `snode_write_gen_` updates for snodes that no cached entry depends on; the gen-counter for an
+  // unobserved snode stays at 0 and the very first `record_*` on that snode records `observed_gen = 0`, which the
+  // subsequent first observed-write bumps to 1 and invalidates as expected.
+  bool is_snode_observed(int snode_id) const {
+    return observed_snode_ids_.find(snode_id) != observed_snode_ids_.end();
+  }
+  // Has any recorded entry observed a value through `ExternalTensorRead` (i.e. depends on an ndarray's data content)?
+  // Bump-writes consults this to skip the entire `array_ptrs.find` + `bump_ndarray_data_gen` loops when no cached entry
+  // could depend on an ndarray, even if `has_any_recordings()` is true because some snode-only entry already exists.
+  bool any_external_read_observed() const {
+    return any_external_read_observed_;
+  }
+  // Per-devalloc refinement of `any_external_read_observed()`: was this exact `DeviceAllocation *` ever named by a
+  // recorded ExternalReadObs or by a per-task `arg_gens` snapshot? Bump-writes uses this after resolving each arg's
+  // devalloc to decide whether the bump itself can be skipped: if no cached entry depends on this devalloc, the
+  // `bump_ndarray_data_gen` update is dead work because nothing reads back the advanced counter. Stale pointers
+  // (Ndarrays that were destroyed and whose holder was reclaimed by a new allocation) at most cost an extra bump on
+  // the recycled address; the cache entry that originally observed the freed pointer is self-invalidated on its next
+  // lookup since `data_ptr == observed_devalloc` will fail against the new binding.
+  bool is_devalloc_observed(void *devalloc_ptr) const {
+    return observed_devalloc_ptrs_.find(devalloc_ptr) != observed_devalloc_ptrs_.end();
   }
   uint64_t ndarray_data_gen(void *devalloc_ptr) const {
     auto it = ndarray_data_gen_.find(devalloc_ptr);
@@ -240,11 +325,23 @@ class AdStackCache {
   // launch of a task whose codegen-time registration could not capture size_exprs (the codegen-time
   // `current_task->ad_stack` had not yet been finalized). No-op for `id == 0` and ids outside the registry range.
   void update_adstack_sizing_info_size_exprs(uint32_t id, std::vector<SerializedSizeExpr> size_exprs);
-  // Returns a *copy* of the registry entry (not a pointer into the underlying vector) so the caller can safely
-  // hold the data across operations that might trigger another `register_adstack_sizing_info` and grow / reallocate
-  // the registry vector (e.g. `evaluate_adstack_size_expr` dispatching a reader kernel that compiles a fresh
-  // task). Returns `std::nullopt` for the sentinel id `0` and for out-of-range ids.
+  // Re-populate the per-`Program` registry for offline-cache-loaded LLVM kernels. `registry_id` is now content-stable
+  // (`fnv1a32(kernel_name + ":" + task_id_in_kernel)`) and serialised, so the dispatcher and metadata-publish gates
+  // already see the right id without us touching anything; this loop exists purely to seed the `Program`-level registry
+  // so `diagnose_adstack_overflow_message` can resolve the cmpxchg-recorded id on the rare overflow path. Idempotent
+  // (same hash inputs yield the same id, so re-registration on every launch is a single map lookup) and only walks
+  // tasks whose `ad_stack.max_reducer_specs` is non-empty (forward-only and reverse-mode-without-recognized
+  // -MaxOverRange tasks pay zero overhead). Mirrors the SPIR-V `adstack_sizer_launch.cpp` runtime re-registration loop.
+  void ensure_runtime_registry_ids_for_max_reducer(std::vector<OffloadedTask> &tasks);
+  // Returns a *copy* of the registry entry (not a pointer into the underlying vector) so the caller can safely hold the
+  // data across operations that might trigger another `register_adstack_sizing_info` and grow / reallocate the registry
+  // vector (e.g. `evaluate_adstack_size_expr` dispatching a reader kernel that compiles a fresh task). Returns
+  // `std::nullopt` for the sentinel id `0` and for out-of-range ids.
   std::optional<AdStackSizingInfoEntry> lookup_adstack_sizing_info(uint32_t id) const;
+  // Cheap lookup gate for the per-launch re-registration loop in `ensure_runtime_registry_ids_for_max_reducer`. Returns
+  // true when `identity_key` already maps to a registry entry, so the caller can skip the vector-building work
+  // `register_adstack_sizing_info` would otherwise pay on every steady-state launch.
+  bool is_adstack_sizing_info_registered(const void *identity_key) const;
   // Format a diagnostic message for an overflow signal. `task_id` is the value read from the pinned-host task-id
   // slot (0 if no thread overflowed; otherwise the registry id of the first overflowing task). The `message`
   // field is embedded into the `QuadrantsAssertionError` raised at the poll site. The `confirmed_invalid_cache`
@@ -306,6 +403,20 @@ class AdStackCache {
   const DiagnoseLaunchSnapshot *get_diagnose_snapshot() const;
 
  private:
+  // Register every `FieldLoadObs` and `ExternalReadObs` entry of `reads` into `observed_snode_ids_` /
+  // `any_external_read_observed_` / `observed_devalloc_ptrs_`. Called from each `record_*` site so the per-id gate
+  // consulted by bump-writes sees the latest observation footprint before the next launch.
+  void note_observations(const std::vector<SizeExprReadObservation> &reads);
+  // Per-task variant: snapshots from `record_per_task_ad_stack` / `record_llvm_per_task_ad_stack` ship `snode_gens` /
+  // `arg_gens` lists directly rather than `SizeExprReadObservation`s, so we route them through this overload to keep
+  // the observation footprint in sync no matter which cache layer holds the entry. The arg_gens tuple shape matches
+  // both `PerTaskAdStackCacheEntry` and `LlvmPerTaskAdStackCacheEntry`; the `MaxReducerLaunchCacheEntry` overload
+  // below adapts its `ArgGenObservation` struct.
+  void note_per_task_dependencies(const std::vector<std::pair<int, uint64_t>> &snode_gens,
+                                  const std::vector<std::tuple<int, void *, uint64_t>> &arg_gens);
+  void note_per_task_dependencies(const std::vector<std::pair<int, uint64_t>> &snode_gens,
+                                  const std::vector<ArgGenObservation> &arg_gens);
+
   Program *prog_{nullptr};
   std::unordered_map<const SerializedSizeExpr *, SizeExprCacheEntry> size_expr_cache_;
   std::unordered_map<const void *, SpirvBytecodeCacheEntry> spirv_bytecode_cache_;
@@ -318,14 +429,20 @@ class AdStackCache {
   // See `max_reducer_dispatch_count` for the contract. Bumped at every `record_max_reducer_eval` call (i.e. once per
   // cache miss that fired a real dispatch); cache hits do not bump it.
   uint64_t max_reducer_dispatch_count_{0};
+  // Per-kernel-handle launch-level result cache; see `try_max_reducer_launch_cache_hit` for the contract.
+  std::unordered_map<const void *, MaxReducerLaunchCacheEntry> max_reducer_launch_cache_;
   std::unordered_map<int, uint64_t> snode_write_gen_;
   std::unordered_map<void *, uint64_t> ndarray_data_gen_;
 
-  // Adstack-overflow identity registry storage. Index 0 is reserved as the "no overflow" sentinel so the
-  // codegen-emitted `cmpxchg(0, id)` cleanly distinguishes "task id recorded" from "slot still clean". The
-  // reverse lookup map (keyed by `identity_key`) keeps `register_adstack_sizing_info` idempotent across
+  // Adstack-overflow identity registry storage. Keyed by the content-stable hash id assigned by
+  // `register_adstack_sizing_info` (`fnv1a32(kernel_name + ":" + task_id_in_kernel)`); the same id is baked into the
+  // codegen-emitted `cmpxchg(0, id)` so a host lookup of the slot the cmpxchg wrote resolves to the matching entry
+  // across re-compiles, `Program` lifetimes, and offline-cache reloads. Id `0` is reserved for "not registered" - the
+  // codegen short-circuits the cmpxchg in that case. Map (rather than vector) because the hash is non-contiguous and
+  // may collide; collisions are resolved by linear-probing within the map (see `register_adstack_sizing_info` for the
+  // loop). The reverse lookup map (keyed by `identity_key`) keeps `register_adstack_sizing_info` idempotent across
   // re-launches of the same kernel.
-  std::vector<AdStackSizingInfoEntry> adstack_sizing_info_registry_{AdStackSizingInfoEntry{}};
+  std::unordered_map<uint32_t, AdStackSizingInfoEntry> adstack_sizing_info_registry_;
   std::unordered_map<const void *, uint32_t> adstack_sizing_info_id_by_ptr_;
   mutable std::mutex adstack_sizing_info_registry_mutex_;
   // Latest captured launch context snapshot for the diagnose path's ndarray-bound leaf resolution. See
@@ -338,6 +455,16 @@ class AdStackCache {
   DiagnoseLaunchSnapshot diagnose_snapshot_;
   // Transient ctx handoff for the lazy LLVM capture path. See `set_pending_launch_ctx`.
   const LaunchContextBuilder *pending_launch_ctx_{nullptr};
+  // Backing storage for `has_any_recordings()`. See accessor doc for behavior and reset rules.
+  bool any_recordings_{false};
+  // Backing storage for `is_snode_observed()` / `any_external_read_observed()` / `is_devalloc_observed()`. All grow
+  // monotonically: every `record_*` call routes its observation list (and per-task snapshot lists) through the
+  // `note_*` helpers in cache.cpp so a freshly captured snapshot is reflected before the next
+  // `bump_writes_for_kernel_*` call queries them. The devalloc set may hold stale pointers across Ndarray destruction
+  // / reuse; see `is_devalloc_observed` for why that is correctness-safe.
+  std::unordered_set<int> observed_snode_ids_;
+  std::unordered_set<void *> observed_devalloc_ptrs_;
+  bool any_external_read_observed_{false};
 };
 
 // Snapshot the live ndarray data pointer + generation counter into each `ExternalReadObs` record. The encoder emits the

@@ -76,7 +76,7 @@ i64 cpu_clock_i64() {
   return 0;
 }
 
-void system_memfence() {
+void system_mem_fence() {
 }
 
 #if ARCH_cuda
@@ -749,7 +749,15 @@ void runtime_memory_allocate_aligned(LLVMRuntime *runtime, std::size_t size, std
 // External API
 // [ON HOST] CPU backend
 // [ON DEVICE] CUDA/AMDGPU backend
-void runtime_get_memory_requirements(Ptr result_buffer, i32 num_rand_states, i32 use_preallocated_buffer) {
+//
+// `external_rand_states_buffer` is set to non-zero by the GPU host launcher when the rand-states buffer is provided
+// by `PersistentRandStateBuffer` (process-lifetime, host-side singleton) rather than carved out of the per-init
+// runtime-objects preallocation. The CPU path still leaves it 0 (rand-states are bumped from `runtime_objects_chunk`
+// in `runtime_initialize`).
+void runtime_get_memory_requirements(Ptr result_buffer,
+                                     i32 num_rand_states,
+                                     i32 use_preallocated_buffer,
+                                     i32 external_rand_states_buffer) {
   i64 size = 0;
 
   if (use_preallocated_buffer) {
@@ -757,7 +765,9 @@ void runtime_get_memory_requirements(Ptr result_buffer, i32 num_rand_states, i32
   }
 
   size += quadrants::iroundup(i64(quadrants_global_tmp_buffer_size), quadrants_page_size);
-  size += quadrants::iroundup(i64(sizeof(RandState)) * num_rand_states, quadrants_page_size);
+  if (!external_rand_states_buffer) {
+    size += quadrants::iroundup(i64(sizeof(RandState)) * num_rand_states, quadrants_page_size);
+  }
 
   reinterpret_cast<i64 *>(result_buffer)[0] = size;
 }
@@ -765,6 +775,22 @@ void runtime_get_memory_requirements(Ptr result_buffer, i32 num_rand_states, i32
 // External API
 // [ON HOST] CPU backend
 // [ON DEVICE] CUDA/AMDGPU backend
+//
+// Returns the byte size the rand-states buffer would consume if allocated in-line in `runtime_objects_chunk`. The
+// host calls this to size the process-lifetime allocation owned by `PersistentRandStateBuffer`.
+void runtime_get_rand_states_buffer_size(Ptr result_buffer, i32 num_rand_states) {
+  i64 size = quadrants::iroundup(i64(sizeof(RandState)) * num_rand_states, quadrants_page_size);
+  reinterpret_cast<i64 *>(result_buffer)[0] = size;
+}
+
+// External API
+// [ON HOST] CPU backend
+// [ON DEVICE] CUDA/AMDGPU backend
+//
+// `external_rand_states_buffer` is non-null when the host has provided a process-lifetime rand-states allocation (via
+// `PersistentRandStateBuffer`). In that case `runtime->rand_states` is bound to that pointer and no rand-states bytes
+// are bumped out of `runtime_objects_chunk`. The CPU path passes nullptr and falls through to the in-chunk
+// allocation.
 void runtime_initialize(Ptr result_buffer,
                         Ptr memory_pool,
                         std::size_t preallocated_size,  // Non-zero means use the preallocated buffer
@@ -772,7 +798,8 @@ void runtime_initialize(Ptr result_buffer,
                         i32 num_rand_states,
                         void *_host_allocator,
                         void *_host_printf,
-                        void *_host_vsnprintf) {
+                        void *_host_vsnprintf,
+                        Ptr external_rand_states_buffer) {
   // bootstrap
   auto host_allocator = (host_allocator_type)_host_allocator;
   auto host_printf = (host_printf_type)_host_printf;
@@ -808,8 +835,12 @@ void runtime_initialize(Ptr result_buffer,
                                                         quadrants_global_tmp_buffer_size, quadrants_page_size);
 
   runtime->num_rand_states = num_rand_states;
-  runtime->rand_states = (RandState *)runtime->allocate_aligned(
-      runtime->runtime_objects_chunk, sizeof(RandState) * runtime->num_rand_states, quadrants_page_size);
+  if (external_rand_states_buffer != nullptr) {
+    runtime->rand_states = (RandState *)external_rand_states_buffer;
+  } else {
+    runtime->rand_states = (RandState *)runtime->allocate_aligned(
+        runtime->runtime_objects_chunk, sizeof(RandState) * runtime->num_rand_states, quadrants_page_size);
+  }
 }
 
 void runtime_initialize_memory(LLVMRuntime *runtime, std::size_t preallocated_size, Ptr preallocated_buffer) {
@@ -1181,10 +1212,10 @@ int32 block_barrier_count_i32(int32 predicate) {
 void warp_barrier(uint32 mask) {
 }
 
-void block_memfence() {
+void block_mem_fence() {
 }
 
-void grid_memfence() {
+void grid_mem_fence() {
 }
 
 // these trivial functions are needed by the DEFINE_REDUCTION macro
@@ -1682,7 +1713,7 @@ void ListManager::touch_chunk(int chunk_id) {
     locked_task(&lock, [&] {
       // may have been allocated during lock contention
       if (!chunks[chunk_id]) {
-        grid_memfence();
+        grid_mem_fence();
         auto chunk_ptr = runtime->allocate_aligned(runtime->runtime_memory_chunk,
                                                    max_num_elements_per_chunk * element_size, 4096, true /*request*/);
         atomic_exchange_u64((u64 *)&chunks[chunk_id], (u64)chunk_ptr);

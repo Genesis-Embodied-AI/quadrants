@@ -219,11 +219,15 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
     llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::sqrt, {input_type}, {input});
   }
   else if (op == UnaryOpType::popcnt) {
-    llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+    auto pop = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+    llvm_val[stmt] = builder->CreateZExtOrTrunc(pop, llvm::Type::getInt32Ty(*llvm_context));
+    stmt->ret_type = PrimitiveType::i32;
   }
   else if (op == UnaryOpType::clz) {
-    llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
-                                              {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
+    auto clz = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
+                                        {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
+    llvm_val[stmt] = builder->CreateZExtOrTrunc(clz, llvm::Type::getInt32Ty(*llvm_context));
+    stmt->ret_type = PrimitiveType::i32;
   }
   else {
     QD_P(unary_op_type_name(op));
@@ -1950,15 +1954,16 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
 
   current_task = std::make_unique<OffloadedTask>(task_kernel_name);
   // Pre-register the per-task AdStackSizingInfo so the registry id is assigned BEFORE codegen visits any
-  // `AdStackPushStmt`. Metadata (allocated_max_sizes) is filled in at `finalize_offloaded_task_function`
-  // time after the alloca scan completes; the registry call is idempotent on the same `ad_stack_ptr` so
-  // the second call updates the entry in place. Skipping registration when `prog == nullptr` (C++-only
-  // tests) leaves `registry_id == 0`, which the codegen-emitted cmpxchg short-circuits.
+  // `AdStackPushStmt`, letting it bake the immediate. Metadata (`allocated_max_sizes` + `size_exprs`) is filled in at
+  // `finalize_offloaded_task_function` time after the alloca scan completes; the registry call is idempotent on the
+  // same identity_key (raw `&current_task->ad_stack` address, never derefed) so the second call updates the entry in
+  // place. `kernel_name` and `task_id_in_kernel` are also stashed on the ad_stack so the offline-cache reload path
+  // (`AdStackCache::ensure_runtime_registry_ids_for_max_reducer`) can re-derive the identity hash without parsing the
+  // task function name. Skipping registration when `prog == nullptr` (C++-only tests) leaves `registry_id == 0`, which
+  // the codegen-emitted cmpxchg short-circuits.
   if (prog != nullptr) {
-    // Reserve a registry id at task START so codegen can bake the immediate before any push site is
-    // visited. Metadata + size_exprs are filled in at `finalize_offloaded_task_function` time below
-    // (idempotent re-registration on the same identity_key updates the entry in place). Identity
-    // key here is the raw `&current_task->ad_stack` address; the registry never derefs it.
+    current_task->ad_stack.kernel_name = kernel_name;
+    current_task->ad_stack.task_id_in_kernel = task_codegen_id;
     uint32_t id = prog->adstack_cache().register_adstack_sizing_info(
         static_cast<const void *>(&current_task->ad_stack), kernel_name, task_codegen_id, /*allocated_max_sizes=*/{},
         /*size_exprs=*/{});
@@ -2001,10 +2006,16 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
     current_task->ad_stack.allocas = ad_stack_allocas_info_;
     current_task->ad_stack.size_exprs = ad_stack_size_exprs_;
     current_task->ad_stack.bound_expr = ad_stack_static_bound_expr_;
-    // recognize `MaxOverRange` nodes that the runtime can reduce in parallel via the dedicated max-reducer dispatch
-    // instead of letting the per-thread sizer enumerate. Indexing matches `ad_stack_size_exprs_` (same iteration order
-    // as the pre-scan above).
-    current_task->ad_stack.max_reducer_specs = recognize_adstack_max_reducer_specs(ad_stack_size_exprs_);
+    // Recognize `MaxOverRange` nodes the runtime can reduce in parallel via the dedicated max-reducer dispatch instead
+    // of letting the per-thread sizer enumerate. Indexing matches `ad_stack_size_exprs_` (same iteration order as the
+    // pre-scan above). Skip on CPU: the host evaluator's `MaxOverRange` loop in `program/adstack/eval.cpp` does the
+    // same serial walk, and dispatching the runtime helper would only add per-launch setup cost (params blob encode,
+    // body bytecode encode, observation bookkeeping, JIT call) with no compute parallelism to amortize. The host
+    // evaluator handles every iteration count up to its own cap (`UINT32_MAX` on CPU; see `eval.cpp`). On CUDA /
+    // AMDGPU the parallel reducer is the whole point of the dispatch and the recognizer stays active.
+    if (!arch_is_cpu(compile_config.arch)) {
+      current_task->ad_stack.max_reducer_specs = recognize_adstack_max_reducer_specs(ad_stack_size_exprs_);
+    }
     // Snodes the task body mutates. Persisted on `OffloadedTask::snode_writes` so the LLVM
     // launcher can invalidate the per-task adstack metadata cache when a kernel that runs in
     // between mutated a SNode an enclosing `size_expr::FieldLoad` reads. Mirrors the SPIR-V
@@ -2055,10 +2066,13 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
       for (const auto &a : current_task->ad_stack.allocas) {
         allocated_max_sizes.push_back(static_cast<int>(a.max_size_compile_time));
       }
-      // Update the entry with the live metadata + per-alloca size_exprs. The size_exprs are copied
-      // into the registry so the diagnose path can walk them without dereferencing the launcher's
-      // unstable `OffloadedTask::ad_stack` pointer (freed by `current_task = nullptr` after
-      // by-value `offloaded_tasks.push_back(*current_task)`).
+      // Update the entry with the live metadata + per-alloca size_exprs. The size_exprs are copied into the registry so
+      // the diagnose path can walk them without dereferencing the launcher's unstable `OffloadedTask::ad_stack` pointer
+      // (freed by `current_task = nullptr` after by-value `offloaded_tasks.push_back(*current_task)`). Mirror the
+      // identity-pair fields here too in case the task START registration above was skipped (no allocas at the time,
+      // prog null, etc.).
+      current_task->ad_stack.kernel_name = kernel_name;
+      current_task->ad_stack.task_id_in_kernel = task_codegen_id;
       uint32_t id = prog->adstack_cache().register_adstack_sizing_info(
           static_cast<const void *>(&current_task->ad_stack), kernel_name, task_codegen_id,
           std::move(allocated_max_sizes), current_task->ad_stack.size_exprs);

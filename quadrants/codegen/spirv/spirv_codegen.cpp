@@ -1047,13 +1047,59 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     auto v = ir_->call_glsl450(dst_type, 52, operand_val);
     ir_->store_variable(val, v);
   } else if (stmt->op_type == UnaryOpType::popcnt) {
-    val = ir_->popcnt(operand_val);
+    // OpBitCount returns the operand's type, so for a u64 input it produces a u64 result. type_check normalises
+    // the stmt's ret_type to i32 across every backend (CUDA / AMDGPU already do this in hardware), so we cast
+    // the OpBitCount result down to dst_type (== i32) here. For an i32 / u32 input the cast is a free OpBitcast.
+    val = ir_->cast(dst_type, ir_->popcnt(operand_val));
   } else if (stmt->op_type == UnaryOpType::clz) {
-    uint32_t FindMSB_id = 74;
-    spirv::Value msb = ir_->call_glsl450(dst_type, FindMSB_id, operand_val);
-    spirv::Value bitcnt = ir_->int_immediate_number(ir_->i32_type(), 32);
-    spirv::Value one = ir_->int_immediate_number(ir_->i32_type(), 1);
-    val = ir_->sub(ir_->sub(bitcnt, msb), one);
+    // Use FindUMsb (75) rather than FindSMsb (74): clz() must count leading zeros over the unsigned bit pattern,
+    // i.e. clz(0xFFFFFFFF) == 0. FindSMsb returns -1 for negative inputs (it finds the MSB of the absolute value's
+    // bit pattern, ignoring the sign bit), which would yield clz(-1) == 32. CUDA's __nv_clz and the LLVM ctlz
+    // intrinsic both operate on the unsigned bit pattern; FindUMsb gives matching semantics.
+    //
+    // All arithmetic happens in i32 regardless of the operand's signedness or width, then the result is cast
+    // to dst_type at the very end. This keeps i32 / u32 / i64 / u64 inputs on the same code path: dispatch on
+    // bit width only.
+    uint32_t FindUMsb_id = 75;
+    auto i32_t = ir_->i32_type();
+    spirv::Value clz_i32;
+    if (data_type_bits(src_dt) == 64) {
+      // GLSL.std.450 FindUMsb is defined for 32-bit integers only. Synthesise the 64-bit case
+      // by splitting the operand into hi/lo i32 halves, calling FindUMsb on each, and selecting:
+      //   if hi != 0:  clz = 31 - FindUMsb(hi)        in [0, 31]
+      //   else:        clz = 32 + (31 - FindUMsb(lo)) in [32, 64]
+      // FindUMsb returns -1 on a zero input, so the "all-zero" cases fall out naturally:
+      //   hi == 0, lo == 0 -> 32 + (31 - (-1)) = 64
+      //   hi == 0, lo != 0 -> 32 + (31 - FindUMsb(lo))
+      //   hi != 0          -> 31 - FindUMsb(hi)
+      auto u64_t = ir_->u64_type();
+      auto val_u64 = ir_->cast(u64_t, operand_val);
+      auto thirty_two_u64 = ir_->uint_immediate_number(u64_t, 32);
+      auto hi_u64 = ir_->make_value(spv::OpShiftRightLogical, u64_t, val_u64, thirty_two_u64);
+      auto hi = ir_->cast(i32_t, hi_u64);
+      auto lo = ir_->cast(i32_t, val_u64);
+      auto hi_msb = ir_->call_glsl450(i32_t, FindUMsb_id, hi);
+      auto lo_msb = ir_->call_glsl450(i32_t, FindUMsb_id, lo);
+      auto bit31 = ir_->int_immediate_number(i32_t, 31);
+      auto bit63 = ir_->int_immediate_number(i32_t, 63);
+      auto zero_i32 = ir_->int_immediate_number(i32_t, 0);
+      auto hi_clz = ir_->sub(bit31, hi_msb);
+      auto lo_clz_full = ir_->sub(bit63, lo_msb);
+      auto hi_zero = ir_->eq(hi, zero_i32);
+      clz_i32 = ir_->select(hi_zero, lo_clz_full, hi_clz);
+    } else if (data_type_bits(src_dt) == 32) {
+      // Cast operand to i32 so FindUMsb's result type matches our i32 arithmetic. For i32 input this is a
+      // no-op; for u32 input cast() emits an OpBitcast.
+      auto val_i32 = ir_->cast(i32_t, operand_val);
+      auto msb = ir_->call_glsl450(i32_t, FindUMsb_id, val_i32);
+      auto bit31 = ir_->int_immediate_number(i32_t, 31);
+      clz_i32 = ir_->sub(bit31, msb);
+    } else {
+      QD_NOT_IMPLEMENTED
+    }
+    // dst_type is i32 across every backend (set by type_check for popcnt / clz), so this cast is a no-op
+    // for the i32 result we just computed; ir_->cast() returns the value unchanged when types match.
+    val = ir_->cast(dst_type, clz_i32);
   }
 #define UNARY_OP_TO_SPIRV(op, instruction, instruction_id, max_bits)                           \
   else if (stmt->op_type == UnaryOpType::op) {                                                 \
@@ -1427,6 +1473,18 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                    ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsWorkgroupMemoryMask |
                                                                   spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
+  } else if (stmt->func_name == "gridMemoryBarrier") {
+    // Device-scope memory fence (orders memory ops across the entire grid). On Vulkan this lowers to an
+    // `OpMemoryBarrier(ScopeDevice, ...)` with acquire-release semantics on workgroup + uniform (= storage-buffer in
+    // Vulkan's mapping) memory; that is sufficient for the canonical use cases (decoupled look-back scan, inter-block
+    // flag publishing). MoltenVK translates this to MSL `atomic_thread_fence(metal::memory_scope_device)` (MSL 2.0+,
+    // macOS 10.13+ / iOS 11+); on pre-A11 Apple GPUs / very old macOS Intel GPUs the cross-workgroup ordering
+    // guarantees are weaker and users should validate empirically.
+    ir_->make_inst(spv::OpMemoryBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeDevice),
+                   ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsUniformMemoryMask |
+                                                                  spv::MemorySemanticsWorkgroupMemoryMask |
+                                                                  spv::MemorySemanticsAcquireReleaseMask));
+    val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "subgroupElect") {
     val = ir_->make_value(spv::OpGroupNonUniformElect, ir_->bool_type(),
                           ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup));
@@ -1744,12 +1802,24 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
         data = ir_->make_value(spv::OpBitcast, ret_type, data);
       }
 
-      // Semantics = (UniformMemory 0x40) | (AcquireRelease 0x8)
-      ir_->make_inst(spv::OpMemoryBarrier, ir_->const_i32_one_,
-                     ir_->uint_immediate_number(ir_->u32_type(), spv::MemorySemanticsAcquireReleaseMask |
-                                                                     spv::MemorySemanticsUniformMemoryMask));
+      // Pick the SPIR-V `Scope` and `MemorySemantics` memory-class flag based on the storage class of the atomic's
+      // target pointer. Workgroup (shared) memory atomics need `Workgroup` scope and `WorkgroupMemory` semantics;
+      // device-buffer atomics need `Device` + `UniformMemory`. Without this distinction MoltenVK / SPIRV-Cross
+      // translates a workgroup-storage `OpAtomicOr` with `Device` scope to MSL
+      // `atomic_fetch_or_explicit(..., memory_scope_device)` on a `threadgroup atomic_int`, which is mismatched and
+      // silently does not update the threadgroup-shared slot. This surfaced as
+      // `block.sync_{any,all,count}_nonzero` returning the initialiser value on Metal even though the same emulation
+      // works on Vulkan (whose drivers happen to tolerate the over-strong scope).
+      const bool is_workgroup = addr_ptr.stype.storage_class == spv::StorageClassWorkgroup;
+      const auto scope_const =
+          ir_->int_immediate_number(ir_->i32_type(), is_workgroup ? spv::ScopeWorkgroup : spv::ScopeDevice);
+      const auto memory_class_mask =
+          is_workgroup ? spv::MemorySemanticsWorkgroupMemoryMask : spv::MemorySemanticsUniformMemoryMask;
+      ir_->make_inst(
+          spv::OpMemoryBarrier, scope_const,
+          ir_->uint_immediate_number(ir_->u32_type(), spv::MemorySemanticsAcquireReleaseMask | memory_class_mask));
       val = ir_->make_value(op, ret_type, addr_ptr,
-                            /*scope=*/ir_->const_i32_one_,
+                            /*scope=*/scope_const,
                             /*semantics=*/ir_->const_i32_zero_, data);
 
       if (val.stype.id != ret_type.id) {

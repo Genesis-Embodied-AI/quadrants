@@ -11,7 +11,9 @@
 
 namespace quadrants::lang {
 
-CUDAContext::CUDAContext() : profiler_(nullptr), driver_(CUDADriver::get_instance_without_context()), stream_(nullptr) {
+thread_local void *CUDAContext::stream_ = nullptr;
+
+CUDAContext::CUDAContext() : profiler_(nullptr), driver_(CUDADriver::get_instance_without_context()) {
   // CUDA initialization
   dev_count_ = 0;
   driver_.init(0);
@@ -107,6 +109,15 @@ std::string CUDAContext::get_device_name() {
   return str;
 }
 
+void CUDAContext::trim_default_mem_pool() {
+  if (!supports_mem_pool_) {
+    return;
+  }
+  void *default_mem_pool = nullptr;
+  driver_.device_get_default_mem_pool(&default_mem_pool, device_);
+  driver_.mem_pool_trim_to(default_mem_pool, 0u);
+}
+
 int64_t CUDAContext::get_clock_rate_khz() const {
   int clock_rate_khz = 0;
   driver_.device_get_attribute(&clock_rate_khz, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device_);
@@ -172,13 +183,11 @@ void CUDAContext::launch(void *func,
 }
 
 CUDAContext::~CUDAContext() {
-  // TODO: restore these?
-  /*
-  CUDADriver::get_instance().cuMemFree(context_buffer);
-  for (auto cudaModule: cudaModules)
-      CUDADriver::get_instance().cuModuleUnload(cudaModule);
-  CUDADriver::get_instance().cuCtxDestroy(context);
-  */
+  // Currently unreachable: singleton is heap-allocated via `new` in get_instance() and never deleted.
+  for (auto *s : stream_pool_) {
+    driver_.stream_destroy(s);
+  }
+  stream_pool_.clear();
 }
 
 CUDAContext &CUDAContext::get_instance() {

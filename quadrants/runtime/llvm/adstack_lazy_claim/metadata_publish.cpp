@@ -31,7 +31,7 @@
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #endif
 
-#include "quadrants/runtime/llvm/adstack_lazy_claim/cuda_stream_pin.h"
+#include "quadrants/rhi/cuda/cuda_stream_pin.h"
 
 namespace quadrants::lang {
 
@@ -319,11 +319,13 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     SizeExprLaunchScope launch_scope;
     // Snapshot the dispatched-results map for this kernel before the per-stack walk. The body of any captured
     // `MaxOverRange` may host-resolve a `FieldLoad` leaf via `read_field_with_launch_cache`, which dispatches a
-    // snode-reader kernel that reenters `dispatch_max_reducers_for_tasks` and clears `current_max_reducer_results_`.
-    // Reading the live executor field per stack would let that recursive clear turn `stack_id == 0` 's substitution
-    // branch into `stack_id == 1` 's empty-map fallback - whose host walk then trips the per-task sizer's `1<<24` cap
-    // on out-of-grammar shapes that the recognizer DID capture. Pin the snapshot by-value so the substitution loop
-    // stays self-consistent.
+    // snode-reader kernel that reenters `dispatch_max_reducers_for_tasks` and rewrites `current_max_reducer_results_`
+    // to point at that recursive call's result map. Reading the live executor field per stack would let that recursive
+    // overwrite turn `stack_id == 0` 's substitution branch into `stack_id == 1` 's empty-map fallback - whose host
+    // walk then trips the per-task sizer's `1<<24` cap on out-of-grammar shapes that the recognizer DID capture. Pin
+    // the snapshot via a `shared_ptr` copy (refcount bump only, no map data copied) so the substitution loop stays
+    // self-consistent and the cache-entry's allocation stays alive even if the executor's transient gets repointed
+    // mid-walk.
     const auto local_max_reducer_results = current_max_reducer_results_;
     std::vector<uint64_t> host_max_sizes(n_stacks);
     for (std::size_t i = 0; i < n_stacks; ++i) {
@@ -334,12 +336,14 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
         // evaluator walks the tree. Mirrors `eval_per_task_metadata_on_host` on the SPIR-V side. The empty-results fast
         // path passes the live `expr` pointer directly so `size_expr_cache_` (keyed by `SerializedSizeExpr *`) stays
         // warm across launches; the non-empty branch builds a stack-local substituted tree and routes through
-        // `evaluate_adstack_size_expr_no_cache` so the transient pointer never aliases unrelated cache entries.
-        if (local_max_reducer_results.empty()) {
+        // `evaluate_adstack_size_expr_no_cache` so the transient pointer never aliases unrelated cache entries. The
+        // `shared_ptr` is initialised to a non-null empty-map sentinel by `dispatch_max_reducers_impl`, so the deref is
+        // always safe.
+        if (!local_max_reducer_results || local_max_reducer_results->empty()) {
           v = evaluate_adstack_size_expr(*expr, prog, ctx);
         } else {
           const SerializedSizeExpr substituted = substitute_precomputed_max_over_range(
-              *expr, ad_stack.registry_id, static_cast<int32_t>(i), local_max_reducer_results);
+              *expr, ad_stack.registry_id, static_cast<int32_t>(i), *local_max_reducer_results);
           v = evaluate_adstack_size_expr_no_cache(substituted, prog, ctx);
         }
       }
@@ -450,14 +454,20 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     }
     if (!llvm_metadata_cache_hit) {
       std::vector<uint8_t> bytecode;
+      // The encoder reads the result map by `const &`. `current_max_reducer_results_` is a `shared_ptr<const map>`
+      // initialised to a non-null empty-map sentinel by `dispatch_max_reducers_impl`, so the deref is safe; defend
+      // anyway against the path where `dispatch_max_reducers_impl` was never invoked (forward-only kernels) by falling
+      // back to a stack-local empty map.
+      static const MaxReducerResultMap kEmptyResults{};
+      const MaxReducerResultMap &results_view =
+          current_max_reducer_results_ ? *current_max_reducer_results_ : kEmptyResults;
       if (program_impl_ != nullptr && program_impl_->program != nullptr) {
-        bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, program_impl_->program, ctx,
-                                                            current_max_reducer_results_);
+        bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, program_impl_->program, ctx, results_view);
       } else {
         // No program attached (rare: C++-only tests that construct Program without a full runtime). Fall through
         // to compile-time bounds by emitting an empty-tree bytecode - the device interpreter sees
         // `root_node_idx == -1` for every stack and routes to `max_size_compile_time`.
-        bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, nullptr, ctx, current_max_reducer_results_);
+        bytecode = encode_adstack_size_expr_device_bytecode(ad_stack, nullptr, ctx, results_view);
       }
       // Grow the scratch buffer if the bytecode outgrew the cached capacity. Amortised doubling keeps the
       // allocation traffic O(log max_bytecode_bytes) across a run.

@@ -4735,21 +4735,25 @@ def test_adstack_static_bound_expr_resolve_length_walks_full_ndarray():
         "above_cap_arith_combine",
     ],
 )
-@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal], require=qd.extension.adstack, cfg_optimization=False)
 def test_max_reducer_pins_stride_for_oversized_axis(shape, body_kind):
-    # A reverse-mode kernel with a parallel-for over an arbitrarily large ndarray axis and an inner range-for bound to a
-    # recognizer-accepted trip-count expression sizes its adstack at launch time and computes the right gradient,
-    # without the per-task sizer's `1<<24` cap firing.
+    # A reverse-mode kernel with a parallel-for over an arbitrarily large ndarray axis and an inner range-for bound to
+    # a recognizer-accepted trip-count expression sizes its adstack at launch time and computes the right gradient,
+    # without the per-task sizer's `1<<24` cap firing. GPU only: the max-reducer dispatch is GPU-specific - the host
+    # evaluator handles equivalent shapes on CPU.
     #
     # Internal details: the kernel lowers to `MaxOverRange(0, a.shape[0], <body>)` in the per-stack `SizeExpr`.
     # `recognize_adstack_max_reducer_specs` captures the spec; the launcher dispatches the parallel max-reducer before
-    # the per-task sizer walks the tree; `substitute_precomputed_max_over_range` rewrites the captured `MaxOverRange` to
-    # `Const`. The above-cap variants place the only non-zero cell at `arr_np[-1] = N_X` so heap-stride correctness
+    # the per-task sizer walks the tree; `substitute_precomputed_max_over_range` rewrites the captured `MaxOverRange`
+    # to `Const`. The above-cap variants place the only non-zero cell at `arr_np[-1] = N_X` so heap-stride correctness
     # depends on the dispatch walking every element of the axis rather than relying on a partial host-eval walk. The
     # `shape_in_body` / `field_in_body` variants additionally pin that closed leaves (`ExternalTensorShape`,
     # `FieldLoad`) host-fold to `kConst` at encode time and never reach the device interpreter; `arith_combine`
     # exercises every binary combinator (`Add`, `Sub`, `Mul`, `Max`) and `Const` leaf in a single body expression that
-    # algebraically reduces to `a[i_e]`.
+    # algebraically reduces to `a[i_e]`. The CPU codegen gate lives in
+    # `codegen/llvm/codegen_llvm.cpp::finalize_offloaded_task_function`; the lifted host-eval cap lives in
+    # `program/adstack/eval.cpp::evaluate_node`. On CPU `_get_max_reducer_dispatch_count` stays at 0 (no dispatch
+    # fires), which is why this test pins it on GPU arches only.
     N_X = 4
     arr_np = np.zeros(shape, dtype=np.int32)
     arr_np[-1] = N_X
@@ -4813,17 +4817,18 @@ def test_max_reducer_pins_stride_for_oversized_axis(shape, body_kind):
         assert x.grad[k] == pytest.approx(2 * 0.1, rel=1e-5)
 
 
-@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal], require=qd.extension.adstack, cfg_optimization=False)
 def test_max_reducer_dispatch_counts_advance_on_input_mutation():
-    # Pins the dispatch + cache invalidation pipeline. The first launch must fire at least one max-reducer dispatch (the
-    # kernel's `MaxOverRange(0, a.shape[0], a[var])` matches the recognizer grammar so the recognizer captures the spec;
-    # the launcher dispatches once and bumps `Program.max_reducer_dispatch_count`). A subsequent host mutation of the
-    # gating ndarray must bump `ndarray_data_gen` and force the next launch to re-dispatch, advancing the counter beyond
-    # its post-first-launch value. Steady-state cache short-circuit on an unchanged ndarray is backend-dependent (the
-    # CPU launcher's `set_host_accessible_ndarray_ptrs` path converts qd.ndarray reads to `kNone` semantics and
-    # `bump_writes_for_kernel_llvm` then bumps the gen on every read; the SPIR-V launchers preserve the qd.ndarray
-    # dev-alloc-type and only bump on writes), so this test asserts only the mutation-triggers-redispatch contract that
-    # holds uniformly.
+    # Pins the dispatch + cache invalidation pipeline. The first launch must fire at least one max-reducer dispatch
+    # (the kernel's `MaxOverRange(0, a.shape[0], a[var])` matches the recognizer grammar so the recognizer captures
+    # the spec; the launcher dispatches once and bumps `Program.max_reducer_dispatch_count`). A subsequent host
+    # mutation of the gating ndarray must bump `ndarray_data_gen` and force the next launch to re-dispatch, advancing
+    # the counter beyond its post-first-launch value. Steady-state cache short-circuit on an unchanged ndarray is
+    # backend-dependent (the CPU launcher's `set_host_accessible_ndarray_ptrs` path converts qd.ndarray reads to
+    # `kNone` semantics and `bump_writes_for_kernel_llvm` then bumps the gen on every read; the SPIR-V launchers
+    # preserve the qd.ndarray dev-alloc-type and only bump on writes), so this test asserts only the
+    # mutation-triggers-redispatch contract that holds uniformly. GPU only: the max-reducer dispatch is GPU-specific -
+    # the host evaluator handles equivalent shapes on CPU.
     N = 4
 
     x = qd.field(qd.f32, shape=(N,), needs_grad=True)
@@ -4864,6 +4869,50 @@ def test_max_reducer_dispatch_counts_advance_on_input_mutation():
     compute.grad(a)
     qd.sync()
     assert prog._get_max_reducer_dispatch_count() > pre_mutation
+
+
+@test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal], require=qd.extension.adstack)
+def test_max_reducer_per_kernel_registry_id_isolation():
+    # Two `qd.template()` instantiations of the same kernel hash to distinct registry ids so the per-spec max-reducer
+    # cache keyed by `(registry_id, stack_id, mor_node_idx)` does not leak entries across them. GPU only: the max-
+    # reducer dispatch is GPU-specific.
+    #
+    # Internal details: a single `@qd.kernel` definition takes a `qd.template()` flag and selects between two distinct
+    # reverse-mode bodies that write to different loss fields. Each instantiation captures a `MaxOverRange` spec at the
+    # same `(stack_id, mor_node_idx)` coordinates because the bodies are structurally identical, and they share the same
+    # `arr` so a stale entry would pass the observation freshness check (same devalloc, same write gen). The dispatch-
+    # count delta on the second instantiation pins that the SPIR-V launcher registers each task with the real kernel
+    # name so the registry slot is unique per kernel handle.
+    arr = qd.ndarray(qd.i32, shape=(2,))
+    arr.from_numpy(np.array([0, 2], dtype=np.int32))
+
+    x = qd.field(qd.f32, shape=(2,), needs_grad=True)
+    loss_a = qd.field(qd.f32, shape=(), needs_grad=True)
+    loss_b = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1), flag: qd.template()):
+        for i in range(a.shape[0]):
+            accum = 0.0
+            for j in range(a[i]):
+                accum = accum + x[j] * x[j]
+            if qd.static(flag):
+                loss_a[None] += accum
+            else:
+                loss_b[None] += accum
+
+    prog = impl.get_runtime().prog
+    prog._reset_max_reducer_dispatch_count()
+
+    compute(arr, False)
+    compute.grad(arr, False)
+    qd.sync()
+    after_false = prog._get_max_reducer_dispatch_count()
+
+    compute(arr, True)
+    compute.grad(arr, True)
+    qd.sync()
+    assert prog._get_max_reducer_dispatch_count() > after_false
 
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
@@ -4921,13 +4970,14 @@ def test_max_reducer_grammar_fallback():
         "arr_bv_indexed_by_field_load",
     ],
 )
-@test_utils.test(require=qd.extension.adstack)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal], require=qd.extension.adstack)
 def test_max_reducer_field_load_bound_var_dispatch(body_kind):
     # A reverse-mode kernel whose inner range-for trip count reads a `qd.field` indexed by the outer chain variable
     # captures via the parallel max-reducer dispatch and produces the analytical gradient. The body-shape
     # parametrization exercises every supported composition: bound-var FieldLoad on its own, mixed with bound-var ETR
     # via `Add` / `Max`, combined with `Const` / arithmetic, and the nested-load worst-case form (`field[field[i]]` /
-    # `arr[field[i]]`).
+    # `arr[field[i]]`). GPU only: the max-reducer dispatch is GPU-specific - the host evaluator handles equivalent
+    # shapes on CPU.
     #
     # Internal details: each variant lowers to `MaxOverRange(0, M, body)` where `body` is bound-var-indexed
     # `FieldLoad(field_a, [bound_var])` or a recognizer-accepted composition that includes one. The relaxed
@@ -5028,10 +5078,11 @@ def test_max_reducer_field_load_bound_var_dispatch(body_kind):
         assert x.grad[k] == pytest.approx(expected, rel=1e-5)
 
 
-@test_utils.test(require=qd.extension.adstack)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal], require=qd.extension.adstack)
 def test_max_reducer_field_load_bound_var_cache_invalidates_on_snode_mutation():
     # A reverse-mode kernel whose inner trip count reads a `qd.field` indexed by the outer chain variable redispatches
-    # the max-reducer when the gating field is mutated between launches.
+    # the max-reducer when the gating field is mutated between launches. GPU only: the max-reducer dispatch is
+    # GPU-specific - the host evaluator handles equivalent shapes on CPU.
     #
     # Internal details: the encoder emits a `kFieldLoad` device node and pushes a `FieldLoadObs` carrying the snode id
     # and the live `snode_write_gen` snapshot. On the second launch's `try_max_reducer_cache_hit`,
@@ -5087,10 +5138,11 @@ def test_max_reducer_field_load_bound_var_cache_invalidates_on_snode_mutation():
     assert prog._get_max_reducer_dispatch_count() > pre_mutation
 
 
-@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal], require=qd.extension.adstack, cfg_optimization=False)
 def test_above_cap_out_of_grammar_kernel_raises():
     # A reverse-mode kernel whose inner `range(...)` trip count is bound to an out-of-grammar `MaxOverRange` body and
     # whose iteration count exceeds the `1<<24` adstack-sizer cap surfaces a `QuadrantsAssertionError` at `qd.sync()`.
+    # GPU only: on CPU the host-eval cap is lifted to UINT32_MAX, so a shape of `(1<<24)+1` resolves without raising.
     #
     # Internal details: the recognizer's body grammar accepts only `Const / ExternalTensorRead / Add / Sub / Mul / Max
     # / ExternalTensorShape / FieldLoad(literal-or-bound-var indices)`, and `max_reducer_body_is_recognizable` further

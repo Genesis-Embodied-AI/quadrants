@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "quadrants/codegen/llvm/llvm_compiled_data.h"
 #include "quadrants/common/logging.h"
 #include "quadrants/ir/type.h"
 #include "quadrants/ir/type_factory.h"
@@ -20,100 +21,89 @@ namespace quadrants::lang {
 
 namespace {
 
-// Read the input that `obs` describes against the live state and `ctx`. Caller compares the result to
-// `obs.observed_value` to decide whether the cached `SizeExprCacheEntry` is still valid. Each `obs.kind`
-// mirrors the corresponding leaf in `evaluate_field_load` / `evaluate_external_tensor_shape` /
-// `evaluate_external_tensor_read`.
-int64_t replay_one_observation(const AdStackCache::SizeExprReadObservation &obs,
-                               Program *prog,
-                               LaunchContextBuilder *ctx) {
+// Decide whether the input that `obs` describes is still consistent with the recorded state. Returns true iff the
+// cached `SizeExprCacheEntry` is still valid for this observation. FieldLoadObs / ExternalReadObs use the per-buffer
+// gen counter (`snode_write_gen` / `ndarray_data_gen`) as the sole staleness signal: a gen-counter advance forces a
+// re-walk regardless of whether the read cells themselves changed. ExternalShapeObs has no gen counter (shapes are
+// launch-arg metadata, not buffer content), so it falls back to value comparison against `observed_value`.
+bool replay_observation_is_fresh(const AdStackCache::SizeExprReadObservation &obs,
+                                 Program *prog,
+                                 LaunchContextBuilder *ctx) {
   using Obs = AdStackCache::SizeExprReadObservation;
   switch (obs.kind) {
-    case Obs::FieldLoadObs: {
-      // Gen-counter fast skip: when no kernel has bumped this SNode's write generation since record time, the
-      // underlying field value cannot have changed and we can return the recorded `observed_value` without dispatching
-      // a reader kernel. The dispatch is the dominant per-launch cost on the hot path for steady-state reverse-mode
-      // loops with stable bounds.
-      if (prog != nullptr && prog->adstack_cache().snode_write_gen(obs.snode_id) == obs.observed_gen) {
-        return obs.observed_value;
-      }
-      // Max-reducer body FieldLoadObs (bound-var-indexed leaves) records `indices = {}` since the body is evaluated at
-      // every cross-product point and there is no single canonical index to re-read. The gen counter is the only valid
-      // staleness signal in that mode; a gen mismatch unconditionally invalidates the cache.
-      if (obs.indices.empty()) {
-        return obs.observed_value + 1;
-      }
-      int64_t v = read_field_with_launch_cache(obs.snode_id, obs.indices, prog);
-      if (v == std::numeric_limits<int64_t>::min()) {
-        return obs.observed_value + 1;  // force a mismatch if SNode disappeared
-      }
-      return v;
-    }
-    case Obs::ExternalShapeObs: {
-      if (ctx == nullptr) {
-        return obs.observed_value + 1;
-      }
-      std::vector<int> arg_indices(obs.arg_id_path.begin(), obs.arg_id_path.end());
-      arg_indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
-      arg_indices.push_back(obs.arg_shape_axis);
-      return static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(arg_indices));
-    }
+    case Obs::FieldLoadObs:
+      return prog != nullptr && prog->adstack_cache().snode_write_gen(obs.snode_id) == obs.observed_gen;
     case Obs::ExternalReadObs: {
-      if (ctx == nullptr || obs.arg_id_path.empty()) {
-        return obs.observed_value + 1;
+      if (ctx == nullptr || obs.arg_id_path.empty() || prog == nullptr) {
+        return false;
       }
       int arg_id = obs.arg_id_path[0];
       ArgArrayPtrKey key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
       auto it = ctx->array_ptrs.find(key);
       if (it == ctx->array_ptrs.end()) {
-        return obs.observed_value + 1;
+        return false;
       }
       void *data_ptr = it->second;
-      // Gen-counter fast skip: when the data pointer is the same `DeviceAllocation *` we observed at record
-      // time AND its data generation has not been bumped since (no kernel write, no host-side `Ndarray.write`
-      // / `fill`), the underlying scalar cannot have changed and we can return the recorded value without
-      // dereferencing the device pointer (which on GPU would be a DtoH copy, on CPU a host load).
-      if (prog != nullptr && data_ptr == obs.observed_devalloc &&
-          prog->adstack_cache().ndarray_data_gen(data_ptr) == obs.observed_gen) {
-        return obs.observed_value;
+      return data_ptr == obs.observed_devalloc && prog->adstack_cache().ndarray_data_gen(data_ptr) == obs.observed_gen;
+    }
+    case Obs::ExternalShapeObs: {
+      if (ctx == nullptr) {
+        return false;
       }
-      int64_t linear = 0;
-      int64_t stride = 1;
-      for (std::size_t i = obs.indices.size(); i > 0; --i) {
-        linear += static_cast<int64_t>(obs.indices[i - 1]) * stride;
-        if (i - 1 > 0) {
-          std::vector<int> sh_idx(obs.arg_id_path.begin(), obs.arg_id_path.end());
-          sh_idx.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
-          sh_idx.push_back(static_cast<int>(i - 1));
-          stride *= static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(sh_idx));
-        }
-      }
-      switch (static_cast<PrimitiveTypeID>(obs.prim_dt)) {
-        case PrimitiveTypeID::i32:
-          return static_cast<int64_t>(static_cast<int32_t *>(data_ptr)[linear]);
-        case PrimitiveTypeID::i64:
-          return static_cast<int64_t *>(data_ptr)[linear];
-        case PrimitiveTypeID::u32:
-          return static_cast<int64_t>(static_cast<uint32_t *>(data_ptr)[linear]);
-        case PrimitiveTypeID::u64:
-          return static_cast<int64_t>(static_cast<uint64_t *>(data_ptr)[linear]);
-        case PrimitiveTypeID::i16:
-          return static_cast<int64_t>(static_cast<int16_t *>(data_ptr)[linear]);
-        case PrimitiveTypeID::u16:
-          return static_cast<int64_t>(static_cast<uint16_t *>(data_ptr)[linear]);
-        case PrimitiveTypeID::i8:
-          return static_cast<int64_t>(static_cast<int8_t *>(data_ptr)[linear]);
-        case PrimitiveTypeID::u8:
-          return static_cast<int64_t>(static_cast<uint8_t *>(data_ptr)[linear]);
-        default:
-          return obs.observed_value + 1;
-      }
+      std::vector<int> arg_indices(obs.arg_id_path.begin(), obs.arg_id_path.end());
+      arg_indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+      arg_indices.push_back(obs.arg_shape_axis);
+      return static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(arg_indices)) == obs.observed_value;
     }
   }
-  return obs.observed_value + 1;
+  return false;
 }
 
 }  // namespace
+
+void AdStackCache::note_observations(const std::vector<SizeExprReadObservation> &reads) {
+  for (const auto &obs : reads) {
+    if (obs.kind == SizeExprReadObservation::FieldLoadObs) {
+      observed_snode_ids_.insert(obs.snode_id);
+    } else if (obs.kind == SizeExprReadObservation::ExternalReadObs) {
+      any_external_read_observed_ = true;
+      if (obs.observed_devalloc != nullptr) {
+        observed_devalloc_ptrs_.insert(obs.observed_devalloc);
+      }
+    }
+  }
+}
+
+void AdStackCache::note_per_task_dependencies(const std::vector<std::pair<int, uint64_t>> &snode_gens,
+                                              const std::vector<std::tuple<int, void *, uint64_t>> &arg_gens) {
+  for (const auto &kv : snode_gens) {
+    observed_snode_ids_.insert(kv.first);
+  }
+  if (!arg_gens.empty()) {
+    any_external_read_observed_ = true;
+    for (const auto &tup : arg_gens) {
+      void *devalloc = std::get<1>(tup);
+      if (devalloc != nullptr) {
+        observed_devalloc_ptrs_.insert(devalloc);
+      }
+    }
+  }
+}
+
+void AdStackCache::note_per_task_dependencies(const std::vector<std::pair<int, uint64_t>> &snode_gens,
+                                              const std::vector<ArgGenObservation> &arg_gens) {
+  for (const auto &kv : snode_gens) {
+    observed_snode_ids_.insert(kv.first);
+  }
+  if (!arg_gens.empty()) {
+    any_external_read_observed_ = true;
+    for (const auto &dep : arg_gens) {
+      if (dep.devalloc != nullptr) {
+        observed_devalloc_ptrs_.insert(dep.devalloc);
+      }
+    }
+  }
+}
 
 bool AdStackCache::try_size_expr_cache_hit(Program *prog,
                                            const SerializedSizeExpr *expr_key,
@@ -125,8 +115,7 @@ bool AdStackCache::try_size_expr_cache_hit(Program *prog,
   }
   const auto &entry = it->second;
   for (const auto &obs : entry.reads) {
-    int64_t now = replay_one_observation(obs, prog, ctx);
-    if (now != obs.observed_value) {
+    if (!replay_observation_is_fresh(obs, prog, ctx)) {
       size_expr_cache_.erase(it);
       return false;
     }
@@ -138,7 +127,9 @@ bool AdStackCache::try_size_expr_cache_hit(Program *prog,
 void AdStackCache::record_size_expr_eval(const SerializedSizeExpr *expr_key,
                                          int64_t result,
                                          std::vector<SizeExprReadObservation> reads) {
+  note_observations(reads);
   size_expr_cache_[expr_key] = SizeExprCacheEntry{result, std::move(reads)};
+  any_recordings_ = true;
 }
 
 namespace {
@@ -163,8 +154,7 @@ bool AdStackCache::try_max_reducer_cache_hit(uint32_t registry_id,
   }
   const auto &entry = it->second;
   for (const auto &obs : entry.reads) {
-    int64_t now = replay_one_observation(obs, prog_, ctx);
-    if (now != obs.observed_value) {
+    if (!replay_observation_is_fresh(obs, prog_, ctx)) {
       max_reducer_cache_.erase(it);
       return false;
     }
@@ -178,11 +168,9 @@ void populate_max_reducer_body_observations(std::vector<AdStackCache::SizeExprRe
                                             AdStackCache *cache) {
   for (auto &obs : reads) {
     if (obs.kind == AdStackCache::SizeExprReadObservation::FieldLoadObs) {
-      // `FieldLoadObs` from a bound-var-indexed body leaf: snapshot the snode write generation so a subsequent launch
-      // that has not mutated the SNode replays the cached max via `replay_one_observation`'s gen-fast-skip arm. Same
-      // sentinel rationale as `ExternalReadObs` below: the recognizer restricts the leaf dtype so an `INT64_MIN`
-      // recorded value cannot equal a freshly-loaded one on cache miss.
-      obs.observed_value = std::numeric_limits<int64_t>::min();
+      // Snapshot the snode write generation so a subsequent launch that has not mutated the SNode replays as a cache
+      // hit via the gen-counter check in `replay_observation_is_fresh`. `observed_value` is unused for FieldLoadObs
+      // (gen counter is the sole staleness signal) and left at its default-constructed value.
       if (cache != nullptr) {
         obs.observed_gen = cache->snode_write_gen(obs.snode_id);
       }
@@ -201,13 +189,9 @@ void populate_max_reducer_body_observations(std::vector<AdStackCache::SizeExprRe
       continue;
     }
     obs.observed_devalloc = it->second;
-    // Pick an `observed_value` that no in-range ndarray scalar can equal (`INT64_MIN`). The replay code returns
-    // `obs.observed_value` verbatim when `ndarray_data_gen` still matches the recorded snapshot, so an `INT64_MIN`
-    // record is a self-equal cache hit. On gen mismatch the replay re-dereferences `data[0]` instead, which (under any
-    // sub-i64 prim_dt the recognizer admits) widens to an i64 strictly greater than `INT64_MIN` and forces the cache to
-    // invalidate. The dispatched max itself lives in `MaxReducerCacheEntry::result`; this observation only gates
-    // whether the cache stays warm.
-    obs.observed_value = std::numeric_limits<int64_t>::min();
+    // Snapshot the data-pointer + ndarray data generation so a subsequent launch with the same `DeviceAllocation` and
+    // an unbumped gen replays as a cache hit. `observed_value` is unused for ExternalReadObs (gen counter is the sole
+    // staleness signal) and left at its default-constructed value.
     if (cache != nullptr) {
       obs.observed_gen = cache->ndarray_data_gen(it->second);
     }
@@ -228,9 +212,105 @@ void AdStackCache::record_max_reducer_eval(uint32_t registry_id,
                                            int32_t mor_node_idx,
                                            int64_t result,
                                            std::vector<SizeExprReadObservation> reads) {
+  note_observations(reads);
   max_reducer_cache_[pack_max_reducer_key(registry_id, stack_id, mor_node_idx)] =
       MaxReducerCacheEntry{result, std::move(reads)};
   ++max_reducer_dispatch_count_;
+  any_recordings_ = true;
+}
+
+bool AdStackCache::try_max_reducer_launch_cache_hit(
+    const void *launch_cache_key,
+    LaunchContextBuilder *ctx,
+    std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> &out_result) {
+  if (launch_cache_key == nullptr || ctx == nullptr) {
+    return false;
+  }
+  auto it = max_reducer_launch_cache_.find(launch_cache_key);
+  if (it == max_reducer_launch_cache_.end()) {
+    return false;
+  }
+  const auto &entry = it->second;
+  for (const auto &kv : entry.snode_gens) {
+    if (snode_write_gen(kv.first) != kv.second) {
+      return false;
+    }
+  }
+  for (const auto &dep : entry.arg_gens) {
+    ArgArrayPtrKey key{dep.arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+    auto ap_it = ctx->array_ptrs.find(key);
+    void *current_devalloc = (ap_it == ctx->array_ptrs.end()) ? nullptr : ap_it->second;
+    if (current_devalloc != dep.devalloc || ndarray_data_gen(current_devalloc) != dep.gen) {
+      return false;
+    }
+  }
+  // Hand back a `shared_ptr` copy of the cached result. Refcount bump only - no map copy. The cache entry retains its
+  // own ownership, so the caller's transient stays valid even after a recursive reentry rewrites the executor's
+  // `current_max_reducer_results_` field.
+  out_result = entry.result;
+  return true;
+}
+
+void AdStackCache::record_max_reducer_launch_cache(const void *launch_cache_key,
+                                                   const std::vector<const AdStackSizingInfo *> &ad_stacks,
+                                                   std::shared_ptr<const std::unordered_map<uint64_t, int64_t>> result,
+                                                   LaunchContextBuilder *ctx) {
+  if (launch_cache_key == nullptr || ctx == nullptr) {
+    return;
+  }
+  // Aggregate every spec's observation deps into a deduplicated `(snode_id -> gen)` map and `(arg_id -> (devalloc,
+  // gen))` map. The fast-path replay walks these maps once per launch; deduplication keeps the replay O(distinct deps)
+  // instead of O(specs * obs/spec). `lookup_max_reducer_reads` returns the per-spec observations recorded by either a
+  // fresh `record_max_reducer_eval` or a still-warm `populate_max_reducer_body_observations` call earlier in this
+  // launch.
+  MaxReducerLaunchCacheEntry entry;
+  entry.result = std::move(result);
+  std::unordered_map<int, uint64_t> snode_gens_map;
+  std::unordered_map<int, std::pair<void *, uint64_t>> arg_gens_map;
+  for (const auto *ad_stack_ptr : ad_stacks) {
+    if (ad_stack_ptr == nullptr) {
+      continue;
+    }
+    const auto &ad_stack = *ad_stack_ptr;
+    if (ad_stack.max_reducer_specs.empty() || ad_stack.registry_id == 0) {
+      continue;
+    }
+    for (const auto &spec : ad_stack.max_reducer_specs) {
+      const auto *reads = lookup_max_reducer_reads(ad_stack.registry_id, spec.stack_id, spec.mor_node_idx);
+      if (reads == nullptr) {
+        continue;
+      }
+      for (const auto &obs : *reads) {
+        if (obs.kind == SizeExprReadObservation::FieldLoadObs) {
+          if (obs.snode_id >= 0) {
+            snode_gens_map[obs.snode_id] = snode_write_gen(obs.snode_id);
+          }
+        } else if (obs.kind == SizeExprReadObservation::ExternalReadObs) {
+          if (!obs.arg_id_path.empty()) {
+            const int arg_id = obs.arg_id_path[0];
+            ArgArrayPtrKey key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+            auto ap_it = ctx->array_ptrs.find(key);
+            void *devalloc = (ap_it == ctx->array_ptrs.end()) ? nullptr : ap_it->second;
+            arg_gens_map[arg_id] = {devalloc, ndarray_data_gen(devalloc)};
+          }
+        }
+      }
+    }
+  }
+  entry.snode_gens.reserve(snode_gens_map.size());
+  for (const auto &kv : snode_gens_map) {
+    entry.snode_gens.emplace_back(kv.first, kv.second);
+  }
+  entry.arg_gens.reserve(arg_gens_map.size());
+  for (const auto &kv : arg_gens_map) {
+    entry.arg_gens.push_back({kv.first, kv.second.first, kv.second.second});
+  }
+  // Mirror the deduplicated dependency footprint into the per-id observed sets; safe to do after `entry` is finalised
+  // because `note_per_task_dependencies` reads the snode-gen pair's first element and walks the `arg_gens` list to
+  // pull each `(arg_id, devalloc, gen)` triple's devalloc into `observed_devalloc_ptrs_`.
+  note_per_task_dependencies(entry.snode_gens, entry.arg_gens);
+  max_reducer_launch_cache_[launch_cache_key] = std::move(entry);
+  any_recordings_ = true;
 }
 
 bool AdStackCache::try_spirv_bytecode_cache_hit(Program *prog,
@@ -243,8 +323,7 @@ bool AdStackCache::try_spirv_bytecode_cache_hit(Program *prog,
   }
   const auto &entry = it->second;
   for (const auto &obs : entry.reads) {
-    int64_t now = replay_one_observation(obs, prog, ctx);
-    if (now != obs.observed_value) {
+    if (!replay_observation_is_fresh(obs, prog, ctx)) {
       spirv_bytecode_cache_.erase(it);
       return false;
     }
@@ -256,7 +335,9 @@ bool AdStackCache::try_spirv_bytecode_cache_hit(Program *prog,
 void AdStackCache::record_spirv_bytecode_eval(const void *attribs_key,
                                               std::vector<uint8_t> bytecode,
                                               std::vector<SizeExprReadObservation> reads) {
+  note_observations(reads);
   spirv_bytecode_cache_[attribs_key] = SpirvBytecodeCacheEntry{std::move(bytecode), std::move(reads)};
+  any_recordings_ = true;
 }
 
 void AdStackCache::record_per_task_ad_stack(const void *attribs_key,
@@ -265,8 +346,10 @@ void AdStackCache::record_per_task_ad_stack(const void *attribs_key,
                                             uint32_t stride_int,
                                             std::vector<std::pair<int, uint64_t>> snode_gens,
                                             std::vector<std::tuple<int, void *, uint64_t>> arg_gens) {
+  note_per_task_dependencies(snode_gens, arg_gens);
   per_task_ad_stack_cache_[attribs_key] = PerTaskAdStackCacheEntry{std::move(metadata), stride_float, stride_int,
                                                                    std::move(snode_gens), std::move(arg_gens)};
+  any_recordings_ = true;
 }
 
 bool AdStackCache::try_per_task_ad_stack_cache_hit(const void *attribs_key,
@@ -316,9 +399,11 @@ void AdStackCache::record_llvm_per_task_ad_stack(const void *attribs_key,
                                                  uint64_t stride_int,
                                                  std::vector<std::pair<int, uint64_t>> snode_gens,
                                                  std::vector<std::tuple<int, void *, uint64_t>> arg_gens) {
+  note_per_task_dependencies(snode_gens, arg_gens);
   llvm_per_task_ad_stack_cache_[attribs_key] =
       LlvmPerTaskAdStackCacheEntry{std::move(offsets), std::move(max_sizes),  stride_combined,    stride_float,
                                    stride_int,         std::move(snode_gens), std::move(arg_gens)};
+  any_recordings_ = true;
 }
 
 bool AdStackCache::try_llvm_per_task_ad_stack_cache_hit(const void *attribs_key,
@@ -360,17 +445,43 @@ bool AdStackCache::try_llvm_per_task_ad_stack_cache_hit(const void *attribs_key,
   return true;
 }
 
+namespace {
+// FNV-1a 64-bit, folded to 32-bit; never returns 0 (reserved sentinel). Used to derive a content-stable `registry_id`
+// from the (kernel_name, task_id_in_kernel) pair. We need a deterministic hash because the id is baked as an immediate
+// into LLVM IR / SPIR-V at codegen time and read back by the host on overflow: `std::hash<std::string>` is
+// implementation-defined and not stable across stdlib versions, so we cannot rely on it producing the same id at
+// codegen time and at offline-cache-reload-driven runtime registration.
+inline uint32_t fnv1a32_for_registry(const std::string &kernel_name, int task_id_in_kernel) {
+  constexpr uint64_t kFnvOffsetBasis = 0xcbf29ce484222325ULL;
+  constexpr uint64_t kFnvPrime = 0x100000001b3ULL;
+  uint64_t h = kFnvOffsetBasis;
+  for (unsigned char c : kernel_name) {
+    h ^= c;
+    h *= kFnvPrime;
+  }
+  // Domain separator so `(name + str(N))` and `(name_with_extra_chars)` cannot accidentally collide.
+  h ^= ':';
+  h *= kFnvPrime;
+  uint64_t t = static_cast<uint64_t>(static_cast<uint32_t>(task_id_in_kernel));
+  for (int i = 0; i < 8; ++i) {
+    h ^= (t >> (i * 8)) & 0xFFu;
+    h *= kFnvPrime;
+  }
+  uint32_t r = static_cast<uint32_t>(h ^ (h >> 32));
+  return r == 0 ? 1u : r;
+}
+}  // namespace
+
 uint32_t AdStackCache::register_adstack_sizing_info(const void *identity_key,
                                                     const std::string &kernel_name,
                                                     int task_id_in_kernel,
                                                     std::vector<int> allocated_max_sizes,
                                                     std::vector<SerializedSizeExpr> size_exprs) {
   std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
-  // Idempotent re-registration: same `identity_key` yields the same id across re-compiles and updates the
-  // entry's metadata + size_exprs in place. The key is just an opaque dedup token - the registry never
-  // dereferences it; all data needed by the diagnose path is copied into the entry below.
-  auto it = adstack_sizing_info_id_by_ptr_.find(identity_key);
-  if (it != adstack_sizing_info_id_by_ptr_.end()) {
+  // Idempotent re-registration: same `identity_key` yields the same id across re-compiles and updates the entry's
+  // metadata + size_exprs in place. The key is just an opaque dedup token - the registry never dereferences it; all
+  // data needed by the diagnose path is copied into the entry below.
+  if (auto it = adstack_sizing_info_id_by_ptr_.find(identity_key); it != adstack_sizing_info_id_by_ptr_.end()) {
     auto &entry = adstack_sizing_info_registry_[it->second];
     entry.kernel_name = kernel_name;
     entry.task_id_in_kernel = task_id_in_kernel;
@@ -378,32 +489,116 @@ uint32_t AdStackCache::register_adstack_sizing_info(const void *identity_key,
     entry.size_exprs = std::move(size_exprs);
     return it->second;
   }
-  uint32_t id = static_cast<uint32_t>(adstack_sizing_info_registry_.size());
+  // Content-stable hash. Same (kernel_name, task_id_in_kernel) yields the same id across `Program` lifetimes,
+  // re-compiles, and offline-cache reloads. The codegen-emitted overflow `cmpxchg(0, registry_id)` writes this same
+  // value, so the host lookup of the cmpxchg slot resolves the offending kernel + task without a pre-launch `register`
+  // call from the runtime.
+  uint32_t id = fnv1a32_for_registry(kernel_name, task_id_in_kernel);
+  // Linear-probe past hash collisions (different `(kernel_name, task_id_in_kernel)` pairs that hash to the same id).
+  // Vanishingly rare with a 32-bit FNV-1a (~1.2e-4 collision probability for 1000 distinct keys via birthday bound).
+  // Same-content / different-identity_key (re-codegen of the same source after a `qd.reset()` produces a fresh
+  // `ad_stack` at a new address but the hash inputs are unchanged) MUST keep the existing id; otherwise the codegen-
+  // baked immediate in the cached LLVM IR points at one entry while the runtime registration mints another, defeating
+  // the content-stable contract. Detect that case by comparing `(kernel_name, task_id_in_kernel)` against the slot's
+  // already-stored values; the `identity_key`-equal case cannot land here because the early-out above already returned
+  // for any already-registered key. Skip id 0 (reserved sentinel).
+  while (true) {
+    auto reg_it = adstack_sizing_info_registry_.find(id);
+    if (reg_it == adstack_sizing_info_registry_.end()) {
+      break;
+    }
+    if (reg_it->second.kernel_name == kernel_name && reg_it->second.task_id_in_kernel == task_id_in_kernel) {
+      // Same content (same hash inputs), different `identity_key`. Update in place and add the new identity_key to the
+      // reverse lookup so the new pointer resolves to this same id; the previous identity_key's entry stays valid and
+      // continues to resolve here too.
+      reg_it->second.allocated_max_sizes = std::move(allocated_max_sizes);
+      reg_it->second.size_exprs = std::move(size_exprs);
+      adstack_sizing_info_id_by_ptr_.emplace(identity_key, id);
+      return id;
+    }
+    ++id;
+    if (id == 0) {
+      ++id;  // skip the sentinel
+    }
+  }
   AdStackSizingInfoEntry entry;
   entry.identity_key = identity_key;
   entry.kernel_name = kernel_name;
   entry.task_id_in_kernel = task_id_in_kernel;
   entry.allocated_max_sizes = std::move(allocated_max_sizes);
   entry.size_exprs = std::move(size_exprs);
-  adstack_sizing_info_registry_.push_back(std::move(entry));
+  adstack_sizing_info_registry_.emplace(id, std::move(entry));
   adstack_sizing_info_id_by_ptr_.emplace(identity_key, id);
   return id;
 }
 
 void AdStackCache::update_adstack_sizing_info_size_exprs(uint32_t id, std::vector<SerializedSizeExpr> size_exprs) {
   std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
-  if (id == 0 || id >= adstack_sizing_info_registry_.size()) {
+  if (id == 0) {
     return;
   }
-  adstack_sizing_info_registry_[id].size_exprs = std::move(size_exprs);
+  auto it = adstack_sizing_info_registry_.find(id);
+  if (it == adstack_sizing_info_registry_.end()) {
+    return;
+  }
+  it->second.size_exprs = std::move(size_exprs);
+}
+
+void AdStackCache::ensure_runtime_registry_ids_for_max_reducer(std::vector<OffloadedTask> &tasks) {
+  for (auto &task : tasks) {
+    auto &ad_stack = task.ad_stack;
+    if (ad_stack.max_reducer_specs.empty()) {
+      continue;
+    }
+    // Fast-path gate: the `&ad_stack` identity key is stable across launches of the same kernel handle (it lives in
+    // `KernelLauncher::contexts_[i].offloaded_tasks`), so once we have populated the registry for it we skip every
+    // subsequent launch in O(1). Without this gate, the steady-state hot path would rebuild `allocated_max_sizes` +
+    // `size_exprs` and move them into `register_adstack_sizing_info` on every launch even though the entry is already
+    // there - which costs a measurable fraction of the recovered FPS on long reverse-mode loops.
+    if (is_adstack_sizing_info_registered(static_cast<const void *>(&ad_stack))) {
+      continue;
+    }
+    // After offline-cache load, `ad_stack.registry_id` carries the codegen-baked content-stable hash (now serialised),
+    // which already matches the immediate baked into the LLVM IR's overflow `cmpxchg`. The dispatcher and the
+    // metadata-publish substitution helper read `registry_id` directly off the ad_stack, so they work without us
+    // touching the `Program`-level registry. We still re-populate that registry here on the FIRST launch so the
+    // diagnose-on-overflow path can resolve the cmpxchg-recorded id to a kernel + task name; without this seed the
+    // `Program` registry would stay empty for cache-loaded kernels and an overflow would print the generic dual-cause
+    // fallback. Same `(kernel_name, task_id_in_kernel)` always hashes to the same id, so the registered id matches the
+    // one we already have on `ad_stack`.
+    std::vector<int> allocated_max_sizes;
+    allocated_max_sizes.reserve(ad_stack.allocas.size());
+    for (const auto &a : ad_stack.allocas) {
+      allocated_max_sizes.push_back(static_cast<int>(a.max_size_compile_time));
+    }
+    std::vector<SerializedSizeExpr> size_exprs(ad_stack.size_exprs.begin(), ad_stack.size_exprs.end());
+    uint32_t id =
+        register_adstack_sizing_info(static_cast<const void *>(&ad_stack), ad_stack.kernel_name,
+                                     ad_stack.task_id_in_kernel, std::move(allocated_max_sizes), std::move(size_exprs));
+    // Defensive: if `registry_id` was never populated (very-stale cache, fresh codegen path that skipped the task-START
+    // register call due to a null `Program *`), seed it now from the just-minted id. New kernels already have this set
+    // by `codegen_llvm.cpp::finalize_offloaded_task_function`.
+    if (ad_stack.registry_id == 0) {
+      ad_stack.registry_id = id;
+    }
+  }
+}
+
+bool AdStackCache::is_adstack_sizing_info_registered(const void *identity_key) const {
+  std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
+  return adstack_sizing_info_id_by_ptr_.find(identity_key) != adstack_sizing_info_id_by_ptr_.end();
 }
 
 std::optional<AdStackCache::AdStackSizingInfoEntry> AdStackCache::lookup_adstack_sizing_info(uint32_t id) const {
   std::lock_guard<std::mutex> lk(adstack_sizing_info_registry_mutex_);
-  if (id == 0 || id >= adstack_sizing_info_registry_.size()) {
+  if (id == 0) {
     return std::nullopt;
   }
-  return adstack_sizing_info_registry_[id];
+  auto it = adstack_sizing_info_registry_.find(id);
+  if (it == adstack_sizing_info_registry_.end()) {
+    return std::nullopt;
+  }
+  return it->second;
 }
 
 std::string AdStackCache::diagnose_adstack_overflow_message(uint32_t task_id) const {

@@ -955,6 +955,7 @@ class RangeForStmt : public Stmt {
   int block_dim;
   bool strictly_serialized;
   std::string range_hint;
+  int stream_parallel_group_id{0};
   std::string loop_name;
 
   RangeForStmt(Stmt *begin,
@@ -977,7 +978,14 @@ class RangeForStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  QD_STMT_DEF_FIELDS(begin, end, reversed, is_bit_vectorized, num_cpu_threads, block_dim, strictly_serialized);
+  QD_STMT_DEF_FIELDS(begin,
+                     end,
+                     reversed,
+                     is_bit_vectorized,
+                     num_cpu_threads,
+                     block_dim,
+                     strictly_serialized,
+                     stream_parallel_group_id);
   QD_DEFINE_ACCEPT
 };
 
@@ -996,6 +1004,7 @@ class StructForStmt : public Stmt {
   int num_cpu_threads;
   int block_dim;
   MemoryAccessOptions mem_access_opt;
+  int stream_parallel_group_id{0};
   std::string loop_name;
 
   StructForStmt(SNode *snode,
@@ -1010,7 +1019,13 @@ class StructForStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  QD_STMT_DEF_FIELDS(snode, index_offsets, is_bit_vectorized, num_cpu_threads, block_dim, mem_access_opt);
+  QD_STMT_DEF_FIELDS(snode,
+                     index_offsets,
+                     is_bit_vectorized,
+                     num_cpu_threads,
+                     block_dim,
+                     mem_access_opt,
+                     stream_parallel_group_id);
   QD_DEFINE_ACCEPT
 };
 
@@ -1352,6 +1367,7 @@ class OffloadedStmt : public Stmt {
   std::size_t tls_size{1};  // avoid allocating dynamic memory with 0 byte
   std::size_t bls_size{0};
   MemoryAccessOptions mem_access_opt;
+  int stream_parallel_group_id{0};
 
   // Pre-chunking loop trip-count `SizeExpr` captured by `determine_ad_stack_size`. Set on adstack-bearing
   // range-for tasks before `make_cpu_multithreaded_range_for` rewrites the loop into per-thread chunks, so the
@@ -1399,7 +1415,8 @@ class OffloadedStmt : public Stmt {
                      reversed,
                      num_cpu_threads,
                      index_offsets,
-                     mem_access_opt);
+                     mem_access_opt,
+                     stream_parallel_group_id);
   QD_DEFINE_ACCEPT
 };
 

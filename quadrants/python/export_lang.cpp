@@ -310,7 +310,9 @@ void export_lang(py::module &m) {
       .def("strictly_serialize", &ASTBuilder::strictly_serialize)
       .def("block_dim", &ASTBuilder::block_dim)
       .def("insert_snode_access_flag", &ASTBuilder::insert_snode_access_flag)
-      .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag);
+      .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag)
+      .def("begin_stream_parallel", &ASTBuilder::begin_stream_parallel)
+      .def("end_stream_parallel", &ASTBuilder::end_stream_parallel);
 
   auto device_capability_config =
       py::class_<DeviceCapabilityConfig>(m, "DeviceCapabilityConfig").def("get", &DeviceCapabilityConfig::get);
@@ -318,8 +320,8 @@ void export_lang(py::module &m) {
   auto compiled_kernel_data = py::class_<CompiledKernelData>(m, "CompiledKernelData")
                                   .def("_debug_dump_to_string", &CompiledKernelData::debug_dump_to_string);
 
-  py::class_<Program>(m, "Program")
-      .def(py::init<>())
+  auto program_class = py::class_<Program>(m, "Program");
+  program_class.def(py::init<>())
       .def(
           "ndarray_to_dlpack",
           [](Program *program, pybind11::object owner, Ndarray *ndarray, const std::vector<int> &layout,
@@ -422,6 +424,7 @@ void export_lang(py::module &m) {
            [](Program *program) { return program->adstack_cache().max_reducer_dispatch_count(); })
       .def("_reset_max_reducer_dispatch_count",
            [](Program *program) { program->adstack_cache().reset_max_reducer_dispatch_count(); });
+  export_stream(m, program_class);
 
   py::class_<CompileResult>(m, "CompileResult")
       .def_property_readonly(

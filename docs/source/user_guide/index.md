@@ -57,12 +57,21 @@ tile16
 ```
 
 ```{toctree}
+:caption: Algorithms
+:maxdepth: 1
+:titlesonly:
+
+algorithms
+```
+
+```{toctree}
 :caption: Performance
 :maxdepth: 1
 :titlesonly:
 
 fastcache
 graph
+streams
 perf_dispatch
 init_options
 ```
