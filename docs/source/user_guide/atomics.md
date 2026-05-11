@@ -90,11 +90,6 @@ CPU and CUDA lower system-scope atomics directly to a single hardware instructio
 
 ### Native instruction vs CAS fallback
 
-Key:
-
-- ✅ — single hardware atomic instruction (`lock`-prefixed x86, PTX `atom.*`, AMDGPU `flat_atomic_*`, or SPIR-V `OpAtomic*`).
-- 🟡 — software `cmpxchg` / `cmpswap` retry loop.
-
 The tables below reflect what the in-tree LLVM emits today for Quadrants' default targets (x86_64; CUDA `sm_60+`; AMDGPU `gfx942` / MI300X at `syncscope("agent")`; Vulkan/Metal via SPIR-V). Older / different GFX generations are footnoted.
 
 **Integer atomics** (`i32`, `u32`, `i64`, `u64`):
@@ -113,6 +108,11 @@ The tables below reflect what the in-tree LLVM emits today for Quadrants' defaul
 | `atomic_add`, `atomic_sub` | 🟡           | ✅   | ✅²    | ✅³                     |
 | `atomic_min`, `atomic_max` | 🟡           | 🟡   | 🟡²    | 🟡                      |
 | `atomic_mul`               | 🟡           | 🟡   | 🟡     | 🟡                      |
+
+Key:
+
+- ✅ — single hardware atomic instruction (`lock`-prefixed x86, PTX `atom.*`, AMDGPU `flat_atomic_*`, or SPIR-V `OpAtomic*`).
+- 🟡 — software `cmpxchg` / `cmpswap` retry loop.
 
 `f16` atomics are CAS on every backend (Quadrants forces a CAS loop built from `llvm.minnum` / `llvm.maxnum` / `fadd`), and on Vulkan / Metal are additionally gated on `spirv_has_atomic_float16_*` device capabilities.
 
