@@ -144,9 +144,7 @@ def _svd3_sign_convention_test_inputs():
 
 
 def _test_svd3_sign_convention(dt):
-    print(
-        f"arch={qd.lang.impl.current_cfg().arch} default_fp={qd.lang.impl.current_cfg().default_fp}"
-    )
+    print(f"arch={qd.lang.impl.current_cfg().arch} default_fp={qd.lang.impl.current_cfg().default_fp}")
     np_dt = np.float32 if dt == qd.f32 else np.float64
 
     A = qd.Matrix.field(3, 3, dtype=dt, shape=())
@@ -181,22 +179,17 @@ def _test_svd3_sign_convention(dt):
         # The sign of det(A) is absorbed into σ (so σ may have a negative
         # entry when det(A) < 0).
         assert det_U == test_utils.approx(1.0, abs=tol), (
-            f"[{label}] det(U) = {det_U}, expected +1 (det(A) = {det_A:+.3f}); "
-            f"σ = {sigma_diag.tolist()}"
+            f"[{label}] det(U) = {det_U}, expected +1 (det(A) = {det_A:+.3f}); " f"σ = {sigma_diag.tolist()}"
         )
         assert det_V == test_utils.approx(1.0, abs=tol), (
-            f"[{label}] det(V) = {det_V}, expected +1 (det(A) = {det_A:+.3f}); "
-            f"σ = {sigma_diag.tolist()}"
+            f"[{label}] det(V) = {det_V}, expected +1 (det(A) = {det_A:+.3f}); " f"σ = {sigma_diag.tolist()}"
         )
         # Direct consequence: R = U @ V.T is a proper rotation.
         assert det_R == test_utils.approx(1.0, abs=tol), (
-            f"[{label}] det(U @ V.T) = {det_R}, expected +1; "
-            f"det(U)={det_U:+.3e} det(V)={det_V:+.3e}"
+            f"[{label}] det(U @ V.T) = {det_R}, expected +1; " f"det(U)={det_U:+.3e} det(V)={det_V:+.3e}"
         )
         # Reconstruction must still hold (sanity — duplicates _test_svd).
-        A_reconstructed = (
-            U.to_numpy() @ sigma.to_numpy() @ V.to_numpy().T
-        )
+        A_reconstructed = U.to_numpy() @ sigma.to_numpy() @ V.to_numpy().T
         np.testing.assert_allclose(A_reconstructed, A_np, rtol=tol, atol=tol)
 
 

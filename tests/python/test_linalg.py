@@ -427,7 +427,10 @@ def _test_inverse_at_size(n_, dt_, factory):
     tol = 50 * cond * eps + (1e-5 if dt_ == qd.f32 else 1e-12)
 
     np.testing.assert_allclose(
-        inv_np, expected, rtol=tol, atol=tol,
+        inv_np,
+        expected,
+        rtol=tol,
+        atol=tol,
         err_msg=f"size {n_}, factory {factory.__name__}, cond={cond:.2e}",
     )
     # Round-trip M @ M⁻¹ ≈ I.
