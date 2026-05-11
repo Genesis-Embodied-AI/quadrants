@@ -419,29 +419,30 @@ def test_sym_eig_alpha_identity_f64(n, alpha):
 
 
 def _test_make_spd_idempotent(n, dt, factory):
-    """``make_spd(make_spd(A)) ≈ make_spd(A)`` — defining property of a projector."""
+    """``make_spd(make_spd(A)) ≈ make_spd(A)`` — defining property of a projector.
+
+    Uses an ndarray-arg parametric kernel so ``qd.make_spd`` is JIT-compiled exactly once and called twice
+    (``A → A_spd_1`` and ``A_spd_1 → A_spd_2``). Compiling it twice at N=12 on CUDA blows past the per-test
+    timeout — one compile fits comfortably.
+    """
     np_dt = np.float32 if dt == qd.f32 else np.float64
-    A_np = factory(n, dt)
-    A = qd.Matrix.field(n, n, dtype=dt, shape=())
-    A_spd_1 = qd.Matrix.field(n, n, dtype=dt, shape=())
-    A_spd_2 = qd.Matrix.field(n, n, dtype=dt, shape=())
-    A.from_numpy(A_np)
+    mat_t = qd.types.matrix(n, n, dt)
+    A = qd.Matrix.ndarray(n, n, dtype=dt, shape=(1,))
+    A_spd_1 = qd.Matrix.ndarray(n, n, dtype=dt, shape=(1,))
+    A_spd_2 = qd.Matrix.ndarray(n, n, dtype=dt, shape=(1,))
+    A.from_numpy(factory(n, dt)[np.newaxis])
 
     @qd.kernel
-    def run_first():
-        A_spd_1[None] = qd.make_spd(A[None], dt)
+    def project(src: qd.types.NDArray[mat_t, 1], dst: qd.types.NDArray[mat_t, 1]):
+        dst[0] = qd.make_spd(src[0], dt)
 
-    @qd.kernel
-    def run_second():
-        A_spd_2[None] = qd.make_spd(A_spd_1[None], dt)
-
-    run_first()
-    run_second()
+    project(A, A_spd_1)
+    project(A_spd_1, A_spd_2)
 
     tol = 5e-3 if dt == qd.f32 else 1e-9
     np.testing.assert_allclose(
-        A_spd_2.to_numpy().astype(np_dt),
-        A_spd_1.to_numpy().astype(np_dt),
+        A_spd_2.to_numpy()[0].astype(np_dt),
+        A_spd_1.to_numpy()[0].astype(np_dt),
         rtol=tol,
         atol=tol,
     )
