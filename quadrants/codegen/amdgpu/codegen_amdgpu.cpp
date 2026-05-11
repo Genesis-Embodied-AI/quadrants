@@ -47,6 +47,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   void emit_extra_unary(UnaryOpStmt *stmt) override {
     auto input = llvm_val[stmt->operand];
     auto input_quadrants_type = stmt->operand->ret_type;
+    auto input_type = input->getType();
     auto op = stmt->op_type;
 
 #define UNARY_STD(x)                                                       \
@@ -169,6 +170,36 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     UNARY_STD(exp)
     UNARY_STD(log)
     UNARY_STD(sqrt)
+    else if (op == UnaryOpType::popcnt) {
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
+        llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        auto pop64 = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+        llvm_val[stmt] = builder->CreateTrunc(pop64, llvm::Type::getInt32Ty(*llvm_context));
+        stmt->ret_type = PrimitiveType::i32;
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
+    }
+    else if (op == UnaryOpType::clz) {
+      // clz operates on the unsigned bit pattern, so u32 / u64 lower to the same llvm.ctlz call as i32 / i64; LLVM IR
+      // is signless for integers.
+      auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
+        llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
+        stmt->ret_type = PrimitiveType::i32;
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        auto clz64 = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
+        llvm_val[stmt] = builder->CreateTrunc(clz64, llvm::Type::getInt32Ty(*llvm_context));
+        stmt->ret_type = PrimitiveType::i32;
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
+    }
     else {
       QD_P(unary_op_type_name(op));
       QD_NOT_IMPLEMENTED

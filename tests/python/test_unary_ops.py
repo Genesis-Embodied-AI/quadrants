@@ -94,11 +94,8 @@ def test_frexp():
     assert get_exp(1.4) == 1
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan])
+@test_utils.test()
 def test_popcnt():
-    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: AMDGPU codegen does not lower this op.")
-
     @qd.kernel
     def test_i32(x: qd.int32) -> qd.int32:
         return qd.math.popcnt(x)
@@ -129,16 +126,17 @@ def test_popcnt():
     assert test_u64(10000) == 5
 
 
-@test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda, qd.amdgpu, qd.vulkan])
+@test_utils.test()
 def test_clz():
-    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: AMDGPU codegen does not lower this op.")
-
     @qd.kernel
     def test_i32(x: qd.int32) -> qd.int32:
         return qd.math.clz(x)
 
-    # assert test_i32(0) == 32
+    @qd.kernel
+    def test_u32(x: qd.uint32) -> qd.int32:
+        return qd.math.clz(x)
+
+    assert test_i32(0) == 32
     assert test_i32(1) == 31
     assert test_i32(2) == 30
     assert test_i32(3) == 30
@@ -146,24 +144,74 @@ def test_clz():
     assert test_i32(5) == 29
     assert test_i32(1023) == 22
     assert test_i32(1024) == 21
+    # Sign-bit / all-bits-set cases. These exercise the unsigned-MSB semantics (clz must count over the bit pattern,
+    # so clz(-1) == 0). Before the FindUMsb fix, the SPIR-V path returned 32 for clz(-1).
+    assert test_i32(-1) == 0
+    assert test_i32(-2) == 0
+    assert test_i32(0x7FFFFFFF) == 1
+
+    # u32 inputs lower to the same intrinsic on every backend (LLVM IR is signless for integers; SPIR-V FindUMsb is
+    # unsigned by definition). Pre-generalisation, CUDA / AMDGPU rejected u32 with QD_NOT_IMPLEMENTED and required a
+    # bit_cast through qd.i32 as a workaround.
+    assert test_u32(0) == 32
+    assert test_u32(1) == 31
+    assert test_u32(0x7FFFFFFF) == 1
+    assert test_u32(0x80000000) == 0
+    assert test_u32(0xFFFFFFFF) == 0
 
 
-@test_utils.test(arch=[qd.metal])
-def test_popcnt_metal():
+# clz on 64-bit ints — runs on every supported backend. CPU / CUDA use native 64-bit leading-zero ops (`__nv_clzll`);
+# AMDGPU lowers via llvm.ctlz; SPIR-V (Vulkan / Metal) synthesises the 64-bit case from a hi/lo FindUMsb decomposition.
+# u64 routes through the same paths as i64 since the operation is on the bit pattern.
+@test_utils.test()
+def test_clz_i64():
     @qd.kernel
-    def test_i32(x: qd.int32) -> qd.int32:
-        return qd.math.popcnt(x)
+    def test_i64(x: qd.int64) -> qd.int32:
+        return qd.math.clz(x)
 
     @qd.kernel
-    def test_u32(x: qd.uint32) -> qd.int32:
-        return qd.math.popcnt(x)
+    def test_u64(x: qd.uint64) -> qd.int32:
+        return qd.math.clz(x)
 
-    assert test_i32(100) == 3
-    assert test_i32(1000) == 6
-    assert test_i32(10000) == 5
-    assert test_u32(100) == 3
-    assert test_u32(1000) == 6
-    assert test_u32(10000) == 5
+    assert test_i64(0) == 64
+    assert test_i64(1) == 63
+    assert test_i64(2) == 62
+    assert test_i64(1 << 31) == 32
+    assert test_i64(1 << 32) == 31
+    assert test_i64(1 << 62) == 1
+    # Top bit set on i64 (sign bit) -> 0xFFFFFFFFFFFFFFFF interpreted as -1.
+    assert test_i64(-1) == 0
+    # Spans both halves: bit 32 set with low half also non-zero.
+    assert test_i64((1 << 32) | 0xFF) == 31
+
+    # u64 mirrors i64 with sign-bit / all-bits-set cases that are awkward to express as signed literals.
+    assert test_u64(0) == 64
+    assert test_u64(1) == 63
+    assert test_u64(1 << 32) == 31
+    assert test_u64(1 << 63) == 0
+    assert test_u64(0xFFFFFFFFFFFFFFFF) == 0
+    assert test_u64(0x7FFFFFFFFFFFFFFF) == 1
+
+
+# Regression sentinel for the i32 return-type normalisation: popcnt / clz must return i32 from the type-checking pass
+# onward, not just at codegen time. If the inferred ret_type were the operand's type (i64), promotion of
+# `op(x: i64) + i64(1)` to i64 would skip the i32 -> i64 cast, and CUDA / AMDGPU codegen — which truncates the
+# libdevice / llvm.ctpop result to i32 — would emit `Add(i32, i64)` and trip an LLVM "operand type mismatch" assertion.
+# Direct-return tests above hide this because they don't compose the result with any other operand.
+@test_utils.test()
+def test_bit_ops_compound_i64():
+    @qd.kernel
+    def popcnt_plus_one(x: qd.int64) -> qd.int64:
+        return qd.math.popcnt(x) + qd.i64(1)
+
+    @qd.kernel
+    def clz_plus_one(x: qd.int64) -> qd.int64:
+        return qd.math.clz(x) + qd.i64(1)
+
+    assert popcnt_plus_one(0) == 1  # popcnt(0) = 0, +1 = 1
+    assert popcnt_plus_one(-1) == 65  # popcnt(0xFFF..F) = 64, +1 = 65 (all-bits-set as signed i64)
+    assert clz_plus_one(0) == 65  # clz(0) = 64, +1 = 65
+    assert clz_plus_one(1) == 64  # clz(1) = 63, +1 = 64
 
 
 @test_utils.test()

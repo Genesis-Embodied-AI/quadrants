@@ -8,24 +8,24 @@ This page currently documents only the bit-counting helpers. The broader `qd.mat
 
 Single-thread integer-register operations. They do not access memory and do not synchronize threads — each thread independently transforms a value in its own register.
 
-| Op                  | CUDA                | AMDGPU                       | SPIR-V (Vulkan / Metal)                            |
-|---------------------|---------------------|------------------------------|----------------------------------------------------|
-| `qd.math.popcnt(x)` | i32, u32, i64, u64  | unsupported (codegen FIXME)  | any int (`OpBitCount`)                             |
-| `qd.math.clz(x)`    | i32, i64 only \*    | unsupported (codegen FIXME)  | 32-bit only (`FindMSB`); 64-bit input is silently truncated |
+| Op                  | CUDA                | AMDGPU                | SPIR-V (Vulkan / Metal)        | x64 (CPU)           |
+|---------------------|---------------------|-----------------------|--------------------------------|---------------------|
+| `qd.math.popcnt(x)` | i32, u32, i64, u64  | i32, u32, i64, u64    | i32, u32, i64, u64 (`OpBitCount`) | i32, u32, i64, u64  |
+| `qd.math.clz(x)`    | i32, u32, i64, u64  | i32, u32, i64, u64    | i32, u32, i64, u64 (`FindUMsb`-based) \*  | i32, u32, i64, u64  |
 
-\* On CUDA, `qd.math.clz` rejects unsigned 32- and 64-bit inputs (`QD_NOT_IMPLEMENTED` in `quadrants/codegen/cuda/codegen_cuda.cpp`); `bit_cast` through the matching signed type as a workaround: `qd.math.clz(qd.bit_cast(x, qd.i32))`. CUDA `popcnt` accepts u32 / u64 directly; only `clz` has the signed-only restriction. On unsupported integer widths (e.g. `i8`, `i16`, `u16`) both ops also hit `QD_NOT_IMPLEMENTED`.
+Both ops **return `i32` on every backend**, regardless of input width. This matches CUDA libdevice (`__nv_popc` / `__nv_clz` both return `int`) and the natural width of the AMDGPU SALU bit-count / leading-zero instructions (`s_bcnt1_i32_b64`, `s_flbit_i32_b64`); SPIR-V and x64 truncate down to `i32` so the same kernel source has the same return type everywhere. The result is always non-negative and fits in 7 bits (`popcnt` ≤ 64, `clz` ≤ 64).
 
-**FIXME (AMDGPU):** the AMDGPU `emit_extra_unary` override (`quadrants/codegen/amdgpu/codegen_amdgpu.cpp`) has no `popcnt` or `clz` branch; both fall through to `QD_NOT_IMPLEMENTED`. The test suite already records this (`tests/python/test_unary_ops.py::test_popcnt` and `::test_clz` both `xfail` on AMDGPU). Until lowerings are added, AMDGPU users hit a hard codegen failure.
+\* On SPIR-V the 64-bit path (i64 / u64) is synthesised from two `FindUMsb` calls on the 32-bit halves plus an `OpSelect`, since `GLSL.std.450 FindUMsb` itself is 32-bit-only. The runtime device must advertise the `Int64` SPIR-V capability (Vulkan: `shaderInt64`); this is the same precondition any other 64-bit op would impose. On unsupported integer widths (e.g. `i8`, `i16`, `u16`) `clz` and `popcnt` hit `QD_NOT_IMPLEMENTED` on every backend.
 
-The classic CUDA bit-tricks `__ffs` (find first set bit) and `__fns` (find n-th set bit in a mask) are not exposed; for a leading-zero count of a u32 on CUDA, the `bit_cast` workaround above is the canonical approach.
+The classic CUDA bit-tricks `__ffs` (find first set bit) and `__fns` (find n-th set bit in a mask) are not exposed; build them from `popcnt` / `clz` if needed.
 
 ### `qd.math.popcnt(x)`
 
-Counts set bits in `x` and returns an `i32`. On CUDA, lowers to `__nv_popc` for 32-bit inputs and `__nv_popcll` for 64-bit inputs (i32 / u32 / i64 / u64 only; narrower widths and AMDGPU are unsupported). On SPIR-V, lowers to `OpBitCount`.
+Counts set bits in `x` and returns an `i32`. On CUDA, lowers to `__nv_popc` for 32-bit inputs and `__nv_popcll` for 64-bit inputs (i32 / u32 / i64 / u64; narrower widths are unsupported). On AMDGPU, lowers to the portable `llvm.ctpop` intrinsic (same dtype set as CUDA), which the AMDGPU LLVM backend further lowers to a native bit-count instruction (e.g. `s_bcnt1_i32_b64` for the 64-bit SALU path). On SPIR-V, lowers to `OpBitCount`. On x64, lowers to `llvm.ctpop`. Every backend truncates to `i32` to match the unified return type; the truncation is free since 64-bit `popcnt` results never exceed 64.
 
 ### `qd.math.clz(x)`
 
-Counts leading zero bits in `x` and returns an `i32`. For a 32-bit input, `clz(0) = 32`; otherwise the result is in `[0, 31]`. On CUDA, lowers to `__nv_clz` (i32 only) and `__nv_clzll` (i64 only); u32 / u64 must be `bit_cast` to the matching signed type. On SPIR-V, lowers to `FindMSB` with `bitwidth - 1 - FindMSB` to convert MSB index into a leading-zero count; the implementation is hard-coded to 32-bit, so 64-bit input silently truncates. AMDGPU is unsupported. See the cross-backend caveats in the support table.
+Counts leading zero bits in `x` and returns an `i32`. For a 32-bit input, `clz(0) = 32`; otherwise the result is in `[0, 31]`. The count is over the unsigned bit pattern, so `clz(-1) == 0` and `clz(0x7FFFFFFF) == 1`. Signed and unsigned inputs lower to the same intrinsic on every backend (LLVM IR is signless for integers; SPIR-V `FindUMsb` is unsigned by definition), so `qd.math.clz(qd.u32(x))` and `qd.math.clz(qd.bit_cast(x, qd.i32))` are equivalent. On CUDA, lowers to `__nv_clz` (32-bit) and `__nv_clzll` (64-bit). On AMDGPU, lowers to the portable `llvm.ctlz` intrinsic with `is_zero_undef = false` (matching `clz(0) = bitwidth`). On SPIR-V, the 32-bit case lowers to `GLSL.std.450 FindUMsb` followed by `31 - FindUMsb`. The 64-bit case is synthesised from a hi/lo decomposition: shift the operand right by 32 to get the high i32 half, truncate for the low half, run `FindUMsb` on each, and select `31 - FindUMsb(hi)` if the high half is non-zero or `63 - FindUMsb(lo)` otherwise. `FindUMsb` returns `-1` on a zero input, so `clz(0) == 64` falls out naturally.
 
 ## Examples
 
@@ -48,14 +48,7 @@ def msb(x: qd.i32) -> qd.i32:
     return 31 - qd.math.clz(x)
 ```
 
-For `qd.u32` input on CUDA, cast first: `qd.math.clz(qd.bit_cast(x, qd.i32))`.
-
-## Performance and portability notes
-
-- `qd.math.popcnt` is supported on CUDA (i32 / u32 / i64 / u64) and SPIR-V (any integer width). AMDGPU is unsupported (FIXME above).
-- `qd.math.clz` has the dtype and backend caveats noted above. Tests that depend on `qd.math.clz` over u32 or u64 should `bit_cast` to the matching signed type for portability on CUDA, and avoid 64-bit input on SPIR-V.
-
 ## Related
 
 - [atomics](atomics.md) — atomic read-modify-write operations on global / shared memory; commonly paired with bit-counting in select / compact patterns.
-- `qd.bit_cast` — reinterprets a value's bit pattern as another dtype, used as a workaround for the `clz` u32 / u64 caveats above.
+- `qd.bit_cast` — reinterprets a value's bit pattern as another dtype.
