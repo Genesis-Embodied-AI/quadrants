@@ -50,14 +50,13 @@ Properties common to every `qd.atomic_*`:
 
 ### `qd.atomic_min(x, y)` / `qd.atomic_max(x, y)`
 
-Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of `x`. Float min/max are `minNum` /
-`maxNum`-style on every backend: if exactly one operand is `NaN`, the non-`NaN` operand wins. Behaviour when **both**
-operands are `NaN` is backend-dependent.
+Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of `x`. Float min/max are
+`minNum` / `maxNum`-style: if exactly one operand is `NaN`, the non-`NaN` operand wins.
 
-| Backends                  | `f16`                                  | `f32`, `f64`                       |
-|---------------------------|----------------------------------------|------------------------------------|
-| CPU, CUDA, AMDGPU (LLVM)  | CAS over `llvm.minnum` / `llvm.maxnum` | LLVM `atomicrmw fmin` / `fmax`     |
-| Vulkan, Metal (SPIR-V)    | capability-gated, usually unsupported  | SPIR-V `FMin` / `FMax`             |
+| Backends                  | `f16`                                  | `f32`, `f64`                       | Both inputs `NaN`                          |
+|---------------------------|----------------------------------------|------------------------------------|--------------------------------------------|
+| CPU, CUDA, AMDGPU (LLVM)  | CAS over `llvm.minnum` / `llvm.maxnum` | LLVM `atomicrmw fmin` / `fmax`     | `NaN` (per LLVM `minnum` / `maxnum` spec)  |
+| Vulkan, Metal (SPIR-V)    | capability-gated, usually unsupported  | SPIR-V `FMin` / `FMax`             | undefined per spec; `NaN` in practice      |
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
