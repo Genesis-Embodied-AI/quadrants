@@ -53,7 +53,13 @@ Every op below that takes a `log2_size` template parameter operates on independe
 | 3 (window = 8)  | 4 windows of 8 | 8 windows of 8 |
 | 0 (window = 1)  | every lane is its own window (no-op) | same |
 
-Why it composes exactly: the largest shuffle distance any op uses is `2**(k-1)`, so partner lookups never cross a `2**k`-aligned boundary — bits `k+` of the lane index are preserved by every `shuffle` / `shuffle_xor` / `shuffle_down`, and `shuffle_up`-based ops mask out cross-window partners via the `lane_in_group >= offset` predicate.
+Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_down` / `subgroup.shuffle_up` / `subgroup.shuffle_xor` ops are themselves **full-subgroup** — they address every lane by absolute lane id, with no built-in notion of a window. Windowing emerges from how the higher-level reductions / scans / votes *compose* those shuffles, and there are two distinct mechanisms in play:
+
+- **`shuffle_xor`-butterfly ops (`reduce_all_*`, `all_true`, `any_true`, `all_equal`)** are intrinsically window-respecting. The largest XOR mask is `2**(k-1)`, which only flips the low `k` bits of the lane index — bits `k+` (the window id) are preserved by every step, so each window's butterfly stays inside its own window for free.
+- **`shuffle_down`-tree ops (`reduce_add` / `reduce_min` / `reduce_max`)** use a non-windowed `shuffle_down` and rely on the access pattern. Lane `i`'s transitive reads at step `j` use offset `2**(k-1-j)`, so the maximum lane id contributing to lane `i`'s final result is `i + (2**(k-1) + 2**(k-2) + ... + 1) = i + 2**k - 1`. For the window-local lane 0 (`i = base`) this is exactly `base + 2**k - 1`, the last lane of the same window — so its result is correct. Intermediate lanes have read sets that *do* spill into the next window (e.g. lane 1 reads up to lane 32 on `log2_size=5`), which is why those lanes are documented as undefined and only the window-local lane 0 result is meaningful.
+- **`shuffle_up`-tree ops (`inclusive_*`, `exclusive_*`, `segmented_reduce_*`)** also use a non-windowed `shuffle_up`, but they mask out cross-window partners at the call site with a runtime `lane_in_group >= offset` predicate, where `lane_in_group = invocation_id() & ((1 << log2_size) - 1)`. Without that predicate, lane 32 at step 0 on wave64 would add lane 31's value and corrupt the upper window's scan.
+
+Net effect: callers see a clean "windowed" abstraction at the reduction / scan / vote level, but a windowed `shuffle_down(v, offset)` op would behave differently from `subgroup.shuffle_down(v, offset)` for any lane within `offset` of a window boundary (the windowed form would refuse the cross-window read; the actual op happily performs it). Same applies to `shuffle_up`. Only `shuffle_xor` with `mask < 2**k` is automatically windowed.
 
 #### Result placement per window
 
