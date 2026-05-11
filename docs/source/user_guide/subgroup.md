@@ -64,7 +64,7 @@ Net effect: callers see a clean "windowed" abstraction at the reduction / scan /
 #### Result placement per window
 
 - **Broadcast-to-all forms** — `all_true`, `any_true`, `all_equal`, `reduce_all_add`, `reduce_all_min`, `reduce_all_max`, `inclusive_*`, `exclusive_*`, `segmented_reduce_*`: every lane in each window holds the per-window result. Lanes in different windows hold different results (their own window's).
-- **Window-local-lane-0 forms** — `reduce_add`, `reduce_min`, `reduce_max`: only the *window-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. On wave64 with `log2_size=5` this is a common gotcha: reading only lane 0 silently drops the upper-half result. Use `reduce_all_*` if you want every lane to see its window's result.
+- **Window-local-lane-0 forms** — `reduce_add`, `reduce_min`, `reduce_max`: only the *window-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. Use `reduce_all_*` if you want every lane to see its window's result.
 
 #### Picking `log2_size` for a "full subgroup" reduction
 
