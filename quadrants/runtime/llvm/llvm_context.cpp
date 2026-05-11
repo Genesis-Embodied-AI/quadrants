@@ -392,8 +392,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_barrier_red("block_barrier_count_i32", Intrinsic::nvvm_barrier_cta_red_popc_aligned_all, false);
       patch_intrinsic("warp_barrier", Intrinsic::nvvm_bar_warp_sync, false);
       patch_intrinsic("block_mem_fence", Intrinsic::nvvm_membar_cta, false);
-      patch_intrinsic("grid_memfence", Intrinsic::nvvm_membar_gl, false);
-      patch_intrinsic("system_memfence", Intrinsic::nvvm_membar_sys, false);
+      patch_intrinsic("grid_mem_fence", Intrinsic::nvvm_membar_gl, false);
+      patch_intrinsic("system_mem_fence", Intrinsic::nvvm_membar_sys, false);
 
       patch_intrinsic("cuda_all", Intrinsic::nvvm_vote_all);
       patch_intrinsic("cuda_all_sync", Intrinsic::nvvm_vote_all_sync);
@@ -518,12 +518,12 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
       patch_intrinsic("amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
 
-      // AMDGPU block-scope memory fence. We can't use `patch_intrinsic` here because LLVM models `fence` as a
-      // first-class IR instruction (`builder.CreateFence(...)`), not as an intrinsic. We also can't compile
-      // `__builtin_amdgcn_fence` from `runtime.cpp` because that runtime is built with the host x86_64 clang
-      // front-end (which doesn't know AMDGCN builtins) and only retargeted to amdgcn here. So we synthesize the fence
-      // body in IR directly with the AMDGPU-specific syncscope name; the AMDGCN backend recognizes "workgroup" scope
-      // and lowers it to the right `s_waitcnt` / cache-flush sequence for a workgroup-scope fence.
+      // AMDGPU memory fences (block-scope "workgroup" and device-scope "agent"). We can't use `patch_intrinsic` here
+      // because LLVM models `fence` as a first-class IR instruction (`builder.CreateFence(...)`), not as an intrinsic.
+      // We also can't compile `__builtin_amdgcn_fence` from `runtime.cpp` because that runtime is built with the host
+      // x86_64 clang front-end (which doesn't know AMDGCN builtins) and only retargeted to amdgcn here. So we
+      // synthesize the fence body in IR directly with the AMDGPU-specific syncscope name; the AMDGCN backend
+      // recognizes "workgroup" / "agent" scopes and lowers each to the right `s_waitcnt` / cache-flush sequence.
       auto patch_fence = [&](const std::string &name, const std::string &scope_str) {
         auto func = module->getFunction(name);
         if (!func) {
@@ -539,6 +539,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
         QuadrantsLLVMContext::mark_inline(func);
       };
       patch_fence("block_mem_fence", "workgroup");
+      patch_fence("grid_mem_fence", "agent");
 
       link_module_with_amdgpu_libdevice(module);
       patch_amdgpu_kernel_dim("block_dim", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), 0));

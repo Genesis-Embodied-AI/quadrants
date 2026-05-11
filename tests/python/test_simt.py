@@ -486,9 +486,20 @@ def test_block_sync():
         assert a[i] == N - 1
 
 
-# TODO: replace this with a stronger test case
-@test_utils.test(arch=qd.cuda)
-def test_grid_memfence():
+# The test relies on `grid.mem_fence()` ordering each block's *non-atomic* `a[i] = 1` write before the subsequent
+# per-block atomic-add counter. CUDA and AMDGPU honor this strictly via their `mem_fence` intrinsics; native Vulkan
+# (Linux / Windows) honors it via `OpMemoryBarrier(ScopeDevice, ...)`. Metal does NOT, even on Apple Silicon: MSL
+# `atomic_thread_fence(memory_scope_device)` -- which is what MoltenVK / SPIRV-Cross translate
+# `OpMemoryBarrier(ScopeDevice, ...)` to -- only orders *atomic* memory accesses across the device, not plain stores;
+# this is a documented Metal limitation called out in the `grid.mem_fence()` Metal caveat in `grid.md`. So we exclude
+# the native `metal` backend, and additionally skip `vulkan` on macOS at runtime, since on macOS Vulkan is really
+# MoltenVK lowering SPIR-V to MSL and inherits the same limitation. Workloads that need cross-workgroup ordering on
+# Metal (or Vulkan-on-Mac) have to publish through atomic stores (e.g. `qd.atomic_or(a[i], 1)`) rather than rely on a
+# plain store + fence.
+@test_utils.test(arch=qd.gpu, exclude=qd.metal)
+def test_grid_mem_fence():
+    if qd.lang.impl.current_cfg().arch == qd.vulkan and platform.system() == "Darwin":
+        pytest.skip("Vulkan on macOS is MoltenVK->Metal; non-atomic stores are not ordered by grid.mem_fence")
     N = 1000
     BLOCK_SIZE = 1
     a = qd.field(dtype=qd.u32, shape=N)
@@ -499,7 +510,7 @@ def test_grid_memfence():
         qd.loop_config(block_dim=BLOCK_SIZE)
         for i in range(N):
             a[i] = 1
-            qd.simt.grid.memfence()
+            qd.simt.grid.mem_fence()
 
             # Execute a prefix sum after all blocks finish
             actual_order_of_block = qd.atomic_add(block_counter, 1)
@@ -511,6 +522,25 @@ def test_grid_memfence():
 
     for i in range(N):
         assert a[i] == i + 1
+
+
+# Verifies the deprecation warning fires for the legacy `qd.simt.grid.memfence()` spelling. `pytest.warns` enables
+# `simplefilter("always")` for its scope, bypassing the project-wide
+# `warnings.filterwarnings("once", ..., module="quadrants")` set in `quadrants/lang/misc.py`.
+@test_utils.test(arch=qd.gpu)
+def test_grid_memfence_deprecated_alias():
+    a = qd.field(dtype=qd.i32, shape=1)
+
+    with pytest.warns(DeprecationWarning, match=r"qd\.simt\.grid\.memfence"):
+
+        @qd.kernel
+        def foo():
+            a[0] = 11
+            qd.simt.grid.memfence()
+
+        foo()
+
+    assert a[0] == 11
 
 
 # Smoke test for `block.mem_fence()`. We can't easily provoke a memory-ordering bug deterministically, so this just
