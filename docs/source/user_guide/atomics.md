@@ -31,7 +31,7 @@ A few cross-cutting notes that the cells above abbreviate:
 
 ‡ `atomic_exchange` on `f16`, on shared (`qd.simt.block.SharedArray`) float arrays, and on f64 in workgroup memory is not yet wired up. Global-memory `atomic_exchange` on every other dtype/backend combination listed above is supported; the SPIR-V path bitcasts through the corresponding uint type so no `spirv_has_atomic_float_*` capability is required.
 
-§ `atomic_cas` on `f32` / `f64` is rejected at trace time (raises `QuadrantsTypeError`). Integer CAS (`i32` / `u32` / `i64` / `u64`) is fully supported, and the `i64` / `u64` Metal caveat is the same as for the rest of the 64-bit integer atomic family.
+§ `atomic_cas` on `f32` / `f64` is rejected at trace time (raises `QuadrantsTypeError`). Integer CAS (`i32` / `u32` / `i64` / `u64`) is supported on every backend listed in the table above, with the same Metal caveat for `i64` / `u64` (†) as the rest of the 64-bit integer atomic family.
 
 All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space - to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.mem_fence()` (device scope).
 
