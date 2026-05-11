@@ -384,8 +384,8 @@ def test_make_spd_f64(n, factory):
 
 
 def _test_sym_eig_trivial(n, dt, A_np, expected_eigvals):
-    """Run ``qd.sym_eig`` and assert it returns ``expected_eigvals`` (sorted asc)
-    plus an orthonormal eigenvector basis, on the trivial input ``A_np``."""
+    """Run ``qd.sym_eig`` and assert it returns ``expected_eigvals`` (sorted ascending) plus an orthonormal
+    eigenvector basis, on the trivial input ``A_np``."""
     np_dt = np.float32 if dt == qd.f32 else np.float64
     A = qd.Matrix.field(n, n, dtype=dt, shape=())
     eigvals = qd.Vector.field(n, dtype=dt, shape=())
@@ -458,8 +458,8 @@ def test_make_spd_idempotent_f64(n, factory):
 @pytest.mark.parametrize("n", [4, 6, 9, 12])
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_make_spd_negative_definite_zero_f64(n):
-    """A symmetric matrix with all-negative eigenvalues projects to the zero
-    matrix (``Q · diag(max(λ, 0)) · Qᵀ`` with all ``λ < 0``)."""
+    """A symmetric matrix with all-negative eigenvalues projects to the zero matrix (``Q · diag(max(λ, 0)) · Qᵀ``
+    with all ``λ < 0``)."""
     np_dt = np.float64
     A_np = _sym_eig_factory_negative_definite(n, qd.f64)
     A = qd.Matrix.field(n, n, dtype=qd.f64, shape=())
@@ -477,8 +477,8 @@ def test_make_spd_negative_definite_zero_f64(n):
 
 @test_utils.test(require=qd.extension.data64, default_fp=qd.f64, fast_math=False)
 def test_sym_eig_above_cap_raises():
-    """``qd.sym_eig`` only supports ``N <= 12``; calling at ``N = 13`` must raise
-    a clear error rather than silently producing wrong results."""
+    """``qd.sym_eig`` only supports ``N <= 12``; calling at ``N = 13`` must raise a clear error rather than silently
+    producing wrong results."""
     A = qd.Matrix.field(13, 13, dtype=qd.f64, shape=())
     A.from_numpy(np.eye(13))
     with pytest.raises(Exception, match="up to 12"):
