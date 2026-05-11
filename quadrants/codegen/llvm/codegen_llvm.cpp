@@ -230,9 +230,9 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
     stmt->ret_type = PrimitiveType::i32;
   }
   else if (op == UnaryOpType::ffs) {
-    // ffs(x): 1-indexed position of the lowest set bit; 0 when x == 0 (CUDA __ffs convention).
-    // llvm.cttz with is_zero_undef = false returns bitwidth on a zero input, so we explicitly select 0
-    // for that case rather than letting the +1 produce bitwidth + 1.
+    // ffs(x): 1-indexed position of the lowest set bit; 0 when x == 0 (CUDA __ffs convention). llvm.cttz with
+    // is_zero_undef = false returns bitwidth on a zero input, so we explicitly select 0 for that case rather than
+    // letting the +1 produce bitwidth + 1.
     auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
     auto cttz = builder->CreateIntrinsic(llvm::Intrinsic::cttz, {input_type}, {input, is_zero_undef});
     auto plus_one = builder->CreateAdd(cttz, llvm::ConstantInt::get(input_type, 1));

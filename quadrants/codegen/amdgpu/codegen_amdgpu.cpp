@@ -201,9 +201,9 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       }
     }
     else if (op == UnaryOpType::ffs) {
-      // ffs(x): 1-indexed position of the lowest set bit; 0 when x == 0 (CUDA __ffs convention).
-      // Lower to llvm.cttz + 1 and a select for the zero case; the AMDGPU LLVM backend further lowers
-      // llvm.cttz to native bitfield-extract instructions. Same width-and-signedness gate as clz.
+      // ffs(x): 1-indexed position of the lowest set bit; 0 when x == 0 (CUDA __ffs convention). Lower to llvm.cttz + 1
+      // and a select for the zero case; the AMDGPU LLVM backend further lowers llvm.cttz to native bitfield-extract
+      // instructions. Same width-and-signedness gate as clz.
       auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::u32) ||
