@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Atomics &#8212; Quadrants 0.7.8 documentation</title>
+    <title>Atomics &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Automatic differentiation" href="autodiff.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -465,7 +465,7 @@
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> atomic RMW is not portable to Metal.</strong> Metal Shading Language only exposes 64-bit atomics as <code class="docutils literal notranslate"><span class="pre">atomic_fetch_min</span></code> / <code class="docutils literal notranslate"><span class="pre">atomic_fetch_max</span></code> on <code class="docutils literal notranslate"><span class="pre">uint64</span></code> (Apple GPU family 9+, M3 / A17); <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> / <code class="docutils literal notranslate"><span class="pre">sub</span></code> / <code class="docutils literal notranslate"><span class="pre">mul</span></code> and the bitwise family are unavailable on every Apple GPU. The Metal RHI today over-advertises <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_int64</span></code> (gated on Apple7 / Mac2 in <code class="docutils literal notranslate"><span class="pre">quadrants/rhi/metal/metal_device.mm</span></code>), so 64-bit integer atomics under Metal fail at pipeline create time with <code class="docutils literal notranslate"><span class="pre">RhiResult=-1</span></code>. Use <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> for Metal portability. CUDA, AMDGPU, and Vulkan with <code class="docutils literal notranslate"><span class="pre">VK_KHR_shader_atomic_int64</span></code> are unaffected.</p></li>
 </ul>
 <p>There is no <code class="docutils literal notranslate"><span class="pre">atomic_cas</span></code> (compare-and-swap) exposed in Python today. The C++ runtime uses CmpXchg internally; surfacing it requires extending <code class="docutils literal notranslate"><span class="pre">AtomicOpType</span></code>.</p>
-<p>All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>). They are sequentially consistent on the location they touch; they are <strong>not</strong> memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code> (block scope) or <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code> (device scope).</p>
+<p>All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>). They are sequentially consistent on the location they touch; they are <strong>not</strong> memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code> (block scope) or <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> (device scope).</p>
 </section>
 <section id="semantics">
 <h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
@@ -482,7 +482,7 @@
 <p>Properties common to every <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code>:</p>
 <ul class="simple">
 <li><p><strong>Returns the old value</strong>, not the new one. This matches CUDA’s <code class="docutils literal notranslate"><span class="pre">atomicAdd</span></code> and is what enables building reservation patterns: <code class="docutils literal notranslate"><span class="pre">slot</span> <span class="pre">=</span> <span class="pre">qd.atomic_add(counter,</span> <span class="pre">1)</span></code> gives every thread a unique index.</p></li>
-<li><p><strong>Per-location atomicity, no fence on the rest of memory.</strong> Writes you issued before an atomic on <code class="docutils literal notranslate"><span class="pre">x</span></code> are not necessarily visible to other threads after they observe the new <code class="docutils literal notranslate"><span class="pre">x</span></code>. Pair the atomic with <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code> if you need that ordering.</p></li>
+<li><p><strong>Per-location atomicity, no fence on the rest of memory.</strong> Writes you issued before an atomic on <code class="docutils literal notranslate"><span class="pre">x</span></code> are not necessarily visible to other threads after they observe the new <code class="docutils literal notranslate"><span class="pre">x</span></code>. Pair the atomic with <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> if you need that ordering.</p></li>
 <li><p><strong>Vector / matrix arguments fan out element-wise.</strong> <code class="docutils literal notranslate"><span class="pre">qd.atomic_add(field_of_vec3,</span> <span class="pre">qd.Vector([1.0,</span> <span class="pre">2.0,</span> <span class="pre">3.0]))</span></code> issues three independent scalar atomic-adds, one per component. There is no all-or-nothing guarantee across the components.</p></li>
 </ul>
 </section>
@@ -503,7 +503,7 @@
 <h2>Performance and portability notes<a class="headerlink" href="#performance-and-portability-notes" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p><strong>Atomic contention is the silent killer of throughput.</strong> The cost of <code class="docutils literal notranslate"><span class="pre">qd.atomic_add(counter,</span> <span class="pre">1)</span></code> from every thread is dominated by serialization at the location, not by the per-thread arithmetic. If many threads hit the same slot, prefer a two-stage scheme: per-warp / per-block reduction first (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.reduce</span></code> if available, or <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.reduce_add</span></code>), then a single atomic per warp / block.</p></li>
-<li><p><strong>Pair atomics with the right fence scope.</strong> A bare atomic only orders the location it touches. To make other writes visible to readers that observe the new atomic value, follow the atomic with a fence: block-scope (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code>) for shared-memory publishing, or grid-scope (<code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code>) for cross-block coordination.</p></li>
+<li><p><strong>Pair atomics with the right fence scope.</strong> A bare atomic only orders the location it touches. To make other writes visible to readers that observe the new atomic value, follow the atomic with a fence: block-scope (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code>) for shared-memory publishing, or grid-scope (<code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code>) for cross-block coordination.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">f64</span></code> atomics fall off the fast path</strong> on most backends; if you only need monotonic accumulation, consider Kahan summation in registers and a single atomic-add at the end of the block.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> is generally a CAS loop</strong> under the hood; don’t put it on the hot path.</p></li>
 </ul>
@@ -514,7 +514,7 @@
 <li><p><a class="reference internal" href="math.html"><span class="std std-doc">math</span></a> — <code class="docutils literal notranslate"><span class="pre">qd.math.*</span></code>, including the bit-counting helpers (<code class="docutils literal notranslate"><span class="pre">popcnt</span></code>, <code class="docutils literal notranslate"><span class="pre">clz</span></code>) commonly paired with atomics in select / compact patterns.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.block.*</span></code> — block-scope barriers and memory fences (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code>).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.*</span></code> — warp-scope reductions and shuffles, the recommended pre-aggregation step before an atomic.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.*</span></code> — device-scope memory fence (<code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.*</span></code> — device-scope memory fence (<code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code>); see <a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a>.</p></li>
 <li><p><a class="reference internal" href="parallelization.html"><span class="std std-doc">parallelization</span></a> — thread-synchronization patterns and how atomics fit into the broader synchronization story.</p></li>
 </ul>
 </section>

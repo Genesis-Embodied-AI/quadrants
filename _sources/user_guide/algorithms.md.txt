@@ -118,5 +118,5 @@ The compact-output kernel reads `offsets[i]` (or `offsets[i] - flags[i]` for 0-b
 
 - `qd.simt.block.*` — the block-scope reductions and shared-memory primitives that algorithm kernels build on.
 - `qd.simt.subgroup.*` — `inclusive_add` and friends, what the per-block scan stage of `PrefixSumExecutor` actually calls.
-- `qd.simt.grid.memfence()` — the grid-scope memory fence that decoupled-look-back scans (a more efficient alternative to Kogge-Stone) require.
+- `qd.simt.grid.mem_fence()` — the grid-scope memory fence that decoupled-look-back scans (a more efficient alternative to Kogge-Stone) require.
 - [parallelization](parallelization.md) — broader synchronization story, including how `qd.algorithms` operations compose with hand-written kernels.
