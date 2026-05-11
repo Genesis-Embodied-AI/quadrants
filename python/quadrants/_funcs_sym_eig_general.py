@@ -1,10 +1,9 @@
 """Symmetric eigenvalue decomposition for ``N > 3`` via cyclic Jacobi.
 
-Cyclic Jacobi is the textbook robust algorithm for small symmetric EVD: it
-iteratively zeros out off-diagonal entries via Givens rotations until the
-matrix is (numerically) diagonal. Complexity is O(N^3) per sweep and
-convergence is quadratic near the solution, so ``MAX_SWEEPS = 12`` is
-comfortably enough to hit f64 precision for any ``N <= 12``.
+Cyclic Jacobi is the textbook robust algorithm for small symmetric EVD: it iteratively zeros out off-diagonal
+entries via Givens rotations until the matrix is (numerically) diagonal. Complexity is O(N^3) per sweep and
+convergence is quadratic near the solution, so ``MAX_SWEEPS = 12`` is comfortably enough to hit f64 precision for
+any ``N <= 12``.
 
 Algorithm (Golub & Van Loan, §8.5):
 
@@ -16,15 +15,12 @@ Algorithm (Golub & Van Loan, §8.5):
 * Eigenvalues are ``diag(A_work)``; eigenvectors are columns of ``Q``.
 * Sort ascending.
 
-The outer sweep loop is a runtime ``range`` so compile time stays bounded
-even at N=12 (the inner ``(p, q)`` and per-row ``static(range)`` updates
-already give straight-line code per Givens step). The sweep loop is
-explicitly tagged ``loop_config(serialize=True)``, so a calling
-``@qd.kernel`` without its own outermost ``for ... in range(...)`` will
-still execute the sweeps sequentially on a single thread instead of
-parallelizing them — see
-``perso_hugh/doc/quadrants_runtime_range_in_func_parallelized_gotcha_20260510.md``
-for the underlying gotcha that this directive sidesteps.
+The outer sweep loop is a runtime ``range`` so compile time stays bounded even at N=12 (the inner ``(p, q)`` and
+per-row ``static(range)`` updates already give straight-line code per Givens step). The sweep loop is explicitly
+tagged ``loop_config(serialize=True)``, so a calling ``@qd.kernel`` without its own outermost
+``for ... in range(...)`` still executes the sweeps sequentially on a single thread instead of parallelizing them —
+see ``perso_hugh/doc/quadrants_runtime_range_in_func_parallelized_gotcha_20260510.md`` for the underlying gotcha
+that this directive sidesteps.
 """
 
 from quadrants.lang import ops
@@ -46,9 +42,8 @@ def sym_eig_general(A, dt):
         dt: element dtype (``qd.f32`` or ``qd.f64``).
 
     Returns:
-        ``(eigenvalues, eigenvectors)`` — a length-N :class:`~quadrants.Vector`
-        sorted ascending and an N × N :class:`~quadrants.Matrix` whose ``i``-th
-        column is the eigenvector for ``eigenvalues[i]``.
+        ``(eigenvalues, eigenvectors)`` — a length-N :class:`~quadrants.Vector` sorted ascending and an N × N
+        :class:`~quadrants.Matrix` whose ``i``-th column is the eigenvector for ``eigenvalues[i]``.
     """
     N = static(A.n)
     A_work = Matrix.zero(dt, N, N)
@@ -133,11 +128,11 @@ def sym_eig_general(A, dt):
 
 @func
 def make_spd(A, dt):
-    """Project a symmetric matrix ``A`` to the nearest positive semi-definite
-    matrix in the Frobenius norm sense, by clamping its eigenvalues to ``≥ 0``.
+    """Project a symmetric matrix ``A`` to the nearest positive semi-definite matrix in the Frobenius norm sense,
+    by clamping its eigenvalues to ``≥ 0``.
 
-    Implemented as ``Q · diag(max(λ, 0)) · Qᵀ`` where ``A = Q diag(λ) Qᵀ`` is
-    the symmetric eigendecomposition computed by :func:`sym_eig_general`.
+    Implemented as ``Q · diag(max(λ, 0)) · Qᵀ`` where ``A = Q diag(λ) Qᵀ`` is the symmetric eigendecomposition
+    computed by :func:`sym_eig_general`.
     """
     N = static(A.n)
     eigvals, eigvecs = sym_eig_general(A, dt)

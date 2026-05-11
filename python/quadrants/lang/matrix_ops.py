@@ -119,18 +119,15 @@ def determinant(mat):
 def _inverse_lu(mat):
     """Inverse of an N×N matrix via Gauss elimination with partial pivoting.
 
-    Generic over N (up to the precondition cap). Loops are all ``static(range)`` so
-    the kernel is fully unrolled at compile time; pivot row indices are runtime
-    integers. Used by :func:`inverse` for ``N >= 5`` (sizes 1–4 keep the existing
-    closed-form cofactor expansions).
+    Generic over N (up to the precondition cap). Loops are all ``static(range)`` so the kernel is fully unrolled at
+    compile time; pivot row indices are runtime integers. Used by :func:`inverse` for ``N >= 5`` (sizes 1–4 keep the
+    existing closed-form cofactor expansions).
 
-    Algorithm: maintain a working copy ``a`` (in-place LU with partial pivoting,
-    row index ``pivot`` chosen by largest |column entry|) and a parallel matrix
-    ``b`` initialised to identity. Apply the same row swaps + row reductions to
-    both ``a`` and ``b``; at the end ``a`` holds U (on / above diag) and L
-    (strictly below, with implicit unit diagonal), and ``b`` holds ``L⁻¹ P`` where
-    ``P`` is the permutation matrix. The inverse is then read off column-by-column
-    by back-solving ``U x = b[:, c]``.
+    Algorithm: maintain a working copy ``a`` (in-place LU with partial pivoting, row index ``pivot`` chosen by
+    largest |column entry|) and a parallel matrix ``b`` initialised to identity. Apply the same row swaps + row
+    reductions to both ``a`` and ``b``; at the end ``a`` holds U (on / above diag) and L (strictly below, with
+    implicit unit diagonal), and ``b`` holds ``L⁻¹ P`` where ``P`` is the permutation matrix. The inverse is then
+    read off column-by-column by back-solving ``U x = b[:, c]``.
     """
     shape = static(mat.get_shape())
     n = static(shape[0])

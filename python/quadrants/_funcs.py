@@ -591,16 +591,8 @@ def sym_eig(A, dt=None):
 
     Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
 
-    Sizes ``A.n == 2`` and ``A.n == 3`` use the existing closed-form (Eigen3
-    ``computeDirect``) paths. Sizes ``4 ≤ A.n ≤ 12`` use cyclic Jacobi
-    (:func:`quadrants._funcs_sym_eig_general.sym_eig_general`).
-
-    .. note::
-       The cyclic Jacobi implementation has a runtime ``range`` over its
-       sweep budget. For that to iterate correctly, the calling
-       ``@qd.kernel`` must have its own outermost ``for _tid in range(...)``
-       loop wrapping the ``qd.sym_eig`` call (otherwise the kernel
-       parallelizes the sweep loop instead of running it sequentially).
+    Sizes ``A.n == 2`` and ``A.n == 3`` use the existing closed-form (Eigen3 ``computeDirect``) paths.
+    Sizes ``4 ≤ A.n ≤ 12`` use cyclic Jacobi (:func:`quadrants._funcs_sym_eig_general.sym_eig_general`).
 
     Args:
         A (qd.Matrix(n, n)): Symmetric Matrix for which the eigenvalues and right eigenvectors will be computed.
@@ -625,11 +617,11 @@ def sym_eig(A, dt=None):
 
 
 def make_spd(A, dt=None):
-    """Project a symmetric matrix ``A`` to the nearest positive semi-definite
-    matrix in the Frobenius norm sense, by clamping its eigenvalues to ``≥ 0``.
+    """Project a symmetric matrix ``A`` to the nearest positive semi-definite matrix in the Frobenius norm sense,
+    by clamping its eigenvalues to ``≥ 0``.
 
-    Implemented as ``Q · diag(max(λ, 0)) · Qᵀ`` where ``A = Q diag(λ) Qᵀ`` is
-    the symmetric eigendecomposition computed by :func:`sym_eig`.
+    Implemented as ``Q · diag(max(λ, 0)) · Qᵀ`` where ``A = Q diag(λ) Qᵀ`` is the symmetric eigendecomposition
+    computed by :func:`sym_eig`.
 
     Args:
         A (qd.Matrix(n, n)): Symmetric matrix.

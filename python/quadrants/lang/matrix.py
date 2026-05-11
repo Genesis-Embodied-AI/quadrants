@@ -637,13 +637,11 @@ class Matrix(QuadrantsOperations):
     def frobenius_inner(self, other):
         """Returns the Frobenius inner product :math:`\\langle A, B \\rangle = \\sum_{ij} A_{ij} B_{ij}`.
 
-        Both operands must have the same shape. Defined for any tensor shape (vector or
-        matrix); for matrices this is the standard Frobenius inner product, and
-        :meth:`norm_sqr` is the special case ``A.frobenius_inner(A)``.
+        Both operands must have the same shape. Defined for any tensor shape (vector or matrix); for matrices this
+        is the standard Frobenius inner product, and :meth:`norm_sqr` is the special case ``A.frobenius_inner(A)``.
 
         Args:
-            other (:class:`~quadrants.Matrix`): The other operand. Must have the same
-                shape as ``self``.
+            other (:class:`~quadrants.Matrix`): The other operand. Must have the same shape as ``self``.
 
         Returns:
             DataType: The scalar Frobenius inner product.
