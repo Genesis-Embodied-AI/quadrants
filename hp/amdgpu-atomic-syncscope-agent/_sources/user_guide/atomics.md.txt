@@ -27,7 +27,7 @@ A few cross-cutting notes that the cells above abbreviate:
 
 There is no `atomic_cas` (compare-and-swap) exposed in Python today. The C++ runtime uses CmpXchg internally; surfacing it requires extending `AtomicOpType`.
 
-All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.memfence()` (device scope).
+All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.mem_fence()` (device scope).
 
 ## Semantics
 
@@ -45,7 +45,7 @@ old = qd.atomic_add(x, y)
 Properties common to every `qd.atomic_*`:
 
 - **Returns the old value**, not the new one. This matches CUDA's `atomicAdd` and is what enables building reservation patterns: `slot = qd.atomic_add(counter, 1)` gives every thread a unique index.
-- **Per-location atomicity, no fence on the rest of memory.** Writes you issued before an atomic on `x` are not necessarily visible to other threads after they observe the new `x`. Pair the atomic with `qd.simt.block.mem_fence()` or `qd.simt.grid.memfence()` if you need that ordering.
+- **Per-location atomicity, no fence on the rest of memory.** Writes you issued before an atomic on `x` are not necessarily visible to other threads after they observe the new `x`. Pair the atomic with `qd.simt.block.mem_fence()` or `qd.simt.grid.mem_fence()` if you need that ordering.
 - **Vector / matrix arguments fan out element-wise.** `qd.atomic_add(field_of_vec3, qd.Vector([1.0, 2.0, 3.0]))` issues three independent scalar atomic-adds, one per component. There is no all-or-nothing guarantee across the components.
 
 ### `qd.atomic_min(x, y)` / `qd.atomic_max(x, y)`
@@ -69,7 +69,7 @@ Atomic subtract and atomic multiply. `atomic_sub` is rewritten to `atomic_add(x,
 ## Performance and portability notes
 
 - **Atomic contention is the silent killer of throughput.** The cost of `qd.atomic_add(counter, 1)` from every thread is dominated by serialization at the location, not by the per-thread arithmetic. If many threads hit the same slot, prefer a two-stage scheme: per-warp / per-block reduction first (`qd.simt.block.reduce` if available, or `qd.simt.subgroup.reduce_add`), then a single atomic per warp / block.
-- **Pair atomics with the right fence scope.** A bare atomic only orders the location it touches. To make other writes visible to readers that observe the new atomic value, follow the atomic with a fence: block-scope (`qd.simt.block.mem_fence()`) for shared-memory publishing, or grid-scope (`qd.simt.grid.memfence()`) for cross-block coordination.
+- **Pair atomics with the right fence scope.** A bare atomic only orders the location it touches. To make other writes visible to readers that observe the new atomic value, follow the atomic with a fence: block-scope (`qd.simt.block.mem_fence()`) for shared-memory publishing, or grid-scope (`qd.simt.grid.mem_fence()`) for cross-block coordination.
 - **`f64` atomics fall off the fast path** on most backends; if you only need monotonic accumulation, consider Kahan summation in registers and a single atomic-add at the end of the block.
 - **`atomic_mul` is generally a CAS loop** under the hood; don't put it on the hot path.
 
@@ -90,8 +90,6 @@ CPU and CUDA lower system-scope atomics directly to a single hardware instructio
 
 ### Native instruction vs CAS fallback
 
-✅ = a single hardware atomic instruction (one `lock`-prefixed x86 op, one PTX `atom.*`, one AMDGPU `flat_atomic_*`, or one SPIR-V `OpAtomic*`). 🟡 = the backend cannot express the op atomically and falls back to a `cmpxchg` / `cmpswap` retry loop in software. — = the op doesn't exist for that dtype.
-
 The tables below reflect what the in-tree LLVM emits today for Quadrants' default targets (x86_64; CUDA `sm_60+`; AMDGPU `gfx942` / MI300X at `syncscope("agent")`; Vulkan/Metal via SPIR-V). Older / different GFX generations are footnoted.
 
 **Integer atomics** (`i32`, `u32`, `i64`, `u64`):
@@ -111,6 +109,11 @@ The tables below reflect what the in-tree LLVM emits today for Quadrants' defaul
 | `atomic_min`, `atomic_max` | 🟡           | 🟡   | 🟡²    | 🟡                      |
 | `atomic_mul`               | 🟡           | 🟡   | 🟡     | 🟡                      |
 
+Key:
+
+- ✅ — single hardware atomic instruction (`lock`-prefixed x86, PTX `atom.*`, AMDGPU `flat_atomic_*`, or SPIR-V `OpAtomic*`).
+- 🟡 — software `cmpxchg` / `cmpswap` retry loop.
+
 `f16` atomics are CAS on every backend (Quadrants forces a CAS loop built from `llvm.minnum` / `llvm.maxnum` / `fadd`), and on Vulkan / Metal are additionally gated on `spirv_has_atomic_float16_*` device capabilities.
 
 ¹ `lock and` / `or` / `xor` are single-instruction on x86, but they don't expose the old value. When the `qd.atomic_*` return value is unused (the common case — fire-and-forget update) LLVM emits the single `lock` op. When the old value is consumed, x86 falls back to a `cmpxchg` loop.
@@ -126,5 +129,5 @@ The tables below reflect what the in-tree LLVM emits today for Quadrants' defaul
 - [math](math.md) — `qd.math.*`, including the bit-counting helpers (`popcnt`, `clz`) commonly paired with atomics in select / compact patterns.
 - `qd.simt.block.*` — block-scope barriers and memory fences (`qd.simt.block.mem_fence()`).
 - `qd.simt.subgroup.*` — warp-scope reductions and shuffles, the recommended pre-aggregation step before an atomic.
-- `qd.simt.grid.*` — device-scope memory fence (`qd.simt.grid.memfence()`).
+- `qd.simt.grid.*` — device-scope memory fence (`qd.simt.grid.mem_fence()`); see [grid](grid.md).
 - [parallelization](parallelization.md) — thread-synchronization patterns and how atomics fit into the broader synchronization story.
