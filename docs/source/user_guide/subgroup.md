@@ -118,7 +118,7 @@ Returns this lane's subgroup-local index — `0..subgroup_size - 1`. Used both a
 
 ### `group_size()`
 
-Returns the subgroup size in effect for the current launch. Currently SPIR-V only; on CUDA the active warp size is statically `32` and on AMDGPU it is statically `64` (wave64 is forced on every AMDGPU target, including RDNA gfx10+ which would otherwise default to wave32), so a runtime query is unnecessary on those backends.
+Returns the subgroup size in effect for the current launch. **SPIR-V only** — calling it from a CUDA or AMDGPU kernel does not compile, because the LLVM backends have no `subgroupSize` lowering and the runtime exposes no equivalent symbol. On those backends the wave size is hard-coded (32 on CUDA, 64 on AMDGPU — wave64 is forced on every AMDGPU target, including RDNA gfx10+ which would otherwise default to wave32), so just use the literal 32 / 64 directly. A future PR may unify this so that `group_size()` works on every backend by returning the appropriate compile-time constant on the LLVM ones.
 
 ### `elect()`
 
