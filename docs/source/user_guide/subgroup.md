@@ -107,7 +107,7 @@ Every lane in the subgroup returns the `value` held by the lane whose subgroup-l
 ### Common to the data-movement ops
 
 - All shuffles / broadcasts are issued under a full active mask on CUDA (`0xFFFFFFFF`). Call them from uniform control flow; calling from divergent control flow is undefined on most backends. (This means: every thread has to execute the shuffle.)
-- Subgroup size varies by backend (32 on NVIDIA, 32 or 64 on AMD depending on wavefront mode, 32 in Vulkan compute on most GPUs). Use `subgroup.group_size()` to query at runtime on SPIR-V; on CUDA / AMDGPU use a compile-time constant.
+- Subgroup size is hard-coded per backend on the LLVM backends — 32 on CUDA, 64 on AMDGPU (wave64 is forced on every AMDGPU target including RDNA, see [supported_systems](supported_systems.md)) — so kernels can rely on those literal values. On SPIR-V it is queried at runtime via `subgroup.group_size()` (typically 32 on Vulkan compute on most GPUs).
 
 ### `invocation_id()`
 
@@ -118,7 +118,7 @@ Returns this lane's subgroup-local index — `0..subgroup_size - 1`. Used both a
 
 ### `group_size()`
 
-Returns the subgroup size in effect for the current launch. Currently SPIR-V only; on CUDA the active warp size is statically `32`, and on AMDGPU it is `32` or `64` depending on the wavefront mode chosen at compile time, so a runtime query is typically unnecessary on those backends.
+Returns the subgroup size in effect for the current launch. **SPIR-V only** — calling it from a CUDA or AMDGPU kernel does not compile, because the LLVM backends have no `subgroupSize` lowering and the runtime exposes no equivalent symbol. On those backends the wave size is hard-coded (32 on CUDA, 64 on AMDGPU — wave64 is forced on every AMDGPU target, including RDNA gfx10+ which would otherwise default to wave32), so just use the literal 32 / 64 directly. A future PR may unify this so that `group_size()` works on every backend by returning the appropriate compile-time constant on the LLVM ones.
 
 ### `elect()`
 
@@ -140,7 +140,7 @@ Picks one lane in the subgroup as the "leader". Returns `1` on the elected lane 
 Sums `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. The result is valid **in lane 0** of each group; other lanes hold partial sums and should be considered undefined.
 
 - `log2_size` is a `qd.template()` — a compile-time constant. The body unrolls into exactly `log2_size` `shuffle_down + add` pairs in the calling kernel's IR, with no runtime loop overhead.
-- `2**log2_size` must not exceed the active subgroup size on the target (32 on CUDA / Metal and on RDNA, 64 on CDNA). Passing a larger value produces implementation-defined results; it does not error.
+- `2**log2_size` must not exceed the active subgroup size on the target (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target). Passing a larger value silently computes the wrong sum and there is no runtime check: each iteration calls `shuffle_down(value, offset >= subgroup_size)`, which on CUDA returns the calling lane's own value, on AMDGPU wraps around the wave (offset is taken mod 64 inside `ds_bpermute`), and on SPIR-V is fully undefined per spec — so the corrupted result varies by backend and, on Vulkan, by driver.
 - The reduction works on any type that supports `+` and `shuffle_down`; in practice this means i32, u32, f32, f64, i64, u64.
 - Decorated with `@qd.func` and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.
 
@@ -281,7 +281,7 @@ Every lane in each group of 32 sees the same `total`.
 
 ### Partial-subgroup reductions
 
-`log2_size` does not have to match the full subgroup. Sum groups of 8 with `reduce_add(v, 3)` or groups of 16 with `reduce_all_add(v, 4)`; the caller just ensures `2**log2_size <= subgroup_size` (so up to 5 on CUDA / Metal / RDNA, up to 6 on CDNA).
+`log2_size` does not have to match the full subgroup. Sum groups of 8 with `reduce_add(v, 3)` or groups of 16 with `reduce_all_add(v, 4)`; the caller just ensures `2**log2_size <= subgroup_size` (so up to 5 on CUDA / Metal, up to 6 on AMDGPU).
 
 ### Inclusive scan on SPIR-V
 
