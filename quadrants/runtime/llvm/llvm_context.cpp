@@ -633,8 +633,13 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
         isa_file, mcpu);
   }
 
+  // Force wave64 on every AMDGPU target (CDNA gfx9xx are wave64 by default; RDNA gfx10/11/12 default
+  // to wave32 but also support wave64). Linking the wavefrontsize64=on libdevice variant aligns the
+  // ROCm device libraries with the wave64 codegen forced via target-features in
+  // llvm_context_pass.h::AMDGPUConvertAllocaInstAddressSpacePass and jit_amdgpu.cpp's TargetMachine
+  // features. See `hp/always-wave64`: testing both wave modes was costly, so we standardize on wave64.
   std::string libdevice_files[] = {"ocml.bc",
-                                   "oclc_wavefrontsize64_off.bc",
+                                   "oclc_wavefrontsize64_on.bc",
                                    "ockl.bc",
                                    "oclc_abi_version_400.bc",
                                    "oclc_correctly_rounded_sqrt_off.bc",
