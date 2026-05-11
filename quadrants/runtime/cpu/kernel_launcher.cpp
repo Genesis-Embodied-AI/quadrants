@@ -135,7 +135,16 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       }
     }
   }
-  // Adstack-cache invalidation bump - see `bump_writes_for_kernel_llvm` in `program/adstack_size_expr_eval.{h,cpp}`.
+  // Adstack-cache invalidation bump - see `bump_writes_for_kernel_llvm` in `program/adstack/write_gen.{h,cpp}`. This
+  // call is unconditional even when the launched kernel has no adstack task of its own: between two consecutive
+  // forward/backward pairs (training-step boundary) the user is free to mutate any field or ndarray through a regular
+  // forward-only kernel, and the loop-bound mutation limitation that bans such writes only applies WITHIN a single
+  // forward/backward pair (a current design limitation, not an intended guarantee). A non-adstack kernel can
+  // therefore legally write state that a later reverse-mode kernel's sizer observes; if we gated this call on
+  // `kernel_has_adstack` the next reverse launch could hit a previously recorded sizer entry whose `observed_gen`
+  // still matched the un-bumped current gen and replay a stale heap-size decision - overflow or silently wrong
+  // gradient. The bump body itself short-circuits cheaply when the cache holds no entry that could observe this
+  // kernel's writes (see `has_any_recordings()` plus the per-id gates inside `bump_writes_for_kernel_llvm`).
   bump_writes_for_kernel_llvm(executor->get_program(), &ctx, launcher_ctx.snode_writes_per_task,
                               launcher_ctx.arr_writes_per_task, launcher_ctx.arr_reads_per_task);
 
