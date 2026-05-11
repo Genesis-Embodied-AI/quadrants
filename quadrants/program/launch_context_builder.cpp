@@ -19,18 +19,24 @@ inline std::vector<T> concatenate_vector(const std::vector<T> &lhs, const std::v
 }
 
 // Per-arg `ndarray_shapes` capture exists solely to feed the adstack-overflow diagnose snapshot
-// (`AdStackCache::capture_diagnose_snapshot` reads this map). Skipping the writes when no cache entry has ever been
-// recorded is safe: an overflow can only surface from a reverse-mode launch, which itself populates the cache through
-// the sizer publish path, so a fresh program that has never recorded into the cache will not reach the diagnose path.
-// Reading `has_any_recordings()` is a single inline bool load; the alternative is a per-arg heap allocation for the
-// shape vector plus an unordered_map insert. Returns true if the kernel-side `Program` backref cannot be reached so
-// callers degrade safely (a launcher built pre-attach pays the capture cost rather than risking a missing snapshot at
-// diagnose time). The `static_cast` is sound because every concrete launcher kernel constructed through
-// `Kernel::make_launch_context` and friends is a `Callable` subclass; `CallableBase` is the launch-context type system
-// fallback but has no live instances in launcher paths.
+// (`AdStackCache::capture_diagnose_snapshot` reads this map). The diagnose path can only fire on a reverse-mode launch
+// (the kernel that owns the adstack), so non-autodiff kernels never need the snapshot. The capture must also kick in
+// on the very first launch of an autodiff-tagged kernel - the first `record_*` fires INSIDE `publish_adstack_metadata`
+// which runs AFTER `capture_diagnose_snapshot`, so a pure `has_any_recordings()` gate would miss the bind of the first
+// reverse launch and the diagnose path would not be able to rerun the sizer. Hence the autodiff-mode check below:
+// every Forward / Reverse / CheckAutodiffValid kernel captures shapes from launch 0; pure forward kernels
+// (`autodiff_mode == kNone`) capture lazily once anything has recorded, which keeps the per-arg heap allocation off
+// the hot path of forward-only workloads. The `static_cast` is sound because every concrete launcher kernel
+// constructed through `Kernel::make_launch_context` and friends is a `Callable` subclass; `CallableBase` is the
+// launch-context type system fallback but has no live instances in launcher paths. Callers degrade safely when the
+// `Program` backref cannot be reached (launcher built pre-attach pays the capture cost rather than risking a missing
+// snapshot at diagnose time).
 inline bool ndarray_shape_capture_needed(const CallableBase *kernel) {
   const auto *callable = static_cast<const Callable *>(kernel);
   if (callable == nullptr || callable->program == nullptr) {
+    return true;
+  }
+  if (callable->autodiff_mode != AutodiffMode::kNone) {
     return true;
   }
   return callable->program->adstack_cache().has_any_recordings();
