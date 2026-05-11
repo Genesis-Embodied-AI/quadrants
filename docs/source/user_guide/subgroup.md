@@ -42,6 +42,28 @@ The old names remain as deprecated aliases that emit a `DeprecationWarning` on f
 
 \*\* `mem_fence()` lowers to a workgroup-scope fence on CUDA (`__threadfence_block()`, via `nvvm.membar.cta`) and AMDGPU (LLVM `fence syncscope("workgroup") seq_cst`). Both are over-strict for the subgroup-scope ask but are correct: a workgroup-scope fence orders memory as observed by the whole workgroup, of which the subgroup is a strict subset. A future change can tighten these to true wave-scope fences if a measurable cost shows up.
 
+### How `log2_size` windowing works
+
+Every op below that takes a `log2_size` template parameter operates on independent `2**log2_size`-aligned windows that **tile the entire subgroup** — not just the first `2**log2_size` lanes. With `log2_size = k`, the subgroup splits into `group_size() / (2**k)` windows of `2**k` consecutive lanes each, and each window does its own reduction / scan / vote completely independently of every other window. The caller must arrange `2**k <= group_size()` so every window is full (a smaller `k` simply gives more, narrower windows; it does **not** mean "only the first window is active").
+
+| `log2_size` | wave32 (CUDA / RDNA / most Vulkan / Metal) | wave64 (CDNA / GFX9 / RDNA wave64) |
+| --- | --- | --- |
+| 5 (window = 32) | 1 window: lanes 0–31 | 2 windows: 0–31, 32–63 |
+| 4 (window = 16) | 2 windows: 0–15, 16–31 | 4 windows: 0–15, 16–31, 32–47, 48–63 |
+| 3 (window = 8)  | 4 windows of 8 | 8 windows of 8 |
+| 0 (window = 1)  | every lane is its own window (no-op) | same |
+
+Why it composes exactly: the largest shuffle distance any op uses is `2**(k-1)`, so partner lookups never cross a `2**k`-aligned boundary — bits `k+` of the lane index are preserved by every `shuffle` / `shuffle_xor` / `shuffle_down`, and `shuffle_up`-based ops mask out cross-window partners via the `lane_in_group >= offset` predicate.
+
+#### Result placement per window
+
+- **Broadcast-to-all forms** — `all_true`, `any_true`, `all_equal`, `reduce_all_add`, `reduce_all_min`, `reduce_all_max`, `inclusive_*`, `exclusive_*`, `segmented_reduce_*`: every lane in each window holds the per-window result. Lanes in different windows hold different results (their own window's).
+- **Window-local-lane-0 forms** — `reduce_add`, `reduce_min`, `reduce_max`: only the *window-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. On wave64 with `log2_size=5` this is a common gotcha: reading only lane 0 silently drops the upper-half result. Use `reduce_all_*` if you want every lane to see its window's result.
+
+#### Picking `log2_size` for a "full subgroup" reduction
+
+`log2_size` is compile-time but `group_size()` is a runtime value on AMDGPU (32 on RDNA, 64 on CDNA). For a portable "full-subgroup" reduction the typical pattern is `log2_size = 5` (32-lane window — fits in every subgroup); accept that wave64 hardware gives you two reductions per wave (one per 32-lane half) and stitch the halves together yourself with `shuffle` if needed. If you specifically need a 64-lane reduction on CDNA, use `log2_size = 6` gated on `arch == amdgpu` at trace time.
+
 ### Voting and predicate ops
 
 `all_true` / `any_true` / `all_equal` take a `log2_size` template parameter and reduce over each `2**log2_size` group of consecutive lanes, broadcasting the `i32` (`0` or `1`) result to every lane in the group. Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`. The two `ballot` variants are full-subgroup only: `ballot_first_n(predicate, n)` returns a `u32` covering lanes `[0, n)` (with `n` a compile-time constant `<= 32`), and `ballot_full_subgroup(predicate)` returns a `u64` covering every lane in the subgroup (32 lanes on wave32, 64 on wave64).
@@ -198,14 +220,14 @@ Ballot is a building block for warp-cooperative algorithms: population counts (`
 
 ### `reduce_add(value, log2_size)`
 
-Sums `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. The result is valid **in lane 0** of each group; other lanes hold partial sums and should be considered undefined.
+Sums `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. The result is valid in the **window-local lane 0** of each group (see [How `log2_size` windowing works](#how-log2-size-windowing-works)); other lanes hold partial sums and should be considered undefined.
 
 - `log2_size` is a `qd.template()` — a compile-time constant. The body unrolls into exactly `log2_size` `shuffle_down + add` pairs in the calling kernel's IR, with no runtime loop overhead.
 - `2**log2_size` must not exceed the active subgroup size on the target (32 on CUDA / Metal and on RDNA, 64 on CDNA). Passing a larger value produces implementation-defined results; it does not error.
 - The reduction works on any type that supports `+` and `shuffle_down`; in practice this means i32, u32, f32, f64, i64, u64.
 - Decorated with `@qd.func` and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.
 
-Lanes 1..`2**log2_size - 1` receive undefined-but-safe partial sums (they never touch out-of-range lanes because the tree shrinks each step), but only lane 0's result is meaningful for the caller.
+Lanes other than the window-local lane 0 receive undefined-but-safe partial sums (they never touch out-of-range lanes because the tree shrinks each step), but only the window-local lane 0's result is meaningful for the caller. On wave64 with `log2_size=5` this is two valid results (lane 0 and lane 32), one per 32-lane half — reading only lane 0 silently drops the upper-half sum. Use `reduce_all_add` if every lane needs the answer.
 
 ### `reduce_all_add(value, log2_size)`
 
@@ -217,7 +239,7 @@ Same sum as `reduce_add`, but broadcast to **every lane** in each `2**log2_size`
 
 ### `reduce_min(value, log2_size)` / `reduce_max(value, log2_size)`
 
-Min / max of `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. Result valid in **lane 0** of each group; other lanes hold partial mins / maxes.
+Min / max of `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. Result valid in the **window-local lane 0** of each group (see [How `log2_size` windowing works](#how-log2-size-windowing-works)); other lanes hold partial mins / maxes. Same wave64 gotcha as `reduce_add` applies — on wave64 with `log2_size=5` both lane 0 and lane 32 hold meaningful per-half results; use `reduce_all_min` / `reduce_all_max` if you want every lane to see its window's answer.
 
 - Same `log2_size` template + size-cap contract as `reduce_add`. Body unrolls into exactly `log2_size` `shuffle_down + min` (or `max`) pairs.
 - Accepts integer (`i32`, `u32`, `i64`, `u64`) and float (`f32`, `f64`) dtypes. Lowers via `qd.min` / `qd.max`, which dispatch to the backend's native min/max intrinsic.
