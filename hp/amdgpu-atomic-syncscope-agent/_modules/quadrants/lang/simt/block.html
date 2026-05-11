@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.simt.block &#8212; Quadrants 0.7.6 documentation</title>
+    <title>quadrants.lang.simt.block &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../_static/documentation_options.js?v=918ced64"></script>
+    <script src="../../../../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.6" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -319,10 +319,15 @@
   <h1>Source code for quadrants.lang.simt.block</h1><div class="highlight"><pre>
 <span></span><span class="c1"># type: ignore</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_expr_group</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span> <span class="k">as</span> <span class="n">_func</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">quadrants_scope</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">i32</span> <span class="k">as</span> <span class="n">_i32</span>
 
 
 <div class="viewcode-block" id="arch_uses_spv">
@@ -349,7 +354,12 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">sync_all_nonzero</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="c1"># Hardware-fused barrier+reduction on NVPTX (`barrier.cta.red.and.aligned.all.sync`).</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_and_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">or</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="c1"># AMDGPU and SPIR-V (Vulkan / Metal) emulate via shared memory + 2 barriers + an atomic; see</span>
+        <span class="c1"># `_block_reduce_*_emulated` below for the pattern.</span>
+        <span class="k">return</span> <span class="n">_block_reduce_all_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span>
     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_all_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
@@ -360,6 +370,8 @@
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_or_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">or</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_block_reduce_any_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span>
     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_any_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
@@ -370,19 +382,33 @@
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_count_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">or</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_block_reduce_count_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span>
     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_count_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="mem_fence">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.mem_fence">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">mem_fence</span><span class="p">():</span>
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_mem_fence&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;workgroupMemoryBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.mem_fence is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="mem_sync">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.mem_sync">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">mem_sync</span><span class="p">():</span>
-    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
-    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;workgroupMemoryBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.mem_sync is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+        <span class="s2">&quot;qd.simt.block.mem_sync() is deprecated; use qd.simt.block.mem_fence() instead.&quot;</span><span class="p">,</span>
+        <span class="ne">DeprecationWarning</span><span class="p">,</span>
+        <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">mem_fence</span><span class="p">()</span></div>
 
 
 
@@ -390,6 +416,8 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.thread_idx">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">thread_idx</span><span class="p">():</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_thread_idx&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;localInvocationId&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.thread_idx is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
@@ -400,7 +428,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.global_thread_idx">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">global_thread_idx</span><span class="p">():</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
-    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">insert_thread_idx_expr</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;globalInvocationId&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -447,6 +475,56 @@
         <span class="p">)</span></div>
 </div>
 
+
+
+<span class="c1"># Shared-memory emulation of CUDA&#39;s hardware-fused barrier-with-reduction ops, used on backends that lack a direct</span>
+<span class="c1"># equivalent (AMDGPU has no NVPTX `barrier.cta.red.*` analog; SPIR-V&#39;s `OpGroupNonUniform*` only operate at subgroup</span>
+<span class="c1"># scope reliably across Vulkan + Metal).</span>
+<span class="c1">#</span>
+<span class="c1"># Pattern: lane 0 zeroes a 1-element shared `i32` -&gt; block.sync() -&gt; every thread atomically folds its predicate into</span>
+<span class="c1"># the slot -&gt; block.sync() -&gt; every thread reads the broadcasted result. Costs 2 barriers + 1 atomic (vs. CUDA&#39;s</span>
+<span class="c1"># hardware fast path of 1 barrier+reduction). Slower than the CUDA path but functionally equivalent and portable. Each</span>
+<span class="c1"># call-site allocates a fresh `SharedArray` so multiple calls in the same kernel do not alias each other.</span>
+<span class="c1">#</span>
+<span class="c1"># IMPORTANT: every thread must participate in the `atomic_add` call unconditionally (guarding with</span>
+<span class="c1"># `if predicate: atomic_add(...)` is NOT safe). On Metal, `workgroupBarrier` does not propagate atomic writes from</span>
+<span class="c1"># divergent branches to threads that did not enter the branch -- non-participating SIMD groups never see the updated</span>
+<span class="c1"># slot. By having every thread call `atomic_add(counter, select(...))` the control flow stays uniform, the barrier</span>
+<span class="c1"># synchronises correctly, and all threads read the final count.</span>
+<span class="c1">#</span>
+<span class="c1"># We also use `atomic_add` rather than `atomic_or` because Metal / MoltenVK silently no-ops `OpAtomicOr` on threadgroup</span>
+<span class="c1"># memory in some configurations.</span>
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_count_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_any_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">_ops</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+
+
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_all_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">_ops</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
 </pre></div>
 
                 </article>

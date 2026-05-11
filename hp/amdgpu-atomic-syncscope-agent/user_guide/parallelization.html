@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Parallelization &#8212; Quadrants 0.7.6 documentation</title>
+    <title>Parallelization &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=918ced64"></script>
+    <script src="../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Sub-functions" href="sub_functions.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.6" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -314,6 +314,10 @@
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
@@ -480,8 +484,8 @@
 <section id="thread-synchronization">
 <h2>Thread synchronization<a class="headerlink" href="#thread-synchronization" title="Link to this heading">#</a></h2>
 <p>Typically, Quadrants kernels use <code class="docutils literal notranslate"><span class="pre">atomic_</span></code> operations for synchronization. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that <code class="docutils literal notranslate"><span class="pre">atomic</span></code> operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.</p>
-<p>When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads. The block-level primitives (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.sync</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_sync</span></code>, the predicate-reducing barriers, and <code class="docutils literal notranslate"><span class="pre">SharedArray</span></code> itself) are documented in <a class="reference internal" href="block.html"><span class="std std-doc">block</span></a>, which also discusses the important distinction between a thread-converging barrier and a memory-only fence.</p>
-<p>However, these block-scope fences and barriers do not work for synchronizing writes across blocks. For cross-block coordination through global memory, use <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code> (a device-scope fence; see <a class="reference internal" href="block.html#grid-scope-fence-qd-simt-grid-memfence"><span class="std std-ref">block</span></a>) — or, if you need full cross-block thread synchronization, finish the current kernel and launch a new kernel.</p>
+<p>When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads. The block-level primitives (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.sync</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence</span></code>, the predicate-reducing barriers, and <code class="docutils literal notranslate"><span class="pre">SharedArray</span></code> itself) are documented in <a class="reference internal" href="block.html"><span class="std std-doc">block</span></a>, which also discusses the important distinction between a thread-converging barrier and a memory-only fence.</p>
+<p>However, these block-scope fences and barriers do not work for synchronizing writes across blocks. For cross-block coordination through global memory, use <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code> (a device-scope fence; see <a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a>) — or, if you need full cross-block thread synchronization, finish the current kernel and launch a new kernel.</p>
 </section>
 <section id="avoiding-synchronization">
 <h2>Avoiding synchronization<a class="headerlink" href="#avoiding-synchronization" title="Link to this heading">#</a></h2>

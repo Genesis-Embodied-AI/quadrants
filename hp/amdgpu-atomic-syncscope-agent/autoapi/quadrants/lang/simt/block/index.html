@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.simt.block &#8212; Quadrants 0.7.6 documentation</title>
+    <title>quadrants.lang.simt.block &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../../_static/documentation_options.js?v=918ced64"></script>
+    <script src="../../../../../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.simt" href="../index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.6" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -381,13 +381,16 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.sync_count_nonzero" title="quadrants.lang.simt.block.sync_count_nonzero"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sync_count_nonzero</span></code></a>(predicate)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.mem_sync" title="quadrants.lang.simt.block.mem_sync"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mem_sync</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.mem_fence" title="quadrants.lang.simt.block.mem_fence"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mem_fence</span></code></a>()</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.thread_idx" title="quadrants.lang.simt.block.thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">thread_idx</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.mem_sync" title="quadrants.lang.simt.block.mem_sync"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mem_sync</span></code></a>()</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.global_thread_idx" title="quadrants.lang.simt.block.global_thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">global_thread_idx</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.thread_idx" title="quadrants.lang.simt.block.thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">thread_idx</span></code></a>()</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.global_thread_idx" title="quadrants.lang.simt.block.global_thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">global_thread_idx</span></code></a>()</p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -419,6 +422,11 @@
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.block.sync_count_nonzero">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">sync_count_nonzero</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predicate</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#sync_count_nonzero"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.sync_count_nonzero" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.mem_fence">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">mem_fence</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#mem_fence"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.mem_fence" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
@@ -514,6 +522,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.sync_all_nonzero"><code class="docutils literal notranslate"><span class="pre">sync_all_nonzero()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.sync_any_nonzero"><code class="docutils literal notranslate"><span class="pre">sync_any_nonzero()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.sync_count_nonzero"><code class="docutils literal notranslate"><span class="pre">sync_count_nonzero()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.mem_fence"><code class="docutils literal notranslate"><span class="pre">mem_fence()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.mem_sync"><code class="docutils literal notranslate"><span class="pre">mem_sync()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.thread_idx"><code class="docutils literal notranslate"><span class="pre">thread_idx()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.global_thread_idx"><code class="docutils literal notranslate"><span class="pre">global_thread_idx()</span></code></a></li>
