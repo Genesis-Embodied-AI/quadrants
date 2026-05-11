@@ -50,14 +50,15 @@ Properties common to every `qd.atomic_*`:
 
 ### `qd.atomic_min(x, y)` / `qd.atomic_max(x, y)`
 
-Atomically writes back `min(x, y)` (resp. `max(x, y)`). Returns the old value of `x`. Floating-point **`f16` / `f32` /
-`f64`** min/max use **`minNum` / `maxNum`-style** semantics on the LLVM backends: if exactly one operand is `NaN`, the
-**non-`NaN`** value is written back — this matches the **`f16`** path (CAS built from `llvm.minnum` / `llvm.maxnum`
-equivalents in `codegen_llvm.cpp`), and the **`f32` / `f64`** path, which uses LLVM `atomicrmw fmin` / `fmax`
-(`atomicMin` / `atomicMax` where CUDA exposes them, SPIR-V `FMin` / `FMax`). The C++ compare loops in
-`runtime_module/atomic.h` (`min_f32`, `max_f32`, …) remain only for **CPU** bitcode that is never patched to `atomicrmw`;
-GPU runtime modules rewrite those symbols to the same `atomicrmw` lowering as user `qd.atomic_*`. Behaviour when *both*
+Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of `x`. Float min/max are `minNum` /
+`maxNum`-style on every backend: if exactly one operand is `NaN`, the non-`NaN` operand wins. Behaviour when **both**
 operands are `NaN` is backend-dependent.
+
+| dtype          | Backends                          | Lowering                                       |
+|----------------|-----------------------------------|------------------------------------------------|
+| `f16`          | CPU, CUDA, AMDGPU                 | CAS over `llvm.minnum` / `llvm.maxnum`         |
+| `f32`, `f64`   | CPU, CUDA, AMDGPU                 | LLVM `atomicrmw fmin` / `fmax`                 |
+| `f32`, `f64`   | Vulkan, Metal (SPIR-V)            | SPIR-V `FMin` / `FMax`                         |
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
