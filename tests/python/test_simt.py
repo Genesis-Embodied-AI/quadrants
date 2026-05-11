@@ -491,7 +491,7 @@ def test_block_sync():
 # (Linux / Windows) honors it via `OpMemoryBarrier(ScopeDevice, ...)`. Metal does NOT, even on Apple Silicon: MSL
 # `atomic_thread_fence(memory_scope_device)` -- which is what MoltenVK / SPIRV-Cross translate
 # `OpMemoryBarrier(ScopeDevice, ...)` to -- only orders *atomic* memory accesses across the device, not plain stores;
-# this is a documented Metal limitation called out in the `grid.mem_fence()` Metal caveat in `block.md`. So we exclude
+# this is a documented Metal limitation called out in the `grid.mem_fence()` Metal caveat in `grid.md`. So we exclude
 # the native `metal` backend, and additionally skip `vulkan` on macOS at runtime, since on macOS Vulkan is really
 # MoltenVK lowering SPIR-V to MSL and inherits the same limitation. Workloads that need cross-workgroup ordering on
 # Metal (or Vulkan-on-Mac) have to publish through atomic stores (e.g. `qd.atomic_or(a[i], 1)`) rather than rely on a
