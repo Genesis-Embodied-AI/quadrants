@@ -6,7 +6,7 @@ This is a different category from the element-wise / arithmetic matrix operation
 
 Each entry point here implements an *iterative or multi-step numerical algorithm* (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.
 
-All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.make_spd`, `qd.polar_decompose`, `qd.eig`, `qd.solve`) and are intended to be called from inside a `@qd.kernel` or `@qd.func`. They run per thread — each thread independently decomposes its own matrix.
+All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.make_spd`, `qd.polar_decompose`, `qd.eig`, `qd.solve`) and are intended to be called from inside a `@qd.kernel` or `@qd.func`.
 
 ## What's available
 
