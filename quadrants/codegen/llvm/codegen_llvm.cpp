@@ -1355,6 +1355,14 @@ llvm::Value *TaskCodeGenLLVM::real_type_atomic(AtomicOpStmt *stmt) {
       return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FAdd, llvm_val[stmt->dest], llvm_val[stmt->val],
                                       llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
                                       kernel_atomic_syncscope(llvm_context, current_arch()));
+    case AtomicOpType::min:
+      return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FMin, llvm_val[stmt->dest], llvm_val[stmt->val],
+                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      kernel_atomic_syncscope(llvm_context, current_arch()));
+    case AtomicOpType::max:
+      return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FMax, llvm_val[stmt->dest], llvm_val[stmt->val],
+                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      kernel_atomic_syncscope(llvm_context, current_arch()));
     case AtomicOpType::mul:
       return atomic_op_using_cas(
           llvm_val[stmt->dest], llvm_val[stmt->val], [&](auto v1, auto v2) { return builder->CreateFMul(v1, v2); },
@@ -1363,14 +1371,7 @@ llvm::Value *TaskCodeGenLLVM::real_type_atomic(AtomicOpStmt *stmt) {
       break;
   }
 
-  std::unordered_map<PrimitiveTypeID, std::unordered_map<AtomicOpType, std::string>> atomics;
-  atomics[PrimitiveTypeID::f32][AtomicOpType::min] = "atomic_min_f32";
-  atomics[PrimitiveTypeID::f64][AtomicOpType::min] = "atomic_min_f64";
-  atomics[PrimitiveTypeID::f32][AtomicOpType::max] = "atomic_max_f32";
-  atomics[PrimitiveTypeID::f64][AtomicOpType::max] = "atomic_max_f64";
-  QD_ASSERT(atomics.find(prim_type) != atomics.end());
-  QD_ASSERT(atomics.at(prim_type).find(op) != atomics.at(prim_type).end());
-  return call(atomics.at(prim_type).at(op), llvm_val[stmt->dest], llvm_val[stmt->val]);
+  return nullptr;
 }
 
 void TaskCodeGenLLVM::visit(AtomicOpStmt *stmt) {

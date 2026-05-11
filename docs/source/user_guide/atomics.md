@@ -51,7 +51,14 @@ Properties common to every `qd.atomic_*`:
 
 ### `qd.atomic_min(x, y)` / `qd.atomic_max(x, y)`
 
-Atomically writes back `min(x, y)` (resp. `max(x, y)`). Returns the old value of `x`. Floating-point min/max use **`minNum` / `maxNum`-style** semantics: if exactly one input is `NaN`, the **non-`NaN`** value is written back. This matches the f16 path's use of LLVM `llvm.minnum` / `llvm.maxnum` intrinsics (`quadrants/codegen/llvm/codegen_llvm.cpp:1337-1342`) and the GPU-native paths (CUDA sm_80+ `atomicMin`/`atomicMax` for floats, SPIR-V `FMin` / `FMax`). The f32 / f64 CPU CAS-loop path (`quadrants/runtime/llvm/runtime_module/atomic.h::min_f32` / `max_f32`) uses naive `<` / `>` comparisons, which give asymmetric NaN behaviour depending on operand order — do not rely on a particular result when either input is `NaN` on the CPU backend. Behaviour when *both* inputs are `NaN` is backend-dependent across the board.
+Atomically writes back `min(x, y)` (resp. `max(x, y)`). Returns the old value of `x`. Floating-point **`f16` / `f32` /
+`f64`** min/max use **`minNum` / `maxNum`-style** semantics on the LLVM backends: if exactly one operand is `NaN`, the
+**non-`NaN`** value is written back — this matches the **`f16`** path (CAS built from `llvm.minnum` / `llvm.maxnum`
+equivalents in `codegen_llvm.cpp`), and the **`f32` / `f64`** path, which uses LLVM `atomicrmw fmin` / `fmax`
+(`atomicMin` / `atomicMax` where CUDA exposes them, SPIR-V `FMin` / `FMax`). The C++ compare loops in
+`runtime_module/atomic.h` (`min_f32`, `max_f32`, …) remain only for **CPU** bitcode that is never patched to `atomicrmw`;
+GPU runtime modules rewrite those symbols to the same `atomicrmw` lowering as user `qd.atomic_*`. Behaviour when *both*
+operands are `NaN` is backend-dependent.
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
@@ -74,9 +81,9 @@ Every `qd.atomic_*` is emitted at **device-wide scope**: visible to all threads 
 
 You don't normally need to think about scope as a user. It's listed here so the per-backend behaviour is explicit:
 
-| Backend | Scope spelling in the IR | Hardware lowering for `atomic_xor` (representative) |
+| Backend | Scope spelling in the IR | Representative hardware lowering (`atomic_xor`; `f32`/`f64` float min/max) |
 |---|---|---|
-| CPU (x86_64) | LLVM `seq_cst` (System) | `lock xor` — single instruction; no fast/slow scope split exists |
+| CPU (x86_64) | LLVM `seq_cst` (System) | `lock xor`; float min/max via `atomicrmw fmin`/`fmax` |
 | CUDA (NVPTX) | LLVM `seq_cst` (System) | `atom.xor.b32` — single PTX op |
 | AMDGPU | LLVM `seq_cst syncscope("agent")` | `flat_atomic_xor` / `global_atomic_xor` — single instruction |
 | Vulkan / Metal (SPIR-V) | SPIR-V `Scope = Device` | `OpAtomicXor` — single op |

@@ -323,9 +323,9 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
     // The runtime bitcode ships with C++ CAS-loop bodies for these (see `runtime_module/atomic.h`); we replace them
     // with single `atomicrmw` instructions here so the GPU backend can lower them to native hardware atomics. The
     // syncscope must match the JIT-time codegen path in `codegen_llvm.cpp`, otherwise on AMDGPU the backend falls back
-    // to a `flat_atomic_cmpswap` retry loop and `test_reduction_single_f32[arch=amdgpu-0]` (and friends) livelocks. See
+    // to a `flat_atomic_cmpswap` retry loop and reduction / float-atomic tests livelock or run pathologically slowly. See
     // `kernel_atomic_syncscope.h` for the full rationale.
-    auto patch_atomic_add = [&](std::string name, llvm::AtomicRMWInst::BinOp op) {
+    auto patch_atomic_rmw = [&](std::string name, llvm::AtomicRMWInst::BinOp op) {
       auto func = module->getFunction(name);
       if (!func) {
         return;
@@ -343,10 +343,14 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       QuadrantsLLVMContext::mark_inline(func);
     };
 
-    patch_atomic_add("atomic_add_i32", llvm::AtomicRMWInst::Add);
-    patch_atomic_add("atomic_add_i64", llvm::AtomicRMWInst::Add);
-    patch_atomic_add("atomic_add_f64", llvm::AtomicRMWInst::FAdd);
-    patch_atomic_add("atomic_add_f32", llvm::AtomicRMWInst::FAdd);
+    patch_atomic_rmw("atomic_add_i32", llvm::AtomicRMWInst::Add);
+    patch_atomic_rmw("atomic_add_i64", llvm::AtomicRMWInst::Add);
+    patch_atomic_rmw("atomic_add_f64", llvm::AtomicRMWInst::FAdd);
+    patch_atomic_rmw("atomic_add_f32", llvm::AtomicRMWInst::FAdd);
+    patch_atomic_rmw("atomic_min_f32", llvm::AtomicRMWInst::FMin);
+    patch_atomic_rmw("atomic_max_f32", llvm::AtomicRMWInst::FMax);
+    patch_atomic_rmw("atomic_min_f64", llvm::AtomicRMWInst::FMin);
+    patch_atomic_rmw("atomic_max_f64", llvm::AtomicRMWInst::FMax);
 
     if (arch_ == Arch::cuda) {
       module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
