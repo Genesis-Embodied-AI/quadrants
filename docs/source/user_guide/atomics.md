@@ -54,11 +54,10 @@ Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of
 `maxNum`-style on every backend: if exactly one operand is `NaN`, the non-`NaN` operand wins. Behaviour when **both**
 operands are `NaN` is backend-dependent.
 
-| dtype          | Backends                          | Lowering                                       |
-|----------------|-----------------------------------|------------------------------------------------|
-| `f16`          | CPU, CUDA, AMDGPU                 | CAS over `llvm.minnum` / `llvm.maxnum`         |
-| `f32`, `f64`   | CPU, CUDA, AMDGPU                 | LLVM `atomicrmw fmin` / `fmax`                 |
-| `f32`, `f64`   | Vulkan, Metal (SPIR-V)            | SPIR-V `FMin` / `FMax`                         |
+| Backends                  | `f16`                                  | `f32`, `f64`                       |
+|---------------------------|----------------------------------------|------------------------------------|
+| CPU, CUDA, AMDGPU (LLVM)  | CAS over `llvm.minnum` / `llvm.maxnum` | LLVM `atomicrmw fmin` / `fmax`     |
+| Vulkan, Metal (SPIR-V)    | capability-gated, usually unsupported  | SPIR-V `FMin` / `FMax`             |
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
