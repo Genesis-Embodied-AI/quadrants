@@ -140,7 +140,7 @@ Picks one lane in the subgroup as the "leader". Returns `1` on the elected lane 
 Sums `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. The result is valid **in lane 0** of each group; other lanes hold partial sums and should be considered undefined.
 
 - `log2_size` is a `qd.template()` — a compile-time constant. The body unrolls into exactly `log2_size` `shuffle_down + add` pairs in the calling kernel's IR, with no runtime loop overhead.
-- `2**log2_size` must not exceed the active subgroup size on the target (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target). Passing a larger value produces implementation-defined results; it does not error.
+- `2**log2_size` must not exceed the active subgroup size on the target (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target). Passing a larger value silently computes the wrong sum and there is no runtime check: each iteration calls `shuffle_down(value, offset >= subgroup_size)`, which on CUDA returns the calling lane's own value, on AMDGPU wraps around the wave (offset is taken mod 64 inside `ds_bpermute`), and on SPIR-V is fully undefined per spec — so the corrupted result varies by backend and, on Vulkan, by driver.
 - The reduction works on any type that supports `+` and `shuffle_down`; in practice this means i32, u32, f32, f64, i64, u64.
 - Decorated with `@qd.func` and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.
 
