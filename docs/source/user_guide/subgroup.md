@@ -66,7 +66,7 @@ Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_d
 
 ### Voting and predicate ops
 
-All three take a `log2_size` template parameter and reduce over each `2**log2_size` group of consecutive lanes, broadcasting the `i32` (`0` or `1`) result to every lane in the group. Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`.
+All three take a `log2_size` template parameter and are **windowed**: they operate independently on each `2**log2_size`-aligned window that tiles the entire subgroup, broadcasting the `i32` (`0` or `1`) per-window result to every lane in that window (the broadcast-to-all forms from [How `log2_size` windowing works](#how-log2_size-windowing-works)). With `log2_size = 5` on wave32 you get one vote per subgroup; with `log2_size = 5` on wave64 you get two independent votes (lanes 0–31 and lanes 32–63 vote separately, and lanes in each half hold their own half's result). Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`.
 
 | Op                                          | CUDA          | AMDGPU | SPIR-V (Vulkan / Metal) |
 |---------------------------------------------|---------------|--------|-------------------------|
