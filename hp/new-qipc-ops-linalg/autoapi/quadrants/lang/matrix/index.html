@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.matrix &#8212; Quadrants 0.7.8 documentation</title>
+    <title>quadrants.lang.matrix &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../../../../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -65,7 +65,7 @@
     <link rel="prev" title="quadrants.lang.kernel_impl" href="../kernel_impl/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -133,7 +133,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -642,13 +642,11 @@ of its elements.</p>
 <dt class="sig sig-object py" id="quadrants.lang.matrix.Matrix.frobenius_inner">
 <span class="sig-name descname"><span class="pre">frobenius_inner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Matrix.frobenius_inner"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Matrix.frobenius_inner" title="Link to this definition">#</a></dt>
 <dd><p>Returns the Frobenius inner product <span class="math notranslate nohighlight">\(\langle A, B \rangle = \sum_{ij} A_{ij} B_{ij}\)</span>.</p>
-<p>Both operands must have the same shape. Defined for any tensor shape (vector or
-matrix); for matrices this is the standard Frobenius inner product, and
-<a class="reference internal" href="#quadrants.lang.matrix.Matrix.norm_sqr" title="quadrants.lang.matrix.Matrix.norm_sqr"><code class="xref py py-meth docutils literal notranslate"><span class="pre">norm_sqr()</span></code></a> is the special case <code class="docutils literal notranslate"><span class="pre">A.frobenius_inner(A)</span></code>.</p>
+<p>Both operands must have the same shape. Defined for any tensor shape (vector or matrix); for matrices this
+is the standard Frobenius inner product, and <a class="reference internal" href="#quadrants.lang.matrix.Matrix.norm_sqr" title="quadrants.lang.matrix.Matrix.norm_sqr"><code class="xref py py-meth docutils literal notranslate"><span class="pre">norm_sqr()</span></code></a> is the special case <code class="docutils literal notranslate"><span class="pre">A.frobenius_inner(A)</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>other</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>) – The other operand. Must have the same
-shape as <code class="docutils literal notranslate"><span class="pre">self</span></code>.</p>
+<dd class="field-odd"><p><strong>other</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>) – The other operand. Must have the same shape as <code class="docutils literal notranslate"><span class="pre">self</span></code>.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>The scalar Frobenius inner product.</p>

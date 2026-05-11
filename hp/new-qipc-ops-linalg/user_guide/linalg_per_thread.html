@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Per-thread linear algebra &#8212; Quadrants 0.7.8 documentation</title>
+    <title>Per-thread linear algebra &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Per-thread matrix and vector operations" href="matrix_vector_per_thread.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -410,8 +410,8 @@
 <h1>Per-thread linear algebra<a class="headerlink" href="#per-thread-linear-algebra" title="Link to this heading">#</a></h1>
 <p>Small matrix decompositions and linear solvers that run <strong>per thread, in registers, with no cross-thread cooperation</strong> — every thread independently decomposes / solves its own 2×2 .. 12×12 matrix. No shared memory, no syncs, no atomics on shared state, no warp / subgroup primitives. A 1000-element kernel runs 1000 copies of the algorithm in parallel, each on its own data.</p>
 <p>This is a different category from the element-wise / arithmetic matrix operations covered in <a class="reference internal" href="matrix_vector_per_thread.html"><span class="std std-doc">matrix_vector_per_thread</span></a> (also per-thread, but closed-form rather than iterative), and from the cross-thread / sparse linear algebra under <code class="docutils literal notranslate"><span class="pre">qd.linalg.*</span></code> (CG, sparse direct solvers — covered separately).</p>
-<p>Each entry point here implements a <em>numerical algorithm</em> (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.</p>
-<p>All ops live at the top level (<code class="docutils literal notranslate"><span class="pre">qd.svd</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.polar_decompose</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.solve</span></code>) and are intended to be called from inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> or <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>. They run per thread — each thread independently decomposes its own matrix.</p>
+<p>Each entry point here implements an <em>iterative or multi-step numerical algorithm</em> (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.</p>
+<p>All ops live at the top level (<code class="docutils literal notranslate"><span class="pre">qd.svd</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.polar_decompose</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.solve</span></code>) and are intended to be called from inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> or <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>.</p>
 <section id="what-s-available">
 <h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
@@ -458,7 +458,7 @@
 </div>
 <p>A few patterns to note:</p>
 <ul class="simple">
-<li><p><strong>Shapes are fixed.</strong> Calling any of these on a matrix outside the supported shapes raises an exception at trace time (<code class="docutils literal notranslate"><span class="pre">&quot;SVD</span> <span class="pre">only</span> <span class="pre">supports</span> <span class="pre">2×2</span> <span class="pre">and</span> <span class="pre">3×3</span> <span class="pre">matrices.&quot;</span></code>, etc.). For shapes up to the cap they compile down to per-thread straight-line code; beyond the cap there is no fallback today.</p></li>
+<li><p><strong>Shapes are fixed.</strong> Calling any of these on a matrix outside the supported shapes raises an exception at trace time (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;SVD</span> <span class="pre">only</span> <span class="pre">supports</span> <span class="pre">2×2</span> <span class="pre">and</span> <span class="pre">3×3</span> <span class="pre">matrices.&quot;</span></code>). There is no fallback for larger shapes.</p></li>
 <li><p><strong>All ops accept an optional <code class="docutils literal notranslate"><span class="pre">dt</span></code> argument.</strong> When unspecified, it defaults to <code class="docutils literal notranslate"><span class="pre">impl.get_runtime().default_fp</span></code> — usually <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code> unless overridden in <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>. Pass <code class="docutils literal notranslate"><span class="pre">dt=qd.f64</span></code> for the high-precision variant.</p></li>
 <li><p><strong>Output shape matches the input shape.</strong> A 3×3 input yields 3×3 outputs (and a length-3 vector for <code class="docutils literal notranslate"><span class="pre">solve</span></code> / eigenvalues); a 2×2 input yields 2×2 outputs.</p></li>
 <li><p><strong>Real matrices only.</strong> <code class="docutils literal notranslate"><span class="pre">qd.eig</span></code> returns complex results in a packed real layout (see below); the others all assume real-valued input and return real-valued output.</p></li>

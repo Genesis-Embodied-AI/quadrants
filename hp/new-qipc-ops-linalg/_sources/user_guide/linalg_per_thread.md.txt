@@ -4,9 +4,9 @@ Small matrix decompositions and linear solvers that run **per thread, in registe
 
 This is a different category from the element-wise / arithmetic matrix operations covered in [matrix_vector_per_thread](matrix_vector_per_thread.md) (also per-thread, but closed-form rather than iterative), and from the cross-thread / sparse linear algebra under `qd.linalg.*` (CG, sparse direct solvers — covered separately).
 
-Each entry point here implements a *numerical algorithm* (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.
+Each entry point here implements an *iterative or multi-step numerical algorithm* (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.
 
-All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.make_spd`, `qd.polar_decompose`, `qd.eig`, `qd.solve`) and are intended to be called from inside a `@qd.kernel` or `@qd.func`. They run per thread — each thread independently decomposes its own matrix.
+All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.make_spd`, `qd.polar_decompose`, `qd.eig`, `qd.solve`) and are intended to be called from inside a `@qd.kernel` or `@qd.func`.
 
 ## What's available
 
@@ -21,7 +21,7 @@ All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.make_spd`, `qd.polar_
 
 A few patterns to note:
 
-- **Shapes are fixed.** Calling any of these on a matrix outside the supported shapes raises an exception at trace time (`"SVD only supports 2×2 and 3×3 matrices."`, etc.). For shapes up to the cap they compile down to per-thread straight-line code; beyond the cap there is no fallback today.
+- **Shapes are fixed.** Calling any of these on a matrix outside the supported shapes raises an exception at trace time (e.g. `"SVD only supports 2×2 and 3×3 matrices."`). There is no fallback for larger shapes.
 - **All ops accept an optional `dt` argument.** When unspecified, it defaults to `impl.get_runtime().default_fp` — usually `qd.f32` unless overridden in `qd.init()`. Pass `dt=qd.f64` for the high-precision variant.
 - **Output shape matches the input shape.** A 3×3 input yields 3×3 outputs (and a length-3 vector for `solve` / eigenvalues); a 2×2 input yields 2×2 outputs.
 - **Real matrices only.** `qd.eig` returns complex results in a packed real layout (see below); the others all assume real-valued input and return real-valued output.

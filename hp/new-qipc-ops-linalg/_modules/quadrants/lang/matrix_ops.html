@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.matrix_ops &#8212; Quadrants 0.7.8 documentation</title>
+    <title>quadrants.lang.matrix_ops &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../../../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -450,18 +450,15 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_inverse_lu</span><span class="p">(</span><span class="n">mat</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Inverse of an N×N matrix via Gauss elimination with partial pivoting.</span>
 
-<span class="sd">    Generic over N (up to the precondition cap). Loops are all ``static(range)`` so</span>
-<span class="sd">    the kernel is fully unrolled at compile time; pivot row indices are runtime</span>
-<span class="sd">    integers. Used by :func:`inverse` for ``N &gt;= 5`` (sizes 1–4 keep the existing</span>
-<span class="sd">    closed-form cofactor expansions).</span>
+<span class="sd">    Generic over N (up to the precondition cap). Loops are all ``static(range)`` so the kernel is fully unrolled at</span>
+<span class="sd">    compile time; pivot row indices are runtime integers. Used by :func:`inverse` for ``N &gt;= 5`` (sizes 1–4 keep the</span>
+<span class="sd">    existing closed-form cofactor expansions).</span>
 
-<span class="sd">    Algorithm: maintain a working copy ``a`` (in-place LU with partial pivoting,</span>
-<span class="sd">    row index ``pivot`` chosen by largest |column entry|) and a parallel matrix</span>
-<span class="sd">    ``b`` initialised to identity. Apply the same row swaps + row reductions to</span>
-<span class="sd">    both ``a`` and ``b``; at the end ``a`` holds U (on / above diag) and L</span>
-<span class="sd">    (strictly below, with implicit unit diagonal), and ``b`` holds ``L⁻¹ P`` where</span>
-<span class="sd">    ``P`` is the permutation matrix. The inverse is then read off column-by-column</span>
-<span class="sd">    by back-solving ``U x = b[:, c]``.</span>
+<span class="sd">    Algorithm: maintain a working copy ``a`` (in-place LU with partial pivoting, row index ``pivot`` chosen by</span>
+<span class="sd">    largest |column entry|) and a parallel matrix ``b`` initialised to identity. Apply the same row swaps + row</span>
+<span class="sd">    reductions to both ``a`` and ``b``; at the end ``a`` holds U (on / above diag) and L (strictly below, with</span>
+<span class="sd">    implicit unit diagonal), and ``b`` holds ``L⁻¹ P`` where ``P`` is the permutation matrix. The inverse is then</span>
+<span class="sd">    read off column-by-column by back-solving ``U x = b[:, c]``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">shape</span> <span class="o">=</span> <span class="n">static</span><span class="p">(</span><span class="n">mat</span><span class="o">.</span><span class="n">get_shape</span><span class="p">())</span>
     <span class="n">n</span> <span class="o">=</span> <span class="n">static</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>

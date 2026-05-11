@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.matrix &#8212; Quadrants 0.7.8 documentation</title>
+    <title>quadrants.lang.matrix &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../../../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -999,13 +999,11 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">frobenius_inner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the Frobenius inner product :math:`\\langle A, B \\rangle = \\sum_{ij} A_{ij} B_{ij}`.</span>
 
-<span class="sd">        Both operands must have the same shape. Defined for any tensor shape (vector or</span>
-<span class="sd">        matrix); for matrices this is the standard Frobenius inner product, and</span>
-<span class="sd">        :meth:`norm_sqr` is the special case ``A.frobenius_inner(A)``.</span>
+<span class="sd">        Both operands must have the same shape. Defined for any tensor shape (vector or matrix); for matrices this</span>
+<span class="sd">        is the standard Frobenius inner product, and :meth:`norm_sqr` is the special case ``A.frobenius_inner(A)``.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            other (:class:`~quadrants.Matrix`): The other operand. Must have the same</span>
-<span class="sd">                shape as ``self``.</span>
+<span class="sd">            other (:class:`~quadrants.Matrix`): The other operand. Must have the same shape as ``self``.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            DataType: The scalar Frobenius inner product.</span>
