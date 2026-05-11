@@ -370,6 +370,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
 #endif
 
       patch_intrinsic("thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
+      patch_intrinsic("block_thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
       patch_intrinsic("cuda_clock_i64", Intrinsic::nvvm_read_ptx_sreg_clock64);
       patch_intrinsic("block_idx", Intrinsic::nvvm_read_ptx_sreg_ctaid_x);
       patch_intrinsic("block_dim", Intrinsic::nvvm_read_ptx_sreg_ntid_x);
@@ -401,7 +402,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_barrier_red("block_barrier_or_i32", Intrinsic::nvvm_barrier_cta_red_or_aligned_all, true);
       patch_barrier_red("block_barrier_count_i32", Intrinsic::nvvm_barrier_cta_red_popc_aligned_all, false);
       patch_intrinsic("warp_barrier", Intrinsic::nvvm_bar_warp_sync, false);
-      patch_intrinsic("block_memfence", Intrinsic::nvvm_membar_cta, false);
+      patch_intrinsic("block_mem_fence", Intrinsic::nvvm_membar_cta, false);
       patch_intrinsic("grid_memfence", Intrinsic::nvvm_membar_gl, false);
       patch_intrinsic("system_memfence", Intrinsic::nvvm_membar_sys, false);
 
@@ -464,8 +465,6 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_intrinsic("ctlz_i32", Intrinsic::ctlz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
       patch_intrinsic("cttz_i32", Intrinsic::cttz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
 
-      patch_intrinsic("block_memfence", Intrinsic::nvvm_membar_cta, false);
-
       link_module_with_cuda_libdevice(module);
 
 #ifdef QD_WITH_CUDA
@@ -522,12 +521,35 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       }
       function_pass_manager.doFinalization();
       patch_intrinsic("thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
+      patch_intrinsic("block_thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
       patch_intrinsic("block_idx", llvm::Intrinsic::amdgcn_workgroup_id_x);
       patch_intrinsic("block_barrier", llvm::Intrinsic::amdgcn_s_barrier, false);
       patch_intrinsic("amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
       patch_intrinsic("amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
       patch_intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
       patch_intrinsic("amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
+
+      // AMDGPU block-scope memory fence. We can't use `patch_intrinsic` here because LLVM models `fence` as a
+      // first-class IR instruction (`builder.CreateFence(...)`), not as an intrinsic. We also can't compile
+      // `__builtin_amdgcn_fence` from `runtime.cpp` because that runtime is built with the host x86_64 clang
+      // front-end (which doesn't know AMDGCN builtins) and only retargeted to amdgcn here. So we synthesize the fence
+      // body in IR directly with the AMDGPU-specific syncscope name; the AMDGCN backend recognizes "workgroup" scope
+      // and lowers it to the right `s_waitcnt` / cache-flush sequence for a workgroup-scope fence.
+      auto patch_fence = [&](const std::string &name, const std::string &scope_str) {
+        auto func = module->getFunction(name);
+        if (!func) {
+          return;
+        }
+        func->deleteBody();
+        auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+        IRBuilder<> builder(*ctx);
+        builder.SetInsertPoint(bb);
+        llvm::SyncScope::ID scope_id = ctx->getOrInsertSyncScopeID(scope_str);
+        builder.CreateFence(llvm::AtomicOrdering::AcquireRelease, scope_id);
+        builder.CreateRetVoid();
+        QuadrantsLLVMContext::mark_inline(func);
+      };
+      patch_fence("block_mem_fence", "workgroup");
 
       link_module_with_amdgpu_libdevice(module);
       patch_amdgpu_kernel_dim("block_dim", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), 0));

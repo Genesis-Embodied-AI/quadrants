@@ -1718,12 +1718,24 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
         data = ir_->make_value(spv::OpBitcast, ret_type, data);
       }
 
-      // Semantics = (UniformMemory 0x40) | (AcquireRelease 0x8)
-      ir_->make_inst(spv::OpMemoryBarrier, ir_->const_i32_one_,
-                     ir_->uint_immediate_number(ir_->u32_type(), spv::MemorySemanticsAcquireReleaseMask |
-                                                                     spv::MemorySemanticsUniformMemoryMask));
+      // Pick the SPIR-V `Scope` and `MemorySemantics` memory-class flag based on the storage class of the atomic's
+      // target pointer. Workgroup (shared) memory atomics need `Workgroup` scope and `WorkgroupMemory` semantics;
+      // device-buffer atomics need `Device` + `UniformMemory`. Without this distinction MoltenVK / SPIRV-Cross
+      // translates a workgroup-storage `OpAtomicOr` with `Device` scope to MSL
+      // `atomic_fetch_or_explicit(..., memory_scope_device)` on a `threadgroup atomic_int`, which is mismatched and
+      // silently does not update the threadgroup-shared slot. This surfaced as
+      // `block.sync_{any,all,count}_nonzero` returning the initialiser value on Metal even though the same emulation
+      // works on Vulkan (whose drivers happen to tolerate the over-strong scope).
+      const bool is_workgroup = addr_ptr.stype.storage_class == spv::StorageClassWorkgroup;
+      const auto scope_const =
+          ir_->int_immediate_number(ir_->i32_type(), is_workgroup ? spv::ScopeWorkgroup : spv::ScopeDevice);
+      const auto memory_class_mask =
+          is_workgroup ? spv::MemorySemanticsWorkgroupMemoryMask : spv::MemorySemanticsUniformMemoryMask;
+      ir_->make_inst(
+          spv::OpMemoryBarrier, scope_const,
+          ir_->uint_immediate_number(ir_->u32_type(), spv::MemorySemanticsAcquireReleaseMask | memory_class_mask));
       val = ir_->make_value(op, ret_type, addr_ptr,
-                            /*scope=*/ir_->const_i32_one_,
+                            /*scope=*/scope_const,
                             /*semantics=*/ir_->const_i32_zero_, data);
 
       if (val.stype.id != ret_type.id) {

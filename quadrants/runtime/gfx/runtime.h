@@ -189,7 +189,8 @@ class QD_DLL_EXPORT GfxRuntime {
       LaunchContextBuilder &host_ctx,
       DeviceAllocationGuard *args_buffer,
       const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
-      const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs);
+      const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
+      const std::string &kernel_name);
 
   void init_nonroot_buffers();
 

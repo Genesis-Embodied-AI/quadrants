@@ -124,3 +124,26 @@ def test_clear_all_dual_field():
         with qd.ad.FwdMode(loss=loss, param=x):
             clear_dual_test()
         assert y.dual[None] == 4.0
+
+
+@test_utils.test(debug=True)
+def test_ad_fwd_debug_preserves_dual_dtype():
+    N = 5
+    x = qd.field(qd.f32, shape=N)
+    loss = qd.field(qd.f32, shape=N)
+    qd.root.lazy_dual()
+
+    assert x.dual.dtype == qd.f32
+    assert loss.dual.dtype == qd.f32
+
+    for i in range(N):
+        x[i] = i
+
+    @qd.kernel
+    def ad_fwd_add():
+        loss[1] += 2 * x[3]
+
+    with qd.ad.FwdMode(loss=loss, param=x, seed=[0, 0, 0, 1, 0]):
+        ad_fwd_add()
+
+    assert loss.dual[1] == 2
