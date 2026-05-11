@@ -319,13 +319,44 @@
   <h1>Source code for quadrants.lang.simt.grid</h1><div class="highlight"><pre>
 <span></span><span class="c1"># type: ignore</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
+
+
+<div class="viewcode-block" id="arch_uses_spv">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/grid/index.html#quadrants.lang.simt.grid.arch_uses_spv">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">vulkan</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">metal</span></div>
+
+
+
+<div class="viewcode-block" id="mem_fence">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/grid/index.html#quadrants.lang.simt.grid.mem_fence">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">mem_fence</span><span class="p">():</span>
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;grid_mem_fence&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="c1"># On Vulkan: `OpMemoryBarrier(ScopeDevice, ...)`. On Metal (via MoltenVK + SPIRV-Cross -&gt; MSL) this is</span>
+        <span class="c1"># translated to `atomic_thread_fence(metal::memory_scope_device)` on Apple Silicon / macOS 10.13+. Cross-</span>
+        <span class="c1"># workgroup ordering guarantees on older Apple hardware and very old macOS Intel GPUs are weaker than on CUDA</span>
+        <span class="c1"># -- see `block.md` for the support note.</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;gridMemoryBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.simt.grid.mem_fence is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
 
 
 <div class="viewcode-block" id="memfence">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/grid/index.html#quadrants.lang.simt.grid.memfence">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">memfence</span><span class="p">():</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;grid_memfence&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+        <span class="s2">&quot;qd.simt.grid.memfence() is deprecated; use qd.simt.grid.mem_fence() instead.&quot;</span><span class="p">,</span>
+        <span class="ne">DeprecationWarning</span><span class="p">,</span>
+        <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">mem_fence</span><span class="p">()</span></div>
 
 </pre></div>
 
