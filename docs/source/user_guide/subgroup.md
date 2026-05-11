@@ -165,7 +165,7 @@ Returns this lane's subgroup-local index — `0..subgroup_size - 1`. Used both a
 
 ### `group_size()`
 
-Returns the subgroup size in effect for the current launch as an `i32`. **For use inside `@qd.kernel` / `@qd.func` bodies only** — calling it from host Python raises, since the value is emitted into the kernel IR rather than computed in CPython.
+Returns the subgroup size in effect for the current launch as an `i32`. **For use inside `@qd.kernel` / `@qd.func` bodies only** — calling it from host Python raises.
 
 - **CUDA**: lowers to a static `32` constant — the warp size is fixed on every supported NVIDIA architecture (sm_30+). The optimizer can fold it into address arithmetic, so calling `group_size()` is no more expensive than hard-coding `32`.
 - **AMDGPU**: lowers to `llvm.amdgcn.wavefrontsize`, which the AMDGPU backend constant-folds to `64` at codegen time. Quadrants pins every AMDGPU function to `+wavefrontsize64,-wavefrontsize32` (see [supported_systems](supported_systems.md)), so CDNA (gfx9xx, gfx940/942) keeps its native wave64 mode and RDNA (gfx10/11/12) — which would otherwise default to wave32 — is forced into wave64 too. `group_size()` is therefore always 64 on AMDGPU.
