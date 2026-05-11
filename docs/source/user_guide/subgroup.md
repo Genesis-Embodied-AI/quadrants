@@ -80,7 +80,7 @@ CUDA shortcut: when `log2_size == 5` (full warp), `all_true` / `any_true` lower 
 
 ### Reductions and scans
 
-`reduce_add`, `reduce_all_add`, and all seven `inclusive_*` and `exclusive_*` ops take a `log2_size` parameter.
+`reduce_add`, `reduce_all_add`, and all seven `inclusive_*` and `exclusive_*` ops take a `log2_size` parameter and are **windowed**: each op operates independently on every `2**log2_size`-aligned window that tiles the entire subgroup (see [How `log2_size` windowing works](#how-log2_size-windowing-works)). `reduce_add` is a window-local-lane-0 form (only the window's first lane holds the reduction; other lanes are undefined); `reduce_all_add` / `inclusive_*` / `exclusive_*` are broadcast-to-all forms (every lane in each window holds that window's per-window scan result). With `log2_size = 5` on wave32 you get one reduction / scan per subgroup; with `log2_size = 5` on wave64 you get two independent reductions / scans (lanes 0–31 and lanes 32–63 reduce / scan separately).
 
 | Op                                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                       |
 |---------------------------------------------|------|--------|-------------------------|------------------------------|
