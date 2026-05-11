@@ -60,6 +60,11 @@ static std::vector<std::uint8_t> get_offline_cache_key_of_compile_config(const C
     serializer(config.gpu_max_reg);
     serializer(config.saturating_grid_dim);
     serializer(config.cpu_max_num_threads);
+    // Mix the per-arch subgroup / warp / wave size into the cache key so cached kernels are
+    // invalidated whenever the constant changes (e.g. flipping AMDGPU between wave32 and wave64).
+    // Today CUDA is fixed at 32 and AMDGPU is fixed at 64 (see kAmdgpuWaveSize in rhi/arch.h);
+    // this serialization path future-proofs the cache against any later toggle.
+    serializer(subgroup_size(config.arch));
   }
   serializer(config.ad_stack_experimental_enabled);
   serializer(config.ad_stack_size);
