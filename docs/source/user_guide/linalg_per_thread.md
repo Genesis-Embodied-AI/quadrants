@@ -4,7 +4,7 @@ Small matrix decompositions and linear solvers that run **per thread, in registe
 
 This is a different category from the element-wise / arithmetic matrix operations covered in [matrix_vector_per_thread](matrix_vector_per_thread.md) (also per-thread, but closed-form rather than iterative), and from the cross-thread / sparse linear algebra under `qd.linalg.*` (CG, sparse direct solvers — covered separately).
 
-Each entry point here implements a *numerical algorithm* (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.
+Each entry point here implements an *iterative or multi-step numerical algorithm* (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.
 
 All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.make_spd`, `qd.polar_decompose`, `qd.eig`, `qd.solve`) and are intended to be called from inside a `@qd.kernel` or `@qd.func`. They run per thread — each thread independently decomposes its own matrix.
 
