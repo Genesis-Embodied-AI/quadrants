@@ -66,7 +66,7 @@ Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_d
 
 ### Voting and predicate ops
 
-All three take a `log2_size` template parameter and are **windowed**: they operate independently on each `2**log2_size`-aligned window that tiles the entire subgroup, broadcasting the `i32` (`0` or `1`) per-window result to every lane in that window (the broadcast-to-all forms from [How `log2_size` windowing works](#how-log2_size-windowing-works)). With `log2_size = 5` on wave32 you get one vote per subgroup; with `log2_size = 5` on wave64 you get two independent votes (lanes 0–31 and lanes 32–63 vote separately, and lanes in each half hold their own half's result). Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`.
+All three take a `log2_size` template parameter and are **windowed**: they operate independently on each `2**log2_size`-aligned window that tiles the entire subgroup, broadcasting the `i32` (`0` or `1`) per-window result to every lane in that window (the broadcast-to-all forms from [How `log2_size` windowing works](#how-log2size-windowing-works)). With `log2_size = 5` on wave32 you get one vote per subgroup; with `log2_size = 5` on wave64 you get two independent votes (lanes 0–31 and lanes 32–63 vote separately, and lanes in each half hold their own half's result). Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`.
 
 | Op                                          | CUDA          | AMDGPU | SPIR-V (Vulkan / Metal) |
 |---------------------------------------------|---------------|--------|-------------------------|
@@ -80,7 +80,7 @@ CUDA shortcut: when `log2_size == 5` (full warp), `all_true` / `any_true` lower 
 
 ### Reductions and scans
 
-`reduce_add`, `reduce_all_add`, and all seven `inclusive_*` and `exclusive_*` ops take a `log2_size` parameter and are **windowed**: each op operates independently on every `2**log2_size`-aligned window that tiles the entire subgroup (see [How `log2_size` windowing works](#how-log2_size-windowing-works)). `reduce_add` is a window-local-lane-0 form (only the window's first lane holds the reduction; other lanes are undefined); `reduce_all_add` / `inclusive_*` / `exclusive_*` are broadcast-to-all forms (every lane in each window holds that window's per-window scan result). With `log2_size = 5` on wave32 you get one reduction / scan per subgroup; with `log2_size = 5` on wave64 you get two independent reductions / scans (lanes 0–31 and lanes 32–63 reduce / scan separately).
+`reduce_add`, `reduce_all_add`, and all seven `inclusive_*` and `exclusive_*` ops take a `log2_size` parameter and are **windowed**: each op operates independently on every `2**log2_size`-aligned window that tiles the entire subgroup (see [How `log2_size` windowing works](#how-log2size-windowing-works)). `reduce_add` is a window-local-lane-0 form (only the window's first lane holds the reduction; other lanes are undefined); `reduce_all_add` / `inclusive_*` / `exclusive_*` are broadcast-to-all forms (every lane in each window holds that window's per-window scan result). With `log2_size = 5` on wave32 you get one reduction / scan per subgroup; with `log2_size = 5` on wave64 you get two independent reductions / scans (lanes 0–31 and lanes 32–63 reduce / scan separately).
 
 | Op                                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                       |
 |---------------------------------------------|------|--------|-------------------------|------------------------------|
@@ -195,7 +195,7 @@ Returns `1` on lane 0 of every subgroup and `0` on every other lane. Useful for 
 
 ### `reduce_add(value, log2_size)`
 
-Sums `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. The result is valid in the **window-local lane 0** of each group (see [How `log2_size` windowing works](#how-log2-size-windowing-works)); other lanes hold partial sums and should be considered undefined.
+Sums `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. The result is valid in the **window-local lane 0** of each group (see [How `log2_size` windowing works](#how-log2size-windowing-works)); other lanes hold partial sums and should be considered undefined.
 
 - `log2_size` is a `qd.template()` — a compile-time constant. The body unrolls into exactly `log2_size` `shuffle_down + add` pairs in the calling kernel's IR, with no runtime loop overhead.
 - `2**log2_size` must not exceed the active subgroup size on the target (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target). Passing a larger value silently computes the wrong sum and there is no runtime check: each iteration calls `shuffle_down(value, offset >= subgroup_size)`, which on CUDA returns the calling lane's own value, on AMDGPU wraps around the wave (offset is taken mod 64 inside `ds_bpermute`), and on SPIR-V is fully undefined per spec — so the corrupted result varies by backend and, on Vulkan, by driver.
