@@ -41,6 +41,7 @@
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/TargetParser/Triple.h"
 
+#include "quadrants/rhi/arch.h"
 #include "quadrants/util/lang_util.h"
 #include "quadrants/jit/jit_session.h"
 #include "quadrants/common/task.h"
@@ -517,6 +518,29 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_intrinsic("amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
       patch_intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
       patch_intrinsic("amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
+
+      // Patch warp_size() for AMDGPU. The shared `cuda_kernel_utils.inc.h` stub returns 32, which is
+      // baked into the runtime bitcode by the host clang front-end. Without this patch, AMDGPU code
+      // that uses `warp_size()` (e.g. the per-lane serialization loop in locked_task.h, the warp
+      // reduction macro in runtime.cpp) believes the wave is 32 wide and computes `warp_idx() = tid
+      // % 32` accordingly, even though we now force wave64 codegen. That mismatch causes lanes
+      // (i, i+32) to share a warp_idx and contend for the same intra-wave lock in lockstep, which
+      // deadlocks because the AMDGCN backend executes the locked body for both lanes simultaneously
+      // (e.g. test_ad_gdar_diffmpm hangs without this patch). Replace the body with a constant 64 so
+      // every consumer of warp_size() sees the real wave width.
+      auto patch_warp_size = [&]() {
+        auto func = module->getFunction("warp_size");
+        if (!func) {
+          return;
+        }
+        func->deleteBody();
+        auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+        IRBuilder<> builder(*ctx);
+        builder.SetInsertPoint(bb);
+        builder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), kAmdgpuWaveSize));
+        QuadrantsLLVMContext::mark_inline(func);
+      };
+      patch_warp_size();
 
       // AMDGPU block-scope memory fence. We can't use `patch_intrinsic` here because LLVM models `fence` as a
       // first-class IR instruction (`builder.CreateFence(...)`), not as an intrinsic. We also can't compile
