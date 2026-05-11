@@ -201,3 +201,60 @@ def test_svd3_sign_convention_f32():
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_svd3_sign_convention_f64():
     _test_svd3_sign_convention(qd.f64)
+
+
+# ---------------------------------------------------------------------------
+# Sort-order contract: every shape of qd.svd must return singular values in descending order (matches NumPy / LAPACK's
+# `svd`). For 3×3 the convention allows the smallest entry to be negative (Sifakis absorbs det(A)'s sign); the
+# descending check is on direct numeric value (S[0] >= S[1] >= S[2]).
+# ---------------------------------------------------------------------------
+
+
+def _svd_sort_order_test_inputs(n, np_dt):
+    rng = np.random.default_rng(0x517D + n)
+    inputs = []
+    inputs.append(("random_pos_det", rng.standard_normal((n, n)).astype(np_dt)))
+    A_neg = rng.standard_normal((n, n)).astype(np_dt)
+    A_neg[0] = -A_neg[0]
+    inputs.append(("random_neg_det", A_neg))
+    if n == 3:
+        U_q, _ = np.linalg.qr(rng.standard_normal((3, 3)))
+        V_q, _ = np.linalg.qr(rng.standard_normal((3, 3)))
+        # Hand-pick a σ that arrives unsorted so the sort actually does work.
+        inputs.append(("unsorted_sigma", (U_q @ np.diag([1.0, 5.0, 2.0]) @ V_q.T).astype(np_dt)))
+    return inputs
+
+
+def _test_svd_sort_order(n, dt):
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    A = qd.Matrix.field(n, n, dtype=dt, shape=())
+    U = qd.Matrix.field(n, n, dtype=dt, shape=())
+    sigma = qd.Matrix.field(n, n, dtype=dt, shape=())
+    V = qd.Matrix.field(n, n, dtype=dt, shape=())
+
+    @qd.kernel
+    def run():
+        U[None], sigma[None], V[None] = qd.svd(A[None], dt)
+
+    tol = 5e-5 if dt == qd.f32 else 1e-10
+    for label, A_np in _svd_sort_order_test_inputs(n, np_dt):
+        A.from_numpy(A_np)
+        run()
+        S_diag = np.array([sigma[None][i, i] for i in range(n)])
+        diffs = np.diff(S_diag)
+        assert np.all(diffs <= tol), f"[{label}] qd.svd n={n} S not descending: S = {S_diag.tolist()}"
+        # Reconstruction must still hold after the sort + sign fix-up.
+        A_reconstructed = U.to_numpy() @ sigma.to_numpy() @ V.to_numpy().T
+        np.testing.assert_allclose(A_reconstructed, A_np, rtol=tol, atol=tol)
+
+
+@pytest.mark.parametrize("dim", [2, 3])
+@test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
+def test_svd_sort_order_f32(dim):
+    _test_svd_sort_order(dim, qd.f32)
+
+
+@pytest.mark.parametrize("dim", [2, 3])
+@test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
+def test_svd_sort_order_f64(dim):
+    _test_svd_sort_order(dim, qd.f64)

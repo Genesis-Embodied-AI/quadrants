@@ -491,3 +491,60 @@ def test_sym_eig_above_cap_raises():
             _ = qd.sym_eig(A[None], qd.f64)
 
         run()
+
+
+# ---------------------------------------------------------------------------
+# Sort-order contract: every shape of qd.sym_eig must return eigenvalues in ascending order (matches NumPy / LAPACK's
+# `eigh`). The vector at column i must be the eigenvector for `eigvals[i]` (i.e. the sort applies to both).
+# ---------------------------------------------------------------------------
+
+
+def _test_sym_eig_sort_order(n, dt):
+    if n == 3 and qd.lang.impl.current_cfg().arch == qd.vulkan:
+        # The closed-form 3×3 path (`_sym_eig3x3` → Eigen3 `computeDirect`) segfaults during SPIR-V codegen on the
+        # cluster's Vulkan stack (genesis-v1_23 image). Same code runs cleanly on amddesktop's Vulkan, so this is a
+        # pre-existing driver / SDK quirk, not a regression from sort-order changes — n=2 and n>=4 work on all
+        # backends. Track separately if it matters; remove this skip once the underlying Vulkan codegen is fixed.
+        pytest.skip("cluster Vulkan segfaults in _sym_eig3x3 SPIR-V codegen (pre-existing)")
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    rng = np.random.default_rng(0x501D + n)
+    Q, _ = np.linalg.qr(rng.standard_normal((n, n)))
+    eigs_target = np.linspace(-2.0, 3.0, n).astype(np_dt)
+    A_np = (Q @ np.diag(eigs_target) @ Q.T).astype(np_dt)
+
+    A = qd.Matrix.field(n, n, dtype=dt, shape=())
+    eigvals = qd.Vector.field(n, dtype=dt, shape=())
+    eigvecs = qd.Matrix.field(n, n, dtype=dt, shape=())
+    A.from_numpy(A_np)
+
+    @qd.kernel
+    def run():
+        eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
+
+    run()
+    eigvals_qd = eigvals.to_numpy().astype(np_dt)
+    eigvecs_qd = eigvecs.to_numpy().astype(np_dt)
+    tol = 5e-3 if dt == qd.f32 else 1e-9
+
+    diffs = np.diff(eigvals_qd)
+    assert np.all(diffs >= -tol), f"qd.sym_eig n={n} not ascending: eigvals = {eigvals_qd.tolist()}"
+
+    for i in range(n):
+        v = eigvecs_qd[:, i]
+        Av = A_np @ v
+        residual = np.linalg.norm(Av - eigvals_qd[i] * v)
+        assert residual <= tol * max(
+            1.0, abs(eigvals_qd[i])
+        ), f"column {i} is not the eigenvector of eigvals[{i}]={eigvals_qd[i]}: residual={residual}"
+
+
+@pytest.mark.parametrize("n", [2, 3, 4, 6, 9, 12])
+@test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
+def test_sym_eig_sort_order_f32(n):
+    _test_sym_eig_sort_order(n, qd.f32)
+
+
+@pytest.mark.parametrize("n", [2, 3, 4, 6, 9, 12])
+@test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
+def test_sym_eig_sort_order_f64(n):
+    _test_sym_eig_sort_order(n, qd.f64)

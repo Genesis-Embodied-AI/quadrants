@@ -36,11 +36,11 @@ Singular value decomposition — produces `(U, S, V)` such that `A = U @ S @ V.t
 - `V` orthogonal.
 - `S` diagonal, with non-negative singular values.
 
-Shapes 2×2 and 3×3 use closed-form / Jacobi-style implementations specialized per shape. Sign convention for `U` and `V` is the implementation's natural one and is **not** guaranteed to enforce `det(U) = det(V) = +1`; if you depend on a particular handedness (e.g. for an ARAP rotation `R = U @ V.transpose()`), check it explicitly and flip a column if needed.
+Shapes 2×2 and 3×3 use closed-form / Jacobi-style implementations specialized per shape.
 
-The 2×2 path returns singular values sorted descending (`S[0,0] >= S[1,1]`). The 3×3 path does **not** sort — singular values come out in whatever order the Sifakis algorithm produces them. If you depend on `S[0,0] >= S[1,1] >= S[2,2]` for 3×3, sort explicitly.
+Singular values come back sorted **descending** (`S[0,0] >= S[1,1] >= ...`) for both 2×2 and 3×3. The 3×3 path uses the Sifakis algorithm and absorbs `sign(det(A))` into σ rather than into `U` / `V`, so the smallest entry of `S` may be negative when `det(A) < 0`; the descending sort is on direct numeric value (matches the 2×2 path and NumPy / LAPACK conventions).
 
-**FIXME (sort consistency):** the 2×2 / 3×3 split is an inconsistency in the API — both shapes should either sort descending or both should leave the order to the algorithm (or parametrize it with a boolean template parameter, e.g. `qd.svd(A, sorted=True)`). The 2×2 swap is essentially free; making 3×3 sort would cost a few comparisons and column swaps. Pick one and apply it across both shapes (and update this paragraph accordingly).
+For 3×3 the implementation enforces `det(U) = det(V) = +1` regardless of input — useful for ARAP-style rotations `R = U @ V.transpose()` (which is then guaranteed to be a proper rotation). The 2×2 path does not enforce this convention; if you need a particular handedness on 2×2, check it explicitly and flip a column if needed.
 
 ### `qd.sym_eig(A, dt=None)`
 
@@ -49,15 +49,15 @@ Symmetric eigendecomposition — for a real symmetric `A`, returns `(eigenvalues
 - `eigenvalues`: a `Vector(n)` of real eigenvalues.
 - `eigenvectors`: a `Matrix(n, n)` whose columns are the corresponding orthonormal eigenvectors.
 
+Eigenvalues come back sorted **ascending** (`eigvals[0] <= eigvals[1] <= ...`) for every shape, with column `i` of `eigenvectors` being the eigenvector for `eigvals[i]`. This matches NumPy / LAPACK's `eigh` (note that `qd.svd` sorts σ *descending*, also matching its NumPy / LAPACK counterpart — the cross-op disagreement is the standard convention, not an inconsistency).
+
 Three implementations dispatch by size:
 
-- **2×2** — closed-form (Eigen3 `computeDirect`). Eigenvalues are *not* explicitly sorted.
-- **3×3** — closed-form Cardano method (Eigen3 `computeDirect`). Eigenvalues come out sorted *ascending*.
-- **4×4 .. 12×12** — cyclic Jacobi: 12 sweeps of Givens rotations zeroing every off-diagonal `(p, q)` pair, with `Q := Q · J` accumulated as eigenvectors. Sorted ascending. ~6 digits of accuracy in `f32`, ~12 digits in `f64`.
+- **2×2** — closed-form via the trace / determinant identity.
+- **3×3** — closed-form Cardano method (Eigen3 `computeDirect`).
+- **4×4 .. 12×12** — cyclic Jacobi: 12 sweeps of Givens rotations zeroing every off-diagonal `(p, q)` pair, with `Q := Q · J` accumulated as eigenvectors. ~6 digits of accuracy in `f32`, ~12 digits in `f64`.
 
 Calling at `N >= 13` raises (`"Symmetric eigen solver currently supports sizes up to 12×12."`).
-
-**FIXME (sort consistency):** same kind of inconsistency as `qd.svd`, with the additional twist that the sort directions disagree across ops — `qd.sym_eig` ≥3×3 sorts *ascending*, while `qd.svd` 2×2 sorts *descending*. Both shapes of `qd.sym_eig` should sort the same way, and ideally `qd.sym_eig` and `qd.svd` should agree on a direction (or parametrize via a boolean template parameter, e.g. `qd.sym_eig(A, sorted=True)`).
 
 `A` is *assumed* symmetric; the implementation does not symmetrize first. If your matrix is only approximately symmetric (e.g. accumulated floating-point error), explicitly compute `(A + A.transpose()) * 0.5` before calling.
 
