@@ -65,11 +65,11 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
   options.NoZerosInBSS = 0;
   options.GuaranteedTailCallOpt = 0;
 
-  // Force wave64 codegen at the TargetMachine level. Belt-and-suspenders with the per-function
-  // target-features attribute set in llvm_context_pass.h: TargetMachine features supply the default
-  // when the IR doesn't pin one, and per-function attrs override per call. Both are needed because
-  // alloca-pass-cleared functions and freshly created kernel wrappers each take a different code
-  // path. Required so the same wave64 runtime works on RDNA (gfx10+) hosts in addition to CDNA.
+  // Force wave64 codegen at the TargetMachine level. Belt-and-suspenders with the per-function target-features
+  // attribute set in llvm_context_pass.h: TargetMachine features supply the default when the IR doesn't pin one, and
+  // per-function attrs override per call. Both are needed because alloca-pass-cleared functions and freshly created
+  // kernel wrappers each take a different code path. Required so the same wave64 runtime works on RDNA (gfx10+) hosts
+  // in addition to CDNA.
   const char *kAmdgpuFeatures = "+wavefrontsize64,-wavefrontsize32";
   std::unique_ptr<llvm::TargetMachine> machine(target->createTargetMachine(
       triple_str, AMDGPUContext::get_instance().get_mcpu(), kAmdgpuFeatures, options, llvm::Reloc::PIC_,
