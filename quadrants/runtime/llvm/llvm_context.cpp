@@ -323,8 +323,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
     // The runtime bitcode ships with C++ CAS-loop bodies for these (see `runtime_module/atomic.h`); we replace them
     // with single `atomicrmw` instructions here so the GPU backend can lower them to native hardware atomics. The
     // syncscope must match the JIT-time codegen path in `codegen_llvm.cpp`, otherwise on AMDGPU the backend falls back
-    // to a `flat_atomic_cmpswap` retry loop and reduction / float-atomic tests livelock or run pathologically slowly. See
-    // `kernel_atomic_syncscope.h` for the full rationale.
+    // to a `flat_atomic_cmpswap` retry loop and reduction / float-atomic tests livelock or run pathologically slowly.
+    // See `kernel_atomic_syncscope.h` for the full rationale.
     auto patch_atomic_rmw = [&](std::string name, llvm::AtomicRMWInst::BinOp op) {
       auto func = module->getFunction(name);
       if (!func) {
