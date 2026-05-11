@@ -831,8 +831,8 @@ def ffs(x):
 
 # Portable fallback for fns(): scans a 32-bit `mask` from `base` in the direction implied by the sign of `offset` and
 # returns the bit position of the |offset|-th set bit, or 0xFFFFFFFF if there are fewer than |offset| set bits in the
-# requested half-open range. The CUDA fast path lowers directly to libdevice's __nv_fns and bypasses this @qd.func
-# entirely; see fns() below.
+# requested half-open range. The CUDA fast path lowers to a single PTX `fns.b32` instruction via inline asm (the slim
+# libdevice we ship does not include `__nv_fns`) and bypasses this @qd.func entirely; see fns() below.
 @func
 def _fns_portable(mask: u32, base: u32, offset: i32) -> u32:
     NOT_FOUND = u32(0xFFFFFFFF)
@@ -876,9 +876,9 @@ def fns(mask, base, offset):
 
     Returns ``0xFFFFFFFF`` if the requested set bit does not exist.
 
-    On CUDA the call lowers directly to libdevice's ``__nv_fns``, which is a single-instruction PTX ``fns`` op. On
-    every other backend (x64 / AMDGPU / SPIR-V) a portable Python @qd.func fallback is emitted; the body is a
-    32-iteration loop over bit positions and is fully unrolled by the lowering pipeline on each backend.
+    On CUDA the call lowers to a single PTX ``fns.b32`` instruction via inline asm (``__nv_fns`` is not in the slim
+    libdevice we ship). On every other backend (x64 / AMDGPU / SPIR-V) a portable Python @qd.func fallback is emitted;
+    the body is a 32-iteration loop over bit positions and is fully unrolled by the lowering pipeline on each backend.
     """
     if impl.current_cfg().arch == _qd_core.Arch.cuda:
         return impl.call_internal("cuda_fns_u32", mask, base, offset, with_runtime_context=False)
