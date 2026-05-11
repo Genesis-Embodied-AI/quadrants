@@ -93,22 +93,20 @@ def test_transpose_no_loop():
 # ---------------------------------------------------------------------------
 # 3×3 SVD sign convention
 #
-# qipc's ARAP rotation `R = U @ V.T` requires that R is a proper rotation
-# (det R = +1) for any input deformation gradient F (which can have det of
-# either sign). The libuipc convention used by qipc enforces this via:
+# qipc's ARAP rotation `R = U @ V.T` requires that R is a proper rotation (det R = +1) for any input deformation
+# gradient F (which can have det of either sign). The libuipc convention used by qipc enforces this via:
 #
-#   det(U) = det(V) = +1  always; the sign of det(F) is absorbed into σ
-#   (so σ may have one negative diagonal entry when det(F) < 0).
+#   det(U) = det(V) = +1  always; the sign of det(F) is absorbed into σ (so σ may have one negative diagonal entry
+#   when det(F) < 0).
 #
 # The tests below verify this convention on `qd.svd` for 3×3 inputs covering:
-#   - generic positive-det matrix, negative-det matrix, symmetric SPD, identity,
-#     near-singular (rank-2), and a near-degenerate-singular-values case.
+#   - generic positive-det matrix, negative-det matrix, symmetric SPD, identity, near-singular (rank-2), and a
+#     near-degenerate-singular-values case.
 # ---------------------------------------------------------------------------
 
 
 def _svd3_sign_convention_test_inputs():
-    """A list of (label, np.ndarray (3, 3)) test inputs covering interesting
-    sign / rank / conditioning cases."""
+    """A list of (label, np.ndarray (3, 3)) test inputs covering interesting sign / rank / conditioning cases."""
     rng = np.random.default_rng(0xA17F)
     # Random with positive det
     A_pos = rng.standard_normal((3, 3))
@@ -175,9 +173,8 @@ def _test_svd3_sign_convention(dt):
         det_R = float(detR[None])
         sigma_diag = np.array([sigma[None][i, i] for i in range(3)])
 
-        # The libuipc / qipc convention: det(U) = det(V) = +1 for every input.
-        # The sign of det(A) is absorbed into σ (so σ may have a negative
-        # entry when det(A) < 0).
+        # The libuipc / qipc convention: det(U) = det(V) = +1 for every input. The sign of det(A) is absorbed into σ
+        # (so σ may have a negative entry when det(A) < 0).
         assert det_U == test_utils.approx(1.0, abs=tol), (
             f"[{label}] det(U) = {det_U}, expected +1 (det(A) = {det_A:+.3f}); " f"σ = {sigma_diag.tolist()}"
         )

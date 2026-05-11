@@ -204,11 +204,9 @@ def test_frobenius_inner_rectangular_f64(rows, cols):
 def _test_matmul_chain(dt):
     """3-way matmul chain at qipc IPC sizes: (9×12) · (12×12) · (12×9) → (9×9).
 
-    Verifies that ``Matrix.__matmul__`` compiles and is numerically correct at the
-    largest size qipc needs. Quadrants imposes no enforced size cap on matmul, but
-    the unrolled `static(range)` triple loop produces ~1296 FMAs per intermediate,
-    so this test catches compile-time blow-up or back-end miscompiles at large
-    sizes.
+    Verifies that ``Matrix.__matmul__`` compiles and is numerically correct at the largest size qipc needs. Quadrants
+    imposes no enforced size cap on matmul, but the unrolled `static(range)` triple loop produces ~1296 FMAs per
+    intermediate, so this test catches compile-time blow-up or back-end miscompiles at large sizes.
     """
     np_dt = np.float32 if dt == qd.f32 else np.float64
     A_np = np.random.default_rng(0xCA70).standard_normal((9, 12)).astype(np_dt)
@@ -373,9 +371,8 @@ def test_mat_inverse_size(n):
 # ---------------------------------------------------------------------------
 # Matrix.inverse for N up to 12 (LU with partial pivoting).
 #
-# qipc's ABD diagonal preconditioner needs Matrix.inverse at sizes up to
-# 12×12. The existing closed-form path (≤ 4×4) is preserved; sizes 5–12
-# dispatch to a generic LU-with-partial-pivoting impl.
+# qipc's ABD diagonal preconditioner needs Matrix.inverse at sizes up to 12×12. The existing closed-form path
+# (≤ 4×4) is preserved; sizes 5–12 dispatch to a generic LU-with-partial-pivoting impl.
 # ---------------------------------------------------------------------------
 
 

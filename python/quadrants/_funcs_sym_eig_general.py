@@ -1,9 +1,8 @@
 """Symmetric eigenvalue decomposition for ``N > 3`` via cyclic Jacobi.
 
-Cyclic Jacobi is the textbook robust algorithm for small symmetric EVD: it iteratively zeros out off-diagonal
-entries via Givens rotations until the matrix is (numerically) diagonal. Complexity is O(N^3) per sweep and
-convergence is quadratic near the solution, so ``MAX_SWEEPS = 12`` is comfortably enough to hit f64 precision for
-any ``N <= 12``.
+Cyclic Jacobi is the textbook robust algorithm for small symmetric EVD: it iteratively zeros out off-diagonal entries
+via Givens rotations until the matrix is (numerically) diagonal. Complexity is O(N^3) per sweep and convergence is
+quadratic near the solution, so ``MAX_SWEEPS = 12`` is comfortably enough to hit f64 precision for any ``N <= 12``.
 
 Algorithm (Golub & Van Loan, §8.5):
 
@@ -16,11 +15,11 @@ Algorithm (Golub & Van Loan, §8.5):
 * Sort ascending.
 
 The outer sweep loop is a runtime ``range`` so compile time stays bounded even at N=12 (the inner ``(p, q)`` and
-per-row ``static(range)`` updates already give straight-line code per Givens step). The sweep loop is explicitly
-tagged ``loop_config(serialize=True)``, so a calling ``@qd.kernel`` without its own outermost
-``for ... in range(...)`` still executes the sweeps sequentially on a single thread instead of parallelizing them —
-see ``perso_hugh/doc/quadrants_runtime_range_in_func_parallelized_gotcha_20260510.md`` for the underlying gotcha
-that this directive sidesteps.
+per-row ``static(range)`` updates already give straight-line code per Givens step). The sweep loop is explicitly tagged
+``loop_config(serialize=True)``, so a calling ``@qd.kernel`` without its own outermost ``for ... in range(...)`` still
+executes the sweeps sequentially on a single thread instead of parallelizing them — see
+``perso_hugh/doc/quadrants_runtime_range_in_func_parallelized_gotcha_20260510.md`` for the underlying gotcha that this
+directive sidesteps.
 """
 
 from quadrants.lang import ops

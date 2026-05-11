@@ -212,9 +212,8 @@ def test_sym_eig3x3_f64(a00):
 
 
 # ---------------------------------------------------------------------------
-# Symmetric eigendecomposition for N >= 4 (Householder + implicit QR).
-#
-# qipc's ABD / contact Hessian make_spd projection needs sizes 6, 9, 12.
+# Symmetric eigendecomposition for N >= 4 (Householder + implicit QR). qipc's ABD / contact Hessian make_spd
+# projection needs sizes 6, 9, 12.
 # ---------------------------------------------------------------------------
 
 
@@ -235,8 +234,7 @@ def _sym_eig_factory_spd(n, dt):
 
 
 def _sym_eig_factory_indefinite(n, dt):
-    """Symmetric matrix with mix of positive and negative eigenvalues — exercises
-    make_spd's clamping path."""
+    """Symmetric matrix with mix of positive and negative eigenvalues — exercises make_spd's clamping path."""
     np_dt = np.float32 if dt == qd.f32 else np.float64
     rng = np.random.default_rng(0xCAFE + n)
     Q, _ = np.linalg.qr(rng.standard_normal((n, n)))
@@ -410,9 +408,8 @@ def _test_sym_eig_trivial(n, dt, A_np, expected_eigvals):
 @pytest.mark.parametrize("alpha", [0.0, 1.0, -2.5])
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_sym_eig_alpha_identity_f64(n, alpha):
-    """``α·I`` has every eigenvalue equal to ``α``. Covers the all-equal /
-    fully-degenerate case that the random / repeated factories don't hit
-    (``α=0`` also covers the zero-matrix case)."""
+    """``α·I`` has every eigenvalue equal to ``α``. Covers the all-equal / fully-degenerate case that the random /
+    repeated factories don't hit (``α=0`` also covers the zero-matrix case)."""
     A_np = (alpha * np.eye(n)).astype(np.float64)
     expected = np.full(n, alpha, dtype=np.float64)
     _test_sym_eig_trivial(n, qd.f64, A_np, expected)
