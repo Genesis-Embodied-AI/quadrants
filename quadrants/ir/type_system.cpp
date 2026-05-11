@@ -294,7 +294,7 @@ void Operations::init_internals() {
   PLAIN_OP(test_internal_func_args, i32, true, f32, f32, i32);
 
   // CUDA ops:
-  // block_barrier, grid_memfence, cuda_all_sync, cuda_any_sync, cuda_uni_sync,
+  // block_barrier, grid_mem_fence, cuda_all_sync, cuda_any_sync, cuda_uni_sync,
   // cuda_ballot, cuda_shfl_sync, cuda_shfl_up_sync, cuda_shfl_down_sync,
   // cuda_shfl_xor_sync, cuda_match_any_sync, cuda_match_all_sync,
   // cuda_active_mask, warp_barrier, cuda_clock_i64
@@ -314,7 +314,7 @@ void Operations::init_internals() {
   PLAIN_OP(block_barrier_or_i32, i32, false, i32);
   PLAIN_OP(block_barrier_count_i32, i32, false, i32);
   PLAIN_OP(block_mem_fence, i32_void, false);
-  PLAIN_OP(grid_memfence, i32_void, false);
+  PLAIN_OP(grid_mem_fence, i32_void, false);
   CUDA_VOTE_SYNC(all);
   CUDA_VOTE_SYNC(any);
   CUDA_VOTE_SYNC(uni);
@@ -351,6 +351,7 @@ void Operations::init_internals() {
 
   PLAIN_OP(workgroupBarrier, i32_void, false);
   PLAIN_OP(workgroupMemoryBarrier, i32_void, false);
+  PLAIN_OP(gridMemoryBarrier, i32_void, false);
   PLAIN_OP(localInvocationId, i32, false);
   PLAIN_OP(globalInvocationId, i32, false);
   PLAIN_OP(vkGlobalThreadIdx, i32, false);
