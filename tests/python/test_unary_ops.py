@@ -74,9 +74,9 @@ def test_logic_not_invalid():
         test(1.0)
 
 
-# Mirrors test_bit_not_invalid / test_logic_not_invalid: ffs is integer-only at the frontend.
-# Real-typed operand must raise QuadrantsTypeError with the same diagnostic, before any codegen
-# is reached — this is what gates ffs on a usefully restricted operand domain on every backend.
+# Mirrors test_bit_not_invalid / test_logic_not_invalid: ffs is integer-only at the frontend. Real-typed operand must
+# raise QuadrantsTypeError with the same diagnostic, before any codegen is reached — this is what gates ffs on a
+# usefully restricted operand domain on every backend.
 @test_utils.test(print_full_traceback=False)
 def test_ffs_invalid():
     @qd.kernel
@@ -234,8 +234,8 @@ def test_ffs():
     assert test_i32(0xF0) == 5
     assert test_i32(0xF00) == 9
 
-    # u32 routes through the same intrinsic; signedness is irrelevant since ffs counts trailing zeros
-    # of the bit pattern.
+    # u32 routes through the same intrinsic; signedness is irrelevant since ffs counts trailing zeros of the bit
+    # pattern.
     assert test_u32(0) == 0
     assert test_u32(1) == 1
     assert test_u32(0x80000000) == 32
@@ -279,12 +279,11 @@ def test_ffs_i64():
     assert test_u64(1 << 32) == 33
 
 
-# Regression sentinel for the i32 return-type normalisation: every bit-op (popcnt / clz / ffs) must
-# return i32 from the type-checking pass onward, not just at codegen time. If the inferred ret_type
-# were the operand's type (i64), promotion of `op(x: i64) + i64(1)` to i64 would skip the i32 → i64
-# cast, and CUDA / AMDGPU codegen — which truncates the libdevice / llvm.ctpop result to i32 —
-# would emit an `Add(i32, i64)` and trip an LLVM "operand type mismatch" assertion. Direct-return
-# tests above hide this because they don't compose the result with any other operand.
+# Regression sentinel for the i32 return-type normalisation: every bit-op (popcnt / clz / ffs) must return i32 from the
+# type-checking pass onward, not just at codegen time. If the inferred ret_type were the operand's type (i64),
+# promotion of `op(x: i64) + i64(1)` to i64 would skip the i32 → i64 cast, and CUDA / AMDGPU codegen — which truncates
+# the libdevice / llvm.ctpop result to i32 — would emit an `Add(i32, i64)` and trip an LLVM "operand type mismatch"
+# assertion. Direct-return tests above hide this because they don't compose the result with any other operand.
 @test_utils.test()
 def test_bit_ops_compound_i64():
     @qd.kernel
@@ -338,19 +337,18 @@ def _np_fns(mask: int, base: int, offset: int) -> int:
     return NOT_FOUND
 
 
-# fns(mask, base, offset) finds the |offset|-th set bit in `mask` starting from `base`,
-# scanning upward (offset > 0), downward (offset < 0), or returning `base` if exactly that bit
-# is set (offset == 0). On CUDA this lowers to libdevice __nv_fns (single-instruction PTX `fns`);
-# on every other backend it emits a portable @qd.func that loops over the 32 bit positions.
-# Both paths must agree with the pure-Python reference _np_fns.
+# fns(mask, base, offset) finds the |offset|-th set bit in `mask` starting from `base`, scanning upward (offset > 0),
+# downward (offset < 0), or returning `base` if exactly that bit is set (offset == 0). On CUDA this lowers to libdevice
+# __nv_fns (single-instruction PTX `fns`); on every other backend it emits a portable @qd.func that loops over the 32
+# bit positions. Both paths must agree with the pure-Python reference _np_fns.
 @test_utils.test()
 def test_fns():
     @qd.kernel
     def fns_kernel(mask: qd.uint32, base: qd.uint32, offset: qd.int32) -> qd.uint32:
         return qd.math.fns(mask, base, offset)
 
-    # Exhaustive sweep over a handful of representative masks. Catches both the upward and
-    # downward search arms and the offset == 0 special case in a single loop.
+    # Exhaustive sweep over a handful of representative masks. Catches both the upward and downward search arms and
+    # the offset == 0 special case in a single loop.
     test_masks = [
         0x00000000,  # empty mask -> always NOT_FOUND
         0xFFFFFFFF,  # all set -> trivial
@@ -388,10 +386,10 @@ def test_fns():
     assert fns_kernel(0xE, 1, 0) == 1
     assert fns_kernel(0xE, 0, 0) == NOT_FOUND
 
-    # Maximum-magnitude offsets. PTX `fns` admits |offset| up to 32 (the bit width of the mask),
-    # which the exhaustive sweep above does not cover. These cases force the search to walk the
-    # entire mask before finding (or failing to find) the requested bit, and would catch an
-    # off-by-one in the loop bound or the early-exit guard on either implementation.
+    # Maximum-magnitude offsets. PTX `fns` admits |offset| up to 32 (the bit width of the mask), which the exhaustive
+    # sweep above does not cover. These cases force the search to walk the entire mask before finding (or failing to
+    # find) the requested bit, and would catch an off-by-one in the loop bound or the early-exit guard on either
+    # implementation.
     assert fns_kernel(0xFFFFFFFF, 0, 32) == 31  # 32nd set bit walking up from 0 in all-set mask
     assert fns_kernel(0xFFFFFFFF, 31, -32) == 0  # 32nd-from-top walking down from 31 in all-set mask
     assert fns_kernel(0xFFFFFFFF, 0, 33) == NOT_FOUND  # only 32 set bits exist

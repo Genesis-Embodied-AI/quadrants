@@ -1174,19 +1174,17 @@ def clz(a):
 def ffs(a):
     """Find first (lowest) set bit in ``a``.
 
-    Returns the 1-indexed position of the lowest set bit in ``a`` as an ``i32``, with ``ffs(0) == 0``
-    (the CUDA ``__ffs`` convention). Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported
-    backend; the count is over the unsigned bit pattern, so ``ffs(-1) == 1`` regardless of input
-    signedness.
+    Returns the 1-indexed position of the lowest set bit in ``a`` as an ``i32``, with ``ffs(0) == 0`` (the CUDA
+    ``__ffs`` convention). Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the count is over
+    the unsigned bit pattern, so ``ffs(-1) == 1`` regardless of input signedness.
     """
 
     def _ffs(_):
-        # No Python fallback: ffs is bitwidth-dependent (an i32 that wraps around to 0 should return 0,
-        # but the same numeric value in Python's arbitrary-precision int would return its real bit
-        # position). Once the value reaches here it's a plain Python int with no width attached, so
-        # there's no single answer that matches native backends. This path is only hit on the
-        # `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR
-        # / codegen and never see it. Same treatment as popcnt / clz for consistency.
+        # No Python fallback: ffs is bitwidth-dependent (an i32 that wraps around to 0 should return 0, but the same
+        # numeric value in Python's arbitrary-precision int would return its real bit position). Once the value reaches
+        # here it's a plain Python int with no width attached, so there's no single answer that matches native backends.
+        # This path is only hit on the `qd.python` backend or from ad-hoc module-level calls; native backends route
+        # through the IR / codegen and never see it. Same treatment as popcnt / clz for consistency.
         raise NotImplementedError(
             "qd.math.ffs has no Python fallback: the result depends on the operand's bitwidth "
             "(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend "
