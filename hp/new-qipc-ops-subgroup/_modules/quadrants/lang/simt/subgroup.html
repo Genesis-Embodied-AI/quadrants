@@ -636,12 +636,48 @@
 
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">group_size</span><span class="p">():</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupSize&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<div class="viewcode-block" id="group_size">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.group_size">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">group_size</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Active subgroup size for the current launch, as a Python ``int``.</span>
+
+<span class="sd">    Resolves once at compile time by querying the live ``Program`` --- 32 on CUDA, 64 on AMDGPU (every AMDGPU target is</span>
+<span class="sd">    pinned to ``+wavefrontsize64``), and the device-probed value on the SPIR-V backends (read from</span>
+<span class="sd">    ``VkPhysicalDeviceSubgroupProperties::subgroupSize`` on Vulkan, fixed at 32 on Metal). Because the return type is a</span>
+<span class="sd">    plain ``int``, the value can be used as a ``qd.template()`` argument inside ``@qd.kernel`` / ``@qd.func`` bodies ---</span>
+<span class="sd">    this is how the ``_full``-suffixed reductions (e.g. ``reduce_add_full``) pick up the right ``log2_size`` per backend</span>
+<span class="sd">    without the caller having to plumb it manually.</span>
+
+<span class="sd">    For use inside ``@qd.kernel`` / ``@qd.func`` bodies: the value is folded into the kernel IR as a constant on every</span>
+<span class="sd">    backend, including SPIR-V (so MoltenVK / desktop Vulkan see a literal subgroup size rather than a runtime</span>
+<span class="sd">    ``OpLoad`` of ``BuiltInSubgroupSize``). Calling it from plain host Python after ``qd.init()`` is also legal and</span>
+<span class="sd">    returns the same number, which is handy for setting up grid dimensions on the host side.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">subgroup_size</span><span class="p">()</span></div>
 
 
+
+<div class="viewcode-block" id="log2_group_size">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.log2_group_size">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">log2_group_size</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``log2(group_size())`` as a Python ``int``, asserting the subgroup size is a power of two.</span>
+
+<span class="sd">    Equivalent to ``int(math.log2(group_size()))`` but emits a clearer error if the device ever reports a non-power-of-two</span>
+<span class="sd">    subgroup width (no current SPIR-V driver does, but the spec allows it). Like ``group_size()`` this is a compile-time</span>
+<span class="sd">    constant on every backend --- callers feed it straight into ``qd.template()`` to pick the right ``log2_size`` for a</span>
+<span class="sd">    full-subgroup reduction (e.g. ``reduce_add(v, qd.simt.subgroup.log2_group_size())``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">size</span> <span class="o">=</span> <span class="n">group_size</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">size</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="p">(</span><span class="n">size</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;subgroup size </span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2"> is not a power of two&quot;</span>
+    <span class="k">return</span> <span class="n">size</span><span class="o">.</span><span class="n">bit_length</span><span class="p">()</span> <span class="o">-</span> <span class="mi">1</span></div>
+
+
+
+<div class="viewcode-block" id="invocation_id">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.invocation_id">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">invocation_id</span><span class="p">():</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupInvocationId&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupInvocationId&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
 
 
 <span class="nd">@func</span>
@@ -1213,6 +1249,9 @@
     <span class="s2">&quot;lanemask_eq&quot;</span><span class="p">,</span>
     <span class="s2">&quot;lanemask_gt&quot;</span><span class="p">,</span>
     <span class="s2">&quot;lanemask_ge&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;group_size&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;log2_group_size&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;invocation_id&quot;</span><span class="p">,</span>
     <span class="s2">&quot;reduce_add&quot;</span><span class="p">,</span>
     <span class="s2">&quot;reduce_all_add&quot;</span><span class="p">,</span>
     <span class="s2">&quot;reduce_min&quot;</span><span class="p">,</span>

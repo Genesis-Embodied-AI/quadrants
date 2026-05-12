@@ -25,6 +25,9 @@ Functions
    quadrants.lang.simt.subgroup.lanemask_gt
    quadrants.lang.simt.subgroup.lanemask_ge
    quadrants.lang.simt.subgroup.broadcast_first
+   quadrants.lang.simt.subgroup.group_size
+   quadrants.lang.simt.subgroup.log2_group_size
+   quadrants.lang.simt.subgroup.invocation_id
    quadrants.lang.simt.subgroup.reduce_add
    quadrants.lang.simt.subgroup.reduce_all_add
    quadrants.lang.simt.subgroup.reduce_min
@@ -206,6 +209,35 @@ Module Contents
    ``OpGroupNonUniformBroadcast`` requirement is satisfied. Decorated with ``@qd.func`` and inlined into the calling
    kernel.
 
+
+.. py:function:: group_size() -> int
+
+   Active subgroup size for the current launch, as a Python ``int``.
+
+   Resolves once at compile time by querying the live ``Program`` --- 32 on CUDA, 64 on AMDGPU (every AMDGPU target is
+   pinned to ``+wavefrontsize64``), and the device-probed value on the SPIR-V backends (read from
+   ``VkPhysicalDeviceSubgroupProperties::subgroupSize`` on Vulkan, fixed at 32 on Metal). Because the return type is a
+   plain ``int``, the value can be used as a ``qd.template()`` argument inside ``@qd.kernel`` / ``@qd.func`` bodies ---
+   this is how the ``_full``-suffixed reductions (e.g. ``reduce_add_full``) pick up the right ``log2_size`` per backend
+   without the caller having to plumb it manually.
+
+   For use inside ``@qd.kernel`` / ``@qd.func`` bodies: the value is folded into the kernel IR as a constant on every
+   backend, including SPIR-V (so MoltenVK / desktop Vulkan see a literal subgroup size rather than a runtime
+   ``OpLoad`` of ``BuiltInSubgroupSize``). Calling it from plain host Python after ``qd.init()`` is also legal and
+   returns the same number, which is handy for setting up grid dimensions on the host side.
+
+
+.. py:function:: log2_group_size() -> int
+
+   ``log2(group_size())`` as a Python ``int``, asserting the subgroup size is a power of two.
+
+   Equivalent to ``int(math.log2(group_size()))`` but emits a clearer error if the device ever reports a non-power-of-two
+   subgroup width (no current SPIR-V driver does, but the spec allows it). Like ``group_size()`` this is a compile-time
+   constant on every backend --- callers feed it straight into ``qd.template()`` to pick the right ``log2_size`` for a
+   full-subgroup reduction (e.g. ``reduce_add(v, qd.simt.subgroup.log2_group_size())``).
+
+
+.. py:function:: invocation_id()
 
 .. py:function:: reduce_add(value, log2_size: template())
 
