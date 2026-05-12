@@ -1,6 +1,15 @@
 # Graph
 
-Graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch. On non-CUDA platforms, the graph annotation is simply ignored, and code runs normally.
+Graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch.
+
+## Backend support
+
+Both features run on every backend. They are only *hardware accelerated* on CUDA (and `graph_do_while` additionally requires SM 9.0+ / Hopper). On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `graph_do_while` falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall — see [Caveats](#caveats)).
+
+| Feature | `qd.cuda` SM 9.0+ | `qd.cuda` < SM 9.0 | `qd.amdgpu` | `qd.metal` | `qd.vulkan` | `qd.cpu` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `graph=True` | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
+| `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 
 ## Basic usage
 
