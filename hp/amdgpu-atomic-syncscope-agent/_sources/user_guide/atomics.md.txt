@@ -50,8 +50,7 @@ Properties common to every `qd.atomic_*`:
 
 ### `qd.atomic_min(x, y)` / `qd.atomic_max(x, y)`
 
-Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of `x`. Float min/max are
-`minNum` / `maxNum`-style: if exactly one operand is `NaN`, the non-`NaN` operand wins.
+Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of `x`. Float min/max are `minNum` / `maxNum`-style: if exactly one operand is `NaN`, the non-`NaN` operand wins.
 
 | Backends                  | `f16`                                  | `f32`, `f64`                       | Both inputs `NaN`                          |
 |---------------------------|----------------------------------------|------------------------------------|--------------------------------------------|
