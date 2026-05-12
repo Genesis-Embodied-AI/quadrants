@@ -134,7 +134,7 @@ class SharedArray:
 # `_warp_reduce` mirrors `subgroup.reduce_add` / `_min` / `_max` but takes a generic template operator so the same
 # kernel skeleton covers add / min / max / mul / bitwise / custom monoids.  We don't reuse `subgroup.reduce_add` etc.
 # directly because we want one source of truth for the block path's per-warp step and a cheap way to plug in arbitrary
-# operators (used internally by `_reduce`, `_reduce_all`, and downstream block scans).
+# operators (used internally by `reduce` / `reduce_all`).
 
 
 @_func
@@ -151,14 +151,18 @@ def _warp_reduce(value, log2_size: template(), op: template()):
 
 
 @_func
-def _reduce(value, tid, block_dim: template(), log2_warp: template(), op: template(), dtype: template()):
+def reduce(value, block_dim: template(), log2_warp: template(), op: template(), dtype: template()):
     """Block-scope reduction under a generic associative ``op``.  Result is valid in **thread 0 only**; other threads
-    retain partial values.  Use ``_reduce_all`` if you need the result on every thread.
+    retain partial values.  Use `reduce_all` if you need the result on every thread.
 
-    ``tid`` is the calling thread's block-local index (``i % block_dim`` from a ``loop_config(block_dim=...)`` kernel,
-    or ``qd.simt.block.thread_idx()`` on backends that expose it).  ``block_dim`` must be a multiple of
-    ``2**log2_warp``; ``log2_warp`` should be 5 on CUDA / Metal / RDNA and 6 on CDNA AMDGPU.  ``dtype`` sizes the
-    inter-warp shared-memory staging slot.
+    Args:
+        value: per-thread input.
+        block_dim: threads per block (template, multiple of ``2**log2_warp``).
+        log2_warp: ``log2(warp_size)``; 5 on CUDA / Metal / RDNA, 6 on CDNA AMDGPU.
+        op: ``@qd.func`` taking two values and returning the same type as ``value``; callers can plug in custom
+            associative monoids (bitwise ops, multiplicative, matrix-multiply, etc.) without re-implementing the
+            per-warp + shared-mem skeleton.  See `reduce_add` for the standard sum specialization.
+        dtype: scalar dtype for the inter-warp shared-memory staging slot (must match ``value``'s type).
 
     When the block is exactly one warp (``block_dim == 2**log2_warp``) the shared-memory path is short-circuited at
     trace time and the call costs only the per-warp tree.
@@ -171,6 +175,7 @@ def _reduce(value, tid, block_dim: template(), log2_warp: template(), op: templa
     if impl.static(NUM_WARPS == 1):
         return warp_agg
 
+    tid = thread_idx()
     warp_id = tid // WARP_SIZE
     # Use the **logical** lane (``tid & (WARP_SIZE-1)``) instead of ``invocation_id()``: on wave64 hardware
     # (CDNA AMDGPU) the hardware-lane index runs 0..63 inside one wave but logical warp 1 starts at lane 32, so
@@ -193,80 +198,54 @@ def _reduce(value, tid, block_dim: template(), log2_warp: template(), op: templa
 
 
 @_func
-def _reduce_all(value, tid, block_dim: template(), log2_warp: template(), op: template(), dtype: template()):
-    """Block reduction whose result is broadcast to every thread.  Costs one extra ``block.sync()`` plus a one-slot
-    shared-memory broadcast vs. ``_reduce``.
+def reduce_all(value, block_dim: template(), log2_warp: template(), op: template(), dtype: template()):
+    """Block-scope reduction under a generic associative ``op``, broadcast to every thread.  Costs one extra
+    ``block.sync()`` plus a one-slot shared-memory broadcast vs. `reduce`.  See `reduce` for the operator contract.
     """
-    result = _reduce(value, tid, block_dim, log2_warp, op, dtype)
+    result = reduce(value, block_dim, log2_warp, op, dtype)
     bcast = SharedArray((1,), dtype)
-    if tid == 0:
+    if thread_idx() == 0:
         bcast[0] = result
     sync()
     return bcast[0]
 
 
 @_func
-def reduce(value, tid, block_dim: template(), log2_warp: template(), op: template(), dtype: template()):
-    """Block-scope reduction under a generic associative ``op``.  Result valid in **thread 0 only**.  See `reduce_add`
-    for the argument contract; this generic form additionally takes an ``op: template()`` ``@qd.func`` taking two args
-    and returning the same type as ``value``, so callers can plug in custom monoids (bitwise ops, multiplicative,
-    matrix-multiply, etc.) without re-implementing the warp-reduce + shared-mem skeleton.
-    """
-    return _reduce(value, tid, block_dim, log2_warp, op, dtype)
+def reduce_add(value, block_dim: template(), log2_warp: template(), dtype: template()):
+    """Block-scope sum reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract."""
+    return reduce(value, block_dim, log2_warp, _bin_add, dtype)
 
 
 @_func
-def reduce_all(value, tid, block_dim: template(), log2_warp: template(), op: template(), dtype: template()):
-    """Block-scope reduction under a generic associative ``op``, broadcast to every thread.  See `reduce_all_add` for
-    the cost profile and `reduce` for the operator contract.
-    """
-    return _reduce_all(value, tid, block_dim, log2_warp, op, dtype)
+def reduce_min(value, block_dim: template(), log2_warp: template(), dtype: template()):
+    """Block-scope min reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract."""
+    return reduce(value, block_dim, log2_warp, _bin_min, dtype)
 
 
 @_func
-def reduce_add(value, tid, block_dim: template(), log2_warp: template(), dtype: template()):
-    """Block-scope sum reduction.  Result valid in **thread 0 only**.
-
-    Args:
-        value: per-thread input.
-        tid: calling thread's block-local index.
-        block_dim: threads per block (template, multiple of ``2**log2_warp``).
-        log2_warp: ``log2(warp_size)``; 5 on CUDA / Metal / RDNA, 6 on CDNA AMDGPU.
-        dtype: scalar dtype for the inter-warp shared-memory staging slot (must match ``value``'s type).
-    """
-    return _reduce(value, tid, block_dim, log2_warp, _bin_add, dtype)
+def reduce_max(value, block_dim: template(), log2_warp: template(), dtype: template()):
+    """Block-scope max reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract."""
+    return reduce(value, block_dim, log2_warp, _bin_max, dtype)
 
 
 @_func
-def reduce_min(value, tid, block_dim: template(), log2_warp: template(), dtype: template()):
-    """Block-scope min reduction.  Result valid in **thread 0 only**.  See `reduce_add` for the argument contract."""
-    return _reduce(value, tid, block_dim, log2_warp, _bin_min, dtype)
-
-
-@_func
-def reduce_max(value, tid, block_dim: template(), log2_warp: template(), dtype: template()):
-    """Block-scope max reduction.  Result valid in **thread 0 only**.  See `reduce_add` for the argument contract."""
-    return _reduce(value, tid, block_dim, log2_warp, _bin_max, dtype)
-
-
-@_func
-def reduce_all_add(value, tid, block_dim: template(), log2_warp: template(), dtype: template()):
+def reduce_all_add(value, block_dim: template(), log2_warp: template(), dtype: template()):
     """Block-scope sum reduction with the result broadcast to every thread.  See `reduce_add` for the cheaper
-    thread-0-only variant and for the argument contract.
+    thread-0-only variant and `reduce` for the argument contract.
     """
-    return _reduce_all(value, tid, block_dim, log2_warp, _bin_add, dtype)
+    return reduce_all(value, block_dim, log2_warp, _bin_add, dtype)
 
 
 @_func
-def reduce_all_min(value, tid, block_dim: template(), log2_warp: template(), dtype: template()):
+def reduce_all_min(value, block_dim: template(), log2_warp: template(), dtype: template()):
     """Block-scope min reduction broadcast to every thread.  See `reduce_all_add`."""
-    return _reduce_all(value, tid, block_dim, log2_warp, _bin_min, dtype)
+    return reduce_all(value, block_dim, log2_warp, _bin_min, dtype)
 
 
 @_func
-def reduce_all_max(value, tid, block_dim: template(), log2_warp: template(), dtype: template()):
+def reduce_all_max(value, block_dim: template(), log2_warp: template(), dtype: template()):
     """Block-scope max reduction broadcast to every thread.  See `reduce_all_add`."""
-    return _reduce_all(value, tid, block_dim, log2_warp, _bin_max, dtype)
+    return reduce_all(value, block_dim, log2_warp, _bin_max, dtype)
 
 
 # --- Block scans -----------------------------------------------------------------------
@@ -286,11 +265,20 @@ def reduce_all_max(value, tid, block_dim: template(), log2_warp: template(), dty
 
 
 @_func
-def _inclusive_block(value, tid, block_dim: template(), log2_warp: template(), op: template(), dtype: template()):
+def inclusive_scan(value, block_dim: template(), log2_warp: template(), op: template(), dtype: template()):
     """Block-scope inclusive scan under a generic associative ``op``.  Every thread receives a valid result.
 
-    See `inclusive_add` for the argument contract.  When the block is exactly one warp the cross-warp
-    shared-memory path is short-circuited at trace time and the call costs only the per-warp Hillis-Steele tree.
+    Args:
+        value: per-thread input.
+        block_dim: threads per block (template, multiple of ``2**log2_warp``).
+        log2_warp: ``log2(warp_size)``; 5 on CUDA / Metal / RDNA, 6 on CDNA AMDGPU.
+        op: ``@qd.func`` taking two values and returning the same type as ``value``; callers can plug in custom
+            associative monoids without re-implementing the per-warp + shared-mem skeleton.  See `inclusive_add`
+            for the standard sum specialization.
+        dtype: scalar dtype for the inter-warp shared-memory staging slot; must match ``value``'s type.
+
+    When the block is exactly one warp the cross-warp shared-memory path is short-circuited at trace time and the
+    call costs only the per-warp Hillis-Steele tree.
     """
     WARP_SIZE = impl.static(1 << log2_warp)
     NUM_WARPS = impl.static(block_dim // WARP_SIZE)
@@ -300,8 +288,9 @@ def _inclusive_block(value, tid, block_dim: template(), log2_warp: template(), o
     if impl.static(NUM_WARPS == 1):
         return inclusive
 
+    tid = thread_idx()
     warp_id = tid // WARP_SIZE
-    # Logical lane within the 32-lane warp (see ``_reduce`` for the wave32-vs-wave64 rationale).
+    # Logical lane within the 32-lane warp (see ``reduce`` for the wave32-vs-wave64 rationale).
     lane_id = tid & impl.static(WARP_SIZE - 1)
 
     shared = SharedArray(impl.static((NUM_WARPS,)), dtype)
@@ -326,11 +315,13 @@ def _inclusive_block(value, tid, block_dim: template(), log2_warp: template(), o
 
 
 @_func
-def _exclusive_block(
-    value, tid, block_dim: template(), log2_warp: template(), op: template(), identity, dtype: template()
-):
-    """Block-scope exclusive scan under a generic associative ``op``.  Every thread receives a valid result; thread 0
-    holds ``identity``.  See `exclusive_add` for the argument contract.
+def exclusive_scan(value, block_dim: template(), log2_warp: template(), op: template(), identity, dtype: template()):
+    """Block-scope exclusive scan under a generic associative ``op`` with explicit ``identity``.  Every thread receives
+    a valid result; thread 0 holds ``identity`` and thread ``i > 0`` holds ``op(v[0], ..., v[i-1])``.
+
+    See `inclusive_scan` for the per-arg contract; in addition this op takes an explicit ``identity`` because exclusive
+    scan needs a definite value for thread 0 (and for the sentinel paths in `exclusive_min` / `exclusive_max`).  See
+    `exclusive_add` for the additive specialization which derives a zero identity automatically.
     """
     WARP_SIZE = impl.static(1 << log2_warp)
     NUM_WARPS = impl.static(block_dim // WARP_SIZE)
@@ -340,8 +331,9 @@ def _exclusive_block(
     if impl.static(NUM_WARPS == 1):
         return exclusive
 
+    tid = thread_idx()
     warp_id = tid // WARP_SIZE
-    # Logical lane within the 32-lane warp (see ``_reduce`` for the wave32-vs-wave64 rationale).
+    # Logical lane within the 32-lane warp (see ``reduce`` for the wave32-vs-wave64 rationale).
     lane_id = tid & impl.static(WARP_SIZE - 1)
 
     shared = SharedArray(impl.static((NUM_WARPS,)), dtype)
@@ -364,75 +356,50 @@ def _exclusive_block(
 
 
 @_func
-def inclusive_scan(value, tid, block_dim: template(), log2_warp: template(), op: template(), dtype: template()):
-    """Block-scope inclusive scan under a generic associative ``op``.  See `inclusive_add` for the argument contract;
-    this generic form additionally takes an ``op: template()`` ``@qd.func`` so callers can plug in custom monoids
-    without re-implementing the per-warp + shared-mem skeleton.
+def inclusive_add(value, block_dim: template(), log2_warp: template(), dtype: template()):
+    """Block-scope inclusive prefix sum.  After the call, thread ``i`` holds ``v[0] + v[1] + ... + v[i]``.  See
+    `inclusive_scan` for the argument contract.
     """
-    return _inclusive_block(value, tid, block_dim, log2_warp, op, dtype)
+    return inclusive_scan(value, block_dim, log2_warp, _bin_add, dtype)
 
 
 @_func
-def exclusive_scan(
-    value, tid, block_dim: template(), log2_warp: template(), op: template(), identity, dtype: template()
-):
-    """Block-scope exclusive scan under a generic associative ``op`` with explicit ``identity``.  See `exclusive_add`
-    for the argument contract.  Thread 0 holds ``identity``; subsequent threads hold ``op(v[0], ..., v[i-1])``.
-    """
-    return _exclusive_block(value, tid, block_dim, log2_warp, op, identity, dtype)
+def inclusive_min(value, block_dim: template(), log2_warp: template(), dtype: template()):
+    """Block-scope inclusive prefix min.  See `inclusive_scan` for the argument contract."""
+    return inclusive_scan(value, block_dim, log2_warp, _bin_min, dtype)
 
 
 @_func
-def inclusive_add(value, tid, block_dim: template(), log2_warp: template(), dtype: template()):
-    """Block-scope inclusive prefix sum.  After the call, thread ``i`` holds ``v[0] + v[1] + ... + v[i]``.
-
-    Args:
-        value: per-thread input.
-        tid: calling thread's block-local index (``i % block_dim``, or `block.thread_idx()`).
-        block_dim: threads per block (template, multiple of ``2**log2_warp``).
-        log2_warp: ``log2(warp_size)``; 5 on CUDA / Metal / RDNA, 6 on CDNA AMDGPU.
-        dtype: scalar dtype for the inter-warp shared-memory staging slot; must match ``value``'s type.
-    """
-    return _inclusive_block(value, tid, block_dim, log2_warp, _bin_add, dtype)
+def inclusive_max(value, block_dim: template(), log2_warp: template(), dtype: template()):
+    """Block-scope inclusive prefix max.  See `inclusive_scan` for the argument contract."""
+    return inclusive_scan(value, block_dim, log2_warp, _bin_max, dtype)
 
 
 @_func
-def inclusive_min(value, tid, block_dim: template(), log2_warp: template(), dtype: template()):
-    """Block-scope inclusive prefix min.  See `inclusive_add` for the argument contract."""
-    return _inclusive_block(value, tid, block_dim, log2_warp, _bin_min, dtype)
-
-
-@_func
-def inclusive_max(value, tid, block_dim: template(), log2_warp: template(), dtype: template()):
-    """Block-scope inclusive prefix max.  See `inclusive_add` for the argument contract."""
-    return _inclusive_block(value, tid, block_dim, log2_warp, _bin_max, dtype)
-
-
-@_func
-def exclusive_add(value, tid, block_dim: template(), log2_warp: template(), dtype: template()):
+def exclusive_add(value, block_dim: template(), log2_warp: template(), dtype: template()):
     """Block-scope exclusive prefix sum.  After the call, thread ``i > 0`` holds ``v[0] + v[1] + ... + v[i-1]`` and
-    thread 0 holds the additive identity (zero, in ``value``'s dtype, derived as ``value - value``).  See `inclusive_add`
-    for the argument contract.
+    thread 0 holds the additive identity (zero, in ``value``'s dtype, derived as ``value - value``).  See
+    `exclusive_scan` for the argument contract.
     """
-    return _exclusive_block(value, tid, block_dim, log2_warp, _bin_add, value - value, dtype)
+    return exclusive_scan(value, block_dim, log2_warp, _bin_add, value - value, dtype)
 
 
 @_func
-def exclusive_min(value, tid, block_dim: template(), log2_warp: template(), identity, dtype: template()):
+def exclusive_min(value, block_dim: template(), log2_warp: template(), identity, dtype: template()):
     """Block-scope exclusive prefix min.  Thread 0 holds ``identity``: the caller must supply a value that is ``>=``
     every legal element of the input (typically ``+∞`` for floats, the dtype's maximum for integers).  See
     `subgroup.exclusive_min` for why this op alone takes an explicit identity.
     """
-    return _exclusive_block(value, tid, block_dim, log2_warp, _bin_min, identity, dtype)
+    return exclusive_scan(value, block_dim, log2_warp, _bin_min, identity, dtype)
 
 
 @_func
-def exclusive_max(value, tid, block_dim: template(), log2_warp: template(), identity, dtype: template()):
+def exclusive_max(value, block_dim: template(), log2_warp: template(), identity, dtype: template()):
     """Block-scope exclusive prefix max.  Thread 0 holds ``identity``: the caller must supply a value that is ``<=``
     every legal element of the input (typically ``-∞`` for floats, the dtype's minimum for integers).  See
     `exclusive_min`.
     """
-    return _exclusive_block(value, tid, block_dim, log2_warp, _bin_max, identity, dtype)
+    return exclusive_scan(value, block_dim, log2_warp, _bin_max, identity, dtype)
 
 
 # --- Block radix rank ------------------------------------------------------------------
@@ -484,7 +451,6 @@ def _warp_sync_fence():
 @_func
 def radix_rank_match_atomic_or(
     key,
-    tid,
     block_dim: template(),
     log2_warp: template(),
     radix_bits: template(),
@@ -499,7 +465,6 @@ def radix_rank_match_atomic_or(
 
     Args:
         key: ``u32`` key, one per thread.
-        tid: calling thread's block-local index.
         block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 << radix_bits``: each digit gets exactly
             one thread for the per-thread bin/excl_prefix output.
         log2_warp: ``log2(warp_size)`` (template).  Must currently be 5 (warp size 32) — the atomic-OR match path is
@@ -532,6 +497,7 @@ def radix_rank_match_atomic_or(
     # ``TempStorage``: union of warp_offsets / warp_histograms (same backing) + match_masks.  All i32.
     smem = SharedArray(impl.static((2 * BLOCK_WARPS * RADIX_DIGITS,)), _i32)
 
+    tid = thread_idx()
     warp_idx = tid // WARP_THREADS
     lane = _ops.cast(_subgroup.invocation_id(), _i32)
 
@@ -558,7 +524,7 @@ def radix_rank_match_atomic_or(
         bin_count = bin_count + warp_count
 
     # Step 3: block-wide exclusive sum on the per-thread bin counts.
-    exclusive_digit_prefix = exclusive_add(bin_count, tid, block_dim, log2_warp, _i32)
+    exclusive_digit_prefix = exclusive_add(bin_count, block_dim, log2_warp, _i32)
 
     # Step 4: ComputeOffsetsWarpDownsweep — fold the block-wide exclusive prefix into every warp's offset.
     for j_warp in impl.static(range(BLOCK_WARPS)):

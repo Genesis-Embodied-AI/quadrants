@@ -787,7 +787,7 @@ def test_block_reduce_add(dtype, block_dim):
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
             tid = i % block_dim
-            agg = block.reduce_add(src[i], tid, block_dim, 5, dtype)
+            agg = block.reduce_add(src[i], block_dim, 5, dtype)
             if tid == 0:
                 dst[i // block_dim] = agg
 
@@ -818,7 +818,7 @@ def test_block_reduce_min(dtype, block_dim):
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
             tid = i % block_dim
-            agg = block.reduce_min(src[i], tid, block_dim, 5, dtype)
+            agg = block.reduce_min(src[i], block_dim, 5, dtype)
             if tid == 0:
                 dst[i // block_dim] = agg
 
@@ -853,7 +853,7 @@ def test_block_reduce_max(dtype, block_dim):
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
             tid = i % block_dim
-            agg = block.reduce_max(src[i], tid, block_dim, 5, dtype)
+            agg = block.reduce_max(src[i], block_dim, 5, dtype)
             if tid == 0:
                 dst[i // block_dim] = agg
 
@@ -890,8 +890,7 @@ def test_block_reduce_all_add(dtype, block_dim):
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            tid = i % block_dim
-            dst[i] = block.reduce_all_add(src[i], tid, block_dim, 5, dtype)
+            dst[i] = block.reduce_all_add(src[i], block_dim, 5, dtype)
 
     _init_field(src, N, dtype)
     foo()
@@ -923,8 +922,7 @@ def test_block_reduce_all_min(dtype, block_dim):
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            tid = i % block_dim
-            dst[i] = block.reduce_all_min(src[i], tid, block_dim, 5, dtype)
+            dst[i] = block.reduce_all_min(src[i], block_dim, 5, dtype)
 
     int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
@@ -957,8 +955,7 @@ def test_block_reduce_all_max(dtype, block_dim):
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            tid = i % block_dim
-            dst[i] = block.reduce_all_max(src[i], tid, block_dim, 5, dtype)
+            dst[i] = block.reduce_all_max(src[i], block_dim, 5, dtype)
 
     int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
@@ -1042,8 +1039,7 @@ def test_block_inclusive_add(dtype, block_dim):
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            tid = i % block_dim
-            dst[i] = block.inclusive_add(src[i], tid, block_dim, 5, dtype)
+            dst[i] = block.inclusive_add(src[i], block_dim, 5, dtype)
 
     _init_field(src, N, dtype)
     foo()
@@ -1075,8 +1071,7 @@ def test_block_exclusive_add(dtype, block_dim):
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            tid = i % block_dim
-            dst[i] = block.exclusive_add(src[i], tid, block_dim, 5, dtype)
+            dst[i] = block.exclusive_add(src[i], block_dim, 5, dtype)
 
     _init_field(src, N, dtype)
     foo()
@@ -1110,8 +1105,7 @@ def test_block_inclusive_min(dtype, block_dim):
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            tid = i % block_dim
-            dst[i] = block.inclusive_min(src[i], tid, block_dim, 5, dtype)
+            dst[i] = block.inclusive_min(src[i], block_dim, 5, dtype)
 
     int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
@@ -1145,8 +1139,7 @@ def test_block_inclusive_max(dtype, block_dim):
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            tid = i % block_dim
-            dst[i] = block.inclusive_max(src[i], tid, block_dim, 5, dtype)
+            dst[i] = block.inclusive_max(src[i], block_dim, 5, dtype)
 
     int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
@@ -1183,11 +1176,10 @@ def test_block_exclusive_min(dtype, block_dim):
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            tid = i % block_dim
             if dtype == qd.i32:
-                dst[i] = block.exclusive_min(src[i], tid, block_dim, 5, SENTINEL_INT, dtype)
+                dst[i] = block.exclusive_min(src[i], block_dim, 5, SENTINEL_INT, dtype)
             else:
-                dst[i] = block.exclusive_min(src[i], tid, block_dim, 5, SENTINEL_FLOAT, dtype)
+                dst[i] = block.exclusive_min(src[i], block_dim, 5, SENTINEL_FLOAT, dtype)
 
     int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
@@ -1308,7 +1300,6 @@ def test_block_radix_rank_match_atomic_or(key_pattern, bit_start, num_bits):
             excl_smem = block.SharedArray((_RADIX_DIGITS,), qd.i32)
             rank = block.radix_rank_match_atomic_or(
                 keys_in[i],
-                tid,
                 _BLOCK_DIM_RR,
                 5,
                 _RADIX_BITS,
@@ -1358,11 +1349,10 @@ def test_block_exclusive_max(dtype, block_dim):
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            tid = i % block_dim
             if dtype == qd.i32:
-                dst[i] = block.exclusive_max(src[i], tid, block_dim, 5, SENTINEL_INT, dtype)
+                dst[i] = block.exclusive_max(src[i], block_dim, 5, SENTINEL_INT, dtype)
             else:
-                dst[i] = block.exclusive_max(src[i], tid, block_dim, 5, SENTINEL_FLOAT, dtype)
+                dst[i] = block.exclusive_max(src[i], block_dim, 5, SENTINEL_FLOAT, dtype)
 
     int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):

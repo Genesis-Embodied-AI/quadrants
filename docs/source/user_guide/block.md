@@ -127,17 +127,18 @@ This is the thread's index *within its own block / workgroup*. To get the across
 
 Today only the X dimension is exposed (1-D blocks). For 2-D / 3-D blocks the calling code should compute the linear index from `block.thread_idx()` and the block-Y / Z dimensions itself, or stick to 1-D blocks (the dominant Quadrants idiom — `qd.loop_config(block_dim=N)` always sets the X extent).
 
-### `block.reduce_{add,min,max}(value, tid, block_dim, log2_warp, dtype)`
+### `block.reduce_{add,min,max}(value, block_dim, log2_warp, dtype)`
 
 Block-scope reductions following the standard two-stage warp-reduction strategy: each warp reduces its lanes via a `shuffle_down` tree, lane 0 of each warp publishes the warp aggregate to shared memory, then thread 0 sequentially folds the warp aggregates with the same operator. The result is valid in **thread 0 only**; other threads retain partial values. For the broadcast-to-every-thread variants see `block.reduce_all_{add,min,max}` below.
 
 Arguments:
 
 - `value`: per-thread input.
-- `tid`: calling thread's block-local index. Pass `i % block_dim` from a `qd.loop_config(block_dim=...)` kernel, or `qd.simt.block.thread_idx()` on backends that expose it.
 - `block_dim`: threads per block (compile-time `template()`; must be a multiple of `2**log2_warp`).
 - `log2_warp`: `log2(warp_size)`, compile-time `template()`. Pass 5 on CUDA / Metal / RDNA AMDGPU (wave32) and 6 on CDNA AMDGPU (wave64).
 - `dtype`: scalar dtype for the inter-warp shared-memory staging slot; must match `value`'s type.
+
+The calling thread's block-local index is read internally via `block.thread_idx()` — no `tid` argument required.
 
 Cost: `log2_warp` shuffles + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / 2**log2_warp) - 1` ops on thread 0. When the block is exactly one warp the shared-memory path is short-circuited at trace time.
 
@@ -146,36 +147,34 @@ Cost: `log2_warp` shuffles + 1 shared-memory write/read per warp + 1 `block.sync
 def kern(src: qd.types.ndarray(ndim=1), out: qd.types.ndarray(ndim=1)):
     qd.loop_config(block_dim=128)
     for i in range(N):
-        tid = i % 128
-        agg = qd.simt.block.reduce_add(src[i], tid, 128, 5, qd.f32)
-        if tid == 0:
+        agg = qd.simt.block.reduce_add(src[i], 128, 5, qd.f32)
+        if qd.simt.block.thread_idx() == 0:
             out[i // 128] = agg
 ```
 
-A generic `block.reduce(value, tid, block_dim, log2_warp, op, dtype)` is also available for custom associative operators (e.g. bitwise ops, custom monoids). It accepts an `op: template()` `@qd.func` taking `(a, b)` and returning the same type as `value`.
+A generic `block.reduce(value, block_dim, log2_warp, op, dtype)` is also available for custom associative operators (e.g. bitwise ops, custom monoids). It accepts an `op: template()` `@qd.func` taking `(a, b)` and returning the same type as `value`.
 
-### `block.reduce_all_{add,min,max}(value, tid, block_dim, log2_warp, dtype)`
+### `block.reduce_all_{add,min,max}(value, block_dim, log2_warp, dtype)`
 
-The broadcast variants of the above. Identical semantics, but the result is published to a one-slot `SharedArray` and read back by every thread after a second `block.sync()`. Use this when downstream code on every thread needs the block-wide aggregate (e.g. normalising each thread's value by the block sum). Cost: one extra `block.sync()` plus one shared-memory hop vs. the lane-0-only variants. The corresponding generic form is `block.reduce_all(value, tid, block_dim, log2_warp, op, dtype)`.
+The broadcast variants of the above. Identical semantics, but the result is published to a one-slot `SharedArray` and read back by every thread after a second `block.sync()`. Use this when downstream code on every thread needs the block-wide aggregate (e.g. normalising each thread's value by the block sum). Cost: one extra `block.sync()` plus one shared-memory hop vs. the lane-0-only variants. The corresponding generic form is `block.reduce_all(value, block_dim, log2_warp, op, dtype)`.
 
-### `block.inclusive_{add,min,max}(value, tid, block_dim, log2_warp, dtype)`
+### `block.inclusive_{add,min,max}(value, block_dim, log2_warp, dtype)`
 
 Block-scope inclusive prefix scans via the standard two-stage warp-scan strategy: each warp does a Hillis-Steele scan via `subgroup` shuffles, the last lane of each warp publishes the warp aggregate to shared memory, then every thread sequentially folds the cross-warp prefix and applies its own warp's prefix to its scan value. **All threads receive a valid result.** After the call, thread `i` holds `op(v[0], v[1], ..., v[i])`.
 
-Args match `block.reduce_add` (`value, tid, block_dim, log2_warp, dtype`). Cost: per-warp Hillis-Steele tree (`log2_warp` shuffles) + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / 2**log2_warp) - 1` ops on every thread (the cross-warp prefix is computed redundantly to avoid a second barrier). When the block is exactly one warp the shared-memory path is short-circuited at trace time.
+Args match `block.reduce_add` (`value, block_dim, log2_warp, dtype`). Cost: per-warp Hillis-Steele tree (`log2_warp` shuffles) + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / 2**log2_warp) - 1` ops on every thread (the cross-warp prefix is computed redundantly to avoid a second barrier). When the block is exactly one warp the shared-memory path is short-circuited at trace time.
 
 ```python
 @qd.kernel
 def kern(src: qd.types.ndarray(ndim=1), out: qd.types.ndarray(ndim=1)):
     qd.loop_config(block_dim=128)
     for i in range(N):
-        tid = i % 128
-        out[i] = qd.simt.block.inclusive_add(src[i], tid, 128, 5, qd.i32)
+        out[i] = qd.simt.block.inclusive_add(src[i], 128, 5, qd.i32)
 ```
 
-The corresponding generic form is `block.inclusive_scan(value, tid, block_dim, log2_warp, op, dtype)` for custom monoids.
+The corresponding generic form is `block.inclusive_scan(value, block_dim, log2_warp, op, dtype)` for custom monoids.
 
-### `block.exclusive_{add,min,max}(value, tid, block_dim, log2_warp[, identity], dtype)`
+### `block.exclusive_{add,min,max}(value, block_dim, log2_warp[, identity], dtype)`
 
 Block-scope exclusive prefix scans. Same strategy and cost profile as `inclusive_*`, but each thread receives the prefix `op(v[0], ..., v[i-1])` instead — and thread 0 receives the operator's identity.
 
@@ -183,9 +182,9 @@ Block-scope exclusive prefix scans. Same strategy and cost profile as `inclusive
 - `exclusive_min(..., identity, dtype)`: pass `identity` greater than or equal to every legal element of the input — typically `+∞` for floats or the dtype's maximum for integers. Thread 0 holds `identity`. There is no portable type-extreme derivable from `value` alone, so this op takes an explicit `identity` argument (mirrors `subgroup.exclusive_min`).
 - `exclusive_max(..., identity, dtype)`: pass `identity` less than or equal to every legal element of the input — typically `-∞` for floats or the dtype's minimum for integers. Thread 0 holds `identity`.
 
-The corresponding generic form is `block.exclusive_scan(value, tid, block_dim, log2_warp, op, identity, dtype)`.
+The corresponding generic form is `block.exclusive_scan(value, block_dim, log2_warp, op, identity, dtype)`.
 
-### `block.radix_rank_match_atomic_or(key, tid, block_dim, log2_warp, radix_bits, bit_start, num_bits, bins, excl_prefix)`
+### `block.radix_rank_match_atomic_or(key, block_dim, log2_warp, radix_bits, bit_start, num_bits, bins, excl_prefix)`
 
 Block-level radix ranking via the atomic-OR match-and-count strategy (the workhorse of an SM90-style onesweep radix sort). Each thread holds one `u32` key; the function returns the key's stable rank within the block under the digit `(key >> bit_start) & ((1 << num_bits) - 1)`, and writes the per-digit count and exclusive-prefix arrays to two caller-supplied `block.SharedArray` outparams.
 
@@ -199,10 +198,11 @@ Constraints (currently):
 Args:
 
 - `key`: per-thread `u32` input.
-- `tid`: calling thread's block-local index.
 - `block_dim`, `log2_warp`, `radix_bits`, `bit_start`, `num_bits`: all compile-time `template()`.
 - `bins`: `block.SharedArray((1 << radix_bits,), qd.i32)`. After the call, `bins[d]` holds the count of keys whose digit equals `d`.
 - `excl_prefix`: `block.SharedArray((1 << radix_bits,), qd.i32)`. After the call, `excl_prefix[d]` holds the exclusive prefix sum of `bins` up to digit `d`.
+
+The calling thread's block-local index is read internally via `block.thread_idx()`.
 
 Cost: 2 `block.sync()` + a handful of `subgroup.sync()` calls + 1 block exclusive scan + per-key `atomic_or` + leader-only `atomic_add` on shared memory. Shared-memory footprint is `2 * BLOCK_WARPS * RADIX_DIGITS` ints = 16 KiB at the default `log2_warp=5, radix_bits=8` configuration (8 warps × 256 digits × 2 banks × 4 B).
 
@@ -211,11 +211,10 @@ Cost: 2 `block.sync()` + a handful of `subgroup.sync()` calls + 1 block exclusiv
 def kern(keys_in: qd.types.ndarray(ndim=1), ranks_out: qd.types.ndarray(ndim=1)):
     qd.loop_config(block_dim=256)
     for i in range(256):
-        tid = i % 256
         bins = qd.simt.block.SharedArray((256,), qd.i32)
         excl = qd.simt.block.SharedArray((256,), qd.i32)
         ranks_out[i] = qd.simt.block.radix_rank_match_atomic_or(
-            keys_in[i], tid, 256, 5, 8, 0, 8, bins, excl
+            keys_in[i], 256, 5, 8, 0, 8, bins, excl
         )
 ```
 
