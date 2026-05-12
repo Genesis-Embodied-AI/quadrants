@@ -24,6 +24,54 @@ def _skip_if_f64_unsupported(dtype):
         pytest.skip("MoltenVK does not support f64")
 
 
+# Scenario tables for the sized reduce / scan tests below.  We deliberately sample (dtype, log2_size) rather than
+# take the full cartesian product, because the two axes are orthogonal in the lowering:
+#
+# * Different ``log2_size`` values exercise different unroll depths of the same ``shuffle_down`` / ``shuffle_xor`` /
+#   ``shuffle_up`` tree (one extra step per increment).  The tree shape is the same regardless of dtype, so once we
+#   have verified the tree behaves correctly at one dtype we mostly just need spot checks at the other dtypes.
+# * Different dtypes exercise different lowering paths inside ``subgroup.shuffle*`` (e.g. 64-bit values are split into
+#   two 32-bit shuffles on AMDGPU, ``f64`` and ``i64`` are skipped on Metal / MoltenVK).  That lowering is
+#   independent of ``log2_size`` -- a bug in the i64 path is just as visible at ``log2_size = 1`` as at ``log2_size =
+#   5``.
+#
+# So every scenario table holds ``log2_size = 1`` (the shortest tree, catches one-step-only bugs) and ``log2_size =
+# 5`` (the full-wave32 / 32-lane-window-on-wave64 case, the most common production size) for ``i32``, plus one row
+# per non-i32 dtype at ``log2_size = 5``.  We don't include ``log2_size = 6`` in the bulk matrix -- that's covered by
+# the dedicated ``test_subgroup_*_log2_size_6`` tests further down, which only run on AMDGPU wave64.  Net effect:
+# ~6 cases per test instead of the previous cartesian ~25, ~4x fewer pytest invocations across the whole sized
+# reduce / scan suite.
+
+# All five dtypes supported (i32, i64, u64, f32, f64).
+_SCENARIOS_FULL_DTYPE = [
+    (qd.i32, 1),
+    (qd.i32, 5),
+    (qd.i64, 5),
+    (qd.u64, 5),
+    (qd.f32, 5),
+    (qd.f64, 5),
+]
+
+# i32 + floats (no 64-bit ints) -- used by ``inclusive_mul`` / ``exclusive_mul`` (64-bit-int product would overflow
+# the tests' 1/2-mixed input) and the min / max scans (only ``inclusive_add`` / ``exclusive_add`` test the four-way
+# i32 / i64 / u64 / f32 / f64 matrix; min / max stick to one int width plus the two floats).
+_SCENARIOS_I32_AND_FLOATS = [
+    (qd.i32, 1),
+    (qd.i32, 5),
+    (qd.f32, 5),
+    (qd.f64, 5),
+]
+
+# Integer dtypes only -- used by the bitwise ops (``inclusive_and`` / ``or`` / ``xor`` and their exclusive variants),
+# which don't accept float dtypes.
+_SCENARIOS_INT = [
+    (qd.i32, 1),
+    (qd.i32, 5),
+    (qd.i64, 5),
+    (qd.u64, 5),
+]
+
+
 @test_utils.test(arch=qd.cuda)
 def test_all_nonzero():
     a = qd.field(dtype=qd.i32, shape=32)
@@ -1636,8 +1684,7 @@ def test_subgroup_shuffle_down_reduction(dtype):
     assert abs(dst[0] - expected) < 1e-5
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_reduce_add(dtype, log2_size):
     """Portable shuffle_down tree reduction: lane 0 of each 2**log2_size group has the sum."""
@@ -1664,8 +1711,7 @@ def test_subgroup_reduce_add(dtype, log2_size):
         assert abs(dst[0] - expected) < 1e-4 * abs(expected)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_reduce_all_add(dtype, log2_size):
     """Portable butterfly XOR reduction: every lane in each 2**log2_size group has the sum."""
@@ -1769,32 +1815,28 @@ def _check_reduce_all(reduce_func, py_op, dtype, log2_size, src_init):
                 ), f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_reduce_min(dtype, log2_size):
     """Portable shuffle_down tree min: lane 0 of each 2**log2_size group has the group min."""
     _check_reduce_lane0(subgroup.reduce_min, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_reduce_max(dtype, log2_size):
     """Portable shuffle_down tree max: lane 0 of each 2**log2_size group has the group max."""
     _check_reduce_lane0(subgroup.reduce_max, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_reduce_all_min(dtype, log2_size):
     """Portable butterfly min: every lane in each 2**log2_size group has the group min."""
     _check_reduce_all(subgroup.reduce_all_min, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_reduce_all_max(dtype, log2_size):
     """Portable butterfly max: every lane in each 2**log2_size group has the group max."""
@@ -2183,8 +2225,7 @@ def _check_inclusive_scan(scan_func, py_op, dtype, log2_size, src_init):
                 ), f"group {g} lane {k} (global {global_lane}): got {got}, expected {running}"
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_add(dtype, log2_size):
     """Portable inclusive prefix sum: lane k of each 2**log2_size group has sum(src[group_base..group_base+k+1])."""
@@ -2199,8 +2240,7 @@ def _init_small_int_or_float(field, n, dtype):
         field[i] = 2 if (i % 4 == 0) else 1
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_mul(dtype, log2_size):
     """Inclusive prefix product.  Inputs are 1 / 2 mixed so the 32-way product is at most 2**8 == 256 (well within i32
@@ -2216,16 +2256,14 @@ def _init_varied_int_or_float(field, n, dtype):
         field[i] = ((i * 7 + 11) % 23) + 1
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_min(dtype, log2_size):
     """Inclusive prefix min."""
     _check_inclusive_scan(subgroup.inclusive_min, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_max(dtype, log2_size):
     """Inclusive prefix max."""
@@ -2239,8 +2277,7 @@ def _init_bitwise_int(field, n, dtype):
         field[i] = (i * 5 + 0x37) & 0xFF
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_and(dtype, log2_size):
     """Inclusive prefix bitwise-AND.  Integer dtypes only."""
@@ -2248,8 +2285,7 @@ def test_subgroup_inclusive_and(dtype, log2_size):
     _check_inclusive_scan(subgroup.inclusive_and, lambda a, b: a & b, dtype, log2_size, _init_bitwise_int)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_or(dtype, log2_size):
     """Inclusive prefix bitwise-OR.  Integer dtypes only."""
@@ -2257,8 +2293,7 @@ def test_subgroup_inclusive_or(dtype, log2_size):
     _check_inclusive_scan(subgroup.inclusive_or, lambda a, b: a | b, dtype, log2_size, _init_bitwise_int)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_inclusive_xor(dtype, log2_size):
     """Inclusive prefix bitwise-XOR.  Integer dtypes only."""
@@ -2322,24 +2357,21 @@ def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_i
                 ), f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_add(dtype, log2_size):
     """Exclusive prefix sum.  Lane 0 of each group is 0."""
     _check_exclusive_scan(subgroup.exclusive_add, lambda a, b: a + b, 0, dtype, log2_size, _init_field)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_mul(dtype, log2_size):
     """Exclusive prefix product.  Lane 0 of each group is 1."""
     _check_exclusive_scan(subgroup.exclusive_mul, lambda a, b: a * b, 1, dtype, log2_size, _init_small_int_or_float)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_min(dtype, log2_size):
     """Exclusive prefix min.  Lane 0 of each group is the explicit `identity` we pass.  Use a sentinel larger than any
@@ -2356,8 +2388,7 @@ def test_subgroup_exclusive_min(dtype, log2_size):
     )
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_max(dtype, log2_size):
     """Exclusive prefix max.  Lane 0 of each group is the explicit `identity` we pass.  Use a sentinel smaller than
@@ -2374,8 +2405,7 @@ def test_subgroup_exclusive_max(dtype, log2_size):
     )
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_and(dtype, log2_size):
     """Exclusive prefix bitwise-AND.  Lane 0 of each group is all-bits-set."""
@@ -2389,8 +2419,7 @@ def test_subgroup_exclusive_and(dtype, log2_size):
     _check_exclusive_scan(subgroup.exclusive_and, lambda a, b: a & b, identity, dtype, log2_size, _init_bitwise_int)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_or(dtype, log2_size):
     """Exclusive prefix bitwise-OR.  Lane 0 of each group is 0."""
@@ -2398,8 +2427,7 @@ def test_subgroup_exclusive_or(dtype, log2_size):
     _check_exclusive_scan(subgroup.exclusive_or, lambda a, b: a | b, 0, dtype, log2_size, _init_bitwise_int)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_xor(dtype, log2_size):
     """Exclusive prefix bitwise-XOR.  Lane 0 of each group is 0."""
