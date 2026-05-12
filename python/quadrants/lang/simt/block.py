@@ -169,13 +169,13 @@ def reduce(value, block_dim: template(), op: template(), dtype: template()):
     `subgroup.group_size()` at compile time.  When the block is exactly one warp the shared-memory path is
     short-circuited at compile time and the call costs only the per-warp tree.
     """
-    WARP_SIZE = _subgroup.group_size()
-    log2_warp = _subgroup.log2_group_size()
+    WARP_SIZE = impl.static(_subgroup.group_size())
+    log2_warp = impl.static(_subgroup.log2_group_size())
     impl.static_assert(
-        block_dim % WARP_SIZE == 0 and block_dim >= WARP_SIZE,
+        impl.static(block_dim % WARP_SIZE == 0 and block_dim >= WARP_SIZE),
         "block.reduce: block_dim must be a positive multiple of subgroup size",
     )
-    NUM_WARPS = block_dim // WARP_SIZE
+    NUM_WARPS = impl.static(block_dim // WARP_SIZE)
 
     warp_agg = _warp_reduce(value, log2_warp, op)
 
@@ -184,9 +184,9 @@ def reduce(value, block_dim: template(), op: template(), dtype: template()):
 
     tid = thread_idx()
     warp_id = tid // WARP_SIZE
-    lane_id = tid & (WARP_SIZE - 1)
+    lane_id = tid & impl.static(WARP_SIZE - 1)
 
-    shared = SharedArray((NUM_WARPS,), dtype)
+    shared = SharedArray(impl.static((NUM_WARPS,)), dtype)
     if lane_id == 0:
         shared[warp_id] = warp_agg
     sync()
@@ -195,7 +195,7 @@ def reduce(value, block_dim: template(), op: template(), dtype: template()):
     if tid == 0:
         result = shared[0]
         for w in impl.static(range(1, NUM_WARPS)):
-            result = op(result, shared[w])
+            result = op(result, shared[impl.static(w)])
     return result
 
 
@@ -283,13 +283,13 @@ def inclusive_scan(value, block_dim: template(), op: template(), dtype: template
     `subgroup.group_size()` at compile time.  When the block is exactly one warp the cross-warp shared-memory path is
     short-circuited at compile time and the call costs only the per-warp Hillis-Steele tree.
     """
-    WARP_SIZE = _subgroup.group_size()
-    log2_warp = _subgroup.log2_group_size()
+    WARP_SIZE = impl.static(_subgroup.group_size())
+    log2_warp = impl.static(_subgroup.log2_group_size())
     impl.static_assert(
-        block_dim % WARP_SIZE == 0 and block_dim >= WARP_SIZE,
+        impl.static(block_dim % WARP_SIZE == 0 and block_dim >= WARP_SIZE),
         "block.inclusive_scan: block_dim must be a positive multiple of subgroup size",
     )
-    NUM_WARPS = block_dim // WARP_SIZE
+    NUM_WARPS = impl.static(block_dim // WARP_SIZE)
 
     inclusive = _subgroup._inclusive_scan(value, op, log2_warp)
 
@@ -298,10 +298,10 @@ def inclusive_scan(value, block_dim: template(), op: template(), dtype: template
 
     tid = thread_idx()
     warp_id = tid // WARP_SIZE
-    lane_id = tid & (WARP_SIZE - 1)
+    lane_id = tid & impl.static(WARP_SIZE - 1)
 
-    shared = SharedArray((NUM_WARPS,), dtype)
-    if lane_id == WARP_SIZE - 1:
+    shared = SharedArray(impl.static((NUM_WARPS,)), dtype)
+    if lane_id == impl.static(WARP_SIZE - 1):
         shared[warp_id] = inclusive
     sync()
 
@@ -313,7 +313,7 @@ def inclusive_scan(value, block_dim: template(), op: template(), dtype: template
     for w in impl.static(range(1, NUM_WARPS)):
         if warp_id == impl.static(w):
             warp_prefix = block_aggregate
-        addend = shared[w]
+        addend = shared[impl.static(w)]
         block_aggregate = op(block_aggregate, addend)
 
     if warp_id != 0:
@@ -330,13 +330,13 @@ def exclusive_scan(value, block_dim: template(), op: template(), identity, dtype
     scan needs a definite value for thread 0 (and for the sentinel paths in `exclusive_min` / `exclusive_max`).  See
     `exclusive_add` for the additive specialization which derives a zero identity automatically.
     """
-    WARP_SIZE = _subgroup.group_size()
-    log2_warp = _subgroup.log2_group_size()
+    WARP_SIZE = impl.static(_subgroup.group_size())
+    log2_warp = impl.static(_subgroup.log2_group_size())
     impl.static_assert(
-        block_dim % WARP_SIZE == 0 and block_dim >= WARP_SIZE,
+        impl.static(block_dim % WARP_SIZE == 0 and block_dim >= WARP_SIZE),
         "block.exclusive_scan: block_dim must be a positive multiple of subgroup size",
     )
-    NUM_WARPS = block_dim // WARP_SIZE
+    NUM_WARPS = impl.static(block_dim // WARP_SIZE)
 
     exclusive = _subgroup._exclusive_scan(value, op, identity, log2_warp)
 
@@ -345,10 +345,10 @@ def exclusive_scan(value, block_dim: template(), op: template(), identity, dtype
 
     tid = thread_idx()
     warp_id = tid // WARP_SIZE
-    lane_id = tid & (WARP_SIZE - 1)
+    lane_id = tid & impl.static(WARP_SIZE - 1)
 
-    shared = SharedArray((NUM_WARPS,), dtype)
-    if lane_id == WARP_SIZE - 1:
+    shared = SharedArray(impl.static((NUM_WARPS,)), dtype)
+    if lane_id == impl.static(WARP_SIZE - 1):
         # Warp aggregate = inclusive at last lane = exclusive[last] + value[last] under `op`.
         shared[warp_id] = op(exclusive, value)
     sync()
@@ -358,7 +358,7 @@ def exclusive_scan(value, block_dim: template(), op: template(), identity, dtype
     for w in impl.static(range(1, NUM_WARPS)):
         if warp_id == impl.static(w):
             warp_prefix = block_aggregate
-        addend = shared[w]
+        addend = shared[impl.static(w)]
         block_aggregate = op(block_aggregate, addend)
 
     if warp_id != 0:
@@ -499,23 +499,23 @@ def radix_rank_match_atomic_or(
     scan + ``BLOCK_WARPS`` ops per thread for the column-sum upsweep.  The shared-memory footprint is
     ``2 * BLOCK_WARPS * RADIX_DIGITS`` i32 ints (16 KiB at the default ``radix_bits=8`` configuration on wave32).
     """
-    WARP_THREADS = _subgroup.group_size()
+    WARP_THREADS = impl.static(_subgroup.group_size())
     impl.static_assert(
-        WARP_THREADS == 32,
+        impl.static(WARP_THREADS == 32),
         "block.radix_rank_match_atomic_or: subgroup size must be 32; wave64 path not yet implemented",
     )
-    RADIX_DIGITS = 1 << radix_bits
+    RADIX_DIGITS = impl.static(1 << radix_bits)
     impl.static_assert(
-        block_dim == RADIX_DIGITS,
+        impl.static(block_dim == RADIX_DIGITS),
         "block.radix_rank_match_atomic_or: block_dim must equal RADIX_DIGITS (1 << radix_bits)",
     )
-    BLOCK_WARPS = block_dim // WARP_THREADS
-    NUM_BITS_MASK = (1 << num_bits) - 1
-    MM_OFF = BLOCK_WARPS * RADIX_DIGITS
-    BINS_PER_LANE = RADIX_DIGITS // WARP_THREADS
+    BLOCK_WARPS = impl.static(block_dim // WARP_THREADS)
+    NUM_BITS_MASK = impl.static((1 << num_bits) - 1)
+    MM_OFF = impl.static(BLOCK_WARPS * RADIX_DIGITS)
+    BINS_PER_LANE = impl.static(RADIX_DIGITS // WARP_THREADS)
 
     # ``TempStorage``: union of warp_offsets / warp_histograms (same backing) + match_masks.  All i32.
-    smem = SharedArray((2 * BLOCK_WARPS * RADIX_DIGITS,), _i32)
+    smem = SharedArray(impl.static((2 * BLOCK_WARPS * RADIX_DIGITS,)), _i32)
 
     tid = thread_idx()
     warp_idx = tid // WARP_THREADS
@@ -523,7 +523,7 @@ def radix_rank_match_atomic_or(
 
     # Step 1: zero per-warp histograms and match_masks.
     for b in impl.static(range(BINS_PER_LANE)):
-        bin_idx = lane + b * WARP_THREADS
+        bin_idx = lane + impl.static(b * WARP_THREADS)
         smem[warp_idx * RADIX_DIGITS + bin_idx] = _i32(0)
         smem[MM_OFF + warp_idx * RADIX_DIGITS + bin_idx] = _i32(0)
     _warp_sync_fence()
@@ -539,8 +539,8 @@ def radix_rank_match_atomic_or(
     # loop, ``bin_count`` is the block-wide total for digit == tid.
     bin_count = _i32(0)
     for j_warp in impl.static(range(BLOCK_WARPS)):
-        warp_count = smem[j_warp * RADIX_DIGITS + tid]
-        smem[j_warp * RADIX_DIGITS + tid] = bin_count
+        warp_count = smem[impl.static(j_warp * RADIX_DIGITS) + tid]
+        smem[impl.static(j_warp * RADIX_DIGITS) + tid] = bin_count
         bin_count = bin_count + warp_count
 
     # Step 3: block-wide exclusive sum on the per-thread bin counts.
@@ -548,7 +548,9 @@ def radix_rank_match_atomic_or(
 
     # Step 4: ComputeOffsetsWarpDownsweep — fold the block-wide exclusive prefix into every warp's offset.
     for j_warp in impl.static(range(BLOCK_WARPS)):
-        smem[j_warp * RADIX_DIGITS + tid] = smem[j_warp * RADIX_DIGITS + tid] + exclusive_digit_prefix
+        smem[impl.static(j_warp * RADIX_DIGITS) + tid] = (
+            smem[impl.static(j_warp * RADIX_DIGITS) + tid] + exclusive_digit_prefix
+        )
 
     sync()  # Publish warp offsets before the per-key match phase.
 
