@@ -238,7 +238,7 @@ void UnaryOpExpression::type_check(const CompileConfig *config) {
     return;
   }
 
-  if (type == UnaryOpType::popcnt && is_real(operand_primitive_type)) {
+  if ((type == UnaryOpType::popcnt || type == UnaryOpType::ffs) && is_real(operand_primitive_type)) {
     ErrorEmitter(QuadrantsTypeError(), this,
                  fmt::format("'{}' takes integral inputs only, however '{}' is provided", unary_op_type_name(type),
                              operand_primitive_type->to_string()));

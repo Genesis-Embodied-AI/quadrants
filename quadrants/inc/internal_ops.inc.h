@@ -63,6 +63,11 @@ PER_INTERNAL_OP(cuda_shfl_xor_sync_i32)
 PER_INTERNAL_OP(cuda_match_any_sync_i32)
 PER_INTERNAL_OP(cuda_match_all_sync_i32)
 PER_INTERNAL_OP(cuda_active_mask)
+// Find-n-th-set-bit fast path for qd.math.fns, lowered to a single PTX `fns.b32` instruction via inline asm
+// (`__nv_fns` is *not* in the slim libdevice.10.bc we ship). The portable / non-CUDA implementation lives in
+// Python (`_fns_portable` in python/quadrants/math/mathimpl.py) and is a 32-iteration linear scan over bit
+// positions, fully unrolled by each backend's lowering pipeline.
+PER_INTERNAL_OP(cuda_fns_u32)
 PER_INTERNAL_OP(warp_barrier)
 
 // AMDGPU

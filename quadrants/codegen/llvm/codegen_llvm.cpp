@@ -220,15 +220,26 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
     llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::sqrt, {input_type}, {input});
   }
   else if (op == UnaryOpType::popcnt) {
+    // stmt->ret_type is already normalised to i32 by type_check.cpp; the explicit truncation here keeps the LLVM
+    // value width in sync with that contract on 64-bit operands.
     auto pop = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
     llvm_val[stmt] = builder->CreateZExtOrTrunc(pop, llvm::Type::getInt32Ty(*llvm_context));
-    stmt->ret_type = PrimitiveType::i32;
   }
   else if (op == UnaryOpType::clz) {
     auto clz = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
                                         {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
     llvm_val[stmt] = builder->CreateZExtOrTrunc(clz, llvm::Type::getInt32Ty(*llvm_context));
-    stmt->ret_type = PrimitiveType::i32;
+  }
+  else if (op == UnaryOpType::ffs) {
+    // ffs(x): 1-indexed position of the lowest set bit; 0 when x == 0 (CUDA __ffs convention). llvm.cttz with
+    // is_zero_undef = false returns bitwidth on a zero input, so we explicitly select 0 for that case rather than
+    // letting the +1 produce bitwidth + 1.
+    auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
+    auto cttz = builder->CreateIntrinsic(llvm::Intrinsic::cttz, {input_type}, {input, is_zero_undef});
+    auto plus_one = builder->CreateAdd(cttz, llvm::ConstantInt::get(input_type, 1));
+    auto is_zero = builder->CreateICmpEQ(input, llvm::ConstantInt::get(input_type, 0));
+    auto sel = builder->CreateSelect(is_zero, llvm::ConstantInt::get(input_type, 0), plus_one);
+    llvm_val[stmt] = builder->CreateZExtOrTrunc(sel, llvm::Type::getInt32Ty(*llvm_context));
   }
   else {
     QD_P(unary_op_type_name(op));
