@@ -250,10 +250,8 @@ def _inclusive_scan(value, op: template(), log2_size: template()):
     groups smaller than the full subgroup compose correctly when ``log2_size < log2(group_size)``.
 
     Note: ``qd.select`` cannot be used here instead of ``if`` because ``OpSelect`` on MoltenVK / Metal miscompiles when
-    one operand is an f32 produced by a shuffle intrinsic—the select silently returns the false-branch value regardless
-    of the condition.  The ``if`` form works correctly for the inclusive scan on its own; callers that issue further
-    subgroup ops after this scan (e.g. `_exclusive_scan`) must insert a ``sync()`` barrier to force reconvergence
-    before the next shuffle.
+    one operand is an f32 produced by a shuffle intrinsic — the select silently returns the false-branch value
+    regardless of the condition.  The ``if`` form works correctly on its own.
     """
     lane_in_group = invocation_id() & impl.static((1 << log2_size) - 1)
     for i in impl.static(range(log2_size)):
@@ -319,10 +317,12 @@ def inclusive_xor(value, log2_size: template()):
 
 # --- Exclusive scans -------------------------------------------------------------------
 #
-# Each `exclusive_*` runs the inclusive scan, then shifts the result up by one lane via `shuffle_up(inc, 1)` and
-# replaces lane 0 of every group with the operator's identity.  Lane 0's result must be set explicitly because
-# `shuffle_up` with offset 1 returns an implementation-defined value at lane 0 (and `OpGroupNonUniformShuffleUp` calls
-# it undefined outright).  See `_exclusive_scan` for the shared body.
+# Each `exclusive_*` shifts the *input* right by one lane via `shuffle_up(value, 1)`, seeds lane 0 of every group with
+# the operator's identity, and then runs the inclusive scan on the shifted data.  Doing the shuffle first (rather than
+# running the inclusive scan and shuffling the result) avoids the MoltenVK / Metal miscompile where the SPIR-V
+# compiler misoptimizes the register holding the inclusive-scan result when its only consumer is a shuffle intrinsic.
+# Lane 0's result must be set explicitly because `shuffle_up` with offset 1 returns an implementation-defined value at
+# lane 0 (`OpGroupNonUniformShuffleUp` calls it undefined outright).  See `_exclusive_scan` for the shared body.
 #
 # Identity per op (in `value`'s dtype, expressed via dtype-preserving arithmetic so the wrapper does not need to
 # inspect the dtype):
