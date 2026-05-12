@@ -2602,20 +2602,27 @@ def test_subgroup_group_size_folds_into_kernel_ir():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_group_size_stable_across_reinit():
+def test_subgroup_group_size_stable_across_reinit(req_arch, req_options):
     """``group_size()`` / ``log2_group_size()`` return the same value after a ``qd.reset()`` + ``qd.init()`` on the
     same backend.  Regression guard: a stale-cached subgroup size on the ``Program`` could silently survive reset and
     corrupt kernels launched on the second init (e.g. if the SPIR-V probe path didn't re-run, or if the LLVM backends
-    cached the wrong arch constant).  Three cycles to catch order-dependent caches."""
-    arch = qd.lang.impl.current_cfg().arch
+    cached the wrong arch constant).  Three cycles to catch order-dependent caches.
+
+    Takes ``req_arch`` / ``req_options`` from the fixture so the re-init mirrors what conftest's ``wanted_arch`` does
+    for the first init (notably ``device_memory_GB`` and ``print_full_traceback``).  Don't read
+    ``impl.current_cfg().arch`` after the first ``qd.reset()`` -- the live config goes away with the runtime."""
     sz_ref = subgroup.group_size()
     l2_ref = subgroup.log2_group_size()
     assert isinstance(sz_ref, int) and isinstance(l2_ref, int)
     assert (1 << l2_ref) == sz_ref
 
+    init_options = dict(req_options or {})
+    init_options.setdefault("print_full_traceback", True)
+    init_options.setdefault("enable_fallback", False)
+
     for cycle in range(3):
         qd.reset()
-        qd.init(arch=arch)
+        qd.init(arch=req_arch, **init_options)
         sz = subgroup.group_size()
         l2 = subgroup.log2_group_size()
         assert sz == sz_ref, f"cycle {cycle}: group_size changed across reinit: {sz_ref} -> {sz}"
