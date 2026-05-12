@@ -1562,6 +1562,29 @@
     <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_clz</span><span class="p">,</span> <span class="n">_clz</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">ffs</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Find first (lowest) set bit in ``a``.</span>
+
+<span class="sd">    Returns the 1-indexed position of the lowest set bit in ``a`` as an ``i32``, with ``ffs(0) == 0`` (the CUDA</span>
+<span class="sd">    ``__ffs`` convention). Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the count is over</span>
+<span class="sd">    the unsigned bit pattern, so ``ffs(-1) == 1`` regardless of input signedness.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_ffs</span><span class="p">(</span><span class="n">_</span><span class="p">):</span>
+        <span class="c1"># No Python fallback: ffs is bitwidth-dependent (an i32 that wraps around to 0 should return 0, but the same</span>
+        <span class="c1"># numeric value in Python&#39;s arbitrary-precision int would return its real bit position). Once the value reaches</span>
+        <span class="c1"># here it&#39;s a plain Python int with no width attached, so there&#39;s no single answer that matches native backends.</span>
+        <span class="c1"># This path is only hit on the `qd.python` backend or from ad-hoc module-level calls; native backends route</span>
+        <span class="c1"># through the IR / codegen and never see it. Same treatment as popcnt / clz for consistency.</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s2">&quot;qd.math.ffs has no Python fallback: the result depends on the operand&#39;s bitwidth &quot;</span>
+            <span class="s2">&quot;(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend &quot;</span>
+            <span class="s2">&quot;(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal).&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_ffs</span><span class="p">,</span> <span class="n">_ffs</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+
+
 <span class="nd">@writeback_binary</span>
 <div class="viewcode-block" id="atomic_add">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_add">[docs]</a>

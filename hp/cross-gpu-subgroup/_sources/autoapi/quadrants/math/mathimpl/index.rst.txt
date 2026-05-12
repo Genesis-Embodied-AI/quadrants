@@ -68,6 +68,8 @@ Functions
    quadrants.math.mathimpl.vdir
    quadrants.math.mathimpl.popcnt
    quadrants.math.mathimpl.clz
+   quadrants.math.mathimpl.ffs
+   quadrants.math.mathimpl.fns
 
 
 Module Contents
@@ -732,4 +734,24 @@ Module Contents
 .. py:function:: popcnt(x)
 
 .. py:function:: clz(x)
+
+.. py:function:: ffs(x)
+
+.. py:function:: fns(mask, base, offset)
+
+   Find the n-th set bit in a 32-bit mask, with CUDA fast-path dispatch.
+
+   Mirrors CUDA's ``__nv_fns(mask, base, offset)``: scans ``mask`` starting from bit ``base`` and returns the bit
+   position of the ``|offset|``-th set bit found. The sign of ``offset`` selects the search direction:
+
+   * ``offset > 0``: scan upward (towards higher bit indices) starting at ``base`` (inclusive).
+   * ``offset < 0``: scan downward (towards lower bit indices) starting at ``base`` (inclusive).
+   * ``offset == 0``: returns ``base`` if ``mask & (1 << base)`` is non-zero, else ``0xFFFFFFFF``.
+
+   Returns ``0xFFFFFFFF`` if the requested set bit does not exist.
+
+   On CUDA the call lowers to a single PTX ``fns.b32`` instruction via inline asm (``__nv_fns`` is not in the slim
+   libdevice we ship). On every other backend (x64 / AMDGPU / SPIR-V) a portable Python @qd.func fallback is emitted;
+   the body is a 32-iteration loop over bit positions and is fully unrolled by the lowering pipeline on each backend.
+
 
