@@ -1491,14 +1491,11 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 3);
   }
 
-  // Note: the SPIR-V-only `subgroupAdd` / `subgroupMul` / `subgroupMin` / `subgroupMax` /
-  // `subgroupAnd` / `subgroupOr` / `subgroupXor` reductions have been removed.  Use the portable
-  // Python `subgroup.reduce_add(value, log2_size)` (and equivalents) on top of the cross-platform
-  // `subgroupShuffleDown` / `subgroupShuffle` primitives instead.  The inclusive-scan ops below
-  // are still SPIR-V-only and remain pending portable replacements.
-  const std::unordered_set<std::string> inclusive_scan_ops{
-      "subgroupInclusiveAdd", "subgroupInclusiveMul", "subgroupInclusiveMin", "subgroupInclusiveMax",
-      "subgroupInclusiveAnd", "subgroupInclusiveOr",  "subgroupInclusiveXor"};
+  // Note: the SPIR-V-only `subgroupAdd` / `subgroupMul` / `subgroupMin` / `subgroupMax` / `subgroupAnd` /
+  // `subgroupOr` / `subgroupXor` reductions have been removed.  Likewise the
+  // `subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}` ops are gone: all seven are implemented as portable ``@qd.func``
+  // Hillis-Steele scans over `subgroupShuffleUp` in Python, so the SPIR-V codegen branch and the matching internal-op
+  // registrations have been removed.
 
   const std::unordered_set<std::string> shuffle_ops{"subgroupShuffleDown", "subgroupShuffleUp", "subgroupShuffle"};
 
@@ -1538,8 +1535,15 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                    ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), ir_->const_i32_zero_);
     val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "subgroupMemoryBarrier") {
+    // The Memory Semantics operand of OpMemoryBarrier must include both an ordering bit (Acquire / Release /
+    // AcquireRelease / SequentiallyConsistent) and at least one storage class (UniformMemory / WorkgroupMemory /
+    // ImageMemory / ...).  The previous emission used 0 for Semantics, which is invalid SPIR-V and behaves as a no-op
+    // on drivers that accept it.  Match the pattern used for `workgroupMemoryBarrier` above: AcquireRelease with the
+    // storage classes Quadrants kernels actually touch (uniform buffers + workgroup-shared memory).
     ir_->make_inst(spv::OpMemoryBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup),
-                   ir_->const_i32_zero_);
+                   ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsUniformMemoryMask |
+                                                                  spv::MemorySemanticsWorkgroupMemoryMask |
+                                                                  spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "subgroupSize") {
     val = ir_->cast(ir_->i32_type(), ir_->get_subgroup_size());
@@ -1550,56 +1554,6 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     auto index = ir_->query_value(stmt->args[1]->raw_name());
     val = ir_->make_value(spv::OpGroupNonUniformBroadcast, value.stype,
                           ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), value, index);
-  } else if (inclusive_scan_ops.find(stmt->func_name) != inclusive_scan_ops.end()) {
-    auto arg = ir_->query_value(stmt->args[0]->raw_name());
-    auto stype = ir_->get_primitive_type(stmt->args[0]->ret_type);
-    spv::Op spv_op;
-
-    if (ends_with(stmt->func_name, "Add")) {
-      if (is_integral(stmt->args[0]->ret_type)) {
-        spv_op = spv::OpGroupNonUniformIAdd;
-      } else {
-        spv_op = spv::OpGroupNonUniformFAdd;
-      }
-    } else if (ends_with(stmt->func_name, "Mul")) {
-      if (is_integral(stmt->args[0]->ret_type)) {
-        spv_op = spv::OpGroupNonUniformIMul;
-      } else {
-        spv_op = spv::OpGroupNonUniformFMul;
-      }
-    } else if (ends_with(stmt->func_name, "Min")) {
-      if (is_integral(stmt->args[0]->ret_type)) {
-        if (is_signed(stmt->args[0]->ret_type)) {
-          spv_op = spv::OpGroupNonUniformSMin;
-        } else {
-          spv_op = spv::OpGroupNonUniformUMin;
-        }
-      } else {
-        spv_op = spv::OpGroupNonUniformFMin;
-      }
-    } else if (ends_with(stmt->func_name, "Max")) {
-      if (is_integral(stmt->args[0]->ret_type)) {
-        if (is_signed(stmt->args[0]->ret_type)) {
-          spv_op = spv::OpGroupNonUniformSMax;
-        } else {
-          spv_op = spv::OpGroupNonUniformUMax;
-        }
-      } else {
-        spv_op = spv::OpGroupNonUniformFMax;
-      }
-    } else if (ends_with(stmt->func_name, "And")) {
-      spv_op = spv::OpGroupNonUniformBitwiseAnd;
-    } else if (ends_with(stmt->func_name, "Or")) {
-      spv_op = spv::OpGroupNonUniformBitwiseOr;
-    } else if (ends_with(stmt->func_name, "Xor")) {
-      spv_op = spv::OpGroupNonUniformBitwiseXor;
-    } else {
-      QD_ERROR("Unsupported operation: {}", stmt->func_name);
-    }
-
-    spv::GroupOperation group_op = spv::GroupOperationInclusiveScan;
-
-    val = ir_->make_value(spv_op, stype, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), group_op, arg);
   } else if (shuffle_ops.find(stmt->func_name) != shuffle_ops.end()) {
     auto arg0 = ir_->query_value(stmt->args[0]->raw_name());
     auto arg1 = ir_->query_value(stmt->args[1]->raw_name());

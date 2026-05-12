@@ -343,9 +343,8 @@ void Operations::init_internals() {
   // workgroupBarrier, workgroupMemoryBarrier, localInvocationId,
   // vkGlobalThreadIdx, subgroupBarrier, subgroupMemoryBarrier, subgroupElect,
   // subgroupBroadcast, subgroupSize, subgroupInvocationId,
-  // subgroupInclusiveAdd, subgroupInclusiveMul, subgroupInclusiveMin,
-  // subgroupInclusiveMax, subgroupInclusiveAnd, subgroupInclusiveOr,
-  // subgroupInclusiveXor
+  // (subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}: portable ``@qd.func`` Hillis-Steele scans over
+  // `subgroupShuffleUp`; no internal ops needed.)
 
   auto ValueT = tyvar("ValueT");
 
@@ -368,14 +367,6 @@ void Operations::init_internals() {
   // are intentionally absent: the portable `subgroup.reduce_add(value, log2_size)` (and equivalents)
   // are implemented in Python on top of `subgroupShuffleDown` / `subgroupShuffle` and are the
   // supported APIs on all backends.
-  POLY_OP(subgroupInclusiveAdd, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupInclusiveMul, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupInclusiveMin, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupInclusiveMax, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupInclusiveAnd, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupInclusiveOr, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupInclusiveXor, false, Signature({}, {ValueT}, ValueT));
-
 #undef POLY_OP
 #undef PLAIN_OP
 }

@@ -8,7 +8,7 @@ from quadrants.lang.field import ScalarField
 from quadrants.lang.impl import grouped, static, static_assert
 from quadrants.lang.kernel_impl import func, kernel
 from quadrants.lang.misc import loop_config
-from quadrants.lang.simt import block, warp
+from quadrants.lang.simt import block, subgroup, warp
 from quadrants.lang.snode import deactivate
 from quadrants.types import ndarray_type
 from quadrants.types.annotations import template
@@ -281,6 +281,17 @@ def warp_shfl_up_i32(val: template()):
     if lane_id >= offset_j:
         val += n
     return val
+
+
+@func
+def subgroup_inclusive_add_warp_i32(val: template()):
+    """Single-arg adapter around ``subgroup.inclusive_add(val, 5)``.
+
+    The prefix-sum kernel ``scan_add_inclusive`` takes its scan primitive as a ``template()`` callable invoked as
+    ``inclusive_add(val)`` (one argument).  The portable ``subgroup.inclusive_add`` takes ``(value, log2_size)`` — pass
+    ``log2_size=5`` to scan a full 32-lane warp/wave, matching ``WARP_SZ`` in ``scan_add_inclusive``.
+    """
+    return subgroup.inclusive_add(val, 5)
 
 
 @kernel
