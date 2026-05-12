@@ -19,7 +19,7 @@ The full Python API is grouped here by category. The first column lists each op,
 | `subgroup.broadcast(value, index)`          | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 | `subgroup.broadcast_first(value)`           | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 
-\* AMDGPU `shuffle_down` / `shuffle_up` (and therefore `reduce_add`, which is built on `shuffle_down`) are currently emulated via `ds_bpermute` (~50 cycle latency).
+\* AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` are lowered through `ds_bpermute` (~50 cycle latency, LDS-routed). On wave64 a cross-half read (target lane in the other SIMD32) additionally takes one `v_permlane64_b32` plus a per-lane select — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering). Same-half reads have no overhead vs. CUDA's `__shfl_*_sync`.
 
 `shuffle_xor` and `broadcast_first` are portable `@qd.func` wrappers on top of `shuffle` / `broadcast` (`shuffle_xor(value, mask)` ≡ `shuffle(value, lane ^ mask)`; `broadcast_first(value)` ≡ `broadcast(value, qd.u32(0))`). They inline at compile time and run wherever the underlying op runs.
 
@@ -136,14 +136,14 @@ Each lane returns the `value` held by the lane whose subgroup-local id equals `i
 Lane `i` returns the `value` held by lane `i + offset`. Lanes near the top of the subgroup — where `i + offset >= subgroup_size` — receive an implementation-defined value (typically their own `value`), so reduction patterns must only trust lane 0's final result, or mask out the out-of-range lanes.
 
 - `value` and `offset` dtypes: same as `shuffle` above; `offset` is a `u32`.
-- Maps to `__shfl_down_sync` on CUDA and `OpGroupNonUniformShuffleDown` on SPIR-V. On AMDGPU it is currently emulated with `ds_bpermute` (see the support matrix above).
+- Maps to `__shfl_down_sync` on CUDA and `OpGroupNonUniformShuffleDown` on SPIR-V. On AMDGPU it is emulated with `ds_bpermute`; wave64 cross-half offsets (any `offset >= 32` for low-half lanes, or any non-zero `offset` for high-half lanes that lands across the SIMD32 boundary) go through the same `permlane64 + ds_bpermute + select` lowering as `shuffle` — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering).
 
 ### `shuffle_up(value, offset)`
 
 Lane `i` returns the `value` held by lane `i - offset`. Lanes near the bottom of the subgroup — where `i - offset < 0` — receive an implementation-defined value (typically their own `value`), so the bottom `offset` lanes' results should be ignored or masked.
 
 - Same dtype rules as `shuffle` / `shuffle_down`; `offset` is a `u32`.
-- Maps to `__shfl_up_sync` on CUDA and `OpGroupNonUniformShuffleUp` on SPIR-V. On AMDGPU it is currently emulated with `ds_bpermute((lane - offset) * 4, value)` (same fast-path FIXME as `shuffle_down`).
+- Maps to `__shfl_up_sync` on CUDA and `OpGroupNonUniformShuffleUp` on SPIR-V. On AMDGPU it is emulated with `ds_bpermute((lane - offset) * 4, value)`; wave64 cross-half cases go through the [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering) (same `permlane64 + ds_bpermute + select` sequence as `shuffle` / `shuffle_down`).
 
 ### `shuffle_xor(value, mask)`
 
@@ -158,7 +158,7 @@ Lane `i` returns the `value` held by lane `i ^ mask`. Convenient for butterfly p
 Every lane in the subgroup returns the `value` held by the lane whose subgroup-local id equals `index`. Expresses intent ("read lane `index`") more directly than `shuffle(value, index)` and on backends with a dedicated broadcast may map to a cheaper instruction.
 
 - Same dtype rules as `shuffle`.
-- Maps to `__shfl_sync` on CUDA, `ds_bpermute` on AMDGPU, and `OpGroupNonUniformBroadcast` on SPIR-V.
+- Maps to `__shfl_sync` on CUDA, `ds_bpermute` (plus a `permlane64`-driven cross-half select on wave64) on AMDGPU, and `OpGroupNonUniformBroadcast` on SPIR-V. See [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering) for the wave64 mechanics.
 - **Important: on SPIR-V, `index` must be dynamically uniform** — the same value on every lane in the subgroup. Passing a per-lane varying `index` is undefined behavior, because `OpGroupNonUniformBroadcast` requires its `Id` operand to be dynamically uniform across the subgroup. On CUDA / AMDGPU, `index` may vary per lane and the call is identical to `shuffle(value, index)`. If you need a varying source lane, use `shuffle` directly.
 
 ### `broadcast_first(value)`
@@ -516,10 +516,27 @@ def cumsum(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
 
 After the call, lane `k` (within each group of 32) holds `a[group_start] + a[group_start+1] + ... + a[k]`. The `5` is `log2_size`; `2**5 == 32` matches the block dim. The body unrolls at compile time into five `shuffle_up + add` pairs. Use a smaller `log2_size` to scan over partial-subgroup groups (e.g. `inclusive_add(v, 3)` produces independent prefix sums in groups of 8).
 
+### AMDGPU wave64 cross-half lowering
+
+AMDGPU `ds_bpermute_b32` — the LDS-routed permute that Quadrants uses to lower `shuffle`, `shuffle_down`, and `shuffle_up` — has a hardware quirk on RDNA (gfx10/11/12, e.g. RX 7900 XTX): its lane-id operand is **SIMD32-scoped**. On a wave64 RDNA wave the 64 lanes execute as two SIMD32 clusters; `ds_bpermute` on those chips can only address lanes inside the requesting lane's own SIMD32 half. CDNA (gfx9xx, MI200/MI300) keeps the wave on a single SIMD64, so `ds_bpermute` there is wave-wide and the quirk does not exist.
+
+To make wave64 `shuffle` / `shuffle_down` / `shuffle_up` behave consistently across RDNA and CDNA, Quadrants always lowers cross-half-capable shuffles through this 3-op sequence:
+
+```
+swapped = v_permlane64_b32 value         # swap the two SIMD32 halves of the wave
+lo      = ds_bpermute_b32 (lane*4), value
+hi      = ds_bpermute_b32 (lane*4), swapped
+result  = ((target_lane ^ self_lane) & 32) ? hi : lo
+```
+
+The two `ds_bpermute_b32` reads run in parallel — one reads the original payload (correct when target is in the same SIMD32 half), the other reads the `permlane64`-swapped payload (correct when the target is in the other half) — and a per-lane select picks between them based on whether the target crosses the 32-lane boundary. On CDNA the cross-half branch is dead, but the cost is one extra `v_permlane64_b32` (still well-defined and free) and one `v_cndmask_b32` — no measurable hit. On RDNA wave64 this is the only correct lowering.
+
+One subtlety worth knowing about (mostly for anyone reading the generated IR): the lane-id operand to `ds_bpermute` is wrapped in an empty `+v` inline-asm fence inside the runtime helper. Without that fence, LLVM's AMDGPU backend can decide a compile-time-constant or otherwise uniform lane-id is "uniform across the wave" and silently lower the call to a `v_readlane_b32`-style instruction that addresses lanes 0..31 **wave-globally** rather than SIMD32-locally. That would break cross-half shuffles whose target lane is a literal (`broadcast(v, 47)`, `shuffle(v, qd.u32(40))`, etc.). The fence costs zero — same instruction shape on every path — and pins the lowering to a real `ds_bpermute_b32` so the SIMD-local semantics our `permlane64` pairing relies on always hold.
+
 ## Performance notes
 
 - Shuffles are register-to-register on CUDA (`__shfl_sync`, `__shfl_down_sync`, `__shfl_up_sync`) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.
-- AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` all go through `ds_permute` / `ds_bpermute` today (LDS-routed, roughly tens of cycles).
+- AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` all go through `ds_permute` / `ds_bpermute` (LDS-routed, roughly tens of cycles). On wave64 the lowering issues two parallel `ds_bpermute_b32` reads plus a `v_permlane64_b32` swap and a per-lane select to handle cross-half shuffles correctly on RDNA — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering). The two `ds_bpermute` reads issue in parallel, so the latency is the same as a single read; the `permlane64` and `cndmask` add a few extra cycles.
 - `shuffle_xor` and `broadcast_first` are `@qd.func` wrappers over `shuffle` / `broadcast` and inline at compile time, so on every backend they cost exactly the same as the underlying op.
 - Both `ballot_first_n` and `ballot_full_subgroup` lower to a single hardware instruction on every backend — one cycle on CUDA (`__ballot_sync`), one instruction on AMDGPU (a single `v_cmp_*_e64` populating the wavefront-width SETCC, then a low-half store for `ballot_first_n`), and `OpGroupNonUniformBallot` on SPIR-V (extract one or two components of the result `uvec4`). At `n == 32` `ballot_first_n` elides the predicate-masking step entirely; at `n < 32` it inserts one extra multiply on the predicate.
 - `reduce_add` and `reduce_all_add` both issue exactly `log2_size` shuffles and `log2_size` adds per call. No barriers, no shared memory, no launch overhead (they inline).
