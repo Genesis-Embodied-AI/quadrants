@@ -139,7 +139,7 @@ Arguments:
 
 The calling thread's block-local index is read internally via `block.thread_idx()`; the warp size is read from `subgroup.group_size()` at compile time. Neither is plumbed through as an argument.
 
-Cost: `log2(warp_size)` shuffles + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / warp_size) - 1` ops on thread 0. When the block is exactly one warp the shared-memory path is short-circuited at trace time.
+Cost: `log2(warp_size)` shuffles + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / warp_size) - 1` ops on thread 0. When the block is exactly one warp the shared-memory path is short-circuited at compile time.
 
 ```python
 @qd.kernel
@@ -161,7 +161,7 @@ The broadcast variants of the above. Identical semantics, but the result is publ
 
 Block-scope inclusive prefix scans via the standard two-stage warp-scan strategy: each warp does a Hillis-Steele scan via `subgroup` shuffles, the last lane of each warp publishes the warp aggregate to shared memory, then every thread sequentially folds the cross-warp prefix and applies its own warp's prefix to its scan value. **All threads receive a valid result.** After the call, thread `i` holds `op(v[0], v[1], ..., v[i])`.
 
-Args match `block.reduce_add` (`value, block_dim, dtype`). Cost: per-warp Hillis-Steele tree (`log2(warp_size)` shuffles) + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / warp_size) - 1` ops on every thread (the cross-warp prefix is computed redundantly to avoid a second barrier). When the block is exactly one warp the shared-memory path is short-circuited at trace time.
+Args match `block.reduce_add` (`value, block_dim, dtype`). Cost: per-warp Hillis-Steele tree (`log2(warp_size)` shuffles) + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / warp_size) - 1` ops on every thread (the cross-warp prefix is computed redundantly to avoid a second barrier). When the block is exactly one warp the shared-memory path is short-circuited at compile time.
 
 ```python
 @qd.kernel
@@ -190,7 +190,7 @@ Block-level radix ranking via the atomic-OR match-and-count strategy (the workho
 Constraints (currently):
 
 - `block_dim` must equal `1 << radix_bits` (each digit gets exactly one thread for the per-thread bin / exclusive-prefix output). Typical configuration is `radix_bits=8, block_dim=256`.
-- `subgroup.group_size()` must be 32 — the match path is built around 32-lane `i32` ballot masks. This holds on CUDA, Metal, and Vulkan-on-NVIDIA; AMDGPU (wave64) is not yet supported and the function asserts the subgroup size at trace time.
+- `subgroup.group_size()` must be 32 — the match path is built around 32-lane `i32` ballot masks. This holds on CUDA, Metal, and Vulkan-on-NVIDIA; AMDGPU (wave64) is not yet supported and the function asserts the subgroup size at compile time.
 - One key per thread (`items_per_thread = 1`). Multi-item per thread is a future extension.
 - `num_bits <= radix_bits`; `bit_start` is the offset of the digit's low bit.
 

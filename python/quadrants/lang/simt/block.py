@@ -167,7 +167,7 @@ def reduce(value, block_dim: template(), op: template(), dtype: template()):
 
     The calling thread's block-local index is read internally via `block.thread_idx()`; the warp size is read from
     `subgroup.group_size()` at compile time.  When the block is exactly one warp the shared-memory path is
-    short-circuited at trace time and the call costs only the per-warp tree.
+    short-circuited at compile time and the call costs only the per-warp tree.
     """
     WARP_SIZE = _subgroup.group_size()
     log2_warp = _subgroup.log2_group_size()
@@ -281,7 +281,7 @@ def inclusive_scan(value, block_dim: template(), op: template(), dtype: template
 
     The calling thread's block-local index is read internally via `block.thread_idx()`; the warp size is read from
     `subgroup.group_size()` at compile time.  When the block is exactly one warp the cross-warp shared-memory path is
-    short-circuited at trace time and the call costs only the per-warp Hillis-Steele tree.
+    short-circuited at compile time and the call costs only the per-warp Hillis-Steele tree.
     """
     WARP_SIZE = _subgroup.group_size()
     log2_warp = _subgroup.log2_group_size()
@@ -489,7 +489,7 @@ def radix_rank_match_atomic_or(
     The calling thread's block-local index is read internally via `block.thread_idx()`; the warp size is read from
     `subgroup.group_size()` at compile time.  Currently only the wave32 subgroup size (32) is supported — the
     atomic-OR match path is built around 32-lane ``i32`` ballot masks, so the function asserts that subgroup size at
-    trace time.  Targeting AMDGPU (wave64) will need a parallel wave64 path; not yet implemented.
+    compile time.  Targeting AMDGPU (wave64) will need a parallel wave64 path; not yet implemented.
 
     Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary ``block.sync()``
     and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without a

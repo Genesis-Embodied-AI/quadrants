@@ -751,7 +751,7 @@ def _init_field(field, n, dtype):
 # one extra `block.sync()` plus a one-slot shared-memory hop.
 #
 # We exercise three block sizes that span the relevant regimes: 32 (single warp,
-# the shared-memory path is short-circuited at trace time), 128 (multi-warp on
+# the shared-memory path is short-circuited at compile time), 128 (multi-warp on
 # wave32 backends), and 256 (multi-warp on every backend).  ``log2_warp`` is
 # pinned to 5 throughout — qipc assumes wave32 here, and Quadrants lays it on as
 # a template knob so future wave64 callers can pass 6 without an API change.
