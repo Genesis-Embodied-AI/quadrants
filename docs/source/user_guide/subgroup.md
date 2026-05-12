@@ -241,7 +241,7 @@ Same sum as `reduce_add`, but broadcast to **every lane** in each `2**log2_size`
 
 ### `reduce_min(value, log2_size)` / `reduce_max(value, log2_size)`
 
-Min / max of `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. Result valid in the **window-local lane 0** of each group (see [How `log2_size` windowing works](#how-log2-size-windowing-works)); other lanes hold partial mins / maxes. Same wave64 gotcha as `reduce_add` applies — on wave64 with `log2_size=5` both lane 0 and lane 32 hold meaningful per-half results; use `reduce_all_min` / `reduce_all_max` if you want every lane to see its window's answer.
+Min / max of `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. Result valid in the **window-local lane 0** of each group (see [How `log2_size` windowing works](#how-log2size-windowing-works)); other lanes hold partial mins / maxes. Same wave64 gotcha as `reduce_add` applies — on wave64 with `log2_size=5` both lane 0 and lane 32 hold meaningful per-half results; use `reduce_all_min` / `reduce_all_max` if you want every lane to see its window's answer.
 
 - Same `log2_size` template + size-cap contract as `reduce_add`. Body unrolls into exactly `log2_size` `shuffle_down + min` (or `max`) pairs.
 - Accepts integer (`i32`, `u32`, `i64`, `u64`) and float (`f32`, `f64`) dtypes. Lowers via `qd.min` / `qd.max`, which dispatch to the backend's native min/max intrinsic.
