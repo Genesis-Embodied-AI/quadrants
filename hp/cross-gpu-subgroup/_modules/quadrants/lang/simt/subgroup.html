@@ -602,10 +602,8 @@
 <span class="sd">    groups smaller than the full subgroup compose correctly when ``log2_size &lt; log2(group_size)``.</span>
 
 <span class="sd">    Note: ``qd.select`` cannot be used here instead of ``if`` because ``OpSelect`` on MoltenVK / Metal miscompiles when</span>
-<span class="sd">    one operand is an f32 produced by a shuffle intrinsic—the select silently returns the false-branch value regardless</span>
-<span class="sd">    of the condition.  The ``if`` form works correctly for the inclusive scan on its own; callers that issue further</span>
-<span class="sd">    subgroup ops after this scan (e.g. `_exclusive_scan`) must insert a ``sync()`` barrier to force reconvergence</span>
-<span class="sd">    before the next shuffle.</span>
+<span class="sd">    one operand is an f32 produced by a shuffle intrinsic — the select silently returns the false-branch value</span>
+<span class="sd">    regardless of the condition.  The ``if`` form works correctly on its own.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">lane_in_group</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
@@ -692,10 +690,12 @@
 
 <span class="c1"># --- Exclusive scans -------------------------------------------------------------------</span>
 <span class="c1">#</span>
-<span class="c1"># Each `exclusive_*` runs the inclusive scan, then shifts the result up by one lane via `shuffle_up(inc, 1)` and</span>
-<span class="c1"># replaces lane 0 of every group with the operator&#39;s identity.  Lane 0&#39;s result must be set explicitly because</span>
-<span class="c1"># `shuffle_up` with offset 1 returns an implementation-defined value at lane 0 (and `OpGroupNonUniformShuffleUp` calls</span>
-<span class="c1"># it undefined outright).  See `_exclusive_scan` for the shared body.</span>
+<span class="c1"># Each `exclusive_*` shifts the *input* right by one lane via `shuffle_up(value, 1)`, seeds lane 0 of every group with</span>
+<span class="c1"># the operator&#39;s identity, and then runs the inclusive scan on the shifted data.  Doing the shuffle first (rather than</span>
+<span class="c1"># running the inclusive scan and shuffling the result) avoids the MoltenVK / Metal miscompile where the SPIR-V</span>
+<span class="c1"># compiler misoptimizes the register holding the inclusive-scan result when its only consumer is a shuffle intrinsic.</span>
+<span class="c1"># Lane 0&#39;s result must be set explicitly because `shuffle_up` with offset 1 returns an implementation-defined value at</span>
+<span class="c1"># lane 0 (`OpGroupNonUniformShuffleUp` calls it undefined outright).  See `_exclusive_scan` for the shared body.</span>
 <span class="c1">#</span>
 <span class="c1"># Identity per op (in `value`&#39;s dtype, expressed via dtype-preserving arithmetic so the wrapper does not need to</span>
 <span class="c1"># inspect the dtype):</span>
