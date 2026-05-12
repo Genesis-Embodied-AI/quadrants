@@ -23,6 +23,7 @@
 #include "quadrants/codegen/ir_dump.h"
 #include "quadrants/util/environ_config.h"
 #include "quadrants/runtime/llvm/llvm_context_pass.h"
+#include "quadrants/runtime/llvm/kernel_atomic_syncscope.h"
 
 namespace quadrants::lang {
 
@@ -219,15 +220,26 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
     llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::sqrt, {input_type}, {input});
   }
   else if (op == UnaryOpType::popcnt) {
+    // stmt->ret_type is already normalised to i32 by type_check.cpp; the explicit truncation here keeps the LLVM
+    // value width in sync with that contract on 64-bit operands.
     auto pop = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
     llvm_val[stmt] = builder->CreateZExtOrTrunc(pop, llvm::Type::getInt32Ty(*llvm_context));
-    stmt->ret_type = PrimitiveType::i32;
   }
   else if (op == UnaryOpType::clz) {
     auto clz = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
                                         {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
     llvm_val[stmt] = builder->CreateZExtOrTrunc(clz, llvm::Type::getInt32Ty(*llvm_context));
-    stmt->ret_type = PrimitiveType::i32;
+  }
+  else if (op == UnaryOpType::ffs) {
+    // ffs(x): 1-indexed position of the lowest set bit; 0 when x == 0 (CUDA __ffs convention). llvm.cttz with
+    // is_zero_undef = false returns bitwidth on a zero input, so we explicitly select 0 for that case rather than
+    // letting the +1 produce bitwidth + 1.
+    auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
+    auto cttz = builder->CreateIntrinsic(llvm::Intrinsic::cttz, {input_type}, {input, is_zero_undef});
+    auto plus_one = builder->CreateAdd(cttz, llvm::ConstantInt::get(input_type, 1));
+    auto is_zero = builder->CreateICmpEQ(input, llvm::ConstantInt::get(input_type, 0));
+    auto sel = builder->CreateSelect(is_zero, llvm::ConstantInt::get(input_type, 0), plus_one);
+    llvm_val[stmt] = builder->CreateZExtOrTrunc(sel, llvm::Type::getInt32Ty(*llvm_context));
   }
   else {
     QD_P(unary_op_type_name(op));
@@ -1288,7 +1300,8 @@ llvm::Value *TaskCodeGenLLVM::integral_type_atomic(AtomicOpStmt *stmt) {
   bin_op[AtomicOpType::bit_xor] = llvm::AtomicRMWInst::BinOp::Xor;
   QD_ASSERT(bin_op.find(stmt->op_type) != bin_op.end());
   return builder->CreateAtomicRMW(bin_op.at(stmt->op_type), llvm_val[stmt->dest], llvm_val[stmt->val],
-                                  llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent);
+                                  llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                  kernel_atomic_syncscope(llvm_context, current_arch()));
 }
 
 llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(llvm::Value *dest,
@@ -1314,7 +1327,8 @@ llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(llvm::Value *dest,
     dest = builder->CreateBitCast(dest, typeIntPtr);
     auto atomicCmpXchg = builder->CreateAtomicCmpXchg(
         dest, builder->CreateBitCast(old_val, typeIntTy), builder->CreateBitCast(new_val, typeIntTy),
-        llvm::MaybeAlign(0), AtomicOrdering::SequentiallyConsistent, AtomicOrdering::SequentiallyConsistent);
+        llvm::MaybeAlign(0), AtomicOrdering::SequentiallyConsistent, AtomicOrdering::SequentiallyConsistent,
+        kernel_atomic_syncscope(llvm_context, current_arch()));
     // Check whether CAS was succussful
     auto ok = builder->CreateExtractValue(atomicCmpXchg, 1);
     builder->CreateCondBr(builder->CreateNot(ok), body, after_loop);
@@ -1354,7 +1368,16 @@ llvm::Value *TaskCodeGenLLVM::real_type_atomic(AtomicOpStmt *stmt) {
   switch (op) {
     case AtomicOpType::add:
       return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FAdd, llvm_val[stmt->dest], llvm_val[stmt->val],
-                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent);
+                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      kernel_atomic_syncscope(llvm_context, current_arch()));
+    case AtomicOpType::min:
+      return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FMin, llvm_val[stmt->dest], llvm_val[stmt->val],
+                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      kernel_atomic_syncscope(llvm_context, current_arch()));
+    case AtomicOpType::max:
+      return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FMax, llvm_val[stmt->dest], llvm_val[stmt->val],
+                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      kernel_atomic_syncscope(llvm_context, current_arch()));
     case AtomicOpType::mul:
       return atomic_op_using_cas(
           llvm_val[stmt->dest], llvm_val[stmt->val], [&](auto v1, auto v2) { return builder->CreateFMul(v1, v2); },
@@ -1363,14 +1386,7 @@ llvm::Value *TaskCodeGenLLVM::real_type_atomic(AtomicOpStmt *stmt) {
       break;
   }
 
-  std::unordered_map<PrimitiveTypeID, std::unordered_map<AtomicOpType, std::string>> atomics;
-  atomics[PrimitiveTypeID::f32][AtomicOpType::min] = "atomic_min_f32";
-  atomics[PrimitiveTypeID::f64][AtomicOpType::min] = "atomic_min_f64";
-  atomics[PrimitiveTypeID::f32][AtomicOpType::max] = "atomic_max_f32";
-  atomics[PrimitiveTypeID::f64][AtomicOpType::max] = "atomic_max_f64";
-  QD_ASSERT(atomics.find(prim_type) != atomics.end());
-  QD_ASSERT(atomics.at(prim_type).find(op) != atomics.at(prim_type).end());
-  return call(atomics.at(prim_type).at(op), llvm_val[stmt->dest], llvm_val[stmt->val]);
+  return nullptr;
 }
 
 void TaskCodeGenLLVM::visit(AtomicOpStmt *stmt) {
