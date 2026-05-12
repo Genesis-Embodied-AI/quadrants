@@ -209,17 +209,6 @@ Returns `1` on lane 0 of every subgroup and `0` on every other lane. Useful for 
 - Caller contract on every backend: call from uniform control flow with all lanes active. Calling either op from divergent control flow has implementation-defined behaviour (CUDA's `nvvm.bar.warp.sync` will deadlock if the mask does not match the active set; AMDGPU's `wave.barrier` is a no-op on most chips so divergent calls silently pass through).
 - The legacy names `subgroup.barrier()` and `subgroup.memory_barrier()` are still available as deprecated aliases. They forward to `sync()` / `mem_fence()` and emit a `DeprecationWarning` on first use; prefer the new names in new code.
 
-### `ballot(predicate)`
-
-Each lane evaluates `predicate` (an `i32`; non-zero is true, zero is false) and the result is a `u32` bitmask where bit `i` is set if lane `i`'s predicate was non-zero.
-
-- Returns a `u32`. Bit 0 corresponds to lane 0, bit 1 to lane 1, etc.
-- On CUDA, maps to `__ballot_sync(0xFFFFFFFF, predicate)`. On SPIR-V, maps to `OpGroupNonUniformBallot` (component 0 of the uvec4 result). On AMDGPU, maps to the `ballot.i32` intrinsic.
-- The result covers the first 32 lanes. On AMDGPU CDNA with 64-wide wavefronts only the low 32 bits are returned; the upper 32 lanes are not represented. This is consistent with the 32-bit return type.
-- Must be called from uniform control flow (all active lanes must execute the ballot).
-
-Ballot is a building block for warp-cooperative algorithms: population counts (`popcount(ballot(cond))` counts how many lanes satisfy `cond`), prefix masks, and lane compaction.
-
 ### `reduce_add(value, log2_size)`
 
 Sums `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. The result is valid in the **window-local lane 0** of each group (see [How `log2_size` windowing works](#how-log2size-windowing-works)); other lanes hold partial sums and should be considered undefined.
