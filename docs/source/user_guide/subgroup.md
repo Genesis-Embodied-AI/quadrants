@@ -183,9 +183,17 @@ Returns this lane's subgroup-local index — `0..subgroup_size - 1`. Used both a
 
 Returns the subgroup size in effect for the current launch as an `i32`. **For use inside `@qd.kernel` / `@qd.func` bodies only** — calling it from host Python raises.
 
+| Backend | Final compiled artifact |
+|---|---|
+| CUDA | literal `32` |
+| AMDGPU | literal `64` |
+| SPIR-V (Vulkan / Metal) | runtime `OpLoad` of `BuiltInSubgroupSize` |
+
+Per-backend lowering notes:
+
 - **CUDA**: lowers to a static `32` constant — the warp size is fixed on every supported NVIDIA architecture (sm_30+). The optimizer can fold it into address arithmetic, so calling `group_size()` is no more expensive than hard-coding `32`.
 - **AMDGPU**: lowers to `llvm.amdgcn.wavefrontsize`, which the AMDGPU backend constant-folds to `64` at codegen time. Quadrants pins every AMDGPU function to `+wavefrontsize64,-wavefrontsize32` (see [supported_systems](supported_systems.md)), so CDNA (gfx9xx, gfx940/942) keeps its native wave64 mode and RDNA (gfx10/11/12) — which would otherwise default to wave32 — is forced into wave64 too. `group_size()` is therefore always 64 on AMDGPU.
-- **SPIR-V**: lowers to a load of the `OpSubgroupSize` builtin — a true runtime query, since on Vulkan compute the subgroup size can be 32 on most desktop GPUs but is permitted to be other powers of two.
+- **SPIR-V**: lowers to a uniform load of the `BuiltInSubgroupSize` input variable — a true runtime query, since on Vulkan compute the subgroup size can be 32 on most desktop GPUs but is permitted to be other powers of two. The load is cheap (uniform, CSE'd across uses), but it does mean `group_size()` is not a compile-time constant on this backend; callers that need a Python `int` at trace time should use `qd.template()` / `qd.static()` with the literal `32` / `64` they're targeting instead.
 
 ### `elect()`
 
