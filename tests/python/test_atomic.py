@@ -958,3 +958,42 @@ def test_atomic_cas_on_float_field_raises(dtype):
 
     with pytest.raises(qd.lang.exception.QuadrantsCompilationError):
         kern()
+
+
+# Pins that atomic_cas on a Vector / Matrix destination is rejected at trace time. The other atomic ops fan
+# out to per-component scalar AtomicOpStmts via scalarize / lower_matrix_ptr, but those passes use the 3-arg
+# AtomicOpStmt constructor that drops `expected`. Until the scalarizers grow a 4-arg path, refusing tensor
+# CAS up front is the correct behaviour. Codex / alanray-tech P1 from PR #690 review.
+@test_utils.test(arch=qd.gpu)
+def test_atomic_cas_on_vector_field_raises():
+    f = qd.Vector.field(3, qd.i32, shape=())
+    f[None] = qd.Vector([0, 0, 0])
+
+    @qd.kernel
+    def kern():
+        qd.atomic_cas(f[None], qd.Vector([0, 0, 0]), qd.Vector([1, 1, 1]))
+
+    with pytest.raises(qd.lang.exception.QuadrantsCompilationError):
+        kern()
+
+
+# Pins that atomic_cas casts `expected` to match the destination element type, so plain Python int literals
+# work as the comparator on i64 destinations the same way they do for atomic_add. Without the cast in
+# AtomicOpExpression::type_check, this would either trip a backend type-mismatch assertion or silently
+# compare-then-corrupt at the codegen layer. Codex / alanray-tech P1 from PR #690 review.
+@test_utils.test(arch=qd.gpu)
+def test_atomic_cas_expected_int_literal_widens_to_i64():
+    _skip_if_no_int64_atomic_rmw(qd.i64)
+    f = qd.field(qd.i64, shape=())
+    out = qd.field(qd.i64, shape=())
+    f[None] = 7
+
+    @qd.kernel
+    def kern():
+        # `expected` and `desired` are Python int literals (default i32). The frontend must cast them to i64
+        # so the CAS operands match the i64 in-memory value.
+        out[None] = qd.atomic_cas(f[None], 7, 42)
+
+    kern()
+    assert int(out[None]) == 7
+    assert int(f[None]) == 42

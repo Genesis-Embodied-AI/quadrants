@@ -977,16 +977,39 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
                    fmt::format("'atomic_cas' requires integer operands, got dest '{}' and val '{}'",
                                dest->ret_type->to_string(), val->ret_type->to_string()));
     }
+    // Reject tensor (vector / matrix) destinations explicitly. The other atomic ops fan out to per-component
+    // scalar AtomicOpStmts via scalarize / lower_matrix_ptr, but those passes use the 3-arg AtomicOpStmt
+    // constructor and would silently drop `expected`, tripping QD_ASSERT(stmt->expected) in codegen. Until the
+    // scalarizers grow a 4-arg path that threads `expected_i` through, refuse tensor CAS at trace time.
+    if (dest_dtype->is<TensorType>()) {
+      ErrorEmitter(QuadrantsTypeError(), this,
+                   fmt::format("'atomic_cas' on tensor (vector / matrix) destinations is not supported; got "
+                               "dest '{}'. Use a scalar field element instead.",
+                               dest->ret_type->to_string()));
+    }
     QD_ASSERT(expected.expr != nullptr);
     QD_ASSERT_TYPE_CHECKED(expected);
     auto expected_dtype = expected.get_rvalue_type();
     if (expected_dtype->is<TensorType>()) {
-      expected_dtype = expected_dtype.get_element_type();
+      ErrorEmitter(QuadrantsTypeError(), this,
+                   fmt::format("'atomic_cas' 'expected' operand must be scalar, got tensor type '{}'",
+                               expected->ret_type->to_string()));
+      return;
     }
     if (!is_integral(expected_dtype)) {
       ErrorEmitter(
           QuadrantsTypeError(), this,
           fmt::format("'atomic_cas' requires integer 'expected' operand, got '{}'", expected->ret_type->to_string()));
+    }
+    // Cast `expected` to the destination element type so it matches what the codegen will load from memory.
+    // LLVM `CreateAtomicCmpXchg` and SPIR-V `OpAtomicCompareExchange` both require the comparator to have the
+    // same width as the in-memory value; without this, a common call like `qd.atomic_cas(i64_field[None], 0, 1)`
+    // would leave `expected` at the i32 default and produce invalid IR. Mirrors how `val` gets widened later in
+    // `irpass::type_check::type_check_store`, which doesn't see `expected`.
+    if (expected_dtype != ret_element_type) {
+      expected.set(
+          Expr::make<UnaryOpExpression>(UnaryOpType::cast_value, expected, ret_element_type, expected->dbg_info));
+      expected.type_check(config);
     }
   }
   if (ret_element_type != val_dtype) {
