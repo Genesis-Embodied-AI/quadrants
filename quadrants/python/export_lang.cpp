@@ -705,6 +705,7 @@ void export_lang(py::module &m) {
   DEFINE_EXPRESSION_OP(log)
   DEFINE_EXPRESSION_OP(popcnt)
   DEFINE_EXPRESSION_OP(clz)
+  DEFINE_EXPRESSION_OP(ffs)
 
   DEFINE_EXPRESSION_OP(select)
   DEFINE_EXPRESSION_OP(ifte)

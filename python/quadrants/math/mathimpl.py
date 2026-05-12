@@ -6,6 +6,7 @@ Math functions for glsl-like functions and other stuff.
 """
 import math
 
+from quadrants._lib import core as _qd_core
 from quadrants.lang import impl, ops
 from quadrants.lang.impl import static, zero
 from quadrants.lang.kernel_impl import func
@@ -29,7 +30,7 @@ from quadrants.lang.ops import (
     tanh,
 )
 from quadrants.types import matrix, template, vector
-from quadrants.types.primitive_types import f64, u32, u64
+from quadrants.types.primitive_types import f64, i32, u32, u64
 
 cfg = impl.default_cfg
 
@@ -823,6 +824,67 @@ def clz(x):
     return ops.clz(x)
 
 
+@func
+def ffs(x):
+    return ops.ffs(x)
+
+
+# Portable fallback for fns(): scans a 32-bit `mask` from `base` in the direction implied by the sign of `offset` and
+# returns the bit position of the |offset|-th set bit, or 0xFFFFFFFF if there are fewer than |offset| set bits in the
+# requested half-open range. The CUDA fast path lowers to a single PTX `fns.b32` instruction via inline asm (the slim
+# libdevice we ship does not include `__nv_fns`) and bypasses this @qd.func entirely; see fns() below.
+@func
+def _fns_portable(mask: u32, base: u32, offset: i32) -> u32:
+    NOT_FOUND = u32(0xFFFFFFFF)
+    result = NOT_FOUND
+    if offset == 0:
+        if base < u32(32):
+            if (mask >> base) & u32(1) != u32(0):
+                result = base
+    elif offset > 0:
+        n = offset
+        for i in range(32):
+            pos = u32(i)
+            if pos >= base:
+                if (mask >> pos) & u32(1) != u32(0):
+                    n -= 1
+                    if n == 0:
+                        if result == NOT_FOUND:
+                            result = pos
+    else:
+        n = -offset
+        for i in range(32):
+            pos = u32(31 - i)
+            if pos <= base:
+                if (mask >> pos) & u32(1) != u32(0):
+                    n -= 1
+                    if n == 0:
+                        if result == NOT_FOUND:
+                            result = pos
+    return result
+
+
+def fns(mask, base, offset):
+    """Find the n-th set bit in a 32-bit mask, with CUDA fast-path dispatch.
+
+    Mirrors CUDA's ``__nv_fns(mask, base, offset)``: scans ``mask`` starting from bit ``base`` and returns the bit
+    position of the ``|offset|``-th set bit found. The sign of ``offset`` selects the search direction:
+
+    * ``offset > 0``: scan upward (towards higher bit indices) starting at ``base`` (inclusive).
+    * ``offset < 0``: scan downward (towards lower bit indices) starting at ``base`` (inclusive).
+    * ``offset == 0``: returns ``base`` if ``mask & (1 << base)`` is non-zero, else ``0xFFFFFFFF``.
+
+    Returns ``0xFFFFFFFF`` if the requested set bit does not exist.
+
+    On CUDA the call lowers to a single PTX ``fns.b32`` instruction via inline asm (``__nv_fns`` is not in the slim
+    libdevice we ship). On every other backend (x64 / AMDGPU / SPIR-V) a portable Python @qd.func fallback is emitted;
+    the body is a 32-iteration loop over bit positions and is fully unrolled by the lowering pipeline on each backend.
+    """
+    if impl.current_cfg().arch == _qd_core.Arch.cuda:
+        return impl.call_internal("cuda_fns_u32", mask, base, offset, with_runtime_context=False)
+    return _fns_portable(mask, base, offset)
+
+
 __all__ = [
     "acos",
     "asin",
@@ -839,7 +901,9 @@ __all__ = [
     "e",
     "exp",
     "eye",
+    "ffs",
     "floor",
+    "fns",
     "fract",
     "inf",
     "inverse",
