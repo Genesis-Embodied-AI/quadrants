@@ -1806,12 +1806,11 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
     if (stmt->op_type == AtomicOpType::cas) {
       // OpAtomicCompareExchange takes (scope, sem_eq, sem_neq, value, comparator) and returns the value
       // originally at `addr_ptr`. We surface that prior value to the user; success is recovered with
-      // `(returned == expected)`. Matches CUDA atomicCAS semantics.
+      // `(returned == expected)`. Matches CUDA atomicCAS semantics. Uses Relaxed semantics like every other
+      // atomic op in this file - if surrounding-memory ordering is needed, the user pairs the CAS with
+      // qd.simt.block.mem_fence() / qd.simt.grid.mem_fence() the same way they would for atomic_add.
       QD_ASSERT(stmt->expected != nullptr);
       spirv::Value expected_val = ir_->query_value(stmt->expected->raw_name());
-      ir_->make_inst(spv::OpMemoryBarrier, ir_->const_i32_one_,
-                     ir_->uint_immediate_number(ir_->u32_type(), spv::MemorySemanticsAcquireReleaseMask |
-                                                                     spv::MemorySemanticsUniformMemoryMask));
       val = ir_->make_value(spv::OpAtomicCompareExchange, ret_type, addr_ptr,
                             /*scope=*/ir_->const_i32_one_,
                             /*semantics if equal=*/ir_->const_i32_zero_,
