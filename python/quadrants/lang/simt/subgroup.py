@@ -269,8 +269,35 @@ def broadcast_first(value):
     return broadcast(value, u32(0))
 
 
-def group_size():
-    return impl.call_internal("subgroupSize", with_runtime_context=False)
+def group_size() -> int:
+    """Active subgroup size for the current launch, as a Python ``int``.
+
+    Resolves once at compile time by querying the live ``Program`` --- 32 on CUDA, 64 on AMDGPU (every AMDGPU target is
+    pinned to ``+wavefrontsize64``), and the device-probed value on the SPIR-V backends (read from
+    ``VkPhysicalDeviceSubgroupProperties::subgroupSize`` on Vulkan, fixed at 32 on Metal). Because the return type is a
+    plain ``int``, the value can be used as a ``qd.template()`` argument inside ``@qd.kernel`` / ``@qd.func`` bodies ---
+    this is how the ``_full``-suffixed reductions (e.g. ``reduce_add_full``) pick up the right ``log2_size`` per backend
+    without the caller having to plumb it manually.
+
+    For use inside ``@qd.kernel`` / ``@qd.func`` bodies: the value is folded into the kernel IR as a constant on every
+    backend, including SPIR-V (so MoltenVK / desktop Vulkan see a literal subgroup size rather than a runtime
+    ``OpLoad`` of ``BuiltInSubgroupSize``). Calling it from plain host Python after ``qd.init()`` is also legal and
+    returns the same number, which is handy for setting up grid dimensions on the host side.
+    """
+    return impl.get_runtime().prog.subgroup_size()
+
+
+def log2_group_size() -> int:
+    """``log2(group_size())`` as a Python ``int``, asserting the subgroup size is a power of two.
+
+    Equivalent to ``int(math.log2(group_size()))`` but emits a clearer error if the device ever reports a non-power-of-two
+    subgroup width (no current SPIR-V driver does, but the spec allows it). Like ``group_size()`` this is a compile-time
+    constant on every backend --- callers feed it straight into ``qd.template()`` to pick the right ``log2_size`` for a
+    full-subgroup reduction (e.g. ``reduce_add(v, qd.simt.subgroup.log2_group_size())``).
+    """
+    size = group_size()
+    assert size > 0 and (size & (size - 1)) == 0, f"subgroup size {size} is not a power of two"
+    return size.bit_length() - 1
 
 
 def invocation_id():
@@ -765,6 +792,9 @@ __all__ = [
     "lanemask_eq",
     "lanemask_gt",
     "lanemask_ge",
+    "group_size",
+    "log2_group_size",
+    "invocation_id",
     "reduce_add",
     "reduce_all_add",
     "reduce_min",

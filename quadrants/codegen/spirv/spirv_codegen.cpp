@@ -1545,8 +1545,6 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                                                                   spv::MemorySemanticsWorkgroupMemoryMask |
                                                                   spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
-  } else if (stmt->func_name == "subgroupSize") {
-    val = ir_->cast(ir_->i32_type(), ir_->get_subgroup_size());
   } else if (stmt->func_name == "subgroupInvocationId") {
     val = ir_->cast(ir_->i32_type(), ir_->get_subgroup_invocation_id());
   } else if (stmt->func_name == "subgroupBroadcast") {
