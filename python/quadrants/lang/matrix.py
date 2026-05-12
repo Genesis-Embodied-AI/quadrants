@@ -302,9 +302,9 @@ class Matrix(QuadrantsOperations):
                 self.entries = np.array(arr, None if dt is None else to_numpy_type(dt))
                 self.is_host_access = False
 
-        if self.n * self.m > 32:
+        if self.n * self.m > 144:
             warning(
-                f"Quadrants matrices/vectors with {self.n}x{self.m} > 32 entries are not suggested."
+                f"Quadrants matrices/vectors with {self.n}x{self.m} > 144 entries are not suggested."
                 " Matrices/vectors will be automatically unrolled at compile-time for performance."
                 " So the compilation time could be extremely long if the matrix size is too big."
                 " You may use a field to store a large matrix like this, e.g.:\n"
