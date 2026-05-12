@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.simt.subgroup &#8212; Quadrants 0.7.8 documentation</title>
+    <title>quadrants.lang.simt.subgroup &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../../../../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -385,7 +385,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ``1`` on lane ``0`` of every subgroup and ``0`` on every other lane.</span>
 
 <span class="sd">    Implemented portably as ``invocation_id() == 0``: every backend that lowers ``invocation_id()`` therefore lowers</span>
-<span class="sd">    ``elect()`` at zero extra cost (it inlines at trace time into a single compare + zext).</span>
+<span class="sd">    ``elect()`` at zero extra cost (it inlines at compile time into a single compare + zext).</span>
 
 <span class="sd">    Note that this narrows SPIR-V&#39;s ``OpGroupNonUniformElect`` semantics, which may pick any *active* lane as the</span>
 <span class="sd">    elected one.  Under the documented uniform-CF + all-lanes-active contract for ``qd.simt.subgroup`` this distinction</span>
@@ -486,8 +486,9 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;AND-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane</span>
 <span class="sd">    of the group iff every lane in the group has a non-zero ``predicate``, else ``0``.</span>
 
-<span class="sd">    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal /</span>
-<span class="sd">    RDNA, 64 on CDNA).  ``log2_size`` is a compile-time template; the body is fully unrolled.</span>
+<span class="sd">    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64</span>
+<span class="sd">    on AMDGPU — wave64 is forced on every AMDGPU target).  ``log2_size`` is a compile-time template; the body is fully</span>
+<span class="sd">    unrolled.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">p</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">and</span> <span class="n">log2_size</span> <span class="o">==</span> <span class="mi">5</span><span class="p">):</span>
@@ -563,7 +564,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Bitmask of lanes strictly below ``lane_id`` — bit ``i`` is set iff ``i &lt; lane_id``.</span>
 
 <span class="sd">    Pass ``invocation_id()`` for the classic CUDA ``__lanemask_lt()`` (current lane&#39;s mask).  Equivalent to</span>
-<span class="sd">    ``(u32(1) &lt;&lt; u32(lane_id)) - u32(1)``; inlined at trace time into 1 shift + 1 subtract.</span>
+<span class="sd">    ``(u32(1) &lt;&lt; u32(lane_id)) - u32(1)``; inlined at compile time into 1 shift + 1 subtract.</span>
 
 <span class="sd">    See the module-level note for the ``lane_id ∈ [0, 31]`` contract and the AMDGPU CDNA wave64 caveat.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -651,7 +652,7 @@
 
 <span class="sd">    The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.</span>
 <span class="sd">    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target</span>
-<span class="sd">    (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).</span>
+<span class="sd">    (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target).</span>
 
 <span class="sd">    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``</span>
 <span class="sd">    shuffle+add operations in the calling kernel&#39;s IR.</span>
@@ -953,10 +954,8 @@
 <span class="sd">    groups smaller than the full subgroup compose correctly when ``log2_size &lt; log2(group_size)``.</span>
 
 <span class="sd">    Note: ``qd.select`` cannot be used here instead of ``if`` because ``OpSelect`` on MoltenVK / Metal miscompiles when</span>
-<span class="sd">    one operand is an f32 produced by a shuffle intrinsic—the select silently returns the false-branch value regardless</span>
-<span class="sd">    of the condition.  The ``if`` form works correctly for the inclusive scan on its own; callers that issue further</span>
-<span class="sd">    subgroup ops after this scan (e.g. `_exclusive_scan`) must insert a ``sync()`` barrier to force reconvergence</span>
-<span class="sd">    before the next shuffle.</span>
+<span class="sd">    one operand is an f32 produced by a shuffle intrinsic — the select silently returns the false-branch value</span>
+<span class="sd">    regardless of the condition.  The ``if`` form works correctly on its own.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">lane_in_group</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
@@ -974,8 +973,8 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix sum across ``2**log2_size`` consecutive lanes.</span>
 
 <span class="sd">    Lane ``i`` within each group of ``2**log2_size`` lanes returns ``v[group_start] + v[group_start + 1] + ... + v[i]``.</span>
-<span class="sd">    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal /</span>
-<span class="sd">    RDNA, 64 on CDNA).</span>
+<span class="sd">    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64</span>
+<span class="sd">    on AMDGPU — wave64 is forced on every AMDGPU target).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
@@ -1043,10 +1042,12 @@
 
 <span class="c1"># --- Exclusive scans -------------------------------------------------------------------</span>
 <span class="c1">#</span>
-<span class="c1"># Each `exclusive_*` runs the inclusive scan, then shifts the result up by one lane via `shuffle_up(inc, 1)` and</span>
-<span class="c1"># replaces lane 0 of every group with the operator&#39;s identity.  Lane 0&#39;s result must be set explicitly because</span>
-<span class="c1"># `shuffle_up` with offset 1 returns an implementation-defined value at lane 0 (and `OpGroupNonUniformShuffleUp` calls</span>
-<span class="c1"># it undefined outright).  See `_exclusive_scan` for the shared body.</span>
+<span class="c1"># Each `exclusive_*` shifts the *input* right by one lane via `shuffle_up(value, 1)`, seeds lane 0 of every group with</span>
+<span class="c1"># the operator&#39;s identity, and then runs the inclusive scan on the shifted data.  Doing the shuffle first (rather than</span>
+<span class="c1"># running the inclusive scan and shuffling the result) avoids the MoltenVK / Metal miscompile where the SPIR-V</span>
+<span class="c1"># compiler misoptimizes the register holding the inclusive-scan result when its only consumer is a shuffle intrinsic.</span>
+<span class="c1"># Lane 0&#39;s result must be set explicitly because `shuffle_up` with offset 1 returns an implementation-defined value at</span>
+<span class="c1"># lane 0 (`OpGroupNonUniformShuffleUp` calls it undefined outright).  See `_exclusive_scan` for the shared body.</span>
 <span class="c1">#</span>
 <span class="c1"># Identity per op (in `value`&#39;s dtype, expressed via dtype-preserving arithmetic so the wrapper does not need to</span>
 <span class="c1"># inspect the dtype):</span>

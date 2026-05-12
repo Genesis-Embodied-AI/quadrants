@@ -9,11 +9,17 @@ Functions
 
 .. autoapisummary::
 
+   quadrants.lang.simt.grid.arch_uses_spv
+   quadrants.lang.simt.grid.mem_fence
    quadrants.lang.simt.grid.memfence
 
 
 Module Contents
 ---------------
+
+.. py:function:: arch_uses_spv(arch)
+
+.. py:function:: mem_fence()
 
 .. py:function:: memfence()
 

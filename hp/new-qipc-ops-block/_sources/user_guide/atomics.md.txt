@@ -27,7 +27,7 @@ A few cross-cutting notes that the cells above abbreviate:
 
 There is no `atomic_cas` (compare-and-swap) exposed in Python today. The C++ runtime uses CmpXchg internally; surfacing it requires extending `AtomicOpType`.
 
-All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.memfence()` (device scope).
+All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.mem_fence()` (device scope).
 
 ## Semantics
 
@@ -45,16 +45,21 @@ old = qd.atomic_add(x, y)
 Properties common to every `qd.atomic_*`:
 
 - **Returns the old value**, not the new one. This matches CUDA's `atomicAdd` and is what enables building reservation patterns: `slot = qd.atomic_add(counter, 1)` gives every thread a unique index.
-- **Per-location atomicity, no fence on the rest of memory.** Writes you issued before an atomic on `x` are not necessarily visible to other threads after they observe the new `x`. Pair the atomic with `qd.simt.block.mem_fence()` or `qd.simt.grid.memfence()` if you need that ordering.
+- **Per-location atomicity, no fence on the rest of memory.** Writes you issued before an atomic on `x` are not necessarily visible to other threads after they observe the new `x`. Pair the atomic with `qd.simt.block.mem_fence()` or `qd.simt.grid.mem_fence()` if you need that ordering.
 - **Vector / matrix arguments fan out element-wise.** `qd.atomic_add(field_of_vec3, qd.Vector([1.0, 2.0, 3.0]))` issues three independent scalar atomic-adds, one per component. There is no all-or-nothing guarantee across the components.
 
 ### `qd.atomic_min(x, y)` / `qd.atomic_max(x, y)`
 
-Atomically writes back `min(x, y)` (resp. `max(x, y)`). Returns the old value of `x`. Floating-point min/max use **`minNum` / `maxNum`-style** semantics: if exactly one input is `NaN`, the **non-`NaN`** value is written back. This matches the f16 path's use of LLVM `llvm.minnum` / `llvm.maxnum` intrinsics (`quadrants/codegen/llvm/codegen_llvm.cpp:1337-1342`) and the GPU-native paths (CUDA sm_80+ `atomicMin`/`atomicMax` for floats, SPIR-V `FMin` / `FMax`). The f32 / f64 CPU CAS-loop path (`quadrants/runtime/llvm/runtime_module/atomic.h::min_f32` / `max_f32`) uses naive `<` / `>` comparisons, which give asymmetric NaN behaviour depending on operand order — do not rely on a particular result when either input is `NaN` on the CPU backend. Behaviour when *both* inputs are `NaN` is backend-dependent across the board.
+Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of `x`. Float min/max are `minNum` / `maxNum`-style: if exactly one operand is `NaN`, the non-`NaN` operand wins.
+
+| Backends                  | `f16`                                  | `f32`, `f64`                       | Both inputs `NaN`                          |
+|---------------------------|----------------------------------------|------------------------------------|--------------------------------------------|
+| CPU, CUDA, AMDGPU (LLVM)  | CAS over `llvm.minnum` / `llvm.maxnum` | LLVM `atomicrmw fmin` / `fmax`           | `NaN` (per LLVM `minnum` / `maxnum` spec)  |
+| Vulkan, Metal (SPIR-V)    | capability-gated, usually unsupported  | CAS loop with GLSL `FMin` / `FMax`       | undefined per spec; `NaN` in practice      |
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
-Bitwise atomics. Integer dtypes only — passing `f32` / `f64` raises a type error at trace time.
+Bitwise atomics. Integer dtypes only — passing `f32` / `f64` raises a type error at compile time.
 
 ### `qd.atomic_sub(x, y)` / `qd.atomic_mul(x, y)`
 
@@ -63,14 +68,65 @@ Atomic subtract and atomic multiply. `atomic_sub` is rewritten to `atomic_add(x,
 ## Performance and portability notes
 
 - **Atomic contention is the silent killer of throughput.** The cost of `qd.atomic_add(counter, 1)` from every thread is dominated by serialization at the location, not by the per-thread arithmetic. If many threads hit the same slot, prefer a two-stage scheme: per-warp / per-block reduction first (`qd.simt.block.reduce` if available, or `qd.simt.subgroup.reduce_add`), then a single atomic per warp / block.
-- **Pair atomics with the right fence scope.** A bare atomic only orders the location it touches. To make other writes visible to readers that observe the new atomic value, follow the atomic with a fence: block-scope (`qd.simt.block.mem_fence()`) for shared-memory publishing, or grid-scope (`qd.simt.grid.memfence()`) for cross-block coordination.
+- **Pair atomics with the right fence scope.** A bare atomic only orders the location it touches. To make other writes visible to readers that observe the new atomic value, follow the atomic with a fence: block-scope (`qd.simt.block.mem_fence()`) for shared-memory publishing, or grid-scope (`qd.simt.grid.mem_fence()`) for cross-block coordination.
 - **`f64` atomics fall off the fast path** on most backends; if you only need monotonic accumulation, consider Kahan summation in registers and a single atomic-add at the end of the block.
 - **`atomic_mul` is generally a CAS loop** under the hood; don't put it on the hot path.
+
+### Atomic visibility scope across backends
+
+Every `qd.atomic_*` is emitted at **device-wide scope**: visible to all threads on the GPU executing the kernel, but not required to be coherent with the host CPU mid-kernel. The host only observes results once the kernel completes, at which point the launcher's stream-sync flushes everything regardless. Choosing device scope (rather than the strongest "system" scope) lets every backend lower the op to a single hardware atomic instruction instead of a software CAS retry loop, which matters for correctness as much as for speed: under heavy contention, a CAS loop on a non-converging op like `atomic_xor` can livelock.
+
+You don't normally need to think about scope as a user. It's listed here so the per-backend behaviour is explicit:
+
+| Backend                 | Scope spelling in the IR          |
+|-------------------------|-----------------------------------|
+| CPU (x86_64)            | LLVM `seq_cst` (System)           |
+| CUDA (NVPTX)            | LLVM `seq_cst` (System)           |
+| AMDGPU                  | LLVM `seq_cst syncscope("agent")` |
+| Vulkan / Metal (SPIR-V) | SPIR-V `Scope = Device`           |
+
+CPU and CUDA lower system-scope atomics directly to a single hardware instruction, so they leave the LLVM default alone. AMDGPU's LLVM backend, in contrast, refuses to use its native single-instruction atomics at system scope (it would have to add cache-flush instructions that don't exist for that op), and silently falls back to a CAS loop; setting `syncscope("agent")` is what unlocks the native `flat_atomic_xor` / `global_atomic_xor` / `flat_atomic_smin` / `flat_atomic_add_f32` / … SPIR-V backends spell the same idea with the `Device` scope token. The user-visible semantics are identical across all four.
+
+### Native instruction vs CAS fallback
+
+The tables below reflect what the in-tree LLVM emits today for Quadrants' default targets (x86_64; CUDA `sm_60+`; AMDGPU `gfx942` / MI300X at `syncscope("agent")`; Vulkan/Metal via SPIR-V). Older / different GFX generations are footnoted.
+
+**Integer atomics** (`i32`, `u32`, `i64`, `u64`):
+
+| Op                                         | CPU (x86_64) | CUDA | AMDGPU | Vulkan / Metal (SPIR-V) |
+|--------------------------------------------|--------------|------|--------|-------------------------|
+| `atomic_add`, `atomic_sub`                 | ✅           | ✅   | ✅     | ✅                      |
+| `atomic_and`, `atomic_or`, `atomic_xor`    | ✅¹          | ✅   | ✅     | ✅                      |
+| `atomic_min`, `atomic_max`                 | 🟡           | ✅   | ✅     | ✅                      |
+| `atomic_mul`                               | 🟡           | 🟡   | 🟡     | 🟡                      |
+
+**Floating-point atomics** (`f32`, `f64`):
+
+| Op                         | CPU (x86_64) | CUDA | AMDGPU | Vulkan / Metal (SPIR-V) |
+|----------------------------|--------------|------|--------|-------------------------|
+| `atomic_add`, `atomic_sub` | 🟡           | ✅   | ✅²    | ✅³                     |
+| `atomic_min`, `atomic_max` | 🟡           | 🟡   | 🟡²    | 🟡                      |
+| `atomic_mul`               | 🟡           | 🟡   | 🟡     | 🟡                      |
+
+Key:
+
+- ✅ — single hardware atomic instruction (`lock`-prefixed x86, PTX `atom.*`, AMDGPU `flat_atomic_*`, or SPIR-V `OpAtomic*`).
+- 🟡 — software `cmpxchg` / `cmpswap` retry loop.
+
+`f16` atomics are CAS on every backend (Quadrants forces a CAS loop built from `llvm.minnum` / `llvm.maxnum` / `fadd`), and on Vulkan / Metal are additionally gated on `spirv_has_atomic_float16_*` device capabilities.
+
+¹ `lock and` / `or` / `xor` are single-instruction on x86, but they don't expose the old value. When the `qd.atomic_*` return value is unused (the common case — fire-and-forget update) LLVM emits the single `lock` op. When the old value is consumed, x86 falls back to a `cmpxchg` loop.
+
+² AMDGPU float-atomic support is GFX-dependent. Empirically with the bundled LLVM:
+- `gfx942` (CDNA3 / MI300X, Quadrants' default AMDGPU target): `atomic_add` f32 / f64 are native (`flat_atomic_add_f32` / `_f64`), `atomic_min` / `max` f64 are native (`flat_atomic_min_f64` / `max_f64`); f32 min/max still expand to CAS.
+- `gfx906`, `gfx90a`, `gfx1030`, `gfx1100`: all f32 / f64 float atomics expand to CAS.
+
+³ SPIR-V float `atomic_add` lowers to `OpAtomicFAddEXT` when the matching `spirv_has_atomic_float{32,64}_add` capability is present on the device, and to a CAS loop with a GLSL.std.450 payload otherwise. Quadrants does not currently emit `OpAtomicFMinEXT` / `OpAtomicFMaxEXT`, so float min/max is always CAS on SPIR-V backends.
 
 ## Related
 
 - [math](math.md) — `qd.math.*`, including the bit-counting helpers (`popcnt`, `clz`) commonly paired with atomics in select / compact patterns.
 - `qd.simt.block.*` — block-scope barriers and memory fences (`qd.simt.block.mem_fence()`).
 - `qd.simt.subgroup.*` — warp-scope reductions and shuffles, the recommended pre-aggregation step before an atomic.
-- `qd.simt.grid.*` — device-scope memory fence (`qd.simt.grid.memfence()`).
+- `qd.simt.grid.*` — device-scope memory fence (`qd.simt.grid.mem_fence()`); see [grid](grid.md).
 - [parallelization](parallelization.md) — thread-synchronization patterns and how atomics fit into the broader synchronization story.

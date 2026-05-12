@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Matrix decompositions and solvers &#8212; Quadrants 0.7.8 documentation</title>
+    <title>Matrix decompositions and solvers &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Matrix and Vector" href="matrix_vector.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -450,7 +450,7 @@
 </div>
 <p>A few patterns to note:</p>
 <ul class="simple">
-<li><p><strong>Shapes are fixed.</strong> Calling any of these on a matrix outside the supported shapes raises an exception at trace time (<code class="docutils literal notranslate"><span class="pre">&quot;SVD</span> <span class="pre">only</span> <span class="pre">supports</span> <span class="pre">2D</span> <span class="pre">and</span> <span class="pre">3D</span> <span class="pre">matrices.&quot;</span></code>, etc.). Larger matrices need a different path — typically a Jacobi-style sweep applied iteratively, which Quadrants does not currently provide out of the box.</p>
+<li><p><strong>Shapes are fixed.</strong> Calling any of these on a matrix outside the supported shapes raises an exception at compile time (<code class="docutils literal notranslate"><span class="pre">&quot;SVD</span> <span class="pre">only</span> <span class="pre">supports</span> <span class="pre">2D</span> <span class="pre">and</span> <span class="pre">3D</span> <span class="pre">matrices.&quot;</span></code>, etc.). Larger matrices need a different path — typically a Jacobi-style sweep applied iteratively, which Quadrants does not currently provide out of the box.</p>
 <ul>
 <li><p><strong>FIXME (message wording):</strong> these exception strings are misleading — “2D matrix” / “3D matrix” conventionally means “rank-2 / rank-3 tensor” (any matrix is rank-2), but here the intent is “matrix of shape 2×2 / 3×3”. They should be updated to e.g. <code class="docutils literal notranslate"><span class="pre">&quot;SVD</span> <span class="pre">only</span> <span class="pre">supports</span> <span class="pre">2×2</span> <span class="pre">and</span> <span class="pre">3×3</span> <span class="pre">matrices.&quot;</span></code>. This page reproduces the messages as they are emitted today.</p></li>
 </ul>

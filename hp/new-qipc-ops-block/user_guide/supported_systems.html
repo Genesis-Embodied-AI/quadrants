@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Supported systems &#8212; Quadrants 0.7.8 documentation</title>
+    <title>Supported systems &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Getting started" href="getting_started.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -491,7 +491,7 @@
 <p>Notes:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.cuda</span></code> requires an NVIDIA driver + CUDA runtime on the host; quadrants links against the CUDA runtime discovered at import time. NVIDIA ships CUDA for Linux ARM64 and Windows ARM64, but quadrants does not support them yet.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code> currently wires up the Linux x64 ROCm path only. AMD’s HIP SDK also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code> currently wires up the Linux x64 ROCm path only. AMD’s HIP SDK also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet. AMDGPU codegen always runs in wave64 mode, so <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code> primitives operate over 64 lanes regardless of whether the GPU is CDNA (Instinct, wave64-default) or RDNA (Radeon, wave32-default — quadrants overrides it to wave64).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.metal</span></code> is only available on Apple hardware and is the recommended GPU backend there.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> on macOS ships a bundled MoltenVK dylib inside the wheel, so no separate MoltenVK install is required.</p></li>
 </ul>

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Algorithms &#8212; Quadrants 0.7.8 documentation</title>
+    <title>Algorithms &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Tile16x16: register-resident 16x16 tiles" href="tile16.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -444,7 +444,7 @@
 <h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
 <section id="qd-algorithms-parallel-sort-keys-values-none">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.algorithms.parallel_sort(keys,</span> <span class="pre">values=None)</span></code><a class="headerlink" href="#qd-algorithms-parallel-sort-keys-values-none" title="Link to this heading">#</a></h3>
-<p>In-place sort. Reorders <code class="docutils literal notranslate"><span class="pre">keys</span></code> ascending; if <code class="docutils literal notranslate"><span class="pre">values</span></code> is provided, applies the same permutation to <code class="docutils literal notranslate"><span class="pre">values</span></code> (key-value sort). Both arguments must be 1-D <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> — <code class="docutils literal notranslate"><span class="pre">parallel_sort</span></code> reaches into <code class="docutils literal notranslate"><span class="pre">snode.ptr.offset</span></code> internally, so <code class="docutils literal notranslate"><span class="pre">ndarray</span></code> is <strong>not</strong> supported and will fail at trace time with an <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code>.</p>
+<p>In-place sort. Reorders <code class="docutils literal notranslate"><span class="pre">keys</span></code> ascending; if <code class="docutils literal notranslate"><span class="pre">values</span></code> is provided, applies the same permutation to <code class="docutils literal notranslate"><span class="pre">values</span></code> (key-value sort). Both arguments must be 1-D <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> — <code class="docutils literal notranslate"><span class="pre">parallel_sort</span></code> reaches into <code class="docutils literal notranslate"><span class="pre">snode.ptr.offset</span></code> internally, so <code class="docutils literal notranslate"><span class="pre">ndarray</span></code> is <strong>not</strong> supported and will fail at compile time with an <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
 <span class="n">keys</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
@@ -487,7 +487,7 @@
 <ul class="simple">
 <li><p><strong>Dtype:</strong> <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> only. Calling with any other dtype raises <code class="docutils literal notranslate"><span class="pre">RuntimeError(&quot;Only</span> <span class="pre">qd.i32</span> <span class="pre">type</span> <span class="pre">is</span> <span class="pre">supported</span> <span class="pre">for</span> <span class="pre">prefix</span> <span class="pre">sum.&quot;)</span></code>.</p></li>
 <li><p><strong>Inclusive only.</strong> No exclusive variant exposed. To convert to exclusive, post-process: <code class="docutils literal notranslate"><span class="pre">exclusive[i]</span> <span class="pre">=</span> <span class="pre">inclusive[i]</span> <span class="pre">-</span> <span class="pre">input_original[i]</span></code>.</p></li>
-<li><p><strong>Backend coverage.</strong> CUDA and Vulkan only. AMDGPU and Metal raise <code class="docutils literal notranslate"><span class="pre">RuntimeError(f&quot;{arch}</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">supported</span> <span class="pre">for</span> <span class="pre">prefix</span> <span class="pre">sum.&quot;)</span></code> at trace time.</p></li>
+<li><p><strong>Backend coverage.</strong> CUDA and Vulkan only. AMDGPU and Metal raise <code class="docutils literal notranslate"><span class="pre">RuntimeError(f&quot;{arch}</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">supported</span> <span class="pre">for</span> <span class="pre">prefix</span> <span class="pre">sum.&quot;)</span></code> at compile time.</p></li>
 </ul>
 <p>The implementation is a Kogge-Stone hierarchical scan: per-block inclusive scan on shared memory, then a small recursive scan over per-block totals, then a uniform-add pass to propagate back. This means the executor reuses the underlying buffer across calls, which is why it’s a class (allocate once, run many times) rather than a free function.</p>
 <p>No explicit fence is required between a kernel that writes the input and the subsequent <code class="docutils literal notranslate"><span class="pre">.run()</span></code> call. <code class="docutils literal notranslate"><span class="pre">.run()</span></code> launches its own kernels under the hood, and the kernel boundary serializes against prior writes from host-launched kernels.</p>
@@ -545,7 +545,7 @@
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.block.*</span></code> — the block-scope reductions and shared-memory primitives that algorithm kernels build on.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.*</span></code> — <code class="docutils literal notranslate"><span class="pre">inclusive_add</span></code> and friends, what the per-block scan stage of <code class="docutils literal notranslate"><span class="pre">PrefixSumExecutor</span></code> actually calls.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code> — the grid-scope memory fence that decoupled-look-back scans (a more efficient alternative to Kogge-Stone) require.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> — the grid-scope memory fence that decoupled-look-back scans (a more efficient alternative to Kogge-Stone) require.</p></li>
 <li><p><a class="reference internal" href="parallelization.html"><span class="std std-doc">parallelization</span></a> — broader synchronization story, including how <code class="docutils literal notranslate"><span class="pre">qd.algorithms</span></code> operations compose with hand-written kernels.</p></li>
 </ul>
 </section>

@@ -70,7 +70,7 @@ Module Contents
    Return ``1`` on lane ``0`` of every subgroup and ``0`` on every other lane.
 
    Implemented portably as ``invocation_id() == 0``: every backend that lowers ``invocation_id()`` therefore lowers
-   ``elect()`` at zero extra cost (it inlines at trace time into a single compare + zext).
+   ``elect()`` at zero extra cost (it inlines at compile time into a single compare + zext).
 
    Note that this narrows SPIR-V's ``OpGroupNonUniformElect`` semantics, which may pick any *active* lane as the
    elected one.  Under the documented uniform-CF + all-lanes-active contract for ``qd.simt.subgroup`` this distinction
@@ -133,8 +133,9 @@ Module Contents
    AND-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane
    of the group iff every lane in the group has a non-zero ``predicate``, else ``0``.
 
-   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal /
-   RDNA, 64 on CDNA).  ``log2_size`` is a compile-time template; the body is fully unrolled.
+   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
+   on AMDGPU — wave64 is forced on every AMDGPU target).  ``log2_size`` is a compile-time template; the body is fully
+   unrolled.
 
 
 .. py:function:: any_true(predicate, log2_size: template())
@@ -164,7 +165,7 @@ Module Contents
    Bitmask of lanes strictly below ``lane_id`` — bit ``i`` is set iff ``i < lane_id``.
 
    Pass ``invocation_id()`` for the classic CUDA ``__lanemask_lt()`` (current lane's mask).  Equivalent to
-   ``(u32(1) << u32(lane_id)) - u32(1)``; inlined at trace time into 1 shift + 1 subtract.
+   ``(u32(1) << u32(lane_id)) - u32(1)``; inlined at compile time into 1 shift + 1 subtract.
 
    See the module-level note for the ``lane_id ∈ [0, 31]`` contract and the AMDGPU CDNA wave64 caveat.
 
@@ -212,7 +213,7 @@ Module Contents
 
    The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.
    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
-   (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).
+   (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target).
 
    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
    shuffle+add operations in the calling kernel's IR.
@@ -312,8 +313,8 @@ Module Contents
    Inclusive prefix sum across ``2**log2_size`` consecutive lanes.
 
    Lane ``i`` within each group of ``2**log2_size`` lanes returns ``v[group_start] + v[group_start + 1] + ... + v[i]``.
-   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal /
-   RDNA, 64 on CDNA).
+   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
+   on AMDGPU — wave64 is forced on every AMDGPU target).
 
 
 .. py:function:: inclusive_mul(value, log2_size: template())

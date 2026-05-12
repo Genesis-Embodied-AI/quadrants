@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.ops &#8212; Quadrants 0.7.8 documentation</title>
+    <title>quadrants.lang.ops &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../../../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -927,8 +927,16 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">popcnt</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_popcnt</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">bin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">&quot;1&quot;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_popcnt</span><span class="p">(</span><span class="n">_</span><span class="p">):</span>
+        <span class="c1"># No Python fallback: popcnt is bitwidth-dependent (a u64 with the top bit set should return 64, not 1), but</span>
+        <span class="c1"># once the value reaches here it&#39;s a plain Python int with no width attached. Worse, `bin(x).count(&quot;1&quot;)`</span>
+        <span class="c1"># quietly drops the sign and reports `popcnt(-1) == 1` instead of 32 / 64. The path is only hit on the</span>
+        <span class="c1"># `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR / codegen.</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s2">&quot;qd.math.popcnt has no Python fallback: the result depends on the operand&#39;s bitwidth &quot;</span>
+            <span class="s2">&quot;(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend &quot;</span>
+            <span class="s2">&quot;(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal).&quot;</span>
+        <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_popcnt</span><span class="p">,</span> <span class="n">_popcnt</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 
@@ -1531,15 +1539,50 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">clz</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Count the number of leading zeros for a 32bit integer&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Count the number of leading zero bits in ``a``.</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_clz</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
-            <span class="k">if</span> <span class="mi">2</span><span class="o">**</span><span class="n">i</span> <span class="o">&gt;</span> <span class="n">x</span><span class="p">:</span>
-                <span class="k">return</span> <span class="mi">32</span> <span class="o">-</span> <span class="n">i</span>
-        <span class="k">return</span> <span class="mi">0</span>
+<span class="sd">    Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the result is always returned as an</span>
+<span class="sd">    ``i32`` in ``[0, bitwidth(a)]`` (``clz(0) == bitwidth(a)``). The count is over the unsigned bit pattern, so</span>
+<span class="sd">    ``clz(-1) == 0`` regardless of input signedness.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_clz</span><span class="p">(</span><span class="n">_</span><span class="p">):</span>
+        <span class="c1"># No Python fallback: clz is bitwidth-dependent (`clz(0) == 32` for i32 but `64` for i64, and `clz(-1) == 0`</span>
+        <span class="c1"># requires interpreting -1 as the unsigned all-bits-set pattern at a known width). Once the value reaches here</span>
+        <span class="c1"># it&#39;s a plain Python int with no width attached, so no single answer is correct. The old hard-coded 32-bit</span>
+        <span class="c1"># implementation silently returned wrong values for negatives and 64-bit inputs. This path is only hit on the</span>
+        <span class="c1"># `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR / codegen and</span>
+        <span class="c1"># never see it.</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s2">&quot;qd.math.clz has no Python fallback: the result depends on the operand&#39;s bitwidth &quot;</span>
+            <span class="s2">&quot;(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend &quot;</span>
+            <span class="s2">&quot;(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal).&quot;</span>
+        <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_clz</span><span class="p">,</span> <span class="n">_clz</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">ffs</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Find first (lowest) set bit in ``a``.</span>
+
+<span class="sd">    Returns the 1-indexed position of the lowest set bit in ``a`` as an ``i32``, with ``ffs(0) == 0`` (the CUDA</span>
+<span class="sd">    ``__ffs`` convention). Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the count is over</span>
+<span class="sd">    the unsigned bit pattern, so ``ffs(-1) == 1`` regardless of input signedness.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_ffs</span><span class="p">(</span><span class="n">_</span><span class="p">):</span>
+        <span class="c1"># No Python fallback: ffs is bitwidth-dependent (an i32 that wraps around to 0 should return 0, but the same</span>
+        <span class="c1"># numeric value in Python&#39;s arbitrary-precision int would return its real bit position). Once the value reaches</span>
+        <span class="c1"># here it&#39;s a plain Python int with no width attached, so there&#39;s no single answer that matches native backends.</span>
+        <span class="c1"># This path is only hit on the `qd.python` backend or from ad-hoc module-level calls; native backends route</span>
+        <span class="c1"># through the IR / codegen and never see it. Same treatment as popcnt / clz for consistency.</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s2">&quot;qd.math.ffs has no Python fallback: the result depends on the operand&#39;s bitwidth &quot;</span>
+            <span class="s2">&quot;(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend &quot;</span>
+            <span class="s2">&quot;(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal).&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_ffs</span><span class="p">,</span> <span class="n">_ffs</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 
 
 <span class="nd">@writeback_binary</span>

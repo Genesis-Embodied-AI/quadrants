@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.math.mathimpl &#8212; Quadrants 0.7.8 documentation</title>
+    <title>quadrants.math.mathimpl &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../../../../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -65,7 +65,7 @@
     <link rel="prev" title="quadrants.math" href="../index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -133,7 +133,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -503,6 +503,12 @@
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.math.mathimpl.clz" title="quadrants.math.mathimpl.clz"><code class="xref py py-obj docutils literal notranslate"><span class="pre">clz</span></code></a>(x)</p></td>
 <td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.math.mathimpl.ffs" title="quadrants.math.mathimpl.ffs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ffs</span></code></a>(x)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.math.mathimpl.fns" title="quadrants.math.mathimpl.fns"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fns</span></code></a>(mask, base, offset)</p></td>
+<td><p>Find the n-th set bit in a 32-bit mask, with CUDA fast-path dispatch.</p></td>
 </tr>
 </tbody>
 </table>
@@ -1318,6 +1324,28 @@ given the angle of rotation.</p>
 <span class="sig-prename descclassname"><span class="pre">quadrants.math.mathimpl.</span></span><span class="sig-name descname"><span class="pre">clz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/math/mathimpl.html#clz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.math.mathimpl.clz" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.math.mathimpl.ffs">
+<span class="sig-prename descclassname"><span class="pre">quadrants.math.mathimpl.</span></span><span class="sig-name descname"><span class="pre">ffs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/math/mathimpl.html#ffs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.math.mathimpl.ffs" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.math.mathimpl.fns">
+<span class="sig-prename descclassname"><span class="pre">quadrants.math.mathimpl.</span></span><span class="sig-name descname"><span class="pre">fns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mask</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/math/mathimpl.html#fns"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.math.mathimpl.fns" title="Link to this definition">#</a></dt>
+<dd><p>Find the n-th set bit in a 32-bit mask, with CUDA fast-path dispatch.</p>
+<p>Mirrors CUDA’s <code class="docutils literal notranslate"><span class="pre">__nv_fns(mask,</span> <span class="pre">base,</span> <span class="pre">offset)</span></code>: scans <code class="docutils literal notranslate"><span class="pre">mask</span></code> starting from bit <code class="docutils literal notranslate"><span class="pre">base</span></code> and returns the bit
+position of the <code class="docutils literal notranslate"><span class="pre">|offset|</span></code>-th set bit found. The sign of <code class="docutils literal notranslate"><span class="pre">offset</span></code> selects the search direction:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">offset</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>: scan upward (towards higher bit indices) starting at <code class="docutils literal notranslate"><span class="pre">base</span></code> (inclusive).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">offset</span> <span class="pre">&lt;</span> <span class="pre">0</span></code>: scan downward (towards lower bit indices) starting at <code class="docutils literal notranslate"><span class="pre">base</span></code> (inclusive).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">offset</span> <span class="pre">==</span> <span class="pre">0</span></code>: returns <code class="docutils literal notranslate"><span class="pre">base</span></code> if <code class="docutils literal notranslate"><span class="pre">mask</span> <span class="pre">&amp;</span> <span class="pre">(1</span> <span class="pre">&lt;&lt;</span> <span class="pre">base)</span></code> is non-zero, else <code class="docutils literal notranslate"><span class="pre">0xFFFFFFFF</span></code>.</p></li>
+</ul>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">0xFFFFFFFF</span></code> if the requested set bit does not exist.</p>
+<p>On CUDA the call lowers to a single PTX <code class="docutils literal notranslate"><span class="pre">fns.b32</span></code> instruction via inline asm (<code class="docutils literal notranslate"><span class="pre">__nv_fns</span></code> is not in the slim
+libdevice we ship). On every other backend (x64 / AMDGPU / SPIR-V) a portable Python &#64;qd.func fallback is emitted;
+the body is a 32-iteration loop over bit positions and is fully unrolled by the lowering pipeline on each backend.</p>
+</dd></dl>
+
 </section>
 </section>
 
@@ -1418,6 +1446,8 @@ given the angle of rotation.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.math.mathimpl.vdir"><code class="docutils literal notranslate"><span class="pre">vdir()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.math.mathimpl.popcnt"><code class="docutils literal notranslate"><span class="pre">popcnt()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.math.mathimpl.clz"><code class="docutils literal notranslate"><span class="pre">clz()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.math.mathimpl.ffs"><code class="docutils literal notranslate"><span class="pre">ffs()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.math.mathimpl.fns"><code class="docutils literal notranslate"><span class="pre">fns()</span></code></a></li>
 </ul>
 </li>
 </ul>
