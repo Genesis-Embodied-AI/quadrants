@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.simt.subgroup &#8212; Quadrants 0.7.8 documentation</title>
+    <title>quadrants.lang.simt.subgroup &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../../../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../../../../../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.simt.grid" href="../grid/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -575,8 +575,9 @@ respectively) and pack them: <code class="docutils literal notranslate"><span cl
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">all_true</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predicate</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#all_true"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.all_true" title="Link to this definition">#</a></dt>
 <dd><p>AND-reduce <code class="docutils literal notranslate"><span class="pre">predicate</span> <span class="pre">!=</span> <span class="pre">0</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Returns <code class="docutils literal notranslate"><span class="pre">1</span></code> (<code class="docutils literal notranslate"><span class="pre">i32</span></code>) on every lane
 of the group iff every lane in the group has a non-zero <code class="docutils literal notranslate"><span class="pre">predicate</span></code>, else <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p>
-<p>Caller must ensure <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> does not exceed the active subgroup size on the target (32 on CUDA / Metal /
-RDNA, 64 on CDNA).  <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a compile-time template; the body is fully unrolled.</p>
+<p>Caller must ensure <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
+on AMDGPU — wave64 is forced on every AMDGPU target).  <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a compile-time template; the body is fully
+unrolled.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -652,7 +653,7 @@ kernel.</p>
 <dd><p>Sum <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> tree.</p>
 <p>The result is valid in lane 0 of each <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> group; other lanes hold partial sums.
 Caller must ensure <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> does not exceed the active subgroup size on the target
-(32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).</p>
+(32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target).</p>
 <p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a compile-time template; the body is fully unrolled into <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>
 shuffle+add operations in the calling kernel’s IR.</p>
 </dd></dl>
@@ -747,8 +748,8 @@ Avoid NaN inputs if you need a portable result.</p>
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_add" title="Link to this definition">#</a></dt>
 <dd><p>Inclusive prefix sum across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p>
 <p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> within each group of <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes returns <code class="docutils literal notranslate"><span class="pre">v[group_start]</span> <span class="pre">+</span> <span class="pre">v[group_start</span> <span class="pre">+</span> <span class="pre">1]</span> <span class="pre">+</span> <span class="pre">...</span> <span class="pre">+</span> <span class="pre">v[i]</span></code>.
-Caller must ensure <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> does not exceed the active subgroup size on the target (32 on CUDA / Metal /
-RDNA, 64 on CDNA).</p>
+Caller must ensure <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
+on AMDGPU — wave64 is forced on every AMDGPU target).</p>
 </dd></dl>
 
 <dl class="py function">
