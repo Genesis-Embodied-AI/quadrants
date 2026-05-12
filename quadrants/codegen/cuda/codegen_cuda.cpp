@@ -765,9 +765,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       llvm_val[stmt] = tlctx->get_constant(0);
     } else if (stmt->func_name == "subgroupMemoryBarrier") {
       // Subgroup-scope memory fence.  CUDA has no warp-scope memory fence intrinsic, so we emit `__threadfence_block()`
-      // (CTA-scope, via the existing `block_memfence` patched to `nvvm_membar_cta`).  This is over-strict but correct:
+      // (CTA-scope, via the existing `block_mem_fence` patched to `nvvm_membar_cta`).  This is over-strict but correct:
       // a CTA-scope fence orders memory as observed by the whole CTA, of which the subgroup is a subset.
-      call("block_memfence");
+      call("block_mem_fence");
       llvm_val[stmt] = tlctx->get_constant(0);
     } else {
       TaskCodeGenLLVM::visit(stmt);
