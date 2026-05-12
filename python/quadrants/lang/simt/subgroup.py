@@ -56,7 +56,7 @@ def reduce_add(value, log2_size: template()):
 
     The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.
     Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
-    (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).
+    (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target).
 
     ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
     shuffle+add operations in the calling kernel's IR.

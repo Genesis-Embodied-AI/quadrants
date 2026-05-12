@@ -97,4 +97,13 @@ int default_simd_width(Arch arch) {
   }
 }
 
+int subgroup_size(Arch arch) {
+  if (arch == Arch::cuda) {
+    return kCudaWarpSize;
+  } else if (arch == Arch::amdgpu) {
+    return kAmdgpuWaveSize;
+  }
+  return 0;
+}
+
 }  // namespace quadrants
