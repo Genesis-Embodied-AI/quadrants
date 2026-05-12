@@ -126,29 +126,15 @@ class SharedArray:
 
 # --- Block reductions ------------------------------------------------------------------
 #
-# Two-stage block reduce: each warp reduces its lanes via `shuffle_down`, lane 0 of every warp publishes the warp
-# aggregate to shared memory, a `block.sync()` retires the publish, and thread 0 sequentially folds the warp aggregates
-# with `op`.  Cost: `log2(warp_size)` shuffles + 1 shared-mem write/read per warp + 1 `block.sync` + (NUM_WARPS - 1)
-# ops on thread 0.  The warp size is read from `subgroup.group_size()` (a compile-time Python int) at the top of every
-# block op, so callers never plumb it in.
+# Two-stage block reduce: each subgroup reduces its lanes via `shuffle_down`, lane 0 of every subgroup publishes the
+# subgroup aggregate to shared memory, a `block.sync()` retires the publish, and thread 0 sequentially folds the
+# subgroup aggregates with `op`.  Cost: `log2(subgroup_size)` shuffles + 1 shared-mem write/read per subgroup + 1
+# `block.sync` + (NUM_SUBGROUPS - 1) ops on thread 0.  The subgroup size is read from `subgroup.group_size()` (a
+# compile-time Python int) at the top of every block op, so callers never plumb it in.
 #
-# `_warp_reduce` mirrors `subgroup.reduce_add` / `_min` / `_max` but takes a generic template operator so the same
-# kernel skeleton covers add / min / max / mul / bitwise / custom monoids.  We don't reuse `subgroup.reduce_add` etc.
-# directly because we want one source of truth for the block path's per-warp step and a cheap way to plug in arbitrary
-# operators (used internally by `reduce` / `reduce_all`).
-
-
-@_func
-def _warp_reduce(value, log2_size: template(), op: template()):
-    """Tree-reduce ``value`` across ``2**log2_size`` consecutive lanes via ``shuffle_down`` under a generic ``op``.
-
-    Result valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial values.  ``log2_size`` is a
-    compile-time template, so the body unrolls into ``log2_size`` shuffle+op pairs.
-    """
-    for i in impl.static(range(log2_size)):
-        offset = impl.static(1 << (log2_size - 1 - i))
-        value = op(value, _subgroup.shuffle_down(value, _u32(offset)))
-    return value
+# The per-subgroup step delegates to `subgroup._reduce`, the generic-op private helper that mirrors
+# `subgroup.reduce_add` / `_min` / `_max` but takes a caller-supplied template operator -- so the same block skeleton
+# covers add / min / max / mul / bitwise / custom monoids.
 
 
 @_func
@@ -177,7 +163,7 @@ def reduce(value, block_dim: template(), op: template(), dtype: template()):
     )
     NUM_WARPS = impl.static(block_dim // WARP_SIZE)
 
-    warp_agg = _warp_reduce(value, log2_warp, op)
+    warp_agg = _subgroup._reduce(value, op, log2_warp)
 
     if impl.static(NUM_WARPS == 1):
         return warp_agg
