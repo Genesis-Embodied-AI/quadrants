@@ -269,9 +269,10 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       builder->CreateStore(output, frac_ptr);
       llvm_val[stmt] = res;
     } else if (op == UnaryOpType::popcnt) {
+      // stmt->ret_type is already normalised to i32 by type_check.cpp; libdevice's __nv_popc / __nv_popcll both return
+      // `int` natively so the LLVM call value matches that contract without an extra Trunc.
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::u64) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::i64)) {
-        stmt->ret_type = PrimitiveType::i32;
         llvm_val[stmt] = call("__nv_popcll", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
                  input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
@@ -285,11 +286,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       // `__nv_clz` (which has signature `int(int)`) requires no explicit bitcast.
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
-        stmt->ret_type = PrimitiveType::i32;
         llvm_val[stmt] = call("__nv_clz", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
                  input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
-        stmt->ret_type = PrimitiveType::i32;
         llvm_val[stmt] = call("__nv_clzll", input);
       } else {
         QD_NOT_IMPLEMENTED
@@ -300,11 +299,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       // so u32 / u64 lower to the same intrinsic as their signed counterparts.
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
-        stmt->ret_type = PrimitiveType::i32;
         llvm_val[stmt] = call("__nv_ffs", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
                  input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
-        stmt->ret_type = PrimitiveType::i32;
         llvm_val[stmt] = call("__nv_ffsll", input);
       } else {
         QD_NOT_IMPLEMENTED

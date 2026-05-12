@@ -171,6 +171,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     UNARY_STD(log)
     UNARY_STD(sqrt)
     else if (op == UnaryOpType::popcnt) {
+      // stmt->ret_type is already normalised to i32 by type_check.cpp; the explicit Trunc on the 64-bit arm keeps the
+      // LLVM value width in sync with that contract.
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
         llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
@@ -178,7 +180,6 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
                  input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
         auto pop64 = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
         llvm_val[stmt] = builder->CreateTrunc(pop64, llvm::Type::getInt32Ty(*llvm_context));
-        stmt->ret_type = PrimitiveType::i32;
       } else {
         QD_NOT_IMPLEMENTED
       }
@@ -190,12 +191,10 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
         llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
-        stmt->ret_type = PrimitiveType::i32;
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
                  input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
         auto clz64 = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
         llvm_val[stmt] = builder->CreateTrunc(clz64, llvm::Type::getInt32Ty(*llvm_context));
-        stmt->ret_type = PrimitiveType::i32;
       } else {
         QD_NOT_IMPLEMENTED
       }
@@ -214,7 +213,6 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         auto is_zero = builder->CreateICmpEQ(input, llvm::ConstantInt::get(input_type, 0));
         auto sel = builder->CreateSelect(is_zero, llvm::ConstantInt::get(input_type, 0), plus_one);
         llvm_val[stmt] = builder->CreateZExtOrTrunc(sel, llvm::Type::getInt32Ty(*llvm_context));
-        stmt->ret_type = PrimitiveType::i32;
       } else {
         QD_NOT_IMPLEMENTED
       }

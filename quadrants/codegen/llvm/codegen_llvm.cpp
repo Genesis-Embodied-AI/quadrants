@@ -220,15 +220,15 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
     llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::sqrt, {input_type}, {input});
   }
   else if (op == UnaryOpType::popcnt) {
+    // stmt->ret_type is already normalised to i32 by type_check.cpp; the explicit truncation here keeps the LLVM
+    // value width in sync with that contract on 64-bit operands.
     auto pop = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
     llvm_val[stmt] = builder->CreateZExtOrTrunc(pop, llvm::Type::getInt32Ty(*llvm_context));
-    stmt->ret_type = PrimitiveType::i32;
   }
   else if (op == UnaryOpType::clz) {
     auto clz = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
                                         {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
     llvm_val[stmt] = builder->CreateZExtOrTrunc(clz, llvm::Type::getInt32Ty(*llvm_context));
-    stmt->ret_type = PrimitiveType::i32;
   }
   else if (op == UnaryOpType::ffs) {
     // ffs(x): 1-indexed position of the lowest set bit; 0 when x == 0 (CUDA __ffs convention). llvm.cttz with
@@ -240,7 +240,6 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
     auto is_zero = builder->CreateICmpEQ(input, llvm::ConstantInt::get(input_type, 0));
     auto sel = builder->CreateSelect(is_zero, llvm::ConstantInt::get(input_type, 0), plus_one);
     llvm_val[stmt] = builder->CreateZExtOrTrunc(sel, llvm::Type::getInt32Ty(*llvm_context));
-    stmt->ret_type = PrimitiveType::i32;
   }
   else {
     QD_P(unary_op_type_name(op));
