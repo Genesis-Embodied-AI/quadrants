@@ -744,17 +744,18 @@ def _init_field(field, n, dtype):
 
 # --- Block reduce tests ----------------------------------------------------------------
 #
-# `qd.simt.block.reduce_{add,min,max}` is a two-stage block reduce: per-warp
-# `shuffle_down` tree, lane 0 of each warp publishes the warp aggregate to shared
-# memory, then thread 0 sequentially folds the warp aggregates.  Result is valid
+# `qd.simt.block.reduce_{add,min,max}` is a two-stage block reduce: per-subgroup
+# `shuffle_down` tree, lane 0 of each subgroup publishes the subgroup aggregate to shared
+# memory, then thread 0 sequentially folds the subgroup aggregates.  Result is valid
 # in thread 0 only; the `reduce_all_*` variants broadcast it to every thread via
 # one extra `block.sync()` plus a one-slot shared-memory hop.
 #
-# We exercise three block sizes that span the relevant regimes: 32 (single warp,
-# the shared-memory path is short-circuited at compile time), 128 (multi-warp on
-# wave32 backends), and 256 (multi-warp on every backend).  ``log2_warp`` is
-# pinned to 5 throughout — qipc assumes wave32 here, and Quadrants lays it on as
-# a template knob so future wave64 callers can pass 6 without an API change.
+# We exercise three block sizes that span the relevant regimes: 32 (single subgroup,
+# the shared-memory path is short-circuited at compile time), 128 (multi-subgroup on
+# wave32 backends), and 256 (multi-subgroup on every backend).  The subgroup size is
+# read from ``subgroup.group_size()`` at compile time, so the same source compiles
+# correctly on wave32 (CUDA / Metal / NVIDIA Vulkan) and wave64 (AMDGPU) without an
+# API knob.
 
 _BLOCK_REDUCE_DTYPES = [qd.i32, qd.f32]
 _BLOCK_REDUCE_BLOCK_DIMS = [32, 128, 256]
@@ -976,13 +977,13 @@ def test_block_reduce_all_max(dtype, block_dim):
 
 # --- Block scan tests ------------------------------------------------------------------
 #
-# `qd.simt.block.{inclusive,exclusive}_{add,min,max}` is a two-stage block scan: per-warp
-# Hillis-Steele scan via shuffle, last lane of each warp publishes the warp aggregate to
-# shared memory, then every thread sequentially folds the cross-warp prefix and applies its
-# own warp's prefix.  Every thread receives a valid result.
+# `qd.simt.block.{inclusive,exclusive}_{add,min,max}` is a two-stage block scan: per-subgroup
+# Hillis-Steele scan via shuffle, last lane of each subgroup publishes the subgroup aggregate to
+# shared memory, then every thread sequentially folds the cross-subgroup prefix and applies its
+# own subgroup's prefix.  Every thread receives a valid result.
 #
-# We exercise the same three block sizes as block reduce (32 single-warp short-circuit, 128
-# / 256 multi-warp shared-mem) and assert per-thread against a sequential CPU oracle.  The
+# We exercise the same three block sizes as block reduce (32 single-subgroup short-circuit, 128
+# / 256 multi-subgroup shared-mem) and assert per-thread against a sequential CPU oracle.  The
 # min / max tests use a permuted (non-monotone) input so the scan result genuinely depends
 # on every prefix step, not just the trailing or leading element.
 
@@ -1216,7 +1217,7 @@ def test_block_exclusive_min(dtype, block_dim):
 # Inputs are mixed: a low-entropy distribution that hits every digit multiple times (so
 # the leader-election + atomic_or match path actually has work to do) and a uniform
 # random distribution (covers the case where most digits have ~1 key each).  Both
-# distributions also probe the warp-level dedup logic with multiple keys-per-warp landing
+# distributions also probe the subgroup-level dedup logic with multiple keys-per-subgroup landing
 # in the same digit bin.
 
 

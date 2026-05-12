@@ -18,17 +18,15 @@ The closely-related device-scope memory fence is documented separately in [grid]
 | `block.SharedArray(shape, dtype)`               | yes  | yes     | yes    | yes   |
 | `block.global_thread_idx()`                     | yes  | yes     | yes    | yes   |
 | `block.thread_idx()`                            | yes  | yes     | yes    | yes   |
-| `block.reduce_{add,min,max}(v, tid, ...)`       | yes  | yes\*\* | yes    | yes   |
-| `block.reduce_all_{add,min,max}(v, tid, ...)`   | yes  | yes\*\* | yes    | yes   |
-| `block.inclusive_{add,min,max}(v, tid, ...)`    | yes  | yes\*\* | yes    | yes   |
-| `block.exclusive_{add,min,max}(v, tid, ...)`    | yes  | yes\*\* | yes    | yes   |
-| `block.radix_rank_match_atomic_or(...)`         | yes  | wave32  | yes    | yes   |
+| `block.reduce_{add,min,max}(v, block_dim, dtype)`     | yes  | yes    | yes    | yes   |
+| `block.reduce_all_{add,min,max}(v, block_dim, dtype)` | yes  | yes    | yes    | yes   |
+| `block.inclusive_{add,min,max}(v, block_dim, dtype)`  | yes  | yes    | yes    | yes   |
+| `block.exclusive_{add,min,max}(v, block_dim, ...)`    | yes  | yes    | yes    | yes   |
+| `block.radix_rank_match_atomic_or(...)`               | yes  | wave32 | yes    | yes   |
 
 Vulkan and Metal share a SPIR-V codegen path (Metal goes through MoltenVK → MSL); they are listed as separate columns because a couple of ops have Metal-specific caveats called out below. Footnoted entries are still functional, just with the limitations the footnote describes.
 
 \* On AMDGPU, Vulkan, and Metal the `block.sync_{all,any,count}_nonzero(p)` ops are *emulated* via shared memory (one shared `i32` slot + 2 block barriers + a single `atomic_add` per contributing thread) rather than a single hardware-fused barrier-with-reduction. CUDA has the fused NVPTX `barrier.cta.red.{and,or,popc}.aligned.all.sync` family of intrinsics so it stays on the fast path; the other backends do not have a direct analog (in particular, SPIR-V `OpGroupNonUniform*` only operates at subgroup scope reliably across Vulkan + Metal). All three reductions are routed through `atomic_add` rather than `atomic_or` / `atomic_and`: the latter trip a Metal-specific bug where `OpAtomicOr` on threadgroup memory silently no-ops via MoltenVK / SPIRV-Cross. The emulation is correct and portable but costs two `block.sync()`s plus one shared-memory atomic per call instead of a single barrier instruction; if you have an inner loop calling these ops millions of times, consider whether you can batch the predicate before reducing it.
-
-\*\* On AMDGPU the block reduce / scan ops require `log2_warp` to match the active hardware wave size: pass `5` on RDNA (wave32) and `6` on CDNA (wave64). Passing wave32 on a wave64 device gives wrong results because per-warp `shuffle_down` falls back to `ds_bpermute` whose OOB index wraps modulo the wave size (e.g. lane 48 with offset 16 reads lane 0 instead of returning the lane's own value as `__shfl_down_sync(width=32)` would on CUDA), contaminating the per-warp aggregate of the second logical 32-lane warp inside each wave. CUDA / Metal / RDNA Vulkan are wave32 in practice, so `log2_warp=5` is the natural choice there.
 
 `block.radix_rank_match_atomic_or` is **wave32-only** by construction: the atomic-OR match phase is keyed on a 32-lane `i32` ballot mask plus `clz` / `popcnt` of that mask. Calling it on CDNA AMDGPU (wave64) requires the kernel to launch with a 32-thread subgroup or to wait for a wave64 path (which would need a `u64` bin mask, `u64` `clz` / `popcnt`, and 64-lane `subgroup.shuffle`).
 
@@ -129,17 +127,17 @@ Today only the X dimension is exposed (1-D blocks). For 2-D / 3-D blocks the cal
 
 ### `block.reduce_{add,min,max}(value, block_dim, dtype)`
 
-Block-scope reductions following the standard two-stage warp-reduction strategy: each warp reduces its lanes via a `shuffle_down` tree, lane 0 of each warp publishes the warp aggregate to shared memory, then thread 0 sequentially folds the warp aggregates with the same operator. The result is valid in **thread 0 only**; other threads retain partial values. For the broadcast-to-every-thread variants see `block.reduce_all_{add,min,max}` below.
+Block-scope reductions following the standard two-stage subgroup-reduction strategy: each subgroup reduces its lanes via a `shuffle_down` tree, lane 0 of each subgroup publishes the subgroup aggregate to shared memory, then thread 0 sequentially folds the subgroup aggregates with the same operator. The result is valid in **thread 0 only**; other threads retain partial values. For the broadcast-to-every-thread variants see `block.reduce_all_{add,min,max}` below.
 
 Arguments:
 
 - `value`: per-thread input.
 - `block_dim`: threads per block (compile-time `template()`). Must be a positive multiple of `subgroup.group_size()`, which resolves to 32 on CUDA / Metal / Vulkan-on-NVIDIA and 64 on AMDGPU. Passing a `block_dim` that is not a multiple of the subgroup size raises a compile-time error.
-- `dtype`: scalar dtype for the inter-warp shared-memory staging slot; must match `value`'s type.
+- `dtype`: scalar dtype for the inter-subgroup shared-memory staging slot; must match `value`'s type.
 
-The calling thread's block-local index is read internally via `block.thread_idx()`; the warp size is read from `subgroup.group_size()` at compile time. Neither is plumbed through as an argument.
+The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from `subgroup.group_size()` at compile time. Neither is plumbed through as an argument.
 
-Cost: `log2(warp_size)` shuffles + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / warp_size) - 1` ops on thread 0. When the block is exactly one warp the shared-memory path is short-circuited at compile time.
+Cost: `log2(subgroup_size)` shuffles + 1 shared-memory write/read per subgroup + 1 `block.sync()` + `(block_dim / subgroup_size) - 1` ops on thread 0. When the block is exactly one subgroup the shared-memory path is short-circuited at compile time.
 
 ```python
 @qd.kernel
@@ -159,9 +157,9 @@ The broadcast variants of the above. Identical semantics, but the result is publ
 
 ### `block.inclusive_{add,min,max}(value, block_dim, dtype)`
 
-Block-scope inclusive prefix scans via the standard two-stage warp-scan strategy: each warp does a Hillis-Steele scan via `subgroup` shuffles, the last lane of each warp publishes the warp aggregate to shared memory, then every thread sequentially folds the cross-warp prefix and applies its own warp's prefix to its scan value. **All threads receive a valid result.** After the call, thread `i` holds `op(v[0], v[1], ..., v[i])`.
+Block-scope inclusive prefix scans via the standard two-stage subgroup-scan strategy: each subgroup does a Hillis-Steele scan via `subgroup` shuffles, the last lane of each subgroup publishes the subgroup aggregate to shared memory, then every thread sequentially folds the cross-subgroup prefix and applies its own subgroup's prefix to its scan value. **All threads receive a valid result.** After the call, thread `i` holds `op(v[0], v[1], ..., v[i])`.
 
-Args match `block.reduce_add` (`value, block_dim, dtype`). Cost: per-warp Hillis-Steele tree (`log2(warp_size)` shuffles) + 1 shared-memory write/read per warp + 1 `block.sync()` + `(block_dim / warp_size) - 1` ops on every thread (the cross-warp prefix is computed redundantly to avoid a second barrier). When the block is exactly one warp the shared-memory path is short-circuited at compile time.
+Args match `block.reduce_add` (`value, block_dim, dtype`). Cost: per-subgroup Hillis-Steele tree (`log2(subgroup_size)` shuffles) + 1 shared-memory write/read per subgroup + 1 `block.sync()` + `(block_dim / subgroup_size) - 1` ops on every thread (the cross-subgroup prefix is computed redundantly to avoid a second barrier). When the block is exactly one subgroup the shared-memory path is short-circuited at compile time.
 
 ```python
 @qd.kernel
@@ -203,7 +201,7 @@ Args:
 
 The calling thread's block-local index is read internally via `block.thread_idx()`.
 
-Cost: 2 `block.sync()` + a handful of `subgroup.sync()` calls + 1 block exclusive scan + per-key `atomic_or` + leader-only `atomic_add` on shared memory. Shared-memory footprint is `2 * BLOCK_WARPS * RADIX_DIGITS` ints = 16 KiB at the default `radix_bits=8` configuration on wave32 (8 warps × 256 digits × 2 banks × 4 B).
+Cost: 2 `block.sync()` + a handful of `subgroup.sync()` calls + 1 block exclusive scan + per-key `atomic_or` + leader-only `atomic_add` on shared memory. Shared-memory footprint is `2 * BLOCK_SUBGROUPS * RADIX_DIGITS` ints = 16 KiB at the default `radix_bits=8` configuration on wave32 (8 subgroups × 256 digits × 2 banks × 4 B).
 
 ```python
 @qd.kernel

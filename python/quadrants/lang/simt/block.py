@@ -148,39 +148,39 @@ def reduce(value, block_dim: template(), op: template(), dtype: template()):
             / Metal / Vulkan-on-NVIDIA, 64 on AMDGPU).
         op: ``@qd.func`` taking two values and returning the same type as ``value``; callers can plug in custom
             associative monoids (bitwise ops, multiplicative, matrix-multiply, etc.) without re-implementing the
-            per-warp + shared-mem skeleton.  See `reduce_add` for the standard sum specialization.
-        dtype: scalar dtype for the inter-warp shared-memory staging slot (must match ``value``'s type).
+            per-subgroup + shared-mem skeleton.  See `reduce_add` for the standard sum specialization.
+        dtype: scalar dtype for the inter-subgroup shared-memory staging slot (must match ``value``'s type).
 
-    The calling thread's block-local index is read internally via `block.thread_idx()`; the warp size is read from
-    `subgroup.group_size()` at compile time.  When the block is exactly one warp the shared-memory path is
-    short-circuited at compile time and the call costs only the per-warp tree.
+    The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
+    `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the shared-memory path is
+    short-circuited at compile time and the call costs only the per-subgroup tree.
     """
-    WARP_SIZE = impl.static(_subgroup.group_size())
-    log2_warp = impl.static(_subgroup.log2_group_size())
+    SUBGROUP_SIZE = impl.static(_subgroup.group_size())
+    log2_subgroup = impl.static(_subgroup.log2_group_size())
     impl.static_assert(
-        impl.static(block_dim % WARP_SIZE == 0 and block_dim >= WARP_SIZE),
+        impl.static(block_dim % SUBGROUP_SIZE == 0 and block_dim >= SUBGROUP_SIZE),
         "block.reduce: block_dim must be a positive multiple of subgroup size",
     )
-    NUM_WARPS = impl.static(block_dim // WARP_SIZE)
+    NUM_SUBGROUPS = impl.static(block_dim // SUBGROUP_SIZE)
 
-    warp_agg = _subgroup._reduce(value, op, log2_warp)
+    subgroup_agg = _subgroup._reduce(value, op, log2_subgroup)
 
-    if impl.static(NUM_WARPS == 1):
-        return warp_agg
+    if impl.static(NUM_SUBGROUPS == 1):
+        return subgroup_agg
 
     tid = thread_idx()
-    warp_id = tid // WARP_SIZE
-    lane_id = tid & impl.static(WARP_SIZE - 1)
+    subgroup_id = tid // SUBGROUP_SIZE
+    lane_id = tid & impl.static(SUBGROUP_SIZE - 1)
 
-    shared = SharedArray(impl.static((NUM_WARPS,)), dtype)
+    shared = SharedArray(impl.static((NUM_SUBGROUPS,)), dtype)
     if lane_id == 0:
-        shared[warp_id] = warp_agg
+        shared[subgroup_id] = subgroup_agg
     sync()
 
-    result = warp_agg
+    result = subgroup_agg
     if tid == 0:
         result = shared[0]
-        for w in impl.static(range(1, NUM_WARPS)):
+        for w in impl.static(range(1, NUM_SUBGROUPS)):
             result = op(result, shared[impl.static(w)])
     return result
 
@@ -238,16 +238,16 @@ def reduce_all_max(value, block_dim: template(), dtype: template()):
 
 # --- Block scans -----------------------------------------------------------------------
 #
-# Two-stage block scan.  Each warp does a Hillis-Steele scan via
-# `subgroup.{_inclusive_scan, _exclusive_scan}`, the last lane of every warp publishes the
-# warp aggregate to shared memory, then every thread sequentially folds the warp prefixes
-# and applies its own warp's prefix to its scan value.  All threads receive a valid result;
-# cost: one warp scan + 1 shared-mem write/read per warp + 1 `block.sync()` + (NUM_WARPS - 1)
-# ops on every thread (the cross-warp prefix is computed redundantly to avoid a second
+# Two-stage block scan.  Each subgroup does a Hillis-Steele scan via
+# `subgroup.{_inclusive_scan, _exclusive_scan}`, the last lane of every subgroup publishes the
+# subgroup aggregate to shared memory, then every thread sequentially folds the subgroup prefixes
+# and applies its own subgroup's prefix to its scan value.  All threads receive a valid result;
+# cost: one subgroup scan + 1 shared-mem write/read per subgroup + 1 `block.sync()` + (NUM_SUBGROUPS - 1)
+# ops on every thread (the cross-subgroup prefix is computed redundantly to avoid a second
 # barrier).
 #
-# Inclusive: warp aggregate at the last lane is just the inclusive value, written directly.
-# Exclusive: warp aggregate = `op(exclusive[last_lane], value[last_lane])`, since the
+# Inclusive: subgroup aggregate at the last lane is just the inclusive value, written directly.
+# Exclusive: subgroup aggregate = `op(exclusive[last_lane], value[last_lane])`, since the
 # exclusive scan does not include the last lane's input — we recover the inclusive total
 # with one extra `op` on the publish path.
 
@@ -261,49 +261,49 @@ def inclusive_scan(value, block_dim: template(), op: template(), dtype: template
         block_dim: threads per block (template).  Must be a positive multiple of ``subgroup.group_size()`` (32 on CUDA
             / Metal / Vulkan-on-NVIDIA, 64 on AMDGPU).
         op: ``@qd.func`` taking two values and returning the same type as ``value``; callers can plug in custom
-            associative monoids without re-implementing the per-warp + shared-mem skeleton.  See `inclusive_add`
+            associative monoids without re-implementing the per-subgroup + shared-mem skeleton.  See `inclusive_add`
             for the standard sum specialization.
-        dtype: scalar dtype for the inter-warp shared-memory staging slot; must match ``value``'s type.
+        dtype: scalar dtype for the inter-subgroup shared-memory staging slot; must match ``value``'s type.
 
-    The calling thread's block-local index is read internally via `block.thread_idx()`; the warp size is read from
-    `subgroup.group_size()` at compile time.  When the block is exactly one warp the cross-warp shared-memory path is
-    short-circuited at compile time and the call costs only the per-warp Hillis-Steele tree.
+    The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
+    `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory path is
+    short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.
     """
-    WARP_SIZE = impl.static(_subgroup.group_size())
-    log2_warp = impl.static(_subgroup.log2_group_size())
+    SUBGROUP_SIZE = impl.static(_subgroup.group_size())
+    log2_subgroup = impl.static(_subgroup.log2_group_size())
     impl.static_assert(
-        impl.static(block_dim % WARP_SIZE == 0 and block_dim >= WARP_SIZE),
+        impl.static(block_dim % SUBGROUP_SIZE == 0 and block_dim >= SUBGROUP_SIZE),
         "block.inclusive_scan: block_dim must be a positive multiple of subgroup size",
     )
-    NUM_WARPS = impl.static(block_dim // WARP_SIZE)
+    NUM_SUBGROUPS = impl.static(block_dim // SUBGROUP_SIZE)
 
-    inclusive = _subgroup._inclusive_scan(value, op, log2_warp)
+    inclusive = _subgroup._inclusive_scan(value, op, log2_subgroup)
 
-    if impl.static(NUM_WARPS == 1):
+    if impl.static(NUM_SUBGROUPS == 1):
         return inclusive
 
     tid = thread_idx()
-    warp_id = tid // WARP_SIZE
-    lane_id = tid & impl.static(WARP_SIZE - 1)
+    subgroup_id = tid // SUBGROUP_SIZE
+    lane_id = tid & impl.static(SUBGROUP_SIZE - 1)
 
-    shared = SharedArray(impl.static((NUM_WARPS,)), dtype)
-    if lane_id == impl.static(WARP_SIZE - 1):
-        shared[warp_id] = inclusive
+    shared = SharedArray(impl.static((NUM_SUBGROUPS,)), dtype)
+    if lane_id == impl.static(SUBGROUP_SIZE - 1):
+        shared[subgroup_id] = inclusive
     sync()
 
-    # Sequential exclusive prefix scan over warp aggregates; each thread captures its own warp's prefix.  Warp 0's
+    # Sequential exclusive prefix scan over subgroup aggregates; each thread captures its own subgroup's prefix.  Subgroup 0's
     # prefix is unused (its inclusive value is already the prefix sum from the start of the block), so we never read
-    # `warp_prefix` on warp 0; the placeholder there exists only to give the variable a definite type.
+    # `subgroup_prefix` on subgroup 0; the placeholder there exists only to give the variable a definite type.
     block_aggregate = shared[0]
-    warp_prefix = block_aggregate
-    for w in impl.static(range(1, NUM_WARPS)):
-        if warp_id == impl.static(w):
-            warp_prefix = block_aggregate
+    subgroup_prefix = block_aggregate
+    for w in impl.static(range(1, NUM_SUBGROUPS)):
+        if subgroup_id == impl.static(w):
+            subgroup_prefix = block_aggregate
         addend = shared[impl.static(w)]
         block_aggregate = op(block_aggregate, addend)
 
-    if warp_id != 0:
-        inclusive = op(warp_prefix, inclusive)
+    if subgroup_id != 0:
+        inclusive = op(subgroup_prefix, inclusive)
     return inclusive
 
 
@@ -316,39 +316,41 @@ def exclusive_scan(value, block_dim: template(), op: template(), identity, dtype
     scan needs a definite value for thread 0 (and for the sentinel paths in `exclusive_min` / `exclusive_max`).  See
     `exclusive_add` for the additive specialization which derives a zero identity automatically.
     """
-    WARP_SIZE = impl.static(_subgroup.group_size())
-    log2_warp = impl.static(_subgroup.log2_group_size())
+    SUBGROUP_SIZE = impl.static(_subgroup.group_size())
+    log2_subgroup = impl.static(_subgroup.log2_group_size())
     impl.static_assert(
-        impl.static(block_dim % WARP_SIZE == 0 and block_dim >= WARP_SIZE),
+        impl.static(block_dim % SUBGROUP_SIZE == 0 and block_dim >= SUBGROUP_SIZE),
         "block.exclusive_scan: block_dim must be a positive multiple of subgroup size",
     )
-    NUM_WARPS = impl.static(block_dim // WARP_SIZE)
+    NUM_SUBGROUPS = impl.static(block_dim // SUBGROUP_SIZE)
 
-    exclusive = _subgroup._exclusive_scan(value, op, identity, log2_warp)
+    exclusive = _subgroup._exclusive_scan(value, op, identity, log2_subgroup)
 
-    if impl.static(NUM_WARPS == 1):
+    if impl.static(NUM_SUBGROUPS == 1):
         return exclusive
 
     tid = thread_idx()
-    warp_id = tid // WARP_SIZE
-    lane_id = tid & impl.static(WARP_SIZE - 1)
+    subgroup_id = tid // SUBGROUP_SIZE
+    lane_id = tid & impl.static(SUBGROUP_SIZE - 1)
 
-    shared = SharedArray(impl.static((NUM_WARPS,)), dtype)
-    if lane_id == impl.static(WARP_SIZE - 1):
-        # Warp aggregate = inclusive at last lane = exclusive[last] + value[last] under `op`.
-        shared[warp_id] = op(exclusive, value)
+    shared = SharedArray(impl.static((NUM_SUBGROUPS,)), dtype)
+    if lane_id == impl.static(SUBGROUP_SIZE - 1):
+        # Subgroup aggregate = inclusive at last lane = exclusive[last] + value[last] under `op`.
+        shared[subgroup_id] = op(exclusive, value)
     sync()
 
     block_aggregate = shared[0]
-    warp_prefix = identity  # warp 0's prefix is the identity; subsequent warps overwrite this in their own iteration
-    for w in impl.static(range(1, NUM_WARPS)):
-        if warp_id == impl.static(w):
-            warp_prefix = block_aggregate
+    subgroup_prefix = (
+        identity  # subgroup 0's prefix is the identity; subsequent subgroups overwrite this in their own iteration
+    )
+    for w in impl.static(range(1, NUM_SUBGROUPS)):
+        if subgroup_id == impl.static(w):
+            subgroup_prefix = block_aggregate
         addend = shared[impl.static(w)]
         block_aggregate = op(block_aggregate, addend)
 
-    if warp_id != 0:
-        exclusive = op(warp_prefix, exclusive)
+    if subgroup_id != 0:
+        exclusive = op(subgroup_prefix, exclusive)
     return exclusive
 
 
@@ -407,31 +409,31 @@ def exclusive_max(value, block_dim: template(), identity, dtype: template()):
 #
 # The algorithm runs in six steps:
 #
-# 1. ComputeHistogramsWarp: each warp builds a private digit histogram in shared memory via ``atomic_add``.
-# 2. ComputeOffsetsWarpUpsweep: every thread sums per-warp histograms column-wise to produce a block-wide bin count
-#    for digit ``= tid``, while rewriting the warp histogram entries into per-warp running exclusive prefixes.
+# 1. ComputeHistogramsSubgroup: each subgroup builds a private digit histogram in shared memory via ``atomic_add``.
+# 2. ComputeOffsetsSubgroupUpsweep: every thread sums per-subgroup histograms column-wise to produce a block-wide bin count
+#    for digit ``= tid``, while rewriting the subgroup histogram entries into per-subgroup running exclusive prefixes.
 # 3. ExclusiveSum on the per-thread bin counts — uses the block exclusive scan defined above.
-# 4. ComputeOffsetsWarpDownsweep: add the block-wide exclusive prefix into every warp's offset entry.
-# 5. ComputeRanksItem (atomic-OR match): per-warp match via ``atomic_or`` on a per-digit lane-mask, then leader
-#    (highest set lane) does a single ``atomic_add`` on the warp offset and broadcasts via ``subgroup.shuffle``; each
-#    thread's rank is ``warp_offset + popc(bin_mask & lanemask_le) - 1``.
+# 4. ComputeOffsetsSubgroupDownsweep: add the block-wide exclusive prefix into every subgroup's offset entry.
+# 5. ComputeRanksItem (atomic-OR match): per-subgroup match via ``atomic_or`` on a per-digit lane-mask, then leader
+#    (highest set lane) does a single ``atomic_add`` on the subgroup offset and broadcasts via ``subgroup.shuffle``; each
+#    thread's rank is ``subgroup_offset + popc(bin_mask & lanemask_le) - 1``.
 # 6. Write bin count + exclusive prefix to the outparam shared arrays.
 #
-# Shared-memory layout (all i32, total ``2 * BLOCK_WARPS * RADIX_DIGITS`` ints, 4096 ints = 16 KiB at the default
-# 8-warp / 256-digit configuration):
+# Shared-memory layout (all i32, total ``2 * BLOCK_SUBGROUPS * RADIX_DIGITS`` ints, 4096 ints = 16 KiB at the default
+# 8-subgroup / 256-digit configuration):
 #
-#     warp_offsets / warp_histograms : [0, BLOCK_WARPS * RADIX_DIGITS)        (union backing)
-#     match_masks                    : [BLOCK_WARPS * RADIX_DIGITS, 2 * ...)
+#     subgroup_offsets / subgroup_histograms : [0, BLOCK_SUBGROUPS * RADIX_DIGITS)        (union backing)
+#     match_masks                    : [BLOCK_SUBGROUPS * RADIX_DIGITS, 2 * ...)
 #
-# Warp-scope barriers use ``subgroup.sync()`` (lowers to ``__syncwarp`` on CUDA,
+# Subgroup-scope barriers use ``subgroup.sync()`` (lowers to ``__syncwarp`` on CUDA,
 # ``OpControlBarrier(ScopeSubgroup, ...)`` on SPIR-V, ``s_barrier`` on AMDGPU).  ``LaneMaskLe()`` (the PTX intrinsic
 # that gives a lane its less-than-or-equal lane mask) is replaced by ``subgroup.lanemask_le(lane)`` from the portable
 # subgroup primitives.
 
 
 @_func
-def _warp_sync_fence():
-    """Warp-scope barrier + memory fence — CUDA ``__syncwarp`` semantics across every backend.
+def _subgroup_sync_fence():
+    """Subgroup-scope barrier + memory fence — CUDA ``__syncwarp`` semantics across every backend.
 
     Why both ops: on CUDA, `subgroup.sync()` already lowers to `__syncwarp` which folds in a memory fence, so the
     extra `subgroup.mem_fence()` is redundant (a `__threadfence_block`).  On SPIR-V, however, the codegen emits
@@ -472,7 +474,7 @@ def radix_rank_match_atomic_or(
         excl_prefix: ``block.SharedArray((1 << radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]`` holds
             the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.
 
-    The calling thread's block-local index is read internally via `block.thread_idx()`; the warp size is read from
+    The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
     `subgroup.group_size()` at compile time.  Currently only the wave32 subgroup size (32) is supported — the
     atomic-OR match path is built around 32-lane ``i32`` ballot masks, so the function asserts that subgroup size at
     compile time.  Targeting AMDGPU (wave64) will need a parallel wave64 path; not yet implemented.
@@ -482,12 +484,12 @@ def radix_rank_match_atomic_or(
     further ``block.sync()`` (we sync internally before exit).
 
     Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block exclusive
-    scan + ``BLOCK_WARPS`` ops per thread for the column-sum upsweep.  The shared-memory footprint is
-    ``2 * BLOCK_WARPS * RADIX_DIGITS`` i32 ints (16 KiB at the default ``radix_bits=8`` configuration on wave32).
+    scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  The shared-memory footprint is
+    ``2 * BLOCK_SUBGROUPS * RADIX_DIGITS`` i32 ints (16 KiB at the default ``radix_bits=8`` configuration on wave32).
     """
-    WARP_THREADS = impl.static(_subgroup.group_size())
+    SUBGROUP_THREADS = impl.static(_subgroup.group_size())
     impl.static_assert(
-        impl.static(WARP_THREADS == 32),
+        impl.static(SUBGROUP_THREADS == 32),
         "block.radix_rank_match_atomic_or: subgroup size must be 32; wave64 path not yet implemented",
     )
     RADIX_DIGITS = impl.static(1 << radix_bits)
@@ -495,63 +497,63 @@ def radix_rank_match_atomic_or(
         impl.static(block_dim == RADIX_DIGITS),
         "block.radix_rank_match_atomic_or: block_dim must equal RADIX_DIGITS (1 << radix_bits)",
     )
-    BLOCK_WARPS = impl.static(block_dim // WARP_THREADS)
+    BLOCK_SUBGROUPS = impl.static(block_dim // SUBGROUP_THREADS)
     NUM_BITS_MASK = impl.static((1 << num_bits) - 1)
-    MM_OFF = impl.static(BLOCK_WARPS * RADIX_DIGITS)
-    BINS_PER_LANE = impl.static(RADIX_DIGITS // WARP_THREADS)
+    MM_OFF = impl.static(BLOCK_SUBGROUPS * RADIX_DIGITS)
+    BINS_PER_LANE = impl.static(RADIX_DIGITS // SUBGROUP_THREADS)
 
-    # ``TempStorage``: union of warp_offsets / warp_histograms (same backing) + match_masks.  All i32.
-    smem = SharedArray(impl.static((2 * BLOCK_WARPS * RADIX_DIGITS,)), _i32)
+    # ``TempStorage``: union of subgroup_offsets / subgroup_histograms (same backing) + match_masks.  All i32.
+    smem = SharedArray(impl.static((2 * BLOCK_SUBGROUPS * RADIX_DIGITS,)), _i32)
 
     tid = thread_idx()
-    warp_idx = tid // WARP_THREADS
+    subgroup_idx = tid // SUBGROUP_THREADS
     lane = _ops.cast(_subgroup.invocation_id(), _i32)
 
-    # Step 1: zero per-warp histograms and match_masks.
+    # Step 1: zero per-subgroup histograms and match_masks.
     for b in impl.static(range(BINS_PER_LANE)):
-        bin_idx = lane + impl.static(b * WARP_THREADS)
-        smem[warp_idx * RADIX_DIGITS + bin_idx] = _i32(0)
-        smem[MM_OFF + warp_idx * RADIX_DIGITS + bin_idx] = _i32(0)
-    _warp_sync_fence()
+        bin_idx = lane + impl.static(b * SUBGROUP_THREADS)
+        smem[subgroup_idx * RADIX_DIGITS + bin_idx] = _i32(0)
+        smem[MM_OFF + subgroup_idx * RADIX_DIGITS + bin_idx] = _i32(0)
+    _subgroup_sync_fence()
 
-    # Each thread atomic-adds 1 to its warp's bin for ``digit``.
+    # Each thread atomic-adds 1 to its subgroup's bin for ``digit``.
     digit = _ops.cast(_ops.bit_and(_ops.bit_shr(key, _u32(bit_start)), _u32(NUM_BITS_MASK)), _i32)
-    _ops.atomic_add(smem[warp_idx * RADIX_DIGITS + digit], _i32(1))
+    _ops.atomic_add(smem[subgroup_idx * RADIX_DIGITS + digit], _i32(1))
 
-    sync()  # Publish per-warp histograms before column-sum.
+    sync()  # Publish per-subgroup histograms before column-sum.
 
-    # Step 2: per-thread column sum across warps for digit == tid.  Each thread collects the running exclusive prefix
-    # into ``bin_count`` while overwriting the warp histogram entries with their per-warp exclusive prefix.  After the
+    # Step 2: per-thread column sum across subgroups for digit == tid.  Each thread collects the running exclusive prefix
+    # into ``bin_count`` while overwriting the subgroup histogram entries with their per-subgroup exclusive prefix.  After the
     # loop, ``bin_count`` is the block-wide total for digit == tid.
     bin_count = _i32(0)
-    for j_warp in impl.static(range(BLOCK_WARPS)):
-        warp_count = smem[impl.static(j_warp * RADIX_DIGITS) + tid]
-        smem[impl.static(j_warp * RADIX_DIGITS) + tid] = bin_count
-        bin_count = bin_count + warp_count
+    for j_subgroup in impl.static(range(BLOCK_SUBGROUPS)):
+        subgroup_count = smem[impl.static(j_subgroup * RADIX_DIGITS) + tid]
+        smem[impl.static(j_subgroup * RADIX_DIGITS) + tid] = bin_count
+        bin_count = bin_count + subgroup_count
 
     # Step 3: block-wide exclusive sum on the per-thread bin counts.
     exclusive_digit_prefix = exclusive_add(bin_count, block_dim, _i32)
 
-    # Step 4: ComputeOffsetsWarpDownsweep — fold the block-wide exclusive prefix into every warp's offset.
-    for j_warp in impl.static(range(BLOCK_WARPS)):
-        smem[impl.static(j_warp * RADIX_DIGITS) + tid] = (
-            smem[impl.static(j_warp * RADIX_DIGITS) + tid] + exclusive_digit_prefix
+    # Step 4: ComputeOffsetsSubgroupDownsweep — fold the block-wide exclusive prefix into every subgroup's offset.
+    for j_subgroup in impl.static(range(BLOCK_SUBGROUPS)):
+        smem[impl.static(j_subgroup * RADIX_DIGITS) + tid] = (
+            smem[impl.static(j_subgroup * RADIX_DIGITS) + tid] + exclusive_digit_prefix
         )
 
-    sync()  # Publish warp offsets before the per-key match phase.
+    sync()  # Publish subgroup offsets before the per-key match phase.
 
     # Step 5: per-key atomic-OR match.  ``items_per_thread == 1``, so this runs once per thread.
     lane_mask = _i32(1) << lane
     lane_mask_le_v = _subgroup.lanemask_le(_subgroup.invocation_id())
 
-    match_idx = MM_OFF + warp_idx * RADIX_DIGITS + digit
+    match_idx = MM_OFF + subgroup_idx * RADIX_DIGITS + digit
 
-    # Every thread ORs its lane_mask into the per-digit match mask of its warp.  Threads with the same digit collide
-    # on the same shared-memory cell and produce a bitmask of "lanes in this warp that share this digit".
+    # Every thread ORs its lane_mask into the per-digit match mask of its subgroup.  Threads with the same digit collide
+    # on the same shared-memory cell and produce a bitmask of "lanes in this subgroup that share this digit".
     _ops.atomic_or(smem[match_idx], lane_mask)
-    _warp_sync_fence()
+    _subgroup_sync_fence()
 
-    # Read the bin_mask back and find the leader (highest matching lane) + intra-warp rank.  ``clz`` here MUST run on
+    # Read the bin_mask back and find the leader (highest matching lane) + intra-subgroup rank.  ``clz`` here MUST run on
     # the u32 (FindUMsb on SPIR-V): casting to i32 first triggers SPIR-V's FindSMsb, which for negative i32 (top bit
     # set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that's one less than the actual
     # highest matching lane.  Concretely, with lane 31 holding the only key for its digit, bin_mask = 0x80000000;
@@ -563,20 +565,20 @@ def radix_rank_match_atomic_or(
     leader = _i32(31) - _ops.cast(_ops.clz(bin_mask), _i32)
     popc = _ops.popcnt(_ops.bit_and(bin_mask, lane_mask_le_v))
 
-    # Leader claims `popc` slots from this warp's slice of the warp_offsets entry.
-    warp_offset = _i32(0)
+    # Leader claims `popc` slots from this subgroup's slice of the subgroup_offsets entry.
+    subgroup_offset = _i32(0)
     if lane == leader:
-        warp_offset = _ops.atomic_add(smem[warp_idx * RADIX_DIGITS + digit], _ops.cast(popc, _i32))
+        subgroup_offset = _ops.atomic_add(smem[subgroup_idx * RADIX_DIGITS + digit], _ops.cast(popc, _i32))
 
-    # Leader broadcasts its claimed offset to every lane in the warp.
-    warp_offset = _subgroup.shuffle(warp_offset, _ops.cast(leader, _u32))
+    # Leader broadcasts its claimed offset to every lane in the subgroup.
+    subgroup_offset = _subgroup.shuffle(subgroup_offset, _ops.cast(leader, _u32))
 
     # Leader resets the match mask so subsequent passes (or items_per_thread > 1) start clean.
     if lane == leader:
         smem[match_idx] = _i32(0)
-    _warp_sync_fence()
+    _subgroup_sync_fence()
 
-    rank = warp_offset + _ops.cast(popc, _i32) - _i32(1)
+    rank = subgroup_offset + _ops.cast(popc, _i32) - _i32(1)
 
     # Step 6: publish bins + exclusive_digit_prefix to the caller-supplied outparams.  ``block_dim == RADIX_DIGITS`` so
     # every thread writes exactly one digit.  Followed by a ``block.sync()`` so the caller can read these arrays
