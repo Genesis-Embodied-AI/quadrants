@@ -398,7 +398,7 @@
 
 <span class="sd">    The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.</span>
 <span class="sd">    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target</span>
-<span class="sd">    (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).</span>
+<span class="sd">    (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target).</span>
 
 <span class="sd">    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``</span>
 <span class="sd">    shuffle+add operations in the calling kernel&#39;s IR.</span>

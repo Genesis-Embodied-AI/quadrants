@@ -483,7 +483,7 @@
 <dd><p>Sum <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> tree.</p>
 <p>The result is valid in lane 0 of each <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> group; other lanes hold partial sums.
 Caller must ensure <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> does not exceed the active subgroup size on the target
-(32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).</p>
+(32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target).</p>
 <p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a compile-time template; the body is fully unrolled into <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>
 shuffle+add operations in the calling kernel’s IR.</p>
 </dd></dl>
