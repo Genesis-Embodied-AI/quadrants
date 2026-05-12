@@ -3139,3 +3139,159 @@ def test_subgroup_segmented_reduce_max_log2_size_6():
     )
     for i in range(N):
         assert dst[i] == expected_py[i], f"lane {i}: got {dst[i]}, expected {expected_py[i]}"
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# Direct cross-half shuffle coverage.  These tests target the lane <-> lane >= 32 traffic that on AMD RDNA wave64
+# hardware (gfx10+) used to silently wrap inside the 32-lane SIMD cluster: ``ds_bpermute`` is SIMD32-scoped, and prior
+# to the ``permlane64``-based cross-half helper a lane in the bottom half could not read the top half (and vice
+# versa).  All five tests are gated to ``log2_group_size() == 6`` so they only assert anything on real wave64
+# hardware -- CUDA and SPIR-V backends with wave32 skip the absolute-correctness check (the cross-half partner is
+# out of range there, which is implementation-defined).  CDNA (gfx9xx, MI300X) already had a wave64-wide
+# ``ds_bpermute`` so its behaviour is unchanged by the fix; the new helper is observably a no-op on that path.
+# --------------------------------------------------------------------------------------------------------------------
+
+
+def _skip_unless_wave64():
+    if subgroup.group_size() != 64:
+        pytest.skip(f"requires wave64 subgroup; running on subgroup_size={subgroup.group_size()}")
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_xor_cross_half(dtype):
+    """``shuffle_xor(v, 32)`` swaps the two halves of a wave64 subgroup.  Pre-fix, on AMD RDNA gfx10+ this would
+    wrap within each SIMD32 and return ``v`` unchanged for every lane.  Gated on wave64."""
+    _skip_if_f64_unsupported(dtype)
+    _skip_unless_wave64()
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def k():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.shuffle_xor(src[i], qd.u32(32))
+
+    _init_field(src, N, dtype)
+
+    k()
+
+    for i in range(N):
+        partner = i ^ 32
+        assert dst[i] == src[partner], (
+            f"lane {i}: shuffle_xor(v, 32) returned src[{i}]={src[i]} but expected src[{partner}]={src[partner]}"
+        )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_down_offset_32(dtype):
+    """``shuffle_down(v, 32)``: each lane in [0, 32) reads from ``lane + 32``.  Lanes in [32, 64) read out-of-range
+    (implementation-defined, not asserted).  Pre-fix this returned garbage on RDNA wave64."""
+    _skip_if_f64_unsupported(dtype)
+    _skip_unless_wave64()
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def k():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.shuffle_down(src[i], qd.u32(32))
+
+    _init_field(src, N, dtype)
+
+    k()
+
+    for i in range(32):
+        assert dst[i] == src[i + 32], (
+            f"lane {i}: shuffle_down(v, 32) returned {dst[i]} but expected src[{i + 32}]={src[i + 32]}"
+        )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_up_offset_32(dtype):
+    """``shuffle_up(v, 32)``: each lane in [32, 64) reads from ``lane - 32``.  Lanes in [0, 32) read out-of-range
+    (implementation-defined).  Pre-fix this returned garbage on RDNA wave64."""
+    _skip_if_f64_unsupported(dtype)
+    _skip_unless_wave64()
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def k():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.shuffle_up(src[i], qd.u32(32))
+
+    _init_field(src, N, dtype)
+
+    k()
+
+    for i in range(32, 64):
+        assert dst[i] == src[i - 32], (
+            f"lane {i}: shuffle_up(v, 32) returned {dst[i]} but expected src[{i - 32}]={src[i - 32]}"
+        )
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_absolute_lane_high_half(dtype):
+    """``shuffle(v, lane >= 32)``: each lane in the bottom half reads from a fixed lane in the top half.  Pre-fix
+    this was the canonical cross-half failure mode on RDNA wave64."""
+    _skip_if_f64_unsupported(dtype)
+    _skip_unless_wave64()
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst_lo = qd.field(dtype=dtype, shape=N)
+    dst_hi = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def k():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            # Bottom half reads lane 47; top half reads lane 7.  Both directions exercise the cross-half path.
+            dst_lo[i] = subgroup.shuffle(src[i], qd.u32(47))
+            dst_hi[i] = subgroup.shuffle(src[i], qd.u32(7))
+
+    _init_field(src, N, dtype)
+
+    k()
+
+    for i in range(N):
+        assert dst_lo[i] == src[47], (
+            f"lane {i}: shuffle(v, 47) returned {dst_lo[i]} but expected src[47]={src[47]}"
+        )
+        assert dst_hi[i] == src[7], f"lane {i}: shuffle(v, 7) returned {dst_hi[i]} but expected src[7]={src[7]}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_reduce_add_full_absolute():
+    """End-to-end correctness: ``reduce_add_full`` over a wave64 subgroup must equal the Python sum.  Pre-fix the
+    top-half lanes never contributed on RDNA, so this returned half the expected value (or worse)."""
+    _skip_unless_wave64()
+    N = 64
+    src = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def k():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.reduce_add_full(src[i])
+
+    payload = [i * 3 + 1 for i in range(N)]
+    for i in range(N):
+        src[i] = payload[i]
+    expected = sum(payload)
+
+    k()
+
+    # ``reduce_add`` returns the full sum in lane 0 of each window; for log2_size = log2_group_size() the window is
+    # the whole subgroup, so we only check lane 0.  (The other lanes' values are implementation-defined.)
+    assert dst[0] == expected, f"reduce_add_full lane 0: got {dst[0]}, expected {expected}"
