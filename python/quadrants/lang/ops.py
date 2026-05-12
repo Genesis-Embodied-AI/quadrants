@@ -1547,6 +1547,12 @@ def atomic_cas(x, expected, desired):
         if old == expected:
             x[()] = desired
         return old
+    # Mirror @writeback_binary's Field guard: passing a raw Field (rather than `field[None]`) would otherwise
+    # blow up later with a confusing AttributeError on `x.ptr`. Surface a clear QuadrantsSyntaxError instead.
+    if isinstance(x, Field):
+        raise QuadrantsSyntaxError(
+            "cannot use a Field directly as the first operand of 'atomic_cas'; index it first (e.g. `field[None]`)"
+        )
     if not (is_quadrants_expr(x) and x.ptr.is_lvalue()):
         raise QuadrantsSyntaxError("cannot use a non-writable target as the first operand of 'atomic_cas'")
     expected_e = wrap_if_not_expr(expected)

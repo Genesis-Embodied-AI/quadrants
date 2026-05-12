@@ -997,3 +997,19 @@ def test_atomic_cas_expected_int_literal_widens_to_i64():
     kern()
     assert int(out[None]) == 7
     assert int(f[None]) == 42
+
+
+# Pins that passing a raw Field (instead of `field[None]`) to atomic_cas raises a clear QuadrantsSyntaxError
+# instead of a confusing AttributeError on x.ptr. Mirrors @writeback_binary's Field guard for the rest of the
+# qd.atomic_* family. alanray-tech nit from PR #690 review.
+@test_utils.test()
+def test_atomic_cas_raw_field_raises_clear_error():
+    f = qd.field(qd.i32, shape=())
+    f[None] = 0
+
+    @qd.kernel
+    def kern():
+        qd.atomic_cas(f, 0, 1)
+
+    with pytest.raises(qd.lang.exception.QuadrantsCompilationError):
+        kern()
