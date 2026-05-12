@@ -385,7 +385,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ``1`` on lane ``0`` of every subgroup and ``0`` on every other lane.</span>
 
 <span class="sd">    Implemented portably as ``invocation_id() == 0``: every backend that lowers ``invocation_id()`` therefore lowers</span>
-<span class="sd">    ``elect()`` at zero extra cost (it inlines at trace time into a single compare + zext).</span>
+<span class="sd">    ``elect()`` at zero extra cost (it inlines at compile time into a single compare + zext).</span>
 
 <span class="sd">    Note that this narrows SPIR-V&#39;s ``OpGroupNonUniformElect`` semantics, which may pick any *active* lane as the</span>
 <span class="sd">    elected one.  Under the documented uniform-CF + all-lanes-active contract for ``qd.simt.subgroup`` this distinction</span>
@@ -564,7 +564,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Bitmask of lanes strictly below ``lane_id`` — bit ``i`` is set iff ``i &lt; lane_id``.</span>
 
 <span class="sd">    Pass ``invocation_id()`` for the classic CUDA ``__lanemask_lt()`` (current lane&#39;s mask).  Equivalent to</span>
-<span class="sd">    ``(u32(1) &lt;&lt; u32(lane_id)) - u32(1)``; inlined at trace time into 1 shift + 1 subtract.</span>
+<span class="sd">    ``(u32(1) &lt;&lt; u32(lane_id)) - u32(1)``; inlined at compile time into 1 shift + 1 subtract.</span>
 
 <span class="sd">    See the module-level note for the ``lane_id ∈ [0, 31]`` contract and the AMDGPU CDNA wave64 caveat.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
