@@ -22,6 +22,7 @@ PER_INTERNAL_OP(test_internal_func_args)
 // SPIRV
 PER_INTERNAL_OP(workgroupBarrier)
 PER_INTERNAL_OP(workgroupMemoryBarrier)
+PER_INTERNAL_OP(gridMemoryBarrier)
 PER_INTERNAL_OP(localInvocationId)
 PER_INTERNAL_OP(globalInvocationId)
 PER_INTERNAL_OP(vkGlobalThreadIdx)
@@ -39,9 +40,10 @@ PER_INTERNAL_OP(subgroupBallotU32)
 PER_INTERNAL_OP(subgroupBallotU64)
 PER_INTERNAL_OP(subgroupSize)
 PER_INTERNAL_OP(subgroupInvocationId)
-// subgroupAdd / subgroupMul / subgroupMin / subgroupMax / subgroupAnd / subgroupOr / subgroupXor removed: use portable
-// Python `subgroup.reduce_add(value, log2_size)` (and equivalents) on top of `subgroupShuffleDown` / `subgroupShuffle`,
-// which work on all backends.  The inclusive-scan ops below remain SPIR-V-only pending portable replacements.
+// subgroupAdd / subgroupMul / subgroupMin / subgroupMax / subgroupAnd / subgroupOr / subgroupXor and subgroupInclusive*
+// / subgroupExclusive* removed: use portable Python `subgroup.reduce_add(value, log2_size)` / `subgroup.inclusive_add`
+// / `subgroup.exclusive_add` (and equivalents), implemented as `@qd.func` Hillis-Steele scans on top of
+// `subgroupShuffleDown` / `subgroupShuffleUp` / `subgroupShuffle`, which work on all backends.
 PER_INTERNAL_OP(spirv_clock_i64)
 
 // CUDA
@@ -51,7 +53,7 @@ PER_INTERNAL_OP(block_barrier_and_i32)
 PER_INTERNAL_OP(block_barrier_or_i32)
 PER_INTERNAL_OP(block_barrier_count_i32)
 PER_INTERNAL_OP(block_mem_fence)
-PER_INTERNAL_OP(grid_memfence)
+PER_INTERNAL_OP(grid_mem_fence)
 PER_INTERNAL_OP(cuda_all_sync_i32)
 PER_INTERNAL_OP(cuda_any_sync_i32)
 PER_INTERNAL_OP(cuda_uni_sync_i32)

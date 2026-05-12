@@ -41,6 +41,7 @@
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/TargetParser/Triple.h"
 
+#include "quadrants/rhi/arch.h"
 #include "quadrants/util/lang_util.h"
 #include "quadrants/jit/jit_session.h"
 #include "quadrants/common/task.h"
@@ -392,8 +393,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_barrier_red("block_barrier_count_i32", Intrinsic::nvvm_barrier_cta_red_popc_aligned_all, false);
       patch_intrinsic("warp_barrier", Intrinsic::nvvm_bar_warp_sync, false);
       patch_intrinsic("block_mem_fence", Intrinsic::nvvm_membar_cta, false);
-      patch_intrinsic("grid_memfence", Intrinsic::nvvm_membar_gl, false);
-      patch_intrinsic("system_memfence", Intrinsic::nvvm_membar_sys, false);
+      patch_intrinsic("grid_mem_fence", Intrinsic::nvvm_membar_gl, false);
+      patch_intrinsic("system_mem_fence", Intrinsic::nvvm_membar_sys, false);
 
       patch_intrinsic("cuda_all", Intrinsic::nvvm_vote_all);
       patch_intrinsic("cuda_all_sync", Intrinsic::nvvm_vote_all_sync);
@@ -520,12 +521,34 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_intrinsic("amdgpu_ballot_w32", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt32Ty(*ctx)});
       patch_intrinsic("amdgpu_ballot_w64", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt64Ty(*ctx)});
 
-      // AMDGPU block-scope memory fence. We can't use `patch_intrinsic` here because LLVM models `fence` as a
-      // first-class IR instruction (`builder.CreateFence(...)`), not as an intrinsic. We also can't compile
-      // `__builtin_amdgcn_fence` from `runtime.cpp` because that runtime is built with the host x86_64 clang
-      // front-end (which doesn't know AMDGCN builtins) and only retargeted to amdgcn here. So we synthesize the fence
-      // body in IR directly with the AMDGPU-specific syncscope name; the AMDGCN backend recognizes "workgroup" scope
-      // and lowers it to the right `s_waitcnt` / cache-flush sequence for a workgroup-scope fence.
+      // Patch warp_size() for AMDGPU. The shared `cuda_kernel_utils.inc.h` stub returns 32, which is baked into the
+      // runtime bitcode by the host clang front-end. Without this patch, AMDGPU code that uses `warp_size()` (e.g. the
+      // per-lane serialization loop in locked_task.h, the warp reduction macro in runtime.cpp) believes the wave is 32
+      // wide and computes `warp_idx() = tid % 32` accordingly, even though we now force wave64 codegen. That mismatch
+      // causes lanes (i, i+32) to share a warp_idx and contend for the same intra-wave lock in lockstep, which
+      // deadlocks because the AMDGCN backend executes the locked body for both lanes simultaneously (e.g.
+      // test_ad_gdar_diffmpm hangs without this patch). Replace the body with a constant 64 so every consumer of
+      // warp_size() sees the real wave width.
+      auto patch_warp_size = [&]() {
+        auto func = module->getFunction("warp_size");
+        if (!func) {
+          return;
+        }
+        func->deleteBody();
+        auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+        IRBuilder<> builder(*ctx);
+        builder.SetInsertPoint(bb);
+        builder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), kAmdgpuWaveSize));
+        QuadrantsLLVMContext::mark_inline(func);
+      };
+      patch_warp_size();
+
+      // AMDGPU memory fences (block-scope "workgroup" and device-scope "agent"). We can't use `patch_intrinsic` here
+      // because LLVM models `fence` as a first-class IR instruction (`builder.CreateFence(...)`), not as an intrinsic.
+      // We also can't compile `__builtin_amdgcn_fence` from `runtime.cpp` because that runtime is built with the host
+      // x86_64 clang front-end (which doesn't know AMDGCN builtins) and only retargeted to amdgcn here. So we
+      // synthesize the fence body in IR directly with the AMDGPU-specific syncscope name; the AMDGCN backend
+      // recognizes "workgroup" / "agent" scopes and lowers each to the right `s_waitcnt` / cache-flush sequence.
       auto patch_fence = [&](const std::string &name, const std::string &scope_str) {
         auto func = module->getFunction(name);
         if (!func) {
@@ -541,6 +564,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
         QuadrantsLLVMContext::mark_inline(func);
       };
       patch_fence("block_mem_fence", "workgroup");
+      patch_fence("grid_mem_fence", "agent");
 
       link_module_with_amdgpu_libdevice(module);
       patch_amdgpu_kernel_dim("block_dim", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), 0));
@@ -635,8 +659,13 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
         isa_file, mcpu);
   }
 
+  // Force wave64 on every AMDGPU target (CDNA gfx9xx are wave64 by default; RDNA gfx10/11/12 default to wave32 but also
+  // support wave64). Linking the wavefrontsize64=on libdevice variant aligns the ROCm device libraries with the wave64
+  // codegen forced via target-features in llvm_context_pass.h::AMDGPUConvertAllocaInstAddressSpacePass and
+  // jit_amdgpu.cpp's TargetMachine features. See `hp/always-wave64`: testing both wave modes was costly, so we
+  // standardize on wave64.
   std::string libdevice_files[] = {"ocml.bc",
-                                   "oclc_wavefrontsize64_off.bc",
+                                   "oclc_wavefrontsize64_on.bc",
                                    "ockl.bc",
                                    "oclc_abi_version_400.bc",
                                    "oclc_correctly_rounded_sqrt_off.bc",

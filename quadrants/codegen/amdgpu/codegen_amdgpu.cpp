@@ -47,6 +47,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   void emit_extra_unary(UnaryOpStmt *stmt) override {
     auto input = llvm_val[stmt->operand];
     auto input_quadrants_type = stmt->operand->ret_type;
+    auto input_type = input->getType();
     auto op = stmt->op_type;
 
 #define UNARY_STD(x)                                                       \
@@ -169,14 +170,35 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     UNARY_STD(exp)
     UNARY_STD(log)
     UNARY_STD(sqrt)
+    else if (op == UnaryOpType::popcnt) {
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
+        llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        auto pop64 = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+        llvm_val[stmt] = builder->CreateTrunc(pop64, llvm::Type::getInt32Ty(*llvm_context));
+        stmt->ret_type = PrimitiveType::i32;
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
+    }
     else if (op == UnaryOpType::clz) {
-      // LLVM's `ctlz` intrinsic works on any integer type (signed or unsigned, any width); the second arg is the
-      // `is_zero_undef` flag, set to 0 so `ctlz(0) == bitwidth`.  Without this, qd.clz on AMDGPU hits the catch-all
-      // QD_NOT_IMPLEMENTED below — needed for `subgroup.segmented_reduce_add` and other ballot-mask scans.
-      auto input_type = input->getType();
-      llvm_val[stmt] =
-          builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
-                                   {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
+      // clz operates on the unsigned bit pattern, so u32 / u64 lower to the same llvm.ctlz call as i32 / i64; LLVM IR
+      // is signless for integers.
+      auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
+        llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
+        stmt->ret_type = PrimitiveType::i32;
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        auto clz64 = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
+        llvm_val[stmt] = builder->CreateTrunc(clz64, llvm::Type::getInt32Ty(*llvm_context));
+        stmt->ret_type = PrimitiveType::i32;
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
     }
     else {
       QD_P(unary_op_type_name(op));
@@ -412,25 +434,6 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       llvm_val[stmt] = emit_amdgpu_shuffle_up(
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type, offset);
-    } else if (stmt->func_name == "subgroupBallotU32") {
-      // We always lower to ``llvm.amdgcn.ballot.i64`` and truncate to i32, on both wave32 and wave64.  In principle
-      // ``llvm.amdgcn.ballot.i32`` exists exactly for this case and is documented as well-defined on wave64 (PR
-      // https://github.com/llvm/llvm-project/pull/71556 in LLVM 18: SETCC at wavefront width, then zext/trunc to the
-      // requested return type, i.e. the low 32 bits = lanes 0..31's predicates on wave64).  In practice the LLVM
-      // versions we've tested (20 and 22.1.0) still fail to select ``ballot.i32`` on gfx942 when the predicate is a
-      // non-constant ``i1`` — isel hits "Cannot select: AMDGPUISD::SETCC ..." for the ``i1 -> i32 != 0`` predicate
-      // shape that ``ballot_first_n`` produces in real kernels.  ``ballot.i64 + trunc to i32`` works around the bug
-      // and produces identical assembly (same single ``v_cmp_*_e64`` + low-half store) since LLVM's CSE folds the
-      // i64 ballot's high half away as soon as the trunc is observed.  See min repro in the PR thread; the workaround
-      // costs nothing and is robust regardless of upstream LLVM fix status.
-      auto ballot64 = call("amdgpu_ballot_u64", llvm_val[stmt->args[0]]);
-      llvm_val[stmt] = builder->CreateTrunc(ballot64, llvm::Type::getInt32Ty(*llvm_context));
-    } else if (stmt->func_name == "subgroupBallotU64") {
-      // ``llvm.amdgcn.ballot.i64`` returns a 64-bit ballot for the full subgroup: on wave64 every lane contributes;
-      // on wave32 only lanes 0..31 contribute and bits 32..63 of the result are zero.  Either way the i64 return is
-      // uniform across wavefront modes, which is what ``ballot_full_subgroup`` advertises to the user.  ``ballot.i64``
-      // on either wave32 or wave64 selects cleanly in current LLVM (only the i32 form has the isel bug noted above).
-      llvm_val[stmt] = call("amdgpu_ballot_u64", llvm_val[stmt->args[0]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
     } else if (stmt->func_name == "subgroupSize") {

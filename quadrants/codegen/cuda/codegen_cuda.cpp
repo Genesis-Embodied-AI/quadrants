@@ -278,14 +278,16 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         QD_NOT_IMPLEMENTED
       }
     } else if (op == UnaryOpType::clz) {
-      // __nv_clz / __nv_clzll are declared on signed types but operate on the underlying bit pattern, so it's safe to
-      // route u32 / u64 through the same intrinsics.  Without this, qd.clz(u32(...)) hits QD_NOT_IMPLEMENTED.
+      // clz operates on the unsigned bit pattern, so u32 and u64 are valid inputs and route to the same libdevice
+      // intrinsics as their signed counterparts. LLVM IR is signless for integers, so passing a `qd.u32` operand to
+      // `__nv_clz` (which has signature `int(int)`) requires no explicit bitcast.
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
         stmt->ret_type = PrimitiveType::i32;
         llvm_val[stmt] = call("__nv_clz", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
                  input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        stmt->ret_type = PrimitiveType::i32;
         llvm_val[stmt] = call("__nv_clzll", input);
       } else {
         QD_NOT_IMPLEMENTED
@@ -748,14 +750,6 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type,
           /* offset=*/llvm_val[stmt->args[1]]);
-    } else if (stmt->func_name == "subgroupBallotU32") {
-      llvm_val[stmt] = call("cuda_ballot_i32", llvm_val[stmt->args[0]]);
-    } else if (stmt->func_name == "subgroupBallotU64") {
-      // CUDA warps are always 32 lanes; there is no native 64-bit ballot.  Zero-extend the i32 result to i64 so the
-      // u64 form has well-defined high 32 bits (always zero) and the public ``ballot_full_subgroup`` API can return a
-      // uniform u64 across backends.
-      auto ballot32 = call("cuda_ballot_i32", llvm_val[stmt->args[0]]);
-      llvm_val[stmt] = builder->CreateZExt(ballot32, llvm::Type::getInt64Ty(*llvm_context));
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("cuda_lane_id");
     } else if (stmt->func_name == "subgroupSize") {
