@@ -47,6 +47,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   void emit_extra_unary(UnaryOpStmt *stmt) override {
     auto input = llvm_val[stmt->operand];
     auto input_quadrants_type = stmt->operand->ret_type;
+    auto input_type = input->getType();
     auto op = stmt->op_type;
 
 #define UNARY_STD(x)                                                       \
@@ -169,14 +170,52 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     UNARY_STD(exp)
     UNARY_STD(log)
     UNARY_STD(sqrt)
+    else if (op == UnaryOpType::popcnt) {
+      // stmt->ret_type is already normalised to i32 by type_check.cpp; the explicit Trunc on the 64-bit arm keeps the
+      // LLVM value width in sync with that contract.
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
+        llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        auto pop64 = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+        llvm_val[stmt] = builder->CreateTrunc(pop64, llvm::Type::getInt32Ty(*llvm_context));
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
+    }
     else if (op == UnaryOpType::clz) {
-      // LLVM's `ctlz` intrinsic works on any integer type (signed or unsigned, any width); the second arg is the
-      // `is_zero_undef` flag, set to 0 so `ctlz(0) == bitwidth`.  Without this, qd.clz on AMDGPU hits the catch-all
-      // QD_NOT_IMPLEMENTED below — needed for `subgroup.segmented_reduce_add` and other ballot-mask scans.
-      auto input_type = input->getType();
-      llvm_val[stmt] =
-          builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
-                                   {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
+      // clz operates on the unsigned bit pattern, so u32 / u64 lower to the same llvm.ctlz call as i32 / i64; LLVM IR
+      // is signless for integers.
+      auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
+        llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        auto clz64 = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
+        llvm_val[stmt] = builder->CreateTrunc(clz64, llvm::Type::getInt32Ty(*llvm_context));
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
+    }
+    else if (op == UnaryOpType::ffs) {
+      // ffs(x): 1-indexed position of the lowest set bit; 0 when x == 0 (CUDA __ffs convention). Lower to llvm.cttz + 1
+      // and a select for the zero case; the AMDGPU LLVM backend further lowers llvm.cttz to native bitfield-extract
+      // instructions. Same width-and-signedness gate as clz.
+      auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        auto cttz = builder->CreateIntrinsic(llvm::Intrinsic::cttz, {input_type}, {input, is_zero_undef});
+        auto plus_one = builder->CreateAdd(cttz, llvm::ConstantInt::get(input_type, 1));
+        auto is_zero = builder->CreateICmpEQ(input, llvm::ConstantInt::get(input_type, 0));
+        auto sel = builder->CreateSelect(is_zero, llvm::ConstantInt::get(input_type, 0), plus_one);
+        llvm_val[stmt] = builder->CreateZExtOrTrunc(sel, llvm::Type::getInt32Ty(*llvm_context));
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
     }
     else {
       QD_P(unary_op_type_name(op));
@@ -451,7 +490,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       // `fence seq_cst` with workgroup syncscope.  The AMDGPU backend lowers this to the appropriate `s_waitcnt` /
       // cache-flush sequence.  Workgroup scope is over-strict for the subgroup-scope ask but correct (orders memory
       // across the whole workgroup, of which the subgroup is a subset) and matches what we do on CUDA
-      // (`block_memfence`).
+      // (`block_mem_fence`).
       builder->CreateFence(llvm::AtomicOrdering::SequentiallyConsistent,
                            llvm_context->getOrInsertSyncScopeID("workgroup"));
       llvm_val[stmt] = tlctx->get_constant(0);

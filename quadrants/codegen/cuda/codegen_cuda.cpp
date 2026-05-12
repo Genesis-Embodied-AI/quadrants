@@ -4,6 +4,8 @@
 #include <set>
 #include <functional>
 
+#include "llvm/IR/InlineAsm.h"
+
 #include "quadrants/common/core.h"
 #include "quadrants/util/io.h"
 #include "quadrants/ir/ir.h"
@@ -267,9 +269,10 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       builder->CreateStore(output, frac_ptr);
       llvm_val[stmt] = res;
     } else if (op == UnaryOpType::popcnt) {
+      // stmt->ret_type is already normalised to i32 by type_check.cpp; libdevice's __nv_popc / __nv_popcll both return
+      // `int` natively so the LLVM call value matches that contract without an extra Trunc.
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::u64) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::i64)) {
-        stmt->ret_type = PrimitiveType::i32;
         llvm_val[stmt] = call("__nv_popcll", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
                  input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
@@ -278,15 +281,28 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         QD_NOT_IMPLEMENTED
       }
     } else if (op == UnaryOpType::clz) {
-      // __nv_clz / __nv_clzll are declared on signed types but operate on the underlying bit pattern, so it's safe to
-      // route u32 / u64 through the same intrinsics.  Without this, qd.clz(u32(...)) hits QD_NOT_IMPLEMENTED.
+      // clz operates on the unsigned bit pattern, so u32 and u64 are valid inputs and route to the same libdevice
+      // intrinsics as their signed counterparts. LLVM IR is signless for integers, so passing a `qd.u32` operand to
+      // `__nv_clz` (which has signature `int(int)`) requires no explicit bitcast.
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
-        stmt->ret_type = PrimitiveType::i32;
         llvm_val[stmt] = call("__nv_clz", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
                  input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
         llvm_val[stmt] = call("__nv_clzll", input);
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
+    } else if (op == UnaryOpType::ffs) {
+      // ffs(x): 1-indexed position of the lowest set bit, with `ffs(0) == 0` (CUDA __ffs convention). libdevice's
+      // `__nv_ffs` / `__nv_ffsll` already produce exactly that contract. As with clz, LLVM IR is signless for integers,
+      // so u32 / u64 lower to the same intrinsic as their signed counterparts.
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
+        llvm_val[stmt] = call("__nv_ffs", input);
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        llvm_val[stmt] = call("__nv_ffsll", input);
       } else {
         QD_NOT_IMPLEMENTED
       }
@@ -771,10 +787,21 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       llvm_val[stmt] = tlctx->get_constant(0);
     } else if (stmt->func_name == "subgroupMemoryBarrier") {
       // Subgroup-scope memory fence.  CUDA has no warp-scope memory fence intrinsic, so we emit `__threadfence_block()`
-      // (CTA-scope, via the existing `block_memfence` patched to `nvvm_membar_cta`).  This is over-strict but correct:
+      // (CTA-scope, via the existing `block_mem_fence` patched to `nvvm_membar_cta`).  This is over-strict but correct:
       // a CTA-scope fence orders memory as observed by the whole CTA, of which the subgroup is a subset.
-      call("block_memfence");
+      call("block_mem_fence");
       llvm_val[stmt] = tlctx->get_constant(0);
+    } else if (stmt->func_name == "cuda_fns_u32") {
+      // Emit PTX inline asm directly: `fns.b32 dst, mask, base, offset`. The hardware op is available since SM 5.0, and
+      // __nv_fns is *not* in the slim_libdevice.10.bc we ship (only popc / clz / ffs are kept), so we cannot route
+      // through libdevice the way popcnt / clz / ffs do. Inline asm produces a single PTX instruction; LLVM's NVPTX
+      // backend rewrites $0..$3 to PTX-style %r register operands.
+      auto i32_ty = llvm::Type::getInt32Ty(*llvm_context);
+      auto func_ty = llvm::FunctionType::get(i32_ty, {i32_ty, i32_ty, i32_ty}, false);
+      auto inline_asm = llvm::InlineAsm::get(func_ty, "fns.b32 $0, $1, $2, $3;", "=r,r,r,r",
+                                             /*hasSideEffects=*/false);
+      llvm_val[stmt] =
+          builder->CreateCall(inline_asm, {llvm_val[stmt->args[0]], llvm_val[stmt->args[1]], llvm_val[stmt->args[2]]});
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }

@@ -76,7 +76,7 @@ i64 cpu_clock_i64() {
   return 0;
 }
 
-void system_memfence() {
+void system_mem_fence() {
 }
 
 #if ARCH_cuda
@@ -1301,7 +1301,7 @@ void warp_barrier(uint32 mask) {
 void block_mem_fence() {
 }
 
-void grid_memfence() {
+void grid_mem_fence() {
 }
 
 // these trivial functions are needed by the DEFINE_REDUCTION macro
@@ -1799,7 +1799,7 @@ void ListManager::touch_chunk(int chunk_id) {
     locked_task(&lock, [&] {
       // may have been allocated during lock contention
       if (!chunks[chunk_id]) {
-        grid_memfence();
+        grid_mem_fence();
         auto chunk_ptr = runtime->allocate_aligned(runtime->runtime_memory_chunk,
                                                    max_num_elements_per_chunk * element_size, 4096, true /*request*/);
         atomic_exchange_u64((u64 *)&chunks[chunk_id], (u64)chunk_ptr);

@@ -52,7 +52,7 @@ def elect():
     """Return ``1`` on lane ``0`` of every subgroup and ``0`` on every other lane.
 
     Implemented portably as ``invocation_id() == 0``: every backend that lowers ``invocation_id()`` therefore lowers
-    ``elect()`` at zero extra cost (it inlines at trace time into a single compare + zext).
+    ``elect()`` at zero extra cost (it inlines at compile time into a single compare + zext).
 
     Note that this narrows SPIR-V's ``OpGroupNonUniformElect`` semantics, which may pick any *active* lane as the
     elected one.  Under the documented uniform-CF + all-lanes-active contract for ``qd.simt.subgroup`` this distinction
@@ -144,8 +144,9 @@ def all_true(predicate, log2_size: template()):
     """AND-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane
     of the group iff every lane in the group has a non-zero ``predicate``, else ``0``.
 
-    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal /
-    RDNA, 64 on CDNA).  ``log2_size`` is a compile-time template; the body is fully unrolled.
+    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
+    on AMDGPU — wave64 is forced on every AMDGPU target).  ``log2_size`` is a compile-time template; the body is fully
+    unrolled.
     """
     p = i32(predicate != 0)
     if impl.static(impl.current_cfg().arch == _qd_core.cuda and log2_size == 5):
@@ -212,7 +213,7 @@ def lanemask_lt(lane_id):
     """Bitmask of lanes strictly below ``lane_id`` — bit ``i`` is set iff ``i < lane_id``.
 
     Pass ``invocation_id()`` for the classic CUDA ``__lanemask_lt()`` (current lane's mask).  Equivalent to
-    ``(u32(1) << u32(lane_id)) - u32(1)``; inlined at trace time into 1 shift + 1 subtract.
+    ``(u32(1) << u32(lane_id)) - u32(1)``; inlined at compile time into 1 shift + 1 subtract.
 
     See the module-level note for the ``lane_id ∈ [0, 31]`` contract and the AMDGPU CDNA wave64 caveat.
     """
@@ -282,7 +283,7 @@ def reduce_add(value, log2_size: template()):
 
     The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.
     Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
-    (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).
+    (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target).
 
     ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
     shuffle+add operations in the calling kernel's IR.
@@ -559,10 +560,8 @@ def _inclusive_scan(value, op: template(), log2_size: template()):
     groups smaller than the full subgroup compose correctly when ``log2_size < log2(group_size)``.
 
     Note: ``qd.select`` cannot be used here instead of ``if`` because ``OpSelect`` on MoltenVK / Metal miscompiles when
-    one operand is an f32 produced by a shuffle intrinsic—the select silently returns the false-branch value regardless
-    of the condition.  The ``if`` form works correctly for the inclusive scan on its own; callers that issue further
-    subgroup ops after this scan (e.g. `_exclusive_scan`) must insert a ``sync()`` barrier to force reconvergence
-    before the next shuffle.
+    one operand is an f32 produced by a shuffle intrinsic — the select silently returns the false-branch value
+    regardless of the condition.  The ``if`` form works correctly on its own.
     """
     lane_in_group = invocation_id() & impl.static((1 << log2_size) - 1)
     for i in impl.static(range(log2_size)):
@@ -578,8 +577,8 @@ def inclusive_add(value, log2_size: template()):
     """Inclusive prefix sum across ``2**log2_size`` consecutive lanes.
 
     Lane ``i`` within each group of ``2**log2_size`` lanes returns ``v[group_start] + v[group_start + 1] + ... + v[i]``.
-    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal /
-    RDNA, 64 on CDNA).
+    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
+    on AMDGPU — wave64 is forced on every AMDGPU target).
     """
     return _inclusive_scan(value, _bin_add, log2_size)
 
@@ -628,10 +627,12 @@ def inclusive_xor(value, log2_size: template()):
 
 # --- Exclusive scans -------------------------------------------------------------------
 #
-# Each `exclusive_*` runs the inclusive scan, then shifts the result up by one lane via `shuffle_up(inc, 1)` and
-# replaces lane 0 of every group with the operator's identity.  Lane 0's result must be set explicitly because
-# `shuffle_up` with offset 1 returns an implementation-defined value at lane 0 (and `OpGroupNonUniformShuffleUp` calls
-# it undefined outright).  See `_exclusive_scan` for the shared body.
+# Each `exclusive_*` shifts the *input* right by one lane via `shuffle_up(value, 1)`, seeds lane 0 of every group with
+# the operator's identity, and then runs the inclusive scan on the shifted data.  Doing the shuffle first (rather than
+# running the inclusive scan and shuffling the result) avoids the MoltenVK / Metal miscompile where the SPIR-V
+# compiler misoptimizes the register holding the inclusive-scan result when its only consumer is a shuffle intrinsic.
+# Lane 0's result must be set explicitly because `shuffle_up` with offset 1 returns an implementation-defined value at
+# lane 0 (`OpGroupNonUniformShuffleUp` calls it undefined outright).  See `_exclusive_scan` for the shared body.
 #
 # Identity per op (in `value`'s dtype, expressed via dtype-preserving arithmetic so the wrapper does not need to
 # inspect the dtype):
