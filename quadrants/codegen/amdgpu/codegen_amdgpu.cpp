@@ -464,7 +464,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       // `fence seq_cst` with workgroup syncscope.  The AMDGPU backend lowers this to the appropriate `s_waitcnt` /
       // cache-flush sequence.  Workgroup scope is over-strict for the subgroup-scope ask but correct (orders memory
       // across the whole workgroup, of which the subgroup is a subset) and matches what we do on CUDA
-      // (`block_memfence`).
+      // (`block_mem_fence`).
       builder->CreateFence(llvm::AtomicOrdering::SequentiallyConsistent,
                            llvm_context->getOrInsertSyncScopeID("workgroup"));
       llvm_val[stmt] = tlctx->get_constant(0);
