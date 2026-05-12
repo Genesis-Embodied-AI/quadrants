@@ -1,5 +1,6 @@
 import math
 
+import numpy as np
 import pytest
 
 import quadrants as qd
@@ -1013,3 +1014,77 @@ def test_atomic_cas_raw_field_raises_clear_error():
 
     with pytest.raises(qd.lang.exception.QuadrantsCompilationError):
         kern()
+
+
+# Pins that atomic_cas works on qd.ndarray elements, not just qd.field. Ndarrays go through a different
+# access path (typed-NDArray kernel argument with physical-pointer subscript), so the surface needs to be
+# exercised separately. Uses a contention pattern (single winner among N threads) to also verify atomicity
+# on the ndarray surface, matching the field-side test_atomic_cas_contention_single_winner.
+@test_utils.test(arch=qd.gpu)
+def test_atomic_cas_on_ndarray():
+    N = 128
+    INIT = 0
+
+    @qd.kernel
+    def kern(slot: qd.types.NDArray, olds: qd.types.NDArray) -> None:
+        for i in range(N):
+            olds[i] = qd.atomic_cas(slot[0], INIT, i + 1)
+
+    slot = np.array([INIT], dtype=np.int32)
+    olds = np.zeros(N, dtype=np.int32)
+    kern(slot, olds)
+    qd.sync()
+
+    olds_seen = list(olds)
+    winners = [i for i in range(N) if olds_seen[i] == INIT]
+    assert len(winners) == 1, f"expected exactly one CAS winner, got {len(winners)}: indices {winners[:5]}..."
+    winner_id = winners[0] + 1
+    assert int(slot[0]) == winner_id, f"slot ended with {int(slot[0])}, expected winner's id {winner_id}"
+
+
+# Pins that the documented workaround for tensor-CAS rejection actually works: extract a scalar component
+# from a Vector field with `vec_field[None][i]` and CAS on that scalar. The MatrixPtrStmt-derived lvalue
+# must reach codegen as a normal scalar AtomicOpStmt with `expected` populated. Without this, the docs
+# would tell users to do something we don't actually support.
+@test_utils.test(arch=qd.gpu)
+def test_atomic_cas_on_vector_field_scalar_component():
+    f = qd.Vector.field(3, qd.i32, shape=())
+    f[None] = qd.Vector([10, 20, 30])
+    out = qd.field(qd.i32, shape=(3,))
+
+    @qd.kernel
+    def kern():
+        # CAS each component independently. The expected-value matches in every case, so all three swaps fire.
+        out[0] = qd.atomic_cas(f[None][0], 10, 100)
+        out[1] = qd.atomic_cas(f[None][1], 20, 200)
+        out[2] = qd.atomic_cas(f[None][2], 30, 300)
+
+    kern()
+    assert int(out[0]) == 10 and int(f[None][0]) == 100
+    assert int(out[1]) == 20 and int(f[None][1]) == 200
+    assert int(out[2]) == 30 and int(f[None][2]) == 300
+
+
+# Pins that the `expected`-cast in AtomicOpExpression::type_check handles signed -> unsigned widening too.
+# `qd.atomic_cas(u32_field[None], -1, 0)` passes -1 as a Python int (default i32). The cast must convert
+# it through cast_value to u32 (=0xFFFFFFFF), letting the swap-from-sentinel pattern work on unsigned
+# fields. Same shape for u64. Complements test_atomic_cas_expected_int_literal_widens_to_i64 which only
+# covers the positive i64 case.
+@pytest.mark.parametrize("dtype", [qd.u32, qd.u64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_cas_expected_signed_int_literal_casts_to_unsigned(dtype):
+    _skip_if_no_int64_atomic_rmw(dtype)
+    sentinel = (1 << 32) - 1 if dtype == qd.u32 else (1 << 64) - 1
+    f = qd.field(dtype, shape=())
+    out = qd.field(dtype, shape=())
+    f[None] = sentinel
+
+    @qd.kernel
+    def kern():
+        # -1 is a Python int (i32 default). After signed -> unsigned cast it becomes the all-ones sentinel,
+        # so the CAS fires and the slot is cleared to 0.
+        out[None] = qd.atomic_cas(f[None], -1, 0)
+
+    kern()
+    assert int(out[None]) == sentinel
+    assert int(f[None]) == 0
