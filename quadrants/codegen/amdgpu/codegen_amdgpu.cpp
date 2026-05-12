@@ -156,6 +156,17 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 #undef UNARY_STD
   }
 
+  // AMDGPU sync scope helper. Genesis atomics are producer-consumer
+  // across kernel launches; the launch boundary supplies release/acquire
+  // ordering, so the in-kernel atomic only needs Monotonic ordering at
+  // agent (device) scope. This skips the s_waitcnt vmcnt(0) lgkmcnt(0)
+  // and buffer_inv / buffer_wbinvl1_vol cache-invalidate pair that
+  // SequentiallyConsistent system-scope atomics emit on AMDGPU. Atomics
+  // are still emitted as single-instruction global_atomic_* on gfx942.
+  llvm::SyncScope::ID amdgpu_atomic_scope() {
+    return llvm_context->getOrInsertSyncScopeID("agent");
+  }
+
   // Emit reductions as direct LLVM atomics instead of calling runtime
   // reduce_* helpers. The runtime helpers expect addrspace(0) pointers,
   // but SNode destinations arrive in addrspace(1). Calling the helpers
@@ -184,13 +195,13 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       if (i32_ops.find(op) != i32_ops.end()) {
         return builder->CreateAtomicRMW(
             i32_ops.at(op), dest, val, llvm::MaybeAlign(0),
-            llvm::AtomicOrdering::SequentiallyConsistent);
+            llvm::AtomicOrdering::Monotonic, amdgpu_atomic_scope());
       }
     } else if (prim_type == PrimitiveTypeID::f32) {
       if (op == AtomicOpType::add) {
         return builder->CreateAtomicRMW(
             llvm::AtomicRMWInst::FAdd, dest, val, llvm::MaybeAlign(0),
-            llvm::AtomicOrdering::SequentiallyConsistent);
+            llvm::AtomicOrdering::Monotonic, amdgpu_atomic_scope());
       } else if (op == AtomicOpType::min) {
         return atomic_op_using_cas(
             dest, val,
@@ -204,6 +215,149 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       }
     }
     return nullptr;
+  }
+
+  // Override the non-reduction integer atomic path so user-written
+  // qd.atomic_add(...) on integer SNode/Ndarray destinations (e.g. the
+  // work-queue counters in Genesis's narrowphase / broadphase / inequality
+  // constraint kernels, which dominate ~14% of the run after the tiled-wc
+  // CG body) emits Monotonic+agent on AMDGPU instead of SeqCst+system.
+  // Mirrors TaskCodeGenLLVM::integral_type_atomic; only the AtomicRMW
+  // ordering + sync scope differ.
+  llvm::Value *integral_type_atomic(AtomicOpStmt *stmt) override {
+    if (!is_integral(stmt->val->ret_type)) {
+      return nullptr;
+    }
+    if (stmt->op_type == AtomicOpType::mul) {
+      return atomic_op_using_cas(
+          llvm_val[stmt->dest], llvm_val[stmt->val],
+          [&](auto v1, auto v2) { return builder->CreateMul(v1, v2); },
+          stmt->val->ret_type);
+    }
+    std::unordered_map<AtomicOpType, llvm::AtomicRMWInst::BinOp> bin_op;
+    bin_op[AtomicOpType::add] = llvm::AtomicRMWInst::BinOp::Add;
+    if (is_signed(stmt->val->ret_type)) {
+      bin_op[AtomicOpType::min] = llvm::AtomicRMWInst::BinOp::Min;
+      bin_op[AtomicOpType::max] = llvm::AtomicRMWInst::BinOp::Max;
+    } else {
+      bin_op[AtomicOpType::min] = llvm::AtomicRMWInst::BinOp::UMin;
+      bin_op[AtomicOpType::max] = llvm::AtomicRMWInst::BinOp::UMax;
+    }
+    bin_op[AtomicOpType::bit_and] = llvm::AtomicRMWInst::BinOp::And;
+    bin_op[AtomicOpType::bit_or] = llvm::AtomicRMWInst::BinOp::Or;
+    bin_op[AtomicOpType::bit_xor] = llvm::AtomicRMWInst::BinOp::Xor;
+    QD_ASSERT(bin_op.find(stmt->op_type) != bin_op.end());
+    return builder->CreateAtomicRMW(
+        bin_op.at(stmt->op_type), llvm_val[stmt->dest], llvm_val[stmt->val],
+        llvm::MaybeAlign(0), llvm::AtomicOrdering::Monotonic,
+        amdgpu_atomic_scope());
+  }
+
+  // Override the non-reduction real atomic path. The f32 add fast path
+  // is what Genesis hits whenever it accumulates a float into a counter
+  // outside a TLS-promoted reduction. f16 and f64 paths fall through to
+  // the CAS-based atomic_op_using_cas below, which is also overridden.
+  llvm::Value *real_type_atomic(AtomicOpStmt *stmt) override {
+    if (!is_real(stmt->val->ret_type)) {
+      return nullptr;
+    }
+    PrimitiveTypeID prim_type =
+        stmt->val->ret_type->cast<PrimitiveType>()->type;
+    AtomicOpType op = stmt->op_type;
+    if (prim_type == PrimitiveTypeID::f16) {
+      switch (op) {
+        case AtomicOpType::add:
+          return atomic_op_using_cas(
+              llvm_val[stmt->dest], llvm_val[stmt->val],
+              [&](auto v1, auto v2) { return builder->CreateFAdd(v1, v2); },
+              stmt->val->ret_type);
+        case AtomicOpType::max:
+          return atomic_op_using_cas(
+              llvm_val[stmt->dest], llvm_val[stmt->val],
+              [&](auto v1, auto v2) { return builder->CreateMaxNum(v1, v2); },
+              stmt->val->ret_type);
+        case AtomicOpType::min:
+          return atomic_op_using_cas(
+              llvm_val[stmt->dest], llvm_val[stmt->val],
+              [&](auto v1, auto v2) { return builder->CreateMinNum(v1, v2); },
+              stmt->val->ret_type);
+        default:
+          break;
+      }
+    }
+    switch (op) {
+      case AtomicOpType::add:
+        return builder->CreateAtomicRMW(
+            llvm::AtomicRMWInst::FAdd, llvm_val[stmt->dest],
+            llvm_val[stmt->val], llvm::MaybeAlign(0),
+            llvm::AtomicOrdering::Monotonic, amdgpu_atomic_scope());
+      case AtomicOpType::mul:
+        return atomic_op_using_cas(
+            llvm_val[stmt->dest], llvm_val[stmt->val],
+            [&](auto v1, auto v2) { return builder->CreateFMul(v1, v2); },
+            stmt->val->ret_type);
+      default:
+        break;
+    }
+    // f32/f64 min/max fall through to the runtime atomic_min/max helpers
+    // declared in runtime.cpp; the base implementation is intentionally
+    // reused here (they are CAS-based regardless of ordering, and Genesis
+    // does not hit this path in the benchmark).
+    std::unordered_map<PrimitiveTypeID,
+                       std::unordered_map<AtomicOpType, std::string>>
+        atomics;
+    atomics[PrimitiveTypeID::f32][AtomicOpType::min] = "atomic_min_f32";
+    atomics[PrimitiveTypeID::f64][AtomicOpType::min] = "atomic_min_f64";
+    atomics[PrimitiveTypeID::f32][AtomicOpType::max] = "atomic_max_f32";
+    atomics[PrimitiveTypeID::f64][AtomicOpType::max] = "atomic_max_f64";
+    QD_ASSERT(atomics.find(prim_type) != atomics.end());
+    QD_ASSERT(atomics.at(prim_type).find(op) != atomics.at(prim_type).end());
+    return call(atomics.at(prim_type).at(op), llvm_val[stmt->dest],
+                llvm_val[stmt->val]);
+  }
+
+  // CAS-loop fallback path on AMDGPU. Used for atomic_mul on integers /
+  // floats and for f32 atomic min/max in the reduction path. Identical
+  // to the base implementation except both AtomicOrdering args on the
+  // cmpxchg are relaxed to Monotonic at agent scope.
+  llvm::Value *atomic_op_using_cas(
+      llvm::Value *dest,
+      llvm::Value *val,
+      std::function<llvm::Value *(llvm::Value *, llvm::Value *)> op,
+      const DataType &type) override {
+    using namespace llvm;
+    BasicBlock *body =
+        BasicBlock::Create(*llvm_context, "while_loop_body", func);
+    BasicBlock *after_loop =
+        BasicBlock::Create(*llvm_context, "after_while", func);
+
+    builder->CreateBr(body);
+    builder->SetInsertPoint(body);
+
+    llvm::Value *old_val;
+    {
+      int bits = data_type_bits(type);
+      unsigned dest_as = dest->getType()->isPointerTy()
+                             ? dest->getType()->getPointerAddressSpace()
+                             : 0;
+      llvm::PointerType *typeIntPtr =
+          llvm::PointerType::get(*llvm_context, dest_as);
+      llvm::IntegerType *typeIntTy = get_integer_type(bits);
+
+      old_val = builder->CreateLoad(val->getType(), dest);
+      auto new_val = op(old_val, val);
+      dest = builder->CreateBitCast(dest, typeIntPtr);
+      auto atomicCmpXchg = builder->CreateAtomicCmpXchg(
+          dest, builder->CreateBitCast(old_val, typeIntTy),
+          builder->CreateBitCast(new_val, typeIntTy), llvm::MaybeAlign(0),
+          AtomicOrdering::Monotonic, AtomicOrdering::Monotonic,
+          amdgpu_atomic_scope());
+      auto ok = builder->CreateExtractValue(atomicCmpXchg, 1);
+      builder->CreateCondBr(builder->CreateNot(ok), body, after_loop);
+    }
+
+    builder->SetInsertPoint(after_loop);
+    return old_val;
   }
 
   void visit(RangeForStmt *for_stmt) override {
@@ -261,6 +415,21 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     QD_NOT_IMPLEMENTED
   }
 
+  // Pin amdgpu-flat-work-group-size on the current kernel function (the
+  // `func` member set by init_offloaded_task_function) to the exact
+  // dispatch shape. The base codegen leaves this attribute unset, so the
+  // inheritance loop in jit_amdgpu.cpp falls back to the conservative
+  // "1,128" bound for every body function. Setting it here lets the
+  // AMDGPU backend fold __ockl_get_local_size to a constant, tightens
+  // VGPR/SGPR allocator decisions, and propagates the tight bound to all
+  // body functions via the inheritance loop.
+  void set_amdgpu_flat_work_group_size(int block_dim) {
+    if (func && block_dim > 0) {
+      auto wgs = std::to_string(block_dim);
+      func->addFnAttr("amdgpu-flat-work-group-size", wgs + "," + wgs);
+    }
+  }
+
   void emit_amdgpu_gc(OffloadedStmt *stmt) {
     auto snode_id = tlctx->get_constant(stmt->snode->id);
     {
@@ -269,6 +438,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       finalize_offloaded_task_function();
       current_task->grid_dim = compile_config.saturating_grid_dim;
       current_task->block_dim = 64;
+      set_amdgpu_flat_work_group_size(current_task->block_dim);
       offloaded_tasks.push_back(*current_task);
       current_task = nullptr;
     }
@@ -278,6 +448,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       finalize_offloaded_task_function();
       current_task->grid_dim = 1;
       current_task->block_dim = 1;
+      set_amdgpu_flat_work_group_size(current_task->block_dim);
       offloaded_tasks.push_back(*current_task);
       current_task = nullptr;
     }
@@ -287,6 +458,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       finalize_offloaded_task_function();
       current_task->grid_dim = compile_config.saturating_grid_dim;
       current_task->block_dim = 64;
+      set_amdgpu_flat_work_group_size(current_task->block_dim);
       offloaded_tasks.push_back(*current_task);
       current_task = nullptr;
     }
@@ -525,6 +697,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
+      set_amdgpu_flat_work_group_size(current_task->block_dim);
       offloaded_tasks.push_back(*current_task);
       current_task = nullptr;
       dynamic_shared_array_bytes = 0;
