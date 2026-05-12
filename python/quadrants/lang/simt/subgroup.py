@@ -489,23 +489,22 @@ def _segment_head_distance(head_flag, log2_size: template()):
         # ``lane - segment_head_abs`` (both shifted by ``half_base``), so the distance returned here is consistent
         # with what ``segmented_reduce_*`` callers expect for the ``distance >= offset`` shuffle-up bound.
         return lane_in_half - segment_head
-    else:
-        # ``log2_size == 6`` (full wave64). Skip the half-local split and work in absolute lane coordinates with a u64
-        # bitmask.  The implicit-head bit is injected at the segment's group base (always 0 on the only
-        # wave64-and-log2_size-6 configuration), and we use ``clz(u64)`` for the segment head.  Quadrants pins AMDGPU
-        # to wave64 so this branch is only reachable when ``group_size() == 64``; on every other backend ``log2_size ==
-        # 6`` violates the documented caller contract (``2**log2_size <= group_size()``) — checked by the
-        # ``static_assert`` in ``segmented_reduce_*``.
-        bits_in_group = u64(impl.static(((1 << (1 << log2_size)) - 1) & 0xFFFFFFFFFFFFFFFF))
-        group_base = u64(lane) & u64(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFFFFFFFFFF))
-        group_mask = bits_in_group << group_base
-        effective_mask = (full_mask & group_mask) | (u64(1) << group_base)
-        # ``lane + 1 <= 64`` on wave64; ``63 - lane`` is in ``[0, 63]`` so the u64 shift is well-defined and produces
-        # all-1s in the bottom ``lane + 1`` bits.
-        inclusive_mask = u64(0xFFFFFFFFFFFFFFFF) >> u64(i32(63) - i32(lane))
-        lower = effective_mask & inclusive_mask
-        segment_head = i32(63) - i32(clz(lower))
-        return i32(lane) - segment_head
+    # ``log2_size == 6`` (full wave64). Skip the half-local split and work in absolute lane coordinates with a u64
+    # bitmask.  The implicit-head bit is injected at the segment's group base (always 0 on the only
+    # wave64-and-log2_size-6 configuration), and we use ``clz(u64)`` for the segment head.  Quadrants pins AMDGPU to
+    # wave64 so this branch is only reachable when ``group_size() == 64``; on every other backend ``log2_size == 6``
+    # violates the documented caller contract (``2**log2_size <= group_size()``) — checked by the ``static_assert`` in
+    # ``segmented_reduce_*``.
+    bits_in_group = u64(impl.static(((1 << (1 << log2_size)) - 1) & 0xFFFFFFFFFFFFFFFF))
+    group_base = u64(lane) & u64(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFFFFFFFFFF))
+    group_mask = bits_in_group << group_base
+    effective_mask = (full_mask & group_mask) | (u64(1) << group_base)
+    # ``lane + 1 <= 64`` on wave64; ``63 - lane`` is in ``[0, 63]`` so the u64 shift is well-defined and produces
+    # all-1s in the bottom ``lane + 1`` bits.
+    inclusive_mask = u64(0xFFFFFFFFFFFFFFFF) >> u64(i32(63) - i32(lane))
+    lower = effective_mask & inclusive_mask
+    segment_head = i32(63) - i32(clz(lower))
+    return i32(lane) - segment_head
 
 
 @func
