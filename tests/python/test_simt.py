@@ -3142,6 +3142,46 @@ def test_subgroup_segmented_reduce_max_log2_size_6():
 
 
 # --------------------------------------------------------------------------------------------------------------------
+# Full-wave (``log2_size = 6``) absolute-correctness tests for the four shuffle-tree families.  Each is a thin
+# wrapper around the existing per-family helper -- the helpers already loop over ``N // group_size`` groups, which
+# at ``log2_size = 6`` and ``N = 64`` collapses to one group spanning the whole wave64 subgroup.  We deliberately
+# don't expand the bulk ``[1, 2, 3, 4, 5]`` parameterization to include ``6``: the dtype-lowering paths are
+# orthogonal to the unroll-depth path, so ``i32`` at ``log2_size = 6`` is enough to lock the cross-half shuffle
+# step at offset 32 that the AMDGPU wave64 fix introduces.  The ``_full`` variant tests above already check the
+# (matching) ``base(v, log2_group_size())`` shape for every op + dtype.  ``arch=qd.amdgpu`` is the only forced-wave64
+# target today; the cross-half shuffle traffic these probe is implementation-defined on wave32 backends.
+# --------------------------------------------------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.amdgpu)
+def test_subgroup_reduce_add_log2_size_6():
+    """``log2_size = 6`` ``reduce_add`` over a wave64 subgroup.  Exercises the cross-half ``shuffle_down(v, 32)``
+    step of the tree, which on RDNA pre-fix silently dropped the upper-half contribution."""
+    _check_reduce_lane0(subgroup.reduce_add, lambda a, b: a + b, qd.i32, 6, _init_field)
+
+
+@test_utils.test(arch=qd.amdgpu)
+def test_subgroup_reduce_all_add_log2_size_6():
+    """``log2_size = 6`` ``reduce_all_add`` over a wave64 subgroup.  Butterfly uses ``shuffle_xor(v, 32)`` at the
+    final step, which on RDNA pre-fix wrapped within SIMD32 and broadcast the wrong value to every lane."""
+    _check_reduce_all(subgroup.reduce_all_add, lambda a, b: a + b, qd.i32, 6, _init_field)
+
+
+@test_utils.test(arch=qd.amdgpu)
+def test_subgroup_inclusive_add_log2_size_6():
+    """``log2_size = 6`` ``inclusive_add`` over a wave64 subgroup.  Final Hillis-Steele step does
+    ``shuffle_up(v, 32)``, exercising the cross-half path."""
+    _check_inclusive_scan(subgroup.inclusive_add, lambda a, b: a + b, qd.i32, 6, _init_field)
+
+
+@test_utils.test(arch=qd.amdgpu)
+def test_subgroup_exclusive_add_log2_size_6():
+    """``log2_size = 6`` ``exclusive_add`` over a wave64 subgroup.  Same shuffle_up tree as ``inclusive_add`` plus
+    an extra ``shuffle_up`` to shift the result down by one lane and an identity-at-lane-0 substitution."""
+    _check_exclusive_scan(subgroup.exclusive_add, lambda a, b: a + b, 0, qd.i32, 6, _init_field)
+
+
+# --------------------------------------------------------------------------------------------------------------------
 # Direct cross-half shuffle coverage.  These tests target the lane <-> lane >= 32 traffic that on AMD RDNA wave64
 # hardware (gfx10+) used to silently wrap inside the 32-lane SIMD cluster: ``ds_bpermute`` is SIMD32-scoped, and prior
 # to the ``permlane64``-based cross-half helper a lane in the bottom half could not read the top half (and vice
