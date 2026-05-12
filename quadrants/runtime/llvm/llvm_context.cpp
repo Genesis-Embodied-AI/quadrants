@@ -533,8 +533,10 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       // brings the other SIMD's value to this lane, and we select between the two based on which half the target lane
       // sits in. See ``amdgpu_cross_half_shuffle_i32`` in runtime.cpp. Available on gfx10.3+ (RDNA2/3/4) and on every
       // CDNA target (gfx9xx, gfx940/942); we force wave64 on all AMDGPU so there's no wave32 codepath that could call
-      // this in an undefined state.
-      patch_intrinsic("amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64);
+      // this in an undefined state. The intrinsic is overloaded on its element type (signature
+      // ``T -> T`` for any 32-bit-or-smaller ``T``), so we have to pass the explicit ``i32`` type alongside the
+      // ID -- otherwise ``CreateIntrinsic`` segfaults inside getDeclaration() while resolving the mangled name.
+      patch_intrinsic("amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true, {llvm::Type::getInt32Ty(*ctx)});
       patch_intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
       patch_intrinsic("amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
       patch_intrinsic("amdgpu_ballot_w32", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt32Ty(*ctx)});
