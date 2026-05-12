@@ -1,6 +1,6 @@
-# CUDA Graph
+# Graph
 
-CUDA graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch. On non-CUDA platforms, the cuda graph annotation is simply ignored, and code runs normally.
+Graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch. On non-CUDA platforms, the graph annotation is simply ignored, and code runs normally.
 
 ## Basic usage
 
@@ -18,7 +18,7 @@ def my_kernel(
         y[i] = y[i] + 2.0
 ```
 
-The top level for-loops will be compiled into a single CUDA graph. The parallelism is the same as before, but the launch latency much reduced.
+The top level for-loops will be compiled into a single graph. The parallelism is the same as before, but the launch latency much reduced.
 
 The kernel is used normally — no other API changes are needed:
 
@@ -32,7 +32,7 @@ my_kernel(x, y)  # subsequent calls: replays the cached graph
 
 ### Restrictions
 
-- **No struct return values.** Kernels that return values (e.g. `-> qd.i32`) cannot use CUDA graphs. An error is raised if `graph=True` is set on such a kernel.
+- **No struct return values.** Kernels that return values (e.g. `-> qd.i32`) cannot use graphs. An error is raised if `graph=True` is set on such a kernel.
 - **Primal kernels only.** The `graph=True` flag is applied to the primal (forward) kernel only, not its adjoint. Autodiff kernels use the normal launch path.
 
 ### Passing different arguments
@@ -124,7 +124,7 @@ However, other parameters can be any supported Quadrants kernel parameter type.
 
 - The same physical ndarray must be used for the counter parameter on every
   call. Passing a different ndarray raises an error, because the counter's
-  device pointer is baked into the CUDA graph at creation time.
+  device pointer is baked into the graph at creation time.
 
 ### Caveats
 
