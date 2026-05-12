@@ -263,6 +263,10 @@ UnaryOpStmt *IRBuilder::create_clz(Stmt *value) {
   return insert(Stmt::make_typed<UnaryOpStmt>(UnaryOpType::clz, value));
 }
 
+UnaryOpStmt *IRBuilder::create_ffs(Stmt *value) {
+  return insert(Stmt::make_typed<UnaryOpStmt>(UnaryOpType::ffs, value));
+}
+
 BinaryOpStmt *IRBuilder::create_add(Stmt *l, Stmt *r) {
   return insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, l, r));
 }
