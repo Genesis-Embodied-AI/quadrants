@@ -750,6 +750,14 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type,
           /* offset=*/llvm_val[stmt->args[1]]);
+    } else if (stmt->func_name == "subgroupBallotU32") {
+      llvm_val[stmt] = call("cuda_ballot_i32", llvm_val[stmt->args[0]]);
+    } else if (stmt->func_name == "subgroupBallotU64") {
+      // CUDA warps are always 32 lanes; there is no native 64-bit ballot.  Zero-extend the i32 result to i64 so the
+      // u64 form has well-defined high 32 bits (always zero) and the public ``ballot_full_subgroup`` API can return a
+      // uniform u64 across backends.
+      auto ballot32 = call("cuda_ballot_i32", llvm_val[stmt->args[0]]);
+      llvm_val[stmt] = builder->CreateZExt(ballot32, llvm::Type::getInt64Ty(*llvm_context));
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("cuda_lane_id");
     } else if (stmt->func_name == "subgroupSize") {
