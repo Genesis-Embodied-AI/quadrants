@@ -527,6 +527,14 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_intrinsic("block_barrier", llvm::Intrinsic::amdgcn_s_barrier, false);
       patch_intrinsic("amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
       patch_intrinsic("amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
+      // ``llvm.amdgcn.permlane64`` exchanges a 32-bit value between lanes ``i`` and ``i ^ 32`` in a single instruction.
+      // We use it to extend the SIMD32-scoped ``ds_bpermute`` (every shuffle op lowers to that) into a wave64-aware
+      // cross-half shuffle on RDNA: ``ds_bpermute`` reads within the lane's own 32-lane SIMD cluster, ``permlane64``
+      // brings the other SIMD's value to this lane, and we select between the two based on which half the target lane
+      // sits in. See ``amdgpu_cross_half_shuffle_i32`` in runtime.cpp. Available on gfx10.3+ (RDNA2/3/4) and on every
+      // CDNA target (gfx9xx, gfx940/942); we force wave64 on all AMDGPU so there's no wave32 codepath that could call
+      // this in an undefined state.
+      patch_intrinsic("amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64);
       patch_intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
       patch_intrinsic("amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
       patch_intrinsic("amdgpu_ballot_w32", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt32Ty(*ctx)});

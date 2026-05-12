@@ -980,6 +980,14 @@ i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
   return 0;
 }
 
+// Exchanges a 32-bit value between lanes ``i`` and ``i ^ 32`` in a single instruction. Available on every wave64
+// AMDGPU target Quadrants compiles for (gfx10.3+ RDNA2/3/4 and every CDNA). Used by ``amdgpu_cross_half_shuffle_i32``
+// below to repair the cross-half story for ``ds_bpermute``, which is SIMD32-scoped on RDNA.
+i32 amdgpu_permlane64(i32 value) {
+  __builtin_trap();
+  return 0;
+}
+
 i32 amdgpu_mbcnt_lo(i32 mask, i32 base) {
   __builtin_trap();
   return 0;
@@ -1012,8 +1020,45 @@ i32 amdgpu_lane_id() {
   return amdgpu_mbcnt_hi(-1, amdgpu_mbcnt_lo(-1, 0));
 }
 
+// Wave64-aware "read ``value`` from lane ``target_lane``" gather for AMDGPU. Shared by every i32 shuffle variant
+// (``shuffle`` / ``shuffle_down`` / ``shuffle_up``); the f32 / i64 / f64 wrappers below decompose into i32 calls and
+// therefore inherit the wave64 fix for free.
+//
+// Why this isn't just ``ds_bpermute``:
+//
+// * On every CDNA target (gfx9xx, gfx940/942) the SIMD is 64 lanes wide and ``ds_bpermute`` already addresses the
+//   whole wavefront, so ``self_half == target_half`` always holds and the ``permlane64`` branch below is dead-coded
+//   by LLVM (or, more precisely, executed but never selected — same instruction count as the old path).
+// * On RDNA (gfx10/11/12) the SIMD is 32 lanes wide. Quadrants forces wave64 so the wavefront spans two SIMD32s, but
+//   ``ds_bpermute`` is still scoped to a single SIMD32 cluster: a lane in the bottom half reading "byte index >= 128"
+//   does not reach the top half — it wraps within its own SIMD. Without a fix this silently corrupts every
+//   ``log2_size = 6`` reduction / scan / vote (and any ``shuffle_xor`` with mask = 32). The fix is to also run a
+//   ``permlane64`` swap of ``value`` so this lane has access to the other SIMD's payload, then pick whichever copy
+//   actually holds the target lane's data.
+//
+// OOR target lanes (``target_lane < 0`` or ``target_lane >= 64``): we mask to ``target_lane & 63`` for the byte index
+// and ``& 32`` for the half-bit. The behaviour for OOR targets is implementation-defined on every backend (CUDA's
+// ``__shfl_sync`` also wraps), and the upstream subgroup ops never rely on it — ``shuffle_up`` masks at lane 0, etc.
+// We just need it not to crash or produce garbage that bleeds into in-range lanes.
+i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
+  i32 self_lane = amdgpu_lane_id();
+  // ``swapped`` is ``value`` viewed from lane ``self_lane ^ 32``: bottom-half lanes see the top half's payload and
+  // vice versa. Single ``v_permlane64_b32`` instruction.
+  i32 swapped = amdgpu_permlane64(value);
+  // Same low-5-bit lane within either half: ``ds_bpermute`` ignores anything above bit 5 in the byte index on RDNA
+  // (mod-128 wrap inside the SIMD32) and matches the requested lane on CDNA (where the SIMD is 64-wide so the read
+  // is wave-wide already).
+  i32 target_in_half_byte_index = (target_lane & 31) * 4;
+  i32 from_self_half = amdgpu_ds_bpermute(target_in_half_byte_index, value);
+  i32 from_other_half = amdgpu_ds_bpermute(target_in_half_byte_index, swapped);
+  // ``different_half == 0`` if ``target_lane`` is in the same 32-lane SIMD as ``self_lane``, else 32. The XOR of the
+  // half-bits picks out exactly that. ``select`` lowers to a single ``v_cndmask_b32`` and is cheaper than a branch.
+  i32 different_half = (target_lane ^ self_lane) & 32;
+  return different_half ? from_other_half : from_self_half;
+}
+
 i32 amdgpu_shuffle_i32(i32 index, i32 value) {
-  return amdgpu_ds_bpermute(index * 4, value);
+  return amdgpu_cross_half_shuffle_i32(index, value);
 }
 
 f32 amdgpu_shuffle_f32(i32 index, f32 value) {
@@ -1044,11 +1089,11 @@ f64 amdgpu_shuffle_f64(i32 index, f64 value) {
   return u.d;
 }
 
-// FIXME: Currently emulates shuffle_down via ds_bpermute (~50 cycle latency).
-// Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for
-// reduction-pattern offsets (1, 2, 4, 8, 16).
+// FIXME: Currently emulates shuffle_down via the cross-half ``ds_bpermute`` + ``permlane64`` helper (~50-60 cycle
+// latency). Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for reduction-pattern offsets (1, 2, 4,
+// 8, 16); the cross-half case (offset >= 32) still needs the helper.
 i32 amdgpu_shuffle_down_i32(i32 offset, i32 value) {
-  return amdgpu_ds_bpermute((amdgpu_lane_id() + offset) * 4, value);
+  return amdgpu_cross_half_shuffle_i32(amdgpu_lane_id() + offset, value);
 }
 
 f32 amdgpu_shuffle_down_f32(i32 offset, f32 value) {
@@ -1079,10 +1124,10 @@ f64 amdgpu_shuffle_down_f64(i32 offset, f64 value) {
   return u.d;
 }
 
-// Mirrors `amdgpu_shuffle_down`: `ds_bpermute` is a generic gather, so `shuffle_up` is just `shuffle_down` with the
-// source lane index decremented instead of incremented. The same DPP fast-path FIXME applies here too.
+// Mirrors `amdgpu_shuffle_down`: the cross-half helper is a generic gather, so `shuffle_up` is just `shuffle_down`
+// with the source lane index decremented instead of incremented. The same DPP fast-path FIXME applies here too.
 i32 amdgpu_shuffle_up_i32(i32 offset, i32 value) {
-  return amdgpu_ds_bpermute((amdgpu_lane_id() - offset) * 4, value);
+  return amdgpu_cross_half_shuffle_i32(amdgpu_lane_id() - offset, value);
 }
 
 f32 amdgpu_shuffle_up_f32(i32 offset, f32 value) {
