@@ -9,6 +9,8 @@ Functions
 
 .. autoapisummary::
 
+   quadrants.lang.simt.subgroup.sync
+   quadrants.lang.simt.subgroup.mem_fence
    quadrants.lang.simt.subgroup.barrier
    quadrants.lang.simt.subgroup.memory_barrier
    quadrants.lang.simt.subgroup.elect
@@ -41,19 +43,67 @@ Functions
 Module Contents
 ---------------
 
+.. py:function:: sync()
+
+.. py:function:: mem_fence()
+
 .. py:function:: barrier()
 
 .. py:function:: memory_barrier()
 
 .. py:function:: elect()
 
-.. py:function:: all_true(cond)
+   Return ``1`` on lane ``0`` of every subgroup and ``0`` on every other lane.
 
-.. py:function:: any_true(cond)
+   Implemented portably as ``invocation_id() == 0``: every backend that lowers ``invocation_id()`` therefore lowers
+   ``elect()`` at zero extra cost (it inlines at trace time into a single compare + zext).
 
-.. py:function:: all_equal(value)
+   Note that this narrows SPIR-V's ``OpGroupNonUniformElect`` semantics, which may pick any *active* lane as the
+   elected one.  Under the documented uniform-CF + all-lanes-active contract for ``qd.simt.subgroup`` this distinction
+   is invisible (lane 0 is always active and is a legal choice), and pinning down the elected lane keeps the behaviour
+   consistent across backends.
+
+
+.. py:function:: all_true(predicate, log2_size: template())
+
+   AND-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane
+   of the group iff every lane in the group has a non-zero ``predicate``, else ``0``.
+
+   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
+   on AMDGPU — wave64 is forced on every AMDGPU target).  ``log2_size`` is a compile-time template; the body is fully
+   unrolled.
+
+
+.. py:function:: any_true(predicate, log2_size: template())
+
+   OR-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane
+   of the group iff at least one lane in the group has a non-zero ``predicate``, else ``0``.
+
+   See `all_true` for the size contract.
+
+
+.. py:function:: all_equal(value, log2_size: template())
+
+   Return ``1`` (``i32``) on every lane in each ``2**log2_size`` group iff every lane in the group has the same
+   ``value``, else ``0``.
+
+   Equality is the backend's native ``==`` on ``value``'s dtype: for floats this means ``NaN != NaN`` (a group with
+   any ``NaN`` returns ``0``) and ``+0.0 == -0.0``, matching SPIR-V ``OpGroupNonUniformAllEqual``.  Callers wanting
+   bit-equality on floats should bit-cast to the same-width integer dtype before calling.
+
+   Implementation: each lane reads the value at the start of its group via ``shuffle``, then ``all_true`` AND-reduces
+   the per-lane equality bit.  Cost: one ``shuffle`` plus one ``all_true`` (one ``vote.all`` on CUDA at
+   ``log2_size == 5``, otherwise a ``log2_size``-deep ``shuffle_xor`` butterfly).
+
 
 .. py:function:: broadcast_first(value)
+
+   Broadcast lane 0's ``value`` to every lane in the subgroup.
+
+   Equivalent to ``broadcast(value, qd.u32(0))``; ``0`` is trivially dynamically uniform, so the SPIR-V
+   ``OpGroupNonUniformBroadcast`` requirement is satisfied. Decorated with ``@qd.func`` and inlined into the calling
+   kernel.
+
 
 .. py:function:: reduce_add(value, log2_size: template())
 
@@ -78,37 +128,110 @@ Module Contents
    shuffle+add operations in the calling kernel's IR.
 
 
-.. py:function:: inclusive_add(value)
+.. py:function:: inclusive_add(value, log2_size: template())
 
-.. py:function:: inclusive_mul(value)
+   Inclusive prefix sum across ``2**log2_size`` consecutive lanes.
 
-.. py:function:: inclusive_min(value)
+   Lane ``i`` within each group of ``2**log2_size`` lanes returns ``v[group_start] + v[group_start + 1] + ... + v[i]``.
+   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
+   on AMDGPU — wave64 is forced on every AMDGPU target).
 
-.. py:function:: inclusive_max(value)
 
-.. py:function:: inclusive_and(value)
+.. py:function:: inclusive_mul(value, log2_size: template())
 
-.. py:function:: inclusive_or(value)
+   Inclusive prefix product across ``2**log2_size`` consecutive lanes.
 
-.. py:function:: inclusive_xor(value)
+   See `inclusive_add` for the size contract.
 
-.. py:function:: exclusive_add(value)
 
-.. py:function:: exclusive_mul(value)
+.. py:function:: inclusive_min(value, log2_size: template())
 
-.. py:function:: exclusive_min(value)
+   Inclusive prefix min across ``2**log2_size`` consecutive lanes.  See `inclusive_add` for the size contract.
 
-.. py:function:: exclusive_max(value)
 
-.. py:function:: exclusive_and(value)
+.. py:function:: inclusive_max(value, log2_size: template())
 
-.. py:function:: exclusive_or(value)
+   Inclusive prefix max across ``2**log2_size`` consecutive lanes.  See `inclusive_add` for the size contract.
 
-.. py:function:: exclusive_xor(value)
+
+.. py:function:: inclusive_and(value, log2_size: template())
+
+   Inclusive prefix bitwise-AND across ``2**log2_size`` consecutive lanes.  Integer dtypes only.  See
+   `inclusive_add` for the size contract.
+
+
+.. py:function:: inclusive_or(value, log2_size: template())
+
+   Inclusive prefix bitwise-OR across ``2**log2_size`` consecutive lanes.  Integer dtypes only.  See
+   `inclusive_add` for the size contract.
+
+
+.. py:function:: inclusive_xor(value, log2_size: template())
+
+   Inclusive prefix bitwise-XOR across ``2**log2_size`` consecutive lanes.  Integer dtypes only.  See
+   `inclusive_add` for the size contract.
+
+
+.. py:function:: exclusive_add(value, log2_size: template())
+
+   Exclusive prefix sum across ``2**log2_size`` consecutive lanes.
+
+   Lane ``i`` (with ``i > 0``) within each group of ``2**log2_size`` lanes returns ``v[group_start] +
+   v[group_start + 1] + ... + v[i - 1]``.  Lane 0 of each group returns the additive identity (zero, in ``value``'s
+   dtype).
+
+
+.. py:function:: exclusive_mul(value, log2_size: template())
+
+   Exclusive prefix product across ``2**log2_size`` consecutive lanes.  Lane 0 of each group returns the
+   multiplicative identity (one, in ``value``'s dtype).
+
+
+.. py:function:: exclusive_min(value, log2_size: template(), identity)
+
+   Exclusive prefix min across ``2**log2_size`` consecutive lanes.
+
+   Lane 0 of each group returns ``identity``: the caller must supply a value that is ``>=`` every legal element of
+   the input (typically ``+∞`` for floats, the dtype's maximum for integers).  See the module-level note for why this
+   op alone takes an explicit identity.
+
+
+.. py:function:: exclusive_max(value, log2_size: template(), identity)
+
+   Exclusive prefix max across ``2**log2_size`` consecutive lanes.
+
+   Lane 0 of each group returns ``identity``: the caller must supply a value that is ``<=`` every legal element of
+   the input (typically ``-∞`` for floats, the dtype's minimum for integers).  See the module-level note for why this
+   op alone takes an explicit identity.
+
+
+.. py:function:: exclusive_and(value, log2_size: template())
+
+   Exclusive prefix bitwise-AND.  Integer dtypes only.  Lane 0 of each group returns all-bits-set in ``value``'s
+   dtype.
+
+
+.. py:function:: exclusive_or(value, log2_size: template())
+
+   Exclusive prefix bitwise-OR.  Integer dtypes only.  Lane 0 of each group returns zero in ``value``'s dtype.
+
+
+.. py:function:: exclusive_xor(value, log2_size: template())
+
+   Exclusive prefix bitwise-XOR.  Integer dtypes only.  Lane 0 of each group returns zero in ``value``'s dtype.
+
 
 .. py:function:: shuffle(value, index)
 
 .. py:function:: shuffle_xor(value, mask)
+
+   Lane ``i`` reads ``value`` from lane ``i ^ mask``.
+
+   Implemented portably as ``shuffle(value, lane ^ mask)``: every backend that lowers ``shuffle`` therefore lowers
+   ``shuffle_xor``. ``mask`` is a ``u32`` and must place the XOR partner inside the active subgroup; results outside
+   that range are implementation-defined (same caveat as ``shuffle``). Decorated with ``@qd.func`` and inlined into
+   the calling kernel.
+
 
 .. py:function:: shuffle_up(value, offset)
 

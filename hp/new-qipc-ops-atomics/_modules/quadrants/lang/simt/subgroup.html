@@ -317,69 +317,182 @@
                 <article class="bd-article">
                   
   <h1>Source code for quadrants.lang.simt.subgroup</h1><div class="highlight"><pre>
-<span></span><span class="c1"># pyright: reportInvalidTypeForm=false</span>
+<span></span><span class="c1"># pyright: reportInvalidTypeForm=false, reportOperatorIssue=false</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.annotations</span><span class="w"> </span><span class="kn">import</span> <span class="n">template</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">u32</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">i32</span><span class="p">,</span> <span class="n">u32</span>
+
+
+<div class="viewcode-block" id="sync">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.sync">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sync</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="mem_fence">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.mem_fence">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">mem_fence</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupMemoryBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+
+
+<span class="n">_barrier_deprecation_warned</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">_memory_barrier_deprecation_warned</span> <span class="o">=</span> <span class="kc">False</span>
 
 
 <div class="viewcode-block" id="barrier">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.barrier">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">barrier</span><span class="p">():</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">global</span> <span class="n">_barrier_deprecation_warned</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_barrier_deprecation_warned</span><span class="p">:</span>
+        <span class="n">_barrier_deprecation_warned</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="s2">&quot;qd.simt.subgroup.barrier() is deprecated; use qd.simt.subgroup.sync() instead &quot;</span> <span class="s2">&quot;(matching block.sync()).&quot;</span><span class="p">,</span>
+            <span class="ne">DeprecationWarning</span><span class="p">,</span>
+            <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">sync</span><span class="p">()</span></div>
 
 
 
 <div class="viewcode-block" id="memory_barrier">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.memory_barrier">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">memory_barrier</span><span class="p">():</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupMemoryBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">global</span> <span class="n">_memory_barrier_deprecation_warned</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_memory_barrier_deprecation_warned</span><span class="p">:</span>
+        <span class="n">_memory_barrier_deprecation_warned</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="s2">&quot;qd.simt.subgroup.memory_barrier() is deprecated; use qd.simt.subgroup.mem_fence() instead &quot;</span>
+            <span class="s2">&quot;(matching the planned block.mem_fence() / grid.mem_fence()).&quot;</span><span class="p">,</span>
+            <span class="ne">DeprecationWarning</span><span class="p">,</span>
+            <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">mem_fence</span><span class="p">()</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="elect">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.elect">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">elect</span><span class="p">():</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupElect&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ``1`` on lane ``0`` of every subgroup and ``0`` on every other lane.</span>
+
+<span class="sd">    Implemented portably as ``invocation_id() == 0``: every backend that lowers ``invocation_id()`` therefore lowers</span>
+<span class="sd">    ``elect()`` at zero extra cost (it inlines at trace time into a single compare + zext).</span>
+
+<span class="sd">    Note that this narrows SPIR-V&#39;s ``OpGroupNonUniformElect`` semantics, which may pick any *active* lane as the</span>
+<span class="sd">    elected one.  Under the documented uniform-CF + all-lanes-active contract for ``qd.simt.subgroup`` this distinction</span>
+<span class="sd">    is invisible (lane 0 is always active and is a legal choice), and pinning down the elected lane keeps the behaviour</span>
+<span class="sd">    consistent across backends.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">i32</span><span class="p">(</span><span class="n">invocation_id</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span></div>
 
 
 
+<span class="c1"># --- Voting / predicate ops ------------------------------------------------------------</span>
+<span class="c1">#</span>
+<span class="c1"># All three are group-scoped over ``2**log2_size`` consecutive lanes, mirror the API of ``reduce_all_add`` /</span>
+<span class="c1"># ``inclusive_*`` / ``exclusive_*``, and broadcast the result to every lane in the group as an ``i32`` (``0`` or ``1``).</span>
+<span class="c1">#</span>
+<span class="c1"># Backend strategy</span>
+<span class="c1"># ----------------</span>
+<span class="c1"># * On CUDA, when ``log2_size == 5`` (full warp), ``all_true`` / ``any_true`` lower to ``__all_sync(0xFFFFFFFF, p)`` /</span>
+<span class="c1">#   ``__any_sync(0xFFFFFFFF, p)`` (one ``vote.all`` / ``vote.any`` instruction).  This shortcut is selected at trace</span>
+<span class="c1">#   time via ``static()`` on ``impl.current_cfg().arch`` and on the compile-time ``log2_size`` template, so it</span>
+<span class="c1">#   collapses to a single intrinsic call in the IR with no overhead vs. handwritten CUDA.</span>
+<span class="c1"># * Every other backend, and CUDA for partial-warp groups, uses a portable ``shuffle_xor`` butterfly: ``log2_size``</span>
+<span class="c1">#   shuffles + ``log2_size`` ANDs / ORs, fully unrolled into the calling kernel&#39;s IR.  Same shape as ``reduce_all_add``.</span>
+<span class="c1"># * ``all_equal`` is always implemented as ``all_true(value == broadcast_group_lane_0)``, so it inherits the CUDA</span>
+<span class="c1">#   shortcut transitively.  We don&#39;t reach for ``__match_all_sync`` because (a) it requires sm_70+, (b) it does</span>
+<span class="c1">#   bit-equality on floats, contradicting the SPIR-V ``OpGroupNonUniformAllEqual`` semantics this op advertises</span>
+<span class="c1">#   (``NaN != NaN``, ``+0.0 == -0.0``), and (c) the broadcast-then-AND form is only one shuffle slower while staying on</span>
+<span class="c1">#   the same code path everywhere.</span>
+
+
+<span class="nd">@func</span>
 <div class="viewcode-block" id="all_true">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.all_true">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">all_true</span><span class="p">(</span><span class="n">cond</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">all_true</span><span class="p">(</span><span class="n">predicate</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;AND-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane</span>
+<span class="sd">    of the group iff every lane in the group has a non-zero ``predicate``, else ``0``.</span>
+
+<span class="sd">    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64</span>
+<span class="sd">    on AMDGPU — wave64 is forced on every AMDGPU target).  ``log2_size`` is a compile-time template; the body is fully</span>
+<span class="sd">    unrolled.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">and</span> <span class="n">log2_size</span> <span class="o">==</span> <span class="mi">5</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_all_sync_i32&quot;</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="mh">0xFFFFFFFF</span><span class="p">),</span> <span class="n">p</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">)</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">p</span> <span class="o">&amp;</span> <span class="n">shuffle_xor</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">mask</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">p</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="any_true">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.any_true">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">any_true</span><span class="p">(</span><span class="n">cond</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">any_true</span><span class="p">(</span><span class="n">predicate</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;OR-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane</span>
+<span class="sd">    of the group iff at least one lane in the group has a non-zero ``predicate``, else ``0``.</span>
+
+<span class="sd">    See `all_true` for the size contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">and</span> <span class="n">log2_size</span> <span class="o">==</span> <span class="mi">5</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_any_sync_i32&quot;</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="mh">0xFFFFFFFF</span><span class="p">),</span> <span class="n">p</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">)</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">p</span> <span class="o">|</span> <span class="n">shuffle_xor</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">mask</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">p</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="all_equal">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.all_equal">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">all_equal</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">all_equal</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ``1`` (``i32``) on every lane in each ``2**log2_size`` group iff every lane in the group has the same</span>
+<span class="sd">    ``value``, else ``0``.</span>
 
+<span class="sd">    Equality is the backend&#39;s native ``==`` on ``value``&#39;s dtype: for floats this means ``NaN != NaN`` (a group with</span>
+<span class="sd">    any ``NaN`` returns ``0``) and ``+0.0 == -0.0``, matching SPIR-V ``OpGroupNonUniformAllEqual``.  Callers wanting</span>
+<span class="sd">    bit-equality on floats should bit-cast to the same-width integer dtype before calling.</span>
 
-
-<div class="viewcode-block" id="broadcast_first">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.broadcast_first">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">broadcast_first</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="sd">    Implementation: each lane reads the value at the start of its group via ``shuffle``, then ``all_true`` AND-reduces</span>
+<span class="sd">    the per-lane equality bit.  Cost: one ``shuffle`` plus one ``all_true`` (one ``vote.all`` on CUDA at</span>
+<span class="sd">    ``log2_size == 5``, otherwise a ``log2_size``-deep ``shuffle_xor`` butterfly).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lane</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span>
+    <span class="n">group_base</span> <span class="o">=</span> <span class="n">u32</span><span class="p">(</span><span class="n">lane</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">u32</span><span class="p">(</span><span class="o">~</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFF</span><span class="p">)</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">shuffle</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">group_base</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">all_true</span><span class="p">(</span><span class="n">i32</span><span class="p">(</span><span class="n">value</span> <span class="o">==</span> <span class="n">base</span><span class="p">),</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">broadcast</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupBroadcast&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="broadcast_first">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.broadcast_first">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">broadcast_first</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Broadcast lane 0&#39;s ``value`` to every lane in the subgroup.</span>
+
+<span class="sd">    Equivalent to ``broadcast(value, qd.u32(0))``; ``0`` is trivially dynamically uniform, so the SPIR-V</span>
+<span class="sd">    ``OpGroupNonUniformBroadcast`` requirement is satisfied. Decorated with ``@qd.func`` and inlined into the calling</span>
+<span class="sd">    kernel.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">broadcast</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span></div>
+
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">group_size</span><span class="p">():</span>
@@ -435,108 +548,262 @@
 <span class="c1"># following the same pattern as `reduce_add` / `reduce_all_add` above when needed.</span>
 
 
+<span class="c1"># --- Inclusive scans -------------------------------------------------------------------</span>
+<span class="c1">#</span>
+<span class="c1"># All seven inclusive scans share the same Hillis-Steele tree over `shuffle_up`; only the binary operator differs.</span>
+<span class="c1"># Each operator is a tiny ``@func`` so it can be passed as a ``template()`` callable to the shared `_inclusive_scan`</span>
+<span class="c1"># helper, which inlines it into the per-lane reduce step.  ``log2_size`` is a compile-time constant so the loop fully</span>
+<span class="c1"># unrolls into ``log2_size`` shuffle+op pairs in the calling kernel&#39;s IR.</span>
+
+
+<span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_bin_add</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+
+
+<span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_bin_mul</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">a</span> <span class="o">*</span> <span class="n">b</span>
+
+
+<span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_bin_min</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">min</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_bin_max</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_bin_and</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">a</span> <span class="o">&amp;</span> <span class="n">b</span>
+
+
+<span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_bin_or</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">a</span> <span class="o">|</span> <span class="n">b</span>
+
+
+<span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_bin_xor</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">a</span> <span class="o">^</span> <span class="n">b</span>
+
+
+<span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Hillis-Steele inclusive scan of ``value`` under binary ``op``, over ``2**log2_size`` consecutive lanes.  See</span>
+<span class="sd">    `inclusive_add` for the contract; the only thing that changes between the seven `inclusive_*` ops is which</span>
+<span class="sd">    ``_bin_*`` is passed here.</span>
+
+<span class="sd">    The shuffle is in uniform CF (every lane participates); only the per-lane reduce step is conditional, matching the</span>
+<span class="sd">    contract for ``shuffle_up``.  Cross-group ``shuffle_up`` partners are masked out by ``lane_in_group &gt;= offset``, so</span>
+<span class="sd">    groups smaller than the full subgroup compose correctly when ``log2_size &lt; log2(group_size)``.</span>
+
+<span class="sd">    Note: ``qd.select`` cannot be used here instead of ``if`` because ``OpSelect`` on MoltenVK / Metal miscompiles when</span>
+<span class="sd">    one operand is an f32 produced by a shuffle intrinsic — the select silently returns the false-branch value</span>
+<span class="sd">    regardless of the condition.  The ``if`` form works correctly on its own.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lane_in_group</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">)</span>
+        <span class="n">partner</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">offset</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">lane_in_group</span> <span class="o">&gt;=</span> <span class="n">offset</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">partner</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">value</span>
+
+
+<span class="nd">@func</span>
 <div class="viewcode-block" id="inclusive_add">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupInclusiveAdd&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix sum across ``2**log2_size`` consecutive lanes.</span>
+
+<span class="sd">    Lane ``i`` within each group of ``2**log2_size`` lanes returns ``v[group_start] + v[group_start + 1] + ... + v[i]``.</span>
+<span class="sd">    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64</span>
+<span class="sd">    on AMDGPU — wave64 is forced on every AMDGPU target).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="inclusive_mul">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_mul">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_mul</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupInclusiveMul&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_mul</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix product across ``2**log2_size`` consecutive lanes.</span>
+
+<span class="sd">    See `inclusive_add` for the size contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_mul</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="inclusive_min">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_min">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupInclusiveMin&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix min across ``2**log2_size`` consecutive lanes.  See `inclusive_add` for the size contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="inclusive_max">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_max">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupInclusiveMax&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix max across ``2**log2_size`` consecutive lanes.  See `inclusive_add` for the size contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="inclusive_and">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_and">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_and</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupInclusiveAnd&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_and</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix bitwise-AND across ``2**log2_size`` consecutive lanes.  Integer dtypes only.  See</span>
+<span class="sd">    `inclusive_add` for the size contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_and</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="inclusive_or">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_or">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_or</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupInclusiveOr&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_or</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix bitwise-OR across ``2**log2_size`` consecutive lanes.  Integer dtypes only.  See</span>
+<span class="sd">    `inclusive_add` for the size contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_or</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="inclusive_xor">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_xor">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_xor</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupInclusiveXor&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_xor</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix bitwise-XOR across ``2**log2_size`` consecutive lanes.  Integer dtypes only.  See</span>
+<span class="sd">    `inclusive_add` for the size contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_xor</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="c1"># --- Exclusive scans -------------------------------------------------------------------</span>
+<span class="c1">#</span>
+<span class="c1"># Each `exclusive_*` shifts the *input* right by one lane via `shuffle_up(value, 1)`, seeds lane 0 of every group with</span>
+<span class="c1"># the operator&#39;s identity, and then runs the inclusive scan on the shifted data.  Doing the shuffle first (rather than</span>
+<span class="c1"># running the inclusive scan and shuffling the result) avoids the MoltenVK / Metal miscompile where the SPIR-V</span>
+<span class="c1"># compiler misoptimizes the register holding the inclusive-scan result when its only consumer is a shuffle intrinsic.</span>
+<span class="c1"># Lane 0&#39;s result must be set explicitly because `shuffle_up` with offset 1 returns an implementation-defined value at</span>
+<span class="c1"># lane 0 (`OpGroupNonUniformShuffleUp` calls it undefined outright).  See `_exclusive_scan` for the shared body.</span>
+<span class="c1">#</span>
+<span class="c1"># Identity per op (in `value`&#39;s dtype, expressed via dtype-preserving arithmetic so the wrapper does not need to</span>
+<span class="c1"># inspect the dtype):</span>
+<span class="c1">#</span>
+<span class="c1">#   add: ``value - value``                  (zero)</span>
+<span class="c1">#   mul: ``value - value + 1``              (one; the literal +1 takes value&#39;s dtype)</span>
+<span class="c1">#   or:  ``value ^ value``                  (zero; bitwise xor of value with itself)</span>
+<span class="c1">#   xor: ``value ^ value``                  (zero)</span>
+<span class="c1">#   and: ``~(value ^ value)``               (all bits set; bitwise not of zero)</span>
+<span class="c1">#</span>
+<span class="c1"># For min and max there is no portable type-extreme that can be derived from `value` alone, so those two ops take an</span>
+<span class="c1"># explicit ``identity`` argument: pass +∞ for `exclusive_min`, −∞ for `exclusive_max` (or whatever sentinel makes sense</span>
+<span class="c1"># for the caller&#39;s dtype and value range).</span>
+
+
+<span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generic exclusive scan over ``2**log2_size`` consecutive lanes.</span>
+
+<span class="sd">    Shift the input right by one lane within each group (filling lane 0 with ``identity``), then run the inclusive</span>
+<span class="sd">    scan on the shifted data.  This avoids issuing a ``shuffle_up`` on the inclusive-scan result, which miscompiles on</span>
+<span class="sd">    MoltenVK / Metal (the SPIR-V compiler misoptimizes the register holding the inclusive result when it is only</span>
+<span class="sd">    consumed by a shuffle intrinsic).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lane_in_group</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">prev</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">lane_in_group</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">prev</span> <span class="o">=</span> <span class="n">identity</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">prev</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
+
+
+<span class="nd">@func</span>
 <div class="viewcode-block" id="exclusive_add">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix sum across ``2**log2_size`` consecutive lanes.</span>
+
+<span class="sd">    Lane ``i`` (with ``i &gt; 0``) within each group of ``2**log2_size`` lanes returns ``v[group_start] +</span>
+<span class="sd">    v[group_start + 1] + ... + v[i - 1]``.  Lane 0 of each group returns the additive identity (zero, in ``value``&#39;s</span>
+<span class="sd">    dtype).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">value</span> <span class="o">-</span> <span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="exclusive_mul">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_mul">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_mul</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_mul</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix product across ``2**log2_size`` consecutive lanes.  Lane 0 of each group returns the</span>
+<span class="sd">    multiplicative identity (one, in ``value``&#39;s dtype).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_mul</span><span class="p">,</span> <span class="n">value</span> <span class="o">-</span> <span class="n">value</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="exclusive_min">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_min">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix min across ``2**log2_size`` consecutive lanes.</span>
+
+<span class="sd">    Lane 0 of each group returns ``identity``: the caller must supply a value that is ``&gt;=`` every legal element of</span>
+<span class="sd">    the input (typically ``+∞`` for floats, the dtype&#39;s maximum for integers).  See the module-level note for why this</span>
+<span class="sd">    op alone takes an explicit identity.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="exclusive_max">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_max">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix max across ``2**log2_size`` consecutive lanes.</span>
+
+<span class="sd">    Lane 0 of each group returns ``identity``: the caller must supply a value that is ``&lt;=`` every legal element of</span>
+<span class="sd">    the input (typically ``-∞`` for floats, the dtype&#39;s minimum for integers).  See the module-level note for why this</span>
+<span class="sd">    op alone takes an explicit identity.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="exclusive_and">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_and">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_and</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_and</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix bitwise-AND.  Integer dtypes only.  Lane 0 of each group returns all-bits-set in ``value``&#39;s</span>
+<span class="sd">    dtype.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_and</span><span class="p">,</span> <span class="o">~</span><span class="p">(</span><span class="n">value</span> <span class="o">^</span> <span class="n">value</span><span class="p">),</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="exclusive_or">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_or">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_or</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_or</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix bitwise-OR.  Integer dtypes only.  Lane 0 of each group returns zero in ``value``&#39;s dtype.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_or</span><span class="p">,</span> <span class="n">value</span> <span class="o">^</span> <span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="exclusive_xor">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_xor">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_xor</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_xor</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix bitwise-XOR.  Integer dtypes only.  Lane 0 of each group returns zero in ``value``&#39;s dtype.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_xor</span><span class="p">,</span> <span class="n">value</span> <span class="o">^</span> <span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
@@ -547,11 +814,19 @@
 
 
 
+<span class="nd">@func</span>
 <div class="viewcode-block" id="shuffle_xor">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.shuffle_xor">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">shuffle_xor</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
-    <span class="c1"># TODO</span>
-    <span class="k">pass</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Lane ``i`` reads ``value`` from lane ``i ^ mask``.</span>
+
+<span class="sd">    Implemented portably as ``shuffle(value, lane ^ mask)``: every backend that lowers ``shuffle`` therefore lowers</span>
+<span class="sd">    ``shuffle_xor``. ``mask`` is a ``u32`` and must place the XOR partner inside the active subgroup; results outside</span>
+<span class="sd">    that range are implementation-defined (same caveat as ``shuffle``). Decorated with ``@qd.func`` and inlined into</span>
+<span class="sd">    the calling kernel.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lane</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">shuffle</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">lane</span><span class="p">)</span> <span class="o">^</span> <span class="n">mask</span><span class="p">)</span></div>
 
 
 
@@ -570,6 +845,8 @@
 
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;sync&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;mem_fence&quot;</span><span class="p">,</span>
     <span class="s2">&quot;barrier&quot;</span><span class="p">,</span>
     <span class="s2">&quot;memory_barrier&quot;</span><span class="p">,</span>
     <span class="s2">&quot;elect&quot;</span><span class="p">,</span>
