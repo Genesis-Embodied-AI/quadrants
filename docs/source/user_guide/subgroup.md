@@ -19,7 +19,7 @@ The full Python API is grouped here by category. The first column lists each op,
 | `subgroup.broadcast(value, index)`          | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 | `subgroup.broadcast_first(value)`           | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 
-\* AMDGPU `shuffle_down` / `shuffle_up` (and therefore `reduce_add`, which is built on `shuffle_down`) are currently emulated via `ds_bpermute` (~50 cycle latency).
+\* AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` are lowered through `ds_bpermute` (~50 cycle latency, LDS-routed). On wave64 a cross-half read (target lane in the other SIMD32) additionally takes one `v_permlane64_b32` plus a per-lane select — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering). Same-half reads have no overhead vs. CUDA's `__shfl_*_sync`.
 
 `shuffle_xor` and `broadcast_first` are portable `@qd.func` wrappers on top of `shuffle` / `broadcast` (`shuffle_xor(value, mask)` ≡ `shuffle(value, lane ^ mask)`; `broadcast_first(value)` ≡ `broadcast(value, qd.u32(0))`). They inline at compile time and run wherever the underlying op runs.
 
@@ -29,6 +29,7 @@ The full Python API is grouped here by category. The first column lists each op,
 |---------------------------------------------|------|--------|-------------------------|
 | `subgroup.invocation_id()`                  | yes  | yes    | yes                     |
 | `subgroup.group_size()`                     | yes  | yes    | yes                     |
+| `subgroup.log2_group_size()`                | yes  | yes    | yes                     |
 | `subgroup.elect()`                          | yes  | yes    | yes                     |
 | `subgroup.sync()`                           | yes  | yes    | yes                     |
 | `subgroup.mem_fence()`                      | yes\*\* | yes\*\* | yes                  |
@@ -62,7 +63,7 @@ Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_d
 
 #### Picking `log2_size` for a "full subgroup" reduction
 
-`log2_size` is compile-time and `group_size()` is a compile-time constant on every LLVM backend (32 on CUDA, 64 on AMDGPU — wave64 is forced on every AMDGPU target, see [supported_systems](supported_systems.md)). On SPIR-V it is a runtime value, typically 32 on Vulkan compute. For a portable "full-subgroup" reduction the typical pattern is `log2_size = 5` (32-lane window — fits in every subgroup); accept that AMDGPU then gives you two reductions per wave (one per 32-lane half) and stitch the halves together yourself with `shuffle` if needed. If you specifically need a 64-lane reduction on AMDGPU, use `log2_size = 6` gated on `arch == amdgpu` at compile time.
+`log2_size` is compile-time and `subgroup.group_size()` / `subgroup.log2_group_size()` return compile-time Python `int`s (32/5 on CUDA / Metal / Vulkan-wave32, 64/6 on AMDGPU; see [`group_size()` / `log2_group_size()`](#group_size--log2_group_size)). The recommended pattern for a portable "operate over every lane" call is to use a [`_full` variant](#full-subgroup-_full-variants) — e.g. `subgroup.reduce_add_full(v)` — which is a one-line wrapper around `reduce_add(v, subgroup.log2_group_size())`. The `_full` form picks the right `log2_size` per backend automatically, producing exactly one reduction per AMDGPU wave64 wave and one per CUDA / wave32 warp without you having to gate on `arch`. If you specifically want two independent 32-lane reductions on AMDGPU (the "wave32-shaped" pattern), call `subgroup.reduce_add(v, 5)` directly.
 
 ### Voting and predicate ops
 
@@ -135,14 +136,14 @@ Each lane returns the `value` held by the lane whose subgroup-local id equals `i
 Lane `i` returns the `value` held by lane `i + offset`. Lanes near the top of the subgroup — where `i + offset >= subgroup_size` — receive an implementation-defined value (typically their own `value`), so reduction patterns must only trust lane 0's final result, or mask out the out-of-range lanes.
 
 - `value` and `offset` dtypes: same as `shuffle` above; `offset` is a `u32`.
-- Maps to `__shfl_down_sync` on CUDA and `OpGroupNonUniformShuffleDown` on SPIR-V. On AMDGPU it is currently emulated with `ds_bpermute` (see the support matrix above).
+- Maps to `__shfl_down_sync` on CUDA and `OpGroupNonUniformShuffleDown` on SPIR-V. On AMDGPU it is emulated with `ds_bpermute`; wave64 cross-half offsets (any `offset >= 32` for low-half lanes, or any non-zero `offset` for high-half lanes that lands across the SIMD32 boundary) go through the same `permlane64 + ds_bpermute + select` lowering as `shuffle` — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering).
 
 ### `shuffle_up(value, offset)`
 
 Lane `i` returns the `value` held by lane `i - offset`. Lanes near the bottom of the subgroup — where `i - offset < 0` — receive an implementation-defined value (typically their own `value`), so the bottom `offset` lanes' results should be ignored or masked.
 
 - Same dtype rules as `shuffle` / `shuffle_down`; `offset` is a `u32`.
-- Maps to `__shfl_up_sync` on CUDA and `OpGroupNonUniformShuffleUp` on SPIR-V. On AMDGPU it is currently emulated with `ds_bpermute((lane - offset) * 4, value)` (same fast-path FIXME as `shuffle_down`).
+- Maps to `__shfl_up_sync` on CUDA and `OpGroupNonUniformShuffleUp` on SPIR-V. On AMDGPU it is emulated with `ds_bpermute((lane - offset) * 4, value)`; wave64 cross-half cases go through the [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering) (same `permlane64 + ds_bpermute + select` sequence as `shuffle` / `shuffle_down`).
 
 ### `shuffle_xor(value, mask)`
 
@@ -157,7 +158,7 @@ Lane `i` returns the `value` held by lane `i ^ mask`. Convenient for butterfly p
 Every lane in the subgroup returns the `value` held by the lane whose subgroup-local id equals `index`. Expresses intent ("read lane `index`") more directly than `shuffle(value, index)` and on backends with a dedicated broadcast may map to a cheaper instruction.
 
 - Same dtype rules as `shuffle`.
-- Maps to `__shfl_sync` on CUDA, `ds_bpermute` on AMDGPU, and `OpGroupNonUniformBroadcast` on SPIR-V.
+- Maps to `__shfl_sync` on CUDA, `ds_bpermute` (plus a `permlane64`-driven cross-half select on wave64) on AMDGPU, and `OpGroupNonUniformBroadcast` on SPIR-V. See [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering) for the wave64 mechanics.
 - **Important: on SPIR-V, `index` must be dynamically uniform** — the same value on every lane in the subgroup. Passing a per-lane varying `index` is undefined behavior, because `OpGroupNonUniformBroadcast` requires its `Id` operand to be dynamically uniform across the subgroup. On CUDA / AMDGPU, `index` may vary per lane and the call is identical to `shuffle(value, index)`. If you need a varying source lane, use `shuffle` directly.
 
 ### `broadcast_first(value)`
@@ -179,21 +180,44 @@ Returns this lane's subgroup-local index — `0..subgroup_size - 1`. Used both a
 - Returns `i32`.
 - Available on every backend.
 
-### `group_size()`
+### `group_size()` / `log2_group_size()`
 
-Returns the subgroup size in effect for the current launch as an `i32`. **For use inside `@qd.kernel` / `@qd.func` bodies only** — calling it from host Python raises.
+Return the subgroup size (and its base-2 log) in effect for the current `Program`, as plain Python `int`s. Callable from anywhere after `qd.init()` — both inside `@qd.kernel` / `@qd.func` bodies (where the int is folded into the IR as a literal) and from host scope (handy for setting up `block_dim` / grid shapes that match the subgroup width).
 
-| Backend | Final compiled artifact |
+| Backend | Compile-time value |
 |---|---|
-| CUDA | literal `32` |
-| AMDGPU | literal `64` |
-| SPIR-V (Vulkan / Metal) | runtime `OpLoad` of `BuiltInSubgroupSize` |
+| CUDA | `32` (hard-coded on every sm_30+ NVIDIA arch) |
+| AMDGPU | `64` (every AMDGPU target is pinned to `+wavefrontsize64`) |
+| SPIR-V (Vulkan / Metal) | `subgroupSize` probed from the live device at `qd.init()` |
+
+Because the return type is a plain `int`, the value is usable as a `qd.template()` argument — that is how the [`_full` variants](#full-subgroup-_full-variants) below pick the right `log2_size` per backend without a runtime branch. The value is fixed for the lifetime of the `Program`: Vulkan / Metal devices expose a single immutable `subgroupSize` and Quadrants never opts in to `VK_EXT_subgroup_size_control`, so two kernels launched under the same `qd.init()` always see the same number.
 
 Per-backend lowering notes:
 
-- **CUDA**: lowers to a static `32` constant — the warp size is fixed on every supported NVIDIA architecture (sm_30+). The optimizer can fold it into address arithmetic, so calling `group_size()` is no more expensive than hard-coding `32`.
-- **AMDGPU**: lowers to `llvm.amdgcn.wavefrontsize`, which the AMDGPU backend constant-folds to `64` at codegen time. Quadrants pins every AMDGPU function to `+wavefrontsize64,-wavefrontsize32` (see [supported_systems](supported_systems.md)), so CDNA (gfx9xx, gfx940/942) keeps its native wave64 mode and RDNA (gfx10/11/12) — which would otherwise default to wave32 — is forced into wave64 too. `group_size()` is therefore always 64 on AMDGPU.
-- **SPIR-V**: lowers to a uniform load of the `BuiltInSubgroupSize` input variable — a true runtime query, since on Vulkan compute the subgroup size can be 32 on most desktop GPUs but is permitted to be other powers of two. The load is cheap (uniform, CSE'd across uses), but it does mean `group_size()` is not a compile-time constant on this backend; callers that need a Python `int` at compile time should use `qd.template()` / `qd.static()` with the literal `32` / `64` they're targeting instead.
+- **CUDA**: `Program::subgroup_size()` returns the constant `32` directly. Inside a kernel, that constant gets folded into the IR — no runtime warp-size query, no PTX instructions emitted for `group_size()` itself.
+- **AMDGPU**: `Program::subgroup_size()` returns `64`. Quadrants pins every AMDGPU function to `+wavefrontsize64,-wavefrontsize32` (see [supported_systems](supported_systems.md)), so CDNA (gfx9xx, gfx940/942) keeps its native wave64 mode and RDNA (gfx10/11/12) — which would otherwise default to wave32 — is forced into wave64 too.
+- **SPIR-V (Vulkan / Metal)**: probed once at device-creation time. Vulkan reads `VkPhysicalDeviceSubgroupProperties::subgroupSize`; Metal hard-codes `32` (every shipping Apple / AMD / Intel Mac GPU is 32-wide). The probed value is stored in `DeviceCapability::spirv_subgroup_size` and feeds both `Program::subgroup_size()` and the fe-ll cache key, so two SPIR-V devices with different subgroup widths get distinct cache entries.
+
+`log2_group_size()` asserts the size is a power of two and returns `bit_length() - 1` (so `5` on every wave32 backend, `6` on AMDGPU). The assert is purely defensive — no shipping SPIR-V driver reports a non-power-of-two subgroup size, but the Vulkan spec permits it.
+
+### Full-subgroup (`_full`) variants
+
+Every `log2_size`-taking op in this module has a paired `_full`-suffixed wrapper that implicitly uses `log2_group_size()` so the call covers every lane in the active subgroup:
+
+| Base op | Full-subgroup wrapper |
+|---|---|
+| `reduce_add(v, log2_size)` | `reduce_add_full(v)` |
+| `reduce_all_add(v, log2_size)` | `reduce_all_add_full(v)` |
+| `reduce_min(v, log2_size)` / `reduce_max(v, log2_size)` | `reduce_min_full(v)` / `reduce_max_full(v)` |
+| `reduce_all_min(v, log2_size)` / `reduce_all_max(v, log2_size)` | `reduce_all_min_full(v)` / `reduce_all_max_full(v)` |
+| `inclusive_*(v, log2_size)` | `inclusive_*_full(v)` |
+| `exclusive_*(v, log2_size[, identity])` | `exclusive_*_full(v[, identity])` |
+| `all_true(p, log2_size)` / `any_true(p, log2_size)` / `all_equal(v, log2_size)` | `all_true_full(p)` / `any_true_full(p)` / `all_equal_full(v)` |
+| `segmented_reduce_{add,min,max}(v, head, log2_size)` | `segmented_reduce_{add,min,max}_full(v, head)` |
+
+The wrappers are plain Python one-liners that pass `log2_size=subgroup.log2_group_size()` (a Python `int`) into the base `@qd.func`'s `template()` parameter, so they fully unroll at compile time and produce exactly the same IR as a hand-written call site that hard-codes `log2_size = 5` on wave32 backends and `log2_size = 6` on AMDGPU. Net effect: one canonical "operate over the whole subgroup" form per op that compiles to identical PTX / GCN / SPIR-V to the per-backend hand-tuned version, and no need to gate on `arch` in user code.
+
+The `segmented_reduce_*_full` variants in particular are new — `segmented_reduce_*` now accepts `log2_size <= 6`, with a compile-time-selected u64-bitmask path for `log2_size == 6` (reachable only on AMDGPU wave64). The u32-bitmask path used for `log2_size <= 5` is bitwise identical to the historical implementation, so CUDA / Metal / Vulkan-wave32 callers see zero overhead from the wave64 support.
 
 ### `elect()`
 
@@ -257,8 +281,10 @@ Same min / max as `reduce_min` / `reduce_max`, but broadcast to **every lane** i
 Per-lane inclusive scan under `+` / `min` / `max` that resets at every non-zero `head_flag`, scoped to `2**log2_size` consecutive lanes. Lane `i` returns the scan of `value[head_below..i + 1]`, where `head_below` is the largest lane index `<= i` (within the lane's `2**log2_size` group) whose `head_flag` is non-zero. If no such lane exists inside the group, the group's first lane is treated as an implicit head, so the result is the inclusive scan from `group_base` to `i`.
 
 - `value` is any type supporting the operator (`+` and `shuffle_up` for `_add`; `qd.min`/`qd.max` and `shuffle_up` for `_min`/`_max`). `head_flag` is any integer scalar; the lowering tests `head_flag != 0`, so non-binary truthy values (e.g. `7`, `42`) work.
-- `log2_size` is a `qd.template()` — a compile-time constant. `2**log2_size` must not exceed 32: segments are scoped to a single 32-lane half of the subgroup so the bit-mask bookkeeping stays in `u32` internally. On wave64 lanes 32..63 are still handled correctly — the helper pulls a `subgroup.ballot_full_subgroup` (`u64`) and shifts the relevant 32-lane half down to bits 0..31 before running the rest of the algorithm in half-local coordinates.
-- Implementation: one `subgroup.ballot_full_subgroup(head_flag != 0)` to materialise a `u64` of head positions, then a Hillis-Steele inclusive scan bounded by `distance >= offset` where `distance = lane_in_half - segment_head` (half-local coords; equals absolute `lane - segment_head_abs` because both terms are offset by the same `half_base`). `segment_head` is computed via `31 - clz(effective_mask & ((1 << (lane_in_half + 1)) - 1))`, with an OR-injected virtual head at `group_base` to guarantee a non-zero `lower`. The mask + `clz` setup is shared between all three ops via a small internal helper.
+- `log2_size` is a `qd.template()` — a compile-time constant in `[0, 6]`. `2**log2_size` must not exceed the active subgroup size: up to 32 (i.e. `log2_size <= 5`) on CUDA / Metal / Vulkan-wave32, up to 64 (`log2_size <= 6`) on AMDGPU wave64. The cap is enforced by a `qd.static_assert(log2_size <= 6)` at the top of each `segmented_reduce_*`. Use [`segmented_reduce_*_full`](#full-subgroup-_full-variants) if you want a portable "operate over every lane in the subgroup" form without gating on `arch` yourself.
+- Implementation: one `subgroup.ballot_full_subgroup(head_flag != 0)` to materialise a `u64` of head positions, then a Hillis-Steele inclusive scan bounded by `distance >= offset` where `distance = lane - segment_head`. A compile-time branch in `_segment_head_distance` picks between two paths:
+  - **`log2_size <= 5`** — u32-bitmask path. Shifts the relevant 32-lane half of the ballot down to bits 0..31 and runs the bit-mask + `clz` arithmetic in half-local coordinates (`lane_in_half = lane - half_base`). Half-local `distance` equals absolute `lane - segment_head_abs` because both terms are offset by the same `half_base`, so the downstream `shuffle_up`'s `distance >= offset` guard still works in absolute terms. This is the only path on wave32 backends — it compiles to identical IR to the historical wave32-only implementation, so CUDA / Metal / Vulkan callers see no perf regression from the wave64 support.
+  - **`log2_size == 6`** — u64-bitmask path. Works in absolute lane coordinates with the full `u64` ballot, an OR-injected virtual head at lane 0 to guarantee a non-zero `lower`, and a `clz(u64)` for the segment head. Costs one extra `u64` shift + `u64 clz` vs the u32 path; only reachable when `group_size() == 64` (i.e. AMDGPU), so the entire branch is dead-code-eliminated at every `log2_size <= 5` call site.
 - No identity argument is required (unlike `exclusive_min` / `exclusive_max`) because the per-lane `distance >= offset` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never combined with the local value.
 - Cost: `1 ballot + 1 clz + log2_size shuffles + log2_size ops`, fully unrolled into the calling kernel's IR. Same shape as `inclusive_add` / `inclusive_min` / `inclusive_max`, plus one ballot and one `clz` for the per-lane segment-head lookup.
 - Float NaN handling for `_min` / `_max` is implementation-defined (same caveat as `reduce_min` / `reduce_max`): PTX uses `fminnm` / `fmaxnm`, AMDGPU uses `llvm.minnum` / `llvm.maxnum`, SPIR-V uses `OpFMin` / `OpFMax`. Avoid NaN inputs if you need a portable result.
@@ -297,7 +323,7 @@ Returns a `u32` bitmask whose bit `i` is set iff `i < n` AND lane `i`'s `predica
   - **SPIR-V**: `OpGroupNonUniformBallot` returns a `uvec4`; we extract component 0, which by spec contains the ballot bits for lanes 0..31.
 - For `n < 32` we mask the predicate by `lane < n` before issuing the ballot, so bits `[n, 32)` of the result are forced to zero regardless of those lanes' actual predicate values. At `n == 32` the masking is provably a no-op on every backend (lanes `>= 32` are either non-existent on wave32 or already not represented in the `u32` result on wave64), so the masking is elided at compile time and the call lowers to a single ballot intrinsic.
 - Caller contract: uniform CF + all lanes active. Calling from divergent control flow has implementation-defined behaviour (CUDA's `__ballot_sync` will deadlock if the active mask doesn't match `0xFFFFFFFF`).
-- Useful for stream compaction over the first 32 lanes, segmented reductions (which cap at 32-lane segments via `log2_size <= 5`), and any pattern that wants `clz` / `popcount` / `ffs` over a per-lane predicate within a `u32`.
+- Useful for stream compaction over the first 32 lanes, the wave32 path of `segmented_reduce_*` (which uses the u32-bitmask form internally for `log2_size <= 5`), and any pattern that wants `clz` / `popcount` / `ffs` over a per-lane predicate within a `u32`. For full-subgroup ballots on AMDGPU wave64 use `ballot_full_subgroup` (returns a `u64`).
 
 ### `ballot_full_subgroup(predicate)`
 
@@ -476,7 +502,7 @@ Every lane in each group of 32 sees the same `total`.
 
 ### Partial-subgroup reductions
 
-`log2_size` does not have to match the full subgroup. Sum groups of 8 with `reduce_add(v, 3)` or groups of 16 with `reduce_all_add(v, 4)`; the caller just ensures `2**log2_size <= subgroup_size` (so up to 5 on CUDA / Metal, up to 6 on AMDGPU).
+`log2_size` does not have to match the full subgroup. Sum groups of 8 with `reduce_add(v, 3)` or groups of 16 with `reduce_all_add(v, 4)`; the caller just ensures `2**log2_size <= group_size()` (so `log2_size <= 5` on CUDA / Metal / Vulkan-wave32, `<= 6` on AMDGPU wave64). Use a [`_full` variant](#full-subgroup-_full-variants) when you want "the whole subgroup" without hard-coding the limit.
 
 ### Inclusive scan with `inclusive_add`
 
@@ -490,10 +516,27 @@ def cumsum(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
 
 After the call, lane `k` (within each group of 32) holds `a[group_start] + a[group_start+1] + ... + a[k]`. The `5` is `log2_size`; `2**5 == 32` matches the block dim. The body unrolls at compile time into five `shuffle_up + add` pairs. Use a smaller `log2_size` to scan over partial-subgroup groups (e.g. `inclusive_add(v, 3)` produces independent prefix sums in groups of 8).
 
+### AMDGPU wave64 cross-half lowering
+
+AMDGPU `ds_bpermute_b32` — the LDS-routed permute that Quadrants uses to lower `shuffle`, `shuffle_down`, and `shuffle_up` — has a hardware quirk on RDNA (gfx10/11/12, e.g. RX 7900 XTX): its lane-id operand is **SIMD32-scoped**. On a wave64 RDNA wave the 64 lanes execute as two SIMD32 clusters; `ds_bpermute` on those chips can only address lanes inside the requesting lane's own SIMD32 half. CDNA (gfx9xx, MI200/MI300) keeps the wave on a single SIMD64, so `ds_bpermute` there is wave-wide and the quirk does not exist.
+
+To make wave64 `shuffle` / `shuffle_down` / `shuffle_up` behave consistently across RDNA and CDNA, Quadrants always lowers cross-half-capable shuffles through this 3-op sequence:
+
+```
+swapped = v_permlane64_b32 value         # swap the two SIMD32 halves of the wave
+lo      = ds_bpermute_b32 (lane*4), value
+hi      = ds_bpermute_b32 (lane*4), swapped
+result  = ((target_lane ^ self_lane) & 32) ? hi : lo
+```
+
+The two `ds_bpermute_b32` reads run in parallel — one reads the original payload (correct when target is in the same SIMD32 half), the other reads the `permlane64`-swapped payload (correct when the target is in the other half) — and a per-lane select picks between them based on whether the target crosses the 32-lane boundary. On CDNA the cross-half branch is dead, but the cost is one extra `v_permlane64_b32` (still well-defined and free) and one `v_cndmask_b32` — no measurable hit. On RDNA wave64 this is the only correct lowering.
+
+One subtlety worth knowing about (mostly for anyone reading the generated IR): the lane-id operand to `ds_bpermute` is wrapped in an empty `+v` inline-asm fence inside the runtime helper. Without that fence, LLVM's AMDGPU backend can decide a compile-time-constant or otherwise uniform lane-id is "uniform across the wave" and silently lower the call to a `v_readlane_b32`-style instruction that addresses lanes 0..31 **wave-globally** rather than SIMD32-locally. That would break cross-half shuffles whose target lane is a literal (`broadcast(v, 47)`, `shuffle(v, qd.u32(40))`, etc.). The fence costs zero — same instruction shape on every path — and pins the lowering to a real `ds_bpermute_b32` so the SIMD-local semantics our `permlane64` pairing relies on always hold.
+
 ## Performance notes
 
 - Shuffles are register-to-register on CUDA (`__shfl_sync`, `__shfl_down_sync`, `__shfl_up_sync`) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.
-- AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` all go through `ds_permute` / `ds_bpermute` today (LDS-routed, roughly tens of cycles).
+- AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` all go through `ds_permute` / `ds_bpermute` (LDS-routed, roughly tens of cycles). On wave64 the lowering issues two parallel `ds_bpermute_b32` reads plus a `v_permlane64_b32` swap and a per-lane select to handle cross-half shuffles correctly on RDNA — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering). The two `ds_bpermute` reads issue in parallel, so the latency is the same as a single read; the `permlane64` and `cndmask` add a few extra cycles.
 - `shuffle_xor` and `broadcast_first` are `@qd.func` wrappers over `shuffle` / `broadcast` and inline at compile time, so on every backend they cost exactly the same as the underlying op.
 - Both `ballot_first_n` and `ballot_full_subgroup` lower to a single hardware instruction on every backend — one cycle on CUDA (`__ballot_sync`), one instruction on AMDGPU (a single `v_cmp_*_e64` populating the wavefront-width SETCC, then a low-half store for `ballot_first_n`), and `OpGroupNonUniformBallot` on SPIR-V (extract one or two components of the result `uvec4`). At `n == 32` `ballot_first_n` elides the predicate-masking step entirely; at `n < 32` it inserts one extra multiply on the predicate.
 - `reduce_add` and `reduce_all_add` both issue exactly `log2_size` shuffles and `log2_size` adds per call. No barriers, no shared memory, no launch overhead (they inline).

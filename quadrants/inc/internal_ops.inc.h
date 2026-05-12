@@ -39,10 +39,10 @@ PER_INTERNAL_OP(subgroupShuffleUp)
 PER_INTERNAL_OP(subgroupBallotU32)
 PER_INTERNAL_OP(subgroupBallotU64)
 // ``subgroupSize`` (the previous IR op) was removed: ``qd.simt.subgroup.group_size()`` now resolves at compile time via
-// ``Program::subgroup_size()`` and returns a Python ``int`` (32 on CUDA, 64 on AMDGPU, device-probed on Vulkan / Metal),
-// so the value is folded into the kernel IR as a literal on every backend instead of going through an internal-op-
-// dispatched ``OpLoad`` / constant-fold on each codegen.  Net effect: one fewer op, identical generated code, and the
-// value is usable as a ``qd.template()`` argument (which an IR op couldn't be).
+// ``Program::subgroup_size()`` and returns a Python ``int`` (32 on CUDA, 64 on AMDGPU, device-probed on Vulkan /
+// Metal), so the value is folded into the kernel IR as a literal on every backend instead of going through an
+// internal-op- dispatched ``OpLoad`` / constant-fold on each codegen.  Net effect: one fewer op, identical generated
+// code, and the value is usable as a ``qd.template()`` argument (which an IR op couldn't be).
 PER_INTERNAL_OP(subgroupInvocationId)
 // subgroupAdd / subgroupMul / subgroupMin / subgroupMax / subgroupAnd / subgroupOr / subgroupXor and subgroupInclusive*
 // / subgroupExclusive* removed: use portable Python `subgroup.reduce_add(value, log2_size)` / `subgroup.inclusive_add`

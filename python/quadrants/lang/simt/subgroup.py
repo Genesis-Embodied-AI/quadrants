@@ -139,6 +139,16 @@ def ballot_full_subgroup(predicate):
 #   the same code path everywhere.
 
 
+# --- `_full` variants ------------------------------------------------------------------
+#
+# Every ``_full`` wrapper below is a plain Python function (not ``@qd.func``) so that ``log2_group_size()`` is evaluated
+# in the kernel's Python tracing pass and feeds into the base function's ``log2_size: template()`` argument as a
+# compile-time ``int``.  Each wrapper compiles down to exactly the same IR as a hand-written call site that hard-codes
+# ``log2_size=5`` (CUDA / Metal / Vulkan-wave32) or ``log2_size=6`` (AMDGPU wave64), so there is no runtime overhead vs
+# the base ops.  Callers reach for ``_full`` when they want "operate over the entire subgroup" portably without
+# branching on ``group_size()`` themselves -- the common case for whole-warp reductions, broadcasts, and votes.
+
+
 @func
 def all_true(predicate, log2_size: template()):
     """AND-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane
@@ -455,41 +465,67 @@ def _segment_head_distance(head_flag, log2_size: template()):
 
     Shared by `segmented_reduce_add` / `_min` / `_max`; see the module-level note for the algorithm.
 
-    Wave32 vs wave64: the documented contract is ``2**log2_size <= 32``, so segments never cross a 32-lane boundary.
-    But on wave64 lanes 32..63 still execute this helper and need correct results within their own group.  We pull
-    a u64 ``ballot_full_subgroup`` mask, shift the relevant 32-lane half down to bits 0..31, and run the rest of the
-    bit-mask algorithm in half-local lane coordinates (``lane_in_half = lane - half_base``).  Half-local ``distance``
-    equals absolute ``distance`` because both ``lane`` and the recovered ``segment_head`` are offset by the same
-    ``half_base``, so `segmented_reduce_*`'s downstream ``distance >= offset`` guard still works in absolute terms.
-    On wave32 this collapses to the original code (high 32 bits of the u64 are always zero, ``half_base == 0`` always).
+    Two compile-time-selected paths:
+
+    * **``log2_size <= 5`` (segments fit in a single 32-lane half)** — u32-bitmask path.  Pulls a u64
+      ``ballot_full_subgroup``, shifts the relevant 32-lane half down to bits 0..31, then runs the bit-mask algorithm in
+      half-local lane coordinates.  Half-local ``distance`` equals absolute ``distance`` because both ``lane`` and the
+      recovered ``segment_head`` are offset by the same ``half_base``, so the downstream ``distance >= offset`` guard
+      still works in absolute terms.  On wave32 this collapses to the no-op (``half_base == 0`` always); on wave64
+      lanes 32..63 see their own half-mask via the shift.  This is the only path on CUDA / Metal / Vulkan-wave32 (and
+      compiles to identical IR to the historical wave32-only impl), so backends with ``group_size() == 32`` see no perf
+      regression from supporting wave64 here.
+
+    * **``log2_size == 6`` (full-wave64 segments, only reachable on AMDGPU)** — u64-bitmask path.  Segments span all 64
+      lanes so we need the full ``ballot_full_subgroup`` u64 mask and a ``clz(u64)``.  Costs one extra ``u64`` shift +
+      ``u64`` clz vs the u32 path but avoids the half-local split and stays in absolute lane coordinates throughout.
+      Gated by ``impl.static(log2_size <= 5)`` so this entire path is dead-code-eliminated at compile time on every
+      ``log2_size <= 5`` call site, including on AMDGPU itself when callers stay under the wave-half boundary.
     """
     # u64 mask covering the entire subgroup.  Wave32: high 32 bits are zero by definition.  Wave64: all 64 bits are
     # meaningful and we need both halves to handle lanes 32..63 correctly.
     full_mask = ballot_full_subgroup(i32(head_flag != 0))
     lane = invocation_id()
-    # Which 32-lane half this lane belongs to: 0 on wave32 (always), 0 or 32 on wave64.  ``& ~31`` rounds down to a
-    # multiple of 32.
-    half_base = u32(lane) & u32(~31 & 0xFFFFFFFF)
-    # Slide the relevant 32 bits down to bits 0..31 of a u32.  ``head_mask >> half_base`` discards the other half;
-    # the truncating cast to u32 then drops everything above bit 31.  On wave32 ``half_base`` is always 0 and the
-    # high 32 bits of ``full_mask`` are zero, so this is a no-op shift + truncate (LLVM folds it).
-    head_mask = u32(full_mask >> u64(half_base))
-    # Half-local lane index — always in ``[0, 32)``, so all the u32 shifts below are well-defined.
-    lane_in_half = i32(lane) - i32(half_base)
-    group_base = u32(lane_in_half) & u32(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFF))
-    bits_in_group = u32(impl.static((2 ** (1 << log2_size) - 1) & 0xFFFFFFFF))
+    if impl.static(log2_size <= 5):
+        # Which 32-lane half this lane belongs to: 0 on wave32 (always), 0 or 32 on wave64.  ``& ~31`` rounds down to a
+        # multiple of 32.
+        half_base = u32(lane) & u32(~31 & 0xFFFFFFFF)
+        # Slide the relevant 32 bits down to bits 0..31 of a u32.  ``head_mask >> half_base`` discards the other half;
+        # the truncating cast to u32 then drops everything above bit 31.  On wave32 ``half_base`` is always 0 and the
+        # high 32 bits of ``full_mask`` are zero, so this is a no-op shift + truncate (LLVM folds it).
+        head_mask = u32(full_mask >> u64(half_base))
+        # Half-local lane index — always in ``[0, 32)``, so all the u32 shifts below are well-defined.
+        lane_in_half = i32(lane) - i32(half_base)
+        group_base = u32(lane_in_half) & u32(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFF))
+        bits_in_group = u32(impl.static((2 ** (1 << log2_size) - 1) & 0xFFFFFFFF))
+        group_mask = bits_in_group << group_base
+        effective_mask = (head_mask & group_mask) | (u32(1) << group_base)
+        inclusive_mask = u32(0xFFFFFFFF) >> u32(i32(31) - lane_in_half)
+        lower = effective_mask & inclusive_mask
+        # `clz` follows the input type on most backends (CUDA explicitly normalizes to i32; AMDGPU LLVM `ctlz` returns
+        # input type; SPIR-V FindUMsb returns the input type).  Wrap the result in `i32(...)` so the subsequent
+        # arithmetic is uniformly signed-32-bit and SPIR-V's strict-type `sub` is happy.
+        segment_head = i32(31) - i32(clz(lower))
+        # ``segment_head`` is in half-local coords; ``lane_in_half - segment_head`` is the same as absolute
+        # ``lane - segment_head_abs`` (both shifted by ``half_base``), so the distance returned here is consistent
+        # with what ``segmented_reduce_*`` callers expect for the ``distance >= offset`` shuffle-up bound.
+        return lane_in_half - segment_head
+    # ``log2_size == 6`` (full wave64). Skip the half-local split and work in absolute lane coordinates with a u64
+    # bitmask.  The implicit-head bit is injected at the segment's group base (always 0 on the only
+    # wave64-and-log2_size-6 configuration), and we use ``clz(u64)`` for the segment head.  Quadrants pins AMDGPU to
+    # wave64 so this branch is only reachable when ``group_size() == 64``; on every other backend ``log2_size == 6``
+    # violates the documented caller contract (``2**log2_size <= group_size()``) — checked by the ``static_assert`` in
+    # ``segmented_reduce_*``.
+    bits_in_group = u64(impl.static(((1 << (1 << log2_size)) - 1) & 0xFFFFFFFFFFFFFFFF))
+    group_base = u64(lane) & u64(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFFFFFFFFFF))
     group_mask = bits_in_group << group_base
-    effective_mask = (head_mask & group_mask) | (u32(1) << group_base)
-    inclusive_mask = u32(0xFFFFFFFF) >> u32(i32(31) - lane_in_half)
+    effective_mask = (full_mask & group_mask) | (u64(1) << group_base)
+    # ``lane + 1 <= 64`` on wave64; ``63 - lane`` is in ``[0, 63]`` so the u64 shift is well-defined and produces
+    # all-1s in the bottom ``lane + 1`` bits.
+    inclusive_mask = u64(0xFFFFFFFFFFFFFFFF) >> u64(i32(63) - i32(lane))
     lower = effective_mask & inclusive_mask
-    # `clz` follows the input type on most backends (CUDA explicitly normalizes to i32; AMDGPU LLVM `ctlz` returns
-    # input type; SPIR-V FindUMsb returns the input type).  Wrap the result in `i32(...)` so the subsequent arithmetic
-    # is uniformly signed-32-bit and SPIR-V's strict-type `sub` is happy.
-    segment_head = i32(31) - i32(clz(lower))
-    # ``segment_head`` is in half-local coords; ``lane_in_half - segment_head`` is the same as absolute
-    # ``lane - segment_head_abs`` (both shifted by ``half_base``), so the distance returned here is consistent
-    # with what ``segmented_reduce_*`` callers expect for the ``distance >= offset`` shuffle-up bound.
-    return lane_in_half - segment_head
+    segment_head = i32(63) - i32(clz(lower))
+    return i32(lane) - segment_head
 
 
 @func
@@ -502,13 +538,16 @@ def segmented_reduce_add(value, head_flag, log2_size: template()):
 
     Caller contract:
 
-    * ``2**log2_size`` must not exceed 32: segments are scoped to a single 32-lane half of the subgroup so the
-      bit-mask bookkeeping stays in u32 internally.  On wave64 the high 32 lanes are handled correctly via a separate
-      half-local ballot — see ``_segment_head_distance`` for the wave64 details.  ``log2_size`` is a ``qd.template()``
-      compile-time constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.
+    * ``2**log2_size`` must not exceed the active subgroup size: up to 32 on CUDA / Metal / Vulkan-wave32, up to 64 on
+      AMDGPU (wave64).  ``log2_size`` is a ``qd.template()`` compile-time constant; the body is fully unrolled into
+      ``log2_size`` ``shuffle_up + add`` pairs.  ``_segment_head_distance`` selects between a u32-bitmask path
+      (``log2_size <= 5``, identical IR to the historical wave32-only impl) and a u64-bitmask path
+      (``log2_size == 6``, AMDGPU-only) at compile time, so CUDA / SPIR-V callers see zero overhead from the wave64
+      support.
     * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values work.
     * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``.
     """
+    impl.static_assert(log2_size <= 6, "segmented_reduce_add requires log2_size <= 6")
     distance = _segment_head_distance(head_flag, log2_size)
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << i)
@@ -523,12 +562,13 @@ def segmented_reduce_min(value, head_flag, log2_size: template()):
     """Per-lane inclusive min that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.
 
     Lane ``i`` returns ``min(value[head_below..i+1])``; see `segmented_reduce_add` for the head-flag semantics, the
-    ``2**log2_size <= 32`` cap, and the truthy-predicate / uniform-CF contract.
+    ``2**log2_size <= group_size()`` cap, and the truthy-predicate / uniform-CF contract.
 
     Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic (``fminnm`` on
     PTX, ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether NaN propagates or is suppressed.
     Avoid NaN inputs if you need a portable result.
     """
+    impl.static_assert(log2_size <= 6, "segmented_reduce_min requires log2_size <= 6")
     distance = _segment_head_distance(head_flag, log2_size)
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << i)
@@ -542,9 +582,10 @@ def segmented_reduce_min(value, head_flag, log2_size: template()):
 def segmented_reduce_max(value, head_flag, log2_size: template()):
     """Per-lane inclusive max that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.
 
-    See `segmented_reduce_min` (with ``qd.max`` in place of ``qd.min``).  Same head-flag semantics, ``2**log2_size <=
-    32`` cap, truthy-predicate / uniform-CF contract, and NaN caveat.
+    See `segmented_reduce_min` (with ``qd.max`` in place of ``qd.min``).  Same head-flag semantics,
+    ``2**log2_size <= group_size()`` cap, truthy-predicate / uniform-CF contract, and NaN caveat.
     """
+    impl.static_assert(log2_size <= 6, "segmented_reduce_max requires log2_size <= 6")
     distance = _segment_head_distance(head_flag, log2_size)
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << i)
@@ -796,6 +837,142 @@ def shuffle_down(value, offset):
     return impl.call_internal("subgroupShuffleDown", value, offset, with_runtime_context=False)
 
 
+# Whole-subgroup convenience wrappers.  See the ``_full`` variants header for the design rationale; each one is a
+# one-liner that picks ``log2_size = log2_group_size()`` so the call covers every lane in the active subgroup.  Kept
+# as plain Python functions so the ``log2_group_size()`` int is resolved at trace time and flows into the base func's
+# ``template()`` argument.
+
+
+def all_true_full(predicate):
+    """``all_true`` across the entire subgroup -- see ``all_true(..., log2_size=log2_group_size())``."""
+    return all_true(predicate, log2_group_size())
+
+
+def any_true_full(predicate):
+    """``any_true`` across the entire subgroup -- see ``any_true(..., log2_size=log2_group_size())``."""
+    return any_true(predicate, log2_group_size())
+
+
+def all_equal_full(value):
+    """``all_equal`` across the entire subgroup -- see ``all_equal(..., log2_size=log2_group_size())``."""
+    return all_equal(value, log2_group_size())
+
+
+def reduce_add_full(value):
+    """``reduce_add`` over the entire subgroup -- lane 0 ends up with the sum across all ``group_size()`` lanes."""
+    return reduce_add(value, log2_group_size())
+
+
+def reduce_all_add_full(value):
+    """``reduce_all_add`` over the entire subgroup -- every lane ends up with the sum across all lanes."""
+    return reduce_all_add(value, log2_group_size())
+
+
+def reduce_min_full(value):
+    """``reduce_min`` over the entire subgroup -- lane 0 ends up with the min across all lanes."""
+    return reduce_min(value, log2_group_size())
+
+
+def reduce_max_full(value):
+    """``reduce_max`` over the entire subgroup -- lane 0 ends up with the max across all lanes."""
+    return reduce_max(value, log2_group_size())
+
+
+def reduce_all_min_full(value):
+    """``reduce_all_min`` over the entire subgroup -- every lane ends up with the min across all lanes."""
+    return reduce_all_min(value, log2_group_size())
+
+
+def reduce_all_max_full(value):
+    """``reduce_all_max`` over the entire subgroup -- every lane ends up with the max across all lanes."""
+    return reduce_all_max(value, log2_group_size())
+
+
+def inclusive_add_full(value):
+    """``inclusive_add`` over the entire subgroup."""
+    return inclusive_add(value, log2_group_size())
+
+
+def inclusive_mul_full(value):
+    """``inclusive_mul`` over the entire subgroup."""
+    return inclusive_mul(value, log2_group_size())
+
+
+def inclusive_min_full(value):
+    """``inclusive_min`` over the entire subgroup."""
+    return inclusive_min(value, log2_group_size())
+
+
+def inclusive_max_full(value):
+    """``inclusive_max`` over the entire subgroup."""
+    return inclusive_max(value, log2_group_size())
+
+
+def inclusive_and_full(value):
+    """``inclusive_and`` over the entire subgroup.  Integer dtypes only."""
+    return inclusive_and(value, log2_group_size())
+
+
+def inclusive_or_full(value):
+    """``inclusive_or`` over the entire subgroup.  Integer dtypes only."""
+    return inclusive_or(value, log2_group_size())
+
+
+def inclusive_xor_full(value):
+    """``inclusive_xor`` over the entire subgroup.  Integer dtypes only."""
+    return inclusive_xor(value, log2_group_size())
+
+
+def exclusive_add_full(value):
+    """``exclusive_add`` over the entire subgroup."""
+    return exclusive_add(value, log2_group_size())
+
+
+def exclusive_mul_full(value):
+    """``exclusive_mul`` over the entire subgroup."""
+    return exclusive_mul(value, log2_group_size())
+
+
+def exclusive_min_full(value, identity):
+    """``exclusive_min`` over the entire subgroup.  ``identity`` must be ``>=`` every legal element (typically ``+inf``)."""
+    return exclusive_min(value, log2_group_size(), identity)
+
+
+def exclusive_max_full(value, identity):
+    """``exclusive_max`` over the entire subgroup.  ``identity`` must be ``<=`` every legal element (typically ``-inf``)."""
+    return exclusive_max(value, log2_group_size(), identity)
+
+
+def exclusive_and_full(value):
+    """``exclusive_and`` over the entire subgroup.  Integer dtypes only."""
+    return exclusive_and(value, log2_group_size())
+
+
+def exclusive_or_full(value):
+    """``exclusive_or`` over the entire subgroup.  Integer dtypes only."""
+    return exclusive_or(value, log2_group_size())
+
+
+def exclusive_xor_full(value):
+    """``exclusive_xor`` over the entire subgroup.  Integer dtypes only."""
+    return exclusive_xor(value, log2_group_size())
+
+
+def segmented_reduce_add_full(value, head_flag):
+    """``segmented_reduce_add`` over the entire subgroup (``log2_size = log2_group_size()`` — 5 on wave32 backends, 6 on AMDGPU)."""
+    return segmented_reduce_add(value, head_flag, log2_group_size())
+
+
+def segmented_reduce_min_full(value, head_flag):
+    """``segmented_reduce_min`` over the entire subgroup."""
+    return segmented_reduce_min(value, head_flag, log2_group_size())
+
+
+def segmented_reduce_max_full(value, head_flag):
+    """``segmented_reduce_max`` over the entire subgroup."""
+    return segmented_reduce_max(value, head_flag, log2_group_size())
+
+
 __all__ = [
     "sync",
     "mem_fence",
@@ -843,4 +1020,30 @@ __all__ = [
     "shuffle_xor",
     "shuffle_up",
     "shuffle_down",
+    "all_true_full",
+    "any_true_full",
+    "all_equal_full",
+    "reduce_add_full",
+    "reduce_all_add_full",
+    "reduce_min_full",
+    "reduce_max_full",
+    "reduce_all_min_full",
+    "reduce_all_max_full",
+    "segmented_reduce_add_full",
+    "segmented_reduce_min_full",
+    "segmented_reduce_max_full",
+    "inclusive_add_full",
+    "inclusive_mul_full",
+    "inclusive_min_full",
+    "inclusive_max_full",
+    "inclusive_and_full",
+    "inclusive_or_full",
+    "inclusive_xor_full",
+    "exclusive_add_full",
+    "exclusive_mul_full",
+    "exclusive_min_full",
+    "exclusive_max_full",
+    "exclusive_and_full",
+    "exclusive_or_full",
+    "exclusive_xor_full",
 ]
