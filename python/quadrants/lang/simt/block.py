@@ -13,7 +13,9 @@ from quadrants.lang.simt.subgroup import _bin_add, _bin_max, _bin_min
 from quadrants.lang.util import quadrants_scope
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import i32 as _i32
+from quadrants.types.primitive_types import i64 as _i64
 from quadrants.types.primitive_types import u32 as _u32
+from quadrants.types.primitive_types import u64 as _u64
 
 
 def arch_uses_spv(arch):
@@ -448,6 +450,215 @@ def _subgroup_sync_fence():
 
 
 @_func
+def _radix_rank_match_atomic_or_wave32(
+    key,
+    block_dim: template(),
+    radix_bits: template(),
+    bit_start: template(),
+    num_bits: template(),
+    bins,
+    excl_prefix,
+):
+    """Wave32 implementation of `radix_rank_match_atomic_or`. See the public wrapper for the contract.
+
+    Match-mask region is ``i32``; atomic_or, ballot, clz, popcnt all operate on 32 bits.  This path is taken on CUDA,
+    Vulkan-on-NVIDIA, and Metal — none of which require ``i64`` threadgroup atomics.
+    """
+    SUBGROUP_THREADS = impl.static(_subgroup.group_size())
+    RADIX_DIGITS = impl.static(1 << radix_bits)
+    BLOCK_SUBGROUPS = impl.static(block_dim // SUBGROUP_THREADS)
+    NUM_BITS_MASK = impl.static((1 << num_bits) - 1)
+    BINS_PER_LANE = impl.static(RADIX_DIGITS // SUBGROUP_THREADS)
+
+    # ``smem_offsets`` (i32) backs the per-subgroup histograms (step 1), in-place column-sum upsweep (step 2), folded
+    # prefixes (step 4), and the leader's atomic_add slot (step 5).  ``smem_match`` (i32) backs the per-digit ballot
+    # mask in step 5.  These were previously unioned into a single ``i32`` SharedArray; splitting them keeps the
+    # offsets path independent of the match-mask width so the wave64 sibling can pick ``i64`` for its match region.
+    smem_offsets = SharedArray(impl.static((BLOCK_SUBGROUPS * RADIX_DIGITS,)), _i32)
+    smem_match = SharedArray(impl.static((BLOCK_SUBGROUPS * RADIX_DIGITS,)), _i32)
+
+    tid = thread_idx()
+    subgroup_idx = tid // SUBGROUP_THREADS
+    lane = _ops.cast(_subgroup.invocation_id(), _i32)
+
+    # Step 1: zero per-subgroup histograms and match_masks.
+    for b in impl.static(range(BINS_PER_LANE)):
+        bin_idx = lane + impl.static(b * SUBGROUP_THREADS)
+        smem_offsets[subgroup_idx * RADIX_DIGITS + bin_idx] = _i32(0)
+        smem_match[subgroup_idx * RADIX_DIGITS + bin_idx] = _i32(0)
+    _subgroup_sync_fence()
+
+    # Each thread atomic-adds 1 to its subgroup's bin for ``digit``.
+    digit = _ops.cast(_ops.bit_and(_ops.bit_shr(key, _u32(bit_start)), _u32(NUM_BITS_MASK)), _i32)
+    _ops.atomic_add(smem_offsets[subgroup_idx * RADIX_DIGITS + digit], _i32(1))
+
+    sync()  # Publish per-subgroup histograms before column-sum.
+
+    # Step 2: per-thread column sum across subgroups for digit == tid.  Each thread collects the running exclusive prefix
+    # into ``bin_count`` while overwriting the subgroup histogram entries with their per-subgroup exclusive prefix.  After the
+    # loop, ``bin_count`` is the block-wide total for digit == tid.
+    bin_count = _i32(0)
+    for j_subgroup in impl.static(range(BLOCK_SUBGROUPS)):
+        subgroup_count = smem_offsets[impl.static(j_subgroup * RADIX_DIGITS) + tid]
+        smem_offsets[impl.static(j_subgroup * RADIX_DIGITS) + tid] = bin_count
+        bin_count = bin_count + subgroup_count
+
+    # Step 3: block-wide exclusive sum on the per-thread bin counts.
+    exclusive_digit_prefix = exclusive_add(bin_count, block_dim, _i32)
+
+    # Step 4: ComputeOffsetsSubgroupDownsweep — fold the block-wide exclusive prefix into every subgroup's offset.
+    for j_subgroup in impl.static(range(BLOCK_SUBGROUPS)):
+        smem_offsets[impl.static(j_subgroup * RADIX_DIGITS) + tid] = (
+            smem_offsets[impl.static(j_subgroup * RADIX_DIGITS) + tid] + exclusive_digit_prefix
+        )
+
+    sync()  # Publish subgroup offsets before the per-key match phase.
+
+    # Step 5: per-key atomic-OR match.  ``items_per_thread == 1``, so this runs once per thread.
+    lane_mask = _i32(1) << lane
+    lane_mask_le_v = _subgroup.lanemask_le(_subgroup.invocation_id())
+
+    match_idx = subgroup_idx * RADIX_DIGITS + digit
+
+    # Every thread ORs its lane_mask into the per-digit match mask of its subgroup.  Threads with the same digit collide
+    # on the same shared-memory cell and produce a bitmask of "lanes in this subgroup that share this digit".
+    _ops.atomic_or(smem_match[match_idx], lane_mask)
+    _subgroup_sync_fence()
+
+    # Read the bin_mask back and find the leader (highest matching lane) + intra-subgroup rank.  ``clz`` here MUST run on
+    # the u32 (FindUMsb on SPIR-V): casting to i32 first triggers SPIR-V's FindSMsb, which for negative i32 (top bit
+    # set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that's one less than the actual
+    # highest matching lane.  Concretely, with lane 31 holding the only key for its digit, bin_mask = 0x80000000;
+    # FindSMsb on -2147483648 returns 30 (highest 0-bit), so 31 - 30 = 1 elects lane 1 instead of lane 31, and lane
+    # 31's shuffle reads from lane 1 (= 0) — observed as last-lane ranks off by one on Vulkan / Metal.  Now that the
+    # subgroup layer dispatches FindUMsb for unsigned ``clz``, passing the u32 directly emits the right intrinsic on
+    # every backend.
+    bin_mask = _ops.cast(smem_match[match_idx], _u32)
+    leader = _i32(31) - _ops.cast(_ops.clz(bin_mask), _i32)
+    popc = _ops.popcnt(_ops.bit_and(bin_mask, lane_mask_le_v))
+
+    # Leader claims `popc` slots from this subgroup's slice of the subgroup_offsets entry.
+    subgroup_offset = _i32(0)
+    if lane == leader:
+        subgroup_offset = _ops.atomic_add(smem_offsets[subgroup_idx * RADIX_DIGITS + digit], _ops.cast(popc, _i32))
+
+    # Leader broadcasts its claimed offset to every lane in the subgroup.
+    subgroup_offset = _subgroup.shuffle(subgroup_offset, _ops.cast(leader, _u32))
+
+    # Leader resets the match mask so subsequent passes (or items_per_thread > 1) start clean.
+    if lane == leader:
+        smem_match[match_idx] = _i32(0)
+    _subgroup_sync_fence()
+
+    rank = subgroup_offset + _ops.cast(popc, _i32) - _i32(1)
+
+    # Step 6: publish bins + exclusive_digit_prefix to the caller-supplied outparams.  ``block_dim == RADIX_DIGITS`` so
+    # every thread writes exactly one digit.  Followed by a ``block.sync()`` so the caller can read these arrays
+    # without having to add their own retiring barrier.
+    bins[tid] = bin_count
+    excl_prefix[tid] = exclusive_digit_prefix
+    sync()
+
+    return rank
+
+
+@_func
+def _radix_rank_match_atomic_or_wave64(
+    key,
+    block_dim: template(),
+    radix_bits: template(),
+    bit_start: template(),
+    num_bits: template(),
+    bins,
+    excl_prefix,
+):
+    """Wave64 implementation of `radix_rank_match_atomic_or`. See the public wrapper for the contract.
+
+    Match-mask region is ``i64``; atomic_or on shared ``i64`` is native on AMDGPU LDS.  Subgroup ``lanemask_le`` is
+    u32-only by contract (see ``subgroup.py``: "lane_id in [0, 31]"), so the 64-lane form is synthesized inline as
+    ``one_at_lane | (one_at_lane - 1)`` — avoids the UB of shifting by 64 when lane == 63.
+
+    Structural twin of the wave32 path; duplicated rather than parameterised because Quadrants' AST transformer
+    doesn't carry locals across ``if impl.static`` branches and the smem_match dtype + match-phase widths are the only
+    things that differ.
+    """
+    SUBGROUP_THREADS = impl.static(_subgroup.group_size())
+    RADIX_DIGITS = impl.static(1 << radix_bits)
+    BLOCK_SUBGROUPS = impl.static(block_dim // SUBGROUP_THREADS)
+    NUM_BITS_MASK = impl.static((1 << num_bits) - 1)
+    BINS_PER_LANE = impl.static(RADIX_DIGITS // SUBGROUP_THREADS)
+
+    smem_offsets = SharedArray(impl.static((BLOCK_SUBGROUPS * RADIX_DIGITS,)), _i32)
+    smem_match = SharedArray(impl.static((BLOCK_SUBGROUPS * RADIX_DIGITS,)), _i64)
+
+    tid = thread_idx()
+    subgroup_idx = tid // SUBGROUP_THREADS
+    lane = _ops.cast(_subgroup.invocation_id(), _i32)
+
+    # Step 1: zero per-subgroup histograms and match_masks.
+    for b in impl.static(range(BINS_PER_LANE)):
+        bin_idx = lane + impl.static(b * SUBGROUP_THREADS)
+        smem_offsets[subgroup_idx * RADIX_DIGITS + bin_idx] = _i32(0)
+        smem_match[subgroup_idx * RADIX_DIGITS + bin_idx] = _i64(0)
+    _subgroup_sync_fence()
+
+    digit = _ops.cast(_ops.bit_and(_ops.bit_shr(key, _u32(bit_start)), _u32(NUM_BITS_MASK)), _i32)
+    _ops.atomic_add(smem_offsets[subgroup_idx * RADIX_DIGITS + digit], _i32(1))
+
+    sync()
+
+    bin_count = _i32(0)
+    for j_subgroup in impl.static(range(BLOCK_SUBGROUPS)):
+        subgroup_count = smem_offsets[impl.static(j_subgroup * RADIX_DIGITS) + tid]
+        smem_offsets[impl.static(j_subgroup * RADIX_DIGITS) + tid] = bin_count
+        bin_count = bin_count + subgroup_count
+
+    exclusive_digit_prefix = exclusive_add(bin_count, block_dim, _i32)
+
+    for j_subgroup in impl.static(range(BLOCK_SUBGROUPS)):
+        smem_offsets[impl.static(j_subgroup * RADIX_DIGITS) + tid] = (
+            smem_offsets[impl.static(j_subgroup * RADIX_DIGITS) + tid] + exclusive_digit_prefix
+        )
+
+    sync()
+
+    # Step 5 — wave64 specifics: u64 ballot mask via inline ``one_at_lane | (one_at_lane - 1)`` (avoids UB on lane=63),
+    # atomic_or on the i64 match cell, clz / popcnt on u64.  Leader formula is ``63 - clz(u64)``.
+    lane_u64 = _ops.cast(lane, _u64)
+    lane_mask = _u64(1) << lane_u64
+    lane_mask_le_v = lane_mask | (lane_mask - _u64(1))
+
+    match_idx = subgroup_idx * RADIX_DIGITS + digit
+
+    _ops.atomic_or(smem_match[match_idx], _ops.cast(lane_mask, _i64))
+    _subgroup_sync_fence()
+
+    # u64 clz via FindUMsb-equivalent on every backend; the wave32 path's caveat about FindSMsb vs FindUMsb on i64
+    # would apply on SPIR-V wave64 devices if those existed (today wave64 = AMDGPU only).
+    bin_mask = _ops.cast(smem_match[match_idx], _u64)
+    leader = _i32(63) - _ops.cast(_ops.clz(bin_mask), _i32)
+    popc = _ops.popcnt(_ops.bit_and(bin_mask, lane_mask_le_v))
+
+    subgroup_offset = _i32(0)
+    if lane == leader:
+        subgroup_offset = _ops.atomic_add(smem_offsets[subgroup_idx * RADIX_DIGITS + digit], _ops.cast(popc, _i32))
+
+    subgroup_offset = _subgroup.shuffle(subgroup_offset, _ops.cast(leader, _u32))
+
+    if lane == leader:
+        smem_match[match_idx] = _i64(0)
+    _subgroup_sync_fence()
+
+    rank = subgroup_offset + _ops.cast(popc, _i32) - _i32(1)
+
+    bins[tid] = bin_count
+    excl_prefix[tid] = exclusive_digit_prefix
+    sync()
+
+    return rank
+
+
+@_func
 def radix_rank_match_atomic_or(
     key,
     block_dim: template(),
@@ -475,119 +686,36 @@ def radix_rank_match_atomic_or(
             the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.
 
     The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
-    `subgroup.group_size()` at compile time.  Currently only the wave32 subgroup size (32) is supported — the
-    atomic-OR match path is built around 32-lane ``i32`` ballot masks, so the function asserts that subgroup size at
-    compile time.  Targeting AMDGPU (wave64) will need a parallel wave64 path; not yet implemented.
+    `subgroup.group_size()` at compile time.  Supports both wave32 (CUDA, Vulkan-on-NVIDIA, Metal) and wave64
+    (AMDGPU — Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private
+    implementations at compile time based on subgroup size; the match-mask shared-memory region's dtype is the only
+    semantic difference (``i32`` on wave32, ``i64`` on wave64), but Quadrants' AST transformer doesn't carry locals
+    across ``if impl.static`` branches so the two paths are written as separate ``@func`` bodies.  Atomic ``or`` on
+    ``i64`` shared memory is native on AMDGPU's LDS; wave32 backends never see the ``i64`` path so portability does
+    not depend on SPIR-V / Metal supporting 64-bit threadgroup atomics.
 
     Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary ``block.sync()``
     and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without a
     further ``block.sync()`` (we sync internally before exit).
 
     Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block exclusive
-    scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  The shared-memory footprint is
-    ``2 * BLOCK_SUBGROUPS * RADIX_DIGITS`` i32 ints (16 KiB at the default ``radix_bits=8`` configuration on wave32).
+    scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  Shared-memory footprint at the default
+    ``radix_bits=8``: 4 KiB ``i32`` for subgroup offsets + 4 KiB ``i32`` (wave32) or 8 KiB ``i64`` (wave64) for the
+    match-mask region — so 8 KiB total on wave32, 12 KiB on wave64.
     """
     SUBGROUP_THREADS = impl.static(_subgroup.group_size())
     impl.static_assert(
-        impl.static(SUBGROUP_THREADS == 32),
-        "block.radix_rank_match_atomic_or: subgroup size must be 32; wave64 path not yet implemented",
+        impl.static(SUBGROUP_THREADS == 32 or SUBGROUP_THREADS == 64),
+        "block.radix_rank_match_atomic_or: subgroup size must be 32 or 64",
     )
     RADIX_DIGITS = impl.static(1 << radix_bits)
     impl.static_assert(
         impl.static(block_dim == RADIX_DIGITS),
         "block.radix_rank_match_atomic_or: block_dim must equal RADIX_DIGITS (1 << radix_bits)",
     )
-    BLOCK_SUBGROUPS = impl.static(block_dim // SUBGROUP_THREADS)
-    NUM_BITS_MASK = impl.static((1 << num_bits) - 1)
-    MM_OFF = impl.static(BLOCK_SUBGROUPS * RADIX_DIGITS)
-    BINS_PER_LANE = impl.static(RADIX_DIGITS // SUBGROUP_THREADS)
-
-    # ``TempStorage``: union of subgroup_offsets / subgroup_histograms (same backing) + match_masks.  All i32.
-    smem = SharedArray(impl.static((2 * BLOCK_SUBGROUPS * RADIX_DIGITS,)), _i32)
-
-    tid = thread_idx()
-    subgroup_idx = tid // SUBGROUP_THREADS
-    lane = _ops.cast(_subgroup.invocation_id(), _i32)
-
-    # Step 1: zero per-subgroup histograms and match_masks.
-    for b in impl.static(range(BINS_PER_LANE)):
-        bin_idx = lane + impl.static(b * SUBGROUP_THREADS)
-        smem[subgroup_idx * RADIX_DIGITS + bin_idx] = _i32(0)
-        smem[MM_OFF + subgroup_idx * RADIX_DIGITS + bin_idx] = _i32(0)
-    _subgroup_sync_fence()
-
-    # Each thread atomic-adds 1 to its subgroup's bin for ``digit``.
-    digit = _ops.cast(_ops.bit_and(_ops.bit_shr(key, _u32(bit_start)), _u32(NUM_BITS_MASK)), _i32)
-    _ops.atomic_add(smem[subgroup_idx * RADIX_DIGITS + digit], _i32(1))
-
-    sync()  # Publish per-subgroup histograms before column-sum.
-
-    # Step 2: per-thread column sum across subgroups for digit == tid.  Each thread collects the running exclusive prefix
-    # into ``bin_count`` while overwriting the subgroup histogram entries with their per-subgroup exclusive prefix.  After the
-    # loop, ``bin_count`` is the block-wide total for digit == tid.
-    bin_count = _i32(0)
-    for j_subgroup in impl.static(range(BLOCK_SUBGROUPS)):
-        subgroup_count = smem[impl.static(j_subgroup * RADIX_DIGITS) + tid]
-        smem[impl.static(j_subgroup * RADIX_DIGITS) + tid] = bin_count
-        bin_count = bin_count + subgroup_count
-
-    # Step 3: block-wide exclusive sum on the per-thread bin counts.
-    exclusive_digit_prefix = exclusive_add(bin_count, block_dim, _i32)
-
-    # Step 4: ComputeOffsetsSubgroupDownsweep — fold the block-wide exclusive prefix into every subgroup's offset.
-    for j_subgroup in impl.static(range(BLOCK_SUBGROUPS)):
-        smem[impl.static(j_subgroup * RADIX_DIGITS) + tid] = (
-            smem[impl.static(j_subgroup * RADIX_DIGITS) + tid] + exclusive_digit_prefix
-        )
-
-    sync()  # Publish subgroup offsets before the per-key match phase.
-
-    # Step 5: per-key atomic-OR match.  ``items_per_thread == 1``, so this runs once per thread.
-    lane_mask = _i32(1) << lane
-    lane_mask_le_v = _subgroup.lanemask_le(_subgroup.invocation_id())
-
-    match_idx = MM_OFF + subgroup_idx * RADIX_DIGITS + digit
-
-    # Every thread ORs its lane_mask into the per-digit match mask of its subgroup.  Threads with the same digit collide
-    # on the same shared-memory cell and produce a bitmask of "lanes in this subgroup that share this digit".
-    _ops.atomic_or(smem[match_idx], lane_mask)
-    _subgroup_sync_fence()
-
-    # Read the bin_mask back and find the leader (highest matching lane) + intra-subgroup rank.  ``clz`` here MUST run on
-    # the u32 (FindUMsb on SPIR-V): casting to i32 first triggers SPIR-V's FindSMsb, which for negative i32 (top bit
-    # set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that's one less than the actual
-    # highest matching lane.  Concretely, with lane 31 holding the only key for its digit, bin_mask = 0x80000000;
-    # FindSMsb on -2147483648 returns 30 (highest 0-bit), so 31 - 30 = 1 elects lane 1 instead of lane 31, and lane
-    # 31's shuffle reads from lane 1 (= 0) — observed as last-lane ranks off by one on Vulkan / Metal.  Now that the
-    # subgroup layer dispatches FindUMsb for unsigned ``clz``, passing the u32 directly emits the right intrinsic on
-    # every backend.
-    bin_mask = _ops.cast(smem[match_idx], _u32)
-    leader = _i32(31) - _ops.cast(_ops.clz(bin_mask), _i32)
-    popc = _ops.popcnt(_ops.bit_and(bin_mask, lane_mask_le_v))
-
-    # Leader claims `popc` slots from this subgroup's slice of the subgroup_offsets entry.
-    subgroup_offset = _i32(0)
-    if lane == leader:
-        subgroup_offset = _ops.atomic_add(smem[subgroup_idx * RADIX_DIGITS + digit], _ops.cast(popc, _i32))
-
-    # Leader broadcasts its claimed offset to every lane in the subgroup.
-    subgroup_offset = _subgroup.shuffle(subgroup_offset, _ops.cast(leader, _u32))
-
-    # Leader resets the match mask so subsequent passes (or items_per_thread > 1) start clean.
-    if lane == leader:
-        smem[match_idx] = _i32(0)
-    _subgroup_sync_fence()
-
-    rank = subgroup_offset + _ops.cast(popc, _i32) - _i32(1)
-
-    # Step 6: publish bins + exclusive_digit_prefix to the caller-supplied outparams.  ``block_dim == RADIX_DIGITS`` so
-    # every thread writes exactly one digit.  Followed by a ``block.sync()`` so the caller can read these arrays
-    # without having to add their own retiring barrier.
-    bins[tid] = bin_count
-    excl_prefix[tid] = exclusive_digit_prefix
-    sync()
-
-    return rank
+    if impl.static(SUBGROUP_THREADS == 32):
+        return _radix_rank_match_atomic_or_wave32(key, block_dim, radix_bits, bit_start, num_bits, bins, excl_prefix)
+    return _radix_rank_match_atomic_or_wave64(key, block_dim, radix_bits, bit_start, num_bits, bins, excl_prefix)
 
 
 # Shared-memory emulation of CUDA's hardware-fused barrier-with-reduction ops, used on backends that lack a direct
