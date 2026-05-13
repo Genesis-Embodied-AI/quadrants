@@ -1,0 +1,809 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Tensors &#8212; Quadrants 0.7.9 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+
+    <script src="../_static/documentation_options.js?v=79964ea6"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/tensor';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Compound types" href="compound_types.html" />
+    <link rel="prev" title="Matrix decompositions and solvers" href="decompositions.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.7.9" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="decompositions.html">Matrix decompositions and solvers</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
+<li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Tensors</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="tensors">
+<h1>Tensors<a class="headerlink" href="#tensors" title="Link to this heading">#</a></h1>
+<p>Quadrants offers two underlying tensor implementations, <a class="reference internal" href="tensor_types.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.field</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code></span></a>. They have different runtime/compile-time trade-offs, and different physical memory layouts can suit different kernels.</p>
+<p>The tensor API lets you pick both the <strong>backend</strong> and the <strong>physical memory layout</strong> on a per-tensor basis at allocation time. The rest of the system (kernels, fastcache, autograd) stays out of the way.</p>
+<p>See <a class="reference internal" href="tensor_types.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">tensor_types</span></code></span></a>, <a class="reference internal" href="scalar_tensors.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">scalar_tensors</span></code></span></a>, and <a class="reference internal" href="matrix_vector.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">matrix_vector</span></code></span></a> for the underlying tensor primitives.</p>
+<section id="choosing-a-backend-qd-backend">
+<h2>Choosing a backend: <code class="docutils literal notranslate"><span class="pre">qd.Backend</span></code><a class="headerlink" href="#choosing-a-backend-qd-backend" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">qd.Backend</span></code> is an <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> with two members:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Member</p></th>
+<th class="head"><p>Underlying type</p></th>
+<th class="head"><p>When to prefer</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.Backend.FIELD</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.field</span></code></p></td>
+<td><p>Faster at runtime; recompiles when any dimension size changes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.Backend.NDARRAY</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code></p></td>
+<td><p>Slower at runtime but avoids recompilation when sizes change.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The choice is per tensor: a single program can freely mix backends.</p>
+</section>
+<section id="allocating-a-tensor-with-qd-tensor">
+<h2>Allocating a tensor with <code class="docutils literal notranslate"><span class="pre">qd.tensor()</span></code><a class="headerlink" href="#allocating-a-tensor-with-qd-tensor" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">qd.tensor(dtype,</span> <span class="pre">shape,</span> <span class="pre">backend=...)</span></code> is a thin dispatcher over <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>. It selects the underlying allocator based on the <code class="docutils literal notranslate"><span class="pre">backend=</span></code> keyword:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">x64</span><span class="p">)</span>
+
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>                                 <span class="c1"># ndarray (default)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">FIELD</span><span class="p">)</span>       <span class="c1"># field</span>
+
+<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">qd.tensor()</span></code> (and the <code class="docutils literal notranslate"><span class="pre">qd.Vector.tensor</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Matrix.tensor</span></code> siblings) returns a <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> wrapper that uniformly forwards a fixed surface (<code class="docutils literal notranslate"><span class="pre">shape</span></code>, <code class="docutils literal notranslate"><span class="pre">dtype</span></code>, <code class="docutils literal notranslate"><span class="pre">layout</span></code>, <code class="docutils literal notranslate"><span class="pre">to_numpy</span></code>, <code class="docutils literal notranslate"><span class="pre">from_numpy</span></code>, <code class="docutils literal notranslate"><span class="pre">to_torch</span></code>, <code class="docutils literal notranslate"><span class="pre">from_torch</span></code>, <code class="docutils literal notranslate"><span class="pre">to_dlpack</span></code>, <code class="docutils literal notranslate"><span class="pre">fill</span></code>, <code class="docutils literal notranslate"><span class="pre">copy_from</span></code>, <code class="docutils literal notranslate"><span class="pre">grad</span></code>, host-side <code class="docutils literal notranslate"><span class="pre">__getitem__</span></code> / <code class="docutils literal notranslate"><span class="pre">__setitem__</span></code>, pickle) regardless of which backend it wraps. Drop down to the bare impl with <code class="docutils literal notranslate"><span class="pre">t._unwrap()</span></code> (returns the underlying <code class="docutils literal notranslate"><span class="pre">qd.Ndarray</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.ScalarField</span></code>) only if you need a backend-specific knob.</p>
+<p>The default backend is <code class="docutils literal notranslate"><span class="pre">qd.Backend.NDARRAY</span></code>: it avoids recompilation when sizes change.</p>
+</section>
+<section id="vector-and-matrix-tensors">
+<h2>Vector and matrix tensors<a class="headerlink" href="#vector-and-matrix-tensors" title="Link to this heading">#</a></h2>
+<p>For tensors whose elements are vectors or matrices, use <code class="docutils literal notranslate"><span class="pre">qd.Vector.tensor</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.Matrix.tensor</span></code>. They dispatch over <code class="docutils literal notranslate"><span class="pre">qd.Vector.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Vector.ndarray</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.Matrix.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Matrix.ndarray</span></code> respectively, with the same <code class="docutils literal notranslate"><span class="pre">backend=</span></code> keyword:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">x64</span><span class="p">)</span>
+
+<span class="c1"># A 1-D tensor of 4 length-3 vectors (ndarray backend, default).</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,))</span>
+
+<span class="c1"># Same shape, on the field backend.</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">FIELD</span><span class="p">)</span>
+
+<span class="c1"># A 1-D tensor of 3 (2x2) matrices, ndarray backend.</span>
+<span class="n">m</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,))</span>
+</pre></div>
+</div>
+</section>
+<section id="gradients">
+<h2>Gradients<a class="headerlink" href="#gradients" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> works on every tensor factory and on every backend, by passing the keyword through to the underlying <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> call:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">x64</span><span class="p">)</span>
+
+<span class="c1"># Ndarray-backed primal + grad (default backend).</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">a</span><span class="o">.</span><span class="n">grad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+<span class="c1"># Same on the field backend.</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">b</span><span class="o">.</span><span class="n">grad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+<span class="c1"># Kernels write through canonical indices on both primal and grad.</span>
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">write_grad</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">):</span>
+        <span class="n">x</span><span class="o">.</span><span class="n">grad</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span> <span class="o">*</span> <span class="mf">100.0</span>
+
+<span class="n">write_grad</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">grad</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span>   <span class="c1"># [0., 100., 200., 300.]</span>
+</pre></div>
+</div>
+<p>Gradient buffers always share the canonical shape of the primal, on both backends. The <code class="docutils literal notranslate"><span class="pre">needs_grad</span></code> keyword also passes through <code class="docutils literal notranslate"><span class="pre">qd.Vector.tensor</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.Matrix.tensor</span></code> for compound element types.</p>
+</section>
+<section id="controlling-physical-layout">
+<h2>Controlling physical layout<a class="headerlink" href="#controlling-physical-layout" title="Link to this heading">#</a></h2>
+<p>Tweaking the memory layout on a per-tensor basis is commonly used to improve runtime performance. In practice, tuning axis order is sufficient in most cases. For advanced users seeking finer-grained control over the memory layout, see the SNode API (<code class="docutils literal notranslate"><span class="pre">qd.root</span></code>).</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">layout=</span></code> keyword lets you pick per-tensor:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">x64</span><span class="p">)</span>
+
+<span class="c1"># Default (canonical) layout: same order as the canonical shape.</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">B</span><span class="p">))</span>
+
+<span class="c1"># Transposed storage: axis 1 (batch) becomes the outer SNode, axis 0 inner.</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">B</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">layout</span></code> is a tuple of <code class="docutils literal notranslate"><span class="pre">int</span></code> listing the <strong>canonical axis index at each successive memory-nesting level, outermost first</strong>. It must be a permutation of <code class="docutils literal notranslate"><span class="pre">range(len(shape))</span></code>. The canonical (logical) shape that you pass and that <code class="docutils literal notranslate"><span class="pre">tensor.shape</span></code> returns is <em>not</em> affected by <code class="docutils literal notranslate"><span class="pre">layout</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">B</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+<span class="k">assert</span> <span class="n">b</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>        <span class="c1"># canonical shape, unchanged</span>
+<span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="o">...</span>                   <span class="c1"># canonical indexing in kernels still works</span>
+</pre></div>
+</div>
+<p>Any permutation is supported, up to Quadrants’ <code class="docutils literal notranslate"><span class="pre">quadrants_max_num_indices</span></code> (currently 12). <code class="docutils literal notranslate"><span class="pre">layout=None</span></code> and the identity permutation (<code class="docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">1,</span> <span class="pre">...,</span> <span class="pre">N-1)</span></code>) are equivalent and forward no permutation to the underlying allocator.</p>
+<p>Quadrants rejects mismatched / invalid layouts up front:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>   <span class="c1"># ValueError: wrong length</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>      <span class="c1"># ValueError: not a permutation</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">order</span><span class="o">=</span><span class="s2">&quot;ji&quot;</span><span class="p">)</span>         <span class="c1"># TypeError: use layout=</span>
+</pre></div>
+</div>
+</section>
+<section id="interop-with-numpy-and-pytorch">
+<h2>Interop with NumPy and PyTorch<a class="headerlink" href="#interop-with-numpy-and-pytorch" title="Link to this heading">#</a></h2>
+<p>Every Python-side accessor - <code class="docutils literal notranslate"><span class="pre">tensor.shape</span></code>, <code class="docutils literal notranslate"><span class="pre">tensor.layout</span></code>, <code class="docutils literal notranslate"><span class="pre">tensor.to_numpy()</span></code>, <code class="docutils literal notranslate"><span class="pre">tensor.to_numpy(dtype=...)</span></code>, <code class="docutils literal notranslate"><span class="pre">tensor.from_numpy(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">tensor.to_torch(device=...)</span></code>, <code class="docutils literal notranslate"><span class="pre">tensor.from_torch(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">tensor.to_dlpack()</span></code> (and therefore anything built on top of it like <code class="docutils literal notranslate"><span class="pre">torch.utils.dlpack.from_dlpack</span></code>) - returns the <strong>canonical view</strong>: the shape you passed at allocation time, indexed in canonical axis order.</p>
+<p><code class="docutils literal notranslate"><span class="pre">layout=</span></code> is purely an internal performance hint. The data lives in permuted physical storage, but Python callers never have to reason about that:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">B</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+<span class="k">assert</span> <span class="n">a</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>                 <span class="c1"># canonical</span>
+<span class="k">assert</span> <span class="n">a</span><span class="o">.</span><span class="n">layout</span> <span class="o">==</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>                <span class="c1"># introspectable</span>
+<span class="k">assert</span> <span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>      <span class="c1"># canonical view of the same data</span>
+
+<span class="c1"># Round-trips work in canonical-shape terms.</span>
+<span class="n">src</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="n">B</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<span class="n">a</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">src</span><span class="p">)</span>
+<span class="k">assert</span> <span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span> <span class="o">==</span> <span class="n">src</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+<span class="c1"># DLPack carries the canonical shape with permuted strides; the resulting torch tensor is a transposed view of the underlying buffer (no data movement until you call ``.contiguous()``).</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">dlpack</span><span class="o">.</span><span class="n">from_dlpack</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">to_dlpack</span><span class="p">())</span>
+<span class="k">assert</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+
+<span class="c1"># ``to_torch`` / ``from_torch`` are equivalent on either backend.</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to_torch</span><span class="p">()</span>
+<span class="k">assert</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+<span class="n">a</span><span class="o">.</span><span class="n">from_torch</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The exact same surface is available on both backends - switching <code class="docutils literal notranslate"><span class="pre">qd.tensor(...,</span> <span class="pre">backend=qd.Backend.FIELD/NDARRAY)</span></code> does not require any other code change at the call site.</p>
+<section id="zero-copy-with-copy-false">
+<h3>Zero-copy with <code class="docutils literal notranslate"><span class="pre">copy=False</span></code><a class="headerlink" href="#zero-copy-with-copy-false" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> and <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> accept a keyword-only <code class="docutils literal notranslate"><span class="pre">copy</span></code> argument:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
+<span class="n">a</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
+
+<span class="n">view</span>  <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>   <span class="c1"># zero-copy: aliases a&#39;s memory, or ValueError</span>
+<span class="n">auto</span>  <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>    <span class="c1"># zero-copy if possible, otherwise copy</span>
+<span class="n">clone</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>    <span class="c1"># independent copy (default)</span>
+</pre></div>
+</div>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Behaviour</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">True</span></code> (default)</p></td>
+<td><p>Independent copy via kernel. Safe to mutate freely.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>Zero-copy when available, otherwise falls back to a copy silently.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">False</span></code></p></td>
+<td><p>Zero-copy DLPack view, or <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> if unsupported for this backend/dtype.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">copy=False</span></code> and <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> avoid both the buffer allocation and the copy kernel when zero-copy is available - the returned numpy array or torch tensor points directly at Quadrants’ existing memory. For a large tensor this eliminates a potentially expensive memcpy and a device-side kernel launch. Writes through the view are immediately visible to subsequent Quadrants kernels (and vice versa), removing the need for <code class="docutils literal notranslate"><span class="pre">to_torch</span></code> → modify → <code class="docutils literal notranslate"><span class="pre">from_torch</span></code> round-trips.</p>
+<p>The difference between <code class="docutils literal notranslate"><span class="pre">False</span></code> and <code class="docutils literal notranslate"><span class="pre">None</span></code>: <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> when zero-copy is not supported (e.g. unsupported dtype or GPU-to-numpy), while <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> silently falls back to a kernel copy in those cases. Use <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> when you want zero-copy as a best-effort optimisation without having to handle exceptions.</p>
+<p>The tradeoff of zero-copy is lifetime coupling: the view is invalidated on <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>, and on GPU you must be mindful of stream synchronisation when both frameworks write to the same buffer.</p>
+<p>This works identically on both backends. For the full support matrix (which backends/dtypes qualify, lifetime caveats, Metal synchronisation) see <a class="reference internal" href="interop.html#zero-copy-interop-via-dlpack"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">interop</span></code></span></a>.</p>
+<p>Gradient buffers behave identically: <code class="docutils literal notranslate"><span class="pre">a.grad.to_numpy()</span></code> returns the canonical view of the gradient.</p>
+</section>
+</section>
+<section id="annotating-kernel-arguments-qd-tensor">
+<h2>Annotating kernel arguments: <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code><a class="headerlink" href="#annotating-kernel-arguments-qd-tensor" title="Link to this heading">#</a></h2>
+<p>Kernel parameter annotations use <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> regardless of backend. The same class doubles as the wrapper class returned by <code class="docutils literal notranslate"><span class="pre">qd.tensor()</span></code>, so the annotation and the runtime values agree:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">x64</span><span class="p">)</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
+
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">FIELD</span><span class="p">)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">NDARRAY</span><span class="p">)</span>
+
+<span class="n">fill</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>   <span class="c1"># field branch</span>
+<span class="n">fill</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>   <span class="c1"># ndarray branch</span>
+</pre></div>
+</div>
+<p>The kernel argument is unwrapped to the bare impl before the template-mapper / AST sees it, so kernel bodies still write <code class="docutils literal notranslate"><span class="pre">x[i,</span> <span class="pre">j]</span></code> and pay no per-call cost for the wrapper.</p>
+</section>
+<section id="pickle">
+<h2>Pickle<a class="headerlink" href="#pickle" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> objects are picklable on <strong>both</strong> backends, including under non-identity layouts. Round-trip (pickle then unpickle) preserves the canonical data, the dtype, the shape, and the layout:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pickle</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">x64</span><span class="p">)</span>
+
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+<span class="n">a</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+
+<span class="n">restored</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">pickle</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>
+<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">restored</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">restored</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">restored</span><span class="o">.</span><span class="n">layout</span> <span class="o">==</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="k">assert</span> <span class="p">(</span><span class="n">restored</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span> <span class="o">==</span> <span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="wrapping-a-bare-tensor-qd-wrap">
+<h2>Wrapping a bare tensor: <code class="docutils literal notranslate"><span class="pre">qd.wrap</span></code><a class="headerlink" href="#wrapping-a-bare-tensor-qd-wrap" title="Link to this heading">#</a></h2>
+<p>If you have a bare <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Vector.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Matrix.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Vector.ndarray</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Matrix.ndarray</span></code> impl (e.g. from older code or library boundaries) and want the unified <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> surface around it, use <code class="docutils literal notranslate"><span class="pre">qd.wrap(impl)</span></code>. It picks the most specific subclass (<code class="docutils literal notranslate"><span class="pre">Tensor</span></code>, <code class="docutils literal notranslate"><span class="pre">VectorTensor</span></code>, <code class="docutils literal notranslate"><span class="pre">MatrixTensor</span></code>):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">x64</span><span class="p">)</span>
+
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">t</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span> <span class="ow">is</span> <span class="n">a</span>   <span class="c1"># same underlying impl</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">qd.wrap</span></code> is the only sanctioned way to construct a wrapper around a bare impl after the fact. The <code class="docutils literal notranslate"><span class="pre">qd.Tensor(impl)</span></code> constructor itself rejects double-wrapping so you can’t accidentally end up with a <code class="docutils literal notranslate"><span class="pre">Tensor</span></code> containing a <code class="docutils literal notranslate"><span class="pre">Tensor</span></code>.</p>
+</section>
+<section id="cross-backend-copy-from-is-not-supported">
+<h2>Cross-backend <code class="docutils literal notranslate"><span class="pre">copy_from</span></code> is not supported<a class="headerlink" href="#cross-backend-copy-from-is-not-supported" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tensor.copy_from(other)</span></code> requires both tensors to share the same backend. Mixed-backend copies are not supported:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">FIELD</span><span class="p">)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">NDARRAY</span><span class="p">)</span>
+<span class="n">a</span><span class="o">.</span><span class="n">copy_from</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>   <span class="c1"># raises: cross-backend copy unsupported</span>
+</pre></div>
+</div>
+<p>If you genuinely need to move data across backends, route it through Torch: <code class="docutils literal notranslate"><span class="pre">a.from_torch(b.to_torch())</span></code>.</p>
+</section>
+<section id="known-asymmetry-real-dtype-grad-placeholder-on-the-field-backend">
+<h2>Known asymmetry: real-dtype <code class="docutils literal notranslate"><span class="pre">.grad</span></code> placeholder on the field backend<a class="headerlink" href="#known-asymmetry-real-dtype-grad-placeholder-on-the-field-backend" title="Link to this heading">#</a></h2>
+<p>For tensors of a real (<code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code>) dtype allocated <strong>without</strong> <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code>, the field backend exposes <code class="docutils literal notranslate"><span class="pre">t.grad</span></code> as a wrapper around an un-placed gradient placeholder, allowing for late manual allocation via <code class="docutils literal notranslate"><span class="pre">qd.root.place(t.grad)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.root.lazy_grad()</span></code>. The ndarray backend reports <code class="docutils literal notranslate"><span class="pre">t.grad</span> <span class="pre">is</span> <span class="pre">None</span></code> in the same case:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t_field</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">FIELD</span><span class="p">)</span>
+<span class="n">t_nd</span>    <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">NDARRAY</span><span class="p">)</span>
+
+<span class="n">t_field</span><span class="o">.</span><span class="n">grad</span>   <span class="c1"># Tensor wrapper around an un-placed grad field (ready for manual placement)</span>
+<span class="n">t_nd</span><span class="o">.</span><span class="n">grad</span>      <span class="c1"># None</span>
+</pre></div>
+</div>
+<p>Pass <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> at tensor creation to automatically allocate gradient storage with default memory layout if needed: floating-point tensors get a grad buffer of the same shape and dtype as the primal, whereas integer-dtype tensors never get a grad buffer - <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> is a no-op there.</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">Tensor.has_grad()</span></code> / <code class="docutils literal notranslate"><span class="pre">Tensor.has_dual()</span></code> to check whether the gradient storage is actually allocated, regardless of whether the allocation came from <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> or a manual <code class="docutils literal notranslate"><span class="pre">qd.root.place(field.grad)</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t_field</span><span class="o">.</span><span class="n">has_grad</span><span class="p">()</span>   <span class="c1"># False -- the placeholder has not been placed</span>
+<span class="n">t_nd</span><span class="o">.</span><span class="n">has_grad</span><span class="p">()</span>      <span class="c1"># False</span>
+
+<span class="n">ng</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">ng</span><span class="o">.</span><span class="n">has_grad</span><span class="p">()</span>        <span class="c1"># True</span>
+</pre></div>
+</div>
+<p>Reading or writing <code class="docutils literal notranslate"><span class="pre">.grad</span></code> on an un-allocated gradient raises <code class="docutils literal notranslate"><span class="pre">QuadrantsRuntimeError(&quot;Field</span> <span class="pre">has</span> <span class="pre">no</span> <span class="pre">allocation.</span> <span class="pre">...&quot;)</span></code> - the failure is loud, never silent. Use <code class="docutils literal notranslate"><span class="pre">has_grad()</span></code> as the pre-check in generic code paths that may receive either a <code class="docutils literal notranslate"><span class="pre">needs_grad</span></code> tensor or a plain one. <code class="docutils literal notranslate"><span class="pre">has_dual()</span></code> mirrors it for the forward-mode dual companion.</p>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="decompositions.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Matrix decompositions and solvers</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="compound_types.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Compound types</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#choosing-a-backend-qd-backend">Choosing a backend: <code class="docutils literal notranslate"><span class="pre">qd.Backend</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#allocating-a-tensor-with-qd-tensor">Allocating a tensor with <code class="docutils literal notranslate"><span class="pre">qd.tensor()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vector-and-matrix-tensors">Vector and matrix tensors</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gradients">Gradients</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#controlling-physical-layout">Controlling physical layout</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#interop-with-numpy-and-pytorch">Interop with NumPy and PyTorch</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-copy-with-copy-false">Zero-copy with <code class="docutils literal notranslate"><span class="pre">copy=False</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#annotating-kernel-arguments-qd-tensor">Annotating kernel arguments: <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#pickle">Pickle</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#wrapping-a-bare-tensor-qd-wrap">Wrapping a bare tensor: <code class="docutils literal notranslate"><span class="pre">qd.wrap</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cross-backend-copy-from-is-not-supported">Cross-backend <code class="docutils literal notranslate"><span class="pre">copy_from</span></code> is not supported</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#known-asymmetry-real-dtype-grad-placeholder-on-the-field-backend">Known asymmetry: real-dtype <code class="docutils literal notranslate"><span class="pre">.grad</span></code> placeholder on the field backend</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/tensor.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
