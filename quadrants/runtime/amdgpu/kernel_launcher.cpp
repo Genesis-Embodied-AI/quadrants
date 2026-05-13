@@ -235,14 +235,12 @@ bool KernelLauncher::on_amdgpu_device(void *ptr) {
 void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
 
-  // HIP graph fast path. Used when the kernel was declared `@qd.kernel(graph=True)` AND there is no
-  // `graph_do_while` arg. The `graph_do_while` case falls through to the regular streaming launch
-  // below, which handles it via `launch_offloaded_tasks_with_do_while` (host-side loop + DtoH of the
-  // counter ndarray each iteration). HIP exposes kernel-launch graph nodes but no conditional / while
-  // nodes today, so the CUDA fast path that builds a conditional graph cannot be ported. The
-  // `AmdgpuDefaultStreamPinGuard` further down is skipped on this branch; that's fine because
-  // `graph_launch` enqueues a single op on the active stream and there are no recursive launches to
-  // reorder.
+  // HIP graph fast path. Used when the kernel was declared `@qd.kernel(graph=True)` AND there is no `graph_do_while`
+  // arg. The `graph_do_while` case falls through to the regular streaming launch below, which handles it via
+  // `launch_offloaded_tasks_with_do_while` (host-side loop + DtoH of the counter ndarray each iteration). HIP exposes
+  // kernel-launch graph nodes but no conditional / while nodes today, so the CUDA fast path that builds a conditional
+  // graph cannot be ported. The `AmdgpuDefaultStreamPinGuard` further down is skipped on this branch; that's fine
+  // because `graph_launch` enqueues a single op on the active stream and there are no recursive launches to reorder.
   if (ctx.use_graph && ctx.graph_do_while_arg_id < 0) {
     auto &lctx = contexts_[handle.get_launch_id()];
     if (graph_manager_.try_launch(handle.get_launch_id(), ctx, lctx.jit_module, *lctx.parameters, lctx.offloaded_tasks,

@@ -72,7 +72,13 @@ PER_AMDGPU_FUNCTION(kernel_set_attribute, hipFuncSetAttribute, const void *, uin
 // `@qd.kernel(graph=True)`. Conditional / while nodes are not yet available in HIP, so device-side
 // `graph_do_while` falls back to the host-side loop in `KernelLauncher::launch_offloaded_tasks_with_do_while`.
 PER_AMDGPU_FUNCTION(graph_create, hipGraphCreate, void **, uint32);
-PER_AMDGPU_FUNCTION(graph_add_kernel_node, hipGraphAddKernelNode, void **, void *, const void *, std::size_t, const void *);
+PER_AMDGPU_FUNCTION(graph_add_kernel_node,
+                    hipGraphAddKernelNode,
+                    void **,
+                    void *,
+                    const void *,
+                    std::size_t,
+                    const void *);
 PER_AMDGPU_FUNCTION(graph_instantiate, hipGraphInstantiate, void **, void *, void *, char *, std::size_t);
 PER_AMDGPU_FUNCTION(graph_launch, hipGraphLaunch, void *, void *);
 PER_AMDGPU_FUNCTION(graph_destroy, hipGraphDestroy, void *);

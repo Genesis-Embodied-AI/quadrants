@@ -41,10 +41,9 @@ constexpr uint32 HIP_JIT_MAX_REGISTERS = 0;
 constexpr uint32 HIP_POINTER_ATTRIBUTE_MEMORY_TYPE = 2;
 constexpr uint32 HIP_SUCCESS = 0;
 constexpr uint32 HIP_MEMORYTYPE_DEVICE = 1;
-// `hipFuncAttributeMaxDynamicSharedMemorySize` from the `hipFuncAttribute` enum in
-// ROCm/clr hipamd/include/hip/hip_runtime_api.h. Used with `kernel_set_attribute`
-// (`hipFuncSetAttribute`) to opt in to >48 KB of dynamic shared memory for graph
-// kernel nodes that request it.
+// `hipFuncAttributeMaxDynamicSharedMemorySize` from the `hipFuncAttribute` enum in ROCm/clr
+// hipamd/include/hip/hip_runtime_api.h. Used with `kernel_set_attribute` (`hipFuncSetAttribute`) to opt in to >48 KB
+// of dynamic shared memory for graph kernel nodes that request it.
 constexpr uint32 HIP_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8;
 
 std::string get_amdgpu_error_message(uint32 err);

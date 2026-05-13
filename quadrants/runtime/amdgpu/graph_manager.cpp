@@ -18,10 +18,9 @@ CachedGraph::CachedGraph(std::size_t arg_buf_size, std::size_t result_buf_size, 
     AMDGPUDriver::get_instance().malloc(reinterpret_cast<void **>(&persistent_device_arg_buffer), arg_buffer_size);
   }
 
-  // Device-side `RuntimeContext` for graph kernel-node args. Unlike the CUDA
-  // path which passes a host pointer (relying on UVA / HMM), AMDGPU kernels
-  // dereference the pointer directly on the GPU, so it must point at device
-  // memory. See `runtime/amdgpu/graph_manager.h` for the full rationale.
+  // Device-side `RuntimeContext` for graph kernel-node args. Unlike the CUDA path which passes a host pointer (relying
+  // on UVA / HMM), AMDGPU kernels dereference the pointer directly on the GPU, so it must point at device memory. See
+  // `runtime/amdgpu/graph_manager.h` for the full rationale.
   AMDGPUDriver::get_instance().malloc(&device_runtime_ctx, sizeof(RuntimeContext));
 
   persistent_ctx.runtime = executor->get_llvm_runtime();
@@ -29,9 +28,8 @@ CachedGraph::CachedGraph(std::size_t arg_buf_size, std::size_t result_buf_size, 
   persistent_ctx.result_buffer = reinterpret_cast<uint64 *>(persistent_device_result_buffer);
   persistent_ctx.cpu_thread_id = 0;
 
-  // The single kernel arg every offloaded task takes is a RuntimeContext *.
-  // Stage the device pointer value into the persistent CachedKernelArgs so
-  // the extra-config addresses are stable for the graph's lifetime.
+  // The single kernel arg every offloaded task takes is a RuntimeContext *. Stage the device pointer value into the
+  // persistent CachedKernelArgs so the extra-config addresses are stable for the graph's lifetime.
   kernel_args.packed_runtime_ctx_ptr = device_runtime_ctx;
   kernel_args.pack_size = sizeof(void *);
   kernel_args.extra_config[0] = reinterpret_cast<void *>(0x01);  // HIP_LAUNCH_PARAM_BUFFER_POINTER
@@ -66,9 +64,8 @@ CachedGraph::CachedGraph(CachedGraph &&other) noexcept
       arg_buffer_size(other.arg_buffer_size),
       result_buffer_size(other.result_buffer_size),
       num_nodes(other.num_nodes) {
-  // The moved-from object must not free our resources at destruction time.
-  // Rebind `kernel_args.extra_config` so it points at *our* members after the
-  // move, not the moved-from object's (which is about to be destroyed).
+  // The moved-from object must not free our resources at destruction time. Rebind `kernel_args.extra_config` so it
+  // points at *our* members after the move, not the moved-from object's (which is about to be destroyed).
   kernel_args.extra_config[1] = &kernel_args.packed_runtime_ctx_ptr;
   kernel_args.extra_config[3] = &kernel_args.pack_size;
   other.graph_exec = nullptr;
@@ -78,8 +75,8 @@ CachedGraph::CachedGraph(CachedGraph &&other) noexcept
 }
 
 CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
-  // Move-and-swap: after the swaps, `raii_guard` holds our old resources and
-  // its destructor frees them, so every owned pointer is released uniformly.
+  // Move-and-swap: after the swaps, `raii_guard` holds our old resources and its destructor frees them, so every owned
+  // pointer is released uniformly.
   CachedGraph raii_guard(std::move(other));
   std::swap(graph_exec, raii_guard.graph_exec);
   std::swap(persistent_device_arg_buffer, raii_guard.persistent_device_arg_buffer);
@@ -87,9 +84,8 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
   std::swap(persistent_ctx, raii_guard.persistent_ctx);
   std::swap(device_runtime_ctx, raii_guard.device_runtime_ctx);
   std::swap(kernel_args, raii_guard.kernel_args);
-  // After the swap, kernel_args is `raii_guard`'s old kernel_args (which had
-  // extra_config[1,3] bound to its own members). Rebind to ours so the
-  // addresses stay valid through the swap.
+  // After the swap, kernel_args is `raii_guard`'s old kernel_args (which had extra_config[1,3] bound to its own
+  // members). Rebind to ours so the addresses stay valid through the swap.
   kernel_args.extra_config[1] = &kernel_args.packed_runtime_ctx_ptr;
   kernel_args.extra_config[3] = &kernel_args.pack_size;
   raii_guard.kernel_args.extra_config[1] = &raii_guard.kernel_args.packed_runtime_ctx_ptr;
@@ -100,12 +96,11 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
   return *this;
 }
 
-// Resolves ndarray parameter handles in the launch context to raw device
-// pointers, writing them into the arg buffer via `set_ndarray_ptrs`.
+// Resolves ndarray parameter handles in the launch context to raw device pointers, writing them into the arg buffer
+// via `set_ndarray_ptrs`.
 //
-// Unlike the normal launch path, this does not handle host-resident arrays
-// (no temporary device allocation or host-to-device transfer). Errors if any
-// external array is on the host, since graph mode bakes device pointers into
+// Unlike the normal launch path, this does not handle host-resident arrays (no temporary device allocation or
+// host-to-device transfer). Errors if any external array is on the host, since graph mode bakes device pointers into
 // the cached graph.
 void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
                                             const std::vector<std::pair<int, Callable::Parameter>> &parameters,
@@ -158,10 +153,9 @@ void *GraphManager::add_kernel_node(void *graph,
                                     unsigned int block_dim,
                                     unsigned int shared_mem,
                                     CachedKernelArgs &kernel_args) {
-  // Opt in to the requested dynamic shared memory size. `hipFuncSetAttribute`
-  // is mostly a no-op for the AMD backend per its header comments, but we
-  // call it for parity with the CUDA path and to forward the request to any
-  // backend that honours it.
+  // Opt in to the requested dynamic shared memory size. `hipFuncSetAttribute` is mostly a no-op for the AMD backend
+  // per its header comments, but we call it for parity with the CUDA path and to forward the request to any backend
+  // that honours it.
   if (shared_mem > 0) {
     AMDGPUDriver::get_instance().kernel_set_attribute(func, HIP_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
                                                       static_cast<int>(shared_mem));
@@ -171,13 +165,11 @@ void *GraphManager::add_kernel_node(void *graph,
   params.blockDimX = block_dim;
   params.blockDimY = 1;
   params.blockDimZ = 1;
-  // HIP's AMD backend expects kernel args via the `extra` byte-buffer convention
-  // (HIP_LAUNCH_PARAM_BUFFER_POINTER / SIZE / END markers), not via the
-  // per-arg `kernelParams` array. See the matching setup in
-  // `rhi/amdgpu/amdgpu_context.cpp::AMDGPUContext::launch`. Passing
-  // `kernelParams` here instead silently corrupts kernel arg loads on RDNA3
-  // and the launched kernels fault asynchronously, surfacing as
-  // `hipErrorIllegalAddress` at the next host-visible sync point.
+  // HIP's AMD backend expects kernel args via the `extra` byte-buffer convention (HIP_LAUNCH_PARAM_BUFFER_POINTER /
+  // SIZE / END markers), not via the per-arg `kernelParams` array. See the matching setup in
+  // `rhi/amdgpu/amdgpu_context.cpp::AMDGPUContext::launch`. Passing `kernelParams` here instead silently corrupts
+  // kernel arg loads on RDNA3 and the launched kernels fault asynchronously, surfacing as `hipErrorIllegalAddress` at
+  // the next host-visible sync point.
   params.extra = kernel_args.extra_config;
   params.func = func;
   params.gridDimX = grid_dim;
@@ -197,9 +189,8 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
   if (ctx.arg_buffer_size > 0) {
     // Async HtoD on the launch stream: the subsequent `graph_launch` is queued on the same stream,
     // so the kernel nodes are ordered after the arg-buffer upload without a host-side barrier.
-    AMDGPUDriver::get_instance().memcpy_host_to_device_async(cached.persistent_device_arg_buffer,
-                                                             ctx.get_context().arg_buffer, cached.arg_buffer_size,
-                                                             stream);
+    AMDGPUDriver::get_instance().memcpy_host_to_device_async(
+        cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer, cached.arg_buffer_size, stream);
   }
   AMDGPUDriver::get_instance().graph_launch(cached.graph_exec, stream);
   used_on_last_call_ = true;
@@ -244,14 +235,12 @@ bool GraphManager::try_launch(int launch_id,
 
   auto *stream_for_setup = AMDGPUContext::get_instance().get_stream();
   if (cached.arg_buffer_size > 0) {
-    AMDGPUDriver::get_instance().memcpy_host_to_device_async(cached.persistent_device_arg_buffer,
-                                                             ctx.get_context().arg_buffer, cached.arg_buffer_size,
-                                                             stream_for_setup);
+    AMDGPUDriver::get_instance().memcpy_host_to_device_async(
+        cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer, cached.arg_buffer_size, stream_for_setup);
   }
 
-  // Stage the RuntimeContext on device. Its arg_buffer / result_buffer
-  // pointers reference the persistent device buffers above; none of its
-  // fields change between graph launches so one copy is sufficient.
+  // Stage the RuntimeContext on device. Its arg_buffer / result_buffer pointers reference the persistent device
+  // buffers above; none of its fields change between graph launches so one copy is sufficient.
   AMDGPUDriver::get_instance().memcpy_host_to_device_async(cached.device_runtime_ctx, &cached.persistent_ctx,
                                                            sizeof(RuntimeContext), stream_for_setup);
   AMDGPUDriver::get_instance().stream_synchronize(stream_for_setup);
@@ -259,10 +248,9 @@ bool GraphManager::try_launch(int launch_id,
   void *graph = nullptr;
   AMDGPUDriver::get_instance().graph_create(&graph, 0);
 
-  // Each kernel node receives the device-side RuntimeContext pointer via the
-  // shared `cached.kernel_args` extra-config (see graph_manager.h for why all
-  // nodes share one). Stream-parallel groups (`stream_parallel_group_id != 0`)
-  // are silently serialized inside the graph, matching the CUDA implementation.
+  // Each kernel node receives the device-side RuntimeContext pointer via the shared `cached.kernel_args` extra-config
+  // (see graph_manager.h for why all nodes share one). Stream-parallel groups (`stream_parallel_group_id != 0`) are
+  // silently serialized inside the graph, matching the CUDA implementation.
   void *prev_node = nullptr;
   for (const auto &task : offloaded_tasks) {
     void *func = amdgpu_module->lookup_function(task.name);
