@@ -10,7 +10,8 @@ Covers:
 - ``qd.algorithms.device_select`` — scan-based stream compaction.
 - ``qd.algorithms.device_radix_sort`` — LSB radix sort built on
   ``block.radix_rank_match_atomic_or``.
-- (Forthcoming) ``reduce-by-key``.
+- ``qd.algorithms.device_reduce_by_key_add`` — scan + scatter +
+  atomic_add reduce-by-key.
 
 Each test runs across the full ``arch=qd.gpu`` parametrization so the kernels
 are exercised on CUDA, AMDGPU, Vulkan, and Metal (where the host supports
@@ -669,3 +670,199 @@ def test_device_radix_sort_rejects_odd_passes():
     tmp = qd.field(qd.i32, shape=8)
     with pytest.raises(ValueError):
         qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, end_bit=8)  # 1 pass — odd
+
+
+# ---------------------------------------------------------------------------
+# Device reduce-by-key (add)
+# ---------------------------------------------------------------------------
+
+# Same default-scratch envelope as device_select (uses ~N + N/256 u32 slots).
+_RBK_SIZES = [1, 2, 3, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000]
+
+
+def _ref_rbk_add(keys, values):
+    """Reference reduce-by-key: collapse consecutive runs of equal keys,
+    returning ``(unique_keys, sums)``."""
+    if len(keys) == 0:
+        return np.array([], dtype=keys.dtype), np.array([], dtype=values.dtype)
+    uniq_keys = [keys[0]]
+    sums = [values[0]]
+    for i in range(1, len(keys)):
+        if keys[i] != keys[i - 1]:
+            uniq_keys.append(keys[i])
+            sums.append(values[i])
+        else:
+            sums[-1] = sums[-1] + values[i]
+    return np.asarray(uniq_keys, dtype=keys.dtype), np.asarray(sums, dtype=values.dtype)
+
+
+def _gen_run_keys(rng, dtype, N):
+    """Build a key vector of size N with a realistic run-length distribution.
+
+    Runs are drawn from a small alphabet of 5-15 distinct values and repeated
+    1-8 times, then concatenated and truncated to N. This guarantees both
+    multi-element runs (so the scatter's atomic_add path is exercised) and
+    single-element runs (so the position math is exercised at boundary).
+    """
+    np_t = to_numpy_type(dtype)
+    if dtype == qd.f32:
+        alphabet = rng.standard_normal(15).astype(np_t)
+    elif dtype == qd.u32:
+        alphabet = rng.integers(0, 100, size=15, dtype=np_t)
+    else:
+        alphabet = rng.integers(-50, 50, size=15, dtype=np_t)
+    run_keys = rng.choice(alphabet, size=N // 3 + 2)
+    run_lengths = rng.integers(1, 8, size=len(run_keys))
+    keys = np.repeat(run_keys, run_lengths)
+    if len(keys) < N:
+        # pad with the last key to fill N elements (extends the final run)
+        keys = np.concatenate([keys, np.full(N - len(keys), keys[-1], dtype=np_t)])
+    return keys[:N].astype(np_t)
+
+
+@pytest.mark.parametrize("N", _RBK_SIZES)
+@pytest.mark.parametrize("key_dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.parametrize("val_dtype", [qd.i32, qd.u32, qd.f32])
+@test_utils.test(arch=qd.gpu)
+def test_device_reduce_by_key_add(key_dtype, val_dtype, N):
+    """Cross-product of key dtype × value dtype × size, against a CPU oracle.
+
+    Values are bounded so ``f32`` accumulation error stays controlled — the
+    tolerance is rtol=1e-3 for f32 (matches our scan_add f32 tolerance) and
+    bit-exact for integer types.
+    """
+    rng = np.random.default_rng(seed=1234)
+    keys_host = _gen_run_keys(rng, key_dtype, N)
+    val_np = to_numpy_type(val_dtype)
+    if val_dtype == qd.f32:
+        values_host = rng.uniform(-1.0, 1.0, size=N).astype(val_np)
+    elif val_dtype == qd.u32:
+        values_host = rng.integers(0, 100, size=N, dtype=val_np)
+    else:
+        values_host = rng.integers(-100, 100, size=N, dtype=val_np)
+
+    keys_in = qd.field(key_dtype, shape=N)
+    values_in = qd.field(val_dtype, shape=N)
+    keys_out = qd.field(key_dtype, shape=N)
+    values_out = qd.field(val_dtype, shape=N)
+    num_runs = qd.field(qd.i32, shape=1)
+    _fill_field(keys_in, keys_host)
+    _fill_field(values_in, values_host)
+
+    qd.algorithms.device_reduce_by_key_add(
+        keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs
+    )
+    nr = int(num_runs.to_numpy()[0])
+    want_keys, want_vals = _ref_rbk_add(keys_host, values_host)
+
+    assert nr == len(want_keys), f"{key_dtype}/{val_dtype} N={N}: num_runs {nr} vs {len(want_keys)}"
+    got_keys = keys_out.to_numpy()[:nr]
+    got_vals = values_out.to_numpy()[:nr]
+    np.testing.assert_array_equal(got_keys, want_keys, err_msg=f"{key_dtype}/{val_dtype} N={N}: keys")
+    if val_dtype == qd.f32:
+        np.testing.assert_allclose(
+            got_vals,
+            want_vals,
+            rtol=1e-3,
+            atol=1e-3,
+            err_msg=f"{key_dtype}/{val_dtype} N={N}: values",
+        )
+    else:
+        np.testing.assert_array_equal(got_vals, want_vals, err_msg=f"{key_dtype}/{val_dtype} N={N}: values")
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_reduce_by_key_add_all_same():
+    """All keys equal -> single run, values_out[0] = sum of all values."""
+    N = 1024
+    keys_in = qd.field(qd.i32, shape=N)
+    values_in = qd.field(qd.i32, shape=N)
+    keys_out = qd.field(qd.i32, shape=N)
+    values_out = qd.field(qd.i32, shape=N)
+    num_runs = qd.field(qd.i32, shape=1)
+    _fill_field(keys_in, np.full(N, 42, dtype=np.int32))
+    rng = np.random.default_rng(seed=42)
+    vals = rng.integers(-100, 100, size=N, dtype=np.int32)
+    _fill_field(values_in, vals)
+
+    qd.algorithms.device_reduce_by_key_add(
+        keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs
+    )
+    assert int(num_runs.to_numpy()[0]) == 1
+    assert int(keys_out.to_numpy()[0]) == 42
+    assert int(values_out.to_numpy()[0]) == int(vals.astype(np.int64).sum())
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_reduce_by_key_add_all_unique():
+    """No two consecutive keys equal -> num_runs == N, values_out is a copy of values."""
+    N = 1024
+    keys_in = qd.field(qd.i32, shape=N)
+    values_in = qd.field(qd.i32, shape=N)
+    keys_out = qd.field(qd.i32, shape=N)
+    values_out = qd.field(qd.i32, shape=N)
+    num_runs = qd.field(qd.i32, shape=1)
+    keys_host = np.arange(N, dtype=np.int32) * 7
+    vals_host = np.arange(N, dtype=np.int32) * 11 - 3
+    _fill_field(keys_in, keys_host)
+    _fill_field(values_in, vals_host)
+
+    qd.algorithms.device_reduce_by_key_add(
+        keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs
+    )
+    assert int(num_runs.to_numpy()[0]) == N
+    np.testing.assert_array_equal(keys_out.to_numpy(), keys_host)
+    np.testing.assert_array_equal(values_out.to_numpy(), vals_host)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_reduce_by_key_add_rejects_shape_mismatch():
+    keys_in = qd.field(qd.i32, shape=8)
+    values_in = qd.field(qd.i32, shape=4)  # wrong length
+    keys_out = qd.field(qd.i32, shape=8)
+    values_out = qd.field(qd.i32, shape=8)
+    num_runs = qd.field(qd.i32, shape=1)
+    with pytest.raises(TypeError):
+        qd.algorithms.device_reduce_by_key_add(
+            keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs
+        )
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_reduce_by_key_add_rejects_dtype_mismatch():
+    keys_in = qd.field(qd.i32, shape=8)
+    values_in = qd.field(qd.i32, shape=8)
+    keys_out = qd.field(qd.f32, shape=8)  # dtype != keys_in
+    values_out = qd.field(qd.i32, shape=8)
+    num_runs = qd.field(qd.i32, shape=1)
+    with pytest.raises(TypeError):
+        qd.algorithms.device_reduce_by_key_add(
+            keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs
+        )
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_reduce_by_key_add_rejects_short_out():
+    """keys_out and values_out must hold at least N entries (worst case: all unique)."""
+    keys_in = qd.field(qd.i32, shape=16)
+    values_in = qd.field(qd.i32, shape=16)
+    keys_out = qd.field(qd.i32, shape=8)  # too short
+    values_out = qd.field(qd.i32, shape=16)
+    num_runs = qd.field(qd.i32, shape=1)
+    with pytest.raises(ValueError):
+        qd.algorithms.device_reduce_by_key_add(
+            keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs
+        )
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_reduce_by_key_add_rejects_unsupported_dtype():
+    keys_in = qd.field(qd.i64, shape=8)
+    values_in = qd.field(qd.i64, shape=8)
+    keys_out = qd.field(qd.i64, shape=8)
+    values_out = qd.field(qd.i64, shape=8)
+    num_runs = qd.field(qd.i32, shape=1)
+    with pytest.raises(NotImplementedError):
+        qd.algorithms.device_reduce_by_key_add(
+            keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs
+        )

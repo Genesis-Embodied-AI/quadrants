@@ -14,10 +14,11 @@ Device-wide algorithms — primitives that consume and produce whole arrays, exe
 | `qd.algorithms.device_exclusive_scan_max(input, id, *, out)` | `out[i] = max(input[0:i])` (same pipeline, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_select(input, flags, *, out, num_out)` | Stream compaction: copy `input[i]` to a dense prefix of `out` for every `flags[i] != 0`. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_radix_sort(keys, *, tmp_keys, values=None, tmp_values=None, end_bit=32)` | LSB radix sort for `u32` / `i32` / `f32` keys (optional key-value). | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, *, keys_out, values_out, num_runs)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)`. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.parallel_sort`                               | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `device_radix_sort`. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.PrefixSumExecutor`                           | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `device_exclusive_scan_add`. | yes  | no     | yes    | no    |
 
-\* `device_reduce_*`, `device_exclusive_scan_*`, `device_select`, `device_radix_sort`, and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives. AMDGPU and Metal coverage is exercised less heavily than CUDA / Vulkan; report any failures.
+\* `device_reduce_*`, `device_exclusive_scan_*`, `device_select`, `device_radix_sort`, `device_reduce_by_key_add`, and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives. AMDGPU and Metal coverage is exercised less heavily than CUDA / Vulkan; report any failures.
 
 ## Semantics
 
@@ -200,6 +201,56 @@ _scratch.set_scratch_bytes(5 << 20)   # 5 MB; covers N up to ~1.3M
 ```
 
 A single-pass decoupled-lookback variant ("Onesweep") is a perf follow-up; the first land prioritizes simplicity and small LoC over peak throughput.
+
+### `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, *, keys_out, values_out, num_runs)`
+
+Collapse every **consecutive run of equal keys** into a single output entry `(unique_key, sum_of_values_in_run)`. Keys that compare equal but are separated by other keys form separate runs. For a global per-key sum, sort by key first (e.g. with `qd.algorithms.device_radix_sort`) and then reduce-by-key.
+
+```python
+import quadrants as qd
+
+N = 100_000
+keys_in    = qd.field(qd.i32, shape=N)       # sorted by key beforehand
+values_in  = qd.field(qd.f32, shape=N)
+keys_out   = qd.field(qd.i32, shape=N)       # capacity = N (worst case: all unique)
+values_out = qd.field(qd.f32, shape=N)
+num_runs   = qd.field(qd.i32, shape=1)
+
+# ... fill keys_in + values_in ...
+
+qd.algorithms.device_reduce_by_key_add(
+    keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs,
+)
+
+count    = int(num_runs.to_numpy()[0])
+uniq_k   = keys_out.to_numpy()[:count]
+sums     = values_out.to_numpy()[:count]
+```
+
+Arguments:
+
+- `keys_in`: 1-D tensor of `u32` / `i32` / `f32`. Pass a `qd.field`, `qd.ndarray`, or `qd.Tensor`.
+- `values_in`: 1-D tensor of `u32` / `i32` / `f32`, same shape as `keys_in`.
+- `keys_out`: 1-D tensor of the same dtype as `keys_in`, with `len(keys_out) >= len(keys_in)` so the worst-case-all-unique run is safe. Only `keys_out[0 : num_runs[0]]` carries meaningful data on return; the tail is untouched.
+- `values_out`: 1-D tensor of the same dtype as `values_in`, same length requirement. The first `num_runs[0]` slots are overwritten; the tail past that prefix is left untouched.
+- `num_runs`: 1-element `qd.i32` tensor receiving the number of runs. Same explicit-host-hop rule: do `int(num_runs.to_numpy()[0])` after the call to get the count as a Python scalar.
+
+Constraints:
+
+- **Dtypes (first land):** `keys_in.dtype` and `values_in.dtype` ∈ {`qd.i32`, `qd.u32`, `qd.f32`}. Other dtypes raise `NotImplementedError`.
+- **Reduction:** only `add` is exposed for first land. `min` / `max` variants need `atomic_min` / `atomic_max` for `f32`, which has spottier cross-backend support; defer to a follow-up gated on real qipc usage.
+- **f32 non-associativity:** the order of additions inside a run is set by hardware atomic ordering, not host order, so `f32` results are *not* bitwise-equal to a serial scan. Tests tolerate a small relative error.
+- **NaN handling (f32 keys):** `NaN != NaN` is true, so each NaN-keyed element becomes its own run. Consistent with treating NaN as "different from everything", which matches the run-length-encoding spirit.
+
+Algorithm: scan + scatter + atomic_add — no segmented-scan primitive needed.
+
+1. **Head-flag pass.** `head_flags[i] = 1` if `i == 0` or `keys[i] != keys[i-1]`, else `0`. Written to the shared `Field(u32)` scratch (bit-cast from `i32`).
+2. **In-place exclusive scan** of `head_flags` (using the same three-pass internals as `device_exclusive_scan_add`). After this, `scratch[i] = sum(head_flags[0:i])`.
+3. **Zero-init `values_out[0:N]`.** The scatter uses `atomic_add`; slots must start at the additive identity `0`.
+4. **Scatter.** For each `i`, recompute `head_flag(i)` from `keys[i]` / `keys[i-1]`, derive the run index `pos = scratch[i] + head_flag(i) - 1` (inclusive scan minus 1), and write `keys_out[pos] = keys[i]` + `atomic_add(values_out[pos], values[i])`.
+5. **Count.** `num_runs[0] = scratch[N-1] + head_flag(N-1)`.
+
+Scratch budget: `~1.004 * N` u32 slots. The default 1 MB scratch covers `N` up to ~260_000; raise via `_scratch.set_scratch_bytes(...)` for larger inputs.
 
 ### `qd.algorithms.parallel_sort(keys, values=None)`
 
