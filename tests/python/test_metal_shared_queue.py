@@ -130,6 +130,28 @@ def test_sync_skipped_with_shared_queue():
 
 
 @test_utils.test(arch=[qd.metal])
+def test_kernel_writes_visible_without_explicit_sync():
+    """Shared-queue mode: kernel writes are observable through a zero-copy view with no explicit cross-framework sync.
+
+    Internal details: shared-queue + is_torch_queue commits Quadrants' cmdbuf at the end of every launch so the cmdbuf
+    takes its FIFO slot in the shared MTLCommandQueue before any subsequent torch op enqueues; Metal's same-queue
+    ordering then makes the torch readback transitively wait for in-flight Quadrants work.
+    """
+    _reinit_with_shared_queue()
+
+    @qd.kernel
+    def fill(out: qd.types.ndarray(ndim=1), value: float):
+        for i in range(out.shape[0]):
+            out[i] = value
+
+    arr = qd.ndarray(qd.f32, shape=(4,))
+    view = arr.to_torch(copy=False)
+    for value in (1.0, 2.0, 3.0, 4.0, 5.0):
+        fill(arr, value)
+        np.testing.assert_allclose(view.cpu().numpy(), np.full(4, value))
+
+
+@test_utils.test(arch=[qd.metal])
 def test_interop_get_mps_command_queue():
     """qd.interop.get_mps_command_queue() returns a non-zero pointer on MPS-capable machines."""
     import torch
