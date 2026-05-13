@@ -1,0 +1,1178 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Subgroup primitives &#8212; Quadrants 0.7.9 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+
+    <script src="../_static/documentation_options.js?v=79964ea6"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/subgroup';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Tile16x16: register-resident 16x16 tiles" href="tile16.html" />
+    <link rel="prev" title="Math" href="math.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.7.9" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="decompositions.html">Matrix decompositions and solvers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Subgroup primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Subgroup primitives</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="subgroup-primitives">
+<h1>Subgroup primitives<a class="headerlink" href="#subgroup-primitives" title="Link to this heading">#</a></h1>
+<p>Subgroup operations let threads within the same subgroup (warp on NVIDIA, wave on AMD, subgroup on Vulkan / Metal) cooperate directly — exchanging register values, voting on predicates, scanning, and electing a leader — without going through shared memory or block barriers. They are the building block for fast in-warp data exchange and are used internally by <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> (see <a class="reference internal" href="tile16.html"><span class="std std-doc">tile16</span></a>).</p>
+<p>Subgroup ops live under <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code> and are written so the same Python source compiles to the right vendor primitive on each backend. Calling a backend that has not implemented an op fails at trace or codegen time.</p>
+<section id="what-s-available">
+<h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
+<p>The full Python API is grouped here by category. The first column lists each op, the next three columns indicate which backend currently lowers it.</p>
+<section id="data-movement">
+<h3>Data movement<a class="headerlink" href="#data-movement" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+<th class="head"><p>dtypes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.shuffle(value,</span> <span class="pre">index)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>i32, u32, f32, f64, i64, u64</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.shuffle_down(value,</span> <span class="pre">offset)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>i32, u32, f32, f64, i64, u64</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.shuffle_up(value,</span> <span class="pre">offset)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>i32, u32, f32, f64, i64, u64</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.shuffle_xor(value,</span> <span class="pre">mask)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>i32, u32, f32, f64, i64, u64</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.broadcast(value,</span> <span class="pre">index)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>i32, u32, f32, f64, i64, u64</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.broadcast_first(value)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>i32, u32, f32, f64, i64, u64</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>* AMDGPU <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> / <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code> (and therefore <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code>, which is built on <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code>) are currently emulated via <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> (~50 cycle latency).</p>
+<p><code class="docutils literal notranslate"><span class="pre">shuffle_xor</span></code> and <code class="docutils literal notranslate"><span class="pre">broadcast_first</span></code> are portable <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> wrappers on top of <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> / <code class="docutils literal notranslate"><span class="pre">broadcast</span></code> (<code class="docutils literal notranslate"><span class="pre">shuffle_xor(value,</span> <span class="pre">mask)</span></code> ≡ <code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">lane</span> <span class="pre">^</span> <span class="pre">mask)</span></code>; <code class="docutils literal notranslate"><span class="pre">broadcast_first(value)</span></code> ≡ <code class="docutils literal notranslate"><span class="pre">broadcast(value,</span> <span class="pre">qd.u32(0))</span></code>). They inline at trace time and run wherever the underlying op runs.</p>
+</section>
+<section id="identification-and-control">
+<h3>Identification and control<a class="headerlink" href="#identification-and-control" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.group_size()</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.elect()</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.sync()</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.mem_fence()</span></code></p></td>
+<td><p>yes**</p></td>
+<td><p>yes**</p></td>
+<td><p>yes</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Naming note: two of the names above were recently renamed to align with the project’s naming conventions across scopes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">subgroup.barrier()</span></code> has been renamed to <code class="docutils literal notranslate"><span class="pre">subgroup.sync()</span></code> (matching <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">subgroup.memory_barrier()</span></code> has been renamed to <code class="docutils literal notranslate"><span class="pre">subgroup.mem_fence()</span></code> (matching the planned <code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code> and <code class="docutils literal notranslate"><span class="pre">grid.mem_fence()</span></code>).</p></li>
+</ul>
+<p>The old names remain as deprecated aliases that emit a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> on first use and forward to the new ones; they will be removed in a future release. The rest of this page uses the new names.</p>
+<p>** <code class="docutils literal notranslate"><span class="pre">mem_fence()</span></code> lowers to a workgroup-scope fence on CUDA (<code class="docutils literal notranslate"><span class="pre">__threadfence_block()</span></code>, via <code class="docutils literal notranslate"><span class="pre">nvvm.membar.cta</span></code>) and AMDGPU (LLVM <code class="docutils literal notranslate"><span class="pre">fence</span> <span class="pre">syncscope(&quot;workgroup&quot;)</span> <span class="pre">seq_cst</span></code>). Both are over-strict for the subgroup-scope ask but are correct: a workgroup-scope fence orders memory as observed by the whole workgroup, of which the subgroup is a strict subset. A future change can tighten these to true wave-scope fences if a measurable cost shows up.</p>
+</section>
+<section id="how-log2-size-windowing-works">
+<h3>How <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> windowing works<a class="headerlink" href="#how-log2-size-windowing-works" title="Link to this heading">#</a></h3>
+<p>Every op below that takes a <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> template parameter operates on independent <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code>-aligned windows that <strong>tile the entire subgroup</strong> — not just the first <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes. With <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">k</span></code>, the subgroup splits into <code class="docutils literal notranslate"><span class="pre">group_size()</span> <span class="pre">/</span> <span class="pre">(2**k)</span></code> windows of <code class="docutils literal notranslate"><span class="pre">2**k</span></code> consecutive lanes each, and each window does its own reduction / scan / vote completely independently of every other window. The caller must arrange <code class="docutils literal notranslate"><span class="pre">2**k</span> <span class="pre">&lt;=</span> <span class="pre">group_size()</span></code> so every window is full (a smaller <code class="docutils literal notranslate"><span class="pre">k</span></code> simply gives more, narrower windows; it does <strong>not</strong> mean “only the first window is active”).</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code></p></th>
+<th class="head"><p>wave32 (CUDA / most Vulkan / Metal)</p></th>
+<th class="head"><p>wave64 (AMDGPU — see <a class="reference internal" href="supported_systems.html"><span class="std std-doc">supported_systems</span></a>)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>5 (window = 32)</p></td>
+<td><p>1 window: lanes 0–31</p></td>
+<td><p>2 windows: 0–31, 32–63</p></td>
+</tr>
+<tr class="row-odd"><td><p>4 (window = 16)</p></td>
+<td><p>2 windows: 0–15, 16–31</p></td>
+<td><p>4 windows: 0–15, 16–31, 32–47, 48–63</p></td>
+</tr>
+<tr class="row-even"><td><p>3 (window = 8)</p></td>
+<td><p>4 windows of 8</p></td>
+<td><p>8 windows of 8</p></td>
+</tr>
+<tr class="row-odd"><td><p>0 (window = 1)</p></td>
+<td><p>every lane is its own window (no-op)</p></td>
+<td><p>same</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Why it composes exactly: the underlying <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code> / <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle_down</span></code> / <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle_up</span></code> / <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle_xor</span></code> ops are themselves <strong>full-subgroup</strong> — they address every lane by absolute lane id, with no built-in notion of a window. Windowing emerges from how the higher-level reductions / scans / votes <em>compose</em> those shuffles.</p>
+<section id="result-placement-per-window">
+<h4>Result placement per window<a class="headerlink" href="#result-placement-per-window" title="Link to this heading">#</a></h4>
+<ul class="simple">
+<li><p><strong>Broadcast-to-all forms</strong> — <code class="docutils literal notranslate"><span class="pre">all_true</span></code>, <code class="docutils literal notranslate"><span class="pre">any_true</span></code>, <code class="docutils literal notranslate"><span class="pre">all_equal</span></code>, <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code>, <code class="docutils literal notranslate"><span class="pre">reduce_all_min</span></code>, <code class="docutils literal notranslate"><span class="pre">reduce_all_max</span></code>, <code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code>, <code class="docutils literal notranslate"><span class="pre">exclusive_*</span></code>, <code class="docutils literal notranslate"><span class="pre">segmented_reduce_*</span></code>: every lane in each window holds the per-window result. Lanes in different windows hold different results (their own window’s).</p></li>
+<li><p><strong>Window-local-lane-0 forms</strong> — <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code>, <code class="docutils literal notranslate"><span class="pre">reduce_min</span></code>, <code class="docutils literal notranslate"><span class="pre">reduce_max</span></code>: only the <em>window-local</em> lane 0 holds the reduction. That’s lane 0 alone with <code class="docutils literal notranslate"><span class="pre">log2_size=5</span></code> on wave32, lanes 0 and 32 with <code class="docutils literal notranslate"><span class="pre">log2_size=5</span></code> on wave64, lanes 0 / 16 / 32 / 48 with <code class="docutils literal notranslate"><span class="pre">log2_size=4</span></code> on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. Use <code class="docutils literal notranslate"><span class="pre">reduce_all_*</span></code> if you want every lane to see its window’s result.</p></li>
+</ul>
+</section>
+<section id="picking-log2-size-for-a-full-subgroup-reduction">
+<h4>Picking <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> for a “full subgroup” reduction<a class="headerlink" href="#picking-log2-size-for-a-full-subgroup-reduction" title="Link to this heading">#</a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is compile-time and <code class="docutils literal notranslate"><span class="pre">group_size()</span></code> is a compile-time constant on every LLVM backend (32 on CUDA, 64 on AMDGPU — wave64 is forced on every AMDGPU target, see <a class="reference internal" href="supported_systems.html"><span class="std std-doc">supported_systems</span></a>). On SPIR-V it is a runtime value, typically 32 on Vulkan compute. For a portable “full-subgroup” reduction the typical pattern is <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">5</span></code> (32-lane window — fits in every subgroup); accept that AMDGPU then gives you two reductions per wave (one per 32-lane half) and stitch the halves together yourself with <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> if needed. If you specifically need a 64-lane reduction on AMDGPU, use <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">6</span></code> gated on <code class="docutils literal notranslate"><span class="pre">arch</span> <span class="pre">==</span> <span class="pre">amdgpu</span></code> at trace time.</p>
+</section>
+</section>
+<section id="voting-and-predicate-ops">
+<h3>Voting and predicate ops<a class="headerlink" href="#voting-and-predicate-ops" title="Link to this heading">#</a></h3>
+<p>All three take a <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> template parameter and are <strong>windowed</strong>: they operate independently on each <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code>-aligned window that tiles the entire subgroup, broadcasting the <code class="docutils literal notranslate"><span class="pre">i32</span></code> (<code class="docutils literal notranslate"><span class="pre">0</span></code> or <code class="docutils literal notranslate"><span class="pre">1</span></code>) per-window result to every lane in that window (the broadcast-to-all forms from <a class="reference internal" href="#how-log2size-windowing-works"><span class="xref myst">How <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> windowing works</span></a>). With <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">5</span></code> on wave32 you get one vote per subgroup; with <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">5</span></code> on wave64 you get two independent votes (lanes 0–31 and lanes 32–63 vote separately, and lanes in each half hold their own half’s result). Same shape as <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_*</span></code>.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.all_true(predicate,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes (fast at <code class="docutils literal notranslate"><span class="pre">log2_size==5</span></code>)</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.any_true(predicate,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes (fast at <code class="docutils literal notranslate"><span class="pre">log2_size==5</span></code>)</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.all_equal(value,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes (fast at <code class="docutils literal notranslate"><span class="pre">log2_size==5</span></code>, transitively via <code class="docutils literal notranslate"><span class="pre">all_true</span></code>)</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>CUDA shortcut: when <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">==</span> <span class="pre">5</span></code> (full warp), <code class="docutils literal notranslate"><span class="pre">all_true</span></code> / <code class="docutils literal notranslate"><span class="pre">any_true</span></code> lower to a single <code class="docutils literal notranslate"><span class="pre">__all_sync(0xFFFFFFFF,</span> <span class="pre">p)</span></code> / <code class="docutils literal notranslate"><span class="pre">__any_sync(0xFFFFFFFF,</span> <span class="pre">p)</span></code> (one <code class="docutils literal notranslate"><span class="pre">vote.all</span></code> / <code class="docutils literal notranslate"><span class="pre">vote.any</span></code> instruction). The shortcut is selected at trace time via <code class="docutils literal notranslate"><span class="pre">qd.static()</span></code> on <code class="docutils literal notranslate"><span class="pre">impl.current_cfg().arch</span></code> and the compile-time <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>, so partial-warp uses (and every other backend) cleanly fall back to a portable <code class="docutils literal notranslate"><span class="pre">shuffle_xor</span></code> butterfly with no branch in the emitted IR.</p>
+<p><code class="docutils literal notranslate"><span class="pre">all_equal</span></code> always uses the broadcast-and-<code class="docutils literal notranslate"><span class="pre">all_true</span></code> form: every lane reads the value at the start of its group via <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>, compares it with its own value, and <code class="docutils literal notranslate"><span class="pre">all_true</span></code>-reduces the per-lane equality bit. Cost: <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">+</span> <span class="pre">log2_size</span></code> shuffles in the portable case, or <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">shuffle</span> <span class="pre">+</span> <span class="pre">1</span> <span class="pre">vote.all</span></code> on CUDA at full-warp. We deliberately do <em>not</em> use <code class="docutils literal notranslate"><span class="pre">__match_all_sync</span></code> even on CUDA: it requires sm_70+, and it does bit-equality on floats, contradicting this op’s documented <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformAllEqual</span></code> semantics (<code class="docutils literal notranslate"><span class="pre">NaN</span> <span class="pre">!=</span> <span class="pre">NaN</span></code>, <code class="docutils literal notranslate"><span class="pre">+0.0</span> <span class="pre">==</span> <span class="pre">-0.0</span></code>). Callers wanting bit-equality on floats should bit-cast to the same-width integer dtype before calling.</p>
+</section>
+<section id="reductions-and-scans">
+<h3>Reductions and scans<a class="headerlink" href="#reductions-and-scans" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">reduce_add</span></code>, <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code>, and all seven <code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code> and <code class="docutils literal notranslate"><span class="pre">exclusive_*</span></code> ops take a <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> parameter and are <strong>windowed</strong>: each op operates independently on every <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code>-aligned window that tiles the entire subgroup (see <a class="reference internal" href="#how-log2size-windowing-works"><span class="xref myst">How <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> windowing works</span></a>). <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> is a window-local-lane-0 form (only the window’s first lane holds the reduction; other lanes are undefined); <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_*</span></code> are broadcast-to-all forms (every lane in each window holds that window’s per-window scan result). With <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">5</span></code> on wave32 you get one reduction / scan per subgroup; with <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">5</span></code> on wave64 you get two independent reductions / scans (lanes 0–31 and lanes 32–63 reduce / scan separately).</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+<th class="head"><p>dtypes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.reduce_add(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>any type supporting <code class="docutils literal notranslate"><span class="pre">+</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.reduce_all_add(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>any type supporting <code class="docutils literal notranslate"><span class="pre">+</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_add(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_mul(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_min(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_max(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_and(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_or(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.inclusive_xor(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.exclusive_add(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.exclusive_mul(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.exclusive_min(v,</span> <span class="pre">log2_size,</span> <span class="pre">identity)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.exclusive_max(v,</span> <span class="pre">log2_size,</span> <span class="pre">identity)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer + float</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.exclusive_and(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.exclusive_or(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.exclusive_xor(v,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>integer</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The SPV-only no-arg reductions (<code class="docutils literal notranslate"><span class="pre">subgroup.reduce_mul</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_min</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_max</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_and</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_or</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_xor</span></code>, plus the original <code class="docutils literal notranslate"><span class="pre">reduce_add(value)</span></code> with no <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>) have been removed in favour of the portable sized API (<code class="docutils literal notranslate"><span class="pre">reduce_add(v,</span> <span class="pre">log2_size)</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_all_add(v,</span> <span class="pre">log2_size)</span></code>). For reductions other than sum, build a sized helper on top of <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> / <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> following the same pattern.</p>
+</section>
+</section>
+<section id="semantics">
+<h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
+<p>All of these ops operate within a single subgroup: they do not move data through memory and do not synchronise across subgroups.</p>
+<section id="shuffle-value-index">
+<h3><code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">index)</span></code><a class="headerlink" href="#shuffle-value-index" title="Link to this heading">#</a></h3>
+<p>Each lane returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by the lane whose subgroup-local id equals <code class="docutils literal notranslate"><span class="pre">index</span></code>.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">value</span></code> is a scalar in a register. Supported dtypes are 32-bit and 64-bit signed/unsigned ints and <code class="docutils literal notranslate"><span class="pre">f32</span></code>/<code class="docutils literal notranslate"><span class="pre">f64</span></code>. (64-bit types are split into two 32-bit shuffles on AMDGPU; CUDA dispatches to its native 64-bit helpers.)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">index</span></code> is a <code class="docutils literal notranslate"><span class="pre">u32</span></code>. If <code class="docutils literal notranslate"><span class="pre">index</span></code> is out of range for the active subgroup the result is implementation-defined, so pass <code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code>-derived values or known-good lane ids.</p></li>
+</ul>
+</section>
+<section id="shuffle-down-value-offset">
+<h3><code class="docutils literal notranslate"><span class="pre">shuffle_down(value,</span> <span class="pre">offset)</span></code><a class="headerlink" href="#shuffle-down-value-offset" title="Link to this heading">#</a></h3>
+<p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by lane <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">+</span> <span class="pre">offset</span></code>. Lanes near the top of the subgroup — where <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">+</span> <span class="pre">offset</span> <span class="pre">&gt;=</span> <span class="pre">subgroup_size</span></code> — receive an implementation-defined value (typically their own <code class="docutils literal notranslate"><span class="pre">value</span></code>), so reduction patterns must only trust lane 0’s final result, or mask out the out-of-range lanes.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">value</span></code> and <code class="docutils literal notranslate"><span class="pre">offset</span></code> dtypes: same as <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> above; <code class="docutils literal notranslate"><span class="pre">offset</span></code> is a <code class="docutils literal notranslate"><span class="pre">u32</span></code>.</p></li>
+<li><p>Maps to <code class="docutils literal notranslate"><span class="pre">__shfl_down_sync</span></code> on CUDA and <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformShuffleDown</span></code> on SPIR-V. On AMDGPU it is currently emulated with <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> (see the support matrix above).</p></li>
+</ul>
+</section>
+<section id="shuffle-up-value-offset">
+<h3><code class="docutils literal notranslate"><span class="pre">shuffle_up(value,</span> <span class="pre">offset)</span></code><a class="headerlink" href="#shuffle-up-value-offset" title="Link to this heading">#</a></h3>
+<p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by lane <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">-</span> <span class="pre">offset</span></code>. Lanes near the bottom of the subgroup — where <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">-</span> <span class="pre">offset</span> <span class="pre">&lt;</span> <span class="pre">0</span></code> — receive an implementation-defined value (typically their own <code class="docutils literal notranslate"><span class="pre">value</span></code>), so the bottom <code class="docutils literal notranslate"><span class="pre">offset</span></code> lanes’ results should be ignored or masked.</p>
+<ul class="simple">
+<li><p>Same dtype rules as <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> / <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code>; <code class="docutils literal notranslate"><span class="pre">offset</span></code> is a <code class="docutils literal notranslate"><span class="pre">u32</span></code>.</p></li>
+<li><p>Maps to <code class="docutils literal notranslate"><span class="pre">__shfl_up_sync</span></code> on CUDA and <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformShuffleUp</span></code> on SPIR-V. On AMDGPU it is currently emulated with <code class="docutils literal notranslate"><span class="pre">ds_bpermute((lane</span> <span class="pre">-</span> <span class="pre">offset)</span> <span class="pre">*</span> <span class="pre">4,</span> <span class="pre">value)</span></code> (same fast-path FIXME as <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code>).</p></li>
+</ul>
+</section>
+<section id="shuffle-xor-value-mask">
+<h3><code class="docutils literal notranslate"><span class="pre">shuffle_xor(value,</span> <span class="pre">mask)</span></code><a class="headerlink" href="#shuffle-xor-value-mask" title="Link to this heading">#</a></h3>
+<p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by lane <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">^</span> <span class="pre">mask</span></code>. Convenient for butterfly patterns (used internally by <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code>).</p>
+<ul class="simple">
+<li><p>Same dtype rules as <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>; <code class="docutils literal notranslate"><span class="pre">mask</span></code> is a <code class="docutils literal notranslate"><span class="pre">u32</span></code>.</p></li>
+<li><p>Implemented portably as a <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> over <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>: every backend that lowers <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> therefore lowers <code class="docutils literal notranslate"><span class="pre">shuffle_xor</span></code> with no additional codegen path. Inlines at trace time into a single <code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">u32(invocation_id())</span> <span class="pre">^</span> <span class="pre">mask)</span></code>.</p></li>
+<li><p>The XOR partner must be inside the active subgroup; behaviour outside that range is implementation-defined (same caveat as <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>).</p></li>
+</ul>
+</section>
+<section id="broadcast-value-index">
+<h3><code class="docutils literal notranslate"><span class="pre">broadcast(value,</span> <span class="pre">index)</span></code><a class="headerlink" href="#broadcast-value-index" title="Link to this heading">#</a></h3>
+<p>Every lane in the subgroup returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by the lane whose subgroup-local id equals <code class="docutils literal notranslate"><span class="pre">index</span></code>. Expresses intent (“read lane <code class="docutils literal notranslate"><span class="pre">index</span></code>”) more directly than <code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">index)</span></code> and on backends with a dedicated broadcast may map to a cheaper instruction.</p>
+<ul class="simple">
+<li><p>Same dtype rules as <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>.</p></li>
+<li><p>Maps to <code class="docutils literal notranslate"><span class="pre">__shfl_sync</span></code> on CUDA, <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> on AMDGPU, and <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformBroadcast</span></code> on SPIR-V.</p></li>
+<li><p><strong>Important: on SPIR-V, <code class="docutils literal notranslate"><span class="pre">index</span></code> must be dynamically uniform</strong> — the same value on every lane in the subgroup. Passing a per-lane varying <code class="docutils literal notranslate"><span class="pre">index</span></code> is undefined behavior, because <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformBroadcast</span></code> requires its <code class="docutils literal notranslate"><span class="pre">Id</span></code> operand to be dynamically uniform across the subgroup. On CUDA / AMDGPU, <code class="docutils literal notranslate"><span class="pre">index</span></code> may vary per lane and the call is identical to <code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">index)</span></code>. If you need a varying source lane, use <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> directly.</p></li>
+</ul>
+</section>
+<section id="broadcast-first-value">
+<h3><code class="docutils literal notranslate"><span class="pre">broadcast_first(value)</span></code><a class="headerlink" href="#broadcast-first-value" title="Link to this heading">#</a></h3>
+<p>Every lane returns lane 0’s <code class="docutils literal notranslate"><span class="pre">value</span></code>. Convenience wrapper for the common “read lane 0 from every lane” pattern.</p>
+<ul class="simple">
+<li><p>Same dtype rules as <code class="docutils literal notranslate"><span class="pre">broadcast</span></code>.</p></li>
+<li><p>Implemented portably as a <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> over <code class="docutils literal notranslate"><span class="pre">broadcast(value,</span> <span class="pre">qd.u32(0))</span></code>: every backend that lowers <code class="docutils literal notranslate"><span class="pre">broadcast</span></code> therefore lowers <code class="docutils literal notranslate"><span class="pre">broadcast_first</span></code>. The <code class="docutils literal notranslate"><span class="pre">0</span></code> index is trivially dynamically uniform, so the SPIR-V <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformBroadcast</span></code> requirement is satisfied. Inlines at trace time.</p></li>
+</ul>
+</section>
+<section id="common-to-the-data-movement-ops">
+<h3>Common to the data-movement ops<a class="headerlink" href="#common-to-the-data-movement-ops" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>All shuffles / broadcasts are issued under a full active mask on CUDA (<code class="docutils literal notranslate"><span class="pre">0xFFFFFFFF</span></code>). Call them from uniform control flow; calling from divergent control flow is undefined on most backends. (This means: every thread has to execute the shuffle.)</p></li>
+<li><p>Subgroup size is hard-coded per backend on the LLVM backends — 32 on CUDA, 64 on AMDGPU (wave64 is forced on every AMDGPU target including RDNA, see <a class="reference internal" href="supported_systems.html"><span class="std std-doc">supported_systems</span></a>) — so kernels can rely on those literal values. On SPIR-V it is queried at runtime via <code class="docutils literal notranslate"><span class="pre">subgroup.group_size()</span></code> (typically 32 on Vulkan compute on most GPUs).</p></li>
+</ul>
+</section>
+<section id="invocation-id">
+<h3><code class="docutils literal notranslate"><span class="pre">invocation_id()</span></code><a class="headerlink" href="#invocation-id" title="Link to this heading">#</a></h3>
+<p>Returns this lane’s subgroup-local index — <code class="docutils literal notranslate"><span class="pre">0..subgroup_size</span> <span class="pre">-</span> <span class="pre">1</span></code>. Used both as a lane id when computing a target lane for <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> / <code class="docutils literal notranslate"><span class="pre">broadcast</span></code>, and as a per-lane identifier in cooperative algorithms.</p>
+<ul class="simple">
+<li><p>Returns <code class="docutils literal notranslate"><span class="pre">i32</span></code>.</p></li>
+<li><p>Available on every backend.</p></li>
+</ul>
+</section>
+<section id="group-size">
+<h3><code class="docutils literal notranslate"><span class="pre">group_size()</span></code><a class="headerlink" href="#group-size" title="Link to this heading">#</a></h3>
+<p>Returns the subgroup size in effect for the current launch as an <code class="docutils literal notranslate"><span class="pre">i32</span></code>. <strong>For use inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> bodies only</strong> — calling it from host Python raises.</p>
+<ul class="simple">
+<li><p><strong>CUDA</strong>: lowers to a static <code class="docutils literal notranslate"><span class="pre">32</span></code> constant — the warp size is fixed on every supported NVIDIA architecture (sm_30+). The optimizer can fold it into address arithmetic, so calling <code class="docutils literal notranslate"><span class="pre">group_size()</span></code> is no more expensive than hard-coding <code class="docutils literal notranslate"><span class="pre">32</span></code>.</p></li>
+<li><p><strong>AMDGPU</strong>: lowers to <code class="docutils literal notranslate"><span class="pre">llvm.amdgcn.wavefrontsize</span></code>, which the AMDGPU backend constant-folds to <code class="docutils literal notranslate"><span class="pre">64</span></code> at codegen time. Quadrants pins every AMDGPU function to <code class="docutils literal notranslate"><span class="pre">+wavefrontsize64,-wavefrontsize32</span></code> (see <a class="reference internal" href="supported_systems.html"><span class="std std-doc">supported_systems</span></a>), so CDNA (gfx9xx, gfx940/942) keeps its native wave64 mode and RDNA (gfx10/11/12) — which would otherwise default to wave32 — is forced into wave64 too. <code class="docutils literal notranslate"><span class="pre">group_size()</span></code> is therefore always 64 on AMDGPU.</p></li>
+<li><p><strong>SPIR-V</strong>: lowers to a load of the <code class="docutils literal notranslate"><span class="pre">OpSubgroupSize</span></code> builtin — a true runtime query, since on Vulkan compute the subgroup size can be 32 on most desktop GPUs but is permitted to be other powers of two.</p></li>
+</ul>
+</section>
+<section id="elect">
+<h3><code class="docutils literal notranslate"><span class="pre">elect()</span></code><a class="headerlink" href="#elect" title="Link to this heading">#</a></h3>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">1</span></code> on lane 0 of every subgroup and <code class="docutils literal notranslate"><span class="pre">0</span></code> on every other lane. Useful for “exactly one lane does X” patterns where you don’t care which lane does it — e.g. emitting a single global write per subgroup.</p>
+<ul class="simple">
+<li><p>Implemented portably as a <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> wrapper: <code class="docutils literal notranslate"><span class="pre">i32(invocation_id()</span> <span class="pre">==</span> <span class="pre">0)</span></code>. Inlines at trace time into a single compare + zero-extend on every backend.</p></li>
+<li><p>This narrows the SPIR-V <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformElect</span></code> semantics, which would otherwise be free to pick any <em>active</em> lane. Under the documented uniform-CF + all-lanes-active contract for <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code> the distinction is invisible (lane 0 is always active and is a legal choice), and pinning the elected lane down keeps the behaviour identical across backends.</p></li>
+</ul>
+</section>
+<section id="sync-mem-fence">
+<h3><code class="docutils literal notranslate"><span class="pre">sync()</span></code> / <code class="docutils literal notranslate"><span class="pre">mem_fence()</span></code><a class="headerlink" href="#sync-mem-fence" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">sync()</span></code> is a subgroup-scope thread-converging barrier — every lane in the subgroup must reach the call before any lane proceeds. <code class="docutils literal notranslate"><span class="pre">mem_fence()</span></code> is a subgroup-scope memory fence: it orders memory operations within the subgroup without requiring thread convergence.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">sync()</span></code> lowers to:</p>
+<ul>
+<li><p><strong>SPIR-V</strong>: <code class="docutils literal notranslate"><span class="pre">OpControlBarrier(Subgroup,</span> <span class="pre">Subgroup,</span> <span class="pre">0)</span></code>.</p></li>
+<li><p><strong>CUDA</strong>: <code class="docutils literal notranslate"><span class="pre">__syncwarp(0xFFFFFFFF)</span></code> (<code class="docutils literal notranslate"><span class="pre">nvvm.bar.warp.sync</span></code>). Reconverges lanes that may have diverged under independent thread scheduling on Volta+; under uniform CF on Pascal and earlier this is effectively a no-op but is still legal.</p></li>
+<li><p><strong>AMDGPU</strong>: <code class="docutils literal notranslate"><span class="pre">llvm.amdgcn.wave.barrier</span></code>. Acts as a compiler reordering barrier on GCN (where waves are lockstep) and as a real wave-scope hardware barrier on RDNA.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mem_fence()</span></code> lowers to:</p>
+<ul>
+<li><p><strong>SPIR-V</strong>: <code class="docutils literal notranslate"><span class="pre">OpMemoryBarrier(Subgroup,</span> <span class="pre">AcquireRelease</span> <span class="pre">|</span> <span class="pre">UniformMemory</span> <span class="pre">|</span> <span class="pre">WorkgroupMemory)</span></code>.</p></li>
+<li><p><strong>CUDA</strong>: <code class="docutils literal notranslate"><span class="pre">__threadfence_block()</span></code> (<code class="docutils literal notranslate"><span class="pre">nvvm.membar.cta</span></code>) — workgroup-scope, see the <code class="docutils literal notranslate"><span class="pre">**</span></code> footnote in the matrix above.</p></li>
+<li><p><strong>AMDGPU</strong>: LLVM <code class="docutils literal notranslate"><span class="pre">fence</span> <span class="pre">syncscope(&quot;workgroup&quot;)</span> <span class="pre">seq_cst</span></code> — workgroup-scope, same caveat.</p></li>
+</ul>
+</li>
+<li><p>Caller contract on every backend: call from uniform control flow with all lanes active. Calling either op from divergent control flow has implementation-defined behaviour (CUDA’s <code class="docutils literal notranslate"><span class="pre">nvvm.bar.warp.sync</span></code> will deadlock if the mask does not match the active set; AMDGPU’s <code class="docutils literal notranslate"><span class="pre">wave.barrier</span></code> is a no-op on most chips so divergent calls silently pass through).</p></li>
+<li><p>The legacy names <code class="docutils literal notranslate"><span class="pre">subgroup.barrier()</span></code> and <code class="docutils literal notranslate"><span class="pre">subgroup.memory_barrier()</span></code> are still available as deprecated aliases. They forward to <code class="docutils literal notranslate"><span class="pre">sync()</span></code> / <code class="docutils literal notranslate"><span class="pre">mem_fence()</span></code> and emit a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> on first use; prefer the new names in new code.</p></li>
+</ul>
+</section>
+<section id="reduce-add-value-log2-size">
+<h3><code class="docutils literal notranslate"><span class="pre">reduce_add(value,</span> <span class="pre">log2_size)</span></code><a class="headerlink" href="#reduce-add-value-log2-size" title="Link to this heading">#</a></h3>
+<p>Sums <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> tree. The result is valid in the <strong>window-local lane 0</strong> of each group (see <a class="reference internal" href="#how-log2size-windowing-works"><span class="xref myst">How <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> windowing works</span></a>); other lanes hold partial sums and should be considered undefined.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> — a compile-time constant. The body unrolls into exactly <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> <code class="docutils literal notranslate"><span class="pre">shuffle_down</span> <span class="pre">+</span> <span class="pre">add</span></code> pairs in the calling kernel’s IR, with no runtime loop overhead.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> must not exceed the active subgroup size on the target (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target). Passing a larger value silently computes the wrong sum and there is no runtime check: each iteration calls <code class="docutils literal notranslate"><span class="pre">shuffle_down(value,</span> <span class="pre">offset</span> <span class="pre">&gt;=</span> <span class="pre">subgroup_size)</span></code>, which on CUDA returns the calling lane’s own value, on AMDGPU wraps around the wave (offset is taken mod 64 inside <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code>), and on SPIR-V is fully undefined per spec — so the corrupted result varies by backend and, on Vulkan, by driver.</p></li>
+<li><p>The reduction works on any type that supports <code class="docutils literal notranslate"><span class="pre">+</span></code> and <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code>; in practice this means i32, u32, f32, f64, i64, u64.</p></li>
+<li><p>Decorated with <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.</p></li>
+</ul>
+<p>Lanes other than the window-local lane 0 receive undefined-but-safe partial sums (they never touch out-of-range lanes because the tree shrinks each step), but only the window-local lane 0’s result is meaningful for the caller. On wave64 with <code class="docutils literal notranslate"><span class="pre">log2_size=5</span></code> this is two valid results (lane 0 and lane 32), one per 32-lane half — reading only lane 0 silently drops the upper-half sum. Use <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> if every lane needs the answer.</p>
+</section>
+<section id="reduce-all-add-value-log2-size">
+<h3><code class="docutils literal notranslate"><span class="pre">reduce_all_add(value,</span> <span class="pre">log2_size)</span></code><a class="headerlink" href="#reduce-all-add-value-log2-size" title="Link to this heading">#</a></h3>
+<p>Same sum as <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code>, but broadcast to <strong>every lane</strong> in each <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> group. Implemented as a butterfly using <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> with <code class="docutils literal notranslate"><span class="pre">lane</span> <span class="pre">^</span> <span class="pre">mask</span></code>, <code class="docutils literal notranslate"><span class="pre">mask</span></code> stepping through <code class="docutils literal notranslate"><span class="pre">1,</span> <span class="pre">2,</span> <span class="pre">4,</span> <span class="pre">...,</span> <span class="pre">2**(log2_size-1)</span></code>.</p>
+<ul class="simple">
+<li><p>Same <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> template + size-cap contract as <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code>.</p></li>
+<li><p>Use this when every lane needs the reduction result (e.g. to divide by the sum, or to branch on it uniformly). It costs exactly the same number of shuffles as <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> but leaves the answer in all lanes, so it replaces a <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> + <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>/broadcast pair.</p></li>
+<li><p>Uses <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code> under the hood.</p></li>
+</ul>
+</section>
+<section id="inclusive-add-inclusive-mul-inclusive-min-inclusive-max-inclusive-and-inclusive-or-inclusive-xor">
+<h3><code class="docutils literal notranslate"><span class="pre">inclusive_add</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_mul</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_min</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_max</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_and</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_or</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_xor</span></code><a class="headerlink" href="#inclusive-add-inclusive-mul-inclusive-min-inclusive-max-inclusive-and-inclusive-or-inclusive-xor" title="Link to this heading">#</a></h3>
+<p>Per-lane inclusive scan over <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes, under the binary operator named by the suffix. Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> within each group of <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes returns <code class="docutils literal notranslate"><span class="pre">v[group_start]</span> <span class="pre">op</span> <span class="pre">v[group_start</span> <span class="pre">+</span> <span class="pre">1]</span> <span class="pre">op</span> <span class="pre">...</span> <span class="pre">op</span> <span class="pre">v[i]</span></code>.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> — a compile-time constant. The body unrolls into exactly <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> <code class="docutils literal notranslate"><span class="pre">shuffle_up</span> <span class="pre">+</span> <span class="pre">op</span></code> pairs in the calling kernel’s IR, with no runtime loop overhead.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> must not exceed the active subgroup size on the target (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target). Passing a larger value produces implementation-defined results; it does not error.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_add</span></code>, <code class="docutils literal notranslate"><span class="pre">_mul</span></code>, <code class="docutils literal notranslate"><span class="pre">_min</span></code>, <code class="docutils literal notranslate"><span class="pre">_max</span></code> accept integer and float dtypes (<code class="docutils literal notranslate"><span class="pre">i32</span></code>, <code class="docutils literal notranslate"><span class="pre">u32</span></code>, <code class="docutils literal notranslate"><span class="pre">i64</span></code>, <code class="docutils literal notranslate"><span class="pre">u64</span></code>, <code class="docutils literal notranslate"><span class="pre">f32</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code>); <code class="docutils literal notranslate"><span class="pre">_and</span></code>, <code class="docutils literal notranslate"><span class="pre">_or</span></code>, <code class="docutils literal notranslate"><span class="pre">_xor</span></code> accept integer dtypes only.</p></li>
+<li><p>All seven share a single <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> Hillis-Steele scan helper (<code class="docutils literal notranslate"><span class="pre">_inclusive_scan</span></code>); each public op is a one-line wrapper that supplies the binary operator. The shuffle is in uniform CF (every lane participates); only the per-lane reduce step is conditional, which is allowed by the <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code> contract on every backend. Cross-group <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code> partners are masked off by the per-lane <code class="docutils literal notranslate"><span class="pre">lane_in_group</span> <span class="pre">&gt;=</span> <span class="pre">offset</span></code> guard, so groups smaller than the full subgroup compose correctly.</p></li>
+<li><p>Decorated with <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.</p></li>
+<li><p>AMDGPU note (<code class="docutils literal notranslate"><span class="pre">*</span></code> in the table): same <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> cost as <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code> — roughly tens of cycles per step × <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> steps. Hardware-accelerated <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformInclusiveScan</span></code> on SPIR-V is no longer used, even on backends that supported it (Vulkan, Metal); the trade-off is a uniform implementation across backends with predictable cost.</p></li>
+</ul>
+</section>
+<section id="exclusive-add-exclusive-mul-exclusive-min-exclusive-max-exclusive-and-exclusive-or-exclusive-xor">
+<h3><code class="docutils literal notranslate"><span class="pre">exclusive_add</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_mul</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_min</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_max</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_and</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_or</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_xor</span></code><a class="headerlink" href="#exclusive-add-exclusive-mul-exclusive-min-exclusive-max-exclusive-and-exclusive-or-exclusive-xor" title="Link to this heading">#</a></h3>
+<p>Per-lane exclusive scan over <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes, under the binary operator named by the suffix. Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> (with <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>) within each group of <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes returns <code class="docutils literal notranslate"><span class="pre">v[group_start]</span> <span class="pre">op</span> <span class="pre">v[group_start</span> <span class="pre">+</span> <span class="pre">1]</span> <span class="pre">op</span> <span class="pre">...</span> <span class="pre">op</span> <span class="pre">v[i</span> <span class="pre">-</span> <span class="pre">1]</span></code>. Lane 0 of each group returns the operator’s identity in <code class="docutils literal notranslate"><span class="pre">value</span></code>’s dtype.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> — a compile-time constant. The body unrolls into the inclusive scan (<code class="docutils literal notranslate"><span class="pre">log2_size</span></code> shuffle+op pairs) plus one extra <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code> and a per-lane select.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_add</span></code>, <code class="docutils literal notranslate"><span class="pre">_mul</span></code>, <code class="docutils literal notranslate"><span class="pre">_or</span></code>, <code class="docutils literal notranslate"><span class="pre">_xor</span></code>, <code class="docutils literal notranslate"><span class="pre">_and</span></code> infer the lane-0 identity from <code class="docutils literal notranslate"><span class="pre">value</span></code>’s dtype: <code class="docutils literal notranslate"><span class="pre">value</span> <span class="pre">-</span> <span class="pre">value</span></code> (zero), <code class="docutils literal notranslate"><span class="pre">value</span> <span class="pre">-</span> <span class="pre">value</span> <span class="pre">+</span> <span class="pre">1</span></code> (one), and <code class="docutils literal notranslate"><span class="pre">~(value</span> <span class="pre">^</span> <span class="pre">value)</span></code> (all bits set) respectively.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_min</span></code> and <code class="docutils literal notranslate"><span class="pre">_max</span></code> take an explicit <code class="docutils literal notranslate"><span class="pre">identity</span></code> argument because there is no portable type-extreme literal that can be derived from <code class="docutils literal notranslate"><span class="pre">value</span></code> alone — pass <code class="docutils literal notranslate"><span class="pre">+∞</span></code> (or the dtype’s max) for <code class="docutils literal notranslate"><span class="pre">_min</span></code>, <code class="docutils literal notranslate"><span class="pre">-∞</span></code> (or the dtype’s min) for <code class="docutils literal notranslate"><span class="pre">_max</span></code>.</p></li>
+<li><p>All seven share a single <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> helper (<code class="docutils literal notranslate"><span class="pre">_exclusive_scan</span></code>) that runs the inclusive scan, shifts the result up by one lane via <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code>, and substitutes <code class="docutils literal notranslate"><span class="pre">identity</span></code> at lane 0 of each group. The lane-0 substitution is required because <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code> with offset 1 is implementation-defined at lane 0 (and <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformShuffleUp</span></code> calls it undefined outright).</p></li>
+<li><p>AMDGPU performance note (<code class="docutils literal notranslate"><span class="pre">*</span></code> in the table): same <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> cost as <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code>. Cost is one inclusive scan plus one extra <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code> and a select.</p></li>
+</ul>
+</section>
+<section id="all-true-predicate-log2-size-any-true-predicate-log2-size">
+<h3><code class="docutils literal notranslate"><span class="pre">all_true(predicate,</span> <span class="pre">log2_size)</span></code> / <code class="docutils literal notranslate"><span class="pre">any_true(predicate,</span> <span class="pre">log2_size)</span></code><a class="headerlink" href="#all-true-predicate-log2-size-any-true-predicate-log2-size" title="Link to this heading">#</a></h3>
+<p>Per-lane AND-reduction (<code class="docutils literal notranslate"><span class="pre">all_true</span></code>) or OR-reduction (<code class="docutils literal notranslate"><span class="pre">any_true</span></code>) of <code class="docutils literal notranslate"><span class="pre">predicate</span> <span class="pre">!=</span> <span class="pre">0</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes. Returns <code class="docutils literal notranslate"><span class="pre">i32</span></code> (<code class="docutils literal notranslate"><span class="pre">0</span></code> or <code class="docutils literal notranslate"><span class="pre">1</span></code>), broadcast to every lane in the group.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">predicate</span></code> is any scalar dtype. The op compares <code class="docutils literal notranslate"><span class="pre">predicate</span> <span class="pre">!=</span> <span class="pre">0</span></code> at the start, so e.g. <code class="docutils literal notranslate"><span class="pre">subgroup.all_true(some_int_field[i],</span> <span class="pre">5)</span></code> is well-formed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> — a compile-time constant. Caller must ensure <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> does not exceed the active subgroup size (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target).</p></li>
+<li><p>CUDA full-warp shortcut: when <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">==</span> <span class="pre">5</span></code>, lowers to a single <code class="docutils literal notranslate"><span class="pre">__all_sync(0xFFFFFFFF,</span> <span class="pre">p)</span></code> / <code class="docutils literal notranslate"><span class="pre">__any_sync(0xFFFFFFFF,</span> <span class="pre">p)</span></code> via the <code class="docutils literal notranslate"><span class="pre">cuda_all_sync_i32</span></code> / <code class="docutils literal notranslate"><span class="pre">cuda_any_sync_i32</span></code> runtime helpers (one <code class="docutils literal notranslate"><span class="pre">vote.all</span></code> / <code class="docutils literal notranslate"><span class="pre">vote.any</span></code> instruction). The shortcut is selected at trace time via <code class="docutils literal notranslate"><span class="pre">qd.static()</span></code> on the active arch and <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>, so the IR contains exactly the intrinsic call and no branch.</p></li>
+<li><p>Portable fallback (every other backend, and CUDA at <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">&lt;</span> <span class="pre">5</span></code>): <code class="docutils literal notranslate"><span class="pre">shuffle_xor</span></code> butterfly — <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> shuffles plus <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> ANDs (or ORs), fully unrolled into the calling kernel’s IR. Same shape as <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code>.</p></li>
+</ul>
+</section>
+<section id="all-equal-value-log2-size">
+<h3><code class="docutils literal notranslate"><span class="pre">all_equal(value,</span> <span class="pre">log2_size)</span></code><a class="headerlink" href="#all-equal-value-log2-size" title="Link to this heading">#</a></h3>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">i32(1)</span></code> on every lane in each <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> group iff every lane in the group has the same <code class="docutils literal notranslate"><span class="pre">value</span></code> (under the backend’s native <code class="docutils literal notranslate"><span class="pre">==</span></code>), else <code class="docutils literal notranslate"><span class="pre">i32(0)</span></code>.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">value</span></code> is any scalar dtype. Equality is the backend’s native <code class="docutils literal notranslate"><span class="pre">==</span></code>: for floats this means <code class="docutils literal notranslate"><span class="pre">NaN</span> <span class="pre">!=</span> <span class="pre">NaN</span></code> (a group with any <code class="docutils literal notranslate"><span class="pre">NaN</span></code> returns <code class="docutils literal notranslate"><span class="pre">0</span></code>) and <code class="docutils literal notranslate"><span class="pre">+0.0</span> <span class="pre">==</span> <span class="pre">-0.0</span></code>, matching SPIR-V <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformAllEqual</span></code>. Callers wanting bit-equality on floats should <code class="docutils literal notranslate"><span class="pre">qd.bit_cast</span></code> to the same-width integer dtype first.</p></li>
+<li><p>Implementation: each lane computes <code class="docutils literal notranslate"><span class="pre">group_base</span> <span class="pre">=</span> <span class="pre">invocation_id()</span> <span class="pre">&amp;</span> <span class="pre">~(2**log2_size</span> <span class="pre">-</span> <span class="pre">1)</span></code>, reads the value at <code class="docutils literal notranslate"><span class="pre">group_base</span></code> via <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>, compares to its own <code class="docutils literal notranslate"><span class="pre">value</span></code>, and <code class="docutils literal notranslate"><span class="pre">all_true</span></code>-reduces the equality bit. Inherits the CUDA full-warp shortcut transitively from <code class="docutils literal notranslate"><span class="pre">all_true</span></code>.</p></li>
+<li><p>Cost: 1 shuffle + 1 <code class="docutils literal notranslate"><span class="pre">vote.all</span></code> on CUDA at <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">==</span> <span class="pre">5</span></code>; 1 shuffle + <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> butterfly shuffles otherwise. We deliberately do <em>not</em> use <code class="docutils literal notranslate"><span class="pre">__match_all_sync</span></code> on CUDA: it requires sm_70+ and uses bit-equality for floats, which would contradict this op’s documented semantics.</p></li>
+</ul>
+</section>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h2>
+<section id="broadcast-lane-0-to-all-lanes">
+<h3>Broadcast lane 0 to all lanes<a class="headerlink" href="#broadcast-lane-0-to-all-lanes" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt</span><span class="w"> </span><span class="kn">import</span> <span class="n">subgroup</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">broadcast</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">64</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">qd</span><span class="o">.</span><span class="n">u32</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>After the kernel, every lane in a subgroup holds the original value of its lane 0. <code class="docutils literal notranslate"><span class="pre">subgroup.broadcast(a[i],</span> <span class="pre">qd.u32(0))</span></code> is interchangeable here.</p>
+</section>
+<section id="identity-shuffle-each-lane-reads-its-own-id">
+<h3>Identity shuffle (each lane reads its own id)<a class="headerlink" href="#identity-shuffle-each-lane-reads-its-own-id" title="Link to this heading">#</a></h3>
+<p>Useful as a sanity check:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">identity</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+             <span class="n">dst</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">64</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">lane</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">()</span>
+        <span class="n">dst</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">qd</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">lane</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">u32</span><span class="p">))</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">dst[i]</span></code> equals <code class="docutils literal notranslate"><span class="pre">src[i]</span></code> on every lane.</p>
+</section>
+<section id="swap-neighbours-xor-pattern-via-explicit-lane">
+<h3>Swap neighbours (xor pattern via explicit lane)<a class="headerlink" href="#swap-neighbours-xor-pattern-via-explicit-lane" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">swap_pairs</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+               <span class="n">dst</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">64</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">lane</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">()</span>
+        <span class="n">dst</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">qd</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">lane</span> <span class="o">^</span> <span class="mi">1</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">u32</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Pairs <code class="docutils literal notranslate"><span class="pre">(0,1)</span></code>, <code class="docutils literal notranslate"><span class="pre">(2,3)</span></code>, … swap their values.</p>
+</section>
+<section id="arbitrary-per-lane-gather">
+<h3>Arbitrary per-lane gather<a class="headerlink" href="#arbitrary-per-lane-gather" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">reverse4</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+             <span class="n">dst</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">64</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">lane</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">()</span>
+        <span class="n">group_base</span> <span class="o">=</span> <span class="p">(</span><span class="n">lane</span> <span class="o">//</span> <span class="mi">4</span><span class="p">)</span> <span class="o">*</span> <span class="mi">4</span>
+        <span class="n">src_lane</span> <span class="o">=</span> <span class="n">group_base</span> <span class="o">+</span> <span class="mi">3</span> <span class="o">-</span> <span class="n">lane</span> <span class="o">%</span> <span class="mi">4</span>
+        <span class="n">dst</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">qd</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">src_lane</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">u32</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Within each group of 4 contiguous lanes the values are reversed.</p>
+</section>
+<section id="tree-reduction-with-shuffle-down">
+<h3>Tree reduction with <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code><a class="headerlink" href="#tree-reduction-with-shuffle-down" title="Link to this heading">#</a></h3>
+<p>Classic warp-level sum of 4 values — after the second step, lane 0 of each group of 4 holds the total:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce4</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+            <span class="n">dst</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">64</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="n">val</span> <span class="o">+</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">shuffle_down</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">u32</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="n">val</span> <span class="o">+</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">shuffle_down</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">dst</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span>
+</pre></div>
+</div>
+<p>Extend the pattern (offsets 16, 8, 4, 2, 1, …) to reduce a full subgroup; only lane 0’s final value is meaningful, because the lanes near the top read past the end of the subgroup.</p>
+</section>
+<section id="sum-32-lanes-with-reduce-add">
+<h3>Sum 32 lanes with <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code><a class="headerlink" href="#sum-32-lanes-with-reduce-add" title="Link to this heading">#</a></h3>
+<p>The same tree, packaged as a one-liner. Lane 0 of each group of 32 holds the total; other lanes hold partial sums:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">sum32</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+          <span class="n">dst</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">reduce_add</span><span class="p">(</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="mi">5</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">dst</span><span class="p">[</span><span class="n">i</span> <span class="o">//</span> <span class="mi">32</span><span class="p">]</span> <span class="o">=</span> <span class="n">total</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">5</span></code> is <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>; <code class="docutils literal notranslate"><span class="pre">2**5</span> <span class="pre">==</span> <span class="pre">32</span></code> matches the block dim. The body of <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> unrolls at trace time into five <code class="docutils literal notranslate"><span class="pre">shuffle_down</span> <span class="pre">+</span> <span class="pre">add</span></code> pairs, so the generated IR is identical to a hand-written tree reduction.</p>
+</section>
+<section id="broadcast-the-sum-to-all-lanes-with-reduce-all-add">
+<h3>Broadcast the sum to all lanes with <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code><a class="headerlink" href="#broadcast-the-sum-to-all-lanes-with-reduce-all-add" title="Link to this heading">#</a></h3>
+<p>When every lane needs the reduction result — e.g. to normalise by the sum — use the butterfly variant. No follow-up broadcast needed:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">normalize32</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">reduce_all_add</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="mi">5</span><span class="p">)</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">/</span> <span class="n">total</span>
+</pre></div>
+</div>
+<p>Every lane in each group of 32 sees the same <code class="docutils literal notranslate"><span class="pre">total</span></code>.</p>
+</section>
+<section id="partial-subgroup-reductions">
+<h3>Partial-subgroup reductions<a class="headerlink" href="#partial-subgroup-reductions" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> does not have to match the full subgroup. Sum groups of 8 with <code class="docutils literal notranslate"><span class="pre">reduce_add(v,</span> <span class="pre">3)</span></code> or groups of 16 with <code class="docutils literal notranslate"><span class="pre">reduce_all_add(v,</span> <span class="pre">4)</span></code>; the caller just ensures <code class="docutils literal notranslate"><span class="pre">2**log2_size</span> <span class="pre">&lt;=</span> <span class="pre">subgroup_size</span></code> (so up to 5 on CUDA / Metal, up to 6 on AMDGPU).</p>
+</section>
+<section id="inclusive-scan-with-inclusive-add">
+<h3>Inclusive scan with <code class="docutils literal notranslate"><span class="pre">inclusive_add</span></code><a class="headerlink" href="#inclusive-scan-with-inclusive-add" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">cumsum</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">inclusive_add</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="mi">5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>After the call, lane <code class="docutils literal notranslate"><span class="pre">k</span></code> (within each group of 32) holds <code class="docutils literal notranslate"><span class="pre">a[group_start]</span> <span class="pre">+</span> <span class="pre">a[group_start+1]</span> <span class="pre">+</span> <span class="pre">...</span> <span class="pre">+</span> <span class="pre">a[k]</span></code>. The <code class="docutils literal notranslate"><span class="pre">5</span></code> is <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>; <code class="docutils literal notranslate"><span class="pre">2**5</span> <span class="pre">==</span> <span class="pre">32</span></code> matches the block dim. The body unrolls at trace time into five <code class="docutils literal notranslate"><span class="pre">shuffle_up</span> <span class="pre">+</span> <span class="pre">add</span></code> pairs. Use a smaller <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> to scan over partial-subgroup groups (e.g. <code class="docutils literal notranslate"><span class="pre">inclusive_add(v,</span> <span class="pre">3)</span></code> produces independent prefix sums in groups of 8).</p>
+</section>
+</section>
+<section id="performance-notes">
+<h2>Performance notes<a class="headerlink" href="#performance-notes" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>Shuffles are register-to-register on CUDA (<code class="docutils literal notranslate"><span class="pre">__shfl_sync</span></code>, <code class="docutils literal notranslate"><span class="pre">__shfl_down_sync</span></code>, <code class="docutils literal notranslate"><span class="pre">__shfl_up_sync</span></code>) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.</p></li>
+<li><p>AMDGPU <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>, <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code>, and <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code> all go through <code class="docutils literal notranslate"><span class="pre">ds_permute</span></code> / <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> today (LDS-routed, roughly tens of cycles).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">shuffle_xor</span></code> and <code class="docutils literal notranslate"><span class="pre">broadcast_first</span></code> are <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> wrappers over <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> / <code class="docutils literal notranslate"><span class="pre">broadcast</span></code> and inline at trace time, so on every backend they cost exactly the same as the underlying op.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> and <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> both issue exactly <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> shuffles and <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> adds per call. No barriers, no shared memory, no launch overhead (they inline).</p></li>
+<li><p>Pick <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> over <code class="docutils literal notranslate"><span class="pre">reduce_add</span> <span class="pre">+</span> <span class="pre">broadcast</span></code> when you need the result in every lane — same cost, one fewer shuffle.</p></li>
+<li><p>64-bit dtypes (<code class="docutils literal notranslate"><span class="pre">i64</span></code>, <code class="docutils literal notranslate"><span class="pre">u64</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code>) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.</p></li>
+<li><p>All seven <code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code> ops are <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> Hillis-Steele scans; cost is exactly <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> shuffle+op pairs, the same as a hand-rolled CUDA warp scan, on every backend. Hardware-accelerated <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformInclusiveScan</span></code> on SPIR-V is no longer used — the cost difference vs. a portable shuffle tree is small in practice, and the uniform implementation makes performance predictable across CUDA, AMDGPU, and SPIR-V.</p></li>
+</ul>
+</section>
+<section id="related">
+<h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="tile16.html"><span class="std std-doc">tile16</span></a> — <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> builds on <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code> to implement register-resident 16×16 matrix tiles.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.warp.*</span></code> — CUDA-only counterparts (<code class="docutils literal notranslate"><span class="pre">warp.all_nonzero</span></code>, <code class="docutils literal notranslate"><span class="pre">warp.any_nonzero</span></code>, <code class="docutils literal notranslate"><span class="pre">warp.unique</span></code>, <code class="docutils literal notranslate"><span class="pre">warp.ballot</span></code>, <code class="docutils literal notranslate"><span class="pre">warp.match_*</span></code>, <code class="docutils literal notranslate"><span class="pre">warp.active_mask</span></code>, …). The voting ops (<code class="docutils literal notranslate"><span class="pre">all_nonzero</span></code> / <code class="docutils literal notranslate"><span class="pre">any_nonzero</span></code> / <code class="docutils literal notranslate"><span class="pre">unique</span></code>) overlap with the new portable <code class="docutils literal notranslate"><span class="pre">subgroup.{all_true,</span> <span class="pre">any_true}</span></code>; the rest stay CUDA-bound. Useful when you need explicit active-mask control or an op that has no portable equivalent yet.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="math.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Math</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="tile16.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Tile16x16: register-resident 16x16 tiles</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-s-available">What’s available</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#data-movement">Data movement</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#identification-and-control">Identification and control</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#how-log2-size-windowing-works">How <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> windowing works</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#result-placement-per-window">Result placement per window</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#picking-log2-size-for-a-full-subgroup-reduction">Picking <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> for a “full subgroup” reduction</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#voting-and-predicate-ops">Voting and predicate ops</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reductions-and-scans">Reductions and scans</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics">Semantics</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shuffle-value-index"><code class="docutils literal notranslate"><span class="pre">shuffle(value,</span> <span class="pre">index)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shuffle-down-value-offset"><code class="docutils literal notranslate"><span class="pre">shuffle_down(value,</span> <span class="pre">offset)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shuffle-up-value-offset"><code class="docutils literal notranslate"><span class="pre">shuffle_up(value,</span> <span class="pre">offset)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shuffle-xor-value-mask"><code class="docutils literal notranslate"><span class="pre">shuffle_xor(value,</span> <span class="pre">mask)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#broadcast-value-index"><code class="docutils literal notranslate"><span class="pre">broadcast(value,</span> <span class="pre">index)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#broadcast-first-value"><code class="docutils literal notranslate"><span class="pre">broadcast_first(value)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#common-to-the-data-movement-ops">Common to the data-movement ops</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#invocation-id"><code class="docutils literal notranslate"><span class="pre">invocation_id()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#group-size"><code class="docutils literal notranslate"><span class="pre">group_size()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#elect"><code class="docutils literal notranslate"><span class="pre">elect()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sync-mem-fence"><code class="docutils literal notranslate"><span class="pre">sync()</span></code> / <code class="docutils literal notranslate"><span class="pre">mem_fence()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reduce-add-value-log2-size"><code class="docutils literal notranslate"><span class="pre">reduce_add(value,</span> <span class="pre">log2_size)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reduce-all-add-value-log2-size"><code class="docutils literal notranslate"><span class="pre">reduce_all_add(value,</span> <span class="pre">log2_size)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inclusive-add-inclusive-mul-inclusive-min-inclusive-max-inclusive-and-inclusive-or-inclusive-xor"><code class="docutils literal notranslate"><span class="pre">inclusive_add</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_mul</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_min</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_max</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_and</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_or</span></code> / <code class="docutils literal notranslate"><span class="pre">inclusive_xor</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#exclusive-add-exclusive-mul-exclusive-min-exclusive-max-exclusive-and-exclusive-or-exclusive-xor"><code class="docutils literal notranslate"><span class="pre">exclusive_add</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_mul</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_min</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_max</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_and</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_or</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_xor</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#all-true-predicate-log2-size-any-true-predicate-log2-size"><code class="docutils literal notranslate"><span class="pre">all_true(predicate,</span> <span class="pre">log2_size)</span></code> / <code class="docutils literal notranslate"><span class="pre">any_true(predicate,</span> <span class="pre">log2_size)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#all-equal-value-log2-size"><code class="docutils literal notranslate"><span class="pre">all_equal(value,</span> <span class="pre">log2_size)</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#examples">Examples</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#broadcast-lane-0-to-all-lanes">Broadcast lane 0 to all lanes</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#identity-shuffle-each-lane-reads-its-own-id">Identity shuffle (each lane reads its own id)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#swap-neighbours-xor-pattern-via-explicit-lane">Swap neighbours (xor pattern via explicit lane)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#arbitrary-per-lane-gather">Arbitrary per-lane gather</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#tree-reduction-with-shuffle-down">Tree reduction with <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sum-32-lanes-with-reduce-add">Sum 32 lanes with <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#broadcast-the-sum-to-all-lanes-with-reduce-all-add">Broadcast the sum to all lanes with <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#partial-subgroup-reductions">Partial-subgroup reductions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inclusive-scan-with-inclusive-add">Inclusive scan with <code class="docutils literal notranslate"><span class="pre">inclusive_add</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-notes">Performance notes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related">Related</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/subgroup.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

@@ -1,0 +1,715 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Contributing to quadrants &#8212; Quadrants 0.7.9 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+
+    <script src="../_static/documentation_options.js?v=79964ea6"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/contributing';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Building the CUDA graph conditional fatbin" href="building_cudagraph_conditional_fatbin.html" />
+    <link rel="prev" title="Troubleshooting" href="troubleshooting.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.7.9" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="decompositions.html">Matrix decompositions and solvers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
+<li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Contributing to quadrants</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Contributing to quadrants</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="contributing-to-quadrants">
+<h1>Contributing to quadrants<a class="headerlink" href="#contributing-to-quadrants" title="Link to this heading">#</a></h1>
+<section id="good-practice-reminder">
+<h2>Good practice reminder<a class="headerlink" href="#good-practice-reminder" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><em>testing</em>: Any new features or modified code should be tested. You have to run the test suite using <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code> which sets up the right test environment for <code class="docutils literal notranslate"><span class="pre">pytest</span></code>. CLI arguments are forwarded to <code class="docutils literal notranslate"><span class="pre">pytest</span></code>. Do not use <code class="docutils literal notranslate"><span class="pre">pytest</span></code> directly as it behaves differently. To see a per-file timing breakdown (useful for identifying slow test files), set <code class="docutils literal notranslate"><span class="pre">QD_FILE_TIMING=1</span></code> — e.g. <code class="docutils literal notranslate"><span class="pre">QD_FILE_TIMING=1</span> <span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code>. This is enabled by default in the Mac CI job and the results appear in the GitHub Actions job summary.</p></li>
+<li><p><em>format/linter</em>: Before pushing any commits, ensure you set up <code class="docutils literal notranslate"><span class="pre">pre-commit</span></code> and run it using <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code></p></li>
+<li><p>No need to force push to keep a clean history as the merging is eventually done by squashing commits.</p></li>
+</ul>
+</section>
+<section id="creating-your-build-dev-environment">
+<h2>Creating your build/dev environment<a class="headerlink" href="#creating-your-build-dev-environment" title="Link to this heading">#</a></h2>
+<p>It is recommended to use a virtual env. Quadrants supports Python 3.10–3.13 for building and testing. However, <code class="docutils literal notranslate"><span class="pre">pre-commit</span></code> is configured with a pinned Python <code class="docutils literal notranslate"><span class="pre">3.10</span></code> to ensure consistent formatting, so you will need Python 3.10 available for running pre-commit hooks.</p>
+<p>After cloning, make sure to initialize submodules:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">submodule</span> <span class="n">update</span> <span class="o">--</span><span class="n">init</span> <span class="o">--</span><span class="n">recursive</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">uv</span></code> could be handy when initializing such an environment:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># create the venv for development</span>
+<span class="n">uv</span> <span class="n">venv</span> <span class="o">--</span><span class="n">python</span> <span class="mf">3.10</span>
+
+<span class="c1"># activate it</span>
+<span class="n">source</span> <span class="o">.</span><span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">activate</span>
+
+<span class="c1"># install deps groups from pyproject.toml</span>
+<span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">group</span> <span class="n">dev</span> <span class="o">--</span><span class="n">group</span> <span class="n">test</span>
+</pre></div>
+</div>
+</section>
+<section id="build-py">
+<h2><code class="docutils literal notranslate"><span class="pre">build.py</span></code><a class="headerlink" href="#build-py" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> is a python script to automatically set up the build environment for you before invoking the build commands:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">LLVM</span> <span class="pre">libraries</span></code>: downloads an archive for <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> libraries, decompresses it and sets <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">clang</span></code>: depending on the platform, download <code class="docutils literal notranslate"><span class="pre">clang</span></code> or just check if available with the right version.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> can be used at least two ways:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> to build the wheel currently using <code class="docutils literal notranslate"><span class="pre">setup.py</span> <span class="pre">bdist_wheel</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">--shell</span></code> to enter a shell with environment variables set up as with <code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> in order to let you invoke yourself the commands.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">setup.py</span> <span class="pre">develop</span></code> provides incremental builds:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">shell</span> <span class="c1"># run a new shell with environment variables</span>
+<span class="n">python</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">develop</span>
+</pre></div>
+</div>
+<p>To write the environment variables to a file, use <code class="docutils literal notranslate"><span class="pre">./build.py</span> <span class="pre">-w</span> <span class="pre">[filename]</span></code>. For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">w</span> <span class="n">env</span><span class="o">.</span><span class="n">sh</span>
+<span class="n">source</span> <span class="n">env</span><span class="o">.</span><span class="n">sh</span>
+<span class="n">python</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">develop</span>
+</pre></div>
+</div>
+</section>
+<section id="building-the-package-for-release-purposes">
+<h2>Building the package for release purposes<a class="headerlink" href="#building-the-package-for-release-purposes" title="Link to this heading">#</a></h2>
+<p>To build the release package:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="n">wheel</span>
+</pre></div>
+</div>
+<p>We use <code class="docutils literal notranslate"><span class="pre">cmake</span></code> to build the C++ core. The build directory depends on the host architecture and the python version. For example: <code class="docutils literal notranslate"><span class="pre">_skbuild/linux-x86_64-3.10/cmake-build</span></code>.</p>
+<p>You can modify the cmake options to your liking in order to enable or disable some features you need or don’t need. To discover them, you can use <code class="docutils literal notranslate"><span class="pre">ccmake</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ccmake</span> <span class="n">_skbuild</span><span class="o">/</span><span class="n">linux</span><span class="o">-</span><span class="n">x86_64</span><span class="o">-</span><span class="mf">3.10</span><span class="o">/</span><span class="n">cmake</span><span class="o">-</span><span class="n">build</span>
+</pre></div>
+</div>
+<p>You could then set the environment variable <code class="docutils literal notranslate"><span class="pre">QUADRANTS_CMAKE_ARGS</span></code> that will be appended to the <code class="docutils literal notranslate"><span class="pre">cmake</span></code> command used to configure the <code class="docutils literal notranslate"><span class="pre">cmake</span></code> build. For instance, to disable the CUDA and AMDGPU backends:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">QUADRANTS_CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF&quot;</span>
+</pre></div>
+</div>
+<p>To direct <code class="docutils literal notranslate"><span class="pre">cmake</span></code> where to look at for some dependencies, for example <code class="docutils literal notranslate"><span class="pre">LLVM</span></code>, you could either use an environment variable <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> or specify the cmake option <code class="docutils literal notranslate"><span class="pre">LLVM_ROOT</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># using an env var</span>
+<span class="n">export</span> <span class="n">LLVM_DIR</span><span class="o">=</span><span class="s2">&quot;/path/to/llvm/&quot;</span>
+<span class="c1"># or with a cmake option</span>
+<span class="n">export</span> <span class="n">QUADRANTS_CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;$QUADRANTS_CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="advanced-usage">
+<h2>Advanced usage<a class="headerlink" href="#advanced-usage" title="Link to this heading">#</a></h2>
+<section id="ci-convention-about-compilers-llvm">
+<h3>CI Convention about compilers/LLVM<a class="headerlink" href="#ci-convention-about-compilers-llvm" title="Link to this heading">#</a></h3>
+<p>Quadrants comprises at least three important parts:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">quadrants</span></code> host runtime: Made with a mix of Python and C++. The C++ core is compiled using the OS default C/C++ compiler.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quadrants</span></code> device runtime (bitcode): C++ code compiled using <code class="docutils literal notranslate"><span class="pre">clang++</span></code> from the distribution/OS. Using <code class="docutils literal notranslate"><span class="pre">clang++</span></code> is required as it has to support the same targets as <code class="docutils literal notranslate"><span class="pre">LLVM</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LLVM</span></code> libraries used by host runtime: statically or dynamically linked, used to lower the kernel’s final IR to machine code on the host. The CI uses an LLVM version compiled from source.</p></li>
+</ol>
+</section>
+<section id="building-llvm-for-debugging-it">
+<h3>Building LLVM for debugging it<a class="headerlink" href="#building-llvm-for-debugging-it" title="Link to this heading">#</a></h3>
+<p>Sometimes, it could be useful to have a <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails). To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml">CI pipeline to build LLVM</a> to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).</p>
+<p>You can then use <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> to point to the <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> build directory.</p>
+</section>
+</section>
+<section id="ci-checks">
+<h2>CI checks<a class="headerlink" href="#ci-checks" title="Link to this heading">#</a></h2>
+<p>Pull requests are validated by several CI jobs. Most run automatically; a failing check blocks merge.</p>
+<section id="pre-commit-linters-linters-yml">
+<h3>Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)<a class="headerlink" href="#pre-commit-linters-linters-yml" title="Link to this heading">#</a></h3>
+<p>Runs <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code> which enforces:</p>
+<ul class="simple">
+<li><p><strong>black</strong> — Python formatting with a 120-character line limit</p></li>
+<li><p><strong>clang-format</strong> — C/C++ formatting</p></li>
+<li><p><strong>trailing-whitespace</strong> and <strong>end-of-file-fixer</strong> — whitespace hygiene</p></li>
+<li><p><strong>ruff</strong> — Python linting</p></li>
+<li><p><strong>pylint</strong> — additional Python linting (scoped to <code class="docutils literal notranslate"><span class="pre">python/quadrants/</span></code>)</p></li>
+</ul>
+<p>You can run these locally with <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code> after <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">pre-commit</span></code>.</p>
+</section>
+<section id="other-ci-jobs">
+<h3>Other CI jobs<a class="headerlink" href="#other-ci-jobs" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>pyright</strong> (<code class="docutils literal notranslate"><span class="pre">pyright_linter.yml</span></code>) — Python type checking</p></li>
+<li><p><strong>clang-tidy</strong> (<code class="docutils literal notranslate"><span class="pre">clang_tidy.yml</span></code>) — C++ static analysis</p></li>
+<li><p><strong>check-markup-links</strong> (<code class="docutils literal notranslate"><span class="pre">check_markup_links.yml</span></code>) — validates links in documentation</p></li>
+<li><p><strong>linux / macosx / win</strong> — build and test on each platform</p></li>
+<li><p><strong>test-gpu</strong> — GPU-specific tests</p></li>
+<li><p><strong>coverage report</strong> — a one-line diff coverage summary is posted as a PR comment on each push, linking to the full annotated report. This includes kernel-level branch coverage. See <a class="reference internal" href="kernel_coverage.html"><span class="std std-doc">Kernel code coverage</span></a> for details.</p></li>
+</ul>
+</section>
+<section id="line-wrapping-check-check-wrapping-yml">
+<h3>Line wrapping check (<code class="docutils literal notranslate"><span class="pre">check_wrapping.yml</span></code>)<a class="headerlink" href="#line-wrapping-check-check-wrapping-yml" title="Link to this heading">#</a></h3>
+<p>Uses an AI agent to check that lines in changed files follow wrapping conventions:</p>
+<ul class="simple">
+<li><p><strong>Markdown files (<code class="docutils literal notranslate"><span class="pre">.md</span></code>)</strong>: lines should not be hard-wrapped. Each paragraph should be a single long line.</p></li>
+<li><p><strong>Code comments and docstrings</strong>: lines should be wrapped at 120 characters, not at 80.</p></li>
+</ul>
+<p>The check runs only on lines changed in the PR and reports up to 3 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
+<section id="deleted-comments-check-check-deleted-comments-yml">
+<h3>Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)<a class="headerlink" href="#deleted-comments-check-check-deleted-comments-yml" title="Link to this heading">#</a></h3>
+<p>Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted. Reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
+<section id="test-coverage-check-check-test-coverage-yml">
+<h3>Test coverage check (<code class="docutils literal notranslate"><span class="pre">check_test_coverage.yml</span></code>)<a class="headerlink" href="#test-coverage-check-check-test-coverage-yml" title="Link to this heading">#</a></h3>
+<p>Uses an AI agent to verify that new or modified source code in a PR has corresponding test coverage. The agent examines the diff of non-test source files and cross-references them against test files in the repo (existing or added in the PR). It flags up to 5 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
+<section id="feature-factorization-check-check-feature-factorization-yml">
+<h3>Feature factorization check (<code class="docutils literal notranslate"><span class="pre">check_feature_factorization.yml</span></code>)<a class="headerlink" href="#feature-factorization-check-check-feature-factorization-yml" title="Link to this heading">#</a></h3>
+<p>Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the “wrong” place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.</p>
+<p>The agent reports up to 5 violations, each annotated with the host file’s hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
+<section id="pr-change-report-pr-change-report-yml">
+<h3>PR change report (<code class="docutils literal notranslate"><span class="pre">pr_change_report.yml</span></code>)<a class="headerlink" href="#pr-change-report-pr-change-report-yml" title="Link to this heading">#</a></h3>
+<p>Posts a fresh PR comment on every push. The comment is a single line: the totals (file count, code lines added, code lines removed) formatted as a markdown link to a GitHub Check whose page contains the full per-file / per-function breakdown. “Code lines” exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of multi-line strings). C/C++ <code class="docutils literal notranslate"><span class="pre">/*</span> <span class="pre">…</span> <span class="pre">*/</span></code> block comments are stripped before counting.</p>
+<p>The number columns on the Check page (without a <code class="docutils literal notranslate"><span class="pre">+</span></code> or <code class="docutils literal notranslate"><span class="pre">-</span></code> sign) are code-line counts in the BASE (pre-PR) version: file size before this PR (0 for newly-added files), function body size before this PR (0 for new functions; original body size for deleted functions). <code class="docutils literal notranslate"><span class="pre">+&lt;n&gt;</span></code> / <code class="docutils literal notranslate"><span class="pre">-&lt;n&gt;</span></code> are code lines added / removed by this PR.</p>
+<p>Files are sorted by added lines descending. Within each file, functions are split into a <code class="docutils literal notranslate"><span class="pre">New:</span></code> group (added by this PR), an <code class="docutils literal notranslate"><span class="pre">Existing:</span></code> group (modified by this PR), and a <code class="docutils literal notranslate"><span class="pre">Deleted:</span></code> group (removed by this PR), and within each group sorted by added lines descending, then removed lines descending. Files that are deleted in their entirety appear as a single per-file row (so the totals stay accurate) but skip the per-function breakdown. Sample shape:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">quadrants</span><span class="o">/</span><span class="n">program</span><span class="o">/</span><span class="n">program_stream</span><span class="o">.</span><span class="n">cpp</span> <span class="mi">0</span> <span class="o">+</span><span class="mi">151</span>
+    <span class="n">New</span><span class="p">:</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">create_event</span><span class="p">()</span>             <span class="mi">0</span>     <span class="o">+</span><span class="mi">18</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">create_stream</span><span class="p">()</span>            <span class="mi">0</span>     <span class="o">+</span><span class="mi">18</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">record_event</span><span class="p">()</span>             <span class="mi">0</span>     <span class="o">+</span><span class="mi">15</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">destroy_event</span><span class="p">()</span>            <span class="mi">0</span>     <span class="o">+</span><span class="mi">13</span>
+      <span class="n">StreamManager</span><span class="p">::</span><span class="n">destroy_stream</span><span class="p">()</span>           <span class="mi">0</span>     <span class="o">+</span><span class="mi">13</span>
+
+<span class="n">python</span><span class="o">/</span><span class="n">quadrants</span><span class="o">/</span><span class="n">lang</span><span class="o">/</span><span class="n">stream</span><span class="o">.</span><span class="n">py</span> <span class="mi">0</span> <span class="o">+</span><span class="mi">111</span>
+    <span class="n">New</span><span class="p">:</span>
+      <span class="n">Event</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>             <span class="mi">0</span>      <span class="o">+</span><span class="mi">9</span>
+      <span class="n">Stream</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>            <span class="mi">0</span>      <span class="o">+</span><span class="mi">9</span>
+      <span class="n">Event</span><span class="o">.</span><span class="n">_destroy_prog</span><span class="p">()</span>       <span class="mi">0</span>      <span class="o">+</span><span class="mi">8</span>
+      <span class="n">Stream</span><span class="o">.</span><span class="n">_destroy_prog</span><span class="p">()</span>      <span class="mi">0</span>      <span class="o">+</span><span class="mi">8</span>
+      <span class="n">Event</span><span class="o">.</span><span class="fm">__del__</span><span class="p">()</span>             <span class="mi">0</span>      <span class="o">+</span><span class="mi">7</span>
+
+<span class="n">quadrants</span><span class="o">/</span><span class="n">program</span><span class="o">/</span><span class="n">legacy_stream</span><span class="o">.</span><span class="n">cpp</span> <span class="mi">42</span> <span class="o">-</span><span class="mi">42</span>
+    <span class="c1"># entire file deleted (per-function breakdown skipped)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">0</span></code> in the LoC column for the two new files reflects that both files did not exist before this PR (their pre-PR code-line count is 0). The <code class="docutils literal notranslate"><span class="pre">42</span> <span class="pre">-42</span></code> row for <code class="docutils literal notranslate"><span class="pre">legacy_stream.cpp</span></code> is a fully-deleted file: 42 code lines existed before this PR and all 42 were removed.</p>
+<p>This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="troubleshooting.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Troubleshooting</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="building_cudagraph_conditional_fatbin.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Building the CUDA graph conditional fatbin</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#good-practice-reminder">Good practice reminder</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-your-build-dev-environment">Creating your build/dev environment</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-py"><code class="docutils literal notranslate"><span class="pre">build.py</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building-the-package-for-release-purposes">Building the package for release purposes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-usage">Advanced usage</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-convention-about-compilers-llvm">CI Convention about compilers/LLVM</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-llvm-for-debugging-it">Building LLVM for debugging it</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-checks">CI checks</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pre-commit-linters-linters-yml">Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#other-ci-jobs">Other CI jobs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#line-wrapping-check-check-wrapping-yml">Line wrapping check (<code class="docutils literal notranslate"><span class="pre">check_wrapping.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deleted-comments-check-check-deleted-comments-yml">Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#test-coverage-check-check-test-coverage-yml">Test coverage check (<code class="docutils literal notranslate"><span class="pre">check_test_coverage.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#feature-factorization-check-check-feature-factorization-yml">Feature factorization check (<code class="docutils literal notranslate"><span class="pre">check_feature_factorization.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pr-change-report-pr-change-report-yml">PR change report (<code class="docutils literal notranslate"><span class="pre">pr_change_report.yml</span></code>)</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/contributing.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
