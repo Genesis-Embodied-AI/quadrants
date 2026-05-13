@@ -798,28 +798,29 @@ def _init_field(field, n, dtype):
 # in thread 0 only; the `reduce_all_*` variants broadcast it to every thread via
 # one extra `block.sync()` plus a one-slot shared-memory hop.
 #
-# We exercise three block sizes that span the relevant regimes: 32 (single subgroup
-# on wave32 — the shared-memory path is short-circuited at compile time; skipped on
-# AMDGPU since ``block_dim < subgroup_size`` is unsupported by design), 128
-# (multi-subgroup on wave32, two-subgroup on wave64), and 256 (multi-subgroup on
-# every backend).  The subgroup size is read from ``subgroup.group_size()`` at
-# compile time, so the same source compiles correctly on wave32 (CUDA / Metal /
-# NVIDIA Vulkan) and wave64 (AMDGPU) without an API knob.
+# We exercise three regimes per arch by parameterizing on subgroups-per-block rather
+# than absolute block_dim: 1 subgroup (single-subgroup short-circuit path — no
+# shared memory, no cross-subgroup fold), 4 subgroups (multi-subgroup), 8 subgroups
+# (multi-subgroup, larger).  The host-side ``_arch_subgroup_size()`` maps to
+# ``block_dim`` at test-body entry, so wave32 archs (CUDA / Metal / NVIDIA Vulkan)
+# get ``[32, 128, 256]`` and wave64 (AMDGPU) gets ``[64, 256, 512]`` — both cover
+# the single-subgroup short-circuit + multi-subgroup paths without skipping
+# anything at collection time.  Inside the kernel, the subgroup size is still read
+# from ``subgroup.group_size()`` at compile time, so the same source compiles
+# correctly on every backend without an API knob.
 
 _BLOCK_REDUCE_DTYPES = [qd.i32, qd.f32]
-_BLOCK_REDUCE_BLOCK_DIMS = [32, 128, 256]
+_BLOCK_REDUCE_SG_PER_BLOCK = [1, 4, 8]
 
 
-def _skip_if_block_dim_lt_subgroup(block_dim):
-    """Skip a block-* test when ``block_dim`` is smaller than the host subgroup size.
+def _arch_subgroup_size():
+    """Return the subgroup size for the active arch (host side).
 
-    Block reduce / scan / radix-rank are only defined when ``block_dim`` is a positive multiple of the subgroup size
-    (the impl ``static_assert`` enforces this).  AMDGPU is always wave64 in Quadrants, so ``block_dim=32`` is
-    degenerate there; on every other arch the subgroup is 32 and 32 is a valid single-subgroup configuration.
+    AMDGPU is pinned to wave64 in Quadrants; every other supported arch is wave32.  This is the host-side mirror of
+    the kernel-side ``subgroup.group_size()`` and is used by block-* tests to derive ``block_dim`` from a
+    subgroups-per-block parameter so each arch tests its own canonical sizes.
     """
-    arch = qd.lang.impl.current_cfg().arch
-    if arch == qd.amdgpu and block_dim < 64:
-        pytest.skip(f"block_dim={block_dim} < AMDGPU subgroup size (64)")
+    return 64 if qd.lang.impl.current_cfg().arch == qd.amdgpu else 32
 
 
 def _ref_reduce_add(values):
@@ -835,11 +836,11 @@ def _ref_reduce_max(values):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_reduce_add(dtype, block_dim):
+def test_block_reduce_add(dtype, sg_per_block):
     """Block sum-reduce: thread 0 of each block holds `sum(src[block_base:block_base+block_dim])`."""
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
@@ -867,11 +868,11 @@ def test_block_reduce_add(dtype, block_dim):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_reduce_min(dtype, block_dim):
+def test_block_reduce_min(dtype, sg_per_block):
     """Block min-reduce: thread 0 of each block holds `min(src[block_base:block_base+block_dim])`."""
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
@@ -903,11 +904,11 @@ def test_block_reduce_min(dtype, block_dim):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_reduce_max(dtype, block_dim):
+def test_block_reduce_max(dtype, sg_per_block):
     """Block max-reduce: thread 0 of each block holds `max(src[block_base:block_base+block_dim])`."""
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
@@ -938,15 +939,15 @@ def test_block_reduce_max(dtype, block_dim):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_reduce_all_add(dtype, block_dim):
+def test_block_reduce_all_add(dtype, sg_per_block):
     """Block sum-reduce broadcast: every thread of each block holds the block-wide sum.
 
     Verifies the broadcast variant by writing the per-thread output to a flat field, then asserting every thread of a
     given block reads the same aggregate.
     """
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
@@ -975,11 +976,11 @@ def test_block_reduce_all_add(dtype, block_dim):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_reduce_all_min(dtype, block_dim):
+def test_block_reduce_all_min(dtype, sg_per_block):
     """Block min-reduce broadcast: every thread reads the block-wide min."""
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
@@ -1009,11 +1010,11 @@ def test_block_reduce_all_min(dtype, block_dim):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_reduce_all_max(dtype, block_dim):
+def test_block_reduce_all_max(dtype, sg_per_block):
     """Block max-reduce broadcast: every thread reads the block-wide max."""
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
@@ -1094,11 +1095,11 @@ def _ref_exclusive_scan_op(values, op, identity):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_inclusive_add(dtype, block_dim):
+def test_block_inclusive_add(dtype, sg_per_block):
     """Block inclusive prefix sum: thread `i` holds `sum(src[block_base..i])`."""
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
@@ -1127,11 +1128,11 @@ def test_block_inclusive_add(dtype, block_dim):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_exclusive_add(dtype, block_dim):
+def test_block_exclusive_add(dtype, sg_per_block):
     """Block exclusive prefix sum: thread `i` holds `sum(src[block_base..i-1])`; thread 0 holds 0."""
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
@@ -1162,11 +1163,11 @@ def test_block_exclusive_add(dtype, block_dim):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_inclusive_min(dtype, block_dim):
+def test_block_inclusive_min(dtype, sg_per_block):
     """Block inclusive prefix min."""
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
@@ -1197,11 +1198,11 @@ def test_block_inclusive_min(dtype, block_dim):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_inclusive_max(dtype, block_dim):
+def test_block_inclusive_max(dtype, sg_per_block):
     """Block inclusive prefix max."""
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
@@ -1232,11 +1233,11 @@ def test_block_inclusive_max(dtype, block_dim):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_exclusive_min(dtype, block_dim):
+def test_block_exclusive_min(dtype, sg_per_block):
     """Block exclusive prefix min; thread 0 holds the supplied identity."""
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
@@ -1405,11 +1406,11 @@ def test_block_radix_rank_match_atomic_or(key_pattern, bit_start, num_bits):
 
 
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("block_dim", _BLOCK_REDUCE_BLOCK_DIMS)
+@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_exclusive_max(dtype, block_dim):
+def test_block_exclusive_max(dtype, sg_per_block):
     """Block exclusive prefix max; thread 0 holds the supplied identity."""
-    _skip_if_block_dim_lt_subgroup(block_dim)
+    block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
