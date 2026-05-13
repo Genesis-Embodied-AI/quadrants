@@ -869,6 +869,7 @@ def test_device_reduce_by_key_add_rejects_unsupported_dtype():
 # ---------------------------------------------------------------------------
 
 
+@test_utils.test(arch=qd.gpu)
 def test_scratch_invalidate_resets_bytes_to_default():
     """``_scratch._invalidate`` (hooked into ``qd.reset()``) resets BOTH the cached field handle AND ``_scratch_bytes``
     to the default.
@@ -876,6 +877,9 @@ def test_scratch_invalidate_resets_bytes_to_default():
     Pins the invariant: every ``qd.init`` starts with a pristine scratch config, exactly as a fresh process would. We
     test ``_invalidate`` directly (rather than going through ``qd.reset()``) because we want to assert the post-reset
     state *inside* a single test without fighting the conftest's per-test ``init`` / ``reset`` pairing.
+
+    The ``arch=qd.gpu`` parametrization is for uniformity with the rest of the file — the assertion itself only
+    touches Python module-level state, not the GPU, so the per-arch loop is redundant but harmless.
     """
     assert _scratch._scratch_bytes == _scratch.DEFAULT_SCRATCH_BYTES, (
         "test prerequisite: scratch_bytes starts at default; the previous "
@@ -1017,6 +1021,145 @@ def test_device_reduce_by_key_add_rejects_oversized_n():
         qd.algorithms.device_reduce_by_key_add(
             keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs
         )
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_reduce_add_rejects_oversized_n():
+    """Same scratch-capacity error path for device_reduce_add. ``device_reduce_*`` needs ~(B + B/256 + …) u32 slots
+    where ``B = ceil(N / BLOCK_DIM)``; at default 1 MB the ceiling is ~64M, so we need a large N to trigger the raise.
+    Use ``80M`` — comfortably over the default ceiling but small enough to allocate the input ``Field`` without OOM
+    on a 4 GB consumer GPU. The kernel itself never launches; the validate-budget check trips first."""
+    N = 80_000_000
+    inp = qd.field(qd.i32, shape=N)
+    out = qd.field(qd.i32, shape=1)
+    with pytest.raises(RuntimeError, match="scratch"):
+        qd.algorithms.device_reduce_add(inp, out=out)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_exclusive_scan_add_rejects_oversized_n():
+    """Same scratch-capacity error path for device_exclusive_scan_add. ``device_exclusive_scan_*`` needs ``B`` u32
+    partials slots at the top level (plus recursive); default 1 MB caps that at ``B = 256K``, so ``N`` of order
+    ``N = B * BLOCK_DIM = 64M`` is the boundary. Use ``80M`` to be comfortably over."""
+    N = 80_000_000
+    inp = qd.field(qd.i32, shape=N)
+    out = qd.field(qd.i32, shape=N)
+    with pytest.raises(RuntimeError, match="scratch"):
+        qd.algorithms.device_exclusive_scan_add(inp, out=out)
+
+
+# --- Reduce / scan at N = 1M alongside the radix sort + RBK 1M coverage. Reduce / scan's scratch budget at 1M is
+# small (4K + recursion ~ 16 u32 slots), well below the default 1 MB, so no ``big_scratch`` fixture is needed —
+# included here just to round out the qipc-hot-path coverage on the same dtypes as the other 1M tests.
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@test_utils.test(arch=qd.gpu)
+def test_device_reduce_add_n_1m(dtype):
+    """N = 1_000_000 reduce. Default scratch is plenty (4K u32 slots for the top-level partials, recursion adds ~16)."""
+    N = 1_000_000
+    rng = np.random.default_rng(seed=1234)
+    if dtype == qd.f32:
+        host = rng.uniform(-1.0, 1.0, size=N).astype(np.float32)
+    elif dtype == qd.u32:
+        host = rng.integers(0, 1000, size=N, dtype=np.uint32)
+    else:
+        host = rng.integers(-1000, 1000, size=N, dtype=np.int32)
+
+    inp = qd.field(dtype, shape=N)
+    out = qd.field(dtype, shape=1)
+    _fill_field(inp, host)
+    qd.algorithms.device_reduce_add(inp, out=out)
+
+    got = out.to_numpy()[0]
+    if dtype == qd.f32:
+        expected = float(np.sum(host.astype(np.float64)))
+        assert math.isclose(got, expected, rel_tol=1e-3, abs_tol=1e-3)
+    else:
+        expected = int(np.sum(host.astype(np.int64)))
+        assert int(got) == expected
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@test_utils.test(arch=qd.gpu)
+def test_device_exclusive_scan_add_n_1m(dtype):
+    """N = 1_000_000 exclusive scan. Same scratch story as reduce — fits in default 1 MB by a wide margin."""
+    N = 1_000_000
+    rng = np.random.default_rng(seed=1234)
+    if dtype == qd.f32:
+        host = rng.uniform(-0.01, 0.01, size=N).astype(np.float32)
+    elif dtype == qd.u32:
+        host = rng.integers(0, 10, size=N, dtype=np.uint32)
+    else:
+        host = rng.integers(-5, 5, size=N, dtype=np.int32)
+
+    inp = qd.field(dtype, shape=N)
+    out = qd.field(dtype, shape=N)
+    _fill_field(inp, host)
+    qd.algorithms.device_exclusive_scan_add(inp, out=out)
+
+    got = out.to_numpy()
+    if dtype == qd.f32:
+        ref = np.concatenate([[0.0], np.cumsum(host.astype(np.float64))[:-1]]).astype(np.float32)
+        # f32 cumulative drift over 1M adds is real; check head + tail only, with a generous rtol.
+        np.testing.assert_allclose(got[:64], ref[:64], rtol=1e-3, atol=1e-3)
+        # Tail: just sanity-check finite-ness — the drift bound past 1M elements at uniform(-0.01, 0.01) is hard to
+        # pin tightly without a Kahan sum.
+        assert np.isfinite(got[-1])
+    else:
+        ref = np.concatenate([[0], np.cumsum(host.astype(np.int64))[:-1]])
+        np.testing.assert_array_equal(got.astype(np.int64), ref)
+
+
+# --- End-to-end round-trip: bump scratch, run a 1M algorithm, qd.reset + qd.init, then run a default-scratch-sized
+# algorithm. This directly validates the principle "after reset+init, everything works as if there was nothing
+# before it" — the bumped capacity from the first cycle must NOT leak into the second cycle's scratch.
+
+
+@test_utils.test(arch=qd.gpu)
+def test_scratch_round_trip_across_qd_reset(req_arch):
+    """Run a bumped-scratch algorithm; ``qd.reset()`` + ``qd.init()``; then run another algorithm at default scratch.
+
+    The bumped capacity from cycle 1 must be gone in cycle 2 — otherwise the second ``qd.init()`` would over-allocate
+    against the unwanted bump. This is the *behavioural* version of ``test_scratch_invalidate_resets_bytes_to_default``
+    (which only manipulates module state directly).
+    """
+    # --- Cycle 1: bump scratch, run a 1M radix sort.
+    _scratch.set_scratch_bytes(8 << 20)
+    N1 = 1_000_000
+    rng = np.random.default_rng(seed=1234)
+    host1 = rng.integers(0, 2**31 - 1, size=N1, dtype=np.int32)
+    keys1 = qd.field(qd.i32, shape=N1)
+    tmp1 = qd.field(qd.i32, shape=N1)
+    _fill_field(keys1, host1)
+    qd.algorithms.device_radix_sort(keys1, tmp_keys=tmp1)
+    np.testing.assert_array_equal(keys1.to_numpy(), np.sort(host1))
+
+    # --- Cross the qd.reset() + qd.init() boundary. After this, everything should behave as if cycle 1 never ran.
+    qd.reset()
+    qd.init(arch=req_arch, enable_fallback=False, device_memory_GB=0.3, print_full_traceback=True)
+
+    # Post-reset invariants on the scratch module.
+    assert (
+        _scratch._scratch_bytes == _scratch.DEFAULT_SCRATCH_BYTES
+    ), "_scratch_bytes did not reset to default across qd.reset() + qd.init() — the very leak this test pins"
+    assert _scratch._scratch_field is None, "_scratch_field handle was not invalidated across qd.reset()"
+
+    # --- Cycle 2: run a small algorithm with default scratch. Should just work — and crucially, attempting a 1M sort
+    # NOW (without re-bumping) should *raise* RuntimeError because the bumped capacity is gone.
+    N2 = 1024
+    host2 = rng.integers(0, 100, size=N2, dtype=np.int32)
+    keys2 = qd.field(qd.i32, shape=N2)
+    tmp2 = qd.field(qd.i32, shape=N2)
+    _fill_field(keys2, host2)
+    qd.algorithms.device_radix_sort(keys2, tmp_keys=tmp2)
+    np.testing.assert_array_equal(keys2.to_numpy(), np.sort(host2))
+
+    # Re-attempting the 1M sort without re-bumping must fail — proves the capacity really did drop back to default.
+    keys3 = qd.field(qd.i32, shape=N1)
+    tmp3 = qd.field(qd.i32, shape=N1)
+    with pytest.raises(RuntimeError, match="scratch"):
+        qd.algorithms.device_radix_sort(keys3, tmp_keys=tmp3)
 
 
 # --- end_bit on radix sort. Default 32; lower values let callers sort by only the low bits when they know the high
