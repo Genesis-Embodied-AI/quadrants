@@ -248,7 +248,7 @@ Same sum as `reduce_add`, but broadcast to **every lane** in the subgroup. Imple
 - Use this when every lane needs the reduction result (e.g. to divide by the sum, or to branch on it uniformly). It costs exactly the same number of shuffles as `reduce_add` but leaves the answer in all lanes, so it replaces a `reduce_add` + `shuffle`/broadcast pair.
 - Uses `subgroup.shuffle` under the hood.
 
-### `reduce_min(value)` / `reduce_max(value)`
+### `reduce_{min,max}(value)`
 
 Min / max of `value` across every lane in the subgroup via a `shuffle_down` tree. Result valid in **lane 0**; other lanes hold partial mins / maxes. Use `reduce_all_min` / `reduce_all_max` if every lane needs the answer. Tiled variants: `reduce_min_tiled(value, log2_size)` / `reduce_max_tiled(value, log2_size)` — see [Tiled variants](#tiled-variants).
 
@@ -256,14 +256,14 @@ Min / max of `value` across every lane in the subgroup via a `shuffle_down` tree
 - Float NaN handling is implementation-defined: PTX uses `fminnm` / `fmaxnm` (NaN-suppressing), AMDGPU uses `llvm.minnum` / `llvm.maxnum` (NaN-suppressing), SPIR-V uses `OpFMin` / `OpFMax` (NaN-propagating in some drivers). Avoid NaN inputs if you need a portable result.
 - Decorated with `@qd.func` and inlined into the calling kernel.
 
-### `reduce_all_min(value)` / `reduce_all_max(value)`
+### `reduce_all_{min,max}(value)`
 
 Same min / max as `reduce_min` / `reduce_max`, but broadcast to **every lane** in the subgroup via a `shuffle_xor` butterfly. Same number of shuffles as the lane-0 forms. Tiled variants: `reduce_all_min_tiled` / `reduce_all_max_tiled` — see [Tiled variants](#tiled-variants).
 
 - Use over `reduce_min` + broadcast / `reduce_max` + broadcast when every lane needs the result (e.g. to subtract the subgroup min, or to clamp to the subgroup max).
 - Same dtypes and float-NaN caveat as `reduce_min` / `reduce_max`.
 
-### `segmented_reduce_add(value, head_flag)` / `segmented_reduce_min(...)` / `segmented_reduce_max(...)`
+### `segmented_reduce_{add,min,max}(value, head_flag)`
 
 Per-lane inclusive scan under `+` / `min` / `max` that resets at every non-zero `head_flag`, across the entire subgroup. Lane `i` returns the scan of `value[head_below..i + 1]`, where `head_below` is the largest lane index `<= i` whose `head_flag` is non-zero. If no such lane exists, lane 0 is treated as an implicit head, so the result is the inclusive scan from lane 0 to lane `i`. Tiled variants: `segmented_reduce_add_tiled(value, head_flag, log2_size)` (and `_min` / `_max`) — see [Tiled variants](#tiled-variants).
 
@@ -276,7 +276,7 @@ Per-lane inclusive scan under `+` / `min` / `max` that resets at every non-zero 
 - Float NaN handling for `_min` / `_max` is implementation-defined (same caveat as `reduce_min` / `reduce_max`): PTX uses `fminnm` / `fmaxnm`, AMDGPU uses `llvm.minnum` / `llvm.maxnum`, SPIR-V uses `OpFMin` / `OpFMax`. Avoid NaN inputs if you need a portable result.
 - AMDGPU note (`*` in the table): `shuffle_up` goes through `ds_bpermute` (~50 cycle latency), same as the other reductions.
 
-### `inclusive_add` / `inclusive_mul` / `inclusive_min` / `inclusive_max` / `inclusive_and` / `inclusive_or` / `inclusive_xor`
+### `inclusive_{add,mul,min,max,and,or,xor}(value)`
 
 Per-lane inclusive scan across the entire subgroup, under the binary operator named by the suffix. Lane `i` returns `v[0] op v[1] op ... op v[i]`. Tiled variants: `inclusive_*_tiled(value, log2_size)` run the same scan independently on each `2**log2_size`-aligned tile — see [Tiled variants](#tiled-variants).
 
@@ -286,7 +286,7 @@ Per-lane inclusive scan across the entire subgroup, under the binary operator na
 - Decorated with `@qd.func` and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.
 - AMDGPU note (`*` in the table): same `ds_bpermute` cost as `shuffle_up` — roughly tens of cycles per step × `log2_group_size()` steps. Hardware-accelerated `OpGroupNonUniformInclusiveScan` on SPIR-V is no longer used, even on backends that supported it (Vulkan, Metal); the trade-off is a uniform implementation across backends with predictable cost.
 
-### `exclusive_add` / `exclusive_mul` / `exclusive_min` / `exclusive_max` / `exclusive_and` / `exclusive_or` / `exclusive_xor`
+### `exclusive_{add,mul,min,max,and,or,xor}(value)`
 
 Per-lane exclusive scan across the entire subgroup, under the binary operator named by the suffix. Lane `i` (with `i > 0`) returns `v[0] op v[1] op ... op v[i - 1]`. Lane 0 returns the operator's identity in `value`'s dtype. Tiled variants: `exclusive_*_tiled(value, log2_size)` — see [Tiled variants](#tiled-variants).
 
@@ -328,7 +328,7 @@ Returns a `u64` bitmask covering the entire subgroup. Bit `i` is set iff lane `i
 - Use this when you need a subgroup-wide population count, prefix mask, or compaction that has to cover more than 32 lanes. Use `ballot_first_n(p, 32)` instead if you only care about the first 32 lanes — it's one register cheaper on wave64 and avoids the wider `u64` result type.
 - Caller contract: uniform CF + all lanes active.
 
-### `all_true(predicate)` / `any_true(predicate)`
+### `{all,any}_true(predicate)`
 
 Per-lane AND-reduction (`all_true`) or OR-reduction (`any_true`) of `predicate != 0` across every lane in the subgroup. Returns `i32` (`0` or `1`), broadcast to every lane. Tiled variants: `all_true_tiled(predicate, log2_size)` / `any_true_tiled(predicate, log2_size)` — see [Tiled variants](#tiled-variants).
 
@@ -344,7 +344,7 @@ Returns `i32(1)` on every lane iff every lane in the subgroup has the same `valu
 - Implementation: each lane reads the value at lane 0 via `shuffle`, compares to its own `value`, and `all_true`-reduces the equality bit. Inherits the CUDA shortcut transitively from `all_true`.
 - Cost: 1 shuffle + 1 `vote.all` on CUDA; 1 shuffle + `log2_group_size()` butterfly shuffles otherwise. We deliberately do *not* use `__match_all_sync` on CUDA: it requires sm_70+ and uses bit-equality for floats, which would contradict this op's documented semantics.
 
-### `lanemask_lt(lane_id)` / `lanemask_le(lane_id)` / `lanemask_eq(lane_id)` / `lanemask_gt(lane_id)` / `lanemask_ge(lane_id)`
+### `lanemask_{lt,le,eq,gt,ge}(lane_id)`
 
 Closed-form `u32` lane-mask constants parametrised by a lane id. Bit `i` of the result follows the relation in the suffix:
 
