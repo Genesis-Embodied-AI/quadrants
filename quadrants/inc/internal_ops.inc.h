@@ -45,9 +45,10 @@ PER_INTERNAL_OP(subgroupBallotU64)
 // code, and the value is usable as a ``qd.template()`` argument (which an IR op couldn't be).
 PER_INTERNAL_OP(subgroupInvocationId)
 // subgroupAdd / subgroupMul / subgroupMin / subgroupMax / subgroupAnd / subgroupOr / subgroupXor and subgroupInclusive*
-// / subgroupExclusive* removed: use portable Python `subgroup.reduce_add(value, log2_size)` / `subgroup.inclusive_add`
-// / `subgroup.exclusive_add` (and equivalents), implemented as `@qd.func` Hillis-Steele scans on top of
-// `subgroupShuffleDown` / `subgroupShuffleUp` / `subgroupShuffle`, which work on all backends.
+// / subgroupExclusive* removed: use portable Python `subgroup.reduce_add_tiled(value, log2_size)` /
+// `subgroup.inclusive_add_tiled` / `subgroup.exclusive_add_tiled` (and equivalents), implemented as `@qd.func`
+// Hillis-Steele scans on top of `subgroupShuffleDown` / `subgroupShuffleUp` / `subgroupShuffle`, which work on all
+// backends.
 PER_INTERNAL_OP(spirv_clock_i64)
 
 // CUDA

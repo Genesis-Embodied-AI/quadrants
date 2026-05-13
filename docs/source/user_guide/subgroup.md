@@ -34,13 +34,19 @@ The full Python API is grouped here by category. The first column lists each op,
 | `subgroup.sync()`                           | yes  | yes    | yes                     |
 | `subgroup.mem_fence()`                      | yes\*\* | yes\*\* | yes                  |
 
-Naming note: three names in this module have recently been renamed to align with the project's naming conventions across scopes:
+Naming note: this module follows a strict suffix convention.
 
-- `subgroup.barrier()` has been renamed to `subgroup.sync()` (matching `block.sync()`).
-- `subgroup.memory_barrier()` has been renamed to `subgroup.mem_fence()` (matching the planned `block.mem_fence()` and `grid.mem_fence()`).
-- `subgroup.ballot_full_subgroup(predicate)` has been renamed to `subgroup.ballot_full(predicate)` (matching the `_full` suffix used by every other full-subgroup wrapper in this module, e.g. `reduce_add_full` / `all_true_full`).
+- **Full-subgroup ops have no suffix.** `subgroup.reduce_add(v)` / `subgroup.all_true(p)` / `subgroup.ballot(p)` / etc. operate over every lane in the active subgroup (32 on wave32, 64 on wave64) and take no `log2_size` argument.
+- **Tiled (multi-window) ops have a `_tiled` suffix.** `subgroup.reduce_add_tiled(v, log2_size)` / `subgroup.all_true_tiled(p, log2_size)` / etc. split the subgroup into independent `2**log2_size`-aligned windows and operate on each window in parallel. Use these when you specifically want multiple sub-warp reductions per subgroup (e.g. `reduce_add_tiled(v, 4)` to fold every 16 lanes into one).
 
-The old names remain as deprecated aliases that emit a `DeprecationWarning` on first use and forward to the new ones; they will be removed in a future release. The rest of this page uses the new names.
+Three names have been renamed to align with this convention (relative to the previous `qd.simt.subgroup` API):
+
+- `subgroup.barrier()` → `subgroup.sync()` (matching `block.sync()`).
+- `subgroup.memory_barrier()` → `subgroup.mem_fence()` (matching the planned `block.mem_fence()` and `grid.mem_fence()`).
+- `subgroup.ballot_full_subgroup(predicate)` → `subgroup.ballot(predicate)` (no suffix on full-subgroup ops).
+- Every `<op>(value, log2_size)` reduction / scan / vote that previously took `log2_size` directly is now `<op>_tiled(value, log2_size)`. The no-suffix names (`reduce_add(v)`, `inclusive_max(v)`, `all_true(p)`, etc.) are the new full-subgroup convenience wrappers. **This is a breaking change** — call sites that hard-coded `log2_size = 5` (the old "full warp" idiom) need to either drop the argument (full-subgroup form) or add the `_tiled` suffix to keep the old behaviour on wave64.
+
+The `barrier()` / `memory_barrier()` / `ballot_full_subgroup()` names remain as deprecated aliases that emit a `DeprecationWarning` on first use and forward to the new ones; they will be removed in a future release. The rest of this page uses the new names.
 
 \*\* `mem_fence()` lowers to a workgroup-scope fence on CUDA (`__threadfence_block()`, via `nvvm.membar.cta`) and AMDGPU (LLVM `fence syncscope("workgroup") seq_cst`). Both are over-strict for the subgroup-scope ask but are correct: a workgroup-scope fence orders memory as observed by the whole workgroup, of which the subgroup is a strict subset. A future change can tighten these to true wave-scope fences if a measurable cost shows up.
 
@@ -59,66 +65,63 @@ Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_d
 
 #### Result placement per window
 
-- **Broadcast-to-all forms** — `all_true`, `any_true`, `all_equal`, `reduce_all_add`, `reduce_all_min`, `reduce_all_max`, `inclusive_*`, `exclusive_*`, `segmented_reduce_*`: every lane in each window holds the per-window result. Lanes in different windows hold different results (their own window's).
-- **Window-local-lane-0 forms** — `reduce_add`, `reduce_min`, `reduce_max`: only the *window-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. Use `reduce_all_*` if you want every lane to see its window's result.
+- **Broadcast-to-all forms** — `all_true_tiled`, `any_true_tiled`, `all_equal_tiled`, `reduce_all_add_tiled`, `reduce_all_min_tiled`, `reduce_all_max_tiled`, `inclusive_*`, `exclusive_*`, `segmented_reduce_*`: every lane in each window holds the per-window result. Lanes in different windows hold different results (their own window's).
+- **Window-local-lane-0 forms** — `reduce_add_tiled`, `reduce_min_tiled`, `reduce_max_tiled`: only the *window-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. Use `reduce_all_*` if you want every lane to see its window's result.
 
 ### Voting and predicate ops
 
-`all_true` / `any_true` / `all_equal` take a `log2_size` template parameter and are **windowed**: they operate independently on each `2**log2_size`-aligned window that tiles the entire subgroup, broadcasting the `i32` (`0` or `1`) per-window result to every lane in that window (the broadcast-to-all forms from [How `log2_size` windowing works](#how-log2size-windowing-works)). With `log2_size = 5` on wave32 you get one vote per subgroup; on wave64 you get two independent votes (lanes 0–31 and lanes 32–63 vote separately, and lanes in each half hold their own half's result). Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`. Each also has a `_full` variant (`all_true_full(p)` / `any_true_full(p)` / `all_equal_full(v)`) that implicitly uses `log2_group_size()` to vote over the entire subgroup — see [Full-subgroup (`_full`) variants](#full-subgroup-_full-variants).
+`all_true(p)` / `any_true(p)` / `all_equal(v)` vote across the entire subgroup, broadcasting the `i32` (`0` or `1`) result to every lane. The `_tiled` forms (`all_true_tiled(p, log2_size)` etc.) take a `log2_size` template parameter and operate independently on each `2**log2_size`-aligned window that tiles the subgroup, broadcasting the per-window result to every lane in that window (the broadcast-to-all shape from [How `log2_size` windowing works](#how-log2size-windowing-works)). With `log2_size = 5` on wave32 the tiled form collapses to one vote per subgroup; on wave64 you get two independent votes (lanes 0–31 and lanes 32–63 vote separately). Same shape as `reduce_all_add_tiled` / `inclusive_*_tiled` / `exclusive_*_tiled`.
 
-The two `ballot` variants are full-subgroup only (no `log2_size` parameter): `ballot_first_n(predicate, n)` returns a `u32` covering lanes `[0, n)` (with `n` a compile-time constant `<= 32`), and `ballot_full(predicate)` returns a `u64` covering every lane in the subgroup (32 lanes on wave32, 64 on wave64).
+The two `ballot` variants are full-subgroup only (no `log2_size` parameter): `ballot_first_n(predicate, n)` returns a `u32` covering lanes `[0, n)` (with `n` a compile-time constant `<= 32`), and `ballot(predicate)` returns a `u64` covering every lane in the subgroup (32 lanes on wave32, 64 on wave64).
 
-| Op                                          | CUDA          | AMDGPU | SPIR-V (Vulkan / Metal) |
-|---------------------------------------------|---------------|--------|-------------------------|
-| `subgroup.ballot_first_n(predicate, n)`     | yes           | yes    | yes                     |
-| `subgroup.ballot_full(predicate)`  | yes (u32 zext'd to u64) | yes (wave32 / wave64) | yes (uvec4 hi:lo packed to u64) |
-| `subgroup.all_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
-| `subgroup.all_true_full(predicate)`         | yes (fast: maps to `__all_sync`) | yes | yes |
-| `subgroup.any_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
-| `subgroup.any_true_full(predicate)`         | yes (fast: maps to `__any_sync`) | yes | yes |
-| `subgroup.all_equal(value, log2_size)`      | yes (fast at `log2_size==5`, transitively via `all_true`) | yes | yes |
-| `subgroup.all_equal_full(value)`            | yes (fast: 1 shuffle + `vote.all`) | yes | yes |
-| `subgroup.lanemask_lt(lane_id)`             | yes           | yes    | yes                     |
-| `subgroup.lanemask_le(lane_id)`             | yes           | yes    | yes                     |
-| `subgroup.lanemask_eq(lane_id)`             | yes           | yes    | yes                     |
-| `subgroup.lanemask_gt(lane_id)`             | yes           | yes    | yes                     |
-| `subgroup.lanemask_ge(lane_id)`             | yes           | yes    | yes                     |
+| Op                                                | Tiled form                                              | CUDA                                                            | AMDGPU                | SPIR-V (Vulkan / Metal)         |
+|---------------------------------------------------|---------------------------------------------------------|-----------------------------------------------------------------|-----------------------|---------------------------------|
+| `subgroup.ballot_first_n(predicate, n)`           | —                                                       | yes                                                             | yes                   | yes                             |
+| `subgroup.ballot(predicate)`                      | —                                                       | yes (u32 zext'd to u64)                                         | yes (wave32 / wave64) | yes (uvec4 hi:lo packed to u64) |
+| `subgroup.all_true(predicate)`                    | `subgroup.all_true_tiled(predicate, log2_size)`         | yes (fast: maps to `__all_sync`)                                | yes                   | yes                             |
+| `subgroup.any_true(predicate)`                    | `subgroup.any_true_tiled(predicate, log2_size)`         | yes (fast: maps to `__any_sync`)                                | yes                   | yes                             |
+| `subgroup.all_equal(value)`                       | `subgroup.all_equal_tiled(value, log2_size)`            | yes (fast: 1 shuffle + `vote.all`)                              | yes                   | yes                             |
+| `subgroup.lanemask_lt(lane_id)`                   | —                                                       | yes                                                             | yes                   | yes                             |
+| `subgroup.lanemask_le(lane_id)`                   | —                                                       | yes                                                             | yes                   | yes                             |
+| `subgroup.lanemask_eq(lane_id)`                   | —                                                       | yes                                                             | yes                   | yes                             |
+| `subgroup.lanemask_gt(lane_id)`                   | —                                                       | yes                                                             | yes                   | yes                             |
+| `subgroup.lanemask_ge(lane_id)`                   | —                                                       | yes                                                             | yes                   | yes                             |
 
-CUDA shortcut: when `log2_size == 5` (full warp), `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF, p)` / `__any_sync(0xFFFFFFFF, p)` (one `vote.all` / `vote.any` instruction). The shortcut is selected at compile time via `qd.static()` on `impl.current_cfg().arch` and the compile-time `log2_size`, so partial-warp uses (and every other backend) cleanly fall back to a portable `shuffle_xor` butterfly with no branch in the emitted IR.
+CUDA shortcut: at the full-subgroup width (no-suffix form, or `_tiled` with `log2_size == 5`), `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF, p)` / `__any_sync(0xFFFFFFFF, p)` (one `vote.all` / `vote.any` instruction). The shortcut is selected at compile time via `qd.static()` on `impl.current_cfg().arch` and the compile-time `log2_size`, so partial-warp `_tiled` uses (and every other backend) cleanly fall back to a portable `shuffle_xor` butterfly with no branch in the emitted IR.
 
-`all_equal` always uses the broadcast-and-`all_true` form: every lane reads the value at the start of its group via `shuffle`, compares it with its own value, and `all_true`-reduces the per-lane equality bit. Cost: `1 + log2_size` shuffles in the portable case, or `1 shuffle + 1 vote.all` on CUDA at full-warp. We deliberately do *not* use `__match_all_sync` even on CUDA: it requires sm_70+, and it does bit-equality on floats, contradicting this op's documented `OpGroupNonUniformAllEqual` semantics (`NaN != NaN`, `+0.0 == -0.0`). Callers wanting bit-equality on floats should bit-cast to the same-width integer dtype before calling.
+`all_equal` / `all_equal_tiled` always use the broadcast-and-`all_true` form: every lane reads the value at the start of its group via `shuffle`, compares it with its own value, and `all_true`-reduces the per-lane equality bit. Cost: `1 + log2_size` shuffles in the portable case, or `1 shuffle + 1 vote.all` on CUDA at full-warp. We deliberately do *not* use `__match_all_sync` even on CUDA: it requires sm_70+, and it does bit-equality on floats, contradicting this op's documented `OpGroupNonUniformAllEqual` semantics (`NaN != NaN`, `+0.0 == -0.0`). Callers wanting bit-equality on floats should bit-cast to the same-width integer dtype before calling.
 
 ### Reductions and scans
 
-`reduce_add`, `reduce_all_add`, and all seven `inclusive_*` and `exclusive_*` ops take a `log2_size` parameter and are **windowed**: each op operates independently on every `2**log2_size`-aligned window that tiles the entire subgroup (see [How `log2_size` windowing works](#how-log2size-windowing-works)). `reduce_add` is a window-local-lane-0 form (only the window's first lane holds the reduction; other lanes are undefined); `reduce_all_add` / `inclusive_*` / `exclusive_*` are broadcast-to-all forms (every lane in each window holds that window's per-window scan result). With `log2_size = 5` on wave32 you get one reduction / scan per subgroup; with `log2_size = 5` on wave64 you get two independent reductions / scans (lanes 0–31 and lanes 32–63 reduce / scan separately). Every op below also has a `_full` variant (e.g. `reduce_add_full(v)`, `inclusive_max_full(v)`, `exclusive_min_full(v, identity)`) that implicitly uses `log2_group_size()` to operate over the entire subgroup — see [Full-subgroup (`_full`) variants](#full-subgroup-_full-variants).
+`reduce_add(v)`, `reduce_all_add(v)`, and all seven `inclusive_*(v)` and `exclusive_*(v[, identity])` ops reduce / scan across the entire subgroup. The `_tiled` forms (`reduce_add_tiled(v, log2_size)` etc.) take a `log2_size` parameter and operate independently on every `2**log2_size`-aligned window that tiles the subgroup (see [How `log2_size` windowing works](#how-log2size-windowing-works)). `reduce_*_tiled` is a window-local-lane-0 form (only the window's first lane holds the reduction; other lanes are undefined); `reduce_all_*_tiled` / `inclusive_*_tiled` / `exclusive_*_tiled` are broadcast-to-all forms (every lane in each window holds that window's per-window scan result). With `log2_size = 5` on wave32 the tiled form is equivalent to the no-suffix form (one reduction / scan per subgroup); on wave64 you get two independent reductions / scans (lanes 0–31 and lanes 32–63 separately).
 
-| Op                                          | `_full` variant                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                       |
-|---------------------------------------------|------------------------------------------|------|--------|-------------------------|------------------------------|
-| `subgroup.reduce_add(v, log2_size)`         | `subgroup.reduce_add_full(v)`            | yes  | yes\*  | yes                     | any type supporting `+`      |
-| `subgroup.reduce_all_add(v, log2_size)`     | `subgroup.reduce_all_add_full(v)`        | yes  | yes    | yes                     | any type supporting `+`      |
-| `subgroup.reduce_min(v, log2_size)`         | `subgroup.reduce_min_full(v)`            | yes  | yes\*  | yes                     | integer + float              |
-| `subgroup.reduce_max(v, log2_size)`         | `subgroup.reduce_max_full(v)`            | yes  | yes\*  | yes                     | integer + float              |
-| `subgroup.reduce_all_min(v, log2_size)`     | `subgroup.reduce_all_min_full(v)`        | yes  | yes    | yes                     | integer + float              |
-| `subgroup.reduce_all_max(v, log2_size)`     | `subgroup.reduce_all_max_full(v)`        | yes  | yes    | yes                     | integer + float              |
-| `subgroup.segmented_reduce_add(v, head_flag, log2_size)` | `subgroup.segmented_reduce_add_full(v, head_flag)` | yes | yes\* | yes      | any type supporting `+`      |
-| `subgroup.segmented_reduce_min(v, head_flag, log2_size)` | `subgroup.segmented_reduce_min_full(v, head_flag)` | yes | yes\* | yes      | integer + float              |
-| `subgroup.segmented_reduce_max(v, head_flag, log2_size)` | `subgroup.segmented_reduce_max_full(v, head_flag)` | yes | yes\* | yes      | integer + float              |
-| `subgroup.inclusive_add(v, log2_size)`      | `subgroup.inclusive_add_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
-| `subgroup.inclusive_mul(v, log2_size)`      | `subgroup.inclusive_mul_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
-| `subgroup.inclusive_min(v, log2_size)`      | `subgroup.inclusive_min_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
-| `subgroup.inclusive_max(v, log2_size)`      | `subgroup.inclusive_max_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
-| `subgroup.inclusive_and(v, log2_size)`      | `subgroup.inclusive_and_full(v)`         | yes  | yes\*  | yes                     | integer                      |
-| `subgroup.inclusive_or(v, log2_size)`       | `subgroup.inclusive_or_full(v)`          | yes  | yes\*  | yes                     | integer                      |
-| `subgroup.inclusive_xor(v, log2_size)`      | `subgroup.inclusive_xor_full(v)`         | yes  | yes\*  | yes                     | integer                      |
-| `subgroup.exclusive_add(v, log2_size)`      | `subgroup.exclusive_add_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
-| `subgroup.exclusive_mul(v, log2_size)`      | `subgroup.exclusive_mul_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
-| `subgroup.exclusive_min(v, log2_size, identity)` | `subgroup.exclusive_min_full(v, identity)` | yes | yes\* | yes                | integer + float              |
-| `subgroup.exclusive_max(v, log2_size, identity)` | `subgroup.exclusive_max_full(v, identity)` | yes | yes\* | yes                | integer + float              |
-| `subgroup.exclusive_and(v, log2_size)`      | `subgroup.exclusive_and_full(v)`         | yes  | yes\*  | yes                     | integer                      |
-| `subgroup.exclusive_or(v, log2_size)`       | `subgroup.exclusive_or_full(v)`          | yes  | yes\*  | yes                     | integer                      |
-| `subgroup.exclusive_xor(v, log2_size)`      | `subgroup.exclusive_xor_full(v)`         | yes  | yes\*  | yes                     | integer                      |
+| Op                                                | Tiled form                                                       | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                       |
+|---------------------------------------------------|------------------------------------------------------------------|------|--------|-------------------------|------------------------------|
+| `subgroup.reduce_add(v)`                          | `subgroup.reduce_add_tiled(v, log2_size)`                        | yes  | yes\*  | yes                     | any type supporting `+`      |
+| `subgroup.reduce_all_add(v)`                      | `subgroup.reduce_all_add_tiled(v, log2_size)`                    | yes  | yes    | yes                     | any type supporting `+`      |
+| `subgroup.reduce_min(v)`                          | `subgroup.reduce_min_tiled(v, log2_size)`                        | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.reduce_max(v)`                          | `subgroup.reduce_max_tiled(v, log2_size)`                        | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.reduce_all_min(v)`                      | `subgroup.reduce_all_min_tiled(v, log2_size)`                    | yes  | yes    | yes                     | integer + float              |
+| `subgroup.reduce_all_max(v)`                      | `subgroup.reduce_all_max_tiled(v, log2_size)`                    | yes  | yes    | yes                     | integer + float              |
+| `subgroup.segmented_reduce_add(v, head_flag)`     | `subgroup.segmented_reduce_add_tiled(v, head_flag, log2_size)`   | yes  | yes\*  | yes                     | any type supporting `+`      |
+| `subgroup.segmented_reduce_min(v, head_flag)`     | `subgroup.segmented_reduce_min_tiled(v, head_flag, log2_size)`   | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.segmented_reduce_max(v, head_flag)`     | `subgroup.segmented_reduce_max_tiled(v, head_flag, log2_size)`   | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.inclusive_add(v)`                       | `subgroup.inclusive_add_tiled(v, log2_size)`                     | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.inclusive_mul(v)`                       | `subgroup.inclusive_mul_tiled(v, log2_size)`                     | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.inclusive_min(v)`                       | `subgroup.inclusive_min_tiled(v, log2_size)`                     | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.inclusive_max(v)`                       | `subgroup.inclusive_max_tiled(v, log2_size)`                     | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.inclusive_and(v)`                       | `subgroup.inclusive_and_tiled(v, log2_size)`                     | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.inclusive_or(v)`                        | `subgroup.inclusive_or_tiled(v, log2_size)`                      | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.inclusive_xor(v)`                       | `subgroup.inclusive_xor_tiled(v, log2_size)`                     | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.exclusive_add(v)`                       | `subgroup.exclusive_add_tiled(v, log2_size)`                     | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.exclusive_mul(v)`                       | `subgroup.exclusive_mul_tiled(v, log2_size)`                     | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.exclusive_min(v, identity)`             | `subgroup.exclusive_min_tiled(v, log2_size, identity)`           | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.exclusive_max(v, identity)`             | `subgroup.exclusive_max_tiled(v, log2_size, identity)`           | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.exclusive_and(v)`                       | `subgroup.exclusive_and_tiled(v, log2_size)`                     | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.exclusive_or(v)`                        | `subgroup.exclusive_or_tiled(v, log2_size)`                      | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.exclusive_xor(v)`                       | `subgroup.exclusive_xor_tiled(v, log2_size)`                     | yes  | yes\*  | yes                     | integer                      |
 
-The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add(value)` with no `log2_size`) have been removed in favour of the portable sized API. For reductions other than the ones listed above, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern as `reduce_add` / `reduce_all_add`.
+The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add_tiled(value)` with no `log2_size`) have been removed in favour of the portable sized API. For reductions other than the ones listed above, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern as `reduce_add_tiled` / `reduce_all_add_tiled`.
 
 ## Semantics
 
@@ -147,7 +150,7 @@ Lane `i` returns the `value` held by lane `i - offset`. Lanes near the bottom of
 
 ### `shuffle_xor(value, mask)`
 
-Lane `i` returns the `value` held by lane `i ^ mask`. Convenient for butterfly patterns (used internally by `reduce_all_add`).
+Lane `i` returns the `value` held by lane `i ^ mask`. Convenient for butterfly patterns (used internally by `reduce_all_add_tiled`).
 
 - Same dtype rules as `shuffle`; `mask` is a `u32`.
 - Implemented portably as a `@qd.func` over `shuffle`: every backend that lowers `shuffle` therefore lowers `shuffle_xor` with no additional codegen path. Inlines at compile time into a single `shuffle(value, u32(invocation_id()) ^ mask)`.
@@ -190,7 +193,7 @@ Return the subgroup size (and its base-2 log) in effect for the current `Program
 | AMDGPU | `64` (every AMDGPU target is pinned to `+wavefrontsize64`) |
 | SPIR-V (Vulkan / Metal) | `subgroupSize` probed from the live device at `qd.init()` |
 
-Because the return type is a plain `int`, the value is usable as a `qd.template()` argument — that is how the [`_full` variants](#full-subgroup-_full-variants) below pick the right `log2_size` per backend without a runtime branch. The value is fixed for the lifetime of the `Program`: Vulkan / Metal devices expose a single immutable `subgroupSize` and Quadrants never opts in to `VK_EXT_subgroup_size_control`, so two kernels launched under the same `qd.init()` always see the same number.
+Because the return type is a plain `int`, the value is usable as a `qd.template()` argument — that is how the [full-subgroup no-suffix wrappers](#full-subgroup-no-suffix-wrappers) below pick the right `log2_size` per backend without a runtime branch. The value is fixed for the lifetime of the `Program`: Vulkan / Metal devices expose a single immutable `subgroupSize` and Quadrants never opts in to `VK_EXT_subgroup_size_control`, so two kernels launched under the same `qd.init()` always see the same number.
 
 Per-backend lowering notes:
 
@@ -200,24 +203,24 @@ Per-backend lowering notes:
 
 `log2_group_size()` asserts the size is a power of two and returns `bit_length() - 1` (so `5` on every wave32 backend, `6` on AMDGPU). The assert is purely defensive — no shipping SPIR-V driver reports a non-power-of-two subgroup size, but the Vulkan spec permits it.
 
-### Full-subgroup (`_full`) variants
+### Full-subgroup no-suffix wrappers
 
-Every `log2_size`-taking op in this module has a paired `_full`-suffixed wrapper that implicitly uses `log2_group_size()` so the call covers every lane in the active subgroup:
+Every `_tiled` op in this module has a paired no-suffix wrapper that implicitly uses `log2_group_size()` so the call covers every lane in the active subgroup:
 
-| Base op | Full-subgroup wrapper |
+| Tiled form | Full-subgroup form |
 |---|---|
-| `reduce_add(v, log2_size)` | `reduce_add_full(v)` |
-| `reduce_all_add(v, log2_size)` | `reduce_all_add_full(v)` |
-| `reduce_min(v, log2_size)` / `reduce_max(v, log2_size)` | `reduce_min_full(v)` / `reduce_max_full(v)` |
-| `reduce_all_min(v, log2_size)` / `reduce_all_max(v, log2_size)` | `reduce_all_min_full(v)` / `reduce_all_max_full(v)` |
-| `inclusive_*(v, log2_size)` | `inclusive_*_full(v)` |
-| `exclusive_*(v, log2_size[, identity])` | `exclusive_*_full(v[, identity])` |
-| `all_true(p, log2_size)` / `any_true(p, log2_size)` / `all_equal(v, log2_size)` | `all_true_full(p)` / `any_true_full(p)` / `all_equal_full(v)` |
-| `segmented_reduce_{add,min,max}(v, head, log2_size)` | `segmented_reduce_{add,min,max}_full(v, head)` |
+| `reduce_add_tiled(v, log2_size)` | `reduce_add(v)` |
+| `reduce_all_add_tiled(v, log2_size)` | `reduce_all_add(v)` |
+| `reduce_min_tiled(v, log2_size)` / `reduce_max_tiled(v, log2_size)` | `reduce_min(v)` / `reduce_max(v)` |
+| `reduce_all_min_tiled(v, log2_size)` / `reduce_all_max_tiled(v, log2_size)` | `reduce_all_min(v)` / `reduce_all_max(v)` |
+| `inclusive_*_tiled(v, log2_size)` | `inclusive_*(v)` |
+| `exclusive_*_tiled(v, log2_size[, identity])` | `exclusive_*(v[, identity])` |
+| `all_true_tiled(p, log2_size)` / `any_true_tiled(p, log2_size)` / `all_equal_tiled(v, log2_size)` | `all_true(p)` / `any_true(p)` / `all_equal(v)` |
+| `segmented_reduce_{add,min,max}_tiled(v, head, log2_size)` | `segmented_reduce_{add,min,max}(v, head)` |
 
-The wrappers are plain Python one-liners that pass `log2_size=subgroup.log2_group_size()` (a Python `int`) into the base `@qd.func`'s `template()` parameter, so they fully unroll at compile time and produce exactly the same IR as a hand-written call site that hard-codes `log2_size = 5` on wave32 backends and `log2_size = 6` on AMDGPU. Net effect: one canonical "operate over the whole subgroup" form per op that compiles to identical PTX / GCN / SPIR-V to the per-backend hand-tuned version, and no need to gate on `arch` in user code.
+The full-subgroup wrappers are plain Python one-liners that pass `log2_size=subgroup.log2_group_size()` (a Python `int`) into the underlying `_tiled` `@qd.func`'s `template()` parameter, so they fully unroll at compile time and produce exactly the same IR as a hand-written `_tiled` call that hard-codes `log2_size = 5` on wave32 backends and `log2_size = 6` on AMDGPU. Net effect: one canonical "operate over the whole subgroup" form per op that compiles to identical PTX / GCN / SPIR-V to the per-backend hand-tuned `_tiled` form, and no need to gate on `arch` in user code.
 
-The `segmented_reduce_*_full` variants in particular are new — `segmented_reduce_*` now accepts `log2_size <= 6`, with a compile-time-selected u64-bitmask path for `log2_size == 6` (reachable only on AMDGPU wave64). The u32-bitmask path used for `log2_size <= 5` is bitwise identical to the historical implementation, so CUDA / Metal / Vulkan-wave32 callers see zero overhead from the wave64 support.
+The `segmented_reduce_*` family in particular is new — `segmented_reduce_*_tiled` now accepts `log2_size <= 6`, with a compile-time-selected u64-bitmask path for `log2_size == 6` (reachable only on AMDGPU wave64). The u32-bitmask path used for `log2_size <= 5` is bitwise identical to the historical implementation, so CUDA / Metal / Vulkan-wave32 callers see zero overhead from the wave64 support.
 
 ### `elect()`
 
@@ -241,7 +244,7 @@ Returns `1` on lane 0 of every subgroup and `0` on every other lane. Useful for 
 - Caller contract on every backend: call from uniform control flow with all lanes active. Calling either op from divergent control flow has implementation-defined behaviour (CUDA's `nvvm.bar.warp.sync` will deadlock if the mask does not match the active set; AMDGPU's `wave.barrier` is a no-op on most chips so divergent calls silently pass through).
 - The legacy names `subgroup.barrier()` and `subgroup.memory_barrier()` are still available as deprecated aliases. They forward to `sync()` / `mem_fence()` and emit a `DeprecationWarning` on first use; prefer the new names in new code.
 
-### `reduce_add(value, log2_size)`
+### `reduce_add_tiled(value, log2_size)`
 
 Sums `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. The result is valid in the **window-local lane 0** of each group (see [How `log2_size` windowing works](#how-log2size-windowing-works)); other lanes hold partial sums and should be considered undefined.
 
@@ -250,65 +253,65 @@ Sums `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. 
 - The reduction works on any type that supports `+` and `shuffle_down`; in practice this means i32, u32, f32, f64, i64, u64.
 - Decorated with `@qd.func` and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.
 
-Lanes other than the window-local lane 0 receive undefined-but-safe partial sums (they never touch out-of-range lanes because the tree shrinks each step), but only the window-local lane 0's result is meaningful for the caller. On wave64 with `log2_size=5` this is two valid results (lane 0 and lane 32), one per 32-lane half — reading only lane 0 silently drops the upper-half sum. Use `reduce_all_add` if every lane needs the answer.
+Lanes other than the window-local lane 0 receive undefined-but-safe partial sums (they never touch out-of-range lanes because the tree shrinks each step), but only the window-local lane 0's result is meaningful for the caller. On wave64 with `log2_size=5` this is two valid results (lane 0 and lane 32), one per 32-lane half — reading only lane 0 silently drops the upper-half sum. Use `reduce_all_add_tiled` if every lane needs the answer.
 
-### `reduce_all_add(value, log2_size)`
+### `reduce_all_add_tiled(value, log2_size)`
 
-Same sum as `reduce_add`, but broadcast to **every lane** in each `2**log2_size` group. Implemented as a butterfly using `shuffle` with `lane ^ mask`, `mask` stepping through `1, 2, 4, ..., 2**(log2_size-1)`.
+Same sum as `reduce_add_tiled`, but broadcast to **every lane** in each `2**log2_size` group. Implemented as a butterfly using `shuffle` with `lane ^ mask`, `mask` stepping through `1, 2, 4, ..., 2**(log2_size-1)`.
 
-- Same `log2_size` template + size-cap contract as `reduce_add`.
-- Use this when every lane needs the reduction result (e.g. to divide by the sum, or to branch on it uniformly). It costs exactly the same number of shuffles as `reduce_add` but leaves the answer in all lanes, so it replaces a `reduce_add` + `shuffle`/broadcast pair.
+- Same `log2_size` template + size-cap contract as `reduce_add_tiled`.
+- Use this when every lane needs the reduction result (e.g. to divide by the sum, or to branch on it uniformly). It costs exactly the same number of shuffles as `reduce_add_tiled` but leaves the answer in all lanes, so it replaces a `reduce_add_tiled` + `shuffle`/broadcast pair.
 - Uses `subgroup.shuffle` under the hood.
 
-### `reduce_min(value, log2_size)` / `reduce_max(value, log2_size)`
+### `reduce_min_tiled(value, log2_size)` / `reduce_max_tiled(value, log2_size)`
 
-Min / max of `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. Result valid in the **window-local lane 0** of each group (see [How `log2_size` windowing works](#how-log2size-windowing-works)); other lanes hold partial mins / maxes. Same wave64 gotcha as `reduce_add` applies — on wave64 with `log2_size=5` both lane 0 and lane 32 hold meaningful per-half results; use `reduce_all_min` / `reduce_all_max` if you want every lane to see its window's answer.
+Min / max of `value` across `2**log2_size` consecutive lanes via a `shuffle_down` tree. Result valid in the **window-local lane 0** of each group (see [How `log2_size` windowing works](#how-log2size-windowing-works)); other lanes hold partial mins / maxes. Same wave64 gotcha as `reduce_add_tiled` applies — on wave64 with `log2_size=5` both lane 0 and lane 32 hold meaningful per-half results; use `reduce_all_min_tiled` / `reduce_all_max_tiled` if you want every lane to see its window's answer.
 
-- Same `log2_size` template + size-cap contract as `reduce_add`. Body unrolls into exactly `log2_size` `shuffle_down + min` (or `max`) pairs.
+- Same `log2_size` template + size-cap contract as `reduce_add_tiled`. Body unrolls into exactly `log2_size` `shuffle_down + min` (or `max`) pairs.
 - Accepts integer (`i32`, `u32`, `i64`, `u64`) and float (`f32`, `f64`) dtypes. Lowers via `qd.min` / `qd.max`, which dispatch to the backend's native min/max intrinsic.
 - Float NaN handling is implementation-defined: PTX uses `fminnm` / `fmaxnm` (NaN-suppressing), AMDGPU uses `llvm.minnum` / `llvm.maxnum` (NaN-suppressing), SPIR-V uses `OpFMin` / `OpFMax` (NaN-propagating in some drivers). Avoid NaN inputs if you need a portable result.
 - Decorated with `@qd.func` and inlined into the calling kernel.
 
-### `reduce_all_min(value, log2_size)` / `reduce_all_max(value, log2_size)`
+### `reduce_all_min_tiled(value, log2_size)` / `reduce_all_max_tiled(value, log2_size)`
 
-Same min / max as `reduce_min` / `reduce_max`, but broadcast to **every lane** in each `2**log2_size` group via a `shuffle_xor` butterfly. Same number of shuffles as the lane-0 forms.
+Same min / max as `reduce_min_tiled` / `reduce_max_tiled`, but broadcast to **every lane** in each `2**log2_size` group via a `shuffle_xor` butterfly. Same number of shuffles as the lane-0 forms.
 
-- Use over `reduce_min` + broadcast / `reduce_max` + broadcast when every lane needs the result (e.g. to subtract the group min, or to clamp to the group max).
-- Same dtypes, size-cap contract, and float-NaN caveat as `reduce_min` / `reduce_max`.
+- Use over `reduce_min_tiled` + broadcast / `reduce_max_tiled` + broadcast when every lane needs the result (e.g. to subtract the group min, or to clamp to the group max).
+- Same dtypes, size-cap contract, and float-NaN caveat as `reduce_min_tiled` / `reduce_max_tiled`.
 
-### `segmented_reduce_add(value, head_flag, log2_size)` / `segmented_reduce_min(...)` / `segmented_reduce_max(...)`
+### `segmented_reduce_add_tiled(value, head_flag, log2_size)` / `segmented_reduce_min_tiled(...)` / `segmented_reduce_max_tiled(...)`
 
 Per-lane inclusive scan under `+` / `min` / `max` that resets at every non-zero `head_flag`, scoped to `2**log2_size` consecutive lanes. Lane `i` returns the scan of `value[head_below..i + 1]`, where `head_below` is the largest lane index `<= i` (within the lane's `2**log2_size` group) whose `head_flag` is non-zero. If no such lane exists inside the group, the group's first lane is treated as an implicit head, so the result is the inclusive scan from `group_base` to `i`.
 
 - `value` is any type supporting the operator (`+` and `shuffle_up` for `_add`; `qd.min`/`qd.max` and `shuffle_up` for `_min`/`_max`). `head_flag` is any integer scalar; the lowering tests `head_flag != 0`, so non-binary truthy values (e.g. `7`, `42`) work.
-- `log2_size` is a `qd.template()` — a compile-time constant in `[0, 6]`. `2**log2_size` must not exceed the active subgroup size: up to 32 (i.e. `log2_size <= 5`) on CUDA / Metal / Vulkan-wave32, up to 64 (`log2_size <= 6`) on AMDGPU wave64. The cap is enforced by a `qd.static_assert(log2_size <= 6)` at the top of each `segmented_reduce_*`. Use [`segmented_reduce_*_full`](#full-subgroup-_full-variants) if you want a portable "operate over every lane in the subgroup" form without gating on `arch` yourself.
-- Implementation: one `subgroup.ballot_full(head_flag != 0)` to materialise a `u64` of head positions, then a Hillis-Steele inclusive scan bounded by `distance >= offset` where `distance = lane - segment_head`. A compile-time branch in `_segment_head_distance` picks between two paths:
+- `log2_size` is a `qd.template()` — a compile-time constant in `[0, 6]`. `2**log2_size` must not exceed the active subgroup size: up to 32 (i.e. `log2_size <= 5`) on CUDA / Metal / Vulkan-wave32, up to 64 (`log2_size <= 6`) on AMDGPU wave64. The cap is enforced by a `qd.static_assert(log2_size <= 6)` at the top of each `segmented_reduce_*_tiled`. Use the no-suffix [`segmented_reduce_{add,min,max}(v, head_flag)`](#full-subgroup-no-suffix-wrappers) form if you want a portable "operate over every lane in the subgroup" call without gating on `arch` yourself.
+- Implementation: one `subgroup.ballot(head_flag != 0)` to materialise a `u64` of head positions, then a Hillis-Steele inclusive scan bounded by `distance >= offset` where `distance = lane - segment_head`. A compile-time branch in `_segment_head_distance_tiled` picks between two paths:
   - **`log2_size <= 5`** — u32-bitmask path. Shifts the relevant 32-lane half of the ballot down to bits 0..31 and runs the bit-mask + `clz` arithmetic in half-local coordinates (`lane_in_half = lane - half_base`). Half-local `distance` equals absolute `lane - segment_head_abs` because both terms are offset by the same `half_base`, so the downstream `shuffle_up`'s `distance >= offset` guard still works in absolute terms. This is the only path on wave32 backends — it compiles to identical IR to the historical wave32-only implementation, so CUDA / Metal / Vulkan callers see no perf regression from the wave64 support.
   - **`log2_size == 6`** — u64-bitmask path. Works in absolute lane coordinates with the full `u64` ballot, an OR-injected virtual head at lane 0 to guarantee a non-zero `lower`, and a `clz(u64)` for the segment head. Costs one extra `u64` shift + `u64 clz` vs the u32 path; only reachable when `group_size() == 64` (i.e. AMDGPU), so the entire branch is dead-code-eliminated at every `log2_size <= 5` call site.
-- No identity argument is required (unlike `exclusive_min` / `exclusive_max`) because the per-lane `distance >= offset` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never combined with the local value.
-- Cost: `1 ballot + 1 clz + log2_size shuffles + log2_size ops`, fully unrolled into the calling kernel's IR. Same shape as `inclusive_add` / `inclusive_min` / `inclusive_max`, plus one ballot and one `clz` for the per-lane segment-head lookup.
-- Float NaN handling for `_min` / `_max` is implementation-defined (same caveat as `reduce_min` / `reduce_max`): PTX uses `fminnm` / `fmaxnm`, AMDGPU uses `llvm.minnum` / `llvm.maxnum`, SPIR-V uses `OpFMin` / `OpFMax`. Avoid NaN inputs if you need a portable result.
+- No identity argument is required (unlike `exclusive_min_tiled` / `exclusive_max_tiled`) because the per-lane `distance >= offset` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never combined with the local value.
+- Cost: `1 ballot + 1 clz + log2_size shuffles + log2_size ops`, fully unrolled into the calling kernel's IR. Same shape as `inclusive_add_tiled` / `inclusive_min_tiled` / `inclusive_max_tiled`, plus one ballot and one `clz` for the per-lane segment-head lookup.
+- Float NaN handling for `_min` / `_max` is implementation-defined (same caveat as `reduce_min_tiled` / `reduce_max_tiled`): PTX uses `fminnm` / `fmaxnm`, AMDGPU uses `llvm.minnum` / `llvm.maxnum`, SPIR-V uses `OpFMin` / `OpFMax`. Avoid NaN inputs if you need a portable result.
 - AMDGPU note (`*` in the table): `shuffle_up` goes through `ds_bpermute` (~50 cycle latency), same as the other reductions.
 
-### `inclusive_add` / `inclusive_mul` / `inclusive_min` / `inclusive_max` / `inclusive_and` / `inclusive_or` / `inclusive_xor`
+### `inclusive_add_tiled` / `inclusive_mul_tiled` / `inclusive_min_tiled` / `inclusive_max_tiled` / `inclusive_and_tiled` / `inclusive_or_tiled` / `inclusive_xor_tiled`
 
 Per-lane inclusive scan over `2**log2_size` consecutive lanes, under the binary operator named by the suffix. Lane `i` within each group of `2**log2_size` lanes returns `v[group_start] op v[group_start + 1] op ... op v[i]`.
 
 - `log2_size` is a `qd.template()` — a compile-time constant. The body unrolls into exactly `log2_size` `shuffle_up + op` pairs in the calling kernel's IR, with no runtime loop overhead.
 - `2**log2_size` must not exceed the active subgroup size on the target (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target). Passing a larger value produces implementation-defined results; it does not error.
 - `_add`, `_mul`, `_min`, `_max` accept integer and float dtypes (`i32`, `u32`, `i64`, `u64`, `f32`, `f64`); `_and`, `_or`, `_xor` accept integer dtypes only.
-- All seven share a single `@qd.func` Hillis-Steele scan helper (`_inclusive_scan`); each public op is a one-line wrapper that supplies the binary operator. The shuffle is in uniform CF (every lane participates); only the per-lane reduce step is conditional, which is allowed by the `shuffle_up` contract on every backend. Cross-group `shuffle_up` partners are masked off by the per-lane `lane_in_group >= offset` guard, so groups smaller than the full subgroup compose correctly.
+- All seven share a single `@qd.func` Hillis-Steele scan helper (`_inclusive_scan_tiled`); each public op is a one-line wrapper that supplies the binary operator. The shuffle is in uniform CF (every lane participates); only the per-lane reduce step is conditional, which is allowed by the `shuffle_up` contract on every backend. Cross-group `shuffle_up` partners are masked off by the per-lane `lane_in_group >= offset` guard, so groups smaller than the full subgroup compose correctly.
 - Decorated with `@qd.func` and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link.
 - AMDGPU note (`*` in the table): same `ds_bpermute` cost as `shuffle_up` — roughly tens of cycles per step × `log2_size` steps. Hardware-accelerated `OpGroupNonUniformInclusiveScan` on SPIR-V is no longer used, even on backends that supported it (Vulkan, Metal); the trade-off is a uniform implementation across backends with predictable cost.
 
-### `exclusive_add` / `exclusive_mul` / `exclusive_min` / `exclusive_max` / `exclusive_and` / `exclusive_or` / `exclusive_xor`
+### `exclusive_add_tiled` / `exclusive_mul_tiled` / `exclusive_min_tiled` / `exclusive_max_tiled` / `exclusive_and_tiled` / `exclusive_or_tiled` / `exclusive_xor_tiled`
 
 Per-lane exclusive scan over `2**log2_size` consecutive lanes, under the binary operator named by the suffix. Lane `i` (with `i > 0`) within each group of `2**log2_size` lanes returns `v[group_start] op v[group_start + 1] op ... op v[i - 1]`. Lane 0 of each group returns the operator's identity in `value`'s dtype.
 
 - `log2_size` is a `qd.template()` — a compile-time constant. The body unrolls into the inclusive scan (`log2_size` shuffle+op pairs) plus one extra `shuffle_up` and a per-lane select.
 - `_add`, `_mul`, `_or`, `_xor`, `_and` infer the lane-0 identity from `value`'s dtype: `value - value` (zero), `value - value + 1` (one), and `~(value ^ value)` (all bits set) respectively.
 - `_min` and `_max` take an explicit `identity` argument because there is no portable type-extreme literal that can be derived from `value` alone — pass `+∞` (or the dtype's max) for `_min`, `-∞` (or the dtype's min) for `_max`.
-- All seven share a single `@qd.func` helper (`_exclusive_scan`) that runs the inclusive scan, shifts the result up by one lane via `shuffle_up`, and substitutes `identity` at lane 0 of each group. The lane-0 substitution is required because `shuffle_up` with offset 1 is implementation-defined at lane 0 (and `OpGroupNonUniformShuffleUp` calls it undefined outright).
+- All seven share a single `@qd.func` helper (`_exclusive_scan_tiled`) that runs the inclusive scan, shifts the result up by one lane via `shuffle_up`, and substitutes `identity` at lane 0 of each group. The lane-0 substitution is required because `shuffle_up` with offset 1 is implementation-defined at lane 0 (and `OpGroupNonUniformShuffleUp` calls it undefined outright).
 - AMDGPU performance note (`*` in the table): same `ds_bpermute` cost as `shuffle_up`. Cost is one inclusive scan plus one extra `shuffle_up` and a select.
 
 ### `ballot_first_n(predicate, n)`
@@ -323,9 +326,9 @@ Returns a `u32` bitmask whose bit `i` is set iff `i < n` AND lane `i`'s `predica
   - **SPIR-V**: `OpGroupNonUniformBallot` returns a `uvec4`; we extract component 0, which by spec contains the ballot bits for lanes 0..31.
 - For `n < 32` we mask the predicate by `lane < n` before issuing the ballot, so bits `[n, 32)` of the result are forced to zero regardless of those lanes' actual predicate values. At `n == 32` the masking is provably a no-op on every backend (lanes `>= 32` are either non-existent on wave32 or already not represented in the `u32` result on wave64), so the masking is elided at compile time and the call lowers to a single ballot intrinsic.
 - Caller contract: uniform CF + all lanes active. Calling from divergent control flow has implementation-defined behaviour (CUDA's `__ballot_sync` will deadlock if the active mask doesn't match `0xFFFFFFFF`).
-- Useful for stream compaction over the first 32 lanes, the wave32 path of `segmented_reduce_*` (which uses the u32-bitmask form internally for `log2_size <= 5`), and any pattern that wants `clz` / `popcount` / `ffs` over a per-lane predicate within a `u32`. For full-subgroup ballots on AMDGPU wave64 use `ballot_full` (returns a `u64`).
+- Useful for stream compaction over the first 32 lanes, the wave32 path of `segmented_reduce_*` (which uses the u32-bitmask form internally for `log2_size <= 5`), and any pattern that wants `clz` / `popcount` / `ffs` over a per-lane predicate within a `u32`. For full-subgroup ballots on AMDGPU wave64 use `ballot` (returns a `u64`).
 
-### `ballot_full(predicate)`
+### `ballot(predicate)`
 
 Returns a `u64` bitmask covering the entire subgroup. Bit `i` is set iff lane `i`'s `predicate` is non-zero, for all `i` in `[0, subgroup_size)`.
 
@@ -337,21 +340,21 @@ Returns a `u64` bitmask covering the entire subgroup. Bit `i` is set iff lane `i
 - Use this when you need a subgroup-wide population count, prefix mask, or compaction that has to cover more than 32 lanes. Use `ballot_first_n(p, 32)` instead if you only care about the first 32 lanes — it's one register cheaper on wave64 and avoids the wider `u64` result type.
 - Caller contract: uniform CF + all lanes active.
 
-### `all_true(predicate, log2_size)` / `any_true(predicate, log2_size)`
+### `all_true_tiled(predicate, log2_size)` / `any_true_tiled(predicate, log2_size)`
 
-Per-lane AND-reduction (`all_true`) or OR-reduction (`any_true`) of `predicate != 0` across `2**log2_size` consecutive lanes. Returns `i32` (`0` or `1`), broadcast to every lane in the group.
+Per-lane AND-reduction (`all_true_tiled`) or OR-reduction (`any_true_tiled`) of `predicate != 0` across `2**log2_size` consecutive lanes. Returns `i32` (`0` or `1`), broadcast to every lane in the group.
 
-- `predicate` is any scalar dtype. The op compares `predicate != 0` at the start, so e.g. `subgroup.all_true(some_int_field[i], 5)` is well-formed.
+- `predicate` is any scalar dtype. The op compares `predicate != 0` at the start, so e.g. `subgroup.all_true_tiled(some_int_field[i], 5)` is well-formed.
 - `log2_size` is a `qd.template()` — a compile-time constant. Caller must ensure `2**log2_size` does not exceed the active subgroup size (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target).
 - CUDA full-warp shortcut: when `log2_size == 5`, lowers to a single `__all_sync(0xFFFFFFFF, p)` / `__any_sync(0xFFFFFFFF, p)` via the `cuda_all_sync_i32` / `cuda_any_sync_i32` runtime helpers (one `vote.all` / `vote.any` instruction). The shortcut is selected at compile time via `qd.static()` on the active arch and `log2_size`, so the IR contains exactly the intrinsic call and no branch.
-- Portable fallback (every other backend, and CUDA at `log2_size < 5`): `shuffle_xor` butterfly — `log2_size` shuffles plus `log2_size` ANDs (or ORs), fully unrolled into the calling kernel's IR. Same shape as `reduce_all_add`.
+- Portable fallback (every other backend, and CUDA at `log2_size < 5`): `shuffle_xor` butterfly — `log2_size` shuffles plus `log2_size` ANDs (or ORs), fully unrolled into the calling kernel's IR. Same shape as `reduce_all_add_tiled`.
 
-### `all_equal(value, log2_size)`
+### `all_equal_tiled(value, log2_size)`
 
 Returns `i32(1)` on every lane in each `2**log2_size` group iff every lane in the group has the same `value` (under the backend's native `==`), else `i32(0)`.
 
 - `value` is any scalar dtype. Equality is the backend's native `==`: for floats this means `NaN != NaN` (a group with any `NaN` returns `0`) and `+0.0 == -0.0`, matching SPIR-V `OpGroupNonUniformAllEqual`. Callers wanting bit-equality on floats should `qd.bit_cast` to the same-width integer dtype first.
-- Implementation: each lane computes `group_base = invocation_id() & ~(2**log2_size - 1)`, reads the value at `group_base` via `shuffle`, compares to its own `value`, and `all_true`-reduces the equality bit. Inherits the CUDA full-warp shortcut transitively from `all_true`.
+- Implementation: each lane computes `group_base = invocation_id() & ~(2**log2_size - 1)`, reads the value at `group_base` via `shuffle`, compares to its own `value`, and `all_true_tiled`-reduces the equality bit. Inherits the CUDA full-warp shortcut transitively from `all_true_tiled`.
 - Cost: 1 shuffle + 1 `vote.all` on CUDA at `log2_size == 5`; 1 shuffle + `log2_size` butterfly shuffles otherwise. We deliberately do *not* use `__match_all_sync` on CUDA: it requires sm_70+ and uses bit-equality for floats, which would contradict this op's documented semantics.
 
 ### `lanemask_lt(lane_id)` / `lanemask_le(lane_id)` / `lanemask_eq(lane_id)` / `lanemask_gt(lane_id)` / `lanemask_ge(lane_id)`
@@ -370,7 +373,7 @@ Closed-form `u32` lane-mask constants parametrised by a lane id. Bit `i` of the 
 - Returns `u32`. Bit 0 corresponds to lane 0, bit 31 to lane 31.
 - Caller contract: `lane_id` must be in `[0, 31]` (matching the `u32` return type, which represents 32 lanes). Passing `lane_id == 32` triggers an undefined-behaviour shift on most backends.
 - Implemented portably as a `@qd.func` over `<<`, `-`, `|`, `~`. Inlines at compile time into 1–3 ALU ops on every backend.
-- AMDGPU CDNA wave64 caveat: only the low 32 lanes are representable in this op (the return type is `u32`). If you need a mask covering all 64 wave64 lanes, use `subgroup.ballot_full` instead — it returns a `u64` and includes lanes 32..63.
+- AMDGPU CDNA wave64 caveat: only the low 32 lanes are representable in this op (the return type is `u32`). If you need a mask covering all 64 wave64 lanes, use `subgroup.ballot` instead — it returns a `u64` and includes lanes 32..63.
 
 ## Examples
 
@@ -468,7 +471,7 @@ def reduce4(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 Extend the pattern (offsets 16, 8, 4, 2, 1, ...) to reduce a full subgroup; only lane 0's final value is meaningful, because the lanes near the top read past the end of the subgroup.
 
-### Sum 32 lanes with `reduce_add`
+### Sum 32 lanes with `reduce_add_tiled`
 
 The same tree, packaged as a one-liner. Lane 0 of each group of 32 holds the total; other lanes hold partial sums:
 
@@ -478,14 +481,14 @@ def sum32(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
           dst: qd.types.ndarray(dtype=qd.f32, ndim=1)):
     qd.loop_config(block_dim=32)
     for i in range(src.shape[0]):
-        total = subgroup.reduce_add(src[i], 5)
+        total = subgroup.reduce_add_tiled(src[i], 5)
         if subgroup.invocation_id() == 0:
             dst[i // 32] = total
 ```
 
-`5` is `log2_size`; `2**5 == 32` matches the block dim. The body of `reduce_add` unrolls at compile time into five `shuffle_down + add` pairs, so the generated IR is identical to a hand-written tree reduction.
+`5` is `log2_size`; `2**5 == 32` matches the block dim. The body of `reduce_add_tiled` unrolls at compile time into five `shuffle_down + add` pairs, so the generated IR is identical to a hand-written tree reduction.
 
-### Broadcast the sum to all lanes with `reduce_all_add`
+### Broadcast the sum to all lanes with `reduce_all_add_tiled`
 
 When every lane needs the reduction result — e.g. to normalise by the sum — use the butterfly variant. No follow-up broadcast needed:
 
@@ -494,7 +497,7 @@ When every lane needs the reduction result — e.g. to normalise by the sum — 
 def normalize32(a: qd.types.ndarray(dtype=qd.f32, ndim=1)):
     qd.loop_config(block_dim=32)
     for i in range(a.shape[0]):
-        total = subgroup.reduce_all_add(a[i], 5)
+        total = subgroup.reduce_all_add_tiled(a[i], 5)
         a[i] = a[i] / total
 ```
 
@@ -502,19 +505,19 @@ Every lane in each group of 32 sees the same `total`.
 
 ### Partial-subgroup reductions
 
-`log2_size` does not have to match the full subgroup. Sum groups of 8 with `reduce_add(v, 3)` or groups of 16 with `reduce_all_add(v, 4)`; the caller just ensures `2**log2_size <= group_size()` (so `log2_size <= 5` on CUDA / Metal / Vulkan-wave32, `<= 6` on AMDGPU wave64). Use a [`_full` variant](#full-subgroup-_full-variants) when you want "the whole subgroup" without hard-coding the limit.
+`log2_size` does not have to match the full subgroup. Sum groups of 8 with `reduce_add_tiled(v, 3)` or groups of 16 with `reduce_all_add_tiled(v, 4)`; the caller just ensures `2**log2_size <= group_size()` (so `log2_size <= 5` on CUDA / Metal / Vulkan-wave32, `<= 6` on AMDGPU wave64). Use the no-suffix [`reduce_add(v)` / `reduce_all_add(v)`](#full-subgroup-no-suffix-wrappers) form when you want "the whole subgroup" without hard-coding the limit.
 
-### Inclusive scan with `inclusive_add`
+### Inclusive scan with `inclusive_add_tiled`
 
 ```python
 @qd.kernel
 def cumsum(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
     qd.loop_config(block_dim=32)
     for i in range(a.shape[0]):
-        a[i] = subgroup.inclusive_add(a[i], 5)
+        a[i] = subgroup.inclusive_add_tiled(a[i], 5)
 ```
 
-After the call, lane `k` (within each group of 32) holds `a[group_start] + a[group_start+1] + ... + a[k]`. The `5` is `log2_size`; `2**5 == 32` matches the block dim. The body unrolls at compile time into five `shuffle_up + add` pairs. Use a smaller `log2_size` to scan over partial-subgroup groups (e.g. `inclusive_add(v, 3)` produces independent prefix sums in groups of 8).
+After the call, lane `k` (within each group of 32) holds `a[group_start] + a[group_start+1] + ... + a[k]`. The `5` is `log2_size`; `2**5 == 32` matches the block dim. The body unrolls at compile time into five `shuffle_up + add` pairs. Use a smaller `log2_size` to scan over partial-subgroup groups (e.g. `inclusive_add_tiled(v, 3)` produces independent prefix sums in groups of 8).
 
 ### AMDGPU wave64 cross-half lowering
 
@@ -538,13 +541,13 @@ One subtlety worth knowing about (mostly for anyone reading the generated IR): t
 - Shuffles are register-to-register on CUDA (`__shfl_sync`, `__shfl_down_sync`, `__shfl_up_sync`) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.
 - AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` all go through `ds_permute` / `ds_bpermute` (LDS-routed, roughly tens of cycles). On wave64 the lowering issues two parallel `ds_bpermute_b32` reads plus a `v_permlane64_b32` swap and a per-lane select to handle cross-half shuffles correctly on RDNA — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering). The two `ds_bpermute` reads issue in parallel, so the latency is the same as a single read; the `permlane64` and `cndmask` add a few extra cycles.
 - `shuffle_xor` and `broadcast_first` are `@qd.func` wrappers over `shuffle` / `broadcast` and inline at compile time, so on every backend they cost exactly the same as the underlying op.
-- Both `ballot_first_n` and `ballot_full` lower to a single hardware instruction on every backend — one cycle on CUDA (`__ballot_sync`), one instruction on AMDGPU (a single `v_cmp_*_e64` populating the wavefront-width SETCC, then a low-half store for `ballot_first_n`), and `OpGroupNonUniformBallot` on SPIR-V (extract one or two components of the result `uvec4`). At `n == 32` `ballot_first_n` elides the predicate-masking step entirely; at `n < 32` it inserts one extra multiply on the predicate.
-- `reduce_add` and `reduce_all_add` both issue exactly `log2_size` shuffles and `log2_size` adds per call. No barriers, no shared memory, no launch overhead (they inline).
-- Pick `reduce_all_add` over `reduce_add + broadcast` when you need the result in every lane — same cost, one fewer shuffle.
+- Both `ballot_first_n` and `ballot` lower to a single hardware instruction on every backend — one cycle on CUDA (`__ballot_sync`), one instruction on AMDGPU (a single `v_cmp_*_e64` populating the wavefront-width SETCC, then a low-half store for `ballot_first_n`), and `OpGroupNonUniformBallot` on SPIR-V (extract one or two components of the result `uvec4`). At `n == 32` `ballot_first_n` elides the predicate-masking step entirely; at `n < 32` it inserts one extra multiply on the predicate.
+- `reduce_add_tiled` and `reduce_all_add_tiled` both issue exactly `log2_size` shuffles and `log2_size` adds per call. No barriers, no shared memory, no launch overhead (they inline).
+- Pick `reduce_all_add_tiled` over `reduce_add_tiled + broadcast` when you need the result in every lane — same cost, one fewer shuffle.
 - 64-bit dtypes (`i64`, `u64`, `f64`) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.
 - All seven `inclusive_*` ops are `@qd.func` Hillis-Steele scans; cost is exactly `log2_size` shuffle+op pairs, the same as a hand-rolled CUDA warp scan, on every backend. Hardware-accelerated `OpGroupNonUniformInclusiveScan` on SPIR-V is no longer used — the cost difference vs. a portable shuffle tree is small in practice, and the uniform implementation makes performance predictable across CUDA, AMDGPU, and SPIR-V.
 
 ## Related
 
 - [tile16](tile16.md) — `Tile16x16` builds on `subgroup.shuffle` to implement register-resident 16×16 matrix tiles.
-- `qd.simt.warp.*` — CUDA-only counterparts (`warp.all_nonzero`, `warp.any_nonzero`, `warp.unique`, `warp.ballot`, `warp.match_*`, `warp.active_mask`, ...). The voting ops (`all_nonzero` / `any_nonzero` / `unique`) overlap with the new portable `subgroup.{all_true, any_true}`; the rest stay CUDA-bound. Useful when you need explicit active-mask control or an op that has no portable equivalent yet.
+- `qd.simt.warp.*` — CUDA-only counterparts (`warp.all_nonzero`, `warp.any_nonzero`, `warp.unique`, `warp.ballot`, `warp.match_*`, `warp.active_mask`, ...). The voting ops (`all_nonzero` / `any_nonzero` / `unique`) overlap with the new portable `subgroup.{all_true_tiled, any_true_tiled}`; the rest stay CUDA-bound. Useful when you need explicit active-mask control or an op that has no portable equivalent yet.
