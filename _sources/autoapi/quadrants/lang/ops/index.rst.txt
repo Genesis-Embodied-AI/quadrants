@@ -41,6 +41,8 @@ Functions
    quadrants.lang.ops.atomic_and
    quadrants.lang.ops.atomic_or
    quadrants.lang.ops.atomic_xor
+   quadrants.lang.ops.atomic_exchange
+   quadrants.lang.ops.atomic_cas
    quadrants.lang.ops.max
    quadrants.lang.ops.min
 
@@ -786,6 +788,68 @@ Module Contents
        >>>     print(z)  # [-1, 0, 1], the old value of x
        >>>
        >>>     qd.atomic_xor(1, x)  # will raise QuadrantsSyntaxError
+
+
+.. py:function:: atomic_exchange(x, y)
+
+   Atomically swap the value of `x` with `y`, and return the old value of `x`.
+
+   Unlike the other `qd.atomic_*` ops, the new value of `x` does not depend on its old value: `x` is unconditionally
+   overwritten with `y`. Useful for lock-free hand-off / claim-a-slot patterns where you want to atomically grab
+   whatever was at a location while leaving a fresh value behind.
+
+   `x` must be a writable target, constant expressions or scalars are not allowed.
+
+   :param x: The input. When both are matrices they must have the same shape.
+   :type x: Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]
+   :param y: The input. When both are matrices they must have the same shape.
+   :type y: Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]
+
+   :returns: The old value of `x`.
+
+   Example::
+
+       >>> @qd.kernel
+       >>> def test():
+       >>>     x = 7
+       >>>     z = qd.atomic_exchange(x, 42)
+       >>>     print(x)  # 42, the new value of x
+       >>>     print(z)  # 7,  the old value of x
+       >>>
+       >>>     qd.atomic_exchange(1, x)  # will raise QuadrantsSyntaxError
+
+
+.. py:function:: atomic_cas(x, expected, desired)
+
+   Atomically compare-and-swap: if the current value of `x` equals `expected`, write `desired` into `x`.
+   Returns the value originally at `x` (regardless of whether the swap happened).
+
+   The user determines whether the swap actually fired by comparing the returned value against `expected`::
+
+       old = qd.atomic_cas(x, expected, desired)
+       success = (old == expected)
+
+   This matches the shape of CUDA's `atomicCAS` and SPIR-V's `OpAtomicCompareExchange`. CAS is the basic
+   primitive on top of which arbitrary atomic read-modify-write operations can be built with a retry loop.
+
+   Currently integer dtypes only -- f32 / f64 will raise a trace-time type error. `x` must be a writable
+   target; constant expressions or scalars are not allowed.
+
+   :param x: the destination memory location (lvalue: field element, ndarray element, matrix slot).
+   :param expected: the value `x` is required to currently hold for the swap to fire.
+   :param desired: the value to write into `x` if `*x == expected`.
+
+   :returns: The value originally at `x`.
+
+   Example::
+
+       >>> @qd.kernel
+       >>> def take_slot():
+       >>>     # Try to claim the slot only if it is currently empty (== 0).
+       >>>     old = qd.atomic_cas(slot[None], 0, my_id)
+       >>>     if old == 0:
+       >>>         # we won the race; the slot is ours
+       >>>         ...
 
 
 .. py:function:: max(*args)
