@@ -6,8 +6,11 @@ Covers:
   every device algorithm.
 - ``qd.algorithms.device_reduce_{add,min,max}`` — two-or-more-pass tree
   reduction with shared scratch + ``bit_cast``.
-- (Forthcoming as each algo lands) ``qd.algorithms.device_exclusive_scan_*``,
-  ``select`` / ``compact``, ``device radix sort``, and ``reduce-by-key``.
+- ``qd.algorithms.device_exclusive_scan_{add,min,max}`` — three-pass scan.
+- ``qd.algorithms.device_select`` — scan-based stream compaction.
+- ``qd.algorithms.device_radix_sort`` — LSB radix sort built on
+  ``block.radix_rank_match_atomic_or``.
+- (Forthcoming) ``reduce-by-key``.
 
 Each test runs across the full ``arch=qd.gpu`` parametrization so the kernels
 are exercised on CUDA, AMDGPU, Vulkan, and Metal (where the host supports
@@ -492,3 +495,177 @@ def test_device_select_rejects_short_out():
     num_out = qd.field(qd.i32, shape=1)
     with pytest.raises(ValueError):
         qd.algorithms.device_select(inp, flags, out=out, num_out=num_out)
+
+
+# ---------------------------------------------------------------------------
+# Device radix sort
+# ---------------------------------------------------------------------------
+
+# Sizes chosen to stay within the default 1 MB scratch budget (256K u32 slots,
+# of which radix sort uses ~N + N/256 per pass — so ceiling ~ 250K elements).
+# We hit single-block (N<=256), block boundary, off-by-one, two-block,
+# many-block (200K, 4-pass histogram-scan-scatter recursion all exercised).
+# Larger N (1M, ~5 MB scratch) is covered by hand-runs and the bench script;
+# bumping scratch in the suite would force a process-wide cap change that
+# could break other tests' assumptions.
+_RADIX_SORT_SIZES = [1, 7, 256, 257, 1023, 1024, 1025, 65536, 200_000]
+
+
+def _gen_keys(rng, dtype, N):
+    if dtype == qd.u32:
+        return rng.integers(0, 2**32, size=N, dtype=np.uint32)
+    if dtype == qd.i32:
+        return rng.integers(-(2**31), 2**31 - 1, size=N, dtype=np.int32)
+    if dtype == qd.f32:
+        arr = rng.standard_normal(N).astype(np.float32) * 1e3
+        # Sprinkle a few specials to verify the f32 sort-twiddle pattern.
+        if N >= 6:
+            arr[0] = -0.0
+            arr[1] = 0.0
+            arr[2] = np.float32(np.inf)
+            arr[3] = np.float32(-np.inf)
+            arr[4] = np.float32(1e-30)
+            arr[5] = np.float32(-1e-30)
+        return arr
+    raise ValueError(dtype)
+
+
+@pytest.mark.parametrize("N", _RADIX_SORT_SIZES)
+@pytest.mark.parametrize("dtype", [qd.u32, qd.i32, qd.f32])
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_keys_only(dtype, N):
+    """device_radix_sort matches numpy.sort for u32 / i32 / f32 keys."""
+    rng = np.random.default_rng(seed=1234)
+    host = _gen_keys(rng, dtype, N)
+
+    keys = qd.field(dtype, shape=N)
+    tmp = qd.field(dtype, shape=N)
+    _fill_field(keys, host)
+
+    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp)
+    got = keys.to_numpy()
+    want = np.sort(host, kind="stable")
+    np.testing.assert_array_equal(got, want, err_msg=f"{dtype} radix_sort(N={N})")
+
+
+@pytest.mark.parametrize("N", _RADIX_SORT_SIZES)
+@pytest.mark.parametrize("dtype", [qd.u32, qd.i32, qd.f32])
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_key_value(dtype, N):
+    """Key-value sort: values permute in lock-step with keys; sort is stable."""
+    rng = np.random.default_rng(seed=1234)
+    host = _gen_keys(rng, dtype, N)
+
+    keys = qd.field(dtype, shape=N)
+    tmp_keys = qd.field(dtype, shape=N)
+    values = qd.field(qd.i32, shape=N)
+    tmp_values = qd.field(qd.i32, shape=N)
+    _fill_field(keys, host)
+    _fill_field(values, np.arange(N, dtype=np.int32))
+
+    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp_keys, values=values, tmp_values=tmp_values)
+
+    got_keys = keys.to_numpy()
+    got_values = values.to_numpy()
+    # Stable argsort gives the values permutation we expect.
+    want_idx = np.argsort(host, kind="stable")
+    want_keys = host[want_idx]
+    np.testing.assert_array_equal(got_keys, want_keys, err_msg=f"{dtype} keys(N={N})")
+    np.testing.assert_array_equal(got_values, want_idx.astype(np.int32), err_msg=f"{dtype} values(N={N})")
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_already_sorted():
+    """No-op-ish input: already-sorted keys still come back sorted."""
+    N = 5000
+    keys = qd.field(qd.u32, shape=N)
+    tmp = qd.field(qd.u32, shape=N)
+    host = np.arange(N, dtype=np.uint32) * 7
+    _fill_field(keys, host)
+    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp)
+    np.testing.assert_array_equal(keys.to_numpy(), host)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_reverse_sorted():
+    """Worst-case-for-comparison-sort input is just normal work for radix."""
+    N = 5000
+    keys = qd.field(qd.i32, shape=N)
+    tmp = qd.field(qd.i32, shape=N)
+    host = (np.arange(N, dtype=np.int32) * -7).astype(np.int32)  # decreasing
+    _fill_field(keys, host)
+    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp)
+    np.testing.assert_array_equal(keys.to_numpy(), np.sort(host))
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_all_same():
+    """Many duplicates: radix rank still groups + scatters them correctly."""
+    N = 5000
+    keys = qd.field(qd.i32, shape=N)
+    tmp = qd.field(qd.i32, shape=N)
+    host = np.full(N, 42, dtype=np.int32)
+    _fill_field(keys, host)
+    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp)
+    np.testing.assert_array_equal(keys.to_numpy(), host)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_n1():
+    """N=1 is the trivial early-return path."""
+    keys = qd.field(qd.i32, shape=1)
+    tmp = qd.field(qd.i32, shape=1)
+    _fill_field(keys, np.asarray([42], dtype=np.int32))
+    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp)
+    assert int(keys.to_numpy()[0]) == 42
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_rejects_dtype_mismatch():
+    keys = qd.field(qd.i32, shape=8)
+    tmp = qd.field(qd.u32, shape=8)
+    with pytest.raises(TypeError):
+        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_rejects_shape_mismatch():
+    keys = qd.field(qd.i32, shape=8)
+    tmp = qd.field(qd.i32, shape=4)
+    with pytest.raises(TypeError):
+        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_rejects_aliasing():
+    keys = qd.field(qd.i32, shape=8)
+    with pytest.raises(ValueError):
+        qd.algorithms.device_radix_sort(keys, tmp_keys=keys)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_rejects_unsupported_dtype():
+    """First-land set is {u32, i32, f32}; i64 / f64 are follow-up."""
+    keys = qd.field(qd.i64, shape=8)
+    tmp = qd.field(qd.i64, shape=8)
+    with pytest.raises(NotImplementedError):
+        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_rejects_missing_tmp_values():
+    """values requires tmp_values."""
+    keys = qd.field(qd.i32, shape=8)
+    tmp_keys = qd.field(qd.i32, shape=8)
+    values = qd.field(qd.i32, shape=8)
+    with pytest.raises(ValueError):
+        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp_keys, values=values)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_rejects_odd_passes():
+    """end_bit must yield an even number of passes so the result lands in keys."""
+    keys = qd.field(qd.i32, shape=8)
+    tmp = qd.field(qd.i32, shape=8)
+    with pytest.raises(ValueError):
+        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, end_bit=8)  # 1 pass — odd
