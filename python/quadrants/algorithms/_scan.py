@@ -1,36 +1,28 @@
 # type: ignore
 """Device-wide exclusive-scan primitives.
 
-Implements ``qd.algorithms.device_exclusive_scan_{add,min,max}`` on top of the
-block-tier ``block.exclusive_scan`` primitive. See the design doc at
-``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the algorithmic
-rationale (Blelloch 1990 / Harris-Sengupta-Owens 2007, three-pass formulation).
+Implements ``qd.algorithms.device_exclusive_scan_{add,min,max}`` on top of the block-tier ``block.exclusive_scan``
+primitive. See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the algorithmic rationale
+(Blelloch 1990 / Harris-Sengupta-Owens 2007, three-pass formulation).
 
 Algorithm (three-pass, multi-level when needed):
 
-- **Pass 1: per-block tile reduce.** Each block reads ``BLOCK_DIM`` input
-  elements, reduces them via ``block.reduce(op, dtype)``, thread 0 writes the
-  per-block aggregate into the shared ``u32`` scratch field (``qd.bit_cast`` on
-  write).  Identical to ``_reduce_pass`` in ``_reduce.py``; we reuse that
-  kernel.
-- **Pass 2: exclusive-scan the partials.** Once the partials buffer is built,
-  exclusive-scan it in place. For ``B <= BLOCK_DIM`` a single block does it in
-  one kernel launch (``_scan_block_inplace_u32``). For ``B > BLOCK_DIM`` the
-  driver recurses: it runs another tile-reduce on the partials buffer to
-  produce a smaller partials-of-partials buffer, recursively scans that, then
-  runs a downsweep over the partials buffer to apply the per-tile prefixes.
-- **Pass 3: per-block tile scan + block-prefix.** Each block re-reads its tile
-  from the input source, computes per-thread tile prefixes via
-  ``block.exclusive_scan(op, identity, dtype)``, fetches its block prefix from
-  the scanned partials buffer, and writes
-  ``out[i] = op(block_prefix, tile_prefix)``.
+- **Pass 1: per-block tile reduce.** Each block reads ``BLOCK_DIM`` input elements, reduces them via
+  ``block.reduce(op, dtype)``, thread 0 writes the per-block aggregate into the shared ``u32`` scratch field
+  (``qd.bit_cast`` on write).  Identical to ``_reduce_pass`` in ``_reduce.py``; we reuse that kernel.
+- **Pass 2: exclusive-scan the partials.** Once the partials buffer is built, exclusive-scan it in place. For
+  ``B <= BLOCK_DIM`` a single block does it in one kernel launch (``_scan_block_inplace_u32``). For ``B > BLOCK_DIM``
+  the driver recurses: it runs another tile-reduce on the partials buffer to produce a smaller partials-of-partials
+  buffer, recursively scans that, then runs a downsweep over the partials buffer to apply the per-tile prefixes.
+- **Pass 3: per-block tile scan + block-prefix.** Each block re-reads its tile from the input source, computes
+  per-thread tile prefixes via ``block.exclusive_scan(op, identity, dtype)``, fetches its block prefix from the
+  scanned partials buffer, and writes ``out[i] = op(block_prefix, tile_prefix)``.
 
 Total scratch usage at ``N = 1M`` and ``BLOCK_DIM = 256``: ``B0 = 4096`` plus
 ``B1 = 16`` u32 slots = 4112 slots = ~16 KB, well under the 1 MB default.
 
-The ``PrefixSumExecutor`` class in ``_algorithms.py`` predates this work; it
-is kept for backward compat. The new functional API is preferred for new
-code — see ``docs/source/user_guide/algorithms.md``.
+The ``PrefixSumExecutor`` class in ``_algorithms.py`` predates this work; it is kept for backward compat. The new
+functional API is preferred for new code — see ``docs/source/user_guide/algorithms.md``.
 """
 
 from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
@@ -59,10 +51,8 @@ def _scan_block_inplace_u32(
 ):
     """Single-block in-place exclusive scan of ``buf[buf_off : buf_off + n_valid]``.
 
-    Used at the recursion base of the scan driver, when the buffer being
-    scanned fits in a single block. ``buf`` is the shared ``Field(u32)``
-    scratch; the per-thread read / write go through ``qd.bit_cast`` to / from
-    ``dtype``.
+    Used at the recursion base of the scan driver, when the buffer being scanned fits in a single block. ``buf`` is
+    the shared ``Field(u32)`` scratch; the per-thread read / write go through ``qd.bit_cast`` to / from ``dtype``.
 
     Threads with ``i >= n_valid`` participate with ``identity`` (so the
     block-scope scan algorithm sees a clean monoid) but do not write back.
@@ -96,17 +86,14 @@ def _scan_pass3(
 ):
     """Pass-3 downsweep: per-block tile scan + apply block prefix from scratch.
 
-    Reads ``src[src_off : src_off + n_valid]`` (template-switched between the
-    dtype tensor path and the u32-scratch ``bit_cast`` path), computes per-
-    thread tile prefixes via ``block.exclusive_scan``, looks up the block
-    prefix at ``prefixes[prefixes_off + block_id]`` (always a u32 scratch slot
-    holding the dtype value bit-cast to u32, written by Pass 2), and writes
-    ``op(block_prefix, tile_prefix)`` to ``dst[dst_off + i]``.
+    Reads ``src[src_off : src_off + n_valid]`` (template-switched between the dtype tensor path and the u32-scratch
+    ``bit_cast`` path), computes per-thread tile prefixes via ``block.exclusive_scan``, looks up the block prefix at
+    ``prefixes[prefixes_off + block_id]`` (always a u32 scratch slot holding the dtype value bit-cast to u32, written
+    by Pass 2), and writes ``op(block_prefix, tile_prefix)`` to ``dst[dst_off + i]``.
 
-    ``dst`` may alias ``src`` (in-place recursion case); the read-modify-write
-    is per-thread and the block.exclusive_scan internally barriers, so threads
-    in a block see consistent values and writes by other blocks land in
-    disjoint tiles.
+    ``dst`` may alias ``src`` (in-place recursion case); the read-modify-write is per-thread and the
+    block.exclusive_scan internally barriers, so threads in a block see consistent values and writes by other blocks
+    land in disjoint tiles.
     """
     loop_config(block_dim=BLOCK_DIM)
     for i in range(total_threads):
@@ -193,9 +180,8 @@ def _device_exclusive_scan(inp, *, out, op, identity_value):
     if inp.dtype != out.dtype:
         raise TypeError(f"device exclusive scan dtype mismatch: input={inp.dtype}, out={out.dtype}")
     if inp is out:
-        # See design doc: in-place scan is rejected (no benefit when the
-        # caller already allocates `out` once and reuses it; protecting
-        # against same-buffer aliasing would just complicate the kernels).
+        # See design doc: in-place scan is rejected (no benefit when the caller already allocates `out` once and
+        # reuses it; protecting against same-buffer aliasing would just complicate the kernels).
         raise ValueError(
             "device exclusive scan does not support in-place operation; "
             "pass a distinct `out` buffer (the API is designed around "
@@ -293,8 +279,7 @@ def _scan_single_tile_input_to_out(
 
 @kernel
 def _scan_trivial_n1(dst: template(), identity_bits: u32, dtype: template()):
-    """N == 1 path: write the identity to out[0]. Exclusive scan of a single
-    element is just the identity."""
+    """N == 1 path: write the identity to out[0]. Exclusive scan of a single element is just the identity."""
     for _ in range(1):
         dst[0] = bit_cast(identity_bits, dtype)
 
@@ -305,13 +290,11 @@ def device_exclusive_scan_add(input, *, out):  # pylint: disable=redefined-built
     Args:
         input: 1-D tensor of ``i32``, ``u32``, or ``f32``. Pass a ``qd.field``,
             ``qd.ndarray``, or ``qd.Tensor`` wrapper around either.
-        out: 1-D tensor with the same dtype and shape as ``input``. Must be a
-            distinct buffer (no in-place scan).
+        out: 1-D tensor with the same dtype and shape as ``input``. Must be a distinct buffer (no in-place scan).
 
-    The implementation is the three-pass Blelloch-style scan built on
-    ``block.exclusive_scan`` and the shared ``Field(u32)`` scratch. Recurses
-    on the partials buffer when ``N`` is large enough that the partials count
-    exceeds ``BLOCK_DIM``.
+    The implementation is the three-pass Blelloch-style scan built on ``block.exclusive_scan`` and the shared
+    ``Field(u32)`` scratch. Recurses on the partials buffer when ``N`` is large enough that the partials count exceeds
+    ``BLOCK_DIM``.
 
     See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md``
     for the algorithmic background and the ``bit_cast``-into-scratch scheme.
@@ -324,11 +307,9 @@ def device_exclusive_scan_min(input, identity, *, out):  # pylint: disable=redef
 
     Args:
         input: see ``device_exclusive_scan_add``.
-        identity: the monoid identity for ``min`` over ``input.dtype`` —
-            i.e. a value ``e`` such that ``min(e, x) == x`` for every ``x``
-            in the dtype (``math.inf`` for ``f32``, ``2**31 - 1`` for ``i32``,
-            ``2**32 - 1`` for ``u32``). Mandatory: no portable type-extreme is
-            derivable from a value alone.
+        identity: the monoid identity for ``min`` over ``input.dtype`` — i.e. a value ``e`` such that
+            ``min(e, x) == x`` for every ``x`` in the dtype (``math.inf`` for ``f32``, ``2**31 - 1`` for ``i32``,
+            ``2**32 - 1`` for ``u32``). Mandatory: no portable type-extreme is derivable from a value alone.
         out: see ``device_exclusive_scan_add``.
     """
     _device_exclusive_scan(input, out=out, op=_bin_min, identity_value=identity)
@@ -337,9 +318,8 @@ def device_exclusive_scan_min(input, identity, *, out):  # pylint: disable=redef
 def device_exclusive_scan_max(input, identity, *, out):  # pylint: disable=redefined-builtin
     """Compute ``out[i] = max(input[0:i])`` (exclusive prefix max) on the device.
 
-    Mirror of :func:`device_exclusive_scan_min` with ``max`` and the dtype's
-    *negative* extremum (``-inf`` for ``f32``, ``-2**31`` for ``i32``, ``0``
-    for ``u32``).
+    Mirror of :func:`device_exclusive_scan_min` with ``max`` and the dtype's *negative* extremum (``-inf`` for
+    ``f32``, ``-2**31`` for ``i32``, ``0`` for ``u32``).
     """
     _device_exclusive_scan(input, out=out, op=_bin_max, identity_value=identity)
 

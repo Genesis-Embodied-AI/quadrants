@@ -4,54 +4,37 @@
 Implements ``qd.algorithms.device_reduce_by_key_add`` on top of the existing
 device exclusive scan internals and the shared ``Field(u32)`` scratch.
 
-Reduce-by-key takes two parallel 1-D tensors — ``keys`` and ``values`` — and
-collapses every **consecutive run of equal keys** into a single output entry
-``(unique_key, sum_of_values_in_run)``. Keys that are equal but separated by
-other keys are treated as separate runs. To compute a global per-key sum,
-sort by key first (e.g. via ``qd.algorithms.device_radix_sort``) and then
-reduce-by-key.
+Reduce-by-key takes two parallel 1-D tensors — ``keys`` and ``values`` — and collapses every **consecutive run of
+equal keys** into a single output entry ``(unique_key, sum_of_values_in_run)``. Keys that are equal but separated by
+other keys are treated as separate runs. To compute a global per-key sum, sort by key first (e.g. via
+``qd.algorithms.device_radix_sort``) and then reduce-by-key.
 
 Algorithm (scan + scatter; no segmented-scan primitive needed):
 
-1. **Head-flag pass** (``_rbk_head_flags``). Compute
-   ``head_flags[i] = 1`` if ``i == 0 or keys[i] != keys[i-1]``, else ``0``,
-   directly into the shared ``Field(u32)`` scratch ``scratch[0:N]``
-   (storing the ``i32`` flag bit-cast to ``u32``).
-2. **Exclusive scan of head_flags** (in-place over ``scratch[0:N]``, using
-   ``_reduce_pass`` + ``_exclusive_scan_inplace_u32`` + ``_scan_pass3``
-   reused from ``_reduce.py`` / ``_scan.py``). After this,
-   ``scratch[i] = exclusive_scan(head_flags)[i] = sum(head_flags[0:i])``.
-   The 0-indexed run index of element ``i`` is then
-   ``positions[i] = scratch[i] + head_flag(i) - 1`` (i.e.
-   ``inclusive_scan(head_flags)[i] - 1``); the scatter pass recomputes
-   ``head_flag(i)`` from the two keys at ``i`` and ``i - 1`` so the
-   ``head_flags`` array itself does not need to survive the scan. This
-   lets the scan run in place, holding scratch to ~``1.004 * N`` slots.
-3. **Zero-init values_out**. The scatter step uses ``atomic_add`` on
-   ``values_out[positions[i]]``; the slots must start at the additive
-   identity ``0``.
+1. **Head-flag pass** (``_rbk_head_flags``). Compute ``head_flags[i] = 1`` if ``i == 0 or keys[i] != keys[i-1]``, else
+   ``0``, directly into the shared ``Field(u32)`` scratch ``scratch[0:N]`` (storing the ``i32`` flag bit-cast to
+   ``u32``).
+2. **Exclusive scan of head_flags** (in-place over ``scratch[0:N]``, using ``_reduce_pass`` +
+   ``_exclusive_scan_inplace_u32`` + ``_scan_pass3`` reused from ``_reduce.py`` / ``_scan.py``). After this,
+   ``scratch[i] = exclusive_scan(head_flags)[i] = sum(head_flags[0:i])``. The 0-indexed run index of element ``i`` is
+   then ``positions[i] = scratch[i] + head_flag(i) - 1`` (i.e. ``inclusive_scan(head_flags)[i] - 1``); the scatter
+   pass recomputes ``head_flag(i)`` from the two keys at ``i`` and ``i - 1`` so the ``head_flags`` array itself does
+   not need to survive the scan. This lets the scan run in place, holding scratch to ~``1.004 * N`` slots.
+3. **Zero-init values_out**. The scatter step uses ``atomic_add`` on ``values_out[positions[i]]``; the slots must
+   start at the additive identity ``0``.
 4. **Scatter pass** (``_rbk_scatter``). For every ``i``:
-   - Recompute ``head_flag(i)`` from
-     ``i == 0 or keys[i] != keys[i-1]`` and compute the run index
+   - Recompute ``head_flag(i)`` from ``i == 0 or keys[i] != keys[i-1]`` and compute the run index
      ``pos = scratch[i] + head_flag(i) - 1``.
-   - ``keys_out[pos] = keys[i]`` — race-free because every thread in a
-     run writes the same key to the same slot.
-   - ``atomic_add(values_out[pos], values[i])`` folds the run's values
-     into the run's output slot.
-5. **Count pass** (``_rbk_count``). Computes
-   ``num_runs[0] = scratch[N-1] + head_flag(N-1)`` where the head flag at
-   ``N-1`` is recomputed from ``keys[N-1] != keys[N-2]`` for ``N >= 2``
-   (``1`` for ``N == 1``).
+   - ``keys_out[pos] = keys[i]`` — race-free because every thread in a run writes the same key to the same slot.
+   - ``atomic_add(values_out[pos], values[i])`` folds the run's values into the run's output slot.
+5. **Count pass** (``_rbk_count``). Computes ``num_runs[0] = scratch[N-1] + head_flag(N-1)`` where the head flag at
+   ``N-1`` is recomputed from ``keys[N-1] != keys[N-2]`` for ``N >= 2`` (``1`` for ``N == 1``).
 
-This first-land scope supports only the ``add`` reduction. ``min`` / ``max``
-variants would need ``atomic_min`` / ``atomic_max``, which have spottier
-cross-backend support for ``f32`` — defer to a follow-up gated on real
-qipc usage.
+This first-land scope supports only the ``add`` reduction. ``min`` / ``max`` variants would need ``atomic_min`` /
+``atomic_max``, which have spottier cross-backend support for ``f32`` — defer to a follow-up gated on real qipc usage.
 
-Scratch budget: ``N + ceil(N / 256) + ...`` ``u32`` slots, ≈ ``1.004 * N``.
-The default 1 MB scratch covers ``N`` up to ~260_000. For larger ``N``,
-raise via ``quadrants._scratch.set_scratch_bytes(...)`` before any
-algorithm call.
+Scratch budget: ``N + ceil(N / 256) + ...`` ``u32`` slots, ≈ ``1.004 * N``. The default 1 MB scratch covers ``N`` up
+to ~260_000. For larger ``N``, raise via ``quadrants._scratch.set_scratch_bytes(...)`` before any algorithm call.
 """
 
 from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
@@ -74,10 +57,9 @@ def _rbk_head_flags(keys_in: template(), head_flags: template(), head_flags_off:
     """Write ``head_flags[i] = 1 if (i == 0 or keys[i] != keys[i-1]) else 0``
     to ``head_flags[head_flags_off + i]`` (as the u32 bit pattern of i32).
 
-    Linear-time, embarrassingly parallel: each thread reads at most two key
-    elements (``keys[i]`` and ``keys[i-1]``) and writes one flag. The
-    boundary thread at ``i == 0`` always writes ``1`` since there is no
-    predecessor and a run trivially starts there.
+    Linear-time, embarrassingly parallel: each thread reads at most two key elements (``keys[i]`` and ``keys[i-1]``)
+    and writes one flag. The boundary thread at ``i == 0`` always writes ``1`` since there is no predecessor and a run
+    trivially starts there.
     """
     loop_config(block_dim=BLOCK_DIM)
     for i in range(N):
@@ -92,15 +74,13 @@ def _rbk_head_flags(keys_in: template(), head_flags: template(), head_flags_off:
 
 @kernel
 def _rbk_zero_values_out(values_out: template(), N: i32, dtype: template()):
-    """Set ``values_out[0 : N] = 0`` so the scatter ``atomic_add`` lands
-    onto a clean additive identity. ``N`` is the upper bound on
-    ``num_runs``; the caller-supplied ``values_out`` may be longer but we
-    only need the prefix that the scatter can touch.
+    """Set ``values_out[0 : N] = 0`` so the scatter ``atomic_add`` lands onto a clean additive identity. ``N`` is the
+    upper bound on ``num_runs``; the caller-supplied ``values_out`` may be longer but we only need the prefix that the
+    scatter can touch.
 
-    We write ``bit_cast(u32(0), dtype)`` rather than relying on
-    ``v - v == 0`` because the latter compiles to a real subtract for
-    ``f32`` (and yields NaN if the slot held NaN garbage from a prior
-    allocation), whereas the bit-cast lowers to a plain store.
+    We write ``bit_cast(u32(0), dtype)`` rather than relying on ``v - v == 0`` because the latter compiles to a real
+    subtract for ``f32`` (and yields NaN if the slot held NaN garbage from a prior allocation), whereas the bit-cast
+    lowers to a plain store.
     """
     for i in range(N):
         values_out[i] = bit_cast(u32(0), dtype)
@@ -118,15 +98,12 @@ def _rbk_scatter(
 ):
     """Per-element scatter:
 
-    - Compute ``head_flag(i)`` on the fly from
-      ``i == 0 or keys[i] != keys[i-1]`` and combine with the in-place
-      exclusive scan stored in ``positions`` to recover the inclusive run
-      index ``pos = positions[i] + head_flag(i) - 1``.
-    - ``keys_out[pos] = keys_in[i]`` — race-free because every thread in
-      a run writes the same key to the same slot.
-    - ``atomic_add(values_out[pos], values_in[i])`` — folds the run's
-      values into the run's output slot. ``values_out`` must be
-      pre-zeroed (see ``_rbk_zero_values_out``).
+    - Compute ``head_flag(i)`` on the fly from ``i == 0 or keys[i] != keys[i-1]`` and combine with the in-place
+      exclusive scan stored in ``positions`` to recover the inclusive run index
+      ``pos = positions[i] + head_flag(i) - 1``.
+    - ``keys_out[pos] = keys_in[i]`` — race-free because every thread in a run writes the same key to the same slot.
+    - ``atomic_add(values_out[pos], values_in[i])`` — folds the run's values into the run's output slot.
+      ``values_out`` must be pre-zeroed (see ``_rbk_zero_values_out``).
     """
     for i in range(N):
         head_i = i32(0)
@@ -144,12 +121,10 @@ def _rbk_scatter(
 def _rbk_count(keys_in: template(), positions: template(), positions_off: i32, N: i32, num_runs: template()):
     """One-thread tail kernel: write ``num_runs[0] = total head_flag count``.
 
-    Equivalently: ``num_runs = exclusive_scan_at(N-1) + head_flag(N-1) =
-    inclusive_scan_at(N-1) = total_head_flags``. We can't read
-    ``scratch[N-1]`` for the original head flag (the in-place scan
-    overwrote it with the exclusive prefix), so we recompute the flag from
-    the last two keys. For ``N == 1``, ``head_flag(0) == 1`` so
-    ``num_runs = 0 + 1 = 1``.
+    Equivalently: ``num_runs = exclusive_scan_at(N-1) + head_flag(N-1) = inclusive_scan_at(N-1) =
+    total_head_flags``. We can't read ``scratch[N-1]`` for the original head flag (the in-place scan overwrote it
+    with the exclusive prefix), so we recompute the flag from the last two keys. For ``N == 1``,
+    ``head_flag(0) == 1`` so ``num_runs = 0 + 1 = 1``.
     """
     for _ in range(1):
         pos_last = bit_cast(positions[positions_off + N - 1], i32)
@@ -212,31 +187,23 @@ def device_reduce_by_key_add(keys_in, values_in, *, keys_out, values_out, num_ru
     """Collapse every consecutive run of equal ``keys_in`` into ``(key, sum_of_values)``.
 
     Args:
-        keys_in: 1-D tensor of ``u32`` / ``i32`` / ``f32``. Sort by key
-            beforehand (e.g. via ``qd.algorithms.device_radix_sort``) if you
-            need a global per-key sum rather than a per-run sum.
-        values_in: 1-D tensor of ``u32`` / ``i32`` / ``f32``, same shape as
-            ``keys_in``.
-        keys_out: 1-D tensor of the same dtype as ``keys_in``, capacity
-            ``>= N``. Receives the unique-run keys at indices
-            ``[0 : num_runs[0])``; the tail is left untouched.
-        values_out: 1-D tensor of the same dtype as ``values_in``, capacity
-            ``>= N``. Receives the per-run sums. The first
-            ``num_runs[0]`` slots are overwritten; if ``values_out`` was
-            longer, the tail past that prefix is left untouched.
+        keys_in: 1-D tensor of ``u32`` / ``i32`` / ``f32``. Sort by key beforehand (e.g. via
+            ``qd.algorithms.device_radix_sort``) if you need a global per-key sum rather than a per-run sum.
+        values_in: 1-D tensor of ``u32`` / ``i32`` / ``f32``, same shape as ``keys_in``.
+        keys_out: 1-D tensor of the same dtype as ``keys_in``, capacity ``>= N``. Receives the unique-run keys at
+            indices ``[0 : num_runs[0])``; the tail is left untouched.
+        values_out: 1-D tensor of the same dtype as ``values_in``, capacity ``>= N``. Receives the per-run sums. The
+            first ``num_runs[0]`` slots are overwritten; if ``values_out`` was longer, the tail past that prefix is
+            left untouched.
         num_runs: 1-element ``i32`` tensor receiving the number of runs.
 
-    Same async / no-implicit-sync contract as the rest of
-    ``qd.algorithms.*``: ``num_runs`` is a tensor (not a Python int);
-    fetch the count with ``int(num_runs.to_numpy()[0])`` after the call.
+    Same async / no-implicit-sync contract as the rest of ``qd.algorithms.*``: ``num_runs`` is a tensor (not a Python
+    int); fetch the count with ``int(num_runs.to_numpy()[0])`` after the call.
 
-    **NaN handling for f32 keys**: NaN ``!=`` NaN is true, so each NaN
-    becomes its own run. This is consistent with treating NaN as
-    "different from everything", which matches the run-length-encoding
-    spirit of reduce-by-key.
+    **NaN handling for f32 keys**: NaN ``!=`` NaN is true, so each NaN becomes its own run. This is consistent with
+    treating NaN as "different from everything", which matches the run-length-encoding spirit of reduce-by-key.
 
-    **Scratch budget**: ~``1.004 * N`` u32 slots. Default 1 MB covers
-    ``N`` up to ~260_000; raise via
+    **Scratch budget**: ~``1.004 * N`` u32 slots. Default 1 MB covers ``N`` up to ~260_000; raise via
     ``quadrants._scratch.set_scratch_bytes(...)`` for larger inputs.
     """
     _validate_inputs(keys_in, values_in, keys_out, values_out, num_runs)
@@ -297,10 +264,9 @@ def device_reduce_by_key_add(keys_in, values_in, *, keys_out, values_out, num_ru
             True,
         )
     else:
-        # Single-tile fast path: one block scans scratch[0:N] in place. Pass 1 still
-        # writes a single partial that is then trivially scanned, but it's cheaper
-        # to inline a 1-block scan kernel that reads + writes scratch directly.
-        # Reuse _exclusive_scan_inplace_u32's base case here.
+        # Single-tile fast path: one block scans scratch[0:N] in place. Pass 1 still writes a single partial that is
+        # then trivially scanned, but it's cheaper to inline a 1-block scan kernel that reads + writes scratch
+        # directly. Reuse _exclusive_scan_inplace_u32's base case here.
         _exclusive_scan_inplace_u32(scratch, positions_off, N, identity_bits, op, dtype, partials_off)
 
     # Step 3: zero-init values_out (only the prefix that the scatter can touch).

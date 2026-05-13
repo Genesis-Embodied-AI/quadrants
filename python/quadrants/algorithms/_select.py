@@ -1,33 +1,27 @@
 # type: ignore
 """Device-wide stream compaction (``select`` / ``compact``).
 
-``qd.algorithms.device_select(input, flags, *, out, num_out)`` packs the
-elements of ``input`` for which the corresponding ``flags`` entry is non-zero
-into a dense prefix of ``out``, in stable input order, and writes the count of
-selected elements to ``num_out[0]``.
+``qd.algorithms.device_select(input, flags, *, out, num_out)`` packs the elements of ``input`` for which the
+corresponding ``flags`` entry is non-zero into a dense prefix of ``out``, in stable input order, and writes the count
+of selected elements to ``num_out[0]``.
 
 Algorithm (textbook scan-based compaction):
 
-1. Exclusive prefix-sum the ``flags`` (treated as 0 / 1) into the shared
-   ``Field(u32)`` scratch, producing per-element write indices. This reuses
-   the same three-pass scan internals as ``device_exclusive_scan_add`` but
-   targets a scratch slice for the output instead of a caller-supplied
-   ``out`` tensor.
-2. A single fused "scatter" kernel reads ``input[i]`` and ``flags[i]``, and if
-   the flag is set, writes ``out[indices[i]] = input[i]``.
-3. A 1-thread tail kernel sums ``indices[N-1] + flags[N-1]`` (= total count)
-   and stores it in ``num_out[0]``.
+1. Exclusive prefix-sum the ``flags`` (treated as 0 / 1) into the shared ``Field(u32)`` scratch, producing per-element
+   write indices. This reuses the same three-pass scan internals as ``device_exclusive_scan_add`` but targets a
+   scratch slice for the output instead of a caller-supplied ``out`` tensor.
+2. A single fused "scatter" kernel reads ``input[i]`` and ``flags[i]``, and if the flag is set, writes
+   ``out[indices[i]] = input[i]``.
+3. A 1-thread tail kernel sums ``indices[N-1] + flags[N-1]`` (= total count) and stores it in ``num_out[0]``.
 
-Scratch layout for the scan: ``scratch[0 : N]`` holds the per-element indices
-(i32 bit-cast to u32). ``scratch[N : N + B0]`` holds the level-0 partials,
-``scratch[N + B0 : ...]`` deeper recursion levels (mirrors the device scan).
+Scratch layout for the scan: ``scratch[0 : N]`` holds the per-element indices (i32 bit-cast to u32).
+``scratch[N : N + B0]`` holds the level-0 partials, ``scratch[N + B0 : ...]`` deeper recursion levels (mirrors the
+device scan).
 
-Constraints (first land): ``N`` must fit comfortably within the configured
-scratch budget — the indices + partials together must not exceed
-``scratch_capacity_u32()``. For the default 1 MB budget that's
-``N + ceil(N / 256) + ... ≤ 262144``, so roughly ``N ≤ 260_000``. Raise the
-budget via ``_scratch.set_scratch_bytes(...)`` before any algorithm runs to
-unlock larger inputs.
+Constraints (first land): ``N`` must fit comfortably within the configured scratch budget — the indices + partials
+together must not exceed ``scratch_capacity_u32()``. For the default 1 MB budget that's
+``N + ceil(N / 256) + ... ≤ 262144``, so roughly ``N ≤ 260_000``. Raise the budget via
+``_scratch.set_scratch_bytes(...)`` before any algorithm runs to unlock larger inputs.
 """
 
 from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
@@ -50,14 +44,12 @@ def _select_scatter(
     dst: template(),
     n_valid: i32,
 ):
-    """Scatter pass: write ``dst[indices[i]] = src[i]`` for every ``i`` where
-    ``flags[i] != 0``. ``indices`` is the u32 scratch slice holding the
-    exclusive scan of ``flags`` (i.e. the destination index of each surviving
-    element); we ``bit_cast`` it back to ``i32`` before indexing.
+    """Scatter pass: write ``dst[indices[i]] = src[i]`` for every ``i`` where ``flags[i] != 0``. ``indices`` is the
+    u32 scratch slice holding the exclusive scan of ``flags`` (i.e. the destination index of each surviving element);
+    we ``bit_cast`` it back to ``i32`` before indexing.
 
-    No race: each surviving thread writes to a distinct ``dst`` slot (by
-    construction of the exclusive scan over 0 / 1 flags). Dropped threads do
-    not write.
+    No race: each surviving thread writes to a distinct ``dst`` slot (by construction of the exclusive scan over
+    0 / 1 flags). Dropped threads do not write.
     """
     for i in range(n_valid):
         if flags[i] != 0:
@@ -75,9 +67,8 @@ def _select_count(
 ):
     """1-thread tail kernel: ``num_out[0] = indices[N-1] + flags[N-1]``.
 
-    Split into its own launch so the host driver doesn't have to insert a
-    grid sync after the scatter; the kernel boundary serializes against the
-    preceding scan writes.
+    Split into its own launch so the host driver doesn't have to insert a grid sync after the scatter; the kernel
+    boundary serializes against the preceding scan writes.
     """
     for _ in range(1):
         last_idx = bit_cast(indices[indices_off + n_valid - 1], i32)
@@ -89,23 +80,19 @@ def _select_count(
 
 
 def device_select(input, flags, *, out, num_out):  # pylint: disable=redefined-builtin
-    """Stream-compact ``input`` by ``flags``: copy ``input[i]`` to a dense
-    prefix of ``out`` for every ``i`` where ``flags[i] != 0``, in stable input
-    order. Write the count of selected elements to ``num_out[0]``.
+    """Stream-compact ``input`` by ``flags``: copy ``input[i]`` to a dense prefix of ``out`` for every ``i`` where
+    ``flags[i] != 0``, in stable input order. Write the count of selected elements to ``num_out[0]``.
 
     Args:
         input: 1-D tensor of any first-land dtype (``i32`` / ``u32`` / ``f32``).
-        flags: 1-D ``i32`` tensor, same shape as ``input``. Each entry is
-            treated as a boolean (``!= 0`` selects). Caller-built (e.g.
-            populated by a separate kernel applying a predicate to ``input``).
-        out: 1-D tensor with the same dtype as ``input``. Must hold at least
-            ``N`` elements (so a worst-case-everyone-selected run fits); only
-            the prefix ``out[0 : num_out[0]]`` is meaningful on return.
+        flags: 1-D ``i32`` tensor, same shape as ``input``. Each entry is treated as a boolean (``!= 0`` selects).
+            Caller-built (e.g. populated by a separate kernel applying a predicate to ``input``).
+        out: 1-D tensor with the same dtype as ``input``. Must hold at least ``N`` elements (so a
+            worst-case-everyone-selected run fits); only the prefix ``out[0 : num_out[0]]`` is meaningful on return.
         num_out: 1-element ``i32`` tensor receiving the selected count.
 
-    Same async / no-implicit-sync contract as ``device_reduce_*`` and
-    ``device_exclusive_scan_*``: ``num_out`` is a tensor, not a Python scalar
-    — call ``num_out.to_numpy()[0]`` explicitly to get the count host-side.
+    Same async / no-implicit-sync contract as ``device_reduce_*`` and ``device_exclusive_scan_*``: ``num_out`` is a
+    tensor, not a Python scalar — call ``num_out.to_numpy()[0]`` explicitly to get the count host-side.
 
     See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md``
     for the scratch-into-indices layout and the algorithm reference.
@@ -136,8 +123,7 @@ def device_select(input, flags, *, out, num_out):  # pylint: disable=redefined-b
     if N == 0:
         return
 
-    # Scratch layout: scratch[0:N] = indices, scratch[N : N + B0] = level-0
-    # partials, then deeper levels above.
+    # Scratch layout: scratch[0:N] = indices, scratch[N : N + B0] = level-0 partials, then deeper levels above.
     scratch = get_scratch_u32()
     cap = scratch_capacity_u32()
     B0 = (N + BLOCK_DIM - 1) // BLOCK_DIM
@@ -154,10 +140,9 @@ def device_select(input, flags, *, out, num_out):  # pylint: disable=redefined-b
     op = _bin_add
     dtype = i32
 
-    # Three-pass scan of flags into scratch[0:N] (i32 indices, stored as u32
-    # bit pattern). The general 3-pass path collapses gracefully when
-    # N <= BLOCK_DIM: pass 1 writes a single partial, pass 2 in-place-scans
-    # it, pass 3 applies the (trivial) prefix to the single-tile scan.
+    # Three-pass scan of flags into scratch[0:N] (i32 indices, stored as u32 bit pattern). The general 3-pass path
+    # collapses gracefully when N <= BLOCK_DIM: pass 1 writes a single partial, pass 2 in-place-scans it, pass 3
+    # applies the (trivial) prefix to the single-tile scan.
     # Pass 1: per-block tile reduce of flags -> scratch[partials_off:]
     _reduce_pass(
         flags,

@@ -74,12 +74,10 @@ def test_scratch_round_trips_bit_cast_f32():
         assert out[i] == expected, f"slot {i}: got {out[i]}, expected {expected}"
 
 
-# Sizes spanning the trivial single-element path (1), within-one-block
-# (< BLOCK_DIM), block boundaries (BLOCK_DIM, BLOCK_DIM + 1), within-two-passes
-# (BLOCK_DIM ** 2 and slightly above), and a "large-ish" three-pass-trigger
-# size that exercises the recursion loop without making the test slow.
-# (Quadrants doesn't support 0-shape tensors, so N=0 isn't exercised — the
-# driver has a defensive N==0 branch but no caller can actually trigger it.)
+# Sizes spanning the trivial single-element path (1), within-one-block (< BLOCK_DIM), block boundaries (BLOCK_DIM,
+# BLOCK_DIM + 1), within-two-passes (BLOCK_DIM ** 2 and slightly above), and a "large-ish" three-pass-trigger size
+# that exercises the recursion loop without making the test slow. (Quadrants doesn't support 0-shape tensors, so N=0
+# isn't exercised — the driver has a defensive N==0 branch but no caller can actually trigger it.)
 _REDUCE_SIZES = [1, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000]
 
 
@@ -94,10 +92,9 @@ def _fill_field(f, vals):
 
 
 def _alloc_input_out(dtype, N):
-    """Allocate a 1-D input field of size ``N`` and a 1-element output field of
-    the same dtype. Field-backed because that's the cheaper allocation for
-    Quadrants and exercises the polymorphic ``qd.Tensor`` annotation in the
-    kernels."""
+    """Allocate a 1-D input field of size ``N`` and a 1-element output field of the same dtype. Field-backed because
+    that's the cheaper allocation for Quadrants and exercises the polymorphic ``qd.Tensor`` annotation in the kernels.
+    """
     inp = qd.field(dtype, shape=N)
     out = qd.field(dtype, shape=1)
     return inp, out
@@ -502,13 +499,11 @@ def test_device_select_rejects_short_out():
 # Device radix sort
 # ---------------------------------------------------------------------------
 
-# Sizes chosen to stay within the default 1 MB scratch budget (256K u32 slots,
-# of which radix sort uses ~N + N/256 per pass — so ceiling ~ 250K elements).
-# We hit single-block (N<=256), block boundary, off-by-one, two-block,
-# many-block (200K, 4-pass histogram-scan-scatter recursion all exercised).
-# Larger N (1M, ~5 MB scratch) is covered by hand-runs and the bench script;
-# bumping scratch in the suite would force a process-wide cap change that
-# could break other tests' assumptions.
+# Sizes chosen to stay within the default 1 MB scratch budget (256K u32 slots, of which radix sort uses ~N + N/256 per
+# pass — so ceiling ~ 250K elements). We hit single-block (N<=256), block boundary, off-by-one, two-block, many-block
+# (200K, 4-pass histogram-scan-scatter recursion all exercised). Larger N (1M, ~5 MB scratch) is covered by hand-runs
+# and the bench script; bumping scratch in the suite would force a process-wide cap change that could break other
+# tests' assumptions.
 _RADIX_SORT_SIZES = [1, 7, 256, 257, 1023, 1024, 1025, 65536, 200_000]
 
 
@@ -869,20 +864,18 @@ def test_device_reduce_by_key_add_rejects_unsupported_dtype():
 
 
 # ---------------------------------------------------------------------------
-# Cross-cutting: runtime lifecycle, ndarray polymorphism, deprecation,
-# scratch-capacity errors, end_bit, pipeline composition, N=1M.
+# Cross-cutting: runtime lifecycle, ndarray polymorphism, deprecation, scratch-capacity errors, end_bit, pipeline
+# composition, N=1M.
 # ---------------------------------------------------------------------------
 
 
 def test_scratch_invalidate_resets_bytes_to_default():
-    """``_scratch._invalidate`` (hooked into ``qd.reset()``) resets BOTH
-    the cached field handle AND ``_scratch_bytes`` to the default.
+    """``_scratch._invalidate`` (hooked into ``qd.reset()``) resets BOTH the cached field handle AND ``_scratch_bytes``
+    to the default.
 
-    Pins the invariant: every ``qd.init`` starts with a pristine scratch
-    config, exactly as a fresh process would. We test ``_invalidate``
-    directly (rather than going through ``qd.reset()``) because we want
-    to assert the post-reset state *inside* a single test without
-    fighting the conftest's per-test ``init`` / ``reset`` pairing.
+    Pins the invariant: every ``qd.init`` starts with a pristine scratch config, exactly as a fresh process would. We
+    test ``_invalidate`` directly (rather than going through ``qd.reset()``) because we want to assert the post-reset
+    state *inside* a single test without fighting the conftest's per-test ``init`` / ``reset`` pairing.
     """
     assert _scratch._scratch_bytes == _scratch.DEFAULT_SCRATCH_BYTES, (
         "test prerequisite: scratch_bytes starts at default; the previous "
@@ -903,13 +896,10 @@ def test_scratch_invalidate_resets_bytes_to_default():
 def big_scratch():
     """Bump scratch to 8 MB for the duration of the test.
 
-    No teardown — the conftest's per-test ``qd.reset()`` fires
-    ``_scratch._invalidate``, which sets ``_scratch_bytes`` back to
-    ``DEFAULT_SCRATCH_BYTES`` and drops the field handle. That is what
-    delivers test isolation for the next test. Restoring here via
-    ``set_scratch_bytes`` would fail anyway: once the test has run an
-    algorithm, the scratch field is allocated, and ``set_scratch_bytes``
-    rejects post-allocation bumps by design.
+    No teardown — the conftest's per-test ``qd.reset()`` fires ``_scratch._invalidate``, which sets ``_scratch_bytes``
+    back to ``DEFAULT_SCRATCH_BYTES`` and drops the field handle. That is what delivers test isolation for the next
+    test. Restoring here via ``set_scratch_bytes`` would fail anyway: once the test has run an algorithm, the scratch
+    field is allocated, and ``set_scratch_bytes`` rejects post-allocation bumps by design.
     """
     _scratch.set_scratch_bytes(8 << 20)
     yield
@@ -918,8 +908,8 @@ def big_scratch():
 @pytest.mark.parametrize("dtype", [qd.u32, qd.i32, qd.f32])
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_n_1m(dtype, big_scratch):  # pylint: disable=unused-argument,redefined-outer-name
-    """N = 1_000_000 — qipc's hot-path size. Requires scratch bumped to
-    ~5 MB; the ``big_scratch`` fixture supplies 8 MB and restores after."""
+    """N = 1_000_000 — qipc's hot-path size. Requires scratch bumped to ~5 MB; the ``big_scratch`` fixture supplies
+    8 MB and restores after."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
@@ -934,9 +924,8 @@ def test_device_radix_sort_n_1m(dtype, big_scratch):  # pylint: disable=unused-a
 
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_by_key_add_n_1m(big_scratch):  # pylint: disable=unused-argument,redefined-outer-name
-    """N = 1_000_000 reduce-by-key. Same scratch requirement as the 1M
-    radix sort; the kernel sequence is different (just scan + scatter)
-    but the in-place scan over scratch[0:N] needs the bump."""
+    """N = 1_000_000 reduce-by-key. Same scratch requirement as the 1M radix sort; the kernel sequence is different
+    (just scan + scatter) but the in-place scan over scratch[0:N] needs the bump."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     keys_host = _gen_run_keys(rng, qd.i32, N)
@@ -960,49 +949,42 @@ def test_device_reduce_by_key_add_n_1m(big_scratch):  # pylint: disable=unused-a
     np.testing.assert_array_equal(values_out.to_numpy()[:nr], want_vals)
 
 
-# --- Polymorphic-tensor coverage (Field vs Ndarray) for the algorithm
-# surface is currently Field-only — every kernel param is annotated
-# ``template()``, which only accepts Field-like storage. The design doc
-# captures the future-direction switch to ``qd.Tensor`` kernel annotations
-# (which would let bare Ndarrays through unchanged). That's a follow-up;
-# the unwrap path for ``qd.Tensor(field)`` is exercised at the kernel-API
-# level in ``test_tensor_wrapper_kernel.py`` so we don't repeat it here
-# (passing ``qd.Tensor(...)`` through ``device_*`` would also pin the
-# per-kernel ``_tensor_unwrap_indices`` cache and break subsequent
-# bare-Field tests, by design of the kernel.py fast-path optimisation).
+# --- Polymorphic-tensor coverage (Field vs Ndarray) for the algorithm surface is currently Field-only — every kernel
+# param is annotated ``template()``, which only accepts Field-like storage. The design doc captures the
+# future-direction switch to ``qd.Tensor`` kernel annotations (which would let bare Ndarrays through unchanged).
+# That's a follow-up; the unwrap path for ``qd.Tensor(field)`` is exercised at the kernel-API level in
+# ``test_tensor_wrapper_kernel.py`` so we don't repeat it here (passing ``qd.Tensor(...)`` through ``device_*`` would
+# also pin the per-kernel ``_tensor_unwrap_indices`` cache and break subsequent bare-Field tests, by design of the
+# kernel.py fast-path optimisation).
 
 
-# --- Deprecation warnings on the legacy executor / parallel_sort surfaces.
-# We added the warnings; assert they actually fire so an accidental rebase
-# that drops them is caught.
+# --- Deprecation warnings on the legacy executor / parallel_sort surfaces. We added the warnings; assert they
+# actually fire so an accidental rebase that drops them is caught.
 
 
 @test_utils.test(arch=qd.gpu)
 def test_prefix_sum_executor_emits_deprecation_warning():
-    """`PrefixSumExecutor(N)` must emit `DeprecationWarning` per the
-    migration plan in algorithms.md."""
+    """`PrefixSumExecutor(N)` must emit `DeprecationWarning` per the migration plan in algorithms.md."""
     with pytest.warns(DeprecationWarning, match="device_exclusive_scan_add"):
         qd.algorithms.PrefixSumExecutor(64)
 
 
 @test_utils.test(arch=qd.gpu)
 def test_parallel_sort_emits_deprecation_warning():
-    """`parallel_sort` must emit `DeprecationWarning` per the
-    migration plan in algorithms.md."""
+    """`parallel_sort` must emit `DeprecationWarning` per the migration plan in algorithms.md."""
     keys = qd.field(qd.i32, shape=8)
     with pytest.warns(DeprecationWarning, match="device_radix_sort"):
         qd.algorithms.parallel_sort(keys)
 
 
-# --- Scratch-capacity error paths. Each algorithm raises a clear
-# RuntimeError when N would push the scratch budget over the configured
-# capacity, rather than corrupting data. Tests run at default 1 MB.
+# --- Scratch-capacity error paths. Each algorithm raises a clear RuntimeError when N would push the scratch budget
+# over the configured capacity, rather than corrupting data. Tests run at default 1 MB.
 
 
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_rejects_oversized_n():
-    """At default 1 MB scratch, ``N`` past ~260K should fail with a clear
-    RuntimeError pointing the caller at ``set_scratch_bytes``."""
+    """At default 1 MB scratch, ``N`` past ~260K should fail with a clear RuntimeError pointing the caller at
+    ``set_scratch_bytes``."""
     N = 400_000  # comfortably over the ~260K default-scratch ceiling
     keys = qd.field(qd.i32, shape=N)
     tmp = qd.field(qd.i32, shape=N)
@@ -1037,21 +1019,19 @@ def test_device_reduce_by_key_add_rejects_oversized_n():
         )
 
 
-# --- end_bit on radix sort. Default 32; lower values let callers sort by
-# only the low bits when they know the high bits are zero (qipc's case
-# for some small-value sorts).
+# --- end_bit on radix sort. Default 32; lower values let callers sort by only the low bits when they know the high
+# bits are zero (qipc's case for some small-value sorts).
 
 
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_end_bit_16():
-    """end_bit=16 sorts by only the low 16 bits; high bits are ignored.
-    Build keys where the low 16 bits and the high 16 bits disagree on
-    order, then verify sort is by low 16."""
+    """end_bit=16 sorts by only the low 16 bits; high bits are ignored. Build keys where the low 16 bits and the high
+    16 bits disagree on order, then verify sort is by low 16."""
     N = 1024
     rng = np.random.default_rng(seed=1234)
     low = rng.integers(0, 1 << 16, size=N, dtype=np.uint32)
-    # High bits decreasing, so a sort by high bits would reverse the array;
-    # if the algorithm correctly ignores the high bits, sort key is `low`.
+    # High bits decreasing, so a sort by high bits would reverse the array; if the algorithm correctly ignores the
+    # high bits, sort key is `low`.
     high = (np.arange(N, dtype=np.uint32)[::-1]).astype(np.uint32)
     host = ((high << np.uint32(16)) | low).astype(np.uint32)
 
@@ -1061,27 +1041,26 @@ def test_device_radix_sort_end_bit_16():
 
     qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, end_bit=16)
     got = keys.to_numpy()
-    # `got` should be sorted by the low 16 bits, in stable order of the
-    # original input. Tie-breaking on the low 16 bits keeps the original
-    # input index order.
+    # `got` should be sorted by the low 16 bits, in stable order of the original input. Tie-breaking on the low 16
+    # bits keeps the original input index order.
     got_low = got & 0xFFFF
     assert np.all(np.diff(got_low.astype(np.int64)) >= 0), "low-16 not non-decreasing"
 
 
-# --- Full pipeline: radix sort, then reduce-by-key. The qipc-shaped
-# composition (unsorted (key, value) pairs -> global per-key sums).
+# --- Full pipeline: radix sort, then reduce-by-key. The qipc-shaped composition (unsorted (key, value) pairs ->
+# global per-key sums).
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
 @test_utils.test(arch=qd.gpu)
 def test_radix_sort_then_reduce_by_key_pipeline(dtype):
-    """Sort by key, then reduce-by-key, to produce a global per-key sum.
-    Cross-checked against numpy.unique + numpy.add.reduceat."""
+    """Sort by key, then reduce-by-key, to produce a global per-key sum. Cross-checked against numpy.unique +
+    numpy.add.reduceat."""
     N = 4096
     rng = np.random.default_rng(seed=1234)
     if dtype == qd.f32:
-        # Use a small set of f32 values to maximise repeats; this also keeps
-        # the f32 atomic_add accumulation tolerance comfortable.
+        # Use a small set of f32 values to maximise repeats; this also keeps the f32 atomic_add accumulation tolerance
+        # comfortable.
         alphabet = rng.standard_normal(20).astype(np.float32)
     elif dtype == qd.u32:
         alphabet = rng.integers(0, 100, size=20, dtype=np.uint32)
@@ -1098,8 +1077,8 @@ def test_radix_sort_then_reduce_by_key_pipeline(dtype):
     _fill_field(values, values_host)
 
     qd.algorithms.device_radix_sort(keys, tmp_keys=tmp_keys, values=values, tmp_values=tmp_values)
-    # After sort, keys is ascending; values is permuted to match. Now RBK
-    # collapses runs of equal keys into per-key sums.
+    # After sort, keys is ascending; values is permuted to match. Now RBK collapses runs of equal keys into per-key
+    # sums.
     keys_out = qd.field(dtype, shape=N)
     values_out = qd.field(qd.i32, shape=N)
     num_runs = qd.field(qd.i32, shape=1)
@@ -1109,8 +1088,7 @@ def test_radix_sort_then_reduce_by_key_pipeline(dtype):
     got_keys = keys_out.to_numpy()[:nr]
     got_vals = values_out.to_numpy()[:nr]
 
-    # CPU reference: numpy.unique with sum aggregation, matching the
-    # device's sort + RBK semantics.
+    # CPU reference: numpy.unique with sum aggregation, matching the device's sort + RBK semantics.
     uniq, idx = np.unique(keys_host, return_inverse=True)
     sums = np.zeros(len(uniq), dtype=np.int64)
     np.add.at(sums, idx, values_host.astype(np.int64))
