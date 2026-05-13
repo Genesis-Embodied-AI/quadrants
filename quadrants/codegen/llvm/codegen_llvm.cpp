@@ -1285,6 +1285,16 @@ llvm::Value *TaskCodeGenLLVM::integral_type_atomic(AtomicOpStmt *stmt) {
         llvm_val[stmt->dest], llvm_val[stmt->val], [&](auto v1, auto v2) { return builder->CreateMul(v1, v2); },
         stmt->val->ret_type);
   }
+  // Atomic compare-and-swap: lowers to a single LLVM cmpxchg. The instruction returns a {value, success}
+  // struct; we project field 0 (the loaded prior value), matching CUDA atomicCAS / SPIR-V OpAtomicCompareExchange.
+  // The user recovers success with `(returned == expected)`.
+  if (stmt->op_type == AtomicOpType::cas) {
+    QD_ASSERT(stmt->expected != nullptr);
+    auto cmpxchg = builder->CreateAtomicCmpXchg(llvm_val[stmt->dest], llvm_val[stmt->expected], llvm_val[stmt->val],
+                                                llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                                llvm::AtomicOrdering::SequentiallyConsistent);
+    return builder->CreateExtractValue(cmpxchg, 0);
+  }
   // Atomic operators supported by LLVM
   std::unordered_map<AtomicOpType, llvm::AtomicRMWInst::BinOp> bin_op;
   bin_op[AtomicOpType::add] = llvm::AtomicRMWInst::BinOp::Add;
@@ -1298,6 +1308,7 @@ llvm::Value *TaskCodeGenLLVM::integral_type_atomic(AtomicOpStmt *stmt) {
   bin_op[AtomicOpType::bit_and] = llvm::AtomicRMWInst::BinOp::And;
   bin_op[AtomicOpType::bit_or] = llvm::AtomicRMWInst::BinOp::Or;
   bin_op[AtomicOpType::bit_xor] = llvm::AtomicRMWInst::BinOp::Xor;
+  bin_op[AtomicOpType::xchg] = llvm::AtomicRMWInst::BinOp::Xchg;
   QD_ASSERT(bin_op.find(stmt->op_type) != bin_op.end());
   return builder->CreateAtomicRMW(bin_op.at(stmt->op_type), llvm_val[stmt->dest], llvm_val[stmt->val],
                                   llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
@@ -1382,6 +1393,12 @@ llvm::Value *TaskCodeGenLLVM::real_type_atomic(AtomicOpStmt *stmt) {
       return atomic_op_using_cas(
           llvm_val[stmt->dest], llvm_val[stmt->val], [&](auto v1, auto v2) { return builder->CreateFMul(v1, v2); },
           stmt->val->ret_type);
+    case AtomicOpType::xchg:
+      // LLVM AtomicRMW Xchg accepts FP types directly since LLVM 14, lowering to the natively-atomic swap instruction
+      // (CUDA atomicExch / AMDGPU buffer_atomic_swap / x86 xchg). f16 falls through to the f16 CAS-emulation block
+      // above.
+      return builder->CreateAtomicRMW(llvm::AtomicRMWInst::Xchg, llvm_val[stmt->dest], llvm_val[stmt->val],
+                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent);
     default:
       break;
   }

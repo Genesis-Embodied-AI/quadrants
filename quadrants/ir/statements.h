@@ -301,10 +301,19 @@ class AtomicOpStmt : public Stmt, public ir_traits::Store, public ir_traits::Loa
  public:
   AtomicOpType op_type;
   Stmt *dest, *val;
+  // Only used when `op_type == AtomicOpType::cas`. For all other atomic ops this is `nullptr` and ignored.
+  // CAS uses three operands (dest, expected, val) and returns the value originally at `dest`; the success
+  // flag is recovered by the user via `(returned == expected)`.
+  Stmt *expected;
   bool is_reduction;
 
   AtomicOpStmt(AtomicOpType op_type, Stmt *dest, Stmt *val, const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info), op_type(op_type), dest(dest), val(val), is_reduction(false) {
+      : Stmt(dbg_info), op_type(op_type), dest(dest), val(val), expected(nullptr), is_reduction(false) {
+    QD_STMT_REG_FIELDS;
+  }
+
+  AtomicOpStmt(AtomicOpType op_type, Stmt *dest, Stmt *expected, Stmt *val, const DebugInfo &dbg_info = DebugInfo())
+      : Stmt(dbg_info), op_type(op_type), dest(dest), val(val), expected(expected), is_reduction(false) {
     QD_STMT_REG_FIELDS;
   }
 
@@ -328,7 +337,7 @@ class AtomicOpStmt : public Stmt, public ir_traits::Store, public ir_traits::Loa
     return dest;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type, op_type, dest, val);
+  QD_STMT_DEF_FIELDS(ret_type, op_type, dest, val, expected);
   QD_DEFINE_ACCEPT_AND_CLONE
 };
 

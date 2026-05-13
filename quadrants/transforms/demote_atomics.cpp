@@ -148,21 +148,51 @@ class DemoteAtomics : public BasicStmtVisitor {
     }
 
     if (demote) {
-      // replace atomics with load, add, store
-      auto bin_type = atomic_to_binary_op_type(stmt->op_type);
+      // replace atomics with load, op, store
       auto ptr = stmt->dest;
       auto val = stmt->val;
 
       auto new_stmts = VecStatement();
       Stmt *load;
-      if (is_local) {
-        load = new_stmts.push_back<LocalLoadStmt>(ptr);
-        auto bin = new_stmts.push_back<BinaryOpStmt>(bin_type, load, val);
-        new_stmts.push_back<LocalStoreStmt>(ptr, bin);
+      if (stmt->op_type == AtomicOpType::xchg) {
+        // atomic_exchange has no binary equivalent: the new value is just `val`, independent of the old value.
+        // Demoted form is load + store(val).
+        if (is_local) {
+          load = new_stmts.push_back<LocalLoadStmt>(ptr);
+          new_stmts.push_back<LocalStoreStmt>(ptr, val);
+        } else {
+          load = new_stmts.push_back<GlobalLoadStmt>(ptr);
+          new_stmts.push_back<GlobalStoreStmt>(ptr, val);
+        }
+      } else if (stmt->op_type == AtomicOpType::cas) {
+        // atomic_cas demoted: the new value is `val` if `load(dest) == expected`, else `load(dest)` (no-op).
+        // We materialize this as `select(cmp, val, load)` followed by an unconditional store -- avoids needing
+        // an IfStmt rewrite here. The user-visible return value is the prior load (success is recovered by the
+        // caller via `(returned == expected)`), same as the native atomic-CAS path in codegen.
+        QD_ASSERT(stmt->expected != nullptr);
+        auto expected_v = stmt->expected;
+        if (is_local) {
+          load = new_stmts.push_back<LocalLoadStmt>(ptr);
+          auto cmp = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::cmp_eq, load, expected_v);
+          auto sel = new_stmts.push_back<TernaryOpStmt>(TernaryOpType::select, cmp, val, load);
+          new_stmts.push_back<LocalStoreStmt>(ptr, sel);
+        } else {
+          load = new_stmts.push_back<GlobalLoadStmt>(ptr);
+          auto cmp = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::cmp_eq, load, expected_v);
+          auto sel = new_stmts.push_back<TernaryOpStmt>(TernaryOpType::select, cmp, val, load);
+          new_stmts.push_back<GlobalStoreStmt>(ptr, sel);
+        }
       } else {
-        load = new_stmts.push_back<GlobalLoadStmt>(ptr);
-        auto bin = new_stmts.push_back<BinaryOpStmt>(bin_type, load, val);
-        new_stmts.push_back<GlobalStoreStmt>(ptr, bin);
+        auto bin_type = atomic_to_binary_op_type(stmt->op_type);
+        if (is_local) {
+          load = new_stmts.push_back<LocalLoadStmt>(ptr);
+          auto bin = new_stmts.push_back<BinaryOpStmt>(bin_type, load, val);
+          new_stmts.push_back<LocalStoreStmt>(ptr, bin);
+        } else {
+          load = new_stmts.push_back<GlobalLoadStmt>(ptr);
+          auto bin = new_stmts.push_back<BinaryOpStmt>(bin_type, load, val);
+          new_stmts.push_back<GlobalStoreStmt>(ptr, bin);
+        }
       }
       // For a quadrants program like `c = ti.atomic_add(a, b)`, the IR looks
       // like the following

@@ -1745,7 +1745,21 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       use_native_atomics = false;
     }
 
-    if (use_native_atomics) {
+    if (stmt->op_type == AtomicOpType::xchg && !dest_is_ptr && !dt->is_primitive(PrimitiveTypeID::f16)) {
+      // Float xchg: route through OpAtomicExchange on the uint-backed buffer pointer (already established by
+      // the addr_ptr block above when no native float-atomic-add cap is in play). OpAtomicExchange supports
+      // float operands per the SPIR-V spec, but going through uint avoids any spirv_has_atomic_float_* cap
+      // dependency and works on every backend (including MoltenVK / spirv-cross-msl on Apple Silicon).
+      // Shared (workgroup) float xchg and f16 xchg are not yet covered -- they would need uint-backing
+      // analogous to the add CAS path; out of scope for the initial xchg landing.
+      auto uint_dt = ir_->get_quadrants_uint_type(dt);
+      auto uint_ret_type = ir_->get_primitive_type(uint_dt);
+      auto uint_data = ir_->make_value(spv::OpBitcast, uint_ret_type, data);
+      val = ir_->make_value(spv::OpAtomicExchange, uint_ret_type, addr_ptr,
+                            /*scope=*/ir_->const_i32_one_,
+                            /*semantics=*/ir_->const_i32_zero_, uint_data);
+      val = ir_->make_value(spv::OpBitcast, ret_type, val);
+    } else if (use_native_atomics) {
       val = ir_->make_value(atomic_fp_op, ir_->get_primitive_type(dt), addr_ptr,
                             /*scope=*/ir_->const_i32_one_,
                             /*semantics=*/ir_->const_i32_zero_, data);
@@ -1753,11 +1767,35 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       // Shared float arrays use uint-backed CAS (width-aware for f16->u32).
       // Integer shared atomics don't need this - they use native OpAtomicIAdd
       // etc. directly on the shared pointer.
+      QD_ASSERT_INFO(stmt->op_type != AtomicOpType::xchg,
+                     "atomic_exchange on shared (workgroup) float arrays is not yet implemented for SPIR-V; would "
+                     "need uint-backing analogous to the shared float-add CAS path");
       val = shared_float_atomic(*ir_, stmt->op_type, addr_ptr, data, dt);
     } else {
+      // Global f16 xchg falls through here because the uint-bitcast xchg branch above explicitly excludes f16
+      // (it would need a width-mismatched bitcast, same as the f16 atomic-add CAS path). float_atomic itself has
+      // no xchg case and would otherwise abort with a generic QD_NOT_IMPLEMENTED -- promote to a clearer message.
+      QD_ASSERT_INFO(stmt->op_type != AtomicOpType::xchg,
+                     "atomic_exchange on f16 (global memory) is not yet implemented for SPIR-V; would need a "
+                     "width-mismatched uint-backed bitcast analogous to the f16 atomic-add CAS path");
       val = ir_->float_atomic(stmt->op_type, addr_ptr, data, dt);
     }
   } else if (is_integral(dt)) {
+    if (stmt->op_type == AtomicOpType::cas) {
+      // OpAtomicCompareExchange takes (scope, sem_eq, sem_neq, value, comparator) and returns the value
+      // originally at `addr_ptr`. We surface that prior value to the user; success is recovered with
+      // `(returned == expected)`. Matches CUDA atomicCAS semantics. Uses Relaxed semantics like every other
+      // atomic op in this file - if surrounding-memory ordering is needed, the user pairs the CAS with
+      // qd.simt.block.mem_fence() / qd.simt.grid.mem_fence() the same way they would for atomic_add.
+      QD_ASSERT(stmt->expected != nullptr);
+      spirv::Value expected_val = ir_->query_value(stmt->expected->raw_name());
+      val = ir_->make_value(spv::OpAtomicCompareExchange, ret_type, addr_ptr,
+                            /*scope=*/ir_->const_i32_one_,
+                            /*semantics if equal=*/ir_->const_i32_zero_,
+                            /*semantics if unequal=*/ir_->const_i32_zero_, data, expected_val);
+      ir_->register_value(stmt->raw_name(), val);
+      return;
+    }
     bool use_native_atomics = false;
     spv::Op op;
     if (stmt->op_type == AtomicOpType::add) {
@@ -1786,6 +1824,9 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       use_native_atomics = true;
     } else if (stmt->op_type == AtomicOpType::bit_xor) {
       op = spv::OpAtomicXor;
+      use_native_atomics = true;
+    } else if (stmt->op_type == AtomicOpType::xchg) {
+      op = spv::OpAtomicExchange;
       use_native_atomics = true;
     } else {
       QD_NOT_IMPLEMENTED
