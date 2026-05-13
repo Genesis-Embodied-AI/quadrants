@@ -181,18 +181,18 @@ Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_d
 
 #### Supported `_tiled` ops
 
-| Tiled op                                                          | Full-subgroup form                               | Result placement    |
-|-------------------------------------------------------------------|--------------------------------------------------|---------------------|
-| `subgroup.{all,any}_true_tiled(p, log2_size)`                     | `subgroup.{all,any}_true(p)`                     | broadcast-to-all    |
-| `subgroup.all_equal_tiled(v, log2_size)`                          | `subgroup.all_equal(v)`                          | broadcast-to-all    |
-| `subgroup.reduce_add_tiled(v, log2_size)`                         | `subgroup.reduce_add(v)`                         | window-local lane 0 |
-| `subgroup.reduce_all_add_tiled(v, log2_size)`                     | `subgroup.reduce_all_add(v)`                     | broadcast-to-all    |
-| `subgroup.segmented_reduce_add_tiled(v, head_flag, log2_size)`    | `subgroup.segmented_reduce_add(v, head_flag)`    | broadcast-to-all    |
-| `subgroup.reduce_{min,max}_tiled(v, log2_size)`                   | `subgroup.reduce_{min,max}(v)`                   | window-local lane 0 |
-| `subgroup.reduce_all_{min,max}_tiled(v, log2_size)`               | `subgroup.reduce_all_{min,max}(v)`               | broadcast-to-all    |
-| `subgroup.segmented_reduce_{min,max}_tiled(v, head_flag, log2_size)` | `subgroup.segmented_reduce_{min,max}(v, head_flag)` | broadcast-to-all |
-| `subgroup.inclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | `subgroup.inclusive_{add,mul,min,max,and,or,xor}(v)` | broadcast-to-all |
-| `subgroup.exclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | `subgroup.exclusive_{add,mul,min,max,and,or,xor}(v)` | broadcast-to-all |
+| Tiled op                                                             | Result placement    |
+|----------------------------------------------------------------------|---------------------|
+| `subgroup.{all,any}_true_tiled(p, log2_size)`                        | broadcast-to-all    |
+| `subgroup.all_equal_tiled(v, log2_size)`                             | broadcast-to-all    |
+| `subgroup.reduce_add_tiled(v, log2_size)`                            | window-local lane 0 |
+| `subgroup.reduce_all_add_tiled(v, log2_size)`                        | broadcast-to-all    |
+| `subgroup.segmented_reduce_add_tiled(v, head_flag, log2_size)`       | broadcast-to-all    |
+| `subgroup.reduce_{min,max}_tiled(v, log2_size)`                      | window-local lane 0 |
+| `subgroup.reduce_all_{min,max}_tiled(v, log2_size)`                  | broadcast-to-all    |
+| `subgroup.segmented_reduce_{min,max}_tiled(v, head_flag, log2_size)` | broadcast-to-all    |
+| `subgroup.inclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | broadcast-to-all   |
+| `subgroup.exclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | broadcast-to-all   |
 
 - **Broadcast-to-all forms**: every lane in each window holds the per-window result. Lanes in different windows hold different results (their own window's).
 - **Window-local-lane-0 forms**: only the *window-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. Use the `reduce_all_*_tiled` counterparts if you want every lane to see its window's result.
