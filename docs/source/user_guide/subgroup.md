@@ -34,7 +34,7 @@ The full Python API is grouped here by category. The first column lists each op,
 | `subgroup.sync()`                           | yes  | yes    | yes                     |
 | `subgroup.mem_fence()`                      | yes\*\* | yes\*\* | yes                  |
 
-Default scope: every op in this module operates over the **full active subgroup** (32 lanes on wave32, 64 on wave64) unless its name carries a `_tiled` suffix. The `_tiled` variants take an extra `log2_size` template argument and split the subgroup into independent `2**log2_size`-aligned windows — see [Tiled variants](#tiled-variants) below for when and why you might want them.
+Default scope: every op in this module operates over the **full active subgroup** (32 lanes on wave32, 64 on wave64) unless its name carries a `_tiled` suffix. The `_tiled` variants take an extra `log2_size` template argument and split the subgroup into independent `2**log2_size`-aligned tiles — see [Tiled variants](#tiled-variants) below for when and why you might want them.
 
 Renames relative to the previous `qd.simt.subgroup` API:
 
@@ -80,7 +80,7 @@ CUDA shortcut: `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF,
 | `subgroup.inclusive_{add,mul,min,max,and,or,xor}(v)` | yes  | yes\*  | yes                     | integer + float (`_and` / `_or` / `_xor`: integer only) |
 | `subgroup.exclusive_{add,mul,min,max,and,or,xor}(v)` | yes  | yes\*  | yes                     | integer + float (`_and` / `_or` / `_xor`: integer only) |
 
-Every op above has a paired `_tiled` form that takes an extra `log2_size` template parameter and operates on independent `2**log2_size`-aligned windows that tile the subgroup — see [Tiled variants](#tiled-variants).
+Every op above has a paired `_tiled` form that takes an extra `log2_size` template parameter and operates on independent `2**log2_size`-aligned tiles within the subgroup — see [Tiled variants](#tiled-variants).
 
 The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add_tiled(value)` with no `log2_size`) have been removed in favour of the portable sized API. For reductions other than the ones listed above, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern as `reduce_add_tiled` / `reduce_all_add_tiled`.
 
@@ -166,36 +166,36 @@ Per-backend lowering notes:
 
 ### Tiled variants
 
-Every reduce / scan / vote op in this module has a paired `_tiled` form that takes an extra `log2_size` template parameter and runs `group_size() / (2**log2_size)` independent reductions / scans / votes in parallel — one per `2**log2_size`-aligned window that tiles the subgroup. The base op is the special case where the window is the whole subgroup (i.e. `log2_size = log2_group_size()`).
+Every reduce / scan / vote op in this module has a paired `_tiled` form that takes an extra `log2_size` template parameter and runs `group_size() / (2**log2_size)` independent reductions / scans / votes in parallel — one per `2**log2_size`-aligned tile within the subgroup. The base op is the special case where the tile is the whole subgroup (i.e. `log2_size = log2_group_size()`).
 
-With `log2_size = k`, the subgroup splits into windows of `2**k` consecutive lanes each, and each window does its own reduction completely independently of every other window. The caller arranges `2**k <= group_size()` so every window is full; a smaller `k` simply gives more, narrower windows. It does **not** mean "only the first window is active".
+With `log2_size = k`, the subgroup splits into tiles of `2**k` consecutive lanes each, and each tile does its own reduction completely independently of every other tile. The caller arranges `2**k <= group_size()` so every tile is full; a smaller `k` simply gives more, narrower tiles. It does **not** mean "only the first tile is active".
 
 | `log2_size` | wave32 (CUDA / most Vulkan / Metal) | wave64 (AMDGPU — see [supported_systems](supported_systems.md)) |
 | --- | --- | --- |
-| 5 (window = 32) | 1 window: lanes 0–31 (= base op)             | 2 windows: 0–31, 32–63 |
-| 4 (window = 16) | 2 windows: 0–15, 16–31                       | 4 windows: 0–15, 16–31, 32–47, 48–63 |
-| 3 (window = 8)  | 4 windows of 8                               | 8 windows of 8 |
-| 0 (window = 1)  | every lane is its own window (no-op)         | same |
+| 5 (tile = 32) | 1 tile: lanes 0–31 (= base op)             | 2 tiles: 0–31, 32–63 |
+| 4 (tile = 16) | 2 tiles: 0–15, 16–31                       | 4 tiles: 0–15, 16–31, 32–47, 48–63 |
+| 3 (tile = 8)  | 4 tiles of 8                               | 8 tiles of 8 |
+| 0 (tile = 1)  | every lane is its own tile (no-op)         | same |
 
-Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_down` / `subgroup.shuffle_up` / `subgroup.shuffle_xor` ops address every lane by absolute lane id with no built-in notion of a window. Windowing emerges from how the higher-level reductions / scans / votes *compose* those shuffles.
+Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_down` / `subgroup.shuffle_up` / `subgroup.shuffle_xor` ops address every lane by absolute lane id with no built-in notion of a tile. Tiling emerges from how the higher-level reductions / scans / votes *compose* those shuffles.
 
 #### Supported `_tiled` ops
 
-| Tiled op                                                             | Result placement    |
-|----------------------------------------------------------------------|---------------------|
-| `subgroup.{all,any}_true_tiled(p, log2_size)`                        | broadcast-to-all    |
-| `subgroup.all_equal_tiled(v, log2_size)`                             | broadcast-to-all    |
-| `subgroup.reduce_add_tiled(v, log2_size)`                            | window-local lane 0 |
-| `subgroup.reduce_all_add_tiled(v, log2_size)`                        | broadcast-to-all    |
-| `subgroup.segmented_reduce_add_tiled(v, head_flag, log2_size)`       | broadcast-to-all    |
-| `subgroup.reduce_{min,max}_tiled(v, log2_size)`                      | window-local lane 0 |
-| `subgroup.reduce_all_{min,max}_tiled(v, log2_size)`                  | broadcast-to-all    |
-| `subgroup.segmented_reduce_{min,max}_tiled(v, head_flag, log2_size)` | broadcast-to-all    |
-| `subgroup.inclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | broadcast-to-all   |
-| `subgroup.exclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | broadcast-to-all   |
+| Tiled op                                                             | Result placement  |
+|----------------------------------------------------------------------|-------------------|
+| `subgroup.{all,any}_true_tiled(p, log2_size)`                        | broadcast-to-tile |
+| `subgroup.all_equal_tiled(v, log2_size)`                             | broadcast-to-tile |
+| `subgroup.reduce_add_tiled(v, log2_size)`                            | tile-local lane 0 |
+| `subgroup.reduce_all_add_tiled(v, log2_size)`                        | broadcast-to-tile |
+| `subgroup.segmented_reduce_add_tiled(v, head_flag, log2_size)`       | broadcast-to-tile |
+| `subgroup.reduce_{min,max}_tiled(v, log2_size)`                      | tile-local lane 0 |
+| `subgroup.reduce_all_{min,max}_tiled(v, log2_size)`                  | broadcast-to-tile |
+| `subgroup.segmented_reduce_{min,max}_tiled(v, head_flag, log2_size)` | broadcast-to-tile |
+| `subgroup.inclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | broadcast-to-tile |
+| `subgroup.exclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | broadcast-to-tile |
 
-- **Broadcast-to-all forms**: every lane in each window holds the per-window result. Lanes in different windows hold different results (their own window's).
-- **Window-local-lane-0 forms**: only the *window-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. Use the `reduce_all_*_tiled` counterparts if you want every lane to see its window's result.
+- **Broadcast-to-tile forms**: every lane in each tile holds that tile's result. Lanes in different tiles hold different results (their own tile's).
+- **Tile-local lane-0 forms**: only the *tile-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. Use the `reduce_all_*_tiled` counterparts if you want every lane to see its tile's result.
 
 `log2_size` is a `qd.template()` — a compile-time constant in `[0, 5]` for reductions / scans / votes, and `[0, 6]` for `segmented_reduce_*_tiled` (which has a dedicated u64-bitmask path on wave64). The caller must ensure `2**log2_size <= group_size()`; passing a larger value silently computes the wrong result on most backends and there is no runtime check. Backends that do not support a given op (`reduce_add_tiled` and friends on `*` backends, see the per-op tables) raise a `qd.static_assert` at compile time.
 
@@ -229,7 +229,7 @@ Returns `1` on lane 0 of every subgroup and `0` on every other lane. Useful for 
 
 ### `reduce_add(value)`
 
-Sums `value` across every lane in the subgroup via a `shuffle_down` tree. The result is valid in **lane 0**; other lanes hold partial sums and should be considered undefined. Tiled variant: `reduce_add_tiled(value, log2_size)` runs the same tree independently on each `2**log2_size`-aligned window — see [Tiled variants](#tiled-variants).
+Sums `value` across every lane in the subgroup via a `shuffle_down` tree. The result is valid in **lane 0**; other lanes hold partial sums and should be considered undefined. Tiled variant: `reduce_add_tiled(value, log2_size)` runs the same tree independently on each `2**log2_size`-aligned tile — see [Tiled variants](#tiled-variants).
 
 - The reduction works on any type that supports `+` and `shuffle_down`; in practice this means i32, u32, f32, f64, i64, u64.
 - Decorated with `@qd.func` and inlined into the calling kernel — there is no kernel-launch overhead and no separate symbol to link. The body unrolls into exactly `log2_group_size()` `shuffle_down + add` pairs in the calling kernel's IR, with no runtime loop overhead.
@@ -271,7 +271,7 @@ Per-lane inclusive scan under `+` / `min` / `max` that resets at every non-zero 
 
 ### `inclusive_add` / `inclusive_mul` / `inclusive_min` / `inclusive_max` / `inclusive_and` / `inclusive_or` / `inclusive_xor`
 
-Per-lane inclusive scan across the entire subgroup, under the binary operator named by the suffix. Lane `i` returns `v[0] op v[1] op ... op v[i]`. Tiled variants: `inclusive_*_tiled(value, log2_size)` run the same scan independently on each `2**log2_size`-aligned window — see [Tiled variants](#tiled-variants).
+Per-lane inclusive scan across the entire subgroup, under the binary operator named by the suffix. Lane `i` returns `v[0] op v[1] op ... op v[i]`. Tiled variants: `inclusive_*_tiled(value, log2_size)` run the same scan independently on each `2**log2_size`-aligned tile — see [Tiled variants](#tiled-variants).
 
 - The body unrolls into exactly `log2_group_size()` `shuffle_up + op` pairs in the calling kernel's IR, with no runtime loop overhead.
 - `_add`, `_mul`, `_min`, `_max` accept integer and float dtypes (`i32`, `u32`, `i64`, `u64`, `f32`, `f64`); `_and`, `_or`, `_xor` accept integer dtypes only.

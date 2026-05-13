@@ -175,7 +175,7 @@ def ballot_full_subgroup(predicate):
 # ``log2_size=5`` (CUDA / Metal / Vulkan-wave32) or ``log2_size=6`` (AMDGPU wave64), so there is no runtime overhead vs
 # calling the underlying ``*_tiled`` op directly.  These are the default form for "operate over the entire subgroup"
 # portably without branching on ``group_size()`` -- the common case for whole-warp reductions, broadcasts, and votes.
-# Reach for the ``*_tiled`` form when you want multiple independent windows per subgroup (e.g.
+# Reach for the ``*_tiled`` form when you want multiple independent tiles per subgroup (e.g.
 # ``reduce_add_tiled(v, 4)`` to fold every 16 lanes into one).
 
 

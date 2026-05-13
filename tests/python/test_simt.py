@@ -37,7 +37,7 @@ def _skip_if_f64_unsupported(dtype):
 #   5``.
 #
 # So every scenario table holds ``log2_size = 1`` (the shortest tree, catches one-step-only bugs) and ``log2_size =
-# 5`` (the full-wave32 / 32-lane-window-on-wave64 case, the most common production size) for ``i32``, plus one row
+# 5`` (the full-wave32 / 32-lane-tile-on-wave64 case, the most common production size) for ``i32``, plus one row
 # per non-i32 dtype at ``log2_size = 5``.  We don't include ``log2_size = 6`` in the bulk matrix -- that's covered by
 # the dedicated ``test_subgroup_*_log2_size_6`` tests further down, which only run on AMDGPU wave64.  Net effect:
 # ~6 cases per test instead of the previous cartesian ~25, ~4x fewer pytest invocations across the whole sized
@@ -3368,6 +3368,6 @@ def test_subgroup_reduce_add_absolute():
 
     k()
 
-    # ``reduce_add_tiled`` returns the full sum in lane 0 of each window; for log2_size = log2_group_size() the
-    # window is the whole subgroup, so we only check lane 0.  (The other lanes' values are implementation-defined.)
+    # ``reduce_add_tiled`` returns the full sum in lane 0 of each tile; for log2_size = log2_group_size() the tile
+    # is the whole subgroup, so we only check lane 0.  (The other lanes' values are implementation-defined.)
     assert dst[0] == expected, f"reduce_add lane 0: got {dst[0]}, expected {expected}"
