@@ -676,6 +676,13 @@ void export_lang(py::module &m) {
   m.def("expr_atomic_mul",
         [&](const Expr &a, const Expr &b) { return Expr::make<AtomicOpExpression>(AtomicOpType::mul, a, b); });
 
+  m.def("expr_atomic_xchg",
+        [&](const Expr &a, const Expr &b) { return Expr::make<AtomicOpExpression>(AtomicOpType::xchg, a, b); });
+
+  m.def("expr_atomic_cas", [&](const Expr &dest, const Expr &expected, const Expr &desired) {
+    return Expr::make<AtomicOpExpression>(AtomicOpType::cas, dest, expected, desired);
+  });
+
   m.def("expr_assume_in_range", assume_range);
 
   m.def("expr_loop_unique", loop_unique);

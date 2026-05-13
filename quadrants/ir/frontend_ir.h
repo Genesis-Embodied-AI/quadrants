@@ -672,9 +672,18 @@ class IdExpression : public Expression {
 class AtomicOpExpression : public Expression {
  public:
   AtomicOpType op_type;
-  Expr dest, val;
+  Expr dest;
+  // Only meaningful when `op_type == AtomicOpType::cas`. Empty Expr otherwise. CAS is the only atomic op
+  // with three operands -- (dest, expected, val) -- and is the only place this slot is populated.
+  // Declared between dest and val so member-init order matches the 4-arg constructor's parameter order.
+  Expr expected;
+  Expr val;
 
   AtomicOpExpression(AtomicOpType op_type, const Expr &dest, const Expr &val) : op_type(op_type), dest(dest), val(val) {
+  }
+
+  AtomicOpExpression(AtomicOpType op_type, const Expr &dest, const Expr &expected, const Expr &val)
+      : op_type(op_type), dest(dest), expected(expected), val(val) {
   }
 
   void type_check(const CompileConfig *config) override;

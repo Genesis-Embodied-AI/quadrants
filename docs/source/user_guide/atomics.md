@@ -15,6 +15,8 @@ All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y
 | `atomic_mul`                                | CAS on every dtype                         | CAS                                   | CAS                                                    | CAS                              |
 | `atomic_min`, `atomic_max`                  | int native; floats via CAS                 | int native; floats via CAS            | int native; floats via CAS                             | int native; floats via CAS       |
 | `atomic_and`, `atomic_or`, `atomic_xor`     | int only (native)                          | int only (native)                     | int only (native)                                      | int only (native)                |
+| `atomic_exchange`                           | int / float native (`atomicExch`)          | int / float native (`*_atomic_swap`)  | int native; f32 / f64 global via uint-bitcast `OpAtomicExchange`; f16, shared float, workgroup f64 deferred‡ | int / float native (`xchg`)      |
+| `atomic_cas`                                | int native (`atomicCAS`)                   | int native (`*_atomic_cmpswap`)       | int native (`OpAtomicCompareExchange`); f32 / f64 rejected at trace time§                                 | int native (`cmpxchg`)           |
 
 A few cross-cutting notes that the cells above abbreviate:
 
@@ -25,13 +27,17 @@ A few cross-cutting notes that the cells above abbreviate:
 - **SPIR-V capability bits** (`spirv_has_atomic_float_add`, `spirv_has_atomic_float64_add`, `spirv_has_atomic_float16_add`) decide whether `atomic_add` lowers to native `OpAtomicFAddEXT` or a uint-backed CAS — the dispatch happens per-call inside `quadrants/codegen/spirv/spirv_codegen.cpp`.
 - **`i64` / `u64` atomic RMW is not portable to Metal.** Metal Shading Language only exposes 64-bit atomics as `atomic_fetch_min` / `atomic_fetch_max` on `uint64` (Apple GPU family 9+, M3 / A17); `atomic_add` / `sub` / `mul` and the bitwise family are unavailable on every Apple GPU. The Metal RHI today over-advertises `spirv_has_atomic_int64` (gated on Apple7 / Mac2 in `quadrants/rhi/metal/metal_device.mm`), so 64-bit integer atomics under Metal fail at pipeline create time with `RhiResult=-1`. Use `i32` / `u32` for Metal portability. CUDA, AMDGPU, and Vulkan with `VK_KHR_shader_atomic_int64` are unaffected.
 
-There is no `atomic_cas` (compare-and-swap) exposed in Python today. The C++ runtime uses CmpXchg internally; surfacing it requires extending `AtomicOpType`.
+† `i64` / `u64` atomic RMW is **not portable to Metal**. Metal Shading Language only exposes 64-bit atomics as `atomic_fetch_min` / `atomic_fetch_max` on `uint64`, starting at Apple GPU family 9 (M3 / A17 and newer); `atomic_add` / `sub` / `mul` and the bitwise family are unavailable on every Apple GPU. The Metal RHI today over-advertises `spirv_has_atomic_int64` (gated on Apple7 / Mac2 in `quadrants/rhi/metal/metal_device.mm`), so trying to use 64-bit integer atomics under Metal currently fails at pipeline create time with `RhiResult=-1` ("SPIR-V shader was rejected by the backend"). Use `i32` / `u32` if you need cross-Metal portability. CUDA, AMDGPU, and Vulkan with `VK_KHR_shader_atomic_int64` are unaffected.
 
-All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.mem_fence()` (device scope).
+‡ `atomic_exchange` on `f16`, on shared (`qd.simt.block.SharedArray`) float arrays, and on f64 in workgroup memory is not yet wired up. Global-memory `atomic_exchange` on every other dtype/backend combination listed above is supported; the SPIR-V path bitcasts through the corresponding uint type so no `spirv_has_atomic_float_*` capability is required.
+
+§ `atomic_cas` on `f32` / `f64` is rejected at trace time (raises `QuadrantsTypeError`). Integer CAS (`i32` / `u32` / `i64` / `u64`) is supported on every backend listed in the table above, with the same Metal caveat for `i64` / `u64` (†) as the rest of the 64-bit integer atomic family.
+
+All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space - to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.mem_fence()` (device scope).
 
 ## Semantics
 
-### `qd.atomic_add(x, y)` — and the rest of the family
+### `qd.atomic_add(x, y)` - and the rest of the family
 
 ```python
 old = qd.atomic_add(x, y)
@@ -63,7 +69,67 @@ Bitwise atomics. Integer dtypes only — passing `f32` / `f64` raises a type err
 
 ### `qd.atomic_sub(x, y)` / `qd.atomic_mul(x, y)`
 
-Atomic subtract and atomic multiply. `atomic_sub` is rewritten to `atomic_add(x, -y)` at IR-construction time (`quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten`), so its per-backend behaviour is identical to `atomic_add`. `atomic_mul` always lowers to a CAS loop — no LLVM AtomicRMW or SPIR-V `OpAtomic*` op corresponds to multiply — and is intentionally not heavily optimised; prefer reducing to a different scheme on hot paths.
+Atomic subtract and atomic multiply. `atomic_sub` is rewritten to `atomic_add(x, -y)` at IR-construction time (`quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten`), so its per-backend behaviour is identical to `atomic_add`. `atomic_mul` always lowers to a CAS loop - no LLVM AtomicRMW or SPIR-V `OpAtomic*` op corresponds to multiply - and is intentionally not heavily optimised; prefer reducing to a different scheme on hot paths.
+
+### `qd.atomic_exchange(x, y)`
+
+Atomically writes `y` into `x` and returns the old value of `x`. Unlike the other `qd.atomic_*` ops the new value of `x` does **not** depend on its old value - `x` is unconditionally overwritten. The exchange always succeeds; there is no retry / failure path.
+
+```python
+old = qd.atomic_exchange(x, y)
+# Effect:
+#   tmp = load(x)
+#   store(x, y)
+#   old = tmp
+# all three steps execute as a single atomic transaction on x.
+```
+
+Lowers to one native instruction on every backend (CUDA `atomicExch`, AMDGPU `buffer_atomic_swap` / `global_atomic_swap`, SPIR-V `OpAtomicExchange`, x86 `xchg`). Useful for take-ownership / hand-off patterns:
+
+```python
+my_old_task = qd.atomic_exchange(slot, NO_TASK)
+if my_old_task != NO_TASK:
+    process(my_old_task)
+# Whatever was in `slot` is now mine to process; I left NO_TASK behind for the next worker.  No retry needed - exchange
+# always succeeds.
+```
+
+Vector / matrix arguments fan out per component, same as the rest of the `qd.atomic_*` family: a `qd.atomic_exchange(field_of_vec3, qd.Vector([...]))` issues three independent scalar exchanges, one per slot, with no all-or-nothing guarantee across the components.
+
+### `qd.atomic_cas(x, expected, desired)`
+
+Atomic compare-and-swap: writes `desired` into `x` if and only if `x` currently equals `expected`, and unconditionally returns the value originally at `x`. The user recovers whether the swap actually fired with one comparison:
+
+```python
+old = qd.atomic_cas(x, expected, desired)
+# Effect:
+#   tmp = load(x)
+#   if tmp == expected: store(x, desired)
+#   old = tmp
+# all three steps (load, conditional store, return-old) execute as a single atomic transaction on x.
+
+success = (old == expected)
+```
+
+This is the basic primitive on top of which arbitrary atomic read-modify-write operations can be built with a retry loop. Returning the prior value (rather than a `(prior, success)` pair) matches CUDA `atomicCAS` and SPIR-V `OpAtomicCompareExchange`; lowers to one native instruction on every backend (CUDA `atomicCAS`, AMDGPU `*_atomic_cmpswap`, SPIR-V `OpAtomicCompareExchange`, x86 `cmpxchg`).
+
+CAS-loop pattern for ops the framework doesn't expose natively (e.g. atomic-max-of-some-derived-quantity):
+
+```python
+@qd.kernel
+def cas_loop_max():
+    # Atomically: x = max(x, candidate). The framework already has atomic_max for primitives, but the same
+    # shape works for any reduction whose backend support is missing.
+    for _attempt in range(MAX_RETRIES):
+        cur = x[None]
+        new = qd.max(cur, candidate)
+        old = qd.atomic_cas(x[None], cur, new)
+        if old == cur:
+            break  # CAS landed; we're done.
+        # Otherwise some other thread won the race; loop back and re-read.
+```
+
+Currently restricted to integer dtypes (`i32` / `u32` / `i64` / `u64`); float CAS is rejected at trace time. The Metal `i64` / `u64` caveat in the support table footnote applies here too. There is no shared-memory CAS path yet.
 
 ## Performance and portability notes
 
@@ -125,8 +191,8 @@ Key:
 
 ## Related
 
-- [math](math.md) — `qd.math.*`, including the bit-counting helpers (`popcnt`, `clz`) commonly paired with atomics in select / compact patterns.
-- `qd.simt.block.*` — block-scope barriers and memory fences (`qd.simt.block.mem_fence()`).
-- `qd.simt.subgroup.*` — warp-scope reductions and shuffles, the recommended pre-aggregation step before an atomic.
-- `qd.simt.grid.*` — device-scope memory fence (`qd.simt.grid.mem_fence()`); see [grid](grid.md).
-- [parallelization](parallelization.md) — thread-synchronization patterns and how atomics fit into the broader synchronization story.
+- [math](math.md) - `qd.math.*`, including the bit-counting helpers (`popcnt`, `clz`) commonly paired with atomics in select / compact patterns.
+- `qd.simt.block.*` - block-scope barriers and memory fences (`qd.simt.block.mem_fence()`).
+- `qd.simt.subgroup.*` - warp-scope reductions and shuffles, the recommended pre-aggregation step before an atomic.
+- `qd.simt.grid.*` - device-scope memory fence (`qd.simt.grid.mem_fence()`); see [grid](grid.md).
+- [parallelization](parallelization.md) - thread-synchronization patterns and how atomics fit into the broader synchronization story.
