@@ -1258,24 +1258,18 @@ def test_block_inclusive_max(dtype, sg_per_block):
 @pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
 def test_block_exclusive_min(dtype, sg_per_block):
-    """Block exclusive prefix min; thread 0 holds the supplied identity."""
+    """Block exclusive prefix min; thread 0 holds the dtype-derived identity (``+inf`` / ``np.iinfo(dtype).max``)."""
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
     dst = qd.field(dtype=dtype, shape=N)
 
-    SENTINEL_INT = 1_000_000  # > every value we initialise (max is ~997 from the permuted hash)
-    SENTINEL_FLOAT = 1e9
-
     @qd.kernel
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            if dtype == qd.i32:
-                dst[i] = block.exclusive_min(src[i], block_dim, SENTINEL_INT, dtype)
-            else:
-                dst[i] = block.exclusive_min(src[i], block_dim, SENTINEL_FLOAT, dtype)
+            dst[i] = block.exclusive_min(src[i], block_dim, dtype)
 
     int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
@@ -1283,7 +1277,7 @@ def test_block_exclusive_min(dtype, sg_per_block):
         src[i] = v if dtype in int_dtypes else 1.0 * v
     foo()
 
-    sentinel = SENTINEL_INT if dtype == qd.i32 else SENTINEL_FLOAT
+    sentinel = np.iinfo(np.int32).max if dtype == qd.i32 else float("inf")
     py_min = lambda a, b: a if a < b else b  # noqa: E731
     for b in range(NUM_BLOCKS):
         block_vals = [src[b * block_dim + j] for j in range(block_dim)]
@@ -1431,24 +1425,18 @@ def test_block_radix_rank_match_atomic_or(key_pattern, bit_start, num_bits):
 @pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
 def test_block_exclusive_max(dtype, sg_per_block):
-    """Block exclusive prefix max; thread 0 holds the supplied identity."""
+    """Block exclusive prefix max; thread 0 holds the dtype-derived identity (``-inf`` / ``np.iinfo(dtype).min``)."""
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
     dst = qd.field(dtype=dtype, shape=N)
 
-    SENTINEL_INT = -1_000_000
-    SENTINEL_FLOAT = -1e9
-
     @qd.kernel
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            if dtype == qd.i32:
-                dst[i] = block.exclusive_max(src[i], block_dim, SENTINEL_INT, dtype)
-            else:
-                dst[i] = block.exclusive_max(src[i], block_dim, SENTINEL_FLOAT, dtype)
+            dst[i] = block.exclusive_max(src[i], block_dim, dtype)
 
     int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
@@ -1456,7 +1444,7 @@ def test_block_exclusive_max(dtype, sg_per_block):
         src[i] = v if dtype in int_dtypes else 1.0 * v
     foo()
 
-    sentinel = SENTINEL_INT if dtype == qd.i32 else SENTINEL_FLOAT
+    sentinel = np.iinfo(np.int32).min if dtype == qd.i32 else float("-inf")
     py_max = lambda a, b: a if a > b else b  # noqa: E731
     for b in range(NUM_BLOCKS):
         block_vals = [src[b * block_dim + j] for j in range(block_dim)]

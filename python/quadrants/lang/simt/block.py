@@ -385,22 +385,25 @@ def exclusive_add(value, block_dim: template(), dtype: template()):
     return exclusive_scan(value, block_dim, _bin_add, value - value, dtype)
 
 
-@_func
-def exclusive_min(value, block_dim: template(), identity, dtype: template()):
-    """Block-scope exclusive prefix min.  Thread 0 holds ``identity``: the caller must supply a value that is ``>=``
-    every legal element of the input (typically ``+∞`` for floats, the dtype's maximum for integers).  See
-    `subgroup.exclusive_min` for why this op alone takes an explicit identity.
+# Plain Python wrappers (not ``@func``): the identity for an exclusive min / max scan is uniquely determined by
+# ``value``'s dtype, so we introspect it at compile time and emit a typed-constant identity Expr rather than asking
+# callers to provide one.  Mirrors the subgroup convention (``subgroup.exclusive_min`` and friends).  The identity
+# helpers (``_typed_min_identity`` / ``_typed_max_identity``) are reused from ``subgroup.py`` so the per-dtype
+# sentinel choices stay consistent across the two scopes.
+def exclusive_min(value, block_dim: template(), dtype: template()):
+    """Block-scope exclusive prefix min.  After the call, thread ``i > 0`` holds ``min(v[0], ..., v[i-1])`` and
+    thread 0 holds the dtype-derived identity: ``+inf`` for real dtypes, ``np.iinfo(dtype).max`` for integer dtypes
+    (``UINT_MAX`` for unsigned, ``INT_MAX`` for signed).  See `exclusive_scan` for the underlying contract.
     """
-    return exclusive_scan(value, block_dim, _bin_min, identity, dtype)
+    return exclusive_scan(value, block_dim, _bin_min, _subgroup._typed_min_identity(value), dtype)
 
 
-@_func
-def exclusive_max(value, block_dim: template(), identity, dtype: template()):
-    """Block-scope exclusive prefix max.  Thread 0 holds ``identity``: the caller must supply a value that is ``<=``
-    every legal element of the input (typically ``-∞`` for floats, the dtype's minimum for integers).  See
-    `exclusive_min`.
+def exclusive_max(value, block_dim: template(), dtype: template()):
+    """Block-scope exclusive prefix max.  After the call, thread ``i > 0`` holds ``max(v[0], ..., v[i-1])`` and
+    thread 0 holds the dtype-derived identity: ``-inf`` for real dtypes, ``np.iinfo(dtype).min`` for signed integer
+    dtypes, ``0`` for unsigned and bool.  See `exclusive_scan` for the underlying contract.
     """
-    return exclusive_scan(value, block_dim, _bin_max, identity, dtype)
+    return exclusive_scan(value, block_dim, _bin_max, _subgroup._typed_max_identity(value), dtype)
 
 
 # --- Block radix rank ------------------------------------------------------------------

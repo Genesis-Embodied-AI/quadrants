@@ -171,15 +171,17 @@ def kern(src: qd.types.ndarray(ndim=1), out: qd.types.ndarray(ndim=1)):
 
 The corresponding generic form is `block.inclusive_scan(value, block_dim, op, dtype)` for custom monoids.
 
-### `block.exclusive_{add,min,max}(value, block_dim[, identity], dtype)`
+### `block.exclusive_{add,min,max}(value, block_dim, dtype)`
 
-Block-scope exclusive prefix scans. Same strategy and cost profile as `inclusive_*`, but each thread receives the prefix `op(v[0], ..., v[i-1])` instead — and thread 0 receives the operator's identity.
+Block-scope exclusive prefix scans. Same strategy and cost profile as `inclusive_*`, but each thread receives the prefix `op(v[0], ..., v[i-1])` instead — and thread 0 receives the operator's identity, derived at compile time from `value`'s dtype:
 
-- `exclusive_add`: identity is the additive zero; derived from `value - value` so callers do not need to pass it. After the call, thread 0 holds 0.
-- `exclusive_min(..., identity, dtype)`: pass `identity` greater than or equal to every legal element of the input — typically `+∞` for floats or the dtype's maximum for integers. Thread 0 holds `identity`. There is no portable type-extreme derivable from `value` alone, so this op takes an explicit `identity` argument (mirrors `subgroup.exclusive_min`).
-- `exclusive_max(..., identity, dtype)`: pass `identity` less than or equal to every legal element of the input — typically `-∞` for floats or the dtype's minimum for integers. Thread 0 holds `identity`.
+- `exclusive_add`: identity is the additive zero, built as `value - value` inside the body. After the call, thread 0 holds `0` in `value`'s dtype.
+- `exclusive_min`: identity is `+inf` for real dtypes, `np.iinfo(dtype).max` for integer dtypes (`UINT_MAX` for unsigned, `INT_MAX` for signed). Thread 0 holds this sentinel.
+- `exclusive_max`: identity is `-inf` for real dtypes, `np.iinfo(dtype).min` for signed integer dtypes, `0` for unsigned and bool. Thread 0 holds this sentinel.
 
-The corresponding generic form is `block.exclusive_scan(value, block_dim, op, identity, dtype)`.
+Mirrors the corresponding `subgroup.exclusive_{min,max}` API: callers no longer pass `identity` for the typed wrappers. Internally `exclusive_min` / `exclusive_max` are plain Python wrappers that introspect the dtype, emit a typed-constant identity Expr, and forward to the generic block scan; the generated IR is identical to the prior hand-supplied form.
+
+The corresponding generic form is `block.exclusive_scan(value, block_dim, op, identity, dtype)`, which still requires an explicit `identity` because the operator can be any custom monoid (no portable type-extreme to introspect for arbitrary ops).
 
 ### `block.radix_rank_match_atomic_or(key, block_dim, radix_bits, bit_start, num_bits, bins, excl_prefix)`
 
