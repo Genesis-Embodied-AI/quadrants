@@ -814,22 +814,18 @@ def _init_field(field, n, dtype):
 
 # --- Block reduce tests ----------------------------------------------------------------
 #
-# `qd.simt.block.reduce_{add,min,max}` is a two-stage block reduce: per-subgroup
-# `shuffle_down` tree, lane 0 of each subgroup publishes the subgroup aggregate to shared
-# memory, then thread 0 sequentially folds the subgroup aggregates.  Result is valid
-# in thread 0 only; the `reduce_all_*` variants broadcast it to every thread via
-# one extra `block.sync()` plus a one-slot shared-memory hop.
+# `qd.simt.block.reduce_{add,min,max}` is a two-stage block reduce: per-subgroup `shuffle_down` tree, lane 0 of each
+# subgroup publishes the subgroup aggregate to shared memory, then thread 0 sequentially folds the subgroup aggregates.
+# Result is valid in thread 0 only; the `reduce_all_*` variants broadcast it to every thread via one extra
+# `block.sync()` plus a one-slot shared-memory hop.
 #
-# We exercise three regimes per arch by parameterizing on subgroups-per-block rather
-# than absolute block_dim: 1 subgroup (single-subgroup short-circuit path — no
-# shared memory, no cross-subgroup fold), 4 subgroups (multi-subgroup), 8 subgroups
-# (multi-subgroup, larger).  The host-side ``_arch_subgroup_size()`` maps to
-# ``block_dim`` at test-body entry, so wave32 archs (CUDA / Metal / NVIDIA Vulkan)
-# get ``[32, 128, 256]`` and wave64 (AMDGPU) gets ``[64, 256, 512]`` — both cover
-# the single-subgroup short-circuit + multi-subgroup paths without skipping
-# anything at collection time.  Inside the kernel, the subgroup size is still read
-# from ``subgroup.group_size()`` at compile time, so the same source compiles
-# correctly on every backend without an API knob.
+# We exercise three regimes per arch by parameterizing on subgroups-per-block rather than absolute block_dim:
+# 1 subgroup (single-subgroup short-circuit path - no shared memory, no cross-subgroup fold), 4 subgroups
+# (multi-subgroup), 8 subgroups (multi-subgroup, larger).  The host-side ``_arch_subgroup_size()`` maps to ``block_dim``
+# at test-body entry, so wave32 archs (CUDA / Metal / NVIDIA Vulkan) get ``[32, 128, 256]`` and wave64 (AMDGPU) gets
+# ``[64, 256, 512]`` - both cover the single-subgroup short-circuit + multi-subgroup paths without skipping anything
+# at collection time.  Inside the kernel, the subgroup size is still read from ``subgroup.group_size()`` at compile
+# time, so the same source compiles correctly on every backend without an API knob.
 
 _BLOCK_REDUCE_DTYPES = [qd.i32, qd.f32]
 _BLOCK_REDUCE_SG_PER_BLOCK = [1, 4, 8]
@@ -1067,15 +1063,14 @@ def test_block_reduce_all_max(dtype, sg_per_block):
 
 # --- Block scan tests ------------------------------------------------------------------
 #
-# `qd.simt.block.{inclusive,exclusive}_{add,min,max}` is a two-stage block scan: per-subgroup
-# Hillis-Steele scan via shuffle, last lane of each subgroup publishes the subgroup aggregate to
-# shared memory, then every thread sequentially folds the cross-subgroup prefix and applies its
-# own subgroup's prefix.  Every thread receives a valid result.
+# `qd.simt.block.{inclusive,exclusive}_{add,min,max}` is a two-stage block scan: per-subgroup Hillis-Steele scan via
+# shuffle, last lane of each subgroup publishes the subgroup aggregate to shared memory, then every thread sequentially
+# folds the cross-subgroup prefix and applies its own subgroup's prefix.  Every thread receives a valid result.
 #
-# We exercise the same three block sizes as block reduce (32 single-subgroup short-circuit, 128
-# / 256 multi-subgroup shared-mem) and assert per-thread against a sequential CPU oracle.  The
-# min / max tests use a permuted (non-monotone) input so the scan result genuinely depends
-# on every prefix step, not just the trailing or leading element.
+# We exercise the same three regimes as block reduce (1 / 4 / 8 subgroups per block, derived to absolute block_dim by
+# the host helper at test-body entry) and assert per-thread against a sequential CPU oracle.  The min / max tests use
+# a permuted (non-monotone) input so the scan result genuinely depends on every prefix step, not just the trailing or
+# leading element.
 
 
 def _ref_inclusive_scan_add(values):
@@ -1295,10 +1290,9 @@ def test_block_exclusive_min(dtype, sg_per_block):
 
 # --- Block radix rank tests ------------------------------------------------------------
 #
-# `qd.simt.block.radix_rank_match_atomic_or` implements the atomic-OR match-and-count
-# radix-rank strategy on top of the portable subgroup primitives (lanemask_le, sync,
-# shuffle) and the block exclusive scan defined above.  Block size and digit count are
-# both 256 (one digit per thread); each thread contributes one u32 key.
+# `qd.simt.block.radix_rank_match_atomic_or` implements the atomic-OR match-and-count radix-rank strategy on top of the
+# portable subgroup primitives (lanemask_le, sync, shuffle) and the block exclusive scan defined above.  Block size
+# and digit count are both 256 (one digit per thread); each thread contributes one u32 key.
 #
 # We test the algorithm end-to-end against a CPU oracle:
 #
@@ -1306,11 +1300,10 @@ def test_block_exclusive_min(dtype, sg_per_block):
 #   - bins[d] = count of keys whose digit equals d
 #   - excl_prefix[d] = sum(bins[0..d-1])
 #
-# Inputs are mixed: a low-entropy distribution that hits every digit multiple times (so
-# the leader-election + atomic_or match path actually has work to do) and a uniform
-# random distribution (covers the case where most digits have ~1 key each).  Both
-# distributions also probe the subgroup-level dedup logic with multiple keys-per-subgroup landing
-# in the same digit bin.
+# Inputs are mixed: a low-entropy distribution that hits every digit multiple times (so the leader-election +
+# atomic_or match path actually has work to do) and a uniform random distribution (covers the case where most digits
+# get ~1 key each).  Both distributions also probe the subgroup-level dedup logic with multiple keys-per-subgroup
+# landing in the same digit bin.
 
 
 _RADIX_BITS = 8

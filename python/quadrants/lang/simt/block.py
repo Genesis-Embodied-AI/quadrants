@@ -240,18 +240,16 @@ def reduce_all_max(value, block_dim: template(), dtype: template()):
 
 # --- Block scans -----------------------------------------------------------------------
 #
-# Two-stage block scan.  Each subgroup does a Hillis-Steele scan via
-# `subgroup.{_inclusive_scan, _exclusive_scan}`, the last lane of every subgroup publishes the
-# subgroup aggregate to shared memory, then every thread sequentially folds the subgroup prefixes
-# and applies its own subgroup's prefix to its scan value.  All threads receive a valid result;
-# cost: one subgroup scan + 1 shared-mem write/read per subgroup + 1 `block.sync()` + (NUM_SUBGROUPS - 1)
-# ops on every thread (the cross-subgroup prefix is computed redundantly to avoid a second
-# barrier).
+# Two-stage block scan.  Each subgroup does a Hillis-Steele scan via `subgroup.{_inclusive_scan_tiled,
+# _exclusive_scan_tiled}`, the last lane of every subgroup publishes the subgroup aggregate to shared memory, then
+# every thread sequentially folds the subgroup prefixes and applies its own subgroup's prefix to its scan value.
+# All threads receive a valid result; cost: one subgroup scan + 1 shared-mem write/read per subgroup + 1
+# `block.sync()` + (NUM_SUBGROUPS - 1) ops on every thread (the cross-subgroup prefix is computed redundantly to
+# avoid a second barrier).
 #
-# Inclusive: subgroup aggregate at the last lane is just the inclusive value, written directly.
-# Exclusive: subgroup aggregate = `op(exclusive[last_lane], value[last_lane])`, since the
-# exclusive scan does not include the last lane's input — we recover the inclusive total
-# with one extra `op` on the publish path.
+# Inclusive: subgroup aggregate at the last lane is just the inclusive value, written directly.  Exclusive: subgroup
+# aggregate = `op(exclusive[last_lane], value[last_lane])`, since the exclusive scan does not include the last lane's
+# input - we recover the inclusive total with one extra `op` on the publish path.
 
 
 @_func
@@ -268,8 +266,8 @@ def inclusive_scan(value, block_dim: template(), op: template(), dtype: template
         dtype: scalar dtype for the inter-subgroup shared-memory staging slot; must match ``value``'s type.
 
     The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
-    `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory path is
-    short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.
+    `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory
+    path is short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.
     """
     SUBGROUP_SIZE = impl.static(_subgroup.group_size())
     log2_subgroup = impl.static(_subgroup.log2_group_size())
@@ -293,9 +291,10 @@ def inclusive_scan(value, block_dim: template(), op: template(), dtype: template
         shared[subgroup_id] = inclusive
     sync()
 
-    # Sequential exclusive prefix scan over subgroup aggregates; each thread captures its own subgroup's prefix.  Subgroup 0's
-    # prefix is unused (its inclusive value is already the prefix sum from the start of the block), so we never read
-    # `subgroup_prefix` on subgroup 0; the placeholder there exists only to give the variable a definite type.
+    # Sequential exclusive prefix scan over subgroup aggregates; each thread captures its own subgroup's prefix.
+    # Subgroup 0's prefix is unused (its inclusive value is already the prefix sum from the start of the block), so
+    # we never read `subgroup_prefix` on subgroup 0; the placeholder there exists only to give the variable a
+    # definite type.
     block_aggregate = shared[0]
     subgroup_prefix = block_aggregate
     for w in impl.static(range(1, NUM_SUBGROUPS)):
@@ -415,13 +414,14 @@ def exclusive_max(value, block_dim: template(), dtype: template()):
 # The algorithm runs in six steps:
 #
 # 1. ComputeHistogramsSubgroup: each subgroup builds a private digit histogram in shared memory via ``atomic_add``.
-# 2. ComputeOffsetsSubgroupUpsweep: every thread sums per-subgroup histograms column-wise to produce a block-wide bin count
-#    for digit ``= tid``, while rewriting the subgroup histogram entries into per-subgroup running exclusive prefixes.
+# 2. ComputeOffsetsSubgroupUpsweep: every thread sums per-subgroup histograms column-wise to produce a block-wide
+#    bin count for digit ``= tid``, while rewriting the subgroup histogram entries into per-subgroup running
+#    exclusive prefixes.
 # 3. ExclusiveSum on the per-thread bin counts — uses the block exclusive scan defined above.
 # 4. ComputeOffsetsSubgroupDownsweep: add the block-wide exclusive prefix into every subgroup's offset entry.
 # 5. ComputeRanksItem (atomic-OR match): per-subgroup match via ``atomic_or`` on a per-digit lane-mask, then leader
-#    (highest set lane) does a single ``atomic_add`` on the subgroup offset and broadcasts via ``subgroup.shuffle``; each
-#    thread's rank is ``subgroup_offset + popc(bin_mask & lanemask_le) - 1``.
+#    (highest set lane) does a single ``atomic_add`` on the subgroup offset and broadcasts via ``subgroup.shuffle``;
+#    each thread's rank is ``subgroup_offset + popc(bin_mask & lanemask_le) - 1``.
 # 6. Write bin count + exclusive prefix to the outparam shared arrays.
 #
 # Shared-memory layout (all i32, total ``2 * BLOCK_SUBGROUPS * RADIX_DIGITS`` ints, 4096 ints = 16 KiB at the default
@@ -442,8 +442,8 @@ def _subgroup_sync_fence():
 
     Why both ops: on CUDA, `subgroup.sync()` already lowers to `__syncwarp` which folds in a memory fence, so the
     extra `subgroup.mem_fence()` is redundant (a `__threadfence_block`).  On SPIR-V, however, the codegen emits
-    `subgroupBarrier` as `OpControlBarrier(ScopeSubgroup, ScopeSubgroup, 0)` — i.e. with **no** memory semantics — so
-    a bare `subgroup.sync()` does *not* publish prior shared-memory writes to other lanes.  The radix rank algorithm
+    `subgroupBarrier` as `OpControlBarrier(ScopeSubgroup, ScopeSubgroup, 0)` - i.e. with **no** memory semantics -
+    so a bare `subgroup.sync()` does *not* publish prior shared-memory writes to other lanes.  The radix rank algorithm
     relies on the `__syncwarp` invariant that, after the barrier, every lane sees every other lane's prior
     `atomic_or` / `atomic_add` to shared memory; pairing the barrier with `subgroup.mem_fence()` (which emits a real
     `OpMemoryBarrier(ScopeSubgroup, AcquireRelease | UniformMemory | WorkgroupMemory)`) restores that invariant.
@@ -497,9 +497,9 @@ def _radix_rank_match_atomic_or_wave32(
 
     sync()  # Publish per-subgroup histograms before column-sum.
 
-    # Step 2: per-thread column sum across subgroups for digit == tid.  Each thread collects the running exclusive prefix
-    # into ``bin_count`` while overwriting the subgroup histogram entries with their per-subgroup exclusive prefix.  After the
-    # loop, ``bin_count`` is the block-wide total for digit == tid.
+    # Step 2: per-thread column sum across subgroups for digit == tid.  Each thread collects the running exclusive
+    # prefix into ``bin_count`` while overwriting the subgroup histogram entries with their per-subgroup exclusive
+    # prefix.  After the loop, ``bin_count`` is the block-wide total for digit == tid.
     bin_count = _i32(0)
     for j_subgroup in impl.static(range(BLOCK_SUBGROUPS)):
         subgroup_count = smem_offsets[impl.static(j_subgroup * RADIX_DIGITS) + tid]
@@ -528,14 +528,14 @@ def _radix_rank_match_atomic_or_wave32(
     _ops.atomic_or(smem_match[match_idx], lane_mask)
     _subgroup_sync_fence()
 
-    # Read the bin_mask back and find the leader (highest matching lane) + intra-subgroup rank.  ``clz`` here MUST run on
-    # the u32 (FindUMsb on SPIR-V): casting to i32 first triggers SPIR-V's FindSMsb, which for negative i32 (top bit
-    # set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that's one less than the actual
-    # highest matching lane.  Concretely, with lane 31 holding the only key for its digit, bin_mask = 0x80000000;
-    # FindSMsb on -2147483648 returns 30 (highest 0-bit), so 31 - 30 = 1 elects lane 1 instead of lane 31, and lane
-    # 31's shuffle reads from lane 1 (= 0) — observed as last-lane ranks off by one on Vulkan / Metal.  Now that the
-    # subgroup layer dispatches FindUMsb for unsigned ``clz``, passing the u32 directly emits the right intrinsic on
-    # every backend.
+    # Read the bin_mask back and find the leader (highest matching lane) + intra-subgroup rank.  ``clz`` here MUST
+    # run on the u32 (FindUMsb on SPIR-V): casting to i32 first triggers SPIR-V's FindSMsb, which for negative i32
+    # (top bit set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that's one less than
+    # the actual highest matching lane.  Concretely, with lane 31 holding the only key for its digit,
+    # bin_mask = 0x80000000; FindSMsb on -2147483648 returns 30 (highest 0-bit), so 31 - 30 = 1 elects lane 1
+    # instead of lane 31, and lane 31's shuffle reads from lane 1 (= 0) - observed as last-lane ranks off by one on
+    # Vulkan / Metal.  Now that the subgroup layer dispatches FindUMsb for unsigned ``clz``, passing the u32 directly
+    # emits the right intrinsic on every backend.
     bin_mask = _ops.cast(smem_match[match_idx], _u32)
     leader = _i32(31) - _ops.cast(_ops.clz(bin_mask), _i32)
     popc = _ops.popcnt(_ops.bit_and(bin_mask, lane_mask_le_v))
@@ -625,8 +625,8 @@ def _radix_rank_match_atomic_or_wave64(
 
     sync()
 
-    # Step 5 — wave64 specifics: u64 ballot mask via inline ``one_at_lane | (one_at_lane - 1)`` (avoids UB on lane=63),
-    # atomic_or on the i64 match cell, clz / popcnt on u64.  Leader formula is ``63 - clz(u64)``.
+    # Step 5 - wave64 specifics: u64 ballot mask via inline ``one_at_lane | (one_at_lane - 1)`` (avoids UB on
+    # lane=63), atomic_or on the i64 match cell, clz / popcnt on u64.  Leader formula is ``63 - clz(u64)``.
     lane_u64 = _ops.cast(lane, _u64)
     lane_mask = _u64(1) << lane_u64
     lane_mask_le_v = lane_mask | (lane_mask - _u64(1))
@@ -673,24 +673,25 @@ def radix_rank_match_atomic_or(
 ):
     """Block-level radix rank via the atomic-OR match-and-count strategy.
 
-    Returns the calling thread's stable rank within the block under digit ``(key >> bit_start) & ((1 << num_bits) - 1)``.
+    Returns the calling thread's stable rank within the block under digit
+    ``(key >> bit_start) & ((1 << num_bits) - 1)``.
 
     Args:
         key: ``u32`` key, one per thread.
-        block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 << radix_bits``: each digit gets exactly
-            one thread for the per-thread bin/excl_prefix output.
+        block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 << radix_bits``: each digit gets
+            exactly one thread for the per-thread bin/excl_prefix output.
         radix_bits: number of bits in the digit (template).  Typical onesweep value is 8, giving 256 digits.
         bit_start: starting bit of the digit (template).  Used as ``key >> bit_start``.
-        num_bits: actual digit width in bits (template), with ``num_bits <= radix_bits``.  Bits ``[bit_start, bit_start +
-            num_bits)`` of ``key`` are extracted.
+        num_bits: actual digit width in bits (template), with ``num_bits <= radix_bits``.  Bits
+            ``[bit_start, bit_start + num_bits)`` of ``key`` are extracted.
         bins: ``block.SharedArray((1 << radix_bits,), qd.i32)`` outparam.  After the call, ``bins[d]`` holds the count
             of keys whose digit equals ``d``.  Caller is responsible for allocating this array exactly once per kernel.
-        excl_prefix: ``block.SharedArray((1 << radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]`` holds
-            the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.
+        excl_prefix: ``block.SharedArray((1 << radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]``
+            holds the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.
 
     The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
     `subgroup.group_size()` at compile time.  Supports both wave32 (CUDA, Vulkan-on-NVIDIA, Metal) and wave64
-    (AMDGPU — Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private
+    (AMDGPU - Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private
     implementations at compile time based on subgroup size; the match-mask shared-memory region's dtype is the only
     semantic difference (``i32`` on wave32, ``i64`` on wave64), but Quadrants' AST transformer doesn't carry locals
     across ``if impl.static`` branches so the two paths are written as separate ``@func`` bodies.  Atomic ``or`` on
@@ -698,13 +699,13 @@ def radix_rank_match_atomic_or(
     not depend on SPIR-V / Metal supporting 64-bit threadgroup atomics.
 
     Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary ``block.sync()``
-    and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without a
-    further ``block.sync()`` (we sync internally before exit).
+    and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without
+    a further ``block.sync()`` (we sync internally before exit).
 
-    Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block exclusive
-    scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  Shared-memory footprint at the default
-    ``radix_bits=8``: 4 KiB ``i32`` for subgroup offsets + 4 KiB ``i32`` (wave32) or 8 KiB ``i64`` (wave64) for the
-    match-mask region — so 8 KiB total on wave32, 12 KiB on wave64.
+    Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block
+    exclusive scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  Shared-memory footprint at the
+    default ``radix_bits=8``: 4 KiB ``i32`` for subgroup offsets + 4 KiB ``i32`` (wave32) or 8 KiB ``i64`` (wave64)
+    for the match-mask region - so 8 KiB total on wave32, 12 KiB on wave64.
     """
     SUBGROUP_THREADS = impl.static(_subgroup.group_size())
     impl.static_assert(
