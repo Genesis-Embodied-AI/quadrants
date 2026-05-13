@@ -300,10 +300,10 @@ def group_size() -> int:
 def log2_group_size() -> int:
     """``log2(group_size())`` as a Python ``int``, asserting the subgroup size is a power of two.
 
-    Equivalent to ``int(math.log2(group_size()))`` but emits a clearer error if the device ever reports a non-power-of-two
-    subgroup width (no current SPIR-V driver does, but the spec allows it). Like ``group_size()`` this is a compile-time
-    constant on every backend --- callers feed it straight into ``qd.template()`` to pick the right ``log2_size`` for a
-    full-subgroup reduction (e.g. ``reduce_add(v, qd.simt.subgroup.log2_group_size())``).
+    Equivalent to ``int(math.log2(group_size()))`` but emits a clearer error if the device ever reports a
+    non-power-of-two subgroup width (no current SPIR-V driver does, but the spec allows it). Like ``group_size()`` this
+    is a compile-time constant on every backend --- callers feed it straight into ``qd.template()`` to pick the right
+    ``log2_size`` for a full-subgroup reduction (e.g. ``reduce_add(v, qd.simt.subgroup.log2_group_size())``).
     """
     size = group_size()
     assert size > 0 and (size & (size - 1)) == 0, f"subgroup size {size} is not a power of two"
@@ -913,12 +913,18 @@ def exclusive_mul_full(value):
 
 
 def exclusive_min_full(value, identity):
-    """``exclusive_min`` over the entire subgroup.  ``identity`` must be ``>=`` every legal element (typically ``+inf``)."""
+    """``exclusive_min`` over the entire subgroup.
+
+    ``identity`` must be ``>=`` every legal element (typically ``+inf``).
+    """
     return exclusive_min(value, log2_group_size(), identity)
 
 
 def exclusive_max_full(value, identity):
-    """``exclusive_max`` over the entire subgroup.  ``identity`` must be ``<=`` every legal element (typically ``-inf``)."""
+    """``exclusive_max`` over the entire subgroup.
+
+    ``identity`` must be ``<=`` every legal element (typically ``-inf``).
+    """
     return exclusive_max(value, log2_group_size(), identity)
 
 
@@ -938,7 +944,10 @@ def exclusive_xor_full(value):
 
 
 def segmented_reduce_add_full(value, head_flag):
-    """``segmented_reduce_add`` over the entire subgroup (``log2_size = log2_group_size()`` — 5 on wave32 backends, 6 on AMDGPU)."""
+    """``segmented_reduce_add`` over the entire subgroup.
+
+    ``log2_size = log2_group_size()`` --- 5 on wave32 backends, 6 on AMDGPU.
+    """
     return segmented_reduce_add(value, head_flag, log2_group_size())
 
 

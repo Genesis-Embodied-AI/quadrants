@@ -2883,8 +2883,9 @@ def test_subgroup_all_equal_full():
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_min_full():
-    """``exclusive_min_full(value, identity)`` matches ``exclusive_min(value, log2_group_size(), identity)`` lane-by-lane.
-    ``identity`` must be ``>=`` every legal element; we pass ``999`` (greater than every src value below)."""
+    """``exclusive_min_full(value, identity)`` matches ``exclusive_min(value, log2_group_size(), identity)``
+    lane-by-lane.  ``identity`` must be ``>=`` every legal element; we pass ``999`` (greater than every src value
+    below)."""
     N = subgroup.group_size()
     src = qd.field(dtype=qd.i32, shape=N)
     out_full = qd.field(dtype=qd.i32, shape=N)
@@ -2911,8 +2912,8 @@ def test_subgroup_exclusive_min_full():
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_max_full():
-    """``exclusive_max_full(value, identity)`` matches ``exclusive_max(value, log2_group_size(), identity)`` lane-by-lane.
-    ``identity`` must be ``<=`` every legal element; we pass ``-999``."""
+    """``exclusive_max_full(value, identity)`` matches ``exclusive_max(value, log2_group_size(), identity)``
+    lane-by-lane.  ``identity`` must be ``<=`` every legal element; we pass ``-999``."""
     N = subgroup.group_size()
     src = qd.field(dtype=qd.i32, shape=N)
     out_full = qd.field(dtype=qd.i32, shape=N)
@@ -2938,7 +2939,8 @@ def test_subgroup_exclusive_max_full():
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_segmented_reduce_min_full():
-    """``segmented_reduce_min_full(value, head_flag)`` matches ``segmented_reduce_min(value, head_flag, log2_group_size())``."""
+    """``segmented_reduce_min_full(value, head_flag)`` matches
+    ``segmented_reduce_min(value, head_flag, log2_group_size())``."""
     N = subgroup.group_size()
     src = qd.field(dtype=qd.i32, shape=N)
     head = qd.field(dtype=qd.i32, shape=N)
@@ -2964,7 +2966,8 @@ def test_subgroup_segmented_reduce_min_full():
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_segmented_reduce_max_full():
-    """``segmented_reduce_max_full(value, head_flag)`` matches ``segmented_reduce_max(value, head_flag, log2_group_size())``."""
+    """``segmented_reduce_max_full(value, head_flag)`` matches
+    ``segmented_reduce_max(value, head_flag, log2_group_size())``."""
     N = subgroup.group_size()
     src = qd.field(dtype=qd.i32, shape=N)
     head = qd.field(dtype=qd.i32, shape=N)
