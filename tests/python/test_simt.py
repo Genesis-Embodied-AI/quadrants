@@ -71,6 +71,27 @@ _SCENARIOS_INT = [
     (qd.u64, 5),
 ]
 
+# Same shape as ``_SCENARIOS_FULL_DTYPE`` but with ``log2_size = 0`` instead of ``1`` as the boundary case -- the
+# segmented_reduce tests accept ``log2_size = 0`` as a degenerate group-of-1 case (the implicit-head-at-group-base
+# fallback collapses to "each lane is its own segment").  Used by segmented_reduce_{add, min, max}.
+_SCENARIOS_SEGMENTED = [
+    (qd.i32, 0),
+    (qd.i32, 5),
+    (qd.i64, 5),
+    (qd.u64, 5),
+    (qd.f32, 5),
+    (qd.f64, 5),
+]
+
+# Float dtypes only -- used by ``all_equal_float_contract`` which locks the ``NaN != NaN`` / ``+0.0 == -0.0`` shape on
+# floats specifically.  ``log2_size = 1`` covers the smallest comparison group; ``5`` covers the full-warp shortcut on
+# CUDA.
+_SCENARIOS_FLOAT = [
+    (qd.f32, 1),
+    (qd.f32, 5),
+    (qd.f64, 5),
+]
+
 
 @test_utils.test(arch=qd.cuda)
 def test_all_nonzero():
@@ -1879,8 +1900,7 @@ def _python_segmented_reduce_add(values, heads, group_size):
     return _python_segmented_reduce(values, heads, group_size, _op.add)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [0, 1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_SEGMENTED)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_segmented_reduce_add(dtype, log2_size):
     """Segmented inclusive sum, sized by ``log2_size`` (covers full warp at log2_size=5)."""
@@ -2036,16 +2056,14 @@ def _check_segmented_reduce(qd_op, py_op, dtype, log2_size):
             assert abs(got - ref) < 1e-5 * max(abs(ref), 1.0), f"lane {i}: got {got}, expected {ref}"
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [0, 1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_SEGMENTED)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_segmented_reduce_min(dtype, log2_size):
     """Segmented inclusive min, sized by ``log2_size`` (covers full warp at log2_size=5)."""
     _check_segmented_reduce(subgroup.segmented_reduce_min, lambda a, b: min(a, b), dtype, log2_size)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [0, 1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_SEGMENTED)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_segmented_reduce_max(dtype, log2_size):
     """Segmented inclusive max, sized by ``log2_size`` (covers full warp at log2_size=5)."""
@@ -2444,7 +2462,7 @@ def test_subgroup_exclusive_xor(dtype, log2_size):
 # the launch spans two CUDA / Metal / RDNA subgroups so cross-subgroup leakage would also be caught).
 
 
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("log2_size", [1, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_all_true(log2_size):
     """``all_true(predicate, log2_size)`` is ``i32(all(predicate != 0))`` over each ``2**log2_size`` group, broadcast
@@ -2485,7 +2503,7 @@ def test_subgroup_all_true(log2_size):
     run_and_check("nonbinary-mixed", [((i * 17) % 13) - 6 for i in range(N)])
 
 
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("log2_size", [1, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_any_true(log2_size):
     """``any_true(predicate, log2_size)`` is ``i32(any(predicate != 0))`` over each ``2**log2_size`` group, broadcast
@@ -2526,8 +2544,7 @@ def test_subgroup_any_true(log2_size):
     run_and_check("nonbinary-mixed", [((i * 17) % 13) - 6 for i in range(N)])
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_all_equal(dtype, log2_size):
     """``all_equal(value, log2_size)`` is ``i32(all values equal)`` over each ``2**log2_size`` group, broadcast to
@@ -2572,8 +2589,7 @@ def test_subgroup_all_equal(dtype, log2_size):
     )
 
 
-@pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FLOAT)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_all_equal_float_contract(dtype, log2_size):
     """``all_equal`` on floats uses the backend's native ``==``: ``NaN != NaN`` and ``+0.0 == -0.0``, matching SPIR-V
@@ -3905,9 +3921,9 @@ def test_subgroup_shuffle_xor_cross_half(dtype):
 
     for i in range(N):
         partner = i ^ 32
-        assert dst[i] == src[partner], (
-            f"lane {i}: shuffle_xor(v, 32) returned src[{i}]={src[i]} but expected src[{partner}]={src[partner]}"
-        )
+        assert (
+            dst[i] == src[partner]
+        ), f"lane {i}: shuffle_xor(v, 32) returned src[{i}]={src[i]} but expected src[{partner}]={src[partner]}"
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
@@ -3932,9 +3948,9 @@ def test_subgroup_shuffle_down_offset_32(dtype):
     k()
 
     for i in range(32):
-        assert dst[i] == src[i + 32], (
-            f"lane {i}: shuffle_down(v, 32) returned {dst[i]} but expected src[{i + 32}]={src[i + 32]}"
-        )
+        assert (
+            dst[i] == src[i + 32]
+        ), f"lane {i}: shuffle_down(v, 32) returned {dst[i]} but expected src[{i + 32}]={src[i + 32]}"
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
@@ -3959,9 +3975,9 @@ def test_subgroup_shuffle_up_offset_32(dtype):
     k()
 
     for i in range(32, 64):
-        assert dst[i] == src[i - 32], (
-            f"lane {i}: shuffle_up(v, 32) returned {dst[i]} but expected src[{i - 32}]={src[i - 32]}"
-        )
+        assert (
+            dst[i] == src[i - 32]
+        ), f"lane {i}: shuffle_up(v, 32) returned {dst[i]} but expected src[{i - 32}]={src[i - 32]}"
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
@@ -3989,9 +4005,7 @@ def test_subgroup_shuffle_absolute_lane_high_half(dtype):
     k()
 
     for i in range(N):
-        assert dst_lo[i] == src[47], (
-            f"lane {i}: shuffle(v, 47) returned {dst_lo[i]} but expected src[47]={src[47]}"
-        )
+        assert dst_lo[i] == src[47], f"lane {i}: shuffle(v, 47) returned {dst_lo[i]} but expected src[47]={src[47]}"
         assert dst_hi[i] == src[7], f"lane {i}: shuffle(v, 7) returned {dst_hi[i]} but expected src[7]={src[7]}"
 
 

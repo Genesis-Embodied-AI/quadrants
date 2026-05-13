@@ -188,7 +188,7 @@ Block-level radix ranking via the atomic-OR match-and-count strategy (the workho
 Constraints (currently):
 
 - `block_dim` must equal `1 << radix_bits` (each digit gets exactly one thread for the per-thread bin / exclusive-prefix output). Typical configuration is `radix_bits=8, block_dim=256`.
-- `subgroup.group_size()` must be 32 — the match path is built around 32-lane `i32` ballot masks. This holds on CUDA, Metal, and Vulkan-on-NVIDIA; AMDGPU (wave64) is not yet supported and the function asserts the subgroup size at compile time.
+- `subgroup.group_size()` must be 32 (CUDA / Metal / Vulkan-on-NVIDIA) or 64 (AMDGPU). The match path picks its ballot dtype at compile time — `i32` on wave32, `i64` on wave64 — and the function `static_assert`s this at compile time.
 - One key per thread (`items_per_thread = 1`). Multi-item per thread is a future extension.
 - `num_bits <= radix_bits`; `bit_start` is the offset of the digit's low bit.
 
@@ -201,7 +201,7 @@ Args:
 
 The calling thread's block-local index is read internally via `block.thread_idx()`.
 
-Cost: 2 `block.sync()` + a handful of `subgroup.sync()` calls + 1 block exclusive scan + per-key `atomic_or` + leader-only `atomic_add` on shared memory. Shared-memory footprint is `2 * BLOCK_SUBGROUPS * RADIX_DIGITS` ints = 16 KiB at the default `radix_bits=8` configuration on wave32 (8 subgroups × 256 digits × 2 banks × 4 B).
+Cost: 2 `block.sync()` + a handful of `subgroup.sync()` calls + 1 block exclusive scan + per-key `atomic_or` + leader-only `atomic_add` on shared memory. Shared-memory footprint at the default `radix_bits=8` configuration: 4 KiB `i32` for the per-subgroup offsets + a match-mask region whose dtype is wave-size-specific — 4 KiB `i32` on wave32 (8 subgroups × 256 digits × 4 B) or 8 KiB `i64` on wave64 (4 subgroups × 256 digits × 8 B). So 8 KiB total on wave32, 12 KiB total on wave64.
 
 ```python
 @qd.kernel
