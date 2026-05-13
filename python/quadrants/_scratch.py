@@ -31,10 +31,11 @@ _scratch_bytes: int = DEFAULT_SCRATCH_BYTES
 def set_scratch_bytes(scratch_bytes: int) -> None:
     """Set the scratch capacity in bytes for the next allocation.
 
-    Must be called before the first ``get_scratch_u32()`` call after
-    ``qd.init()`` (or ``qd.reset()`` + ``qd.init()``). Has no effect on an
-    already-allocated scratch field; users wishing to enlarge an existing
-    scratch must ``qd.reset()`` and ``qd.init()`` again.
+    Must be called before the first ``get_scratch_u32()`` call in the
+    current runtime cycle. Has no effect on an already-allocated scratch
+    field; users wishing to enlarge an existing scratch must ``qd.reset()``
+    and ``qd.init()`` again, then re-call ``set_scratch_bytes`` (the
+    capacity is reset to ``DEFAULT_SCRATCH_BYTES`` on every ``qd.reset()``).
     """
     global _scratch_bytes
     if _scratch_field is not None:
@@ -66,11 +67,23 @@ def scratch_capacity_u32() -> int:
 
 
 def _invalidate() -> None:
-    """Drop the cached scratch handle. Registered as an ``impl.on_reset`` hook
-    so the next ``get_scratch_u32()`` call reallocates against the fresh
-    runtime instance produced by ``qd.reset()``."""
-    global _scratch_field
+    """Drop the cached scratch handle *and* reset the capacity setting back
+    to ``DEFAULT_SCRATCH_BYTES``. Registered as an ``impl.on_reset`` hook so
+    every ``qd.reset()`` → ``qd.init()`` transaction is a clean slate: the
+    next ``get_scratch_u32()`` call reallocates against the fresh runtime
+    at the default capacity, and any prior ``set_scratch_bytes(...)`` bump
+    has to be re-applied before the new runtime's first algorithm call.
+
+    The persistence-vs-clean-slate trade-off was explicitly resolved in
+    favour of clean slate: ``qd.init`` / ``qd.reset`` is meant to be
+    "free to use whenever, no constraints", which only holds if all
+    module state tied to a runtime cycle (resource handles *and*
+    runtime-scoped config) goes away on reset. Apps that want a
+    persistent bump should call ``set_scratch_bytes`` immediately after
+    each ``qd.init``."""
+    global _scratch_field, _scratch_bytes
     _scratch_field = None
+    _scratch_bytes = DEFAULT_SCRATCH_BYTES
 
 
 on_reset(_invalidate)
