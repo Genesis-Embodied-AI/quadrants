@@ -101,6 +101,13 @@ def _test_python(args, default_dir="python"):
     else:
         if int(threads) > 1:
             pytest_args += ["-n", str(threads), "--dist=worksteal"]
+    if os.environ.get("QD_FILE_TIMING", "0") == "1":
+        import sys as _sys
+
+        if test_dir not in _sys.path:
+            _sys.path.insert(0, test_dir)
+        pytest_args += ["-p", "pytest_file_timing"]
+
     import pytest  # pylint: disable=C0415
 
     return int(pytest.main(pytest_args))
