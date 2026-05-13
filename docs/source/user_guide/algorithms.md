@@ -4,14 +4,63 @@ Device-wide algorithms — primitives that consume and produce whole arrays, exe
 
 ## What's available
 
-| Op                              | What it does                                | CUDA | AMDGPU | Vulkan | Metal |
-|---------------------------------|---------------------------------------------|------|--------|--------|-------|
-| `qd.algorithms.parallel_sort`   | Odd-even merge sort (in-place, key or key-value) | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.PrefixSumExecutor` | Inclusive in-place prefix sum (i32 only)  | yes  | no     | yes    | no    |
+| Op                                                 | What it does                                                   | CUDA | AMDGPU | Vulkan | Metal |
+|----------------------------------------------------|----------------------------------------------------------------|------|--------|--------|-------|
+| `qd.algorithms.device_reduce_add(input, *, out)`   | `out[0] = sum(input)` (two-or-more-pass tree reduction)        | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_reduce_min(input, id, *, out)` | `out[0] = min(input)` (same recursion, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_reduce_max(input, id, *, out)` | `out[0] = max(input)` (same recursion, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.parallel_sort`                      | Odd-even merge sort (in-place, key or key-value)               | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.PrefixSumExecutor`                  | Inclusive in-place prefix sum (i32 only)                       | yes  | no     | yes    | no    |
 
-\* `parallel_sort` runs anywhere a Quadrants kernel runs; portability is inherited from the underlying kernel infrastructure. AMDGPU and Metal coverage is exercised less heavily than CUDA / Vulkan; report any failures.
+\* `device_reduce_*` and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives. AMDGPU and Metal coverage is exercised less heavily than CUDA / Vulkan; report any failures.
 
 ## Semantics
+
+### `qd.algorithms.device_reduce_{add,min,max}(input, [identity,] *, out)`
+
+Device-wide tree reduction over a 1-D tensor.
+
+```python
+import quadrants as qd
+
+inp = qd.field(qd.f32, shape=N)
+out = qd.field(qd.f32, shape=1)
+# ... fill inp ...
+
+qd.algorithms.device_reduce_add(inp, out=out)
+total = float(out.to_numpy()[0])   # explicit device->host hop
+```
+
+Signatures:
+
+- `device_reduce_add(input, *, out)` — sum reduction. Identity (`0` for the dtype) is derived automatically.
+- `device_reduce_min(input, identity, *, out)` — min reduction. `identity` is **required** and must be a value `e` such that `min(e, x) == x` for every `x` in the dtype (e.g. `math.inf` for `f32`, `2**31 - 1` for `i32`, `2**32 - 1` for `u32`).
+- `device_reduce_max(input, identity, *, out)` — max reduction. `identity` is **required** and must be the dtype's negative extremum (e.g. `-math.inf` for `f32`, `-2**31` for `i32`, `0` for `u32`).
+
+Arguments:
+
+- `input`: 1-D tensor. Pass a `qd.field`, `qd.ndarray`, or `qd.Tensor` wrapper around either — the kernels are polymorphic via the `qd.Tensor` annotation.
+- `out`: 1-element tensor with the same dtype as `input`. Caller-supplied so the call is fully asynchronous — there is no implicit device→host sync. To get a Python scalar, do `out.to_numpy()[0]` explicitly after the call. This makes the host hop visible at the call site rather than hidden inside the algorithm.
+
+Constraints:
+
+- **Dtypes (first land):** `qd.i32`, `qd.u32`, `qd.f32`. Calls with `qd.i64` / `qd.f64` raise `NotImplementedError`; lifting that is on the roadmap and gated on extending `block.reduce` to those dtypes.
+- **Shape:** `input` must be 1-D; `out.shape` must be `(1,)`. Both must share the same dtype.
+- **Identity (min / max only):** mandatory. Calling `device_reduce_min` / `device_reduce_max` without an `identity` argument raises `TypeError`.
+- **f32 non-associativity:** `device_reduce_add` on `f32` is not bitwise-reproducible across `N` changes, nor bitwise-equal to host `numpy.sum`. Tests tolerate a small relative error rather than asserting bitwise.
+
+Implementation:
+
+- Two-or-more-pass tree reduction. Each pass uses `BLOCK_DIM = 256` threads per block and reduces 256 elements per block via `block.reduce_{add,min,max}`. For `N ≤ 256` one pass suffices; for `N` up to `256² = 65536`, two passes; for larger `N`, additional intermediate passes are added until the reduction terminates in a single block.
+- Per-block partials are written to a **shared scratch field** (single `Field(u32)`, allocated lazily at first algorithm call, default 1 MB which covers `N` up to ≈ 64M elements). The shared scratch is bit-cast on access so a single field backs every supported dtype.
+- The last pass writes the final value to `out[0]` directly. The kernel launches are pipelined back-to-back; correctness relies on the kernel-boundary serialization that Quadrants provides between host-launched kernels.
+
+If you scan or reduce on `N > ≈ 64M`, raise the scratch budget *before any algorithm runs*:
+
+```python
+from quadrants import _scratch
+_scratch.set_scratch_bytes(4 << 20)   # 4 MB, before any qd.algorithms.* call
+```
 
 ### `qd.algorithms.parallel_sort(keys, values=None)`
 

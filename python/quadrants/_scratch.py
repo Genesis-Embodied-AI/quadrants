@@ -43,9 +43,7 @@ def set_scratch_bytes(scratch_bytes: int) -> None:
             "call before any qd.algorithms.* op runs, or qd.reset() first"
         )
     if scratch_bytes <= 0 or scratch_bytes % 4 != 0:
-        raise ValueError(
-            f"scratch_bytes must be a positive multiple of 4; got {scratch_bytes}"
-        )
+        raise ValueError(f"scratch_bytes must be a positive multiple of 4; got {scratch_bytes}")
     _scratch_bytes = scratch_bytes
 
 
