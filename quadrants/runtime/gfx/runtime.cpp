@@ -1105,11 +1105,15 @@ void GfxRuntime::ensure_current_cmdlist() {
 
 void GfxRuntime::submit_current_cmdlist_if_timeout() {
   // If we have accumulated some work but does not require sync and if the accumulated cmdlist has been pending for some
-  // time launch the cmdlist to start processing.
+  // time launch the cmdlist to start processing. When the MTLCommandQueue is shared with another framework, the cmdbuf
+  // must reach the queue before any external op is enqueued for Metal's same-queue FIFO scheduling to order them, so
+  // commit every launch unconditionally instead of waiting for the staleness threshold.
   if (current_cmdlist_) {
+    bool force_flush = program_impl_ != nullptr && program_impl_->config != nullptr &&
+                       program_impl_->config->external_metal_command_queue != 0;
     constexpr uint64_t max_pending_time = 2000;  // 2000us = 2ms
     auto duration = high_res_clock::now() - current_cmdlist_pending_since_;
-    if (std::chrono::duration_cast<std::chrono::microseconds>(duration).count() > max_pending_time) {
+    if (force_flush || std::chrono::duration_cast<std::chrono::microseconds>(duration).count() > max_pending_time) {
       flush();
     }
   }
