@@ -1552,7 +1552,33 @@ def test_subgroup_segmented_reduce_add_tiled_block64(log2_size):
 # varies is the operator and which dtypes are legal for it.  `_check_inclusive_scan` factors out the kernel launch,
 # dtype skip, and per-lane check.
 
-_INT_DTYPES = (qd.i32, qd.i64, qd.u64)
+_INT_DTYPES = (qd.i32, qd.i64, qd.u32, qd.u64)
+
+# Per-dtype numpy companion type, used by the exclusive_min / exclusive_max wide-int identity tests to spell the
+# expected lane-0 identity (``np.iinfo(dtype).max`` for min, ``.min`` for max).  Bool / 8-bit / 16-bit are omitted
+# because the underlying subgroup ops are exercised only at 32 / 64 bit widths.
+_NP_FOR_INT_DTYPE = {
+    qd.i32: np.int32,
+    qd.i64: np.int64,
+    qd.u32: np.uint32,
+    qd.u64: np.uint64,
+}
+
+
+def _exclusive_min_lane0_identity(dtype):
+    """Expected lane-0 value for ``exclusive_min_tiled`` -- mirrors what ``_typed_min_identity`` emits in
+    ``quadrants/lang/simt/subgroup.py``: ``+inf`` for real dtypes, ``np.iinfo(dtype).max`` for integer dtypes."""
+    if dtype in (qd.f32, qd.f64):
+        return float("inf")
+    return int(np.iinfo(_NP_FOR_INT_DTYPE[dtype]).max)
+
+
+def _exclusive_max_lane0_identity(dtype):
+    """Expected lane-0 value for ``exclusive_max_tiled`` -- ``-inf`` for real dtypes, ``np.iinfo(dtype).min`` for
+    integer dtypes (``0`` for the unsigned widths)."""
+    if dtype in (qd.f32, qd.f64):
+        return float("-inf")
+    return int(np.iinfo(_NP_FOR_INT_DTYPE[dtype]).min)
 
 
 def _check_inclusive_scan(scan_func, py_op, dtype, log2_size, src_init):
@@ -1735,24 +1761,44 @@ def test_subgroup_exclusive_mul_tiled(dtype, log2_size):
     )
 
 
-@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
+# Unlike inclusive_mul / inclusive_min / inclusive_max / exclusive_mul which all live in
+# ``_SCENARIOS_I32_AND_FLOATS`` (no dtype-specific identity code path -- they either don't need a lane-0 sentinel or
+# inherit the universal ``1`` literal), exclusive_min / exclusive_max emit a dtype-typed identity constant in the
+# generated IR (``np.iinfo(dtype).{max,min}`` / ``+-inf``).  The u64 max path in particular routes through
+# ``_clamp_unsigned_to_range`` (val > int64 max -> two's-complement conversion to -1).  Extend the parameter set
+# here so every supported int width and signedness exercises the identity-emission code in ``_typed_min_identity`` /
+# ``_typed_max_identity``.
+_SCENARIOS_EXCLUSIVE_MINMAX = _SCENARIOS_I32_AND_FLOATS + [(qd.i64, 5), (qd.u32, 5), (qd.u64, 5)]
+
+
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_EXCLUSIVE_MINMAX)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_min_tiled(dtype, log2_size):
-    """Exclusive prefix min.  Lane 0 of each group is the dtype-typed identity (+inf for floats, INT_MAX for ints) --
-    the wrapper auto-derives it from ``value``'s dtype, so the caller doesn't pass one."""
-    identity = float("inf") if dtype in (qd.f32, qd.f64) else int(np.iinfo(np.int32).max)
+    """Exclusive prefix min.  Lane 0 of each group is the dtype-typed identity (+inf for floats,
+    ``np.iinfo(dtype).max`` for ints) -- the wrapper auto-derives it from ``value``'s dtype, so the caller doesn't
+    pass one."""
     _check_exclusive_scan(
-        subgroup.exclusive_min_tiled, lambda a, b: min(a, b), identity, dtype, log2_size, _init_varied_int_or_float
+        subgroup.exclusive_min_tiled,
+        lambda a, b: min(a, b),
+        _exclusive_min_lane0_identity(dtype),
+        dtype,
+        log2_size,
+        _init_varied_int_or_float,
     )
 
 
-@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_EXCLUSIVE_MINMAX)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_max_tiled(dtype, log2_size):
-    """Exclusive prefix max.  Lane 0 of each group is the dtype-typed identity (-inf for floats, INT_MIN for ints)."""
-    identity = float("-inf") if dtype in (qd.f32, qd.f64) else int(np.iinfo(np.int32).min)
+    """Exclusive prefix max.  Lane 0 of each group is the dtype-typed identity (-inf for floats,
+    ``np.iinfo(dtype).min`` for ints; ``0`` for unsigned widths)."""
     _check_exclusive_scan(
-        subgroup.exclusive_max_tiled, lambda a, b: max(a, b), identity, dtype, log2_size, _init_varied_int_or_float
+        subgroup.exclusive_max_tiled,
+        lambda a, b: max(a, b),
+        _exclusive_max_lane0_identity(dtype),
+        dtype,
+        log2_size,
+        _init_varied_int_or_float,
     )
 
 
