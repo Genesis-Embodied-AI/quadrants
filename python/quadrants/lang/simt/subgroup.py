@@ -126,15 +126,16 @@ def ballot_full_subgroup(predicate):
     """Deprecated alias for :func:`ballot`.
 
     Emits a ``DeprecationWarning`` on first use and forwards to :func:`ballot`.  Will be removed in a future
-    release; rename call sites to ``ballot(predicate)`` (matches the no-suffix-on-full-subgroup naming used by every
-    other full-subgroup op in this module, e.g. ``reduce_add`` / ``all_true`` / ``inclusive_max``).
+    release; rename call sites to ``ballot(predicate)``.  Full-subgroup ops are unsuffixed throughout this module
+    (``reduce_add`` / ``all_true`` / ``inclusive_max`` / etc.); tiled variants take a ``_tiled`` suffix and an extra
+    ``log2_size`` template parameter.
     """
     global _ballot_full_subgroup_deprecation_warned
     if not _ballot_full_subgroup_deprecation_warned:
         _ballot_full_subgroup_deprecation_warned = True
         warnings.warn(
             "qd.simt.subgroup.ballot_full_subgroup() is deprecated; use qd.simt.subgroup.ballot() instead "
-            "(no-suffix naming for full-subgroup ops; tiled forms now use _tiled, e.g. reduce_add_tiled).",
+            "(full-subgroup ops are unsuffixed; tiled forms use _tiled, e.g. reduce_add_tiled).",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -168,10 +169,10 @@ def ballot_full_subgroup(predicate):
 # kernel's Python tracing pass and feeds into the underlying ``*_tiled`` op's ``log2_size: template()`` argument as a
 # compile-time ``int``.  Each wrapper compiles down to exactly the same IR as a hand-written call site that hard-codes
 # ``log2_size=5`` (CUDA / Metal / Vulkan-wave32) or ``log2_size=6`` (AMDGPU wave64), so there is no runtime overhead vs
-# calling the underlying ``*_tiled`` op directly.  Callers reach for the no-suffix form when they want "operate over
-# the entire subgroup" portably without branching on ``group_size()`` themselves -- the common case for whole-warp
-# reductions, broadcasts, and votes.  Reach for the ``*_tiled`` form when you want multiple independent windows per
-# subgroup (e.g. ``reduce_add_tiled(v, 4)`` to fold every 16 lanes into one).
+# calling the underlying ``*_tiled`` op directly.  These are the default form for "operate over the entire subgroup"
+# portably without branching on ``group_size()`` -- the common case for whole-warp reductions, broadcasts, and votes.
+# Reach for the ``*_tiled`` form when you want multiple independent windows per subgroup (e.g.
+# ``reduce_add_tiled(v, 4)`` to fold every 16 lanes into one).
 
 
 @func
@@ -311,8 +312,8 @@ def group_size() -> int:
     pinned to ``+wavefrontsize64``), and the device-probed value on the SPIR-V backends (read from
     ``VkPhysicalDeviceSubgroupProperties::subgroupSize`` on Vulkan, fixed at 32 on Metal). Because the return type is a
     plain ``int``, the value can be used as a ``qd.template()`` argument inside ``@qd.kernel`` / ``@qd.func`` bodies ---
-    this is how the no-suffix full-subgroup reductions (e.g. ``reduce_add(v)``) pick up the right ``log2_size`` per
-    backend without the caller having to plumb it manually.
+    this is how the full-subgroup reductions (e.g. ``reduce_add(v)``) pick up the right ``log2_size`` per backend
+    without the caller having to plumb it manually.
 
     For use inside ``@qd.kernel`` / ``@qd.func`` bodies: the value is folded into the kernel IR as a constant on every
     backend, including SPIR-V (so MoltenVK / desktop Vulkan see a literal subgroup size rather than a runtime

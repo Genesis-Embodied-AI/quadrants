@@ -2708,7 +2708,7 @@ def test_subgroup_log2_group_size_feeds_into_template():
 
 
 # --------------------------------------------------------------------------------------------------------------------
-# Full-subgroup wrappers: smoke-test each no-suffix op against its ``_tiled`` form with explicit
+# Full-subgroup wrappers: smoke-test each full-subgroup op against its ``_tiled`` form with explicit
 # ``log2_size=log2_group_size()``.  Picks N to be ``group_size()`` so the full-subgroup form is meaningful on both
 # wave32 and wave64.
 # --------------------------------------------------------------------------------------------------------------------
