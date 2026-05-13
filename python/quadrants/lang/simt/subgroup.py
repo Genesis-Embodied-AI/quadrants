@@ -798,6 +798,7 @@ def _typed_min_identity(value):
     npty = to_numpy_type(dtype)
     if npty is np.bool_:
         return make_constant_expr(1, dtype)
+    assert issubclass(npty, np.integer)
     return make_constant_expr(int(np.iinfo(npty).max), dtype)
 
 
@@ -813,6 +814,7 @@ def _typed_max_identity(value):
     npty = to_numpy_type(dtype)
     if npty is np.bool_:
         return make_constant_expr(0, dtype)
+    assert issubclass(npty, np.integer)
     return make_constant_expr(int(np.iinfo(npty).min), dtype)
 
 
