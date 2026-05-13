@@ -121,12 +121,12 @@ class PrefixSumExecutor:
             raise RuntimeError("Only qd.i32 type is supported for prefix sum.")
 
         if current_cfg().arch == cuda:
-            inclusive_add = warp_shfl_up_i32
+            scan_primitive = warp_shfl_up_i32
         elif current_cfg().arch == vulkan:
-            # `subgroup.inclusive_add` now takes `(value, log2_size)`; the prefix-sum kernel passes the primitive as a
-            # template callable invoked with a single argument, so use the adapter that pre-binds `log2_size=5` (full
-            # 32-lane warp/wave scan).
-            inclusive_add = subgroup_inclusive_add_warp_i32
+            # `subgroup.inclusive_add_tiled` takes `(value, log2_size)`; the prefix-sum kernel passes the primitive as
+            # a template callable invoked with a single argument, so use the adapter that pre-binds `log2_size=5`
+            # (full 32-lane warp/wave scan).
+            scan_primitive = subgroup_inclusive_add_warp_i32
         else:
             raise RuntimeError(f"{str(current_cfg().arch)} is not supported for prefix sum.")
 
@@ -140,7 +140,7 @@ class PrefixSumExecutor:
                     ele_nums_pos[i],
                     ele_nums_pos[i + 1],
                     True,
-                    inclusive_add,
+                    scan_primitive,
                 )
             else:
                 scan_add_inclusive(
@@ -148,7 +148,7 @@ class PrefixSumExecutor:
                     ele_nums_pos[i],
                     ele_nums_pos[i + 1],
                     False,
-                    inclusive_add,
+                    scan_primitive,
                 )
 
         for i in range(len(ele_nums) - 3, -1, -1):
