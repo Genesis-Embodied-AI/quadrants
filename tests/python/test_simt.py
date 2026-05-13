@@ -1286,6 +1286,9 @@ def test_block_exclusive_min(dtype, sg_per_block):
             actual = dst[b * block_dim + j]
             if dtype == qd.i32:
                 assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+            elif math.isinf(expected[j]):
+                # Thread 0 of each block gets the +inf identity; ``inf - inf`` is NaN, so check by equality / sign.
+                assert math.isinf(actual) and actual > 0, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
             else:
                 assert abs(actual - expected[j]) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
 
@@ -1453,6 +1456,9 @@ def test_block_exclusive_max(dtype, sg_per_block):
             actual = dst[b * block_dim + j]
             if dtype == qd.i32:
                 assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+            elif math.isinf(expected[j]):
+                # Thread 0 of each block gets the -inf identity; ``-inf - -inf`` is NaN, so check by equality / sign.
+                assert math.isinf(actual) and actual < 0, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
             else:
                 assert abs(actual - expected[j]) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
 
