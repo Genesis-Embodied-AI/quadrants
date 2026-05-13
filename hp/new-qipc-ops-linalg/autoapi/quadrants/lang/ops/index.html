@@ -450,6 +450,12 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_xor" title="quadrants.lang.ops.atomic_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_xor</span></code></a>(x, y)</p></td>
 <td><p>Atomically compute the bit-wise XOR of <cite>x</cite> and <cite>y</cite>, element-wise.</p></td>
 </tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_exchange" title="quadrants.lang.ops.atomic_exchange"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_exchange</span></code></a>(x, y)</p></td>
+<td><p>Atomically swap the value of <cite>x</cite> with <cite>y</cite>, and return the old value of <cite>x</cite>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_cas" title="quadrants.lang.ops.atomic_cas"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_cas</span></code></a>(x, expected, desired)</p></td>
+<td><p>Atomically compare-and-swap: if the current value of <cite>x</cite> equals <cite>expected</cite>, write <cite>desired</cite> into <cite>x</cite>.</p></td>
+</tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.max" title="quadrants.lang.ops.max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">max</span></code></a>(*args)</p></td>
 <td><p>Compute the maximum of the arguments, element-wise.</p></td>
 </tr>
@@ -1338,6 +1344,76 @@ are not allowed.</p>
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.atomic_exchange">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atomic_exchange</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atomic_exchange"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atomic_exchange" title="Link to this definition">#</a></dt>
+<dd><p>Atomically swap the value of <cite>x</cite> with <cite>y</cite>, and return the old value of <cite>x</cite>.</p>
+<p>Unlike the other <cite>qd.atomic_*</cite> ops, the new value of <cite>x</cite> does not depend on its old value: <cite>x</cite> is unconditionally
+overwritten with <cite>y</cite>. Useful for lock-free hand-off / claim-a-slot patterns where you want to atomically grab
+whatever was at a location while leaving a fresh value behind.</p>
+<p><cite>x</cite> must be a writable target, constant expressions or scalars are not allowed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input. When both are matrices they must have the same shape.</p></li>
+<li><p><strong>y</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input. When both are matrices they must have the same shape.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The old value of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="mi">7</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_exchange</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">42</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># 42, the new value of x</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># 7,  the old value of x</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">qd</span><span class="o">.</span><span class="n">atomic_exchange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># will raise QuadrantsSyntaxError</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.atomic_cas">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atomic_cas</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expected</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">desired</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atomic_cas"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atomic_cas" title="Link to this definition">#</a></dt>
+<dd><p>Atomically compare-and-swap: if the current value of <cite>x</cite> equals <cite>expected</cite>, write <cite>desired</cite> into <cite>x</cite>.
+Returns the value originally at <cite>x</cite> (regardless of whether the swap happened).</p>
+<p>The user determines whether the swap actually fired by comparing the returned value against <cite>expected</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">old</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_cas</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">expected</span><span class="p">,</span> <span class="n">desired</span><span class="p">)</span>
+<span class="n">success</span> <span class="o">=</span> <span class="p">(</span><span class="n">old</span> <span class="o">==</span> <span class="n">expected</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This matches the shape of CUDA’s <cite>atomicCAS</cite> and SPIR-V’s <cite>OpAtomicCompareExchange</cite>. CAS is the basic
+primitive on top of which arbitrary atomic read-modify-write operations can be built with a retry loop.</p>
+<p>Currently integer dtypes only – f32 / f64 will raise a trace-time type error. <cite>x</cite> must be a writable
+target; constant expressions or scalars are not allowed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> – the destination memory location (lvalue: field element, ndarray element, matrix slot).</p></li>
+<li><p><strong>expected</strong> – the value <cite>x</cite> is required to currently hold for the swap to fire.</p></li>
+<li><p><strong>desired</strong> – the value to write into <cite>x</cite> if <cite>*x == expected</cite>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The value originally at <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">take_slot</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="c1"># Try to claim the slot only if it is currently empty (== 0).</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">old</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_cas</span><span class="p">(</span><span class="n">slot</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="n">my_id</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="k">if</span> <span class="n">old</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<span class="gp">&gt;&gt;&gt; </span>        <span class="c1"># we won the race; the slot is ours</span>
+<span class="gp">&gt;&gt;&gt; </span>        <span class="o">...</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.ops.max">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.max" title="Link to this definition">#</a></dt>
 <dd><p>Compute the maximum of the arguments, element-wise.</p>
@@ -1473,6 +1549,8 @@ must have the same shape, and scalars will be broadcasted to the same shape as t
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_and"><code class="docutils literal notranslate"><span class="pre">atomic_and()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_or"><code class="docutils literal notranslate"><span class="pre">atomic_or()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_xor"><code class="docutils literal notranslate"><span class="pre">atomic_xor()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_exchange"><code class="docutils literal notranslate"><span class="pre">atomic_exchange()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_cas"><code class="docutils literal notranslate"><span class="pre">atomic_cas()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.max"><code class="docutils literal notranslate"><span class="pre">max()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.min"><code class="docutils literal notranslate"><span class="pre">min()</span></code></a></li>
 </ul>
