@@ -910,10 +910,17 @@ def big_scratch():
 
 
 @pytest.mark.parametrize("dtype", [qd.u32, qd.i32, qd.f32])
+@pytest.mark.run_in_serial
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_n_1m(dtype, big_scratch):  # pylint: disable=unused-argument,redefined-outer-name
     """N = 1_000_000 - qipc's hot-path size. Requires scratch bumped to ~5 MB; the ``big_scratch`` fixture supplies
-    8 MB and restores after."""
+    8 MB and restores after.
+
+    Marked ``run_in_serial`` so conftest gives this test the 1 GB ``device_memory_GB`` pool instead of the 0.3 GB
+    non-serial default. On AMDGPU (gfx1100) running the full suite, the 0.3 GB pool plus the ``hipMallocAsync`` mempool
+    behaviour of ROCm 7.2 occasionally returned this test allocations against fragmented memory by the time it ran,
+    surfacing as a one-in-many-runs spurious sort mismatch with no algorithmic flaw on isolated reruns (700+ in-process
+    trials and 200 reset/init trials clean). The 1 GB pool removes the fragmentation pressure."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
@@ -926,10 +933,12 @@ def test_device_radix_sort_n_1m(dtype, big_scratch):  # pylint: disable=unused-a
     np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"))
 
 
+@pytest.mark.run_in_serial
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_by_key_add_n_1m(big_scratch):  # pylint: disable=unused-argument,redefined-outer-name
     """N = 1_000_000 reduce-by-key. Same scratch requirement as the 1M radix sort; the kernel sequence is different
-    (just scan + scatter) but the in-place scan over scratch[0:N] needs the bump."""
+    (just scan + scatter) but the in-place scan over scratch[0:N] needs the bump. Marked ``run_in_serial`` for the
+    same 1 GB ``device_memory_GB`` pool reason as ``test_device_radix_sort_n_1m``."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     keys_host = _gen_run_keys(rng, qd.i32, N)
@@ -1054,9 +1063,11 @@ def test_device_exclusive_scan_add_rejects_oversized_n():
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.run_in_serial
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_add_n_1m(dtype):
-    """N = 1_000_000 reduce. Default scratch is plenty (4K u32 slots for the top-level partials, recursion adds ~16)."""
+    """N = 1_000_000 reduce. Default scratch is plenty (4K u32 slots for the top-level partials, recursion adds ~16).
+    Marked ``run_in_serial`` for the 1 GB ``device_memory_GB`` pool, consistent with the other 1M tests."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     if dtype == qd.f32:
@@ -1081,9 +1092,11 @@ def test_device_reduce_add_n_1m(dtype):
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.run_in_serial
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_add_n_1m(dtype):
-    """N = 1_000_000 exclusive scan. Same scratch story as reduce - fits in default 1 MB by a wide margin."""
+    """N = 1_000_000 exclusive scan. Same scratch story as reduce - fits in default 1 MB by a wide margin.
+    Marked ``run_in_serial`` for the 1 GB ``device_memory_GB`` pool, consistent with the other 1M tests."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     if dtype == qd.f32:
@@ -1116,6 +1129,7 @@ def test_device_exclusive_scan_add_n_1m(dtype):
 # before it" - the bumped capacity from the first cycle must NOT leak into the second cycle's scratch.
 
 
+@pytest.mark.run_in_serial
 @test_utils.test(arch=qd.gpu)
 def test_scratch_round_trip_across_qd_reset(req_arch):
     """Run a bumped-scratch algorithm; ``qd.reset()`` + ``qd.init()``; then run another algorithm at default scratch.
