@@ -1069,7 +1069,14 @@ i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
   // ``permlane64`` swap for cross-half traffic. On CDNA the cost is zero (the instruction is the same shape) and on
   // RDNA the cost is also zero (we'd already be issuing a real ``ds_bpermute`` for the per-lane case; this just
   // makes the constant-target case behave the same way).
+  //
+  // The ``+v`` constraint names the AMDGPU VGPR register class, so it is only valid when clang's target is amdgcn.
+  // The runtime is compiled once per backend into a per-arch ``.bc`` (see ``runtime_module/CMakeLists.txt``); on
+  // non-AMDGPU bitcode this whole function is dead (``amdgpu_ds_bpermute`` / ``amdgpu_permlane64`` ``__builtin_trap``
+  // there), but we still need the source to compile cleanly. Gate the asm fence on ``ARCH_amdgpu`` accordingly.
+#ifdef ARCH_amdgpu
   __asm__ volatile("" : "+v"(byte));
+#endif
   i32 from_self_half = amdgpu_ds_bpermute(byte, value);
   i32 from_other_half = amdgpu_ds_bpermute(byte, swapped);
   return ((target_lane ^ self_lane) & 32) ? from_other_half : from_self_half;
