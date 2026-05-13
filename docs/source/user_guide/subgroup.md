@@ -212,20 +212,27 @@ Returns `1` on lane 0 of every subgroup and `0` on every other lane. Useful for 
 - Implemented portably as a `@qd.func` wrapper: `i32(invocation_id() == 0)`. Inlines at compile time into a single compare + zero-extend on every backend.
 - This narrows the SPIR-V `OpGroupNonUniformElect` semantics, which would otherwise be free to pick any *active* lane. Under the documented uniform-CF + all-lanes-active contract for `qd.simt.subgroup` the distinction is invisible (lane 0 is always active and is a legal choice), and pinning the elected lane down keeps the behaviour identical across backends.
 
-### `sync()` / `mem_fence()`
+### `sync()`
 
-`sync()` is a subgroup-scope thread-converging barrier — every lane in the subgroup must reach the call before any lane proceeds. `mem_fence()` is a subgroup-scope memory fence: it orders memory operations within the subgroup without requiring thread convergence.
+Subgroup-scope thread-converging barrier — every lane in the subgroup must reach the call before any lane proceeds.
 
-- `sync()` lowers to:
+- Lowers to:
   - **SPIR-V**: `OpControlBarrier(Subgroup, Subgroup, 0)`.
   - **CUDA**: `__syncwarp(0xFFFFFFFF)` (`nvvm.bar.warp.sync`). Reconverges lanes that may have diverged under independent thread scheduling on Volta+; under uniform CF on Pascal and earlier this is effectively a no-op but is still legal.
   - **AMDGPU**: `llvm.amdgcn.wave.barrier`. Acts as a compiler reordering barrier on GCN (where waves are lockstep) and as a real wave-scope hardware barrier on RDNA.
-- `mem_fence()` lowers to:
+- Caller contract on every backend: call from uniform control flow with all lanes active. Calling from divergent control flow has implementation-defined behaviour (CUDA's `nvvm.bar.warp.sync` will deadlock if the mask does not match the active set; AMDGPU's `wave.barrier` is a no-op on most chips so divergent calls silently pass through).
+- The legacy name `subgroup.barrier()` is still available as a deprecated alias. It forwards to `sync()` and emits a `DeprecationWarning` on first use; prefer the new name in new code.
+
+### `mem_fence()`
+
+Subgroup-scope memory fence — orders memory operations within the subgroup without requiring thread convergence.
+
+- Lowers to:
   - **SPIR-V**: `OpMemoryBarrier(Subgroup, AcquireRelease | UniformMemory | WorkgroupMemory)`.
   - **CUDA**: `__threadfence_block()` (`nvvm.membar.cta`) — workgroup-scope, see the `**` footnote in the matrix above.
   - **AMDGPU**: LLVM `fence syncscope("workgroup") seq_cst` — workgroup-scope, same caveat.
-- Caller contract on every backend: call from uniform control flow with all lanes active. Calling either op from divergent control flow has implementation-defined behaviour (CUDA's `nvvm.bar.warp.sync` will deadlock if the mask does not match the active set; AMDGPU's `wave.barrier` is a no-op on most chips so divergent calls silently pass through).
-- The legacy names `subgroup.barrier()` and `subgroup.memory_barrier()` are still available as deprecated aliases. They forward to `sync()` / `mem_fence()` and emit a `DeprecationWarning` on first use; prefer the new names in new code.
+- Caller contract on every backend: call from uniform control flow with all lanes active. Calling from divergent control flow has implementation-defined behaviour (same caveats as `sync()`).
+- The legacy name `subgroup.memory_barrier()` is still available as a deprecated alias. It forwards to `mem_fence()` and emits a `DeprecationWarning` on first use; prefer the new name in new code.
 
 ### `reduce_add(value)`
 
