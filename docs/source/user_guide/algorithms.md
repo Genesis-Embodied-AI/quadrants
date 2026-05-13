@@ -4,15 +4,18 @@ Device-wide algorithms — primitives that consume and produce whole arrays, exe
 
 ## What's available
 
-| Op                                                 | What it does                                                   | CUDA | AMDGPU | Vulkan | Metal |
-|----------------------------------------------------|----------------------------------------------------------------|------|--------|--------|-------|
-| `qd.algorithms.device_reduce_add(input, *, out)`   | `out[0] = sum(input)` (two-or-more-pass tree reduction)        | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_reduce_min(input, id, *, out)` | `out[0] = min(input)` (same recursion, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_reduce_max(input, id, *, out)` | `out[0] = max(input)` (same recursion, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.parallel_sort`                      | Odd-even merge sort (in-place, key or key-value)               | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.PrefixSumExecutor`                  | Inclusive in-place prefix sum (i32 only)                       | yes  | no     | yes    | no    |
+| Op                                                          | What it does                                                       | CUDA | AMDGPU | Vulkan | Metal |
+|-------------------------------------------------------------|--------------------------------------------------------------------|------|--------|--------|-------|
+| `qd.algorithms.device_reduce_add(input, *, out)`            | `out[0] = sum(input)` (two-or-more-pass tree reduction)            | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_reduce_min(input, id, *, out)`        | `out[0] = min(input)` (same recursion, caller-supplied identity)   | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_reduce_max(input, id, *, out)`        | `out[0] = max(input)` (same recursion, caller-supplied identity)   | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_exclusive_scan_add(input, *, out)`    | `out[i] = sum(input[0:i])` (three-pass Blelloch-style scan)        | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_exclusive_scan_min(input, id, *, out)` | `out[i] = min(input[0:i])` (same pipeline, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_exclusive_scan_max(input, id, *, out)` | `out[i] = max(input[0:i])` (same pipeline, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.parallel_sort`                               | Odd-even merge sort (in-place, key or key-value)                   | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.PrefixSumExecutor`                           | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `device_exclusive_scan_add`. | yes  | no     | yes    | no    |
 
-\* `device_reduce_*` and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives. AMDGPU and Metal coverage is exercised less heavily than CUDA / Vulkan; report any failures.
+\* `device_reduce_*`, `device_exclusive_scan_*`, and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives. AMDGPU and Metal coverage is exercised less heavily than CUDA / Vulkan; report any failures.
 
 ## Semantics
 
@@ -62,6 +65,44 @@ from quadrants import _scratch
 _scratch.set_scratch_bytes(4 << 20)   # 4 MB, before any qd.algorithms.* call
 ```
 
+### `qd.algorithms.device_exclusive_scan_{add,min,max}(input, [identity,] *, out)`
+
+Device-wide exclusive prefix scan over a 1-D tensor: `out[i]` holds the reduction (`sum` / `min` / `max`) of `input[0:i]`. `out[0]` is always the monoid identity.
+
+```python
+import quadrants as qd
+
+N = 1_000_000
+inp = qd.field(qd.f32, shape=N)
+out = qd.field(qd.f32, shape=N)
+# ... fill inp ...
+
+qd.algorithms.device_exclusive_scan_add(inp, out=out)
+# out[0] == 0.0; out[i] == sum(inp[0:i]) for i > 0.
+```
+
+Signatures:
+
+- `device_exclusive_scan_add(input, *, out)` — exclusive sum. Identity (`0` for the dtype) is derived automatically.
+- `device_exclusive_scan_min(input, identity, *, out)` — exclusive min. `identity` is **required** (e.g. `math.inf` for `f32`, `2**31 - 1` for `i32`).
+- `device_exclusive_scan_max(input, identity, *, out)` — exclusive max. `identity` is **required** (e.g. `-math.inf` for `f32`, `-2**31` for `i32`).
+
+Constraints:
+
+- **Dtypes (first land):** `qd.i32`, `qd.u32`, `qd.f32`. Calls with `qd.i64` / `qd.f64` raise `NotImplementedError`.
+- **Shape:** `input` and `out` must both be 1-D with the same shape and dtype.
+- **No in-place scan:** `out` must be a distinct buffer from `input`. Calling with `out is input` raises `ValueError`. (The kernels do not protect against same-buffer aliasing; allocating one extra buffer once is cheap relative to the scan itself.)
+- **Identity (min / max only):** mandatory. Passing `None` or omitting `identity` raises `TypeError`.
+- **f32 non-associativity:** the order of additions inside a scan tree is not the same as a left-to-right host scan, so `f32` results are *not* bitwise-equal to `numpy.cumsum`. Tests tolerate a small relative error.
+
+Implementation:
+
+- Blelloch 1990 three-pass exclusive scan:
+  1. **Pass 1** — per-block tile reduce into the shared `Field(u32)` scratch (one `u32` per block).
+  2. **Pass 2** — exclusive-scan the partials buffer in place. For `N ≤ BLOCK_DIM²` (= 65536) a single block does this. For larger `N`, the driver recurses: another tile-reduce on the partials, a recursive scan, then a downsweep that applies the higher-level prefixes.
+  3. **Pass 3** — per-block tile scan + add the block prefix from scratch. Each block re-reads its tile from the input, runs `block.exclusive_scan` to get per-thread tile prefixes, and adds its `block_prefix` from the scanned partials.
+- `BLOCK_DIM = 256`. Total scratch usage at `N = 1M` is `4096 + 16 = 4112` `u32` slots (~16 KB), well under the 1 MB default.
+
 ### `qd.algorithms.parallel_sort(keys, values=None)`
 
 In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `qd.field` — `parallel_sort` reaches into `snode.ptr.offset` internally, so `ndarray` is **not** supported and will fail at compile time with an `AttributeError`.
@@ -86,6 +127,8 @@ qd.algorithms.parallel_sort(keys, vals)
 - **Performance characteristic.** Beats radix-style sorts for small N (roughly N ≲ 4K).
 
 ### `qd.algorithms.PrefixSumExecutor`
+
+> **Deprecated.** New code should call `qd.algorithms.device_exclusive_scan_add(input, *, out)` instead. `PrefixSumExecutor` is **inclusive**-only, **`i32`**-only, and **CUDA / Vulkan**-only; the new functional API covers `{i32, u32, f32}` on every supported backend and runs the exclusive variant directly. To migrate from inclusive in-place to exclusive out-of-place, drop the `Executor` wrapper, allocate a distinct `out` field, and post-process if you actually need the inclusive form (`inclusive[i] = exclusive[i] + input[i]`). `PrefixSumExecutor` is kept for one release cycle for backward compat and will be removed in a future release.
 
 Inclusive in-place prefix sum (scan) over a 1-D `i32` field. Construct once with the array length, then call `.run(field)` to scan.
 

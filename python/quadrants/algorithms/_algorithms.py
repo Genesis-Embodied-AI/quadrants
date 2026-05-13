@@ -42,7 +42,16 @@ def parallel_sort(keys, values=None):
 
 @data_oriented
 class PrefixSumExecutor:
-    """Parallel Prefix Sum (Scan) Helper
+    """Parallel Prefix Sum (Scan) Helper.
+
+    .. deprecated::
+        Prefer ``qd.algorithms.device_exclusive_scan_add(input, *, out)``. The
+        new functional API supports ``{i32, u32, f32}`` on every backend
+        (CUDA, AMDGPU, Vulkan, Metal) and runs the exclusive variant directly.
+        ``PrefixSumExecutor`` is inclusive-only, ``i32``-only, and limited to
+        CUDA / Vulkan; it is kept for one release cycle for backward compat
+        and will be removed thereafter. See
+        ``docs/source/user_guide/algorithms.md`` for the migration recipe.
 
     Use this helper to perform an inclusive in-place's parallel prefix sum.
 
@@ -52,6 +61,18 @@ class PrefixSumExecutor:
     """
 
     def __init__(self, length):
+        import warnings  # pylint: disable=import-outside-toplevel
+
+        warnings.warn(
+            "qd.algorithms.PrefixSumExecutor is deprecated. Use "
+            "qd.algorithms.device_exclusive_scan_add(input, *, out) instead. "
+            "See docs/source/user_guide/algorithms.md for migration.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self._init(length)
+
+    def _init(self, length):
         self.sorting_length = length
 
         BLOCK_SZ = 64
