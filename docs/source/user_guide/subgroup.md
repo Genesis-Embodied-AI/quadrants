@@ -199,10 +199,41 @@ With `log2_size = k`, the subgroup splits into windows of `2**k` consecutive lan
 
 Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_down` / `subgroup.shuffle_up` / `subgroup.shuffle_xor` ops address every lane by absolute lane id with no built-in notion of a window. Windowing emerges from how the higher-level reductions / scans / votes *compose* those shuffles.
 
-#### Result placement per window
+#### Supported `_tiled` ops
 
-- **Broadcast-to-all forms** (`all_true_tiled`, `any_true_tiled`, `all_equal_tiled`, `reduce_all_*_tiled`, `inclusive_*_tiled`, `exclusive_*_tiled`, `segmented_reduce_*_tiled`): every lane in each window holds the per-window result. Lanes in different windows hold different results (their own window's).
-- **Window-local-lane-0 forms** (`reduce_add_tiled`, `reduce_min_tiled`, `reduce_max_tiled`): only the *window-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. Use `reduce_all_*_tiled` if you want every lane to see its window's result.
+| Tiled op                                                       | Full-subgroup form                            | Result placement     |
+|----------------------------------------------------------------|-----------------------------------------------|----------------------|
+| `subgroup.all_true_tiled(p, log2_size)`                        | `subgroup.all_true(p)`                        | broadcast-to-all     |
+| `subgroup.any_true_tiled(p, log2_size)`                        | `subgroup.any_true(p)`                        | broadcast-to-all     |
+| `subgroup.all_equal_tiled(v, log2_size)`                       | `subgroup.all_equal(v)`                       | broadcast-to-all     |
+| `subgroup.reduce_add_tiled(v, log2_size)`                      | `subgroup.reduce_add(v)`                      | window-local lane 0  |
+| `subgroup.reduce_min_tiled(v, log2_size)`                      | `subgroup.reduce_min(v)`                      | window-local lane 0  |
+| `subgroup.reduce_max_tiled(v, log2_size)`                      | `subgroup.reduce_max(v)`                      | window-local lane 0  |
+| `subgroup.reduce_all_add_tiled(v, log2_size)`                  | `subgroup.reduce_all_add(v)`                  | broadcast-to-all     |
+| `subgroup.reduce_all_min_tiled(v, log2_size)`                  | `subgroup.reduce_all_min(v)`                  | broadcast-to-all     |
+| `subgroup.reduce_all_max_tiled(v, log2_size)`                  | `subgroup.reduce_all_max(v)`                  | broadcast-to-all     |
+| `subgroup.segmented_reduce_add_tiled(v, head_flag, log2_size)` | `subgroup.segmented_reduce_add(v, head_flag)` | broadcast-to-all     |
+| `subgroup.segmented_reduce_min_tiled(v, head_flag, log2_size)` | `subgroup.segmented_reduce_min(v, head_flag)` | broadcast-to-all     |
+| `subgroup.segmented_reduce_max_tiled(v, head_flag, log2_size)` | `subgroup.segmented_reduce_max(v, head_flag)` | broadcast-to-all     |
+| `subgroup.inclusive_add_tiled(v, log2_size)`                   | `subgroup.inclusive_add(v)`                   | broadcast-to-all     |
+| `subgroup.inclusive_mul_tiled(v, log2_size)`                   | `subgroup.inclusive_mul(v)`                   | broadcast-to-all     |
+| `subgroup.inclusive_min_tiled(v, log2_size)`                   | `subgroup.inclusive_min(v)`                   | broadcast-to-all     |
+| `subgroup.inclusive_max_tiled(v, log2_size)`                   | `subgroup.inclusive_max(v)`                   | broadcast-to-all     |
+| `subgroup.inclusive_and_tiled(v, log2_size)`                   | `subgroup.inclusive_and(v)`                   | broadcast-to-all     |
+| `subgroup.inclusive_or_tiled(v, log2_size)`                    | `subgroup.inclusive_or(v)`                    | broadcast-to-all     |
+| `subgroup.inclusive_xor_tiled(v, log2_size)`                   | `subgroup.inclusive_xor(v)`                   | broadcast-to-all     |
+| `subgroup.exclusive_add_tiled(v, log2_size)`                   | `subgroup.exclusive_add(v)`                   | broadcast-to-all     |
+| `subgroup.exclusive_mul_tiled(v, log2_size)`                   | `subgroup.exclusive_mul(v)`                   | broadcast-to-all     |
+| `subgroup.exclusive_min_tiled(v, log2_size, identity)`         | `subgroup.exclusive_min(v, identity)`         | broadcast-to-all     |
+| `subgroup.exclusive_max_tiled(v, log2_size, identity)`         | `subgroup.exclusive_max(v, identity)`         | broadcast-to-all     |
+| `subgroup.exclusive_and_tiled(v, log2_size)`                   | `subgroup.exclusive_and(v)`                   | broadcast-to-all     |
+| `subgroup.exclusive_or_tiled(v, log2_size)`                    | `subgroup.exclusive_or(v)`                    | broadcast-to-all     |
+| `subgroup.exclusive_xor_tiled(v, log2_size)`                   | `subgroup.exclusive_xor(v)`                   | broadcast-to-all     |
+
+- **Broadcast-to-all forms**: every lane in each window holds the per-window result. Lanes in different windows hold different results (their own window's).
+- **Window-local-lane-0 forms**: only the *window-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. Use the `reduce_all_*_tiled` counterparts if you want every lane to see its window's result.
+
+`log2_size` is a `qd.template()` — a compile-time constant in `[0, 5]` for reductions / scans / votes, and `[0, 6]` for `segmented_reduce_*_tiled` (which has a dedicated u64-bitmask path on wave64). The caller must ensure `2**log2_size <= group_size()`; passing a larger value silently computes the wrong result on most backends and there is no runtime check. Backends that do not support a given op (`reduce_add_tiled` and friends on `*` backends, see the per-op tables) raise a `qd.static_assert` at compile time.
 
 #### Lowering
 
