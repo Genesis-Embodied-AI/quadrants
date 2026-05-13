@@ -1,3 +1,4 @@
+import math
 import platform
 
 import numpy as np
@@ -1678,28 +1679,17 @@ def test_subgroup_inclusive_xor_tiled(dtype, log2_size):
 # pass through here.
 
 
-def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_init, *, takes_identity_arg=False):
+def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_init):
     _skip_if_f64_unsupported(dtype)
     N = 64
     src = qd.field(dtype=dtype, shape=N)
     dst = qd.field(dtype=dtype, shape=N)
 
-    if takes_identity_arg:
-        identity_value = py_identity
-
-        @qd.kernel
-        def foo():
-            qd.loop_config(block_dim=N)
-            for i in range(N):
-                dst[i] = scan_func(src[i], log2_size, identity_value)
-
-    else:
-
-        @qd.kernel
-        def foo():
-            qd.loop_config(block_dim=N)
-            for i in range(N):
-                dst[i] = scan_func(src[i], log2_size)
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = scan_func(src[i], log2_size)
 
     src_init(src, N, dtype)
     foo()
@@ -1720,6 +1710,8 @@ def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_i
             global_lane = group_base + k
             got = dst[global_lane]
             if dtype in _INT_DTYPES:
+                assert got == expected, f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
+            elif math.isinf(expected) or math.isnan(expected):
                 assert got == expected, f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
             else:
                 assert abs(got - expected) < 1e-4 * max(
@@ -1746,34 +1738,21 @@ def test_subgroup_exclusive_mul_tiled(dtype, log2_size):
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_min_tiled(dtype, log2_size):
-    """Exclusive prefix min.  Lane 0 of each group is the explicit `identity` we pass.  Use a sentinel larger than any
-    element produced by `_init_varied_int_or_float` (max is 23)."""
-    identity = 1_000_000 if dtype == qd.i32 else 1e30
+    """Exclusive prefix min.  Lane 0 of each group is the dtype-typed identity (+inf for floats, INT_MAX for ints) --
+    the wrapper auto-derives it from ``value``'s dtype, so the caller doesn't pass one."""
+    identity = float("inf") if dtype in (qd.f32, qd.f64) else int(np.iinfo(np.int32).max)
     _check_exclusive_scan(
-        subgroup.exclusive_min_tiled,
-        lambda a, b: min(a, b),
-        identity,
-        dtype,
-        log2_size,
-        _init_varied_int_or_float,
-        takes_identity_arg=True,
+        subgroup.exclusive_min_tiled, lambda a, b: min(a, b), identity, dtype, log2_size, _init_varied_int_or_float
     )
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_max_tiled(dtype, log2_size):
-    """Exclusive prefix max.  Lane 0 of each group is the explicit `identity` we pass.  Use a sentinel smaller than
-    any element produced by `_init_varied_int_or_float` (min is 1)."""
-    identity = -1_000_000 if dtype == qd.i32 else -1e30
+    """Exclusive prefix max.  Lane 0 of each group is the dtype-typed identity (-inf for floats, INT_MIN for ints)."""
+    identity = float("-inf") if dtype in (qd.f32, qd.f64) else int(np.iinfo(np.int32).min)
     _check_exclusive_scan(
-        subgroup.exclusive_max_tiled,
-        lambda a, b: max(a, b),
-        identity,
-        dtype,
-        log2_size,
-        _init_varied_int_or_float,
-        takes_identity_arg=True,
+        subgroup.exclusive_max_tiled, lambda a, b: max(a, b), identity, dtype, log2_size, _init_varied_int_or_float
     )
 
 
@@ -2892,22 +2871,20 @@ def test_subgroup_all_equal():
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_min():
-    """``exclusive_min(value, identity)`` matches ``exclusive_min_tiled(value, log2_group_size(), identity)``
-    lane-by-lane.  ``identity`` must be ``>=`` every legal element; we pass ``999`` (greater than every src value
-    below)."""
+    """``exclusive_min(value)`` matches ``exclusive_min_tiled(value, log2_group_size())`` lane-by-lane.  Lane 0 holds
+    the dtype's auto-derived identity (``np.iinfo(qd.i32).max`` here)."""
     N = subgroup.group_size()
     src = qd.field(dtype=qd.i32, shape=N)
     out_full = qd.field(dtype=qd.i32, shape=N)
     out_base = qd.field(dtype=qd.i32, shape=N)
     l2 = subgroup.log2_group_size()
-    identity = 999
 
     @qd.kernel
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            out_full[i] = subgroup.exclusive_min(src[i], identity)
-            out_base[i] = subgroup.exclusive_min_tiled(src[i], l2, identity)
+            out_full[i] = subgroup.exclusive_min(src[i])
+            out_base[i] = subgroup.exclusive_min_tiled(src[i], l2)
 
     for i in range(N):
         src[i] = ((i * 7 + 11) % 23) + 1  # 11, 7, 13, 3, 17, 5, 19, ... -- varied, all < 24
@@ -2915,27 +2892,28 @@ def test_subgroup_exclusive_min():
 
     for i in range(N):
         assert out_full[i] == out_base[i], f"lane {i}: full={out_full[i]}, base={out_base[i]}"
-    # Lane 0 (and lane log2_group_size()-aligned starts in general) must equal identity.
-    assert out_full[0] == identity, f"lane 0 of first group should be identity ({identity}), got {out_full[0]}"
+    expected_identity = int(np.iinfo(np.int32).max)
+    assert (
+        out_full[0] == expected_identity
+    ), f"lane 0 of first group should be dtype max ({expected_identity}), got {out_full[0]}"
 
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_exclusive_max():
-    """``exclusive_max(value, identity)`` matches ``exclusive_max_tiled(value, log2_group_size(), identity)``
-    lane-by-lane.  ``identity`` must be ``<=`` every legal element; we pass ``-999``."""
+    """``exclusive_max(value)`` matches ``exclusive_max_tiled(value, log2_group_size())`` lane-by-lane.  Lane 0 holds
+    the dtype's auto-derived identity (``np.iinfo(qd.i32).min`` here)."""
     N = subgroup.group_size()
     src = qd.field(dtype=qd.i32, shape=N)
     out_full = qd.field(dtype=qd.i32, shape=N)
     out_base = qd.field(dtype=qd.i32, shape=N)
     l2 = subgroup.log2_group_size()
-    identity = -999
 
     @qd.kernel
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            out_full[i] = subgroup.exclusive_max(src[i], identity)
-            out_base[i] = subgroup.exclusive_max_tiled(src[i], l2, identity)
+            out_full[i] = subgroup.exclusive_max(src[i])
+            out_base[i] = subgroup.exclusive_max_tiled(src[i], l2)
 
     for i in range(N):
         src[i] = ((i * 7 + 11) % 23) + 1
@@ -2943,7 +2921,10 @@ def test_subgroup_exclusive_max():
 
     for i in range(N):
         assert out_full[i] == out_base[i], f"lane {i}: full={out_full[i]}, base={out_base[i]}"
-    assert out_full[0] == identity, f"lane 0 of first group should be identity ({identity}), got {out_full[0]}"
+    expected_identity = int(np.iinfo(np.int32).min)
+    assert (
+        out_full[0] == expected_identity
+    ), f"lane 0 of first group should be dtype min ({expected_identity}), got {out_full[0]}"
 
 
 @test_utils.test(arch=qd.gpu)

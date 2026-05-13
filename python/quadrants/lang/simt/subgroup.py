@@ -2,10 +2,14 @@
 
 import warnings
 
+import numpy as np
+
 from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
+from quadrants.lang.expr import make_constant_expr
 from quadrants.lang.kernel_impl import func
 from quadrants.lang.ops import clz
+from quadrants.lang.util import to_numpy_type
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import i32, u32, u64
 
@@ -458,9 +462,10 @@ def reduce_all_max_tiled(value, log2_size: template()):
 # ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` ops — the same shape as `inclusive_add_tiled` /
 # `inclusive_min_tiled` / `inclusive_max_tiled`, plus a single-instruction setup.
 #
-# No identity argument is required (unlike `exclusive_min_tiled` / `exclusive_max_tiled`) because the per-lane
-# ``distance >= offset`` guard ensures the scan never reaches across a segment boundary, so a partner from another
-# segment is never combined with the local value.
+# No identity element is involved at all -- the per-lane ``distance >= offset`` guard ensures the scan never reaches
+# across a segment boundary, so a partner from another segment is never combined with the local value (i.e. the
+# implementation doesn't need a "what to combine with at the segment head" sentinel the way ``exclusive_min`` /
+# ``exclusive_max`` do for lane 0 within each tile).
 
 
 @func
@@ -730,18 +735,21 @@ def inclusive_xor_tiled(value, log2_size: template()):
 # Lane 0's result must be set explicitly because `shuffle_up` with offset 1 returns an implementation-defined value at
 # lane 0 (`OpGroupNonUniformShuffleUp` calls it undefined outright).  See `_exclusive_scan_tiled` for the shared body.
 #
-# Identity per op (in `value`'s dtype, expressed via dtype-preserving arithmetic so the wrapper does not need to
-# inspect the dtype):
+# Identity per op (in `value`'s dtype):
 #
-#   add: ``value - value``                  (zero)
+#   add: ``value - value``                  (zero; built from arithmetic on ``value`` to inherit its dtype)
 #   mul: ``value - value + 1``              (one; the literal +1 takes value's dtype)
 #   or:  ``value ^ value``                  (zero; bitwise xor of value with itself)
 #   xor: ``value ^ value``                  (zero)
 #   and: ``~(value ^ value)``               (all bits set; bitwise not of zero)
+#   min: dtype-max constant                 (+inf for float dtypes; ``np.iinfo(dtype).max`` for integer dtypes)
+#   max: dtype-min constant                 (-inf for float dtypes; ``np.iinfo(dtype).min`` for integer dtypes)
 #
-# For min and max there is no portable type-extreme that can be derived from `value` alone, so those two ops take an
-# explicit ``identity`` argument: pass +∞ for `exclusive_min_tiled`, −∞ for `exclusive_max_tiled` (or whatever
-# sentinel makes sense for the caller's dtype and value range).
+# For add / mul / and / or / xor the identity falls out of pure arithmetic on ``value`` itself, so the body stays
+# inside a ``@func`` and the identity is built from typed Exprs.  For min and max there is no such trick (you can't
+# manufacture ``+inf`` or ``INT_MAX`` from arithmetic on a single value of unknown dtype), so ``exclusive_min_tiled``
+# / ``exclusive_max_tiled`` are plain Python wrappers that introspect ``value``'s dtype at compile time and emit a
+# typed-constant identity Expr.
 
 
 @func
@@ -778,26 +786,53 @@ def exclusive_mul_tiled(value, log2_size: template()):
     return _exclusive_scan_tiled(value, _bin_mul, value - value + 1, log2_size)
 
 
-@func
-def exclusive_min_tiled(value, log2_size: template(), identity):
+def _typed_min_identity(value):
+    """Return a typed-constant Expr equal to the largest value representable in ``value``'s dtype.
+
+    Suitable as the identity for an ``exclusive_min`` scan -- lane 0's "predecessor" must be guaranteed ``>=`` every
+    real element, and ``+inf`` / ``INT_MAX`` / ``UINT_MAX`` are the tightest such sentinels per dtype.
+    """
+    dtype = value.ptr.get_rvalue_type()
+    if _qd_core.is_real(dtype):
+        return make_constant_expr(float("inf"), dtype)
+    npty = to_numpy_type(dtype)
+    if npty is np.bool_:
+        return make_constant_expr(1, dtype)
+    return make_constant_expr(int(np.iinfo(npty).max), dtype)
+
+
+def _typed_max_identity(value):
+    """Return a typed-constant Expr equal to the smallest value representable in ``value``'s dtype.
+
+    Suitable as the identity for an ``exclusive_max`` scan -- ``-inf`` for floats, ``INT_MIN`` for signed ints, ``0``
+    for unsigned ints and bool.
+    """
+    dtype = value.ptr.get_rvalue_type()
+    if _qd_core.is_real(dtype):
+        return make_constant_expr(float("-inf"), dtype)
+    npty = to_numpy_type(dtype)
+    if npty is np.bool_:
+        return make_constant_expr(0, dtype)
+    return make_constant_expr(int(np.iinfo(npty).min), dtype)
+
+
+def exclusive_min_tiled(value, log2_size):
     """Exclusive prefix min across ``2**log2_size`` consecutive lanes.
 
-    Lane 0 of each group returns ``identity``: the caller must supply a value that is ``>=`` every legal element of
-    the input (typically ``+∞`` for floats, the dtype's maximum for integers).  See the module-level note for why this
-    op alone takes an explicit identity.
+    Lane 0 of each group returns the dtype-typed identity: ``+inf`` for real dtypes, the dtype's maximum
+    (``np.iinfo(dtype).max``) for integer dtypes.  See the module-level note for why this op (and ``exclusive_max``)
+    is a plain Python wrapper rather than ``@func``.
     """
-    return _exclusive_scan_tiled(value, _bin_min, identity, log2_size)
+    return _exclusive_scan_tiled(value, _bin_min, _typed_min_identity(value), log2_size)
 
 
-@func
-def exclusive_max_tiled(value, log2_size: template(), identity):
+def exclusive_max_tiled(value, log2_size):
     """Exclusive prefix max across ``2**log2_size`` consecutive lanes.
 
-    Lane 0 of each group returns ``identity``: the caller must supply a value that is ``<=`` every legal element of
-    the input (typically ``-∞`` for floats, the dtype's minimum for integers).  See the module-level note for why this
-    op alone takes an explicit identity.
+    Lane 0 of each group returns the dtype-typed identity: ``-inf`` for real dtypes, the dtype's minimum
+    (``np.iinfo(dtype).min``) for integer dtypes (``0`` for unsigned).
     """
-    return _exclusive_scan_tiled(value, _bin_max, identity, log2_size)
+    return _exclusive_scan_tiled(value, _bin_max, _typed_max_identity(value), log2_size)
 
 
 @func
@@ -941,20 +976,15 @@ def exclusive_mul(value):
     return exclusive_mul_tiled(value, log2_group_size())
 
 
-def exclusive_min(value, identity):
-    """``exclusive_min_tiled`` over the entire subgroup.
-
-    ``identity`` must be ``>=`` every legal element (typically ``+inf``).
-    """
-    return exclusive_min_tiled(value, log2_group_size(), identity)
+def exclusive_min(value):
+    """``exclusive_min_tiled`` over the entire subgroup -- lane 0 returns the dtype's max (``+inf`` for floats)."""
+    return exclusive_min_tiled(value, log2_group_size())
 
 
-def exclusive_max(value, identity):
-    """``exclusive_max_tiled`` over the entire subgroup.
-
-    ``identity`` must be ``<=`` every legal element (typically ``-inf``).
-    """
-    return exclusive_max_tiled(value, log2_group_size(), identity)
+def exclusive_max(value):
+    """``exclusive_max_tiled`` over the entire subgroup -- lane 0 returns the dtype's min (``-inf`` for floats, ``0``
+    for unsigned ints)."""
+    return exclusive_max_tiled(value, log2_group_size())
 
 
 def exclusive_and(value):

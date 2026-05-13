@@ -74,31 +74,16 @@ CUDA shortcut: `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF,
 
 `reduce_*` returns the reduction in lane 0 (other lanes are undefined); `reduce_all_*` broadcasts the reduction to every lane in the subgroup. `inclusive_*` / `exclusive_*` produce the per-lane prefix; lane `i` ends up with the scan of `value[0..i]` (inclusive) or `value[0..i-1]` (exclusive). `segmented_reduce_*` resets the scan at every `head_flag != 0` and returns the per-segment inclusive reduction in every lane of that segment.
 
-| Op                                            | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                  |
-|-----------------------------------------------|------|--------|-------------------------|-------------------------|
-| `subgroup.reduce_add(v)`                      | yes  | yes\*  | yes                     | any type supporting `+` |
-| `subgroup.reduce_all_add(v)`                  | yes  | yes    | yes                     | any type supporting `+` |
-| `subgroup.reduce_min(v)`                      | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.reduce_max(v)`                      | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.reduce_all_min(v)`                  | yes  | yes    | yes                     | integer + float         |
-| `subgroup.reduce_all_max(v)`                  | yes  | yes    | yes                     | integer + float         |
-| `subgroup.segmented_reduce_add(v, head_flag)` | yes  | yes\*  | yes                     | any type supporting `+` |
-| `subgroup.segmented_reduce_min(v, head_flag)` | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.segmented_reduce_max(v, head_flag)` | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.inclusive_add(v)`                   | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.inclusive_mul(v)`                   | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.inclusive_min(v)`                   | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.inclusive_max(v)`                   | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.inclusive_and(v)`                   | yes  | yes\*  | yes                     | integer                 |
-| `subgroup.inclusive_or(v)`                    | yes  | yes\*  | yes                     | integer                 |
-| `subgroup.inclusive_xor(v)`                   | yes  | yes\*  | yes                     | integer                 |
-| `subgroup.exclusive_add(v)`                   | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.exclusive_mul(v)`                   | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.exclusive_min(v, identity)`         | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.exclusive_max(v, identity)`         | yes  | yes\*  | yes                     | integer + float         |
-| `subgroup.exclusive_and(v)`                   | yes  | yes\*  | yes                     | integer                 |
-| `subgroup.exclusive_or(v)`                    | yes  | yes\*  | yes                     | integer                 |
-| `subgroup.exclusive_xor(v)`                   | yes  | yes\*  | yes                     | integer                 |
+| Op                                                   | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                                                  |
+|------------------------------------------------------|------|--------|-------------------------|---------------------------------------------------------|
+| `subgroup.reduce_add(v)`                             | yes  | yes\*  | yes                     | any type supporting `+`                                 |
+| `subgroup.reduce_{min,max}(v)`                       | yes  | yes\*  | yes                     | integer + float                                         |
+| `subgroup.reduce_all_add(v)`                         | yes  | yes    | yes                     | any type supporting `+`                                 |
+| `subgroup.reduce_all_{min,max}(v)`                   | yes  | yes    | yes                     | integer + float                                         |
+| `subgroup.segmented_reduce_add(v, head_flag)`        | yes  | yes\*  | yes                     | any type supporting `+`                                 |
+| `subgroup.segmented_reduce_{min,max}(v, head_flag)`  | yes  | yes\*  | yes                     | integer + float                                         |
+| `subgroup.inclusive_{add,mul,min,max,and,or,xor}(v)` | yes  | yes\*  | yes                     | integer + float (`_and` / `_or` / `_xor`: integer only) |
+| `subgroup.exclusive_{add,mul,min,max,and,or,xor}(v)` | yes  | yes\*  | yes                     | integer + float (`_and` / `_or` / `_xor`: integer only) |
 
 Every op above has a paired `_tiled` form that takes an extra `log2_size` template parameter and operates on independent `2**log2_size`-aligned windows that tile the subgroup — see [Tiled variants](#tiled-variants).
 
@@ -224,8 +209,8 @@ Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_d
 | `subgroup.inclusive_xor_tiled(v, log2_size)`                   | `subgroup.inclusive_xor(v)`                   | broadcast-to-all     |
 | `subgroup.exclusive_add_tiled(v, log2_size)`                   | `subgroup.exclusive_add(v)`                   | broadcast-to-all     |
 | `subgroup.exclusive_mul_tiled(v, log2_size)`                   | `subgroup.exclusive_mul(v)`                   | broadcast-to-all     |
-| `subgroup.exclusive_min_tiled(v, log2_size, identity)`         | `subgroup.exclusive_min(v, identity)`         | broadcast-to-all     |
-| `subgroup.exclusive_max_tiled(v, log2_size, identity)`         | `subgroup.exclusive_max(v, identity)`         | broadcast-to-all     |
+| `subgroup.exclusive_min_tiled(v, log2_size)`                   | `subgroup.exclusive_min(v)`                   | broadcast-to-all     |
+| `subgroup.exclusive_max_tiled(v, log2_size)`                   | `subgroup.exclusive_max(v)`                   | broadcast-to-all     |
 | `subgroup.exclusive_and_tiled(v, log2_size)`                   | `subgroup.exclusive_and(v)`                   | broadcast-to-all     |
 | `subgroup.exclusive_or_tiled(v, log2_size)`                    | `subgroup.exclusive_or(v)`                    | broadcast-to-all     |
 | `subgroup.exclusive_xor_tiled(v, log2_size)`                   | `subgroup.exclusive_xor(v)`                   | broadcast-to-all     |
@@ -300,7 +285,7 @@ Per-lane inclusive scan under `+` / `min` / `max` that resets at every non-zero 
 - Implementation: one `subgroup.ballot(head_flag != 0)` to materialise a `u64` of head positions, then a Hillis-Steele inclusive scan bounded by `distance >= offset` where `distance = lane - segment_head`. A compile-time branch in `_segment_head_distance_tiled` picks between two paths:
   - **`log2_size <= 5`** — u32-bitmask path. Shifts the relevant 32-lane half of the ballot down to bits 0..31 and runs the bit-mask + `clz` arithmetic in half-local coordinates (`lane_in_half = lane - half_base`). Half-local `distance` equals absolute `lane - segment_head_abs` because both terms are offset by the same `half_base`, so the downstream `shuffle_up`'s `distance >= offset` guard still works in absolute terms. This is the only path on wave32 backends — it compiles to identical IR to the historical wave32-only implementation, so CUDA / Metal / Vulkan callers see no perf regression from the wave64 support.
   - **`log2_size == 6`** — u64-bitmask path. Works in absolute lane coordinates with the full `u64` ballot, an OR-injected virtual head at lane 0 to guarantee a non-zero `lower`, and a `clz(u64)` for the segment head. Costs one extra `u64` shift + `u64 clz` vs the u32 path; only reachable when `group_size() == 64` (i.e. AMDGPU), so the entire branch is dead-code-eliminated at every `log2_size <= 5` call site.
-- No identity argument is required (unlike `exclusive_min` / `exclusive_max`) because the per-lane `distance >= offset` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never combined with the local value.
+- No identity element is involved at all — the per-lane `distance >= offset` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never combined with the local value (i.e. the implementation doesn't need a "what to combine with at the segment head" sentinel the way `exclusive_min` / `exclusive_max` do for lane 0).
 - Cost: `1 ballot + 1 clz + log2_group_size() shuffles + log2_group_size() ops`, fully unrolled into the calling kernel's IR. Same shape as `inclusive_add` / `inclusive_min` / `inclusive_max`, plus one ballot and one `clz` for the per-lane segment-head lookup.
 - Float NaN handling for `_min` / `_max` is implementation-defined (same caveat as `reduce_min` / `reduce_max`): PTX uses `fminnm` / `fmaxnm`, AMDGPU uses `llvm.minnum` / `llvm.maxnum`, SPIR-V uses `OpFMin` / `OpFMax`. Avoid NaN inputs if you need a portable result.
 - AMDGPU note (`*` in the table): `shuffle_up` goes through `ds_bpermute` (~50 cycle latency), same as the other reductions.
@@ -317,12 +302,18 @@ Per-lane inclusive scan across the entire subgroup, under the binary operator na
 
 ### `exclusive_add` / `exclusive_mul` / `exclusive_min` / `exclusive_max` / `exclusive_and` / `exclusive_or` / `exclusive_xor`
 
-Per-lane exclusive scan across the entire subgroup, under the binary operator named by the suffix. Lane `i` (with `i > 0`) returns `v[0] op v[1] op ... op v[i - 1]`. Lane 0 returns the operator's identity in `value`'s dtype. Tiled variants: `exclusive_*_tiled(value, log2_size[, identity])` — see [Tiled variants](#tiled-variants).
+Per-lane exclusive scan across the entire subgroup, under the binary operator named by the suffix. Lane `i` (with `i > 0`) returns `v[0] op v[1] op ... op v[i - 1]`. Lane 0 returns the operator's identity in `value`'s dtype. Tiled variants: `exclusive_*_tiled(value, log2_size)` — see [Tiled variants](#tiled-variants).
 
 - The body unrolls into the inclusive scan (`log2_group_size()` shuffle+op pairs) plus one extra `shuffle_up` and a per-lane select.
-- `_add`, `_mul`, `_or`, `_xor`, `_and` infer the lane-0 identity from `value`'s dtype: `value - value` (zero), `value - value + 1` (one), and `~(value ^ value)` (all bits set) respectively.
-- `_min` and `_max` take an explicit `identity` argument because there is no portable type-extreme literal that can be derived from `value` alone — pass `+∞` (or the dtype's max) for `_min`, `-∞` (or the dtype's min) for `_max`.
-- All seven share a single `@qd.func` helper (`_exclusive_scan_tiled`) that runs the inclusive scan, shifts the result up by one lane via `shuffle_up`, and substitutes `identity` at lane 0. The lane-0 substitution is required because `shuffle_up` with offset 1 is implementation-defined at lane 0 (and `OpGroupNonUniformShuffleUp` calls it undefined outright).
+- The lane-0 identity is auto-derived from `value`'s dtype at compile time, with no runtime cost:
+  - `_add` / `_or` / `_xor`: `0` in `value`'s dtype (built as `value - value` / `value ^ value`).
+  - `_mul`: `1` in `value`'s dtype (built as `value - value + 1`).
+  - `_and`: all-bits-set in `value`'s dtype (built as `~(value ^ value)`).
+  - `_min`: `+inf` for real dtypes, `np.iinfo(dtype).max` for integer dtypes.
+  - `_max`: `-inf` for real dtypes, `np.iinfo(dtype).min` for integer dtypes (`0` for unsigned).
+- `_add`, `_mul`, `_min`, `_max` accept integer and float dtypes; `_and`, `_or`, `_xor` accept integer dtypes only.
+- The first five (`_add`, `_mul`, `_and`, `_or`, `_xor`) build the identity from pure arithmetic on `value` and stay inside a single shared `@qd.func` helper (`_exclusive_scan_tiled`). `_min` and `_max` cannot manufacture `+inf` / `INT_MAX` from arithmetic on a value of unknown dtype, so they are plain Python wrappers that introspect `value`'s dtype at compile time and emit a typed-constant identity Expr before calling the same shared helper — the identity is a compile-time constant in the generated IR, so the cost is identical to the other five ops.
+- The shared `_exclusive_scan_tiled` helper runs the inclusive scan, shifts the result up by one lane via `shuffle_up`, and substitutes the identity at lane 0. The lane-0 substitution is required because `shuffle_up` with offset 1 is implementation-defined at lane 0 (and `OpGroupNonUniformShuffleUp` calls it undefined outright).
 - AMDGPU performance note (`*` in the table): same `ds_bpermute` cost as `shuffle_up`. Cost is one inclusive scan plus one extra `shuffle_up` and a select.
 
 ### `ballot_first_n(predicate, n)`
