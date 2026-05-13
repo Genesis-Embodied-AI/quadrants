@@ -145,8 +145,8 @@ Module Contents
    :param dtype: scalar dtype for the inter-subgroup shared-memory staging slot; must match ``value``'s type.
 
    The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
-   `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory path is
-   short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.
+   `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory
+   path is short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.
 
 
 .. py:function:: exclusive_scan(value, block_dim: template(), op: template(), identity, dtype: template())
@@ -200,23 +200,24 @@ Module Contents
 
    Block-level radix rank via the atomic-OR match-and-count strategy.
 
-   Returns the calling thread's stable rank within the block under digit ``(key >> bit_start) & ((1 << num_bits) - 1)``.
+   Returns the calling thread's stable rank within the block under digit
+   ``(key >> bit_start) & ((1 << num_bits) - 1)``.
 
    :param key: ``u32`` key, one per thread.
-   :param block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 << radix_bits``: each digit gets exactly
-                     one thread for the per-thread bin/excl_prefix output.
+   :param block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 << radix_bits``: each digit gets
+                     exactly one thread for the per-thread bin/excl_prefix output.
    :param radix_bits: number of bits in the digit (template).  Typical onesweep value is 8, giving 256 digits.
    :param bit_start: starting bit of the digit (template).  Used as ``key >> bit_start``.
-   :param num_bits: actual digit width in bits (template), with ``num_bits <= radix_bits``.  Bits ``[bit_start, bit_start +
-                    num_bits)`` of ``key`` are extracted.
+   :param num_bits: actual digit width in bits (template), with ``num_bits <= radix_bits``.  Bits
+                    ``[bit_start, bit_start + num_bits)`` of ``key`` are extracted.
    :param bins: ``block.SharedArray((1 << radix_bits,), qd.i32)`` outparam.  After the call, ``bins[d]`` holds the count
                 of keys whose digit equals ``d``.  Caller is responsible for allocating this array exactly once per kernel.
-   :param excl_prefix: ``block.SharedArray((1 << radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]`` holds
-                       the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.
+   :param excl_prefix: ``block.SharedArray((1 << radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]``
+                       holds the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.
 
    The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
    `subgroup.group_size()` at compile time.  Supports both wave32 (CUDA, Vulkan-on-NVIDIA, Metal) and wave64
-   (AMDGPU — Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private
+   (AMDGPU - Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private
    implementations at compile time based on subgroup size; the match-mask shared-memory region's dtype is the only
    semantic difference (``i32`` on wave32, ``i64`` on wave64), but Quadrants' AST transformer doesn't carry locals
    across ``if impl.static`` branches so the two paths are written as separate ``@func`` bodies.  Atomic ``or`` on
@@ -224,12 +225,12 @@ Module Contents
    not depend on SPIR-V / Metal supporting 64-bit threadgroup atomics.
 
    Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary ``block.sync()``
-   and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without a
-   further ``block.sync()`` (we sync internally before exit).
+   and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without
+   a further ``block.sync()`` (we sync internally before exit).
 
-   Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block exclusive
-   scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  Shared-memory footprint at the default
-   ``radix_bits=8``: 4 KiB ``i32`` for subgroup offsets + 4 KiB ``i32`` (wave32) or 8 KiB ``i64`` (wave64) for the
-   match-mask region — so 8 KiB total on wave32, 12 KiB on wave64.
+   Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block
+   exclusive scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  Shared-memory footprint at the
+   default ``radix_bits=8``: 4 KiB ``i32`` for subgroup offsets + 4 KiB ``i32`` (wave32) or 8 KiB ``i64`` (wave64)
+   for the match-mask region - so 8 KiB total on wave32, 12 KiB on wave64.
 
 

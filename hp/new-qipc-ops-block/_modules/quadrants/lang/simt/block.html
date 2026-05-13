@@ -622,18 +622,16 @@
 
 <span class="c1"># --- Block scans -----------------------------------------------------------------------</span>
 <span class="c1">#</span>
-<span class="c1"># Two-stage block scan.  Each subgroup does a Hillis-Steele scan via</span>
-<span class="c1"># `subgroup.{_inclusive_scan, _exclusive_scan}`, the last lane of every subgroup publishes the</span>
-<span class="c1"># subgroup aggregate to shared memory, then every thread sequentially folds the subgroup prefixes</span>
-<span class="c1"># and applies its own subgroup&#39;s prefix to its scan value.  All threads receive a valid result;</span>
-<span class="c1"># cost: one subgroup scan + 1 shared-mem write/read per subgroup + 1 `block.sync()` + (NUM_SUBGROUPS - 1)</span>
-<span class="c1"># ops on every thread (the cross-subgroup prefix is computed redundantly to avoid a second</span>
-<span class="c1"># barrier).</span>
+<span class="c1"># Two-stage block scan.  Each subgroup does a Hillis-Steele scan via `subgroup.{_inclusive_scan_tiled,</span>
+<span class="c1"># _exclusive_scan_tiled}`, the last lane of every subgroup publishes the subgroup aggregate to shared memory, then</span>
+<span class="c1"># every thread sequentially folds the subgroup prefixes and applies its own subgroup&#39;s prefix to its scan value.</span>
+<span class="c1"># All threads receive a valid result; cost: one subgroup scan + 1 shared-mem write/read per subgroup + 1</span>
+<span class="c1"># `block.sync()` + (NUM_SUBGROUPS - 1) ops on every thread (the cross-subgroup prefix is computed redundantly to</span>
+<span class="c1"># avoid a second barrier).</span>
 <span class="c1">#</span>
-<span class="c1"># Inclusive: subgroup aggregate at the last lane is just the inclusive value, written directly.</span>
-<span class="c1"># Exclusive: subgroup aggregate = `op(exclusive[last_lane], value[last_lane])`, since the</span>
-<span class="c1"># exclusive scan does not include the last lane&#39;s input — we recover the inclusive total</span>
-<span class="c1"># with one extra `op` on the publish path.</span>
+<span class="c1"># Inclusive: subgroup aggregate at the last lane is just the inclusive value, written directly.  Exclusive: subgroup</span>
+<span class="c1"># aggregate = `op(exclusive[last_lane], value[last_lane])`, since the exclusive scan does not include the last lane&#39;s</span>
+<span class="c1"># input - we recover the inclusive total with one extra `op` on the publish path.</span>
 
 
 <span class="nd">@_func</span>
@@ -652,8 +650,8 @@
 <span class="sd">        dtype: scalar dtype for the inter-subgroup shared-memory staging slot; must match ``value``&#39;s type.</span>
 
 <span class="sd">    The calling thread&#39;s block-local index is read internally via `block.thread_idx()`; the subgroup size is read from</span>
-<span class="sd">    `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory path is</span>
-<span class="sd">    short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.</span>
+<span class="sd">    `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory</span>
+<span class="sd">    path is short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">SUBGROUP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
     <span class="n">log2_subgroup</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">log2_group_size</span><span class="p">())</span>
@@ -677,9 +675,10 @@
         <span class="n">shared</span><span class="p">[</span><span class="n">subgroup_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">inclusive</span>
     <span class="n">sync</span><span class="p">()</span>
 
-    <span class="c1"># Sequential exclusive prefix scan over subgroup aggregates; each thread captures its own subgroup&#39;s prefix.  Subgroup 0&#39;s</span>
-    <span class="c1"># prefix is unused (its inclusive value is already the prefix sum from the start of the block), so we never read</span>
-    <span class="c1"># `subgroup_prefix` on subgroup 0; the placeholder there exists only to give the variable a definite type.</span>
+    <span class="c1"># Sequential exclusive prefix scan over subgroup aggregates; each thread captures its own subgroup&#39;s prefix.</span>
+    <span class="c1"># Subgroup 0&#39;s prefix is unused (its inclusive value is already the prefix sum from the start of the block), so</span>
+    <span class="c1"># we never read `subgroup_prefix` on subgroup 0; the placeholder there exists only to give the variable a</span>
+    <span class="c1"># definite type.</span>
     <span class="n">block_aggregate</span> <span class="o">=</span> <span class="n">shared</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
     <span class="n">subgroup_prefix</span> <span class="o">=</span> <span class="n">block_aggregate</span>
     <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">NUM_SUBGROUPS</span><span class="p">)):</span>
@@ -821,13 +820,14 @@
 <span class="c1"># The algorithm runs in six steps:</span>
 <span class="c1">#</span>
 <span class="c1"># 1. ComputeHistogramsSubgroup: each subgroup builds a private digit histogram in shared memory via ``atomic_add``.</span>
-<span class="c1"># 2. ComputeOffsetsSubgroupUpsweep: every thread sums per-subgroup histograms column-wise to produce a block-wide bin count</span>
-<span class="c1">#    for digit ``= tid``, while rewriting the subgroup histogram entries into per-subgroup running exclusive prefixes.</span>
+<span class="c1"># 2. ComputeOffsetsSubgroupUpsweep: every thread sums per-subgroup histograms column-wise to produce a block-wide</span>
+<span class="c1">#    bin count for digit ``= tid``, while rewriting the subgroup histogram entries into per-subgroup running</span>
+<span class="c1">#    exclusive prefixes.</span>
 <span class="c1"># 3. ExclusiveSum on the per-thread bin counts — uses the block exclusive scan defined above.</span>
 <span class="c1"># 4. ComputeOffsetsSubgroupDownsweep: add the block-wide exclusive prefix into every subgroup&#39;s offset entry.</span>
 <span class="c1"># 5. ComputeRanksItem (atomic-OR match): per-subgroup match via ``atomic_or`` on a per-digit lane-mask, then leader</span>
-<span class="c1">#    (highest set lane) does a single ``atomic_add`` on the subgroup offset and broadcasts via ``subgroup.shuffle``; each</span>
-<span class="c1">#    thread&#39;s rank is ``subgroup_offset + popc(bin_mask &amp; lanemask_le) - 1``.</span>
+<span class="c1">#    (highest set lane) does a single ``atomic_add`` on the subgroup offset and broadcasts via ``subgroup.shuffle``;</span>
+<span class="c1">#    each thread&#39;s rank is ``subgroup_offset + popc(bin_mask &amp; lanemask_le) - 1``.</span>
 <span class="c1"># 6. Write bin count + exclusive prefix to the outparam shared arrays.</span>
 <span class="c1">#</span>
 <span class="c1"># Shared-memory layout (all i32, total ``2 * BLOCK_SUBGROUPS * RADIX_DIGITS`` ints, 4096 ints = 16 KiB at the default</span>
@@ -848,8 +848,8 @@
 
 <span class="sd">    Why both ops: on CUDA, `subgroup.sync()` already lowers to `__syncwarp` which folds in a memory fence, so the</span>
 <span class="sd">    extra `subgroup.mem_fence()` is redundant (a `__threadfence_block`).  On SPIR-V, however, the codegen emits</span>
-<span class="sd">    `subgroupBarrier` as `OpControlBarrier(ScopeSubgroup, ScopeSubgroup, 0)` — i.e. with **no** memory semantics — so</span>
-<span class="sd">    a bare `subgroup.sync()` does *not* publish prior shared-memory writes to other lanes.  The radix rank algorithm</span>
+<span class="sd">    `subgroupBarrier` as `OpControlBarrier(ScopeSubgroup, ScopeSubgroup, 0)` - i.e. with **no** memory semantics -</span>
+<span class="sd">    so a bare `subgroup.sync()` does *not* publish prior shared-memory writes to other lanes.  The radix rank algorithm</span>
 <span class="sd">    relies on the `__syncwarp` invariant that, after the barrier, every lane sees every other lane&#39;s prior</span>
 <span class="sd">    `atomic_or` / `atomic_add` to shared memory; pairing the barrier with `subgroup.mem_fence()` (which emits a real</span>
 <span class="sd">    `OpMemoryBarrier(ScopeSubgroup, AcquireRelease | UniformMemory | WorkgroupMemory)`) restores that invariant.</span>
@@ -903,9 +903,9 @@
 
     <span class="n">sync</span><span class="p">()</span>  <span class="c1"># Publish per-subgroup histograms before column-sum.</span>
 
-    <span class="c1"># Step 2: per-thread column sum across subgroups for digit == tid.  Each thread collects the running exclusive prefix</span>
-    <span class="c1"># into ``bin_count`` while overwriting the subgroup histogram entries with their per-subgroup exclusive prefix.  After the</span>
-    <span class="c1"># loop, ``bin_count`` is the block-wide total for digit == tid.</span>
+    <span class="c1"># Step 2: per-thread column sum across subgroups for digit == tid.  Each thread collects the running exclusive</span>
+    <span class="c1"># prefix into ``bin_count`` while overwriting the subgroup histogram entries with their per-subgroup exclusive</span>
+    <span class="c1"># prefix.  After the loop, ``bin_count`` is the block-wide total for digit == tid.</span>
     <span class="n">bin_count</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">j_subgroup</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BLOCK_SUBGROUPS</span><span class="p">)):</span>
         <span class="n">subgroup_count</span> <span class="o">=</span> <span class="n">smem_offsets</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_subgroup</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span>
@@ -934,14 +934,14 @@
     <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_or</span><span class="p">(</span><span class="n">smem_match</span><span class="p">[</span><span class="n">match_idx</span><span class="p">],</span> <span class="n">lane_mask</span><span class="p">)</span>
     <span class="n">_subgroup_sync_fence</span><span class="p">()</span>
 
-    <span class="c1"># Read the bin_mask back and find the leader (highest matching lane) + intra-subgroup rank.  ``clz`` here MUST run on</span>
-    <span class="c1"># the u32 (FindUMsb on SPIR-V): casting to i32 first triggers SPIR-V&#39;s FindSMsb, which for negative i32 (top bit</span>
-    <span class="c1"># set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that&#39;s one less than the actual</span>
-    <span class="c1"># highest matching lane.  Concretely, with lane 31 holding the only key for its digit, bin_mask = 0x80000000;</span>
-    <span class="c1"># FindSMsb on -2147483648 returns 30 (highest 0-bit), so 31 - 30 = 1 elects lane 1 instead of lane 31, and lane</span>
-    <span class="c1"># 31&#39;s shuffle reads from lane 1 (= 0) — observed as last-lane ranks off by one on Vulkan / Metal.  Now that the</span>
-    <span class="c1"># subgroup layer dispatches FindUMsb for unsigned ``clz``, passing the u32 directly emits the right intrinsic on</span>
-    <span class="c1"># every backend.</span>
+    <span class="c1"># Read the bin_mask back and find the leader (highest matching lane) + intra-subgroup rank.  ``clz`` here MUST</span>
+    <span class="c1"># run on the u32 (FindUMsb on SPIR-V): casting to i32 first triggers SPIR-V&#39;s FindSMsb, which for negative i32</span>
+    <span class="c1"># (top bit set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that&#39;s one less than</span>
+    <span class="c1"># the actual highest matching lane.  Concretely, with lane 31 holding the only key for its digit,</span>
+    <span class="c1"># bin_mask = 0x80000000; FindSMsb on -2147483648 returns 30 (highest 0-bit), so 31 - 30 = 1 elects lane 1</span>
+    <span class="c1"># instead of lane 31, and lane 31&#39;s shuffle reads from lane 1 (= 0) - observed as last-lane ranks off by one on</span>
+    <span class="c1"># Vulkan / Metal.  Now that the subgroup layer dispatches FindUMsb for unsigned ``clz``, passing the u32 directly</span>
+    <span class="c1"># emits the right intrinsic on every backend.</span>
     <span class="n">bin_mask</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">smem_match</span><span class="p">[</span><span class="n">match_idx</span><span class="p">],</span> <span class="n">_u32</span><span class="p">)</span>
     <span class="n">leader</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">31</span><span class="p">)</span> <span class="o">-</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">clz</span><span class="p">(</span><span class="n">bin_mask</span><span class="p">),</span> <span class="n">_i32</span><span class="p">)</span>
     <span class="n">popc</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">popcnt</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">bit_and</span><span class="p">(</span><span class="n">bin_mask</span><span class="p">,</span> <span class="n">lane_mask_le_v</span><span class="p">))</span>
@@ -1031,8 +1031,8 @@
 
     <span class="n">sync</span><span class="p">()</span>
 
-    <span class="c1"># Step 5 — wave64 specifics: u64 ballot mask via inline ``one_at_lane | (one_at_lane - 1)`` (avoids UB on lane=63),</span>
-    <span class="c1"># atomic_or on the i64 match cell, clz / popcnt on u64.  Leader formula is ``63 - clz(u64)``.</span>
+    <span class="c1"># Step 5 - wave64 specifics: u64 ballot mask via inline ``one_at_lane | (one_at_lane - 1)`` (avoids UB on</span>
+    <span class="c1"># lane=63), atomic_or on the i64 match cell, clz / popcnt on u64.  Leader formula is ``63 - clz(u64)``.</span>
     <span class="n">lane_u64</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">lane</span><span class="p">,</span> <span class="n">_u64</span><span class="p">)</span>
     <span class="n">lane_mask</span> <span class="o">=</span> <span class="n">_u64</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">lane_u64</span>
     <span class="n">lane_mask_le_v</span> <span class="o">=</span> <span class="n">lane_mask</span> <span class="o">|</span> <span class="p">(</span><span class="n">lane_mask</span> <span class="o">-</span> <span class="n">_u64</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
@@ -1081,24 +1081,25 @@
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-level radix rank via the atomic-OR match-and-count strategy.</span>
 
-<span class="sd">    Returns the calling thread&#39;s stable rank within the block under digit ``(key &gt;&gt; bit_start) &amp; ((1 &lt;&lt; num_bits) - 1)``.</span>
+<span class="sd">    Returns the calling thread&#39;s stable rank within the block under digit</span>
+<span class="sd">    ``(key &gt;&gt; bit_start) &amp; ((1 &lt;&lt; num_bits) - 1)``.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        key: ``u32`` key, one per thread.</span>
-<span class="sd">        block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 &lt;&lt; radix_bits``: each digit gets exactly</span>
-<span class="sd">            one thread for the per-thread bin/excl_prefix output.</span>
+<span class="sd">        block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 &lt;&lt; radix_bits``: each digit gets</span>
+<span class="sd">            exactly one thread for the per-thread bin/excl_prefix output.</span>
 <span class="sd">        radix_bits: number of bits in the digit (template).  Typical onesweep value is 8, giving 256 digits.</span>
 <span class="sd">        bit_start: starting bit of the digit (template).  Used as ``key &gt;&gt; bit_start``.</span>
-<span class="sd">        num_bits: actual digit width in bits (template), with ``num_bits &lt;= radix_bits``.  Bits ``[bit_start, bit_start +</span>
-<span class="sd">            num_bits)`` of ``key`` are extracted.</span>
+<span class="sd">        num_bits: actual digit width in bits (template), with ``num_bits &lt;= radix_bits``.  Bits</span>
+<span class="sd">            ``[bit_start, bit_start + num_bits)`` of ``key`` are extracted.</span>
 <span class="sd">        bins: ``block.SharedArray((1 &lt;&lt; radix_bits,), qd.i32)`` outparam.  After the call, ``bins[d]`` holds the count</span>
 <span class="sd">            of keys whose digit equals ``d``.  Caller is responsible for allocating this array exactly once per kernel.</span>
-<span class="sd">        excl_prefix: ``block.SharedArray((1 &lt;&lt; radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]`` holds</span>
-<span class="sd">            the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.</span>
+<span class="sd">        excl_prefix: ``block.SharedArray((1 &lt;&lt; radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]``</span>
+<span class="sd">            holds the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.</span>
 
 <span class="sd">    The calling thread&#39;s block-local index is read internally via `block.thread_idx()`; the subgroup size is read from</span>
 <span class="sd">    `subgroup.group_size()` at compile time.  Supports both wave32 (CUDA, Vulkan-on-NVIDIA, Metal) and wave64</span>
-<span class="sd">    (AMDGPU — Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private</span>
+<span class="sd">    (AMDGPU - Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private</span>
 <span class="sd">    implementations at compile time based on subgroup size; the match-mask shared-memory region&#39;s dtype is the only</span>
 <span class="sd">    semantic difference (``i32`` on wave32, ``i64`` on wave64), but Quadrants&#39; AST transformer doesn&#39;t carry locals</span>
 <span class="sd">    across ``if impl.static`` branches so the two paths are written as separate ``@func`` bodies.  Atomic ``or`` on</span>
@@ -1106,13 +1107,13 @@
 <span class="sd">    not depend on SPIR-V / Metal supporting 64-bit threadgroup atomics.</span>
 
 <span class="sd">    Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary ``block.sync()``</span>
-<span class="sd">    and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without a</span>
-<span class="sd">    further ``block.sync()`` (we sync internally before exit).</span>
+<span class="sd">    and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without</span>
+<span class="sd">    a further ``block.sync()`` (we sync internally before exit).</span>
 
-<span class="sd">    Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block exclusive</span>
-<span class="sd">    scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  Shared-memory footprint at the default</span>
-<span class="sd">    ``radix_bits=8``: 4 KiB ``i32`` for subgroup offsets + 4 KiB ``i32`` (wave32) or 8 KiB ``i64`` (wave64) for the</span>
-<span class="sd">    match-mask region — so 8 KiB total on wave32, 12 KiB on wave64.</span>
+<span class="sd">    Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block</span>
+<span class="sd">    exclusive scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  Shared-memory footprint at the</span>
+<span class="sd">    default ``radix_bits=8``: 4 KiB ``i32`` for subgroup offsets + 4 KiB ``i32`` (wave32) or 8 KiB ``i64`` (wave64)</span>
+<span class="sd">    for the match-mask region - so 8 KiB total on wave32, 12 KiB on wave64.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">SUBGROUP_THREADS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
     <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span>

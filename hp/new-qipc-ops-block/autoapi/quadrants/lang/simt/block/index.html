@@ -600,8 +600,8 @@ for the standard sum specialization.</p></li>
 </dd>
 </dl>
 <p>The calling thread’s block-local index is read internally via <cite>block.thread_idx()</cite>; the subgroup size is read from
-<cite>subgroup.group_size()</cite> at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory path is
-short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.</p>
+<cite>subgroup.group_size()</cite> at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory
+path is short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -661,39 +661,40 @@ dtypes, <code class="docutils literal notranslate"><span class="pre">0</span></c
 <dt class="sig sig-object py" id="quadrants.lang.simt.block.radix_rank_match_atomic_or">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">radix_rank_match_atomic_or</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radix_bits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit_start</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bins</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">excl_prefix</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#radix_rank_match_atomic_or"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.radix_rank_match_atomic_or" title="Link to this definition">#</a></dt>
 <dd><p>Block-level radix rank via the atomic-OR match-and-count strategy.</p>
-<p>Returns the calling thread’s stable rank within the block under digit <code class="docutils literal notranslate"><span class="pre">(key</span> <span class="pre">&gt;&gt;</span> <span class="pre">bit_start)</span> <span class="pre">&amp;</span> <span class="pre">((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">num_bits)</span> <span class="pre">-</span> <span class="pre">1)</span></code>.</p>
+<p>Returns the calling thread’s stable rank within the block under digit
+<code class="docutils literal notranslate"><span class="pre">(key</span> <span class="pre">&gt;&gt;</span> <span class="pre">bit_start)</span> <span class="pre">&amp;</span> <span class="pre">((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">num_bits)</span> <span class="pre">-</span> <span class="pre">1)</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>key</strong> – <code class="docutils literal notranslate"><span class="pre">u32</span></code> key, one per thread.</p></li>
-<li><p><strong>block_dim</strong> – threads per block (template).  Must equal <code class="docutils literal notranslate"><span class="pre">RADIX_DIGITS</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">&lt;&lt;</span> <span class="pre">radix_bits</span></code>: each digit gets exactly
-one thread for the per-thread bin/excl_prefix output.</p></li>
+<li><p><strong>block_dim</strong> – threads per block (template).  Must equal <code class="docutils literal notranslate"><span class="pre">RADIX_DIGITS</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">&lt;&lt;</span> <span class="pre">radix_bits</span></code>: each digit gets
+exactly one thread for the per-thread bin/excl_prefix output.</p></li>
 <li><p><strong>radix_bits</strong> – number of bits in the digit (template).  Typical onesweep value is 8, giving 256 digits.</p></li>
 <li><p><strong>bit_start</strong> – starting bit of the digit (template).  Used as <code class="docutils literal notranslate"><span class="pre">key</span> <span class="pre">&gt;&gt;</span> <span class="pre">bit_start</span></code>.</p></li>
-<li><p><strong>num_bits</strong> – actual digit width in bits (template), with <code class="docutils literal notranslate"><span class="pre">num_bits</span> <span class="pre">&lt;=</span> <span class="pre">radix_bits</span></code>.  Bits <code class="docutils literal notranslate"><span class="pre">[bit_start,</span> <span class="pre">bit_start</span> <span class="pre">+</span>
-<span class="pre">num_bits)</span></code> of <code class="docutils literal notranslate"><span class="pre">key</span></code> are extracted.</p></li>
+<li><p><strong>num_bits</strong> – actual digit width in bits (template), with <code class="docutils literal notranslate"><span class="pre">num_bits</span> <span class="pre">&lt;=</span> <span class="pre">radix_bits</span></code>.  Bits
+<code class="docutils literal notranslate"><span class="pre">[bit_start,</span> <span class="pre">bit_start</span> <span class="pre">+</span> <span class="pre">num_bits)</span></code> of <code class="docutils literal notranslate"><span class="pre">key</span></code> are extracted.</p></li>
 <li><p><strong>bins</strong> – <code class="docutils literal notranslate"><span class="pre">block.SharedArray((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">radix_bits,),</span> <span class="pre">qd.i32)</span></code> outparam.  After the call, <code class="docutils literal notranslate"><span class="pre">bins[d]</span></code> holds the count
 of keys whose digit equals <code class="docutils literal notranslate"><span class="pre">d</span></code>.  Caller is responsible for allocating this array exactly once per kernel.</p></li>
-<li><p><strong>excl_prefix</strong> – <code class="docutils literal notranslate"><span class="pre">block.SharedArray((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">radix_bits,),</span> <span class="pre">qd.i32)</span></code> outparam.  After the call, <code class="docutils literal notranslate"><span class="pre">excl_prefix[d]</span></code> holds
-the exclusive prefix sum of <code class="docutils literal notranslate"><span class="pre">bins</span></code> up to digit <code class="docutils literal notranslate"><span class="pre">d</span></code>.  Caller allocates as for <code class="docutils literal notranslate"><span class="pre">bins</span></code>.</p></li>
+<li><p><strong>excl_prefix</strong> – <code class="docutils literal notranslate"><span class="pre">block.SharedArray((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">radix_bits,),</span> <span class="pre">qd.i32)</span></code> outparam.  After the call, <code class="docutils literal notranslate"><span class="pre">excl_prefix[d]</span></code>
+holds the exclusive prefix sum of <code class="docutils literal notranslate"><span class="pre">bins</span></code> up to digit <code class="docutils literal notranslate"><span class="pre">d</span></code>.  Caller allocates as for <code class="docutils literal notranslate"><span class="pre">bins</span></code>.</p></li>
 </ul>
 </dd>
 </dl>
 <p>The calling thread’s block-local index is read internally via <cite>block.thread_idx()</cite>; the subgroup size is read from
 <cite>subgroup.group_size()</cite> at compile time.  Supports both wave32 (CUDA, Vulkan-on-NVIDIA, Metal) and wave64
-(AMDGPU — Quadrants pins every AMDGPU target to <code class="docutils literal notranslate"><span class="pre">+wavefrontsize64</span></code>).  Dispatches to one of two private
+(AMDGPU - Quadrants pins every AMDGPU target to <code class="docutils literal notranslate"><span class="pre">+wavefrontsize64</span></code>).  Dispatches to one of two private
 implementations at compile time based on subgroup size; the match-mask shared-memory region’s dtype is the only
 semantic difference (<code class="docutils literal notranslate"><span class="pre">i32</span></code> on wave32, <code class="docutils literal notranslate"><span class="pre">i64</span></code> on wave64), but Quadrants’ AST transformer doesn’t carry locals
 across <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">impl.static</span></code> branches so the two paths are written as separate <code class="docutils literal notranslate"><span class="pre">&#64;func</span></code> bodies.  Atomic <code class="docutils literal notranslate"><span class="pre">or</span></code> on
 <code class="docutils literal notranslate"><span class="pre">i64</span></code> shared memory is native on AMDGPU’s LDS; wave32 backends never see the <code class="docutils literal notranslate"><span class="pre">i64</span></code> path so portability does
 not depend on SPIR-V / Metal supporting 64-bit threadgroup atomics.</p>
 <p>Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code>
-and <code class="docutils literal notranslate"><span class="pre">subgroup.sync()</span></code> retires.  After the call, <code class="docutils literal notranslate"><span class="pre">bins</span></code> and <code class="docutils literal notranslate"><span class="pre">excl_prefix</span></code> are visible to every thread without a
-further <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> (we sync internally before exit).</p>
-<p>Cost: <code class="docutils literal notranslate"><span class="pre">~items_per_thread</span></code> atomic_or + atomic_add per pass on shared memory + 2 <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> + 1 block exclusive
-scan + <code class="docutils literal notranslate"><span class="pre">BLOCK_SUBGROUPS</span></code> ops per thread for the column-sum upsweep.  Shared-memory footprint at the default
-<code class="docutils literal notranslate"><span class="pre">radix_bits=8</span></code>: 4 KiB <code class="docutils literal notranslate"><span class="pre">i32</span></code> for subgroup offsets + 4 KiB <code class="docutils literal notranslate"><span class="pre">i32</span></code> (wave32) or 8 KiB <code class="docutils literal notranslate"><span class="pre">i64</span></code> (wave64) for the
-match-mask region — so 8 KiB total on wave32, 12 KiB on wave64.</p>
+and <code class="docutils literal notranslate"><span class="pre">subgroup.sync()</span></code> retires.  After the call, <code class="docutils literal notranslate"><span class="pre">bins</span></code> and <code class="docutils literal notranslate"><span class="pre">excl_prefix</span></code> are visible to every thread without
+a further <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> (we sync internally before exit).</p>
+<p>Cost: <code class="docutils literal notranslate"><span class="pre">~items_per_thread</span></code> atomic_or + atomic_add per pass on shared memory + 2 <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> + 1 block
+exclusive scan + <code class="docutils literal notranslate"><span class="pre">BLOCK_SUBGROUPS</span></code> ops per thread for the column-sum upsweep.  Shared-memory footprint at the
+default <code class="docutils literal notranslate"><span class="pre">radix_bits=8</span></code>: 4 KiB <code class="docutils literal notranslate"><span class="pre">i32</span></code> for subgroup offsets + 4 KiB <code class="docutils literal notranslate"><span class="pre">i32</span></code> (wave32) or 8 KiB <code class="docutils literal notranslate"><span class="pre">i64</span></code> (wave64)
+for the match-mask region - so 8 KiB total on wave32, 12 KiB on wave64.</p>
 </dd></dl>
 
 </section>
