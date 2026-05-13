@@ -12,10 +12,11 @@ Device-wide algorithms — primitives that consume and produce whole arrays, exe
 | `qd.algorithms.device_exclusive_scan_add(input, *, out)`    | `out[i] = sum(input[0:i])` (three-pass Blelloch-style scan)        | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_exclusive_scan_min(input, id, *, out)` | `out[i] = min(input[0:i])` (same pipeline, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_exclusive_scan_max(input, id, *, out)` | `out[i] = max(input[0:i])` (same pipeline, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_select(input, flags, *, out, num_out)` | Stream compaction: copy `input[i]` to a dense prefix of `out` for every `flags[i] != 0`. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.parallel_sort`                               | Odd-even merge sort (in-place, key or key-value)                   | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.PrefixSumExecutor`                           | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `device_exclusive_scan_add`. | yes  | no     | yes    | no    |
 
-\* `device_reduce_*`, `device_exclusive_scan_*`, and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives. AMDGPU and Metal coverage is exercised less heavily than CUDA / Vulkan; report any failures.
+\* `device_reduce_*`, `device_exclusive_scan_*`, `device_select`, and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives. AMDGPU and Metal coverage is exercised less heavily than CUDA / Vulkan; report any failures.
 
 ## Semantics
 
@@ -102,6 +103,43 @@ Implementation:
   2. **Pass 2** — exclusive-scan the partials buffer in place. For `N ≤ BLOCK_DIM²` (= 65536) a single block does this. For larger `N`, the driver recurses: another tile-reduce on the partials, a recursive scan, then a downsweep that applies the higher-level prefixes.
   3. **Pass 3** — per-block tile scan + add the block prefix from scratch. Each block re-reads its tile from the input, runs `block.exclusive_scan` to get per-thread tile prefixes, and adds its `block_prefix` from the scanned partials.
 - `BLOCK_DIM = 256`. Total scratch usage at `N = 1M` is `4096 + 16 = 4112` `u32` slots (~16 KB), well under the 1 MB default.
+
+### `qd.algorithms.device_select(input, flags, *, out, num_out)`
+
+Stream compaction. Copy every `input[i]` whose corresponding `flags[i]` is non-zero into a dense prefix of `out`, in stable input order, and write the count of selected elements to `num_out[0]`.
+
+```python
+import quadrants as qd
+
+N = 100_000
+inp     = qd.field(qd.f32, shape=N)
+flags   = qd.field(qd.i32, shape=N)         # caller fills with 0 / 1
+out     = qd.field(qd.f32, shape=N)         # large enough for worst case
+num_out = qd.field(qd.i32, shape=1)
+
+# ... fill inp + flags via a separate kernel ...
+
+qd.algorithms.device_select(inp, flags, out=out, num_out=num_out)
+
+# Only out[0 : count] is meaningful; copy out the count host-side explicitly:
+count = int(num_out.to_numpy()[0])
+selected = out.to_numpy()[:count]
+```
+
+Constraints:
+
+- **Dtypes (first land):** `input.dtype` ∈ {`qd.i32`, `qd.u32`, `qd.f32`}.
+- **`flags`:** 1-D `qd.i32` tensor with the same shape as `input`. Each entry is treated as a boolean (`!= 0` selects). `flags` is caller-built — populate it with a kernel applying whatever predicate you want.
+- **`out`:** 1-D tensor, same dtype as `input`, with `len(out) >= len(input)` so the worst-case all-selected run is safe. Only `out[0 : num_out[0]]` carries meaningful data on return; the tail is left untouched (whatever was in `out` before the call remains).
+- **`num_out`:** 1-element `qd.i32` tensor. Same explicit-host-hop rule: do `int(num_out.to_numpy()[0])` after the call to get the count as a Python scalar.
+
+Algorithm: the textbook scan-based compaction.
+
+1. **Exclusive scan of `flags`** into the shared `Field(u32)` scratch, producing per-element write indices. Same three-pass internals as `device_exclusive_scan_add`.
+2. **Scatter:** one parallel kernel reads each `(input[i], flags[i], indices[i])` and, if the flag is set, writes `out[indices[i]] = input[i]`. No races by construction of the exclusive scan over 0 / 1 flags.
+3. **Count tail:** one-thread kernel computes `indices[N-1] + flags[N-1]` and stores it in `num_out[0]`.
+
+Scratch budget: at the default 1 MB, `N + ceil(N/256) + ... ≤ 262144`, so roughly `N ≤ 260_000` works out of the box. Raise the budget via `_scratch.set_scratch_bytes(...)` before any algorithm runs for larger inputs.
 
 ### `qd.algorithms.parallel_sort(keys, values=None)`
 

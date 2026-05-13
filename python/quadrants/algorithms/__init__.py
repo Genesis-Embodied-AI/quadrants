@@ -7,6 +7,7 @@ from ._scan import (
     device_exclusive_scan_max,
     device_exclusive_scan_min,
 )
+from ._select import device_select
 
 __all__ = [
     "PrefixSumExecutor",
@@ -16,5 +17,6 @@ __all__ = [
     "device_reduce_add",
     "device_reduce_max",
     "device_reduce_min",
+    "device_select",
     "parallel_sort",
 ]

@@ -369,3 +369,126 @@ def test_device_exclusive_scan_rejects_unsupported_dtype():
     out = qd.field(qd.i64, shape=4)
     with pytest.raises(NotImplementedError):
         qd.algorithms.device_exclusive_scan_add(inp, out=out)
+
+
+# ---------------------------------------------------------------------------
+# Device select / compact
+# ---------------------------------------------------------------------------
+
+# Sizes that exercise: single-block path, two-pass path with even split,
+# off-by-one tile (B0 ends mid-block), three-pass recursion. Default 1 MB
+# scratch holds N + ceil(N/256) + ... <= 262144 u32 slots, so the largest
+# size below (200_000) fits with ~780-slot partials -> still ok.
+_SELECT_SIZES = [1, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000]
+
+
+@pytest.mark.parametrize("N", _SELECT_SIZES)
+@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@test_utils.test(arch=qd.gpu)
+def test_device_select_basic(dtype, N):
+    """device_select packs the elements with flags != 0 into a dense prefix
+    of out, in stable input order; num_out[0] holds the count."""
+    rng = np.random.default_rng(seed=1234)
+    if dtype == qd.f32:
+        host = rng.uniform(-1.0, 1.0, size=N).astype(np.float32)
+    elif dtype == qd.u32:
+        host = rng.integers(0, 10000, size=N, dtype=np.uint32)
+    else:
+        host = rng.integers(-10000, 10000, size=N, dtype=np.int32)
+    # Roughly 30% selection rate so the test exercises a non-trivial mix.
+    flags_host = (rng.random(N) < 0.3).astype(np.int32)
+    expected = host[flags_host == 1]
+    expected_n = int(flags_host.sum())
+
+    inp = qd.field(dtype, shape=N)
+    flags = qd.field(qd.i32, shape=N)
+    out = qd.field(dtype, shape=max(N, 1))
+    num_out = qd.field(qd.i32, shape=1)
+    _fill_field(inp, host)
+    _fill_field(flags, flags_host)
+
+    qd.algorithms.device_select(inp, flags, out=out, num_out=num_out)
+    got_n = int(num_out.to_numpy()[0])
+    assert got_n == expected_n, f"{dtype} N={N}: got count {got_n}, expected {expected_n}"
+
+    got = out.to_numpy()[:got_n]
+    if dtype == qd.f32:
+        np.testing.assert_array_equal(got, expected, err_msg=f"f32 select(N={N})")
+    else:
+        np.testing.assert_array_equal(got, expected, err_msg=f"{dtype} select(N={N})")
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_select_all_selected():
+    """flags = all 1 -> out is a copy of input, num_out = N."""
+    N = 1024
+    inp = qd.field(qd.i32, shape=N)
+    flags = qd.field(qd.i32, shape=N)
+    out = qd.field(qd.i32, shape=N)
+    num_out = qd.field(qd.i32, shape=1)
+
+    rng = np.random.default_rng(seed=42)
+    host = rng.integers(-100, 100, size=N, dtype=np.int32)
+    _fill_field(inp, host)
+    _fill_field(flags, np.ones(N, dtype=np.int32))
+
+    qd.algorithms.device_select(inp, flags, out=out, num_out=num_out)
+    assert int(num_out.to_numpy()[0]) == N
+    np.testing.assert_array_equal(out.to_numpy(), host)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_select_none_selected():
+    """flags = all 0 -> nothing written, num_out = 0."""
+    N = 1024
+    inp = qd.field(qd.i32, shape=N)
+    flags = qd.field(qd.i32, shape=N)
+    out = qd.field(qd.i32, shape=N)
+    num_out = qd.field(qd.i32, shape=1)
+
+    _fill_field(inp, np.arange(N, dtype=np.int32))
+    _fill_field(flags, np.zeros(N, dtype=np.int32))
+
+    qd.algorithms.device_select(inp, flags, out=out, num_out=num_out)
+    assert int(num_out.to_numpy()[0]) == 0
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_select_rejects_shape_mismatch():
+    inp = qd.field(qd.i32, shape=4)
+    flags = qd.field(qd.i32, shape=5)
+    out = qd.field(qd.i32, shape=4)
+    num_out = qd.field(qd.i32, shape=1)
+    with pytest.raises(TypeError):
+        qd.algorithms.device_select(inp, flags, out=out, num_out=num_out)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_select_rejects_flags_wrong_dtype():
+    inp = qd.field(qd.i32, shape=4)
+    flags = qd.field(qd.f32, shape=4)
+    out = qd.field(qd.i32, shape=4)
+    num_out = qd.field(qd.i32, shape=1)
+    with pytest.raises(TypeError):
+        qd.algorithms.device_select(inp, flags, out=out, num_out=num_out)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_select_rejects_dtype_mismatch():
+    inp = qd.field(qd.i32, shape=4)
+    flags = qd.field(qd.i32, shape=4)
+    out = qd.field(qd.f32, shape=4)
+    num_out = qd.field(qd.i32, shape=1)
+    with pytest.raises(TypeError):
+        qd.algorithms.device_select(inp, flags, out=out, num_out=num_out)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_select_rejects_short_out():
+    """out must hold at least N elements (worst-case all-selected)."""
+    inp = qd.field(qd.i32, shape=8)
+    flags = qd.field(qd.i32, shape=8)
+    out = qd.field(qd.i32, shape=4)  # < input size
+    num_out = qd.field(qd.i32, shape=1)
+    with pytest.raises(ValueError):
+        qd.algorithms.device_select(inp, flags, out=out, num_out=num_out)
