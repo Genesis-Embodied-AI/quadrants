@@ -3264,9 +3264,9 @@ def test_subgroup_shuffle_xor_cross_half(dtype):
 
     for i in range(N):
         partner = i ^ 32
-        assert dst[i] == src[partner], (
-            f"lane {i}: shuffle_xor(v, 32) returned src[{i}]={src[i]} but expected src[{partner}]={src[partner]}"
-        )
+        assert (
+            dst[i] == src[partner]
+        ), f"lane {i}: shuffle_xor(v, 32) returned src[{i}]={src[i]} but expected src[{partner}]={src[partner]}"
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
@@ -3291,9 +3291,9 @@ def test_subgroup_shuffle_down_offset_32(dtype):
     k()
 
     for i in range(32):
-        assert dst[i] == src[i + 32], (
-            f"lane {i}: shuffle_down(v, 32) returned {dst[i]} but expected src[{i + 32}]={src[i + 32]}"
-        )
+        assert (
+            dst[i] == src[i + 32]
+        ), f"lane {i}: shuffle_down(v, 32) returned {dst[i]} but expected src[{i + 32}]={src[i + 32]}"
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
@@ -3318,9 +3318,9 @@ def test_subgroup_shuffle_up_offset_32(dtype):
     k()
 
     for i in range(32, 64):
-        assert dst[i] == src[i - 32], (
-            f"lane {i}: shuffle_up(v, 32) returned {dst[i]} but expected src[{i - 32}]={src[i - 32]}"
-        )
+        assert (
+            dst[i] == src[i - 32]
+        ), f"lane {i}: shuffle_up(v, 32) returned {dst[i]} but expected src[{i - 32}]={src[i - 32]}"
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
@@ -3348,9 +3348,7 @@ def test_subgroup_shuffle_absolute_lane_high_half(dtype):
     k()
 
     for i in range(N):
-        assert dst_lo[i] == src[47], (
-            f"lane {i}: shuffle(v, 47) returned {dst_lo[i]} but expected src[47]={src[47]}"
-        )
+        assert dst_lo[i] == src[47], f"lane {i}: shuffle(v, 47) returned {dst_lo[i]} but expected src[47]={src[47]}"
         assert dst_hi[i] == src[7], f"lane {i}: shuffle(v, 7) returned {dst_hi[i]} but expected src[7]={src[7]}"
 
 
