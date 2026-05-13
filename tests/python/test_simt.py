@@ -2607,6 +2607,33 @@ def test_subgroup_memory_barrier_deprecation_warn_once(monkeypatch):
     assert calls == ["mem_fence", "mem_fence", "mem_fence"], calls
 
 
+def test_subgroup_ballot_full_subgroup_deprecation_warn_once(monkeypatch):
+    """``subgroup.ballot_full_subgroup(predicate)`` is a deprecated alias for ``subgroup.ballot(predicate)`` after
+    the rename to "tiled forms get a _tiled suffix; full-subgroup ops are unsuffixed".  Same one-warning-per-process
+    contract as ``barrier()`` / ``memory_barrier()`` -- exactly one ``DeprecationWarning`` over many calls, and the
+    predicate forwards through to ``ballot()`` unchanged."""
+    import warnings as _w
+
+    from quadrants.lang.simt import subgroup as sg
+
+    sg._ballot_full_subgroup_deprecation_warned = False
+    calls = []
+    monkeypatch.setattr(sg, "ballot", lambda p: calls.append(p) or 0)
+
+    with _w.catch_warnings(record=True) as records:
+        _w.simplefilter("always", DeprecationWarning)
+        sg.ballot_full_subgroup(1)
+        sg.ballot_full_subgroup(0)
+        sg.ballot_full_subgroup(1)
+
+    deprecations = _drain_deprecation_warnings(records)
+    assert len(deprecations) == 1, f"expected exactly one DeprecationWarning, got {len(deprecations)}"
+    msg = str(deprecations[0].message)
+    assert "qd.simt.subgroup.ballot_full_subgroup()" in msg
+    assert "qd.simt.subgroup.ballot()" in msg
+    assert calls == [1, 0, 1], calls
+
+
 @test_utils.test(arch=qd.vulkan)
 def test_vulkan_subgroup_id_survives_reinit():
     """Regression test: SubgroupLocalInvocationId must stay stable across
