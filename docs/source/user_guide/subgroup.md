@@ -61,7 +61,7 @@ The two `ballot` variants are tile-less by construction: `ballot_first_n(predica
 | `subgroup.all_equal(value)`                   | yes (fast: 1 shuffle + vote.all)      | yes                   | yes                             |
 | `subgroup.lanemask_{lt,le,eq,gt,ge}(lane_id)` | yes                                   | yes                   | yes                             |
 
-CUDA shortcut: `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF, p)` / `__any_sync(0xFFFFFFFF, p)` (one `vote.all` / `vote.any` instruction). The same shortcut is selected for `all_true_tiled` / `any_true_tiled` at `log2_size == 5`; partial-warp tiles (and every other backend) cleanly fall back to a portable `shuffle_xor` butterfly with no branch in the emitted IR.
+CUDA shortcut: `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF, p)` / `__any_sync(0xFFFFFFFF, p)` (one `vote.all` / `vote.any` instruction). Every other backend uses a portable `shuffle_xor` butterfly with no branch in the emitted IR.
 
 `all_equal` always uses the broadcast-and-`all_true` form: every lane reads the value at the start of the subgroup via `shuffle`, compares it with its own value, and `all_true`-reduces the per-lane equality bit. Cost: `log2(subgroup_size) + 1` shuffles in the portable case, or `1 shuffle + 1 vote.all` on CUDA. We deliberately do *not* use `__match_all_sync` even on CUDA: it requires sm_70+, and it does bit-equality on floats, contradicting this op's documented `OpGroupNonUniformAllEqual` semantics (`NaN != NaN`, `+0.0 == -0.0`). Callers wanting bit-equality on floats should bit-cast to the same-width integer dtype before calling.
 
