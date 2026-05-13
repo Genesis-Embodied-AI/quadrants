@@ -2113,12 +2113,12 @@ def test_subgroup_ballot_first_n_partial_truthy_per_lane():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_full_subgroup_all_true():
-    """``ballot_full_subgroup(1)`` with every lane voting true returns a u64 bitmask covering the whole subgroup.
+def test_subgroup_ballot_full_all_true():
+    """``ballot_full(1)`` with every lane voting true returns a u64 bitmask covering the whole subgroup.
     On wave32 we expect ``0xFFFFFFFF`` (low 32 bits set, high 32 zero); on wave64 we expect ``0xFFFFFFFFFFFFFFFF``.
 
     Uses ``block_dim=64`` so every wave has every lane active on both wave32 (two full 32-lane waves) and wave64
-    (one full 64-lane wave) — required to satisfy the ``ballot_full_subgroup`` "all lanes active" contract on wave64.
+    (one full 64-lane wave) — required to satisfy the ``ballot_full`` "all lanes active" contract on wave64.
     """
     N = 64
     result = qd.field(dtype=qd.u64, shape=N)
@@ -2128,7 +2128,7 @@ def test_subgroup_ballot_full_subgroup_all_true():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            result[i] = subgroup.ballot_full_subgroup(1)
+            result[i] = subgroup.ballot_full(1)
             sg_size[i] = subgroup.group_size()
 
     foo()
@@ -2141,8 +2141,8 @@ def test_subgroup_ballot_full_subgroup_all_true():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_full_subgroup_all_false():
-    """``ballot_full_subgroup(0)`` returns zero everywhere — verifies no spurious bits leak in from
+def test_subgroup_ballot_full_all_false():
+    """``ballot_full(0)`` returns zero everywhere — verifies no spurious bits leak in from
     uninitialised wave64 high-half lanes."""
     N = 32
     result = qd.field(dtype=qd.u64, shape=N)
@@ -2151,7 +2151,7 @@ def test_subgroup_ballot_full_subgroup_all_false():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            result[i] = subgroup.ballot_full_subgroup(0)
+            result[i] = subgroup.ballot_full(0)
 
     foo()
 
@@ -2160,13 +2160,13 @@ def test_subgroup_ballot_full_subgroup_all_false():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_full_subgroup_even_lanes():
+def test_subgroup_ballot_full_even_lanes():
     """Even lanes vote true; odd lanes vote false.  Result: ``0x5555...`` over the whole subgroup width.
 
     On wave32 we get ``0x0000000055555555`` (low 32 bits, high 32 zero); on wave64 we get
     ``0x5555555555555555`` (all 64 bits in the alternating pattern).
 
-    Uses ``block_dim=64`` to keep every lane active on wave64 (required by the ``ballot_full_subgroup`` "all lanes
+    Uses ``block_dim=64`` to keep every lane active on wave64 (required by the ``ballot_full`` "all lanes
     active" contract); on wave32 the workgroup splits into two waves and each wave's ballot covers its own 32 lanes.
     """
     N = 64
@@ -2178,7 +2178,7 @@ def test_subgroup_ballot_full_subgroup_even_lanes():
         qd.loop_config(block_dim=N)
         for i in range(N):
             lane = subgroup.invocation_id()
-            result[i] = subgroup.ballot_full_subgroup(1 - lane % 2)
+            result[i] = subgroup.ballot_full(1 - lane % 2)
             sg_size[i] = subgroup.group_size()
 
     foo()
@@ -2194,7 +2194,7 @@ def test_subgroup_ballot_full_subgroup_even_lanes():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_full_subgroup_high_half_only():
+def test_subgroup_ballot_full_high_half_only():
     """Only lanes ``>= 32`` vote true.  On wave32 the result is zero (no such lanes exist); on wave64 the result is
     ``0xFFFFFFFF00000000``.  This is the test that distinguishes a *correct* wave64 implementation from a wave32-only
     one: a broken wave64 path that always uses the i32 ballot would silently report 0 here."""
@@ -2207,7 +2207,7 @@ def test_subgroup_ballot_full_subgroup_high_half_only():
         qd.loop_config(block_dim=N)
         for i in range(N):
             lane = subgroup.invocation_id()
-            result[i] = subgroup.ballot_full_subgroup(qd.i32(lane >= qd.u32(32)))
+            result[i] = subgroup.ballot_full(qd.i32(lane >= qd.u32(32)))
             sg_size[i] = subgroup.group_size()
 
     foo()

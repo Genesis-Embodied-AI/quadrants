@@ -87,7 +87,7 @@ def ballot_first_n(predicate, n: template()):
     result on wave64), so we shortcut and emit the ballot directly with no extra arithmetic.
 
     Caller contract: uniform CF + all lanes active.  If you need a mask covering more than 32 lanes (for wave64
-    callers who want the full subgroup), use `ballot_full_subgroup` and check the high 32 bits.
+    callers who want the full subgroup), use `ballot_full` and check the high 32 bits.
     """
     if impl.static(n == 32):
         return impl.call_internal("subgroupBallotU32", predicate, with_runtime_context=False)
@@ -96,7 +96,7 @@ def ballot_first_n(predicate, n: template()):
     return impl.call_internal("subgroupBallotU32", masked, with_runtime_context=False)
 
 
-def ballot_full_subgroup(predicate):
+def ballot_full(predicate):
     """Return a ``u64`` bitmask covering the entire subgroup; bit ``i`` is set iff lane ``i``'s ``predicate`` is
     non-zero.  On wave32 backends (CUDA, RDNA wave32, most Vulkan / Metal) the high 32 bits of the result are always
     zero, since lanes ``>= 32`` do not exist; on wave64 backends (AMDGPU CDNA, GFX9, RDNA explicit-wave64) all 64 bits
@@ -117,6 +117,28 @@ def ballot_full_subgroup(predicate):
     Caller contract: uniform CF + all lanes active.
     """
     return impl.call_internal("subgroupBallotU64", predicate, with_runtime_context=False)
+
+
+_ballot_full_subgroup_deprecation_warned = False
+
+
+def ballot_full_subgroup(predicate):
+    """Deprecated alias for :func:`ballot_full`.
+
+    Emits a ``DeprecationWarning`` on first use and forwards to :func:`ballot_full`.  Will be removed in a future
+    release; rename call sites to ``ballot_full(predicate)`` (matches the ``_full`` naming used by every other
+    full-subgroup wrapper in this module, e.g. ``reduce_add_full`` / ``all_true_full``).
+    """
+    global _ballot_full_subgroup_deprecation_warned
+    if not _ballot_full_subgroup_deprecation_warned:
+        _ballot_full_subgroup_deprecation_warned = True
+        warnings.warn(
+            "qd.simt.subgroup.ballot_full_subgroup() is deprecated; use qd.simt.subgroup.ballot_full() instead "
+            "(matches the _full naming used by reduce_add_full / all_true_full / etc.).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    return ballot_full(predicate)
 
 
 # --- Voting / predicate ops ------------------------------------------------------------
@@ -423,7 +445,7 @@ def reduce_all_max(value, log2_size: template()):
 # group) whose ``head_flag`` is non-zero.  If no such lane exists the algorithm treats the group's first lane as an
 # implicit head, so a segment that runs from ``group_base`` to the lane is still aggregated correctly.
 #
-# Implementation: one ``ballot_full_subgroup`` to materialise a u64 of head positions across the whole subgroup, then
+# Implementation: one ``ballot_full`` to materialise a u64 of head positions across the whole subgroup, then
 # a Hillis-Steele inclusive scan bounded by ``distance >= offset`` (where ``distance = lane - segment_head``).
 # ``segment_head`` comes from ``31 - clz(effective_mask & ((1 << (lane + 1)) - 1))`` with an OR-injected virtual head
 # at ``group_base`` to guarantee a non-zero ``lower``.  We work in half-local 32-lane coordinates so the bit-mask
@@ -447,7 +469,7 @@ def _segment_head_distance(head_flag, log2_size: template()):
     Two compile-time-selected paths:
 
     * **``log2_size <= 5`` (segments fit in a single 32-lane half)** — u32-bitmask path.  Pulls a u64
-      ``ballot_full_subgroup``, shifts the relevant 32-lane half down to bits 0..31, then runs the bit-mask algorithm in
+      ``ballot_full``, shifts the relevant 32-lane half down to bits 0..31, then runs the bit-mask algorithm in
       half-local lane coordinates.  Half-local ``distance`` equals absolute ``distance`` because both ``lane`` and the
       recovered ``segment_head`` are offset by the same ``half_base``, so the downstream ``distance >= offset`` guard
       still works in absolute terms.  On wave32 this collapses to the no-op (``half_base == 0`` always); on wave64
@@ -456,14 +478,14 @@ def _segment_head_distance(head_flag, log2_size: template()):
       regression from supporting wave64 here.
 
     * **``log2_size == 6`` (full-wave64 segments, only reachable on AMDGPU)** — u64-bitmask path.  Segments span all 64
-      lanes so we need the full ``ballot_full_subgroup`` u64 mask and a ``clz(u64)``.  Costs one extra ``u64`` shift +
+      lanes so we need the full ``ballot_full`` u64 mask and a ``clz(u64)``.  Costs one extra ``u64`` shift +
       ``u64`` clz vs the u32 path but avoids the half-local split and stays in absolute lane coordinates throughout.
       Gated by ``impl.static(log2_size <= 5)`` so this entire path is dead-code-eliminated at compile time on every
       ``log2_size <= 5`` call site, including on AMDGPU itself when callers stay under the wave-half boundary.
     """
     # u64 mask covering the entire subgroup.  Wave32: high 32 bits are zero by definition.  Wave64: all 64 bits are
     # meaningful and we need both halves to handle lanes 32..63 correctly.
-    full_mask = ballot_full_subgroup(i32(head_flag != 0))
+    full_mask = ballot_full(i32(head_flag != 0))
     lane = invocation_id()
     if impl.static(log2_size <= 5):
         # Which 32-lane half this lane belongs to: 0 on wave32 (always), 0 or 32 on wave64.  ``& ~31`` rounds down to a
@@ -968,6 +990,7 @@ __all__ = [
     "memory_barrier",
     "elect",
     "ballot_first_n",
+    "ballot_full",
     "ballot_full_subgroup",
     "all_true",
     "any_true",

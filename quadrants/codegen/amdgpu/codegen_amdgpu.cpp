@@ -467,7 +467,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     } else if (stmt->func_name == "subgroupBallotU64") {
       // ``llvm.amdgcn.ballot.i64`` returns a 64-bit ballot for the full subgroup: on wave64 every lane contributes;
       // on wave32 only lanes 0..31 contribute and bits 32..63 of the result are zero.  Either way the i64 return is
-      // uniform across wavefront modes, which is what ``ballot_full_subgroup`` advertises to the user.  ``ballot.i64``
+      // uniform across wavefront modes, which is what ``ballot_full`` advertises to the user.  ``ballot.i64``
       // on either wave32 or wave64 selects cleanly in current LLVM (only the i32 form has the isel bug noted above).
       llvm_val[stmt] = call("amdgpu_ballot_u64", llvm_val[stmt->args[0]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
