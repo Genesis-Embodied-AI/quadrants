@@ -72,10 +72,10 @@ CUDA shortcut: `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF,
 | Op                                                   | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                                                  |
 |------------------------------------------------------|------|--------|-------------------------|---------------------------------------------------------|
 | `subgroup.reduce_add(v)`                             | yes  | yes\*  | yes                     | any type supporting `+`                                 |
-| `subgroup.reduce_{min,max}(v)`                       | yes  | yes\*  | yes                     | integer + float                                         |
 | `subgroup.reduce_all_add(v)`                         | yes  | yes    | yes                     | any type supporting `+`                                 |
-| `subgroup.reduce_all_{min,max}(v)`                   | yes  | yes    | yes                     | integer + float                                         |
 | `subgroup.segmented_reduce_add(v, head_flag)`        | yes  | yes\*  | yes                     | any type supporting `+`                                 |
+| `subgroup.reduce_{min,max}(v)`                       | yes  | yes\*  | yes                     | integer + float                                         |
+| `subgroup.reduce_all_{min,max}(v)`                   | yes  | yes    | yes                     | integer + float                                         |
 | `subgroup.segmented_reduce_{min,max}(v, head_flag)`  | yes  | yes\*  | yes                     | integer + float                                         |
 | `subgroup.inclusive_{add,mul,min,max,and,or,xor}(v)` | yes  | yes\*  | yes                     | integer + float (`_and` / `_or` / `_xor`: integer only) |
 | `subgroup.exclusive_{add,mul,min,max,and,or,xor}(v)` | yes  | yes\*  | yes                     | integer + float (`_and` / `_or` / `_xor`: integer only) |
@@ -186,10 +186,10 @@ Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_d
 | `subgroup.{all,any}_true_tiled(p, log2_size)`                     | `subgroup.{all,any}_true(p)`                     | broadcast-to-all    |
 | `subgroup.all_equal_tiled(v, log2_size)`                          | `subgroup.all_equal(v)`                          | broadcast-to-all    |
 | `subgroup.reduce_add_tiled(v, log2_size)`                         | `subgroup.reduce_add(v)`                         | window-local lane 0 |
-| `subgroup.reduce_{min,max}_tiled(v, log2_size)`                   | `subgroup.reduce_{min,max}(v)`                   | window-local lane 0 |
 | `subgroup.reduce_all_add_tiled(v, log2_size)`                     | `subgroup.reduce_all_add(v)`                     | broadcast-to-all    |
-| `subgroup.reduce_all_{min,max}_tiled(v, log2_size)`               | `subgroup.reduce_all_{min,max}(v)`               | broadcast-to-all    |
 | `subgroup.segmented_reduce_add_tiled(v, head_flag, log2_size)`    | `subgroup.segmented_reduce_add(v, head_flag)`    | broadcast-to-all    |
+| `subgroup.reduce_{min,max}_tiled(v, log2_size)`                   | `subgroup.reduce_{min,max}(v)`                   | window-local lane 0 |
+| `subgroup.reduce_all_{min,max}_tiled(v, log2_size)`               | `subgroup.reduce_all_{min,max}(v)`               | broadcast-to-all    |
 | `subgroup.segmented_reduce_{min,max}_tiled(v, head_flag, log2_size)` | `subgroup.segmented_reduce_{min,max}(v, head_flag)` | broadcast-to-all |
 | `subgroup.inclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | `subgroup.inclusive_{add,mul,min,max,and,or,xor}(v)` | broadcast-to-all |
 | `subgroup.exclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | `subgroup.exclusive_{add,mul,min,max,and,or,xor}(v)` | broadcast-to-all |
