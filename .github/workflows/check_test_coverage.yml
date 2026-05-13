@@ -65,14 +65,14 @@ jobs:
           You are checking whether code changes in a PR have adequate test coverage.
 
           Inputs:
-          - /tmp/source_diff.patch — unified diff of NON-TEST source files changed in this PR (.py, .cpp, .h, etc., excluding tests/)
-          - /tmp/all_changed_files.txt — list of ALL files changed in this PR
-          - /tmp/changed_test_files.txt — list of test files changed/added in this PR
+          - /tmp/source_diff.patch - unified diff of NON-TEST source files changed in this PR (.py, .cpp, .h, etc., excluding tests/)
+          - /tmp/all_changed_files.txt - list of ALL files changed in this PR
+          - /tmp/changed_test_files.txt - list of test files changed/added in this PR
 
           Your task:
           1. Read the source diff to understand what functional code was added or modified.
           2. Read the changed test files list to see what tests were added or modified in this PR.
-          3. For each meaningful source change (new function, new class, new method, changed behavior, new module), determine whether there is a corresponding test — either:
+          3. For each meaningful source change (new function, new class, new method, changed behavior, new module), determine whether there is a corresponding test - either:
              a. An existing test file in the repo (under tests/) that already covers that code, OR
              b. A new/modified test file in this PR that covers that code.
           4. Use the repo structure to find existing tests. The repo layout is:
@@ -82,7 +82,7 @@ jobs:
              - C++ tests: tests/cpp/ (mirrors the source subdirs)
              Test files are typically named test_<feature>.py or test_<feature>.cpp.
 
-          Repo testing policy — Python is the default:
+          Repo testing policy - Python is the default:
           - Prefer Python tests under tests/python/. Most C++ behavior is reachable via the Python
             API and is best tested end-to-end from Python.
           - Do NOT flag missing C++ tests when adequate Python coverage (existing or added in this
@@ -90,7 +90,7 @@ jobs:
           - Only flag a missing C++ test under tests/cpp/ when the behavior is impossible or
             impractical to exercise from Python. Narrow exceptions:
             (a) Hardware-capability gating or other negative paths that require mocked device
-                state (e.g. a function that returns empty when a SPIR-V capability is missing) —
+                state (e.g. a function that returns empty when a SPIR-V capability is missing) -
                 Python tests on real devices either skip or never enter the branch.
             (b) Parity with an existing C++ test for an analogous function (e.g. if foo_a has a
                 C++ unit test and the PR adds foo_b of the same shape, mirror the test).

@@ -6,7 +6,7 @@ This page currently documents only the bit-counting helpers. The broader `qd.mat
 
 ## Bit operations
 
-Single-thread integer-register operations. They do not access memory and do not synchronize threads — each thread independently transforms a value in its own register.
+Single-thread integer-register operations. They do not access memory and do not synchronize threads - each thread independently transforms a value in its own register.
 
 | Op                                       | CUDA                | AMDGPU                | SPIR-V (Vulkan / Metal)        | x64 (CPU)           |
 |------------------------------------------|---------------------|-----------------------|--------------------------------|---------------------|
@@ -75,5 +75,5 @@ def lowest_set_bit_index(mask: qd.u32) -> qd.i32:
 
 ## Related
 
-- [atomics](atomics.md) — atomic read-modify-write operations on global / shared memory; commonly paired with bit-counting in select / compact patterns.
-- `qd.bit_cast` — reinterprets a value's bit pattern as another dtype.
+- [atomics](atomics.md) - atomic read-modify-write operations on global / shared memory; commonly paired with bit-counting in select / compact patterns.
+- `qd.bit_cast` - reinterprets a value's bit pattern as another dtype.

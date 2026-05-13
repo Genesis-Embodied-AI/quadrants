@@ -142,7 +142,7 @@ def pytest_runtest_logreport(report):
                 layoff = True
                 break
 
-    # Don't call interactor.retire() — it uses os._exit(0) which kills
+    # Don't call interactor.retire() - it uses os._exit(0) which kills
     # the process before execnet's IO thread can flush the channel buffer.
     # The test failure report (queued by xdist's own hook, which ran before
     # this trylast hook) would be lost, hiding all error messages.

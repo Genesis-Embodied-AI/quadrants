@@ -1,4 +1,4 @@
-// StreamManager — manages CUDA stream and event lifecycle, isolated from Program so that backend-specific GPU
+// StreamManager - manages CUDA stream and event lifecycle, isolated from Program so that backend-specific GPU
 // plumbing does not pollute the core Program interface.
 
 #pragma once

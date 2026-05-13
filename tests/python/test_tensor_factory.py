@@ -45,7 +45,7 @@ def test_tensor_explicit_backend_allocates(backend):
 )
 @test_utils.test(arch=qd.cpu)
 def test_tensor_int_backend_value_accepted(backend_int, expected):
-    """``backend=0`` and ``backend=1`` work too — IntEnum coercion."""
+    """``backend=0`` and ``backend=1`` work too - IntEnum coercion."""
     a = qd.tensor(qd.f32, shape=(3,), backend=backend_int)
     assert isinstance(a, qd.Tensor)
     assert isinstance(a._unwrap(), _expected_impl_type(expected))

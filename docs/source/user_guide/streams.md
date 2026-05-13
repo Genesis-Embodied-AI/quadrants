@@ -12,7 +12,7 @@ Streams allow concurrent execution of GPU operations. By default, all Quadrants 
 | Metal   | No-op     |
 | Vulkan  | No-op     |
 
-On backends without native stream support, stream operations are no-ops and for loops run serially. Code using streams is portable across all backends — it will run without modifications, but serially.
+On backends without native stream support, stream operations are no-ops and for loops run serially. Code using streams is portable across all backends - it will run without modifications, but serially.
 
 ## Stream parallelism
 
@@ -43,7 +43,7 @@ def combine():
         c[i] = a[i] + b[i]
 
 compute_ab()  # the two stream_parallel blocks run concurrently
-combine()     # runs after compute_ab() returns — a[] and b[] are ready
+combine()     # runs after compute_ab() returns - a[] and b[] are ready
 ```
 
 Consecutive `with qd.stream_parallel():` blocks run concurrently. Multiple for loops within a single block share a stream and run serially on it. All streams are synchronized before the kernel returns.
@@ -55,11 +55,11 @@ Consecutive `with qd.stream_parallel():` blocks run concurrently. Multiple for l
 
 ## Explicit streams
 
-For cases that require manual control — such as launching separate kernels on different streams or interoperating with PyTorch — you can create and manage streams directly.
+For cases that require manual control - such as launching separate kernels on different streams or interoperating with PyTorch - you can create and manage streams directly.
 
 ### Creating and using streams
 
-Any `@qd.kernel` function accepts a special `qd_stream` keyword argument — you do not need to declare it in the kernel signature. The `@qd.kernel` decorator handles it automatically.
+Any `@qd.kernel` function accepts a special `qd_stream` keyword argument - you do not need to declare it in the kernel signature. The `@qd.kernel` decorator handles it automatically.
 
 ```python
 @qd.kernel
@@ -106,7 +106,7 @@ e = qd.create_event()
 e.record(s1)       # record when s1 finishes produce()
 e.wait(qd_stream=s2)  # s2 waits for that event before proceeding
 
-consume(qd_stream=s2)  # safe to read a[] — produce() is guaranteed complete
+consume(qd_stream=s2)  # safe to read a[] - produce() is guaranteed complete
 s2.synchronize()
 
 e.destroy()
@@ -123,7 +123,7 @@ Streams and events support `with` blocks for automatic cleanup:
 ```python
 with qd.create_stream() as s:
     some_func1(qd_stream=s)
-# s.destroy() called automatically — waits for in-flight work
+# s.destroy() called automatically - waits for in-flight work
 ```
 
 ## Synchronization notes

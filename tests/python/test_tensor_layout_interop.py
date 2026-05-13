@@ -223,7 +223,7 @@ def test_to_dlpack_layout_shows_up_as_strides_not_shape():
 
     t = torch.utils.dlpack.from_dlpack(a.to_dlpack())
     assert tuple(t.shape) == canonical
-    # On a non-identity layout the dlpack view is by construction not contiguous in the canonical sense — calling
+    # On a non-identity layout the dlpack view is by construction not contiguous in the canonical sense - calling
     # ``.contiguous()`` is how the canonical layout would be materialised.
     assert not t.is_contiguous()
     np.testing.assert_array_equal(t.contiguous().cpu().numpy(), _expected_canonical(canonical))
@@ -343,7 +343,7 @@ def test_identity_layout_to_numpy_unchanged():
 #
 # Regression for the AST rewrite in :func:`build_Subscript`: prior to the fix, ``x[I]`` skipped the
 # canonical→physical permutation because the subscript arity (1) didn't match ``len(_qd_layout)`` (N). On a permuted
-# layout this silently wrote at canonical indices into a differently-shaped physical buffer — out-of-bounds for any
+# layout this silently wrote at canonical indices into a differently-shaped physical buffer - out-of-bounds for any
 # non-square canonical shape.
 # ----------------------------------------------------------------------------
 
@@ -416,7 +416,7 @@ def test_grouped_vector_subscript_canonical_view_rank3(backend, layout):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
 @test_utils.test(arch=qd.cpu)
 def test_grouped_struct_for_vector_subscript_rank2(backend, layout):
-    """``for I in qd.grouped(x)`` is the other source of single-Vector subscripts in real kernels — the loop var ``I``
+    """``for I in qd.grouped(x)`` is the other source of single-Vector subscripts in real kernels - the loop var ``I``
     has rank ``len(x.shape)`` and is used as ``x[I]``. Pin canonical-view behaviour here too."""
     canonical = (3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
@@ -577,7 +577,7 @@ def test_genesis_shaped_dofs_batch_layout(backend):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
 @test_utils.test(arch=qd.cpu)
 def test_pickle_layout_tagged_ndarray_roundtrip_preserves_layout(layout):
-    import pickle  # noqa: PLC0415 — local import keeps test self-contained
+    import pickle  # noqa: PLC0415 - local import keeps test self-contained
 
     canonical = (2, 3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)

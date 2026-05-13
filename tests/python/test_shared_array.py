@@ -12,10 +12,10 @@ from tests import test_utils
 @pytest.mark.parametrize(
     "num_dim, first_shape_delta_size, dtype1, dtype2",
     [
-        (1, 0, qd.i8, qd.i8),  # same shape, same dtype — triggers the singleton bug
-        (2, 0, qd.i8, qd.i8),  # same shape, same dtype — triggers the singleton bug
-        (1, 0, qd.f32, qd.f32),  # same shape, same dtype — triggers the singleton bug
-        (2, 0, qd.u32, qd.u32),  # same shape, same dtype — triggers the singleton bug
+        (1, 0, qd.i8, qd.i8),  # same shape, same dtype - triggers the singleton bug
+        (2, 0, qd.i8, qd.i8),  # same shape, same dtype - triggers the singleton bug
+        (1, 0, qd.f32, qd.f32),  # same shape, same dtype - triggers the singleton bug
+        (2, 0, qd.u32, qd.u32),  # same shape, same dtype - triggers the singleton bug
         (1, 0, qd.i8, qd.f32),  # same shape, different dtype
         (1, 1, qd.i8, qd.i8),  # different shape, same dtype
         (2, 0, qd.u32, qd.u32),  # different shape, same dtype
@@ -74,7 +74,7 @@ def test_shared_array_not_accumulated_across_offloads(num_dim, first_shape_delta
     # Each offloaded task cooperatively fills a large shared array with an
     # LCG sequence, syncs, then each thread sums a contiguous chunk written
     # by other threads. This forces the entire shared array to be materialized
-    # — the compiler cannot short-circuit it.
+    # - the compiler cannot short-circuit it.
     chunk_size_1 = num_elems_1 // block_dim
     chunk_size_2 = num_elems_2 // block_dim
     cols_1 = shape_1[-1]

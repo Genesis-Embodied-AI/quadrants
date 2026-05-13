@@ -154,7 +154,7 @@ def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
     except AttributeError:
         pass
     # Cache whether ALL unwrapped values are Fields (zero launch-context slots).  This is a property of the instance
-    # alone — independent of which kernel or field-subset is active — so a simple boolean suffices and survives
+    # alone - independent of which kernel or field-subset is active - so a simple boolean suffices and survives
     # qd.reset() harmlessly (the boolean remains valid as long as the instance is alive).
     if getattr(v, "_qd_all_field", None) is None:
         from quadrants.lang.field import Field as _Field  # pylint: disable=C0415
@@ -274,7 +274,7 @@ class FuncBase:
                 elif annotation_type is buffer_view_type.BufferViewType:
                     pass
                 elif annotation is BufferViewInstance:
-                    # v: BufferView (no dtype) — infer dtype from the passed argument
+                    # v: BufferView (no dtype) - infer dtype from the passed argument
                     annotation = buffer_view_type.BufferViewType()
                 else:
                     raise QuadrantsSyntaxError(f"Invalid type annotation (argument {i}) of Taichi kernel: {annotation}")

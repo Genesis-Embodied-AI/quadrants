@@ -36,7 +36,7 @@ bool arch_use_host_memory(Arch arch);
 int default_simd_width(Arch arch);
 
 // Wavefront / warp / subgroup size for the GPU backends quadrants compiles for. CUDA is fixed at 32 hardware-wide;
-// AMDGPU is forced to 64 on every target (see hp/always-wave64 — RDNA defaults to wave32 in LLVM's AMDGPU backend, but
+// AMDGPU is forced to 64 on every target (see hp/always-wave64 - RDNA defaults to wave32 in LLVM's AMDGPU backend, but
 // we override target-features and link the wavefrontsize64=on libdevice variant to standardize on wave64). Returns 0
 // for non-LLVM-GPU backends (Vulkan / Metal query subgroup size at runtime through SPIR-V) and for CPU. Also folded
 // into the offline-cache key so cached kernels invalidate if this constant ever changes.

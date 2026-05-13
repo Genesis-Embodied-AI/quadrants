@@ -28,7 +28,7 @@ from tests import test_utils
 
 @test_utils.test(arch=qd.cpu)
 def test_all_field_struct_tensor_basic():
-    """A frozen struct where all fields are qd.Tensor wrapping Fields — the shortcut fires."""
+    """A frozen struct where all fields are qd.Tensor wrapping Fields - the shortcut fires."""
 
     @dataclasses.dataclass(frozen=True)
     class State:
@@ -89,13 +89,13 @@ def test_ndarray_struct_not_skipped():
 
 
 # ---------------------------------------------------------------------------
-# Mixed struct: Field + scalar float — shortcut must NOT fire.
+# Mixed struct: Field + scalar float - shortcut must NOT fire.
 # ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
 def test_mixed_field_and_scalar_not_skipped():
-    """A frozen struct mixing a qd.Tensor(Field) with a plain float must NOT be skipped — the float consumes a slot."""
+    """A frozen struct mixing a qd.Tensor(Field) with a plain float must NOT be skipped - the float consumes a slot."""
 
     @dataclasses.dataclass(frozen=True)
     class Config:
@@ -115,14 +115,14 @@ def test_mixed_field_and_scalar_not_skipped():
     apply_scale(cfg, out)
     np.testing.assert_allclose(out.to_numpy(), [2.0, 4.0, 6.0, 8.0])
 
-    # Second call — must still work (not broken by cached flag)
+    # Second call - must still work (not broken by cached flag)
     out2 = qd.ndarray(qd.f32, shape=(4,))
     apply_scale(cfg, out2)
     np.testing.assert_allclose(out2.to_numpy(), [2.0, 4.0, 6.0, 8.0])
 
 
 # ---------------------------------------------------------------------------
-# Mixed struct: Field + Ndarray — shortcut must NOT fire.
+# Mixed struct: Field + Ndarray - shortcut must NOT fire.
 # ---------------------------------------------------------------------------
 
 
@@ -225,7 +225,7 @@ def test_all_field_struct_multiple_kernels():
 
 
 # ---------------------------------------------------------------------------
-# Struct with qd.Tensor wrapping Ndarray — must NOT be skipped.
+# Struct with qd.Tensor wrapping Ndarray - must NOT be skipped.
 # ---------------------------------------------------------------------------
 
 
@@ -257,7 +257,7 @@ def test_tensor_wrapping_ndarray_not_skipped():
 
 
 # ---------------------------------------------------------------------------
-# All-Field struct survives qd.reset() — flag must remain correct.
+# All-Field struct survives qd.reset() - flag must remain correct.
 # ---------------------------------------------------------------------------
 
 
@@ -289,7 +289,7 @@ def test_all_field_flag_survives_reset():
 
 
 # ---------------------------------------------------------------------------
-# Struct with int field — must NOT be skipped.
+# Struct with int field - must NOT be skipped.
 # ---------------------------------------------------------------------------
 
 
@@ -322,14 +322,14 @@ def test_struct_with_int_field_not_skipped():
 
 
 # ---------------------------------------------------------------------------
-# All-Field struct passed to a parameter with wrong annotation — must error, not silently skip.
+# All-Field struct passed to a parameter with wrong annotation - must error, not silently skip.
 # ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
 def test_all_field_struct_wrong_annotation_raises():
     """If an all-Field struct (with _qd_all_field=True cached) is passed to a kernel parameter annotated as a
-    different type (e.g. float), the kernel must raise an error — not silently skip due to the shortcut."""
+    different type (e.g. float), the kernel must raise an error - not silently skip due to the shortcut."""
 
     @dataclasses.dataclass(frozen=True)
     class State:

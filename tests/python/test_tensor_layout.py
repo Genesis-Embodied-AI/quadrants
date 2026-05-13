@@ -32,7 +32,7 @@ def test_layout_identity_field_works():
 
 @test_utils.test(arch=qd.cpu)
 def test_layout_identity_ndarray_works():
-    """Identity layout on ndarray must work — only non-identity is gated."""
+    """Identity layout on ndarray must work - only non-identity is gated."""
     a = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY, layout=(0, 1))
     assert a.shape == (4, 5)
 
@@ -148,7 +148,7 @@ def test_layout_not_permutation_raises():
 
 
 def test_order_kwarg_rejected():
-    """order= is forbidden — users must say layout=."""
+    """order= is forbidden - users must say layout=."""
     qd.init(arch=qd.x64)
     with pytest.raises(TypeError, match="layout="):
         qd.tensor(qd.f32, shape=(4, 5), order="ji")

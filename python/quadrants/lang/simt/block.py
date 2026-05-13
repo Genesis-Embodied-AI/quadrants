@@ -250,7 +250,7 @@ def reduce_all_max(value, block_dim: template(), dtype: template()):
 #
 # Inclusive: subgroup aggregate at the last lane is just the inclusive value, written directly.
 # Exclusive: subgroup aggregate = `op(exclusive[last_lane], value[last_lane])`, since the
-# exclusive scan does not include the last lane's input — we recover the inclusive total
+# exclusive scan does not include the last lane's input - we recover the inclusive total
 # with one extra `op` on the publish path.
 
 
@@ -414,7 +414,7 @@ def exclusive_max(value, block_dim: template(), identity, dtype: template()):
 # 1. ComputeHistogramsSubgroup: each subgroup builds a private digit histogram in shared memory via ``atomic_add``.
 # 2. ComputeOffsetsSubgroupUpsweep: every thread sums per-subgroup histograms column-wise to produce a block-wide bin count
 #    for digit ``= tid``, while rewriting the subgroup histogram entries into per-subgroup running exclusive prefixes.
-# 3. ExclusiveSum on the per-thread bin counts — uses the block exclusive scan defined above.
+# 3. ExclusiveSum on the per-thread bin counts - uses the block exclusive scan defined above.
 # 4. ComputeOffsetsSubgroupDownsweep: add the block-wide exclusive prefix into every subgroup's offset entry.
 # 5. ComputeRanksItem (atomic-OR match): per-subgroup match via ``atomic_or`` on a per-digit lane-mask, then leader
 #    (highest set lane) does a single ``atomic_add`` on the subgroup offset and broadcasts via ``subgroup.shuffle``; each
@@ -435,11 +435,11 @@ def exclusive_max(value, block_dim: template(), identity, dtype: template()):
 
 @_func
 def _subgroup_sync_fence():
-    """Subgroup-scope barrier + memory fence — CUDA ``__syncwarp`` semantics across every backend.
+    """Subgroup-scope barrier + memory fence - CUDA ``__syncwarp`` semantics across every backend.
 
     Why both ops: on CUDA, `subgroup.sync()` already lowers to `__syncwarp` which folds in a memory fence, so the
     extra `subgroup.mem_fence()` is redundant (a `__threadfence_block`).  On SPIR-V, however, the codegen emits
-    `subgroupBarrier` as `OpControlBarrier(ScopeSubgroup, ScopeSubgroup, 0)` — i.e. with **no** memory semantics — so
+    `subgroupBarrier` as `OpControlBarrier(ScopeSubgroup, ScopeSubgroup, 0)` - i.e. with **no** memory semantics - so
     a bare `subgroup.sync()` does *not* publish prior shared-memory writes to other lanes.  The radix rank algorithm
     relies on the `__syncwarp` invariant that, after the barrier, every lane sees every other lane's prior
     `atomic_or` / `atomic_add` to shared memory; pairing the barrier with `subgroup.mem_fence()` (which emits a real
@@ -462,7 +462,7 @@ def _radix_rank_match_atomic_or_wave32(
     """Wave32 implementation of `radix_rank_match_atomic_or`. See the public wrapper for the contract.
 
     Match-mask region is ``i32``; atomic_or, ballot, clz, popcnt all operate on 32 bits.  This path is taken on CUDA,
-    Vulkan-on-NVIDIA, and Metal — none of which require ``i64`` threadgroup atomics.
+    Vulkan-on-NVIDIA, and Metal - none of which require ``i64`` threadgroup atomics.
     """
     SUBGROUP_THREADS = impl.static(_subgroup.group_size())
     RADIX_DIGITS = impl.static(1 << radix_bits)
@@ -506,7 +506,7 @@ def _radix_rank_match_atomic_or_wave32(
     # Step 3: block-wide exclusive sum on the per-thread bin counts.
     exclusive_digit_prefix = exclusive_add(bin_count, block_dim, _i32)
 
-    # Step 4: ComputeOffsetsSubgroupDownsweep — fold the block-wide exclusive prefix into every subgroup's offset.
+    # Step 4: ComputeOffsetsSubgroupDownsweep - fold the block-wide exclusive prefix into every subgroup's offset.
     for j_subgroup in impl.static(range(BLOCK_SUBGROUPS)):
         smem_offsets[impl.static(j_subgroup * RADIX_DIGITS) + tid] = (
             smem_offsets[impl.static(j_subgroup * RADIX_DIGITS) + tid] + exclusive_digit_prefix
@@ -530,7 +530,7 @@ def _radix_rank_match_atomic_or_wave32(
     # set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that's one less than the actual
     # highest matching lane.  Concretely, with lane 31 holding the only key for its digit, bin_mask = 0x80000000;
     # FindSMsb on -2147483648 returns 30 (highest 0-bit), so 31 - 30 = 1 elects lane 1 instead of lane 31, and lane
-    # 31's shuffle reads from lane 1 (= 0) — observed as last-lane ranks off by one on Vulkan / Metal.  Now that the
+    # 31's shuffle reads from lane 1 (= 0) - observed as last-lane ranks off by one on Vulkan / Metal.  Now that the
     # subgroup layer dispatches FindUMsb for unsigned ``clz``, passing the u32 directly emits the right intrinsic on
     # every backend.
     bin_mask = _ops.cast(smem_match[match_idx], _u32)
@@ -576,7 +576,7 @@ def _radix_rank_match_atomic_or_wave64(
 
     Match-mask region is ``i64``; atomic_or on shared ``i64`` is native on AMDGPU LDS.  Subgroup ``lanemask_le`` is
     u32-only by contract (see ``subgroup.py``: "lane_id in [0, 31]"), so the 64-lane form is synthesized inline as
-    ``one_at_lane | (one_at_lane - 1)`` — avoids the UB of shifting by 64 when lane == 63.
+    ``one_at_lane | (one_at_lane - 1)`` - avoids the UB of shifting by 64 when lane == 63.
 
     Structural twin of the wave32 path; duplicated rather than parameterised because Quadrants' AST transformer
     doesn't carry locals across ``if impl.static`` branches and the smem_match dtype + match-phase widths are the only
@@ -622,7 +622,7 @@ def _radix_rank_match_atomic_or_wave64(
 
     sync()
 
-    # Step 5 — wave64 specifics: u64 ballot mask via inline ``one_at_lane | (one_at_lane - 1)`` (avoids UB on lane=63),
+    # Step 5 - wave64 specifics: u64 ballot mask via inline ``one_at_lane | (one_at_lane - 1)`` (avoids UB on lane=63),
     # atomic_or on the i64 match cell, clz / popcnt on u64.  Leader formula is ``63 - clz(u64)``.
     lane_u64 = _ops.cast(lane, _u64)
     lane_mask = _u64(1) << lane_u64
@@ -687,7 +687,7 @@ def radix_rank_match_atomic_or(
 
     The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
     `subgroup.group_size()` at compile time.  Supports both wave32 (CUDA, Vulkan-on-NVIDIA, Metal) and wave64
-    (AMDGPU — Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private
+    (AMDGPU - Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private
     implementations at compile time based on subgroup size; the match-mask shared-memory region's dtype is the only
     semantic difference (``i32`` on wave32, ``i64`` on wave64), but Quadrants' AST transformer doesn't carry locals
     across ``if impl.static`` branches so the two paths are written as separate ``@func`` bodies.  Atomic ``or`` on
@@ -701,7 +701,7 @@ def radix_rank_match_atomic_or(
     Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block exclusive
     scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  Shared-memory footprint at the default
     ``radix_bits=8``: 4 KiB ``i32`` for subgroup offsets + 4 KiB ``i32`` (wave32) or 8 KiB ``i64`` (wave64) for the
-    match-mask region — so 8 KiB total on wave32, 12 KiB on wave64.
+    match-mask region - so 8 KiB total on wave32, 12 KiB on wave64.
     """
     SUBGROUP_THREADS = impl.static(_subgroup.group_size())
     impl.static_assert(

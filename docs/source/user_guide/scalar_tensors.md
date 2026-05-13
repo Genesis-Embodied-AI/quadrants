@@ -1,6 +1,6 @@
 # Scalar tensors
 
-A scalar tensor is a field with zero dimensions — it holds a single value. This is useful for accumulators, counters, or any kernel that needs to produce a single output value.
+A scalar tensor is a field with zero dimensions - it holds a single value. This is useful for accumulators, counters, or any kernel that needs to produce a single output value.
 
 Scalar tensors can be used with both fields and ndarrays.
 

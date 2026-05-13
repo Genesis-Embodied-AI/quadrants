@@ -457,7 +457,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       // https://github.com/llvm/llvm-project/pull/71556 in LLVM 18: SETCC at wavefront width, then zext/trunc to the
       // requested return type, i.e. the low 32 bits = lanes 0..31's predicates on wave64).  In practice the LLVM
       // versions we've tested (20 and 22.1.0) still fail to select ``ballot.i32`` on gfx942 when the predicate is a
-      // non-constant ``i1`` — isel hits "Cannot select: AMDGPUISD::SETCC ..." for the ``i1 -> i32 != 0`` predicate
+      // non-constant ``i1`` - isel hits "Cannot select: AMDGPUISD::SETCC ..." for the ``i1 -> i32 != 0`` predicate
       // shape that ``ballot_first_n`` produces in real kernels.  ``ballot.i64 + trunc to i32`` works around the bug
       // and produces identical assembly (same single ``v_cmp_*_e64`` + low-half store) since LLVM's CSE folds the
       // i64 ballot's high half away as soon as the trunc is observed.  See min repro in the PR thread; the workaround
@@ -561,7 +561,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     return nullptr;
   }
 
-  // FIXME: Same DPP fast-path opportunity as `emit_amdgpu_shuffle_down` — currently emulates `shuffle_up` via
+  // FIXME: Same DPP fast-path opportunity as `emit_amdgpu_shuffle_down` - currently emulates `shuffle_up` via
   // `ds_bpermute` (~50 cycle latency).
   llvm::Value *emit_amdgpu_shuffle_up(llvm::Value *value, DataType dt, llvm::Value *offset) {
     if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::u32))

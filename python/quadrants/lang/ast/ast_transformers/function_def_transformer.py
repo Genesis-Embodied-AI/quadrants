@@ -294,7 +294,7 @@ class FunctionDefTransformer:
 
         # qd.Tensor in @qd.func context: polymorphic pass-by-reference. No template-mapper features are available
         # (those only exist for top-level @qd.kernel args). Unwrap any Tensor wrapper, then create the variable
-        # directly — ndarray and field impls are both valid pass-by-reference arguments.
+        # directly - ndarray and field impls are both valid pass-by-reference arguments.
         if argument_type is _TensorClass:
             data = FunctionDefTransformer._unwrap_tensor(data)
             _cache = getattr(getattr(ctx, "global_context", None), "ndarray_to_any_array", None)
@@ -315,7 +315,7 @@ class FunctionDefTransformer:
                         any_array.AnyArray,
                     ),
                 ):
-                    # qd.Tensor struct fields skip check_matched (the Tensor class has no such method — it is
+                    # qd.Tensor struct fields skip check_matched (the Tensor class has no such method - it is
                     # polymorphic).
                     if field.type is not _TensorClass and hasattr(field.type, "check_matched"):
                         field.type.check_matched(data_child.get_type(), field.name)
@@ -357,7 +357,7 @@ class FunctionDefTransformer:
 
         # BufferView arguments are passed by reference.
         # Dtype validation happens at the kernel boundary (_template_mapper_hotpath._extract_arg),
-        # not here — data.arr is an Expr node during func compilation, not a real Ndarray.
+        # not here - data.arr is an Expr node during func compilation, not a real Ndarray.
         if isinstance(argument_type, buffer_view_type.BufferViewType):
             if not isinstance(data, BufferView):
                 raise QuadrantsSyntaxError(f"Argument {argument_name} expects a BufferView, got {type(data).__name__}")

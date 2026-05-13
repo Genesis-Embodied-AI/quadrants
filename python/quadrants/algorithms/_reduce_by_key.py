@@ -4,7 +4,7 @@
 Implements ``qd.algorithms.device_reduce_by_key_add`` on top of the existing
 device exclusive scan internals and the shared ``Field(u32)`` scratch.
 
-Reduce-by-key takes two parallel 1-D tensors — ``keys`` and ``values`` — and collapses every **consecutive run of
+Reduce-by-key takes two parallel 1-D tensors - ``keys`` and ``values`` - and collapses every **consecutive run of
 equal keys** into a single output entry ``(unique_key, sum_of_values_in_run)``. Keys that are equal but separated by
 other keys are treated as separate runs. To compute a global per-key sum, sort by key first (e.g. via
 ``qd.algorithms.device_radix_sort``) and then reduce-by-key.
@@ -25,13 +25,13 @@ Algorithm (scan + scatter; no segmented-scan primitive needed):
 4. **Scatter pass** (``_rbk_scatter``). For every ``i``:
    - Recompute ``head_flag(i)`` from ``i == 0 or keys[i] != keys[i-1]`` and compute the run index
      ``pos = scratch[i] + head_flag(i) - 1``.
-   - ``keys_out[pos] = keys[i]`` — race-free because every thread in a run writes the same key to the same slot.
+   - ``keys_out[pos] = keys[i]`` - race-free because every thread in a run writes the same key to the same slot.
    - ``atomic_add(values_out[pos], values[i])`` folds the run's values into the run's output slot.
 5. **Count pass** (``_rbk_count``). Computes ``num_runs[0] = scratch[N-1] + head_flag(N-1)`` where the head flag at
    ``N-1`` is recomputed from ``keys[N-1] != keys[N-2]`` for ``N >= 2`` (``1`` for ``N == 1``).
 
 This first-land scope supports only the ``add`` reduction. ``min`` / ``max`` variants would need ``atomic_min`` /
-``atomic_max``, which have spottier cross-backend support for ``f32`` — defer to a follow-up gated on real qipc usage.
+``atomic_max``, which have spottier cross-backend support for ``f32`` - defer to a follow-up gated on real qipc usage.
 
 Scratch budget: ``N + ceil(N / 256) + ...`` ``u32`` slots, ≈ ``1.004 * N``. The default 1 MB scratch covers ``N`` up
 to ~260_000. For larger ``N``, raise via ``quadrants._scratch.set_scratch_bytes(...)`` before any algorithm call.
@@ -101,8 +101,8 @@ def _rbk_scatter(
     - Compute ``head_flag(i)`` on the fly from ``i == 0 or keys[i] != keys[i-1]`` and combine with the in-place
       exclusive scan stored in ``positions`` to recover the inclusive run index
       ``pos = positions[i] + head_flag(i) - 1``.
-    - ``keys_out[pos] = keys_in[i]`` — race-free because every thread in a run writes the same key to the same slot.
-    - ``atomic_add(values_out[pos], values_in[i])`` — folds the run's values into the run's output slot.
+    - ``keys_out[pos] = keys_in[i]`` - race-free because every thread in a run writes the same key to the same slot.
+    - ``atomic_add(values_out[pos], values_in[i])`` - folds the run's values into the run's output slot.
       ``values_out`` must be pre-zeroed (see ``_rbk_zero_values_out``).
     """
     for i in range(N):

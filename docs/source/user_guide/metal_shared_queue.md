@@ -20,14 +20,14 @@ qd.init(
 
 Two flags work together:
 
-- `external_metal_command_queue` — the raw `MTLCommandQueue*` pointer. Quadrants dispatches all GPU work on this queue instead of creating its own.
-- `external_metal_command_queue_is_torch_queue` — set to `True` when the queue comes from PyTorch MPS. This tells Quadrants that PyTorch shares the same queue, so the explicit interop syncs can be safely skipped. Defaults to `False`, which preserves the sync calls even when an external queue is provided (useful when the external queue belongs to a non-PyTorch framework).
+- `external_metal_command_queue` - the raw `MTLCommandQueue*` pointer. Quadrants dispatches all GPU work on this queue instead of creating its own.
+- `external_metal_command_queue_is_torch_queue` - set to `True` when the queue comes from PyTorch MPS. This tells Quadrants that PyTorch shares the same queue, so the explicit interop syncs can be safely skipped. Defaults to `False`, which preserves the sync calls even when an external queue is provided (useful when the external queue belongs to a non-PyTorch framework).
 
 Once initialised with both flags:
 
 - `to_torch(copy=False)` no longer calls `qd.sync()` internally.
 - `to_torch(copy=True)` no longer calls `torch.mps.synchronize()` after the copy.
-- GPU work submitted by Quadrants and by PyTorch executes in the order it was committed — no manual sync needed between the two.
+- GPU work submitted by Quadrants and by PyTorch executes in the order it was committed - no manual sync needed between the two.
 
 You can still call `qd.sync()` when you need to read results back to the CPU (e.g. `to_numpy()`); what changes is that you no longer need *both* `qd.sync()` and `torch.mps.synchronize()` at every framework boundary.
 
@@ -66,7 +66,7 @@ qd.init(
 | `f.to_torch(copy=False)` | `qd.sync()` called internally | no sync needed |
 | `f.to_torch(copy=True)` | `qd.sync()` + `torch.mps.synchronize()` | no sync needed |
 | Quadrants kernel after torch write | manual `torch.mps.synchronize()` required | automatic (same queue) |
-| `f.to_numpy()` | `qd.sync()` (always needed for CPU readback) | `qd.sync()` (still needed — the kernel-copy path is Quadrants-internal, not routed through MPS) |
+| `f.to_numpy()` | `qd.sync()` (always needed for CPU readback) | `qd.sync()` (still needed - the kernel-copy path is Quadrants-internal, not routed through MPS) |
 
 ## Lifetime and ownership
 

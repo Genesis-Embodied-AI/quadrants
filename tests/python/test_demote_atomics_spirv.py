@@ -85,7 +85,7 @@ def test_serial_atomic_counter_simple():
     A counter is atomically incremented inside a conditional, and a second
     atomic (to a different field) is also present.  The caching pass may
     cache the second atomic's target, leaving the first as a lone
-    device-memory RMW — which Metal miscompiles.
+    device-memory RMW - which Metal miscompiles.
     """
     n = 16
     data = qd.field(dtype=qd.f32, shape=(n,))

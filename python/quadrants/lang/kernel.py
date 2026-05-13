@@ -682,7 +682,7 @@ class Kernel(FuncBase):
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
         # Tensor-wrapper unwrap (stork-17). Substitute each ``qd.Tensor`` instance (including ``VectorTensor`` /
         # ``MatrixTensor`` subclasses) with its underlying ``Ndarray`` / ``ScalarField`` impl *before* anything
-        # downstream observes the arg tuple — including the autograd tape (uses identity), the template mapper
+        # downstream observes the arg tuple - including the autograd tape (uses identity), the template mapper
         # (cache-keys on ``id(arg)``), ``_extract_arg``, and the AST builder. This guarantees JIT cache stability:
         # ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields
         # identical cache keys.
@@ -693,7 +693,7 @@ class Kernel(FuncBase):
         #
         # Safety of caching: kernel parameter annotations are fixed per position (they come from the function
         # signature and are stored in ``self.mapper.arguments``). Whether a given position receives a Tensor wrapper
-        # or a bare impl is determined by the caller's annotation pattern, which is stable across calls — a user who
+        # or a bare impl is determined by the caller's annotation pattern, which is stable across calls - a user who
         # passes ``qd.Tensor(impl)`` at position *i* will do so on every call, because the annotation (``qd.Tensor``,
         # ``qd.template()``, ``qd.types.ndarray()``, or a dataclass type) doesn't change. The template mapper
         # enforces a fixed arg count (``len(args) == self.num_args``), so cached indices cannot go out of bounds.

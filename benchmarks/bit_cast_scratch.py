@@ -124,8 +124,8 @@ def main(argv):
     print(f"  delta                       : {delta_pct:+7.3f}%   (tolerance ±{args.tolerance_pct}%)")
 
     # Only a *positive* delta (bit_cast path slower than direct) is a regression.
-    # A negative delta means the bit_cast path was at least as fast — consistent
-    # with the no-op claim — even though run-to-run noise (±a few percent at
+    # A negative delta means the bit_cast path was at least as fast - consistent
+    # with the no-op claim - even though run-to-run noise (±a few percent at
     # microsecond timings) sometimes flips the sign.
     if delta_pct > args.tolerance_pct:
         print(

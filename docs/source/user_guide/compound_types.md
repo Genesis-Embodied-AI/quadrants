@@ -5,9 +5,9 @@
 It can be useful to combine multiple ndarrays or fields together into a single struct-like object that can be passed into kernels, and into @qd.func's.
 
 The following compound types are available:
-- `dataclasses.dataclass` — **recommended**
-- `@qd.data_oriented` — for classes that define `@qd.kernel` methods, cannot contain ndarrays
-- `@qd.struct` / `@qd.dataclass` — legacy, field-only
+- `dataclasses.dataclass` - **recommended**
+- `@qd.data_oriented` - for classes that define `@qd.kernel` methods, cannot contain ndarrays
+- `@qd.struct` / `@qd.dataclass` - legacy, field-only
 
 | type                               | can be passed to qd.kernel? | can be passed to qd.func? | can contain ndarray? | can contain field? | can be nested? | supports differentiation? |
 |------------------------------------|:---------------------------:|:-------------------------:|:--------------------:|:------------------:|:--------------:|:-------------------------:|
@@ -17,7 +17,7 @@ The following compound types are available:
 
 ## Recommendation
 
-**Use `dataclasses.dataclass` for new code.** It supports both fields and ndarrays, can be nested, and uses standard Python — no Quadrants-specific decorator needed.
+**Use `dataclasses.dataclass` for new code.** It supports both fields and ndarrays, can be nested, and uses standard Python - no Quadrants-specific decorator needed.
 
 The other compound types exist for historical reasons.
 

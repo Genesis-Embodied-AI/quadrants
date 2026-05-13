@@ -46,11 +46,11 @@ PER_DEVICE_CAPABILITY(spirv_has_subgroup_arithmetic)
 PER_DEVICE_CAPABILITY(spirv_has_subgroup_ballot)
 // Device-probed subgroup size used by SPIR-V (Vulkan / Metal) backends. Stored as a positive integer
 // (e.g. 32 on every Apple GPU and every desktop NVIDIA/AMD Vulkan driver we've tested). Always uniform
-// at queue submit time on every implementation we target — Vulkan returns
+// at queue submit time on every implementation we target - Vulkan returns
 // `VkPhysicalDeviceSubgroupProperties::subgroupSize` once at device creation; Metal's SIMD width is
 // fixed per-device. Mixed in via `Program::subgroup_size()` for `qd.simt.subgroup.group_size()` and via
 // the per-kernel `DeviceCapabilityConfig` cache key for fe-ll cache correctness. Unset / zero on
-// LLVM (CUDA / AMDGPU / x64) backends — those return their respective constants from
+// LLVM (CUDA / AMDGPU / x64) backends - those return their respective constants from
 // `Program::subgroup_size()` directly without consulting the cap.
 PER_DEVICE_CAPABILITY(spirv_subgroup_size)
 PER_DEVICE_CAPABILITY(spirv_has_non_semantic_info)

@@ -108,7 +108,7 @@ class _DeferredProxyMixin:
         self._misuse("subscripted")
 
     def __repr__(self) -> str:
-        return f"<{self._proxy_description} — not a value; use with tile[:] = ... or qd.outer(...)>"
+        return f"<{self._proxy_description} - not a value; use with tile[:] = ... or qd.outer(...)>"
 
 
 class _TileSliceProxy(_DeferredProxyMixin):

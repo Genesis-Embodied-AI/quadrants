@@ -359,7 +359,7 @@ def test_grouped_on_struct_ndarray_after_field_to_ndarray_switch():
     qd.reset()
     qd.init(arch=qd.cpu)
 
-    # Cycle 2: ndarray backend — this is the case that failed before the fix.
+    # Cycle 2: ndarray backend - this is the case that failed before the fix.
     w2 = qd.ndarray(qd.f32, shape=(4,))
     w2.fill(2.0)
     o2 = qd.ndarray(qd.f32, shape=(1,))

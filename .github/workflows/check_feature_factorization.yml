@@ -29,7 +29,7 @@ jobs:
           MERGE_BASE=$(git merge-base "origin/$BASE_REF" HEAD)
 
           # Diff restricted to MODIFIED (not added/deleted/renamed) source files. Newly added files
-          # are out of scope for this check — we only care about feature-specific code being grafted
+          # are out of scope for this check - we only care about feature-specific code being grafted
           # onto pre-existing files.
           git diff --diff-filter=M "$MERGE_BASE...HEAD" \
             -- '*.py' '*.cpp' '*.h' '*.hpp' '*.c' '*.cc' '*.cu' \
@@ -66,16 +66,16 @@ jobs:
           You are reviewing a PR for one specific factorization smell: *feature-specific code being
           piled into a heavily-tracked core file* when it could instead live in its own
           feature-specific file (new or existing). The concern is NOT that the new code is in the
-          "wrong" place semantically — it is usually topically related to the host file. The concern
+          "wrong" place semantically - it is usually topically related to the host file. The concern
           is that the host file is already a hot, central, frequently-edited file, and adding more
           self-contained feature code to it makes review, merge conflicts, and future churn worse.
           The fix is almost always: extract the feature-specific block into its own module/file.
 
           Inputs:
-          - /tmp/source_diff.patch — unified diff of NON-TEST source files MODIFIED (not added,
+          - /tmp/source_diff.patch - unified diff of NON-TEST source files MODIFIED (not added,
             deleted, or renamed) in this PR (.py, .cpp, .h, .hpp, .c, .cc, .cu, excluding tests/,
             benchmarks/, docs/, scripts/, misc/)
-          - /tmp/modified_source_files.txt — list of those modified source files
+          - /tmp/modified_source_files.txt - list of those modified source files
 
           You may inspect any file in the repo and run shell commands to gather signal. Useful ones:
           - git log --oneline -- <path> | wc -l      # total commit count for the file
@@ -97,7 +97,7 @@ jobs:
              - Many distinct authors (e.g. >= 8).
              - It is large (e.g. >= 800 lines) AND clearly central (frequently imported, sits in a
                core subdir like codegen/, ir/, runtime/, transforms/, lang/, lang/ast/).
-             If NONE of these hold, do not flag anything in this file — the host is not hot enough
+             If NONE of these hold, do not flag anything in this file - the host is not hot enough
              to warrant carving things out.
           2. If the host IS hot, examine the substantial added code. In scope:
              - New top-level functions or classes.

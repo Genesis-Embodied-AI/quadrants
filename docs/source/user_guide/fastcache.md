@@ -19,7 +19,7 @@ On a Genesis simulator benchmark (`single_franka_envs.py`, Ubuntu 24.04, NVIDIA 
 
 ### Enabling fastcache on a kernel
 
-Fastcache requires the kernel to be *pure*: all data it operates on must be passed as explicit parameters, with nothing captured from the enclosing Python scope (see [Constraints](#constraints) below). Because not all kernels satisfy this, fastcache is opt-in — you assert purity by adding `fastcache=True` to the `@qd.kernel` decorator:
+Fastcache requires the kernel to be *pure*: all data it operates on must be passed as explicit parameters, with nothing captured from the enclosing Python scope (see [Constraints](#constraints) below). Because not all kernels satisfy this, fastcache is opt-in - you assert purity by adding `fastcache=True` to the `@qd.kernel` decorator:
 
 ```python
 import quadrants as qd
@@ -54,7 +54,7 @@ qd.init(arch=qd.gpu)
 
 By default, for `dataclasses.dataclass` parameters, fastcache only includes the *types* of each field in the cache key, not their values. This is fine for fields like ndarrays, where the compiled kernel doesn't depend on the actual data, only the dtype and dimensionality.
 
-However, some dataclass fields hold configuration values that get baked into the compiled kernel — typically values used with `qd.static()`, such as loop bounds or feature flags:
+However, some dataclass fields hold configuration values that get baked into the compiled kernel - typically values used with `qd.static()`, such as loop bounds or feature flags:
 
 ```python
 for i in qd.static(range(config.num_layers)):
@@ -78,7 +78,7 @@ class SimConfig:
 
 With this annotation, changing `num_envs` from 100 to 200 produces a different cache key so the correct compiled kernel is looked up (or compiled if not yet cached). Without it, the wrong kernel could be loaded.
 
-Note: `@qd.data_oriented` objects and `qd.Template` parameters already include primitive values in the cache key automatically — this annotation is only needed for `dataclasses.dataclass` fields.
+Note: `@qd.data_oriented` objects and `qd.Template` parameters already include primitive values in the cache key automatically - this annotation is only needed for `dataclasses.dataclass` fields.
 
 ## Constraints
 
@@ -86,7 +86,7 @@ A kernel is eligible for fastcache only if all of the following hold:
 
 ### 1. All data flows through parameters
 
-The kernel must receive every piece of data it operates on as an explicit parameter. It must **not** capture variables from the enclosing Python scope (closures over fields, ndarrays, or mutable globals). This is the core "purity" constraint — the compiled kernel's behavior must be fully determined by its arguments.
+The kernel must receive every piece of data it operates on as an explicit parameter. It must **not** capture variables from the enclosing Python scope (closures over fields, ndarrays, or mutable globals). This is the core "purity" constraint - the compiled kernel's behavior must be fully determined by its arguments.
 
 ```python
 a = qd.ndarray(qd.f32, (10,))
@@ -104,7 +104,7 @@ def good_kernel(a: qd.types.NDArray[qd.f32, 1]) -> None:
         a[i] = 0.0
 ```
 
-Sub-functions called by the kernel are also checked — they must not capture external state either.
+Sub-functions called by the kernel are also checked - they must not capture external state either.
 
 **Exemptions:** The following may be accessed from the enclosing scope without violating purity:
 
@@ -130,9 +130,9 @@ Fastcache supports the following parameter types:
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
-| `qd.field` / `ScalarField` / `MatrixField` | **No** | — |
+| `qd.field` / `ScalarField` / `MatrixField` | **No** | - |
 
-If any parameter is of an unsupported type, fastcache is disabled for that call and the kernel falls back to normal compilation. For `qd.field` / `ScalarField` / `MatrixField` arriving through a `qd.Tensor`-annotated parameter, this is silent — no warning is emitted. For other unsupported types, a warning is logged at the `warn` level identifying the offending parameter.
+If any parameter is of an unsupported type, fastcache is disabled for that call and the kernel falls back to normal compilation. For `qd.field` / `ScalarField` / `MatrixField` arriving through a `qd.Tensor`-annotated parameter, this is silent - no warning is emitted. For other unsupported types, a warning is logged at the `warn` level identifying the offending parameter.
 
 ### 3. Source code must be available
 
@@ -148,7 +148,7 @@ Each compiled artifact is stored under a key derived from all of the following:
 - The **compiler configuration** (e.g. `arch`, `debug`, `opt_level`, `fast_math`).
 - **Template parameter values** (since they are baked into the compiled kernel).
 
-When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk — multiple cached versions coexist. You do not need to manually clear the cache when making code changes — the hash mismatch causes a transparent recompilation.
+When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk - multiple cached versions coexist. You do not need to manually clear the cache when making code changes - the hash mismatch causes a transparent recompilation.
 
 ## Advanced
 

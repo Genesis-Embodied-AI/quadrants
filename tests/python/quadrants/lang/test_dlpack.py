@@ -180,7 +180,7 @@ def test_dlpack_non_sequenced_axes():
     t = qd_to_torch(field_ikj)
     # canonical (i, j, k) shape: extents 3, 4, 2.
     assert tuple(t.shape) == (3, 4, 2)
-    # Physical memory layout is (i, k, j), so the canonical view is not contiguous — the strides reflect the actual
+    # Physical memory layout is (i, k, j), so the canonical view is not contiguous - the strides reflect the actual
     # SNode order.
     assert not t.is_contiguous()
 

@@ -1,4 +1,4 @@
-# Releases — Genesis-Embodied-AI/gstaichi
+# Releases - Genesis-Embodied-AI/gstaichi
 
 This file contains the old releases of this repo when it was called gstaichi, before we renamed it to Quadrants.
 

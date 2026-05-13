@@ -980,7 +980,7 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
     // Reject tensor (vector / matrix) destinations explicitly. The other atomic ops fan out to per-component
     // scalar AtomicOpStmts via scalarize / lower_matrix_ptr, but those passes use the 3-arg AtomicOpStmt
     // constructor and would silently drop `expected`, tripping QD_ASSERT(stmt->expected) in codegen. Until the
-    // scalarizers grow a 4-arg path that threads `expected_i` through, refuse tensor CAS at trace time.
+    // scalarizers grow a 4-arg path that threads `expected_i` through, refuse tensor CAS at compile time.
     if (dest_dtype->is<TensorType>()) {
       ErrorEmitter(QuadrantsTypeError(), this,
                    fmt::format("'atomic_cas' on tensor (vector / matrix) destinations is not supported; got "

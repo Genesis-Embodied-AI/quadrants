@@ -18,7 +18,7 @@ Scratch layout for the scan: ``scratch[0 : N]`` holds the per-element indices (i
 ``scratch[N : N + B0]`` holds the level-0 partials, ``scratch[N + B0 : ...]`` deeper recursion levels (mirrors the
 device scan).
 
-Constraints (first land): ``N`` must fit comfortably within the configured scratch budget — the indices + partials
+Constraints (first land): ``N`` must fit comfortably within the configured scratch budget - the indices + partials
 together must not exceed ``scratch_capacity_u32()``. For the default 1 MB budget that's
 ``N + ceil(N / 256) + ... ≤ 262144``, so roughly ``N ≤ 260_000``. Raise the budget via
 ``_scratch.set_scratch_bytes(...)`` before any algorithm runs to unlock larger inputs.
@@ -92,7 +92,7 @@ def device_select(input, flags, *, out, num_out):  # pylint: disable=redefined-b
         num_out: 1-element ``i32`` tensor receiving the selected count.
 
     Same async / no-implicit-sync contract as ``device_reduce_*`` and ``device_exclusive_scan_*``: ``num_out`` is a
-    tensor, not a Python scalar — call ``num_out.to_numpy()[0]`` explicitly to get the count host-side.
+    tensor, not a Python scalar - call ``num_out.to_numpy()[0]`` explicitly to get the count host-side.
 
     See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md``
     for the scratch-into-indices layout and the algorithm reference.

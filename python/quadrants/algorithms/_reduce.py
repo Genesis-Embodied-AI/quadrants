@@ -8,7 +8,7 @@ Layout (host driver builds a recursion plan, kernels are the per-pass workers):
 
 - **First pass** reads the caller's input tensor (of the algorithm's ``dtype``) and writes per-block partials to the
   shared scratch field as ``u32`` via ``qd.bit_cast``.
-- **Intermediate passes** (only needed when ``N`` is large enough to require more than two passes total — i.e.
+- **Intermediate passes** (only needed when ``N`` is large enough to require more than two passes total - i.e.
   ``B0 > BLOCK_DIM``) read from one slice of scratch (``u32`` → ``dtype`` via ``qd.bit_cast``) and write to another
   slice (``dtype`` → ``u32`` via ``qd.bit_cast``).
 - **Last pass** reduces to a single value and writes it directly to the caller's ``out`` tensor as ``dtype`` (no
@@ -223,7 +223,7 @@ def _trivial_write_input(input: template(), out: template()):  # pylint: disable
 def _trivial_write_identity(out: template(), identity_bits: u32, dtype: template()):
     """N == 0 path: write the monoid identity (as a u32 bit pattern) to out[0].
 
-    Quadrants doesn't support 0-shape tensors today, so this path is currently unreachable from a caller — left in
+    Quadrants doesn't support 0-shape tensors today, so this path is currently unreachable from a caller - left in
     place for defensiveness against future 0-length support.
     """
     for _ in range(1):
@@ -246,7 +246,7 @@ def device_reduce_add(input, *, out):  # pylint: disable=redefined-builtin
     Args:
         input: 1-D tensor of ``i32``, ``u32``, or ``f32``. Pass a ``qd.field``,
             ``qd.ndarray``, or ``qd.Tensor`` wrapper around either.
-        out: 1-element tensor of the same dtype as ``input``. Caller-supplied so the call is fully asynchronous — no
+        out: 1-element tensor of the same dtype as ``input``. Caller-supplied so the call is fully asynchronous - no
             implicit device→host sync. To get a Python scalar, do ``out.to_numpy()[0]`` explicitly after this call.
 
     The implementation is a two-or-more-pass tree reduction built on ``block.reduce_add``. Scratch is drawn from the
@@ -262,7 +262,7 @@ def device_reduce_min(input, identity, *, out):  # pylint: disable=redefined-bui
 
     Args:
         input: see ``device_reduce_add``.
-        identity: the monoid identity for ``min`` over ``input.dtype`` — i.e. a value ``e`` such that
+        identity: the monoid identity for ``min`` over ``input.dtype`` - i.e. a value ``e`` such that
             ``min(e, x) == x`` for every ``x`` in the dtype. For ``f32``, that's ``+inf`` (``math.inf``). For ``i32``,
             that's ``2**31 - 1``. Mandatory: there is no portable type-extreme derivable from a value alone, and
             giving callers an implicit one would silently bake in a backend assumption.

@@ -778,7 +778,7 @@ def test_block_thread_idx_multi_block():
 
 # Multi-block coverage for `block.global_thread_idx()`: same shape as the test above, but the expected values span the
 # full grid (0..N-1) rather than wrapping per block. Together with `test_block_thread_idx_multi_block` this
-# distinguishes the two ops on every backend — a `global_thread_idx == thread_idx` aliasing regression fails one of the
+# distinguishes the two ops on every backend - a `global_thread_idx == thread_idx` aliasing regression fails one of the
 # two.
 @test_utils.test(arch=qd.gpu)
 def test_block_global_thread_idx_multi_block():
@@ -820,11 +820,11 @@ def _init_field(field, n, dtype):
 # one extra `block.sync()` plus a one-slot shared-memory hop.
 #
 # We exercise three regimes per arch by parameterizing on subgroups-per-block rather
-# than absolute block_dim: 1 subgroup (single-subgroup short-circuit path — no
+# than absolute block_dim: 1 subgroup (single-subgroup short-circuit path - no
 # shared memory, no cross-subgroup fold), 4 subgroups (multi-subgroup), 8 subgroups
 # (multi-subgroup, larger).  The host-side ``_arch_subgroup_size()`` maps to
 # ``block_dim`` at test-body entry, so wave32 archs (CUDA / Metal / NVIDIA Vulkan)
-# get ``[32, 128, 256]`` and wave64 (AMDGPU) gets ``[64, 256, 512]`` — both cover
+# get ``[32, 128, 256]`` and wave64 (AMDGPU) gets ``[64, 256, 512]`` - both cover
 # the single-subgroup short-circuit + multi-subgroup paths without skipping
 # anything at collection time.  Inside the kernel, the subgroup size is still read
 # from ``subgroup.group_size()`` at compile time, so the same source compiles
@@ -1391,9 +1391,9 @@ def _ref_radix_rank(keys, bit_start, num_bits):
 @pytest.mark.parametrize(
     "key_pattern,bit_start,num_bits",
     [
-        ("low_entropy", 0, 8),  # 16 distinct digits each appearing 16 times — heavy match path traffic
-        ("uniform", 0, 8),  # full 8-bit uniform — most digits get 1 key, some get 0
-        ("uniform_high_bits", 8, 8),  # digit drawn from bits [8, 16) — exercises bit_start > 0
+        ("low_entropy", 0, 8),  # 16 distinct digits each appearing 16 times - heavy match path traffic
+        ("uniform", 0, 8),  # full 8-bit uniform - most digits get 1 key, some get 0
+        ("uniform_high_bits", 8, 8),  # digit drawn from bits [8, 16) - exercises bit_start > 0
     ],
 )
 @test_utils.test(arch=qd.gpu)
@@ -1460,7 +1460,7 @@ def test_block_radix_rank_match_atomic_or(key_pattern, bit_start, num_bits):
     assert actual_excl == ref_excl, f"excl_prefix mismatch (pattern={key_pattern})"
 
     actual_ranks = [ranks_out[i] for i in range(_BLOCK_DIM_RR)]
-    # Ranks must be a permutation of [0, n) — uniqueness check first so any duplicate is caught even if the sorted
+    # Ranks must be a permutation of [0, n) - uniqueness check first so any duplicate is caught even if the sorted
     # invariant below silently masks it.
     assert sorted(actual_ranks) == list(
         range(_BLOCK_DIM_RR)
@@ -1959,7 +1959,7 @@ def test_subgroup_segmented_reduce_add(dtype, log2_size):
             dst[i] = subgroup.segmented_reduce_add(src[i], head[i], log2_size)
 
     _init_varied_int_or_float(src, N, dtype)
-    # Head pattern: heads at lanes 0, 3, 7, 12, 19, 25 — varied gaps, plus one group where the group base is not a head
+    # Head pattern: heads at lanes 0, 3, 7, 12, 19, 25 - varied gaps, plus one group where the group base is not a head
     # (e.g. for log2_size=2, lane 4 is a group base but not a head, exercising the implicit head fallback).
     head_lanes = {0, 3, 7, 12, 19, 25}
     heads_py = [1 if i in head_lanes else 0 for i in range(N)]
@@ -2061,7 +2061,7 @@ def test_subgroup_segmented_reduce_add_truthy_predicate():
         assert dst_binary[i] == dst_truthy[i], f"lane {i}: binary={dst_binary[i]}, truthy={dst_truthy[i]}"
 
 
-# Segmented reduce min / max — share the head-pattern + Python-verifier strategy with `segmented_reduce_add`, but the
+# Segmented reduce min / max - share the head-pattern + Python-verifier strategy with `segmented_reduce_add`, but the
 # input data is a *non-monotonic* sequence (via ``_init_varied_int_or_float``) so each segment's min / max actually
 # depends on the data and not just on the segment endpoints.
 
@@ -2208,7 +2208,7 @@ def test_subgroup_segmented_reduce_add_block64(log2_size):
     32-lane subgroups, so each half exercises the lanes-0..31 path that the existing N=32 tests already cover.
 
     On wave64 hardware (AMDGPU CDNA, GFX9, RDNA explicit-wave64) this runs as a single 64-lane wavefront.  Lanes
-    32..63 then need correct results inside their own ``log2_size`` group — which only works after the half-local
+    32..63 then need correct results inside their own ``log2_size`` group - which only works after the half-local
     ``_segment_head_distance`` rewrite (this commit).  Without the fix, lanes 32..63 hit u32 overshift / out-of-range
     bit-mask arithmetic and produce garbage.
 
@@ -2817,7 +2817,7 @@ def test_subgroup_ballot_full_subgroup_all_true():
     On wave32 we expect ``0xFFFFFFFF`` (low 32 bits set, high 32 zero); on wave64 we expect ``0xFFFFFFFFFFFFFFFF``.
 
     Uses ``block_dim=64`` so every wave has every lane active on both wave32 (two full 32-lane waves) and wave64
-    (one full 64-lane wave) — required to satisfy the ``ballot_full_subgroup`` "all lanes active" contract on wave64.
+    (one full 64-lane wave) - required to satisfy the ``ballot_full_subgroup`` "all lanes active" contract on wave64.
     """
     N = 64
     result = qd.field(dtype=qd.u64, shape=N)
@@ -2841,7 +2841,7 @@ def test_subgroup_ballot_full_subgroup_all_true():
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_ballot_full_subgroup_all_false():
-    """``ballot_full_subgroup(0)`` returns zero everywhere — verifies no spurious bits leak in from
+    """``ballot_full_subgroup(0)`` returns zero everywhere - verifies no spurious bits leak in from
     uninitialised wave64 high-half lanes."""
     N = 32
     result = qd.field(dtype=qd.u64, shape=N)
@@ -2926,7 +2926,7 @@ def test_subgroup_ballot_full_subgroup_high_half_only():
 
 
 # Lane masks: each lane queries its own mask via ``invocation_id()`` and we cross-check against the closed-form
-# ``(1 << lane) - 1`` etc.  We cap at 32 lanes (the ``u32`` mask range), regardless of ``group_size()`` — wave64 lanes
+# ``(1 << lane) - 1`` etc.  We cap at 32 lanes (the ``u32`` mask range), regardless of ``group_size()`` - wave64 lanes
 # 32..63 are not representable in this op.
 
 
@@ -3104,7 +3104,7 @@ def test_subgroup_sync():
 
     Verifies the trivial "sync inside a uniform-CF kernel doesn't break the emitted code" contract on CUDA
     (``__syncwarp(0xFFFFFFFF)``), AMDGPU (``llvm.amdgcn.wave.barrier``), and SPIR-V (``OpControlBarrier(Subgroup,
-    Subgroup, 0)``).  We do not attempt to test reconvergence semantics here — that would require deliberately
+    Subgroup, 0)``).  We do not attempt to test reconvergence semantics here - that would require deliberately
     divergent control flow plus a memory-visible side-channel and is too flaky to be a unit test.
     """
     N = 64
@@ -3179,9 +3179,9 @@ def test_subgroup_elect():
     ``invocation_id``.  We verify, in a single kernel, that:
 
     * ``elect()`` returns 0 or 1.
-    * Every elected lane has ``invocation_id() == 0``, and every non-elected lane has ``invocation_id() != 0`` — i.e.
+    * Every elected lane has ``invocation_id() == 0``, and every non-elected lane has ``invocation_id() != 0`` - i.e.
       lane 0 is exactly the elected one.
-    * The total elected count equals ``N / group_size()`` — one per subgroup.
+    * The total elected count equals ``N / group_size()`` - one per subgroup.
     """
     N = 256
     elected = qd.field(dtype=qd.i32, shape=N)
@@ -3296,7 +3296,7 @@ def test_vulkan_subgroup_id_survives_reinit():
         if reference is None:
             reference = result
         else:
-            assert result == reference, f"cycle {cycle}: subgroup IDs changed — " f"got {result}, expected {reference}"
+            assert result == reference, f"cycle {cycle}: subgroup IDs changed - " f"got {result}, expected {reference}"
 
         qd.reset()
 
@@ -3327,7 +3327,7 @@ def test_subgroup_log2_group_size_returns_python_int():
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_group_size_folds_into_kernel_ir():
-    """``subgroup.group_size()`` inside a kernel body folds to a constant literal — verified by storing it into a field
+    """``subgroup.group_size()`` inside a kernel body folds to a constant literal - verified by storing it into a field
     and reading back the host-side value of ``group_size()``."""
     N = 64
     out = qd.field(dtype=qd.i32, shape=N)
@@ -3374,7 +3374,7 @@ def test_subgroup_group_size_stable_across_reinit(req_arch, req_options):
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_log2_group_size_feeds_into_template():
-    """``log2_group_size()`` can be passed directly into ``qd.template()`` arguments — e.g. ``reduce_add(v,
+    """``log2_group_size()`` can be passed directly into ``qd.template()`` arguments - e.g. ``reduce_add(v,
     log2_group_size())`` matches what hand-written ``log2_size=5/6`` would produce."""
     N = 64
     src = qd.field(dtype=qd.i32, shape=N)
@@ -3854,7 +3854,7 @@ def test_subgroup_segmented_reduce_add_log2_size_6():
 
 @test_utils.test(arch=qd.amdgpu)
 def test_subgroup_segmented_reduce_max_log2_size_6():
-    """``log2_size=6`` ``segmented_reduce_max`` across a wave64 wavefront — same coverage as the ``_add`` variant for
+    """``log2_size=6`` ``segmented_reduce_max`` across a wave64 wavefront - same coverage as the ``_add`` variant for
     the u64 path."""
     N = 64
     src = qd.field(dtype=qd.i32, shape=N)

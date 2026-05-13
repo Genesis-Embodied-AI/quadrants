@@ -101,7 +101,7 @@ class Ndarray:
 
         Mirrors the field-backend behaviour: ``to_dlpack()`` on a field allocated via ``qd.tensor(...,
         backend=qd.Backend.FIELD, layout=...)`` (translated to ``order=...``) likewise returns a canonical view via
-        permuted strides — see the C++ ``field_to_dlpack`` SNode-walk path.
+        permuted strides - see the C++ ``field_to_dlpack`` SNode-walk path.
         """
         if impl.current_cfg().arch == _arch_metal:
             impl.get_runtime().sync()
@@ -275,7 +275,7 @@ class Ndarray:
         """Mirror of ``_ndarray_matrix_to_numpy`` that fills a torch tensor instead of a numpy array.
 
         Allocates a ``torch.zeros`` of ``self.arr.total_shape()`` (the canonical-major shape including the trailing
-        element-axis extents) and dispatches the same ``ndarray_matrix_to_ext_arr`` bridge kernel — torch tensors
+        element-axis extents) and dispatches the same ``ndarray_matrix_to_ext_arr`` bridge kernel - torch tensors
         expose the same external-array interface to the kernel as numpy arrays do.
         """
         import torch  # pylint: disable=C0415

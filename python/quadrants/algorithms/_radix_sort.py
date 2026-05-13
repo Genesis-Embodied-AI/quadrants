@@ -23,7 +23,7 @@ Sort proceeds digit-by-digit from the least significant byte upward. Each digit 
    tile_histograms, subtracts the block-local ``excl_prefix[digit]`` to obtain the intra-digit offset, and scatters
    ``keys_in[i] -> keys_out[offset + rank]``. Values, if provided, are scattered with the same indices.
 
-After each pass we swap (``keys_in`` ↔ ``keys_out``). Four passes for ``u32`` covering bits 0-31 — even, so the final
+After each pass we swap (``keys_in`` ↔ ``keys_out``). Four passes for ``u32`` covering bits 0-31 - even, so the final
 result lands back in the caller's ``keys`` buffer.
 
 **Twiddle for i32 / f32.** Radix sort sorts u32 bit patterns lexicographically. To get ascending ``i32`` and
@@ -31,7 +31,7 @@ result lands back in the caller's ``keys`` buffer.
 the last pass:
 
 - ``u32``: identity.
-- ``i32``: XOR sign bit (``0x80000000``) — maps two's-complement to monotone u32.
+- ``i32``: XOR sign bit (``0x80000000``) - maps two's-complement to monotone u32.
 - ``f32``: if the sign bit is clear (positive), XOR ``0x80000000``; if set (negative), XOR ``0xFFFFFFFF``. Inverse uses
   the *output* sign bit to pick the same masks back.
 
@@ -86,7 +86,7 @@ def _twiddle_pass(keys: template(), N: i32, dtype: template(), do_twiddle: templ
     sort. Both directions write through ``bit_cast`` so the storage dtype is preserved.
 
     The two directions are encoded by the same kernel because their bodies differ only in which sign-bit (input's or
-    output's) selects the XOR mask — see the docstring on ``_radix_sort.py`` for the bit-twiddle table.
+    output's) selects the XOR mask - see the docstring on ``_radix_sort.py`` for the bit-twiddle table.
     """
     loop_config(block_dim=BLOCK_DIM)
     for i in range(N):
@@ -125,7 +125,7 @@ def _radix_histogram_pass(
     """Per-block histogram of digit ``(key >> bit_start) & 0xFF``.
 
     Writes to ``tile_histograms[histograms_off + d * num_blocks + b]``
-    (digit-major layout — see module docstring on why).
+    (digit-major layout - see module docstring on why).
 
     Out-of-range threads (in the tail block when ``N % BLOCK_DIM != 0``) do not contribute to the histogram. The
     shared-mem zeroing and final write-out still cover all 256 digits.
@@ -306,7 +306,7 @@ def device_radix_sort(keys, *, tmp_keys, values=None, tmp_values=None, end_bit=3
     cap = scratch_capacity_u32()
     # Scratch layout: scratch[0 : hist_len] = current pass's tile_histograms. The in-place scan over scratch[0 :
     # hist_len] sub-allocates partials from scratch[hist_len : ...] up to its own recursion depth. Worst case the scan
-    # needs roughly `hist_len / BLOCK_DIM + ...` extra u32 slots — well under hist_len / 100.
+    # needs roughly `hist_len / BLOCK_DIM + ...` extra u32 slots - well under hist_len / 100.
     if hist_len + (hist_len + BLOCK_DIM - 1) // BLOCK_DIM > cap:
         needed = hist_len + (hist_len + BLOCK_DIM - 1) // BLOCK_DIM
         raise RuntimeError(

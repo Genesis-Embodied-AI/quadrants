@@ -288,7 +288,7 @@ def subgroup_inclusive_add_warp_i32(val: template()):
     """Single-arg adapter around ``subgroup.inclusive_add(val, 5)``.
 
     The prefix-sum kernel ``scan_add_inclusive`` takes its scan primitive as a ``template()`` callable invoked as
-    ``inclusive_add(val)`` (one argument).  The portable ``subgroup.inclusive_add`` takes ``(value, log2_size)`` — pass
+    ``inclusive_add(val)`` (one argument).  The portable ``subgroup.inclusive_add`` takes ``(value, log2_size)`` - pass
     ``log2_size=5`` to scan a full 32-lane warp/wave, matching ``WARP_SZ`` in ``scan_add_inclusive``.
     """
     return subgroup.inclusive_add(val, 5)

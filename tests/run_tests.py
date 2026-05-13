@@ -46,7 +46,7 @@ def _test_python(args, default_dir="python"):
             # Disable the quadrants pytest plugin (pytest11 entry point) during coverage runs.  Loading the plugin
             # forces Python to import the quadrants parent package before pytest-cov starts measuring, so module-level
             # code (imports, def lines, etc.) appears uncovered.  The plugin is still useful for *external* users who
-            # run `pytest --cov` on their own code — they don't measure quadrants' own coverage.  We replicate the
+            # run `pytest --cov` on their own code - they don't measure quadrants' own coverage.  We replicate the
             # plugin's env-var setup (QD_KERNEL_COVERAGE, _QD_KCOV_ARC) above.
             pytest_args += [
                 "--cov-branch",
@@ -70,7 +70,7 @@ def _test_python(args, default_dir="python"):
         if args.timeout > 0:
             pytest_args += [
                 "--durations=15",
-                # Suppress stock pytest-timeout if installed — it conflicts
+                # Suppress stock pytest-timeout if installed - it conflicts
                 # with pytest_hardtle (both register the same hook specs).
                 "-p",
                 "no:timeout",

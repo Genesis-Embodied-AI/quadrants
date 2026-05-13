@@ -8,14 +8,14 @@ conditional nodes require SM 9.0+ (Hopper or later); on older GPUs,
 
 There are three distinct phases:
 
-1. **Fatbin generation** (rare, manual) — A developer runs
+1. **Fatbin generation** (rare, manual) - A developer runs
    `scripts/build_condition_kernel_fatbin.py`, which compiles the kernel and
    device-links it with `libcudadevrt.a` to resolve `cudaGraphSetConditional`.
    The output is a self-contained fatbin, committed to git as a C header.
    Requires `nvcc` and the CUDA toolkit.
-2. **Quadrants build** (CI / developers) — The C header is `#include`d as a
+2. **Quadrants build** (CI / developers) - The C header is `#include`d as a
    plain byte array. No CUDA toolkit needed.
-3. **Runtime** (end users) — The fatbin is loaded via `cuModuleLoadData`.
+3. **Runtime** (end users) - The fatbin is loaded via `cuModuleLoadData`.
    No CUDA toolkit needed.
 
 This page documents phase 1: regenerating the pre-built fatbin.

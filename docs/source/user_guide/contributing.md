@@ -111,22 +111,22 @@ Pull requests are validated by several CI jobs. Most run automatically; a failin
 
 Runs `pre-commit run -a` which enforces:
 
-- **black** — Python formatting with a 120-character line limit
-- **clang-format** — C/C++ formatting
-- **trailing-whitespace** and **end-of-file-fixer** — whitespace hygiene
-- **ruff** — Python linting
-- **pylint** — additional Python linting (scoped to `python/quadrants/`)
+- **black** - Python formatting with a 120-character line limit
+- **clang-format** - C/C++ formatting
+- **trailing-whitespace** and **end-of-file-fixer** - whitespace hygiene
+- **ruff** - Python linting
+- **pylint** - additional Python linting (scoped to `python/quadrants/`)
 
 You can run these locally with `pre-commit run -a` after `pip install pre-commit`.
 
 ### Other CI jobs
 
-- **pyright** (`pyright_linter.yml`) — Python type checking
-- **clang-tidy** (`clang_tidy.yml`) — C++ static analysis
-- **check-markup-links** (`check_markup_links.yml`) — validates links in documentation
-- **linux / macosx / win** — build and test on each platform
-- **test-gpu** — GPU-specific tests
-- **coverage report** — a one-line diff coverage summary is posted as a PR comment on each push, linking to the full annotated report. This includes kernel-level branch coverage. See [Kernel code coverage](kernel_coverage.md) for details.
+- **pyright** (`pyright_linter.yml`) - Python type checking
+- **clang-tidy** (`clang_tidy.yml`) - C++ static analysis
+- **check-markup-links** (`check_markup_links.yml`) - validates links in documentation
+- **linux / macosx / win** - build and test on each platform
+- **test-gpu** - GPU-specific tests
+- **coverage report** - a one-line diff coverage summary is posted as a PR comment on each push, linking to the full annotated report. This includes kernel-level branch coverage. See [Kernel code coverage](kernel_coverage.md) for details.
 
 ### Line wrapping check (`check_wrapping.yml`)
 
@@ -147,7 +147,7 @@ Uses an AI agent to verify that new or modified source code in a PR has correspo
 
 ### Feature factorization check (`check_feature_factorization.yml`)
 
-Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the "wrong" place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.
+Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the "wrong" place semantically - it is usually topically related to the host file - but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.
 
 The agent reports up to 5 violations, each annotated with the host file's hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
 

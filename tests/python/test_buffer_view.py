@@ -20,7 +20,7 @@ N = 32
 
 
 # ---------------------------------------------------------------------------
-# Group A — Slice syntax (host-level)
+# Group A - Slice syntax (host-level)
 # ---------------------------------------------------------------------------
 
 
@@ -209,7 +209,7 @@ def test_host_view_int_index_error():
 
 
 # ---------------------------------------------------------------------------
-# Group B — Kernel functional tests
+# Group B - Kernel functional tests
 # ---------------------------------------------------------------------------
 
 
@@ -440,7 +440,7 @@ def test_wrong_type_error():
 
 
 # ---------------------------------------------------------------------------
-# Group C — Debug mode: auto-error + complete callstack
+# Group C - Debug mode: auto-error + complete callstack
 # ---------------------------------------------------------------------------
 
 
@@ -565,7 +565,7 @@ def test_debug_no_false_positive():
     @qd.kernel
     def k(v: BufferView[qd.f32]):
         for i in range(1):
-            v[v.size - 1 + i] = 1.0  # last valid index — should succeed
+            v[v.size - 1 + i] = 1.0  # last valid index - should succeed
 
     k(data[:16])  # must complete without exception
 

@@ -1,6 +1,6 @@
 # Algorithms
 
-Device-wide algorithms — primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above grid-scope synchronization: they *use* block, subgroup, and grid primitives internally and expose a high-level entry point that the user calls from host (Python) code, not from inside a kernel.
+Device-wide algorithms - primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above grid-scope synchronization: they *use* block, subgroup, and grid primitives internally and expose a high-level entry point that the user calls from host (Python) code, not from inside a kernel.
 
 ## What's available
 
@@ -39,14 +39,14 @@ total = float(out.to_numpy()[0])   # explicit device->host hop
 
 Signatures:
 
-- `device_reduce_add(input, *, out)` — sum reduction. Identity (`0` for the dtype) is derived automatically.
-- `device_reduce_min(input, identity, *, out)` — min reduction. `identity` is **required** and must be a value `e` such that `min(e, x) == x` for every `x` in the dtype (e.g. `math.inf` for `f32`, `2**31 - 1` for `i32`, `2**32 - 1` for `u32`).
-- `device_reduce_max(input, identity, *, out)` — max reduction. `identity` is **required** and must be the dtype's negative extremum (e.g. `-math.inf` for `f32`, `-2**31` for `i32`, `0` for `u32`).
+- `device_reduce_add(input, *, out)` - sum reduction. Identity (`0` for the dtype) is derived automatically.
+- `device_reduce_min(input, identity, *, out)` - min reduction. `identity` is **required** and must be a value `e` such that `min(e, x) == x` for every `x` in the dtype (e.g. `math.inf` for `f32`, `2**31 - 1` for `i32`, `2**32 - 1` for `u32`).
+- `device_reduce_max(input, identity, *, out)` - max reduction. `identity` is **required** and must be the dtype's negative extremum (e.g. `-math.inf` for `f32`, `-2**31` for `i32`, `0` for `u32`).
 
 Arguments:
 
-- `input`: 1-D tensor. Pass a `qd.field`, `qd.ndarray`, or `qd.Tensor` wrapper around either — the kernels are polymorphic via the `qd.Tensor` annotation.
-- `out`: 1-element tensor with the same dtype as `input`. Caller-supplied so the call is fully asynchronous — there is no implicit device→host sync. To get a Python scalar, do `out.to_numpy()[0]` explicitly after the call. This makes the host hop visible at the call site rather than hidden inside the algorithm.
+- `input`: 1-D tensor. Pass a `qd.field`, `qd.ndarray`, or `qd.Tensor` wrapper around either - the kernels are polymorphic via the `qd.Tensor` annotation.
+- `out`: 1-element tensor with the same dtype as `input`. Caller-supplied so the call is fully asynchronous - there is no implicit device→host sync. To get a Python scalar, do `out.to_numpy()[0]` explicitly after the call. This makes the host hop visible at the call site rather than hidden inside the algorithm.
 
 Constraints:
 
@@ -86,9 +86,9 @@ qd.algorithms.device_exclusive_scan_add(inp, out=out)
 
 Signatures:
 
-- `device_exclusive_scan_add(input, *, out)` — exclusive sum. Identity (`0` for the dtype) is derived automatically.
-- `device_exclusive_scan_min(input, identity, *, out)` — exclusive min. `identity` is **required** (e.g. `math.inf` for `f32`, `2**31 - 1` for `i32`).
-- `device_exclusive_scan_max(input, identity, *, out)` — exclusive max. `identity` is **required** (e.g. `-math.inf` for `f32`, `-2**31` for `i32`).
+- `device_exclusive_scan_add(input, *, out)` - exclusive sum. Identity (`0` for the dtype) is derived automatically.
+- `device_exclusive_scan_min(input, identity, *, out)` - exclusive min. `identity` is **required** (e.g. `math.inf` for `f32`, `2**31 - 1` for `i32`).
+- `device_exclusive_scan_max(input, identity, *, out)` - exclusive max. `identity` is **required** (e.g. `-math.inf` for `f32`, `-2**31` for `i32`).
 
 Constraints:
 
@@ -101,9 +101,9 @@ Constraints:
 Implementation:
 
 - Blelloch 1990 three-pass exclusive scan:
-  1. **Pass 1** — per-block tile reduce into the shared `Field(u32)` scratch (one `u32` per block).
-  2. **Pass 2** — exclusive-scan the partials buffer in place. For `N ≤ BLOCK_DIM²` (= 65536) a single block does this. For larger `N`, the driver recurses: another tile-reduce on the partials, a recursive scan, then a downsweep that applies the higher-level prefixes.
-  3. **Pass 3** — per-block tile scan + add the block prefix from scratch. Each block re-reads its tile from the input, runs `block.exclusive_scan` to get per-thread tile prefixes, and adds its `block_prefix` from the scanned partials.
+  1. **Pass 1** - per-block tile reduce into the shared `Field(u32)` scratch (one `u32` per block).
+  2. **Pass 2** - exclusive-scan the partials buffer in place. For `N ≤ BLOCK_DIM²` (= 65536) a single block does this. For larger `N`, the driver recurses: another tile-reduce on the partials, a recursive scan, then a downsweep that applies the higher-level prefixes.
+  3. **Pass 3** - per-block tile scan + add the block prefix from scratch. Each block re-reads its tile from the input, runs `block.exclusive_scan` to get per-thread tile prefixes, and adds its `block_prefix` from the scanned partials.
 - `BLOCK_DIM = 256`. Total scratch usage at `N = 1M` is `4096 + 16 = 4112` `u32` slots (~16 KB), well under the 1 MB default.
 
 ### `qd.algorithms.device_select(input, flags, *, out, num_out)`
@@ -131,7 +131,7 @@ selected = out.to_numpy()[:count]
 Constraints:
 
 - **Dtypes (first land):** `input.dtype` ∈ {`qd.i32`, `qd.u32`, `qd.f32`}.
-- **`flags`:** 1-D `qd.i32` tensor with the same shape as `input`. Each entry is treated as a boolean (`!= 0` selects). `flags` is caller-built — populate it with a kernel applying whatever predicate you want.
+- **`flags`:** 1-D `qd.i32` tensor with the same shape as `input`. Each entry is treated as a boolean (`!= 0` selects). `flags` is caller-built - populate it with a kernel applying whatever predicate you want.
 - **`out`:** 1-D tensor, same dtype as `input`, with `len(out) >= len(input)` so the worst-case all-selected run is safe. Only `out[0 : num_out[0]]` carries meaningful data on return; the tail is left untouched (whatever was in `out` before the call remains).
 - **`num_out`:** 1-element `qd.i32` tensor. Same explicit-host-hop rule: do `int(num_out.to_numpy()[0])` after the call to get the count as a Python scalar.
 
@@ -181,17 +181,17 @@ Constraints:
 
 - **Dtypes (first land):** `keys.dtype` and `values.dtype` ∈ {`qd.u32`, `qd.i32`, `qd.f32`}. Other dtypes raise `NotImplementedError`.
 - **Aliasing:** `keys` and `tmp_keys` must be distinct buffers; same for `values` / `tmp_values`. Calling with the same buffer raises `ValueError`.
-- **Stability:** stable sort — equal keys keep their original input order in the output.
+- **Stability:** stable sort - equal keys keep their original input order in the output.
 - **NaN handling (f32):** matches `numpy.sort` (NaNs land at the end). NaNs are not tested separately and should not be relied on for ordering invariants beyond `numpy.sort`.
 
 Implementation:
 
 - Classical LSB radix sort with 8-bit digits, four passes for `u32` / `i32` / `f32`. Each digit pass is three internal kernels:
-  1. **Histogram** — every block computes its per-digit count into shared memory, then publishes the 256-bin tile histogram to the global `Field(u32)` scratch (digit-major layout: `tile_histograms[d * num_blocks + b]`).
-  2. **Scan** — in-place exclusive scan over the flat tile_histograms buffer. The digit-major layout makes a single 1-D scan enough to produce per-(digit, block) global offsets.
-  3. **Scatter** — each block ranks its keys via `block.radix_rank_match_atomic_or` (wave32 + wave64 clean), looks up the per-(digit, block) global offset from the scan output, and scatters keys (and values, if provided) to the destination buffer.
+  1. **Histogram** - every block computes its per-digit count into shared memory, then publishes the 256-bin tile histogram to the global `Field(u32)` scratch (digit-major layout: `tile_histograms[d * num_blocks + b]`).
+  2. **Scan** - in-place exclusive scan over the flat tile_histograms buffer. The digit-major layout makes a single 1-D scan enough to produce per-(digit, block) global offsets.
+  3. **Scatter** - each block ranks its keys via `block.radix_rank_match_atomic_or` (wave32 + wave64 clean), looks up the per-(digit, block) global offset from the scan output, and scatters keys (and values, if provided) to the destination buffer.
 - After each pass we swap `keys` ↔ `tmp_keys`. Four passes is even, so the sorted keys end up back in `keys`.
-- `i32` and `f32` keys are mapped to a sortable `u32` representation before the first pass and mapped back after the last pass via in-place "twiddle" kernels (`i32`: XOR sign bit; `f32`: flip sign bit on positives, flip all bits on negatives — the standard sortable-key transform).
+- `i32` and `f32` keys are mapped to a sortable `u32` representation before the first pass and mapped back after the last pass via in-place "twiddle" kernels (`i32`: XOR sign bit; `f32`: flip sign bit on positives, flip all bits on negatives - the standard sortable-key transform).
 
 Scratch budget: `num_blocks * 256 + ...` `u32` slots per pass (re-used across passes), where `num_blocks = ceil(N / 256)`. The default 1 MB scratch budget covers `N` up to **≈ 260_000**. For `N = 1M` (qipc's hot path), raise the budget to **5 MB** before any algorithm runs:
 
@@ -242,7 +242,7 @@ Constraints:
 - **f32 non-associativity:** the order of additions inside a run is set by hardware atomic ordering, not host order, so `f32` results are *not* bitwise-equal to a serial scan. Tests tolerate a small relative error.
 - **NaN handling (f32 keys):** `NaN != NaN` is true, so each NaN-keyed element becomes its own run. Consistent with treating NaN as "different from everything", which matches the run-length-encoding spirit.
 
-Algorithm: scan + scatter + atomic_add — no segmented-scan primitive needed.
+Algorithm: scan + scatter + atomic_add - no segmented-scan primitive needed.
 
 1. **Head-flag pass.** `head_flags[i] = 1` if `i == 0` or `keys[i] != keys[i-1]`, else `0`. Written to the shared `Field(u32)` scratch (bit-cast from `i32`).
 2. **In-place exclusive scan** of `head_flags` (using the same three-pass internals as `device_exclusive_scan_add`). After this, `scratch[i] = sum(head_flags[0:i])`.
@@ -256,7 +256,7 @@ Scratch budget: `~1.004 * N` u32 slots. The default 1 MB scratch covers `N` up t
 
 > **Deprecated.** New code should call `qd.algorithms.device_radix_sort(keys, tmp_keys=..., values=..., tmp_values=...)` instead. `device_radix_sort` is asymptotically `O(N log_radix N)` rather than `O(N log² N)`, is **stable** (odd-even merge sort is not), supports `u32` / `i32` / `f32` keys across CUDA / AMDGPU / Vulkan / Metal, and accepts `qd.field`, `qd.ndarray`, and `qd.Tensor` (`parallel_sort` is field-only). The only thing `parallel_sort` is competitive on is very small N (≲ 4K); even there the radix path is comparable on modern hardware. To migrate, allocate a `tmp_keys` field of the same shape and dtype as `keys`, then call `device_radix_sort`. `parallel_sort` is kept for one release cycle for backward compat and will be removed thereafter.
 
-In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `qd.field` — `parallel_sort` reaches into `snode.ptr.offset` internally, so `ndarray` is **not** supported and will fail at compile time with an `AttributeError`.
+In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `qd.field` - `parallel_sort` reaches into `snode.ptr.offset` internally, so `ndarray` is **not** supported and will fail at compile time with an `AttributeError`.
 
 ```python
 import quadrants as qd
@@ -273,8 +273,8 @@ qd.algorithms.parallel_sort(keys, vals)
 
 - **Algorithm.** Batcher's odd-even merge sort. Time complexity `O(N log² N)`, work-efficient for small / mid-sized arrays.
 - **Key dtype.** Whatever the key field's dtype is, as long as `<` is meaningful for it (integer and float types).
-- **Stability.** Odd-even merge sort is *not* a stable sort — equal keys may be reordered relative to one another. If stability matters, encode tiebreakers into the keys (e.g. pack the original index into the low bits).
-- **Memory.** Strictly in-place — no auxiliary buffers from the caller's perspective.
+- **Stability.** Odd-even merge sort is *not* a stable sort - equal keys may be reordered relative to one another. If stability matters, encode tiebreakers into the keys (e.g. pack the original index into the low bits).
+- **Memory.** Strictly in-place - no auxiliary buffers from the caller's perspective.
 - **Performance characteristic.** Beats radix-style sorts for small N (roughly N ≲ 4K).
 
 ### `qd.algorithms.PrefixSumExecutor`
@@ -293,11 +293,11 @@ psum.run(arr)
 
 Constructor:
 
-- `length: int` — the **fixed** number of elements the executor will scan on every `.run()` call. Internally allocates an auxiliary `qd.field(i32, shape=padded_length)` sized to the Kogge-Stone hierarchy (block size = 64).
+- `length: int` - the **fixed** number of elements the executor will scan on every `.run()` call. Internally allocates an auxiliary `qd.field(i32, shape=padded_length)` sized to the Kogge-Stone hierarchy (block size = 64).
 
 `run(input_arr)`:
 
-- `input_arr` must be a 1-D `qd.field(qd.i32, shape=(length,))` — its length must match the constructor's `length` exactly. `run()` always blits `length` elements between `input_arr` and the internal buffer; passing a shorter field results in out-of-bounds reads / writes (no runtime check today).
+- `input_arr` must be a 1-D `qd.field(qd.i32, shape=(length,))` - its length must match the constructor's `length` exactly. `run()` always blits `length` elements between `input_arr` and the internal buffer; passing a shorter field results in out-of-bounds reads / writes (no runtime check today).
 - Returns nothing; `input_arr` is overwritten with the scan result.
 
 Constraints:
@@ -364,7 +364,7 @@ The compact-output kernel reads `offsets[i]` (or `offsets[i] - flags[i]` for 0-b
 
 ## Related
 
-- `qd.simt.block.*` — the block-scope reductions and shared-memory primitives that algorithm kernels build on.
-- `qd.simt.subgroup.*` — `inclusive_add` and friends, what the per-block scan stage of `PrefixSumExecutor` actually calls.
-- `qd.simt.grid.mem_fence()` — the grid-scope memory fence that decoupled-look-back scans (a more efficient alternative to Kogge-Stone) require.
-- [parallelization](parallelization.md) — broader synchronization story, including how `qd.algorithms` operations compose with hand-written kernels.
+- `qd.simt.block.*` - the block-scope reductions and shared-memory primitives that algorithm kernels build on.
+- `qd.simt.subgroup.*` - `inclusive_add` and friends, what the per-block scan stage of `PrefixSumExecutor` actually calls.
+- `qd.simt.grid.mem_fence()` - the grid-scope memory fence that decoupled-look-back scans (a more efficient alternative to Kogge-Stone) require.
+- [parallelization](parallelization.md) - broader synchronization story, including how `qd.algorithms` operations compose with hand-written kernels.

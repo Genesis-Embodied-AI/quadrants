@@ -72,11 +72,11 @@ def ballot_first_n(predicate, n: template()):
 
     Backend lowering:
 
-    * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` — the warp is always 32 lanes, so the ``u32`` result naturally
+    * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` - the warp is always 32 lanes, so the ``u32`` result naturally
       packs every lane.
     * AMDGPU: ``llvm.amdgcn.ballot.i64`` followed by ``trunc to i32``; bits ``[32, 64)`` of the i64 (lanes 32..63 on
       wave64) are always discarded, matching the ``ballot_first_n(p, n <= 32)`` contract.  This is a workaround for
-      an LLVM AMDGPU isel bug — ``ballot.i32`` is documented as well-defined on wave64 (PR
+      an LLVM AMDGPU isel bug - ``ballot.i32`` is documented as well-defined on wave64 (PR
       https://github.com/llvm/llvm-project/pull/71556) but in practice still fails ``Cannot select`` on gfx942 in
       LLVM 20 / 22 for non-constant predicates.  See ``codegen_amdgpu.cpp`` for the full bug + workaround comment.
     * SPIR-V: ``OpGroupNonUniformBallot`` (returns a uvec4); we extract component 0 = lanes 0..31's ballot.
@@ -105,9 +105,9 @@ def ballot_full_subgroup(predicate):
 
     Backend lowering:
 
-    * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` zero-extended to ``u64`` — the warp is 32 lanes so the high half
+    * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` zero-extended to ``u64`` - the warp is 32 lanes so the high half
       is always zero.
-    * AMDGPU: ``llvm.amdgcn.ballot.i64`` — returns the full 64-bit ballot on wave64; on wave32 the AMDGPU backend
+    * AMDGPU: ``llvm.amdgcn.ballot.i64`` - returns the full 64-bit ballot on wave64; on wave32 the AMDGPU backend
       lowers it to the wave32 ballot zero-extended to 64 bits, so the API stays uniform across wavefront modes.  The
       i64 form selects cleanly in current LLVM (unlike the i32 form's isel bug noted in ``ballot_first_n``); see
       https://github.com/llvm/llvm-project/pull/71556 and ``codegen_amdgpu.cpp`` for the full background.
@@ -155,7 +155,7 @@ def all_true(predicate, log2_size: template()):
     of the group iff every lane in the group has a non-zero ``predicate``, else ``0``.
 
     Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
-    on AMDGPU — wave64 is forced on every AMDGPU target).  ``log2_size`` is a compile-time template; the body is fully
+    on AMDGPU - wave64 is forced on every AMDGPU target).  ``log2_size`` is a compile-time template; the body is fully
     unrolled.
     """
     p = i32(predicate != 0)
@@ -220,7 +220,7 @@ def broadcast(value, index):
 
 @func
 def lanemask_lt(lane_id):
-    """Bitmask of lanes strictly below ``lane_id`` — bit ``i`` is set iff ``i < lane_id``.
+    """Bitmask of lanes strictly below ``lane_id`` - bit ``i`` is set iff ``i < lane_id``.
 
     Pass ``invocation_id()`` for the classic CUDA ``__lanemask_lt()`` (current lane's mask).  Equivalent to
     ``(u32(1) << u32(lane_id)) - u32(1)``; inlined at compile time into 1 shift + 1 subtract.
@@ -232,7 +232,7 @@ def lanemask_lt(lane_id):
 
 @func
 def lanemask_le(lane_id):
-    """Bitmask of lanes ``<= lane_id`` — bit ``i`` is set iff ``i <= lane_id``.
+    """Bitmask of lanes ``<= lane_id`` - bit ``i`` is set iff ``i <= lane_id``.
 
     Equivalent to ``lanemask_lt(lane_id) | lanemask_eq(lane_id)``.  See `lanemask_lt` for the contract.
     """
@@ -242,7 +242,7 @@ def lanemask_le(lane_id):
 
 @func
 def lanemask_eq(lane_id):
-    """Bitmask with exactly one bit set at ``lane_id`` — equivalent to ``u32(1) << u32(lane_id)``.
+    """Bitmask with exactly one bit set at ``lane_id`` - equivalent to ``u32(1) << u32(lane_id)``.
 
     See `lanemask_lt` for the contract.
     """
@@ -251,7 +251,7 @@ def lanemask_eq(lane_id):
 
 @func
 def lanemask_gt(lane_id):
-    """Bitmask of lanes strictly above ``lane_id`` — bit ``i`` is set iff ``i > lane_id``.
+    """Bitmask of lanes strictly above ``lane_id`` - bit ``i`` is set iff ``i > lane_id``.
 
     Equivalent to ``~lanemask_le(lane_id)``.  See `lanemask_lt` for the contract.
     """
@@ -261,7 +261,7 @@ def lanemask_gt(lane_id):
 
 @func
 def lanemask_ge(lane_id):
-    """Bitmask of lanes ``>= lane_id`` — bit ``i`` is set iff ``i >= lane_id``.
+    """Bitmask of lanes ``>= lane_id`` - bit ``i`` is set iff ``i >= lane_id``.
 
     Equivalent to ``~lanemask_lt(lane_id)``.  See `lanemask_lt` for the contract.
     """
@@ -341,7 +341,7 @@ def reduce_add(value, log2_size: template()):
 
     The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.
     Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
-    (32 on CUDA / Metal, 64 on AMDGPU — wave64 is forced on every AMDGPU target).
+    (32 on CUDA / Metal, 64 on AMDGPU - wave64 is forced on every AMDGPU target).
 
     ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
     shuffle+add operations in the calling kernel's IR.
@@ -450,7 +450,7 @@ def reduce_all_max(value, log2_size: template()):
 # at ``group_base`` to guarantee a non-zero ``lower``.  We work in half-local 32-lane coordinates so the bit-mask
 # arithmetic stays in u32 even on wave64; ``2**log2_size <= 32`` guarantees segments never cross a half boundary, so
 # half-local distance equals absolute distance and the downstream ``shuffle_up`` partners stay in-half.  Cost: 1
-# ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` ops — the same shape as `inclusive_add` / `inclusive_min` /
+# ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` ops - the same shape as `inclusive_add` / `inclusive_min` /
 # `inclusive_max`, plus a single-instruction setup.
 #
 # No identity argument is required (unlike `exclusive_min` / `exclusive_max`) because the per-lane ``distance >=
@@ -460,14 +460,14 @@ def reduce_all_max(value, log2_size: template()):
 
 @func
 def _segment_head_distance(head_flag, log2_size: template()):
-    """Compute ``lane - segment_head`` — how many lanes the current lane sits past its segment head, scoped to
+    """Compute ``lane - segment_head`` - how many lanes the current lane sits past its segment head, scoped to
     ``2**log2_size`` lanes.  Returns ``0`` at the segment head, ``1, 2, ...`` for later lanes within the segment.
 
     Shared by `segmented_reduce_add` / `_min` / `_max`; see the module-level note for the algorithm.
 
     Two compile-time-selected paths:
 
-    * **``log2_size <= 5`` (segments fit in a single 32-lane half)** — u32-bitmask path.  Pulls a u64
+    * **``log2_size <= 5`` (segments fit in a single 32-lane half)** - u32-bitmask path.  Pulls a u64
       ``ballot_full_subgroup``, shifts the relevant 32-lane half down to bits 0..31, then runs the bit-mask algorithm in
       half-local lane coordinates.  Half-local ``distance`` equals absolute ``distance`` because both ``lane`` and the
       recovered ``segment_head`` are offset by the same ``half_base``, so the downstream ``distance >= offset`` guard
@@ -476,7 +476,7 @@ def _segment_head_distance(head_flag, log2_size: template()):
       compiles to identical IR to the historical wave32-only impl), so backends with ``group_size() == 32`` see no perf
       regression from supporting wave64 here.
 
-    * **``log2_size == 6`` (full-wave64 segments, only reachable on AMDGPU)** — u64-bitmask path.  Segments span all 64
+    * **``log2_size == 6`` (full-wave64 segments, only reachable on AMDGPU)** - u64-bitmask path.  Segments span all 64
       lanes so we need the full ``ballot_full_subgroup`` u64 mask and a ``clz(u64)``.  Costs one extra ``u64`` shift +
       ``u64`` clz vs the u32 path but avoids the half-local split and stays in absolute lane coordinates throughout.
       Gated by ``impl.static(log2_size <= 5)`` so this entire path is dead-code-eliminated at compile time on every
@@ -494,7 +494,7 @@ def _segment_head_distance(head_flag, log2_size: template()):
         # the truncating cast to u32 then drops everything above bit 31.  On wave32 ``half_base`` is always 0 and the
         # high 32 bits of ``full_mask`` are zero, so this is a no-op shift + truncate (LLVM folds it).
         head_mask = u32(full_mask >> u64(half_base))
-        # Half-local lane index — always in ``[0, 32)``, so all the u32 shifts below are well-defined.
+        # Half-local lane index - always in ``[0, 32)``, so all the u32 shifts below are well-defined.
         lane_in_half = i32(lane) - i32(half_base)
         group_base = u32(lane_in_half) & u32(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFF))
         bits_in_group = u32(impl.static((2 ** (1 << log2_size) - 1) & 0xFFFFFFFF))
@@ -514,7 +514,7 @@ def _segment_head_distance(head_flag, log2_size: template()):
     # bitmask.  The implicit-head bit is injected at the segment's group base (always 0 on the only
     # wave64-and-log2_size-6 configuration), and we use ``clz(u64)`` for the segment head.  Quadrants pins AMDGPU to
     # wave64 so this branch is only reachable when ``group_size() == 64``; on every other backend ``log2_size == 6``
-    # violates the documented caller contract (``2**log2_size <= group_size()``) — checked by the ``static_assert`` in
+    # violates the documented caller contract (``2**log2_size <= group_size()``) - checked by the ``static_assert`` in
     # ``segmented_reduce_*``.
     bits_in_group = u64(impl.static(((1 << (1 << log2_size)) - 1) & 0xFFFFFFFFFFFFFFFF))
     group_base = u64(lane) & u64(impl.static(~((1 << log2_size) - 1) & 0xFFFFFFFFFFFFFFFF))
@@ -649,7 +649,7 @@ def _inclusive_scan(value, op: template(), log2_size: template()):
     groups smaller than the full subgroup compose correctly when ``log2_size < log2(group_size)``.
 
     Note: ``qd.select`` cannot be used here instead of ``if`` because ``OpSelect`` on MoltenVK / Metal miscompiles when
-    one operand is an f32 produced by a shuffle intrinsic — the select silently returns the false-branch value
+    one operand is an f32 produced by a shuffle intrinsic - the select silently returns the false-branch value
     regardless of the condition.  The ``if`` form works correctly on its own.
     """
     lane_in_group = invocation_id() & impl.static((1 << log2_size) - 1)
@@ -667,7 +667,7 @@ def inclusive_add(value, log2_size: template()):
 
     Lane ``i`` within each group of ``2**log2_size`` lanes returns ``v[group_start] + v[group_start + 1] + ... + v[i]``.
     Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
-    on AMDGPU — wave64 is forced on every AMDGPU target).
+    on AMDGPU - wave64 is forced on every AMDGPU target).
     """
     return _inclusive_scan(value, _bin_add, log2_size)
 
@@ -839,7 +839,7 @@ def shuffle_down(value, offset):
 
 # Whole-subgroup convenience wrappers.  See the ``_full`` variants header for the design rationale; each one is a
 # one-liner that picks ``log2_size = log2_group_size()`` so the call covers every lane in the active subgroup.  Kept
-# as plain Python functions so the ``log2_group_size()`` int is resolved at trace time and flows into the base func's
+# as plain Python functions so the ``log2_group_size()`` int is resolved at compile time and flows into the base func's
 # ``template()`` argument.
 
 
@@ -959,7 +959,7 @@ def exclusive_xor_full(value):
 
 
 def segmented_reduce_add_full(value, head_flag):
-    """``segmented_reduce_add`` over the entire subgroup (``log2_size = log2_group_size()`` — 5 on wave32 backends, 6 on AMDGPU)."""
+    """``segmented_reduce_add`` over the entire subgroup (``log2_size = log2_group_size()`` - 5 on wave32 backends, 6 on AMDGPU)."""
     return segmented_reduce_add(value, head_flag, log2_group_size())
 
 

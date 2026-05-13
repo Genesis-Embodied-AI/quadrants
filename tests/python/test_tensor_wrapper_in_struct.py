@@ -84,7 +84,7 @@ def test_dataclass_struct_with_wrapper_field_kernel_runs(layout):
 # Mirrors the Genesis field-backend struct shape (``DATA_ORIENTED = qd.data_oriented`` with kernel arg
 # ``state: qd.template()``). The kernel body resolves ``state.a`` at AST-build time via ``build_Attribute``; without
 # the wrapper-unwrap there ``state.a[i, j]`` would land in ``impl.subscript`` with a Python wrapper that the IR layer
-# doesn't understand (``__getitem__ cannot be called in Quadrants-scope``). Field-backend only — see module docstring.
+# doesn't understand (``__getitem__ cannot be called in Quadrants-scope``). Field-backend only - see module docstring.
 # ----------------------------------------------------------------------------
 
 
@@ -109,7 +109,7 @@ def test_data_oriented_struct_with_wrapper_field_kernel_runs(layout):
 
 
 # ----------------------------------------------------------------------------
-# Mixed bare-impl + wrapper struct fields. Confirms the in-struct unwrap is applied selectively per field — bare impls
+# Mixed bare-impl + wrapper struct fields. Confirms the in-struct unwrap is applied selectively per field - bare impls
 # pass straight through (no double-unwrap), wrappers are see-through. Genesis Phase 1 only migrates a subset (Tier-1)
 # of struct fields; the rest stay on bare ``V``, so the mixed-shape case is the live one. Ndarray-only: same
 # constraint as repro 1.
@@ -148,7 +148,7 @@ def test_mixed_bare_and_wrapper_struct_fields():
 # for the whole call. Following the harness used by ``test_src_ll_cache_arg_warnings``: capfd + ``@qd.pure`` makes
 # the warning observable end-to-end.
 #
-# Ndarray-only — fastcache exercises the dataclass walker (``dataclass_to_repr``) for this struct shape; the
+# Ndarray-only - fastcache exercises the dataclass walker (``dataclass_to_repr``) for this struct shape; the
 # data_oriented walker has its own per-field code path which is exercised transitively by the dataclass test via the
 # same ``stringify_obj_type`` recursion.
 # ----------------------------------------------------------------------------
@@ -186,7 +186,7 @@ def test_struct_wrapper_field_does_not_invalidate_fastcache(capfd):
 # ----------------------------------------------------------------------------
 # JIT cache: wrapper-in-struct shares a cache entry with bare-in-struct.
 #
-# A wrapper passed as a struct field must dispatch the same compiled kernel as the bare impl in the same struct slot —
+# A wrapper passed as a struct field must dispatch the same compiled kernel as the bare impl in the same struct slot -
 # otherwise we'd fragment the JIT cache per call. Struct-field analog of
 # ``test_kernel_cache_no_fragmentation_under_wrapping`` from ``test_tensor_wrapper_kernel.py``. Ndarray-only: same
 # reason as repro 1.

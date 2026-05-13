@@ -4,7 +4,7 @@
 
 ## Basic usage
 
-Define a meta-function with `@qd.perf_dispatch`. The function body should be empty — it serves only as a prototype declaring the signature and geometry hash:
+Define a meta-function with `@qd.perf_dispatch`. The function body should be empty - it serves only as a prototype declaring the signature and geometry hash:
 
 ```python
 @qd.perf_dispatch(get_geometry_hash=lambda a, b: hash(a.shape + b.shape))
@@ -47,7 +47,7 @@ When registering a `@qd.kernel`, the `@my_op.register` decorator must be the **t
 @qd.kernel
 def impl(...) -> None: ...
 
-# Wrong — will raise QuadrantsSyntaxError
+# Wrong - will raise QuadrantsSyntaxError
 @qd.kernel
 @my_op.register
 def impl(...) -> None: ...
@@ -111,7 +111,7 @@ def my_op(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]): ...
 
 Guidelines for `get_geometry_hash`:
 
-- Return a constant (e.g. `0`) if all inputs have the same performance characteristics — a single winner will be chosen.
+- Return a constant (e.g. `0`) if all inputs have the same performance characteristics - a single winner will be chosen.
 - Hash input shapes when different shapes may favor different implementations.
 - **Avoid reading GPU data** in the hash function, as this creates a GPU sync point and will severely degrade performance. Prefer metadata like `.shape` which is available on the CPU.
 
@@ -187,7 +187,7 @@ If the requested implementation name doesn't match any registered function, a wa
 
 ## Important notes
 
-- All registered implementations **must produce identical results**, including side effects. `perf_dispatch` does not verify this — incorrect results will be silently returned if implementations disagree.
+- All registered implementations **must produce identical results**, including side effects. `perf_dispatch` does not verify this - incorrect results will be silently returned if implementations disagree.
 - Only one implementation runs per call. Implementations do not need to be idempotent.
 - `perf_dispatch` is **not thread-safe**. Do not call the same meta-function concurrently from multiple threads.
 - Set `QD_PERFDISPATCH_PRINT_DEBUG=1` to print debug messages showing which implementation was registered and which was selected.

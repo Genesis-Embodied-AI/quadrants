@@ -22,7 +22,7 @@ Total scratch usage at ``N = 1M`` and ``BLOCK_DIM = 256``: ``B0 = 4096`` plus
 ``B1 = 16`` u32 slots = 4112 slots = ~16 KB, well under the 1 MB default.
 
 The ``PrefixSumExecutor`` class in ``_algorithms.py`` predates this work; it is kept for backward compat. The new
-functional API is preferred for new code — see ``docs/source/user_guide/algorithms.md``.
+functional API is preferred for new code - see ``docs/source/user_guide/algorithms.md``.
 """
 
 from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
@@ -307,7 +307,7 @@ def device_exclusive_scan_min(input, identity, *, out):  # pylint: disable=redef
 
     Args:
         input: see ``device_exclusive_scan_add``.
-        identity: the monoid identity for ``min`` over ``input.dtype`` — i.e. a value ``e`` such that
+        identity: the monoid identity for ``min`` over ``input.dtype`` - i.e. a value ``e`` such that
             ``min(e, x) == x`` for every ``x`` in the dtype (``math.inf`` for ``f32``, ``2**31 - 1`` for ``i32``,
             ``2**32 - 1`` for ``u32``). Mandatory: no portable type-extreme is derivable from a value alone.
         out: see ``device_exclusive_scan_add``.

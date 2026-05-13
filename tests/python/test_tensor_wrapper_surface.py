@@ -2,7 +2,7 @@
 
 Pins the wrapper behavior the user-facing factory relies on:
 
-- Interop forwards — ``to_numpy``/``from_numpy``/``to_torch``/``from_torch``/``to_dlpack``/``fill``/``copy_from`` all
+- Interop forwards - ``to_numpy``/``from_numpy``/``to_torch``/``from_torch``/``to_dlpack``/``fill``/``copy_from`` all
   produce / consume canonical views via the wrapper, on both backends, at every layout.
 - Pickle via ``__reduce__`` round-trips symmetrically on both backends (the pre-existing ``Field`` asymmetry is closed
   *at the wrapper layer* without touching the upstream ``Field`` type).

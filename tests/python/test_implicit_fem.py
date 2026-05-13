@@ -5,7 +5,7 @@ import quadrants as qd
 from tests import test_utils
 
 
-# `SparseMatrixBuilder` below is only wired up for x64/arm64/cuda — see
+# `SparseMatrixBuilder` below is only wired up for x64/arm64/cuda - see
 # `python/quadrants/linalg/sparse_matrix.py`. amdgpu, vulkan and metal raise
 # `QuadrantsRuntimeError("SparseMatrix only supports CPU and CUDA for now.")`.
 @test_utils.test(arch=[qd.cpu, qd.cuda])
