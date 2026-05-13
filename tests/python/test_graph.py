@@ -15,8 +15,10 @@ def _graph_used():
     return impl.get_runtime().prog.get_graph_cache_used_on_last_call()
 
 
-def _on_cuda():
-    return impl.current_cfg().arch == qd.cuda
+def _platform_supports_graph():
+    """Backends with a real graph cache (CUDA, AMDGPU). Other backends ignore graph=True."""
+    arch = impl.current_cfg().arch
+    return arch == qd.cuda or arch == qd.amdgpu
 
 
 def _num_offloaded_tasks():
@@ -31,7 +33,7 @@ def _graph_num_nodes():
 @test_utils.test()
 def test_graph_two_loops(tensor_type):
     """A kernel with two top-level for loops should be fused into a CUDA graph."""
-    platform_supports_graph = _on_cuda()
+    platform_supports_graph = _platform_supports_graph()
     n = 1024
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
@@ -70,7 +72,7 @@ def test_graph_two_loops(tensor_type):
 @test_utils.test()
 def test_graph_three_loops(tensor_type):
     """A kernel with three top-level for loops."""
-    platform_supports_graph = _on_cuda()
+    platform_supports_graph = _platform_supports_graph()
     n = 512
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
@@ -120,7 +122,7 @@ def test_graph_three_loops(tensor_type):
 @test_utils.test()
 def test_graph_multi_func(tensor_type):
     """A kernel calling three funcs with 2, 4, and 3 top-level for loops."""
-    platform_supports_graph = _on_cuda()
+    platform_supports_graph = _platform_supports_graph()
     n = 256
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
@@ -232,7 +234,7 @@ def test_no_graph_annotation(tensor_type):
 @test_utils.test()
 def test_graph_changed_args(tensor_type):
     """Graph should produce correct results when called with different tensors."""
-    platform_supports_graph = _on_cuda()
+    platform_supports_graph = _platform_supports_graph()
     n = 256
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
@@ -297,7 +299,7 @@ def test_graph_different_sizes(tensor_type):
     For fields, different-sized fields are separate template specializations,
     so each gets its own graph cache entry.
     """
-    platform_supports_graph = _on_cuda()
+    platform_supports_graph = _platform_supports_graph()
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
@@ -340,7 +342,7 @@ def test_graph_different_sizes(tensor_type):
 @test_utils.test()
 def test_graph_after_reset(tensor_type):
     """graph=True kernel must work correctly after qd.reset()."""
-    platform_supports_graph = _on_cuda()
+    platform_supports_graph = _platform_supports_graph()
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
@@ -386,7 +388,7 @@ def test_graph_after_reset(tensor_type):
 @test_utils.test()
 def test_graph_annotation_cross_platform(tensor_type):
     """graph=True should be a harmless no-op on non-CUDA backends."""
-    platform_supports_graph = _on_cuda()
+    platform_supports_graph = _platform_supports_graph()
     n = 256
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
