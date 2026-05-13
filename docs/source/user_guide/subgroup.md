@@ -19,7 +19,7 @@ The full Python API is grouped here by category. The first column lists each op,
 | `subgroup.broadcast(value, index)`          | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 | `subgroup.broadcast_first(value)`           | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 
-\* AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` are lowered through `ds_bpermute` (~50 cycle latency, LDS-routed). On wave64 a cross-half read (target lane in the other SIMD32) additionally takes one `v_permlane64_b32` plus a per-lane select — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering). These operations are added on both RDNA and CDNA. Same-half reads have no overhead vs. CUDA's `__shfl_*_sync`.
+\* AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` are lowered through `ds_bpermute` (~50 cycle latency, LDS-routed). On wave64 a cross-half read (target lane in the other SIMD32) additionally takes one `v_permlane64_b32` plus a per-lane select — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering). These operations are added on both RDNA and CDNA.
 
 `shuffle_xor` and `broadcast_first` are portable `@qd.func` wrappers on top of `shuffle` / `broadcast` (`shuffle_xor(value, mask)` ≡ `shuffle(value, lane ^ mask)`; `broadcast_first(value)` ≡ `broadcast(value, qd.u32(0))`). They inline at compile time and run wherever the underlying op runs.
 
