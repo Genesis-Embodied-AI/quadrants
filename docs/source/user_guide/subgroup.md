@@ -53,18 +53,13 @@ The `barrier()` / `memory_barrier()` / `ballot_full_subgroup()` names remain as 
 
 The two `ballot` variants are tile-less by construction: `ballot_first_n(predicate, n)` returns a `u32` covering lanes `[0, n)` (with `n` a compile-time constant `<= 32`), and `ballot(predicate)` returns a `u64` covering every lane in the subgroup (32 lanes on wave32, 64 on wave64).
 
-| Op                                      | CUDA                              | AMDGPU                | SPIR-V (Vulkan / Metal)         |
-|-----------------------------------------|-----------------------------------|-----------------------|---------------------------------|
-| `subgroup.ballot_first_n(predicate, n)` | yes                               | yes                   | yes                             |
-| `subgroup.ballot(predicate)`            | yes (u32 zext'd to u64)           | yes (wave32 / wave64) | yes (uvec4 hi:lo packed to u64) |
-| `subgroup.all_true(predicate)`          | yes (fast: maps to `__all_sync`)  | yes                   | yes                             |
-| `subgroup.any_true(predicate)`          | yes (fast: maps to `__any_sync`)  | yes                   | yes                             |
-| `subgroup.all_equal(value)`             | yes (fast: 1 shuffle + vote.all)  | yes                   | yes                             |
-| `subgroup.lanemask_lt(lane_id)`         | yes                               | yes                   | yes                             |
-| `subgroup.lanemask_le(lane_id)`         | yes                               | yes                   | yes                             |
-| `subgroup.lanemask_eq(lane_id)`         | yes                               | yes                   | yes                             |
-| `subgroup.lanemask_gt(lane_id)`         | yes                               | yes                   | yes                             |
-| `subgroup.lanemask_ge(lane_id)`         | yes                               | yes                   | yes                             |
+| Op                                            | CUDA                                  | AMDGPU                | SPIR-V (Vulkan / Metal)         |
+|-----------------------------------------------|---------------------------------------|-----------------------|---------------------------------|
+| `subgroup.ballot_first_n(predicate, n)`       | yes                                   | yes                   | yes                             |
+| `subgroup.ballot(predicate)`                  | yes (u32 zext'd to u64)               | yes (wave32 / wave64) | yes (uvec4 hi:lo packed to u64) |
+| `subgroup.{all,any}_true(predicate)`          | yes (fast: maps to `__{all,any}_sync`) | yes                   | yes                             |
+| `subgroup.all_equal(value)`                   | yes (fast: 1 shuffle + vote.all)      | yes                   | yes                             |
+| `subgroup.lanemask_{lt,le,eq,gt,ge}(lane_id)` | yes                                   | yes                   | yes                             |
 
 CUDA shortcut: `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF, p)` / `__any_sync(0xFFFFFFFF, p)` (one `vote.all` / `vote.any` instruction). The same shortcut is selected for `all_true_tiled` / `any_true_tiled` at `log2_size == 5`; partial-warp tiles (and every other backend) cleanly fall back to a portable `shuffle_xor` butterfly with no branch in the emitted IR.
 
@@ -186,34 +181,18 @@ Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_d
 
 #### Supported `_tiled` ops
 
-| Tiled op                                                       | Full-subgroup form                            | Result placement     |
-|----------------------------------------------------------------|-----------------------------------------------|----------------------|
-| `subgroup.all_true_tiled(p, log2_size)`                        | `subgroup.all_true(p)`                        | broadcast-to-all     |
-| `subgroup.any_true_tiled(p, log2_size)`                        | `subgroup.any_true(p)`                        | broadcast-to-all     |
-| `subgroup.all_equal_tiled(v, log2_size)`                       | `subgroup.all_equal(v)`                       | broadcast-to-all     |
-| `subgroup.reduce_add_tiled(v, log2_size)`                      | `subgroup.reduce_add(v)`                      | window-local lane 0  |
-| `subgroup.reduce_min_tiled(v, log2_size)`                      | `subgroup.reduce_min(v)`                      | window-local lane 0  |
-| `subgroup.reduce_max_tiled(v, log2_size)`                      | `subgroup.reduce_max(v)`                      | window-local lane 0  |
-| `subgroup.reduce_all_add_tiled(v, log2_size)`                  | `subgroup.reduce_all_add(v)`                  | broadcast-to-all     |
-| `subgroup.reduce_all_min_tiled(v, log2_size)`                  | `subgroup.reduce_all_min(v)`                  | broadcast-to-all     |
-| `subgroup.reduce_all_max_tiled(v, log2_size)`                  | `subgroup.reduce_all_max(v)`                  | broadcast-to-all     |
-| `subgroup.segmented_reduce_add_tiled(v, head_flag, log2_size)` | `subgroup.segmented_reduce_add(v, head_flag)` | broadcast-to-all     |
-| `subgroup.segmented_reduce_min_tiled(v, head_flag, log2_size)` | `subgroup.segmented_reduce_min(v, head_flag)` | broadcast-to-all     |
-| `subgroup.segmented_reduce_max_tiled(v, head_flag, log2_size)` | `subgroup.segmented_reduce_max(v, head_flag)` | broadcast-to-all     |
-| `subgroup.inclusive_add_tiled(v, log2_size)`                   | `subgroup.inclusive_add(v)`                   | broadcast-to-all     |
-| `subgroup.inclusive_mul_tiled(v, log2_size)`                   | `subgroup.inclusive_mul(v)`                   | broadcast-to-all     |
-| `subgroup.inclusive_min_tiled(v, log2_size)`                   | `subgroup.inclusive_min(v)`                   | broadcast-to-all     |
-| `subgroup.inclusive_max_tiled(v, log2_size)`                   | `subgroup.inclusive_max(v)`                   | broadcast-to-all     |
-| `subgroup.inclusive_and_tiled(v, log2_size)`                   | `subgroup.inclusive_and(v)`                   | broadcast-to-all     |
-| `subgroup.inclusive_or_tiled(v, log2_size)`                    | `subgroup.inclusive_or(v)`                    | broadcast-to-all     |
-| `subgroup.inclusive_xor_tiled(v, log2_size)`                   | `subgroup.inclusive_xor(v)`                   | broadcast-to-all     |
-| `subgroup.exclusive_add_tiled(v, log2_size)`                   | `subgroup.exclusive_add(v)`                   | broadcast-to-all     |
-| `subgroup.exclusive_mul_tiled(v, log2_size)`                   | `subgroup.exclusive_mul(v)`                   | broadcast-to-all     |
-| `subgroup.exclusive_min_tiled(v, log2_size)`                   | `subgroup.exclusive_min(v)`                   | broadcast-to-all     |
-| `subgroup.exclusive_max_tiled(v, log2_size)`                   | `subgroup.exclusive_max(v)`                   | broadcast-to-all     |
-| `subgroup.exclusive_and_tiled(v, log2_size)`                   | `subgroup.exclusive_and(v)`                   | broadcast-to-all     |
-| `subgroup.exclusive_or_tiled(v, log2_size)`                    | `subgroup.exclusive_or(v)`                    | broadcast-to-all     |
-| `subgroup.exclusive_xor_tiled(v, log2_size)`                   | `subgroup.exclusive_xor(v)`                   | broadcast-to-all     |
+| Tiled op                                                          | Full-subgroup form                               | Result placement    |
+|-------------------------------------------------------------------|--------------------------------------------------|---------------------|
+| `subgroup.{all,any}_true_tiled(p, log2_size)`                     | `subgroup.{all,any}_true(p)`                     | broadcast-to-all    |
+| `subgroup.all_equal_tiled(v, log2_size)`                          | `subgroup.all_equal(v)`                          | broadcast-to-all    |
+| `subgroup.reduce_add_tiled(v, log2_size)`                         | `subgroup.reduce_add(v)`                         | window-local lane 0 |
+| `subgroup.reduce_{min,max}_tiled(v, log2_size)`                   | `subgroup.reduce_{min,max}(v)`                   | window-local lane 0 |
+| `subgroup.reduce_all_add_tiled(v, log2_size)`                     | `subgroup.reduce_all_add(v)`                     | broadcast-to-all    |
+| `subgroup.reduce_all_{min,max}_tiled(v, log2_size)`               | `subgroup.reduce_all_{min,max}(v)`               | broadcast-to-all    |
+| `subgroup.segmented_reduce_add_tiled(v, head_flag, log2_size)`    | `subgroup.segmented_reduce_add(v, head_flag)`    | broadcast-to-all    |
+| `subgroup.segmented_reduce_{min,max}_tiled(v, head_flag, log2_size)` | `subgroup.segmented_reduce_{min,max}(v, head_flag)` | broadcast-to-all |
+| `subgroup.inclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | `subgroup.inclusive_{add,mul,min,max,and,or,xor}(v)` | broadcast-to-all |
+| `subgroup.exclusive_{add,mul,min,max,and,or,xor}_tiled(v, log2_size)` | `subgroup.exclusive_{add,mul,min,max,and,or,xor}(v)` | broadcast-to-all |
 
 - **Broadcast-to-all forms**: every lane in each window holds the per-window result. Lanes in different windows hold different results (their own window's).
 - **Window-local-lane-0 forms**: only the *window-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. Use the `reduce_all_*_tiled` counterparts if you want every lane to see its window's result.
