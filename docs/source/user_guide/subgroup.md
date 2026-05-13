@@ -19,7 +19,7 @@ The full Python API is grouped here by category. The first column lists each op,
 | `subgroup.broadcast(value, index)`          | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 | `subgroup.broadcast_first(value)`           | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 
-\* AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` are lowered through `ds_bpermute` (~50 cycle latency, LDS-routed). On wave64 a cross-half read (target lane in the other SIMD32) additionally takes one `v_permlane64_b32` plus a per-lane select — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering). Same-half reads have no overhead vs. CUDA's `__shfl_*_sync`.
+\* AMDGPU `shuffle`, `shuffle_down`, and `shuffle_up` are lowered through `ds_bpermute` (~50 cycle latency, LDS-routed). On wave64 a cross-half read (target lane in the other SIMD32) additionally takes one `v_permlane64_b32` plus a per-lane select — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering). These operations are added on both RDNA and CDNA. Same-half reads have no overhead vs. CUDA's `__shfl_*_sync`.
 
 `shuffle_xor` and `broadcast_first` are portable `@qd.func` wrappers on top of `shuffle` / `broadcast` (`shuffle_xor(value, mask)` ≡ `shuffle(value, lane ^ mask)`; `broadcast_first(value)` ≡ `broadcast(value, qd.u32(0))`). They inline at compile time and run wherever the underlying op runs.
 
@@ -61,10 +61,6 @@ Why it composes exactly: the underlying `subgroup.shuffle` / `subgroup.shuffle_d
 - **Broadcast-to-all forms** — `all_true`, `any_true`, `all_equal`, `reduce_all_add`, `reduce_all_min`, `reduce_all_max`, `inclusive_*`, `exclusive_*`, `segmented_reduce_*`: every lane in each window holds the per-window result. Lanes in different windows hold different results (their own window's).
 - **Window-local-lane-0 forms** — `reduce_add`, `reduce_min`, `reduce_max`: only the *window-local* lane 0 holds the reduction. That's lane 0 alone with `log2_size=5` on wave32, lanes 0 and 32 with `log2_size=5` on wave64, lanes 0 / 16 / 32 / 48 with `log2_size=4` on wave64, etc. Other lanes hold partial reductions and should be treated as undefined. Use `reduce_all_*` if you want every lane to see its window's result.
 
-#### Picking `log2_size` for a "full subgroup" reduction
-
-`log2_size` is compile-time and `subgroup.group_size()` / `subgroup.log2_group_size()` return compile-time Python `int`s (32/5 on CUDA / Metal / Vulkan-wave32, 64/6 on AMDGPU; see [`group_size()` / `log2_group_size()`](#group_size--log2_group_size)). The recommended pattern for a portable "operate over every lane" call is to use a [`_full` variant](#full-subgroup-_full-variants) — e.g. `subgroup.reduce_add_full(v)` — which is a one-line wrapper around `reduce_add(v, subgroup.log2_group_size())`. The `_full` form picks the right `log2_size` per backend automatically, producing exactly one reduction per AMDGPU wave64 wave and one per CUDA / wave32 warp without you having to gate on `arch`. If you specifically want two independent 32-lane reductions on AMDGPU (the "wave32-shaped" pattern), call `subgroup.reduce_add(v, 5)` directly.
-
 ### Voting and predicate ops
 
 `all_true` / `any_true` / `all_equal` take a `log2_size` template parameter and are **windowed**: they operate independently on each `2**log2_size`-aligned window that tiles the entire subgroup, broadcasting the `i32` (`0` or `1`) per-window result to every lane in that window (the broadcast-to-all forms from [How `log2_size` windowing works](#how-log2size-windowing-works)). With `log2_size = 5` on wave32 you get one vote per subgroup; on wave64 you get two independent votes (lanes 0–31 and lanes 32–63 vote separately, and lanes in each half hold their own half's result). Same shape as `reduce_all_add` / `inclusive_*` / `exclusive_*`.
@@ -76,8 +72,11 @@ The two `ballot` variants are full-subgroup only (no `log2_size` parameter): `ba
 | `subgroup.ballot_first_n(predicate, n)`     | yes           | yes    | yes                     |
 | `subgroup.ballot_full_subgroup(predicate)`  | yes (u32 zext'd to u64) | yes (wave32 / wave64) | yes (uvec4 hi:lo packed to u64) |
 | `subgroup.all_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
+| `subgroup.all_true_full(predicate)`         | yes (fast: maps to `__all_sync`) | yes | yes |
 | `subgroup.any_true(predicate, log2_size)`   | yes (fast at `log2_size==5`) | yes | yes |
+| `subgroup.any_true_full(predicate)`         | yes (fast: maps to `__any_sync`) | yes | yes |
 | `subgroup.all_equal(value, log2_size)`      | yes (fast at `log2_size==5`, transitively via `all_true`) | yes | yes |
+| `subgroup.all_equal_full(value)`            | yes (fast: 1 shuffle + `vote.all`) | yes | yes |
 | `subgroup.lanemask_lt(lane_id)`             | yes           | yes    | yes                     |
 | `subgroup.lanemask_le(lane_id)`             | yes           | yes    | yes                     |
 | `subgroup.lanemask_eq(lane_id)`             | yes           | yes    | yes                     |
@@ -92,31 +91,31 @@ CUDA shortcut: when `log2_size == 5` (full warp), `all_true` / `any_true` lower 
 
 `reduce_add`, `reduce_all_add`, and all seven `inclusive_*` and `exclusive_*` ops take a `log2_size` parameter and are **windowed**: each op operates independently on every `2**log2_size`-aligned window that tiles the entire subgroup (see [How `log2_size` windowing works](#how-log2size-windowing-works)). `reduce_add` is a window-local-lane-0 form (only the window's first lane holds the reduction; other lanes are undefined); `reduce_all_add` / `inclusive_*` / `exclusive_*` are broadcast-to-all forms (every lane in each window holds that window's per-window scan result). With `log2_size = 5` on wave32 you get one reduction / scan per subgroup; with `log2_size = 5` on wave64 you get two independent reductions / scans (lanes 0–31 and lanes 32–63 reduce / scan separately).
 
-| Op                                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                       |
-|---------------------------------------------|------|--------|-------------------------|------------------------------|
-| `subgroup.reduce_add(v, log2_size)`         | yes  | yes\*  | yes                     | any type supporting `+`      |
-| `subgroup.reduce_all_add(v, log2_size)`     | yes  | yes    | yes                     | any type supporting `+`      |
-| `subgroup.reduce_min(v, log2_size)`         | yes  | yes\*  | yes                     | integer + float              |
-| `subgroup.reduce_max(v, log2_size)`         | yes  | yes\*  | yes                     | integer + float              |
-| `subgroup.reduce_all_min(v, log2_size)`     | yes  | yes    | yes                     | integer + float              |
-| `subgroup.reduce_all_max(v, log2_size)`     | yes  | yes    | yes                     | integer + float              |
-| `subgroup.segmented_reduce_add(v, head_flag, log2_size)` | yes | yes\* | yes              | any type supporting `+`      |
-| `subgroup.segmented_reduce_min(v, head_flag, log2_size)` | yes | yes\* | yes              | integer + float              |
-| `subgroup.segmented_reduce_max(v, head_flag, log2_size)` | yes | yes\* | yes              | integer + float              |
-| `subgroup.inclusive_add(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
-| `subgroup.inclusive_mul(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
-| `subgroup.inclusive_min(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
-| `subgroup.inclusive_max(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
-| `subgroup.inclusive_and(v, log2_size)`      | yes  | yes\*  | yes                     | integer                      |
-| `subgroup.inclusive_or(v, log2_size)`       | yes  | yes\*  | yes                     | integer                      |
-| `subgroup.inclusive_xor(v, log2_size)`      | yes  | yes\*  | yes                     | integer                      |
-| `subgroup.exclusive_add(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
-| `subgroup.exclusive_mul(v, log2_size)`      | yes  | yes\*  | yes                     | integer + float             |
-| `subgroup.exclusive_min(v, log2_size, identity)` | yes | yes\* | yes                  | integer + float             |
-| `subgroup.exclusive_max(v, log2_size, identity)` | yes | yes\* | yes                  | integer + float             |
-| `subgroup.exclusive_and(v, log2_size)`      | yes  | yes\*  | yes                     | integer                      |
-| `subgroup.exclusive_or(v, log2_size)`       | yes  | yes\*  | yes                     | integer                      |
-| `subgroup.exclusive_xor(v, log2_size)`      | yes  | yes\*  | yes                     | integer                      |
+| Op                                          | `_full` variant                          | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                       |
+|---------------------------------------------|------------------------------------------|------|--------|-------------------------|------------------------------|
+| `subgroup.reduce_add(v, log2_size)`         | `subgroup.reduce_add_full(v)`            | yes  | yes\*  | yes                     | any type supporting `+`      |
+| `subgroup.reduce_all_add(v, log2_size)`     | `subgroup.reduce_all_add_full(v)`        | yes  | yes    | yes                     | any type supporting `+`      |
+| `subgroup.reduce_min(v, log2_size)`         | `subgroup.reduce_min_full(v)`            | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.reduce_max(v, log2_size)`         | `subgroup.reduce_max_full(v)`            | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.reduce_all_min(v, log2_size)`     | `subgroup.reduce_all_min_full(v)`        | yes  | yes    | yes                     | integer + float              |
+| `subgroup.reduce_all_max(v, log2_size)`     | `subgroup.reduce_all_max_full(v)`        | yes  | yes    | yes                     | integer + float              |
+| `subgroup.segmented_reduce_add(v, head_flag, log2_size)` | `subgroup.segmented_reduce_add_full(v, head_flag)` | yes | yes\* | yes      | any type supporting `+`      |
+| `subgroup.segmented_reduce_min(v, head_flag, log2_size)` | `subgroup.segmented_reduce_min_full(v, head_flag)` | yes | yes\* | yes      | integer + float              |
+| `subgroup.segmented_reduce_max(v, head_flag, log2_size)` | `subgroup.segmented_reduce_max_full(v, head_flag)` | yes | yes\* | yes      | integer + float              |
+| `subgroup.inclusive_add(v, log2_size)`      | `subgroup.inclusive_add_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.inclusive_mul(v, log2_size)`      | `subgroup.inclusive_mul_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.inclusive_min(v, log2_size)`      | `subgroup.inclusive_min_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.inclusive_max(v, log2_size)`      | `subgroup.inclusive_max_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.inclusive_and(v, log2_size)`      | `subgroup.inclusive_and_full(v)`         | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.inclusive_or(v, log2_size)`       | `subgroup.inclusive_or_full(v)`          | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.inclusive_xor(v, log2_size)`      | `subgroup.inclusive_xor_full(v)`         | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.exclusive_add(v, log2_size)`      | `subgroup.exclusive_add_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.exclusive_mul(v, log2_size)`      | `subgroup.exclusive_mul_full(v)`         | yes  | yes\*  | yes                     | integer + float              |
+| `subgroup.exclusive_min(v, log2_size, identity)` | `subgroup.exclusive_min_full(v, identity)` | yes | yes\* | yes                | integer + float              |
+| `subgroup.exclusive_max(v, log2_size, identity)` | `subgroup.exclusive_max_full(v, identity)` | yes | yes\* | yes                | integer + float              |
+| `subgroup.exclusive_and(v, log2_size)`      | `subgroup.exclusive_and_full(v)`         | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.exclusive_or(v, log2_size)`       | `subgroup.exclusive_or_full(v)`          | yes  | yes\*  | yes                     | integer                      |
+| `subgroup.exclusive_xor(v, log2_size)`      | `subgroup.exclusive_xor_full(v)`         | yes  | yes\*  | yes                     | integer                      |
 
 The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add(value)` with no `log2_size`) have been removed in favour of the portable sized API. For reductions other than the ones listed above, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern as `reduce_add` / `reduce_all_add`.
 
@@ -136,14 +135,14 @@ Each lane returns the `value` held by the lane whose subgroup-local id equals `i
 Lane `i` returns the `value` held by lane `i + offset`. Lanes near the top of the subgroup — where `i + offset >= subgroup_size` — receive an implementation-defined value (typically their own `value`), so reduction patterns must only trust lane 0's final result, or mask out the out-of-range lanes.
 
 - `value` and `offset` dtypes: same as `shuffle` above; `offset` is a `u32`.
-- Maps to `__shfl_down_sync` on CUDA and `OpGroupNonUniformShuffleDown` on SPIR-V. On AMDGPU it is emulated with `ds_bpermute`; wave64 cross-half offsets (any `offset >= 32` for low-half lanes, or any non-zero `offset` for high-half lanes that lands across the SIMD32 boundary) go through the same `permlane64 + ds_bpermute + select` lowering as `shuffle` — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering).
+- Maps to `__shfl_down_sync` on CUDA and `OpGroupNonUniformShuffleDown` on SPIR-V. On AMDGPU it is emulated with `ds_bpermute`; wave64 cross-half offsets (any `offset >= 32` for low-half lanes, or any non-zero `offset` for high-half lanes that lands across the SIMD32 boundary) go through the same `permlane64 + ds_bpermute + select` lowering as `shuffle` — see [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering). These operations are added on both RDNA and CDNA.
 
 ### `shuffle_up(value, offset)`
 
 Lane `i` returns the `value` held by lane `i - offset`. Lanes near the bottom of the subgroup — where `i - offset < 0` — receive an implementation-defined value (typically their own `value`), so the bottom `offset` lanes' results should be ignored or masked.
 
 - Same dtype rules as `shuffle` / `shuffle_down`; `offset` is a `u32`.
-- Maps to `__shfl_up_sync` on CUDA and `OpGroupNonUniformShuffleUp` on SPIR-V. On AMDGPU it is emulated with `ds_bpermute((lane - offset) * 4, value)`; wave64 cross-half cases go through the [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering) (same `permlane64 + ds_bpermute + select` sequence as `shuffle` / `shuffle_down`).
+- Maps to `__shfl_up_sync` on CUDA and `OpGroupNonUniformShuffleUp` on SPIR-V. On AMDGPU it is emulated with `ds_bpermute((lane - offset) * 4, value)`; wave64 cross-half cases go through the [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering) (same `permlane64 + ds_bpermute + select` sequence as `shuffle` / `shuffle_down`). These operations are added on both RDNA and CDNA.
 
 ### `shuffle_xor(value, mask)`
 
@@ -158,7 +157,7 @@ Lane `i` returns the `value` held by lane `i ^ mask`. Convenient for butterfly p
 Every lane in the subgroup returns the `value` held by the lane whose subgroup-local id equals `index`. Expresses intent ("read lane `index`") more directly than `shuffle(value, index)` and on backends with a dedicated broadcast may map to a cheaper instruction.
 
 - Same dtype rules as `shuffle`.
-- Maps to `__shfl_sync` on CUDA, `ds_bpermute` (plus a `permlane64`-driven cross-half select on wave64) on AMDGPU, and `OpGroupNonUniformBroadcast` on SPIR-V. See [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering) for the wave64 mechanics.
+- Maps to `__shfl_sync` on CUDA, `ds_bpermute` (plus a `permlane64`-driven cross-half select on wave64) on AMDGPU, and `OpGroupNonUniformBroadcast` on SPIR-V. See [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering) for the wave64 mechanics. These operations are added on both RDNA and CDNA.
 - **Important: on SPIR-V, `index` must be dynamically uniform** — the same value on every lane in the subgroup. Passing a per-lane varying `index` is undefined behavior, because `OpGroupNonUniformBroadcast` requires its `Id` operand to be dynamically uniform across the subgroup. On CUDA / AMDGPU, `index` may vary per lane and the call is identical to `shuffle(value, index)`. If you need a varying source lane, use `shuffle` directly.
 
 ### `broadcast_first(value)`
