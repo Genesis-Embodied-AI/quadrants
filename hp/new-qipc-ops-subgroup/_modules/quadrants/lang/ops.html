@@ -1889,6 +1889,104 @@
 
 
 <span class="nd">@writeback_binary</span>
+<div class="viewcode-block" id="atomic_exchange">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_exchange">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_exchange</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically swap the value of `x` with `y`, and return the old value of `x`.</span>
+
+<span class="sd">    Unlike the other `qd.atomic_*` ops, the new value of `x` does not depend on its old value: `x` is unconditionally</span>
+<span class="sd">    overwritten with `y`. Useful for lock-free hand-off / claim-a-slot patterns where you want to atomically grab</span>
+<span class="sd">    whatever was at a location while leaving a fresh value behind.</span>
+
+<span class="sd">    `x` must be a writable target, constant expressions or scalars are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input. When both are matrices they must have the same shape.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The old value of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = 7</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_exchange(x, 42)</span>
+<span class="sd">        &gt;&gt;&gt;     print(x)  # 42, the new value of x</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # 7,  the old value of x</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_exchange(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">y</span>
+        <span class="k">return</span> <span class="n">old</span>
+
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_xchg</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
+
+
+
+<div class="viewcode-block" id="atomic_cas">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_cas">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_cas</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">expected</span><span class="p">,</span> <span class="n">desired</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically compare-and-swap: if the current value of `x` equals `expected`, write `desired` into `x`.</span>
+<span class="sd">    Returns the value originally at `x` (regardless of whether the swap happened).</span>
+
+<span class="sd">    The user determines whether the swap actually fired by comparing the returned value against `expected`::</span>
+
+<span class="sd">        old = qd.atomic_cas(x, expected, desired)</span>
+<span class="sd">        success = (old == expected)</span>
+
+<span class="sd">    This matches the shape of CUDA&#39;s `atomicCAS` and SPIR-V&#39;s `OpAtomicCompareExchange`. CAS is the basic</span>
+<span class="sd">    primitive on top of which arbitrary atomic read-modify-write operations can be built with a retry loop.</span>
+
+<span class="sd">    Currently integer dtypes only -- f32 / f64 will raise a trace-time type error. `x` must be a writable</span>
+<span class="sd">    target; constant expressions or scalars are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x: the destination memory location (lvalue: field element, ndarray element, matrix slot).</span>
+<span class="sd">        expected: the value `x` is required to currently hold for the swap to fire.</span>
+<span class="sd">        desired: the value to write into `x` if `*x == expected`.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The value originally at `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def take_slot():</span>
+<span class="sd">        &gt;&gt;&gt;     # Try to claim the slot only if it is currently empty (== 0).</span>
+<span class="sd">        &gt;&gt;&gt;     old = qd.atomic_cas(slot[None], 0, my_id)</span>
+<span class="sd">        &gt;&gt;&gt;     if old == 0:</span>
+<span class="sd">        &gt;&gt;&gt;         # we won the race; the slot is ours</span>
+<span class="sd">        &gt;&gt;&gt;         ...</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">old</span> <span class="o">==</span> <span class="n">expected</span><span class="p">:</span>
+            <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">desired</span>
+        <span class="k">return</span> <span class="n">old</span>
+    <span class="c1"># Mirror @writeback_binary&#39;s Field guard: passing a raw Field (rather than `field[None]`) would otherwise</span>
+    <span class="c1"># blow up later with a confusing AttributeError on `x.ptr`. Surface a clear QuadrantsSyntaxError instead.</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+            <span class="s2">&quot;cannot use a Field directly as the first operand of &#39;atomic_cas&#39;; index it first (e.g. `field[None]`)&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_lvalue</span><span class="p">()):</span>
+        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;cannot use a non-writable target as the first operand of &#39;atomic_cas&#39;&quot;</span><span class="p">)</span>
+    <span class="n">expected_e</span> <span class="o">=</span> <span class="n">wrap_if_not_expr</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span>
+    <span class="n">desired_e</span> <span class="o">=</span> <span class="n">wrap_if_not_expr</span><span class="p">(</span><span class="n">desired</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
+        <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_cas</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">expected_e</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">desired_e</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span>
+            <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()),</span>
+        <span class="p">)</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="nd">@writeback_binary</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">assign</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
     <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">expr_assign</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">b</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
     <span class="k">return</span> <span class="n">a</span>
@@ -1976,6 +2074,8 @@
     <span class="s2">&quot;atomic_min&quot;</span><span class="p">,</span>
     <span class="s2">&quot;atomic_add&quot;</span><span class="p">,</span>
     <span class="s2">&quot;atomic_mul&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_exchange&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_cas&quot;</span><span class="p">,</span>
     <span class="s2">&quot;bit_cast&quot;</span><span class="p">,</span>
     <span class="s2">&quot;bit_shr&quot;</span><span class="p">,</span>
     <span class="s2">&quot;cast&quot;</span><span class="p">,</span>

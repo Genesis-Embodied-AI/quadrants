@@ -321,10 +321,14 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_constant_expr</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ops</span><span class="w"> </span><span class="kn">import</span> <span class="n">clz</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_numpy_type</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.annotations</span><span class="w"> </span><span class="kn">import</span> <span class="n">template</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">i32</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u64</span>
 
@@ -423,7 +427,7 @@
 <span class="sd">    result on wave64), so we shortcut and emit the ballot directly with no extra arithmetic.</span>
 
 <span class="sd">    Caller contract: uniform CF + all lanes active.  If you need a mask covering more than 32 lanes (for wave64</span>
-<span class="sd">    callers who want the full subgroup), use `ballot_full_subgroup` and check the high 32 bits.</span>
+<span class="sd">    callers who want the full subgroup), use `ballot` and check the high 32 bits.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">n</span> <span class="o">==</span> <span class="mi">32</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupBallotU32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -433,9 +437,9 @@
 
 
 
-<div class="viewcode-block" id="ballot_full_subgroup">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.ballot_full_subgroup">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">ballot_full_subgroup</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
+<div class="viewcode-block" id="ballot">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.ballot">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">ballot</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a ``u64`` bitmask covering the entire subgroup; bit ``i`` is set iff lane ``i``&#39;s ``predicate`` is</span>
 <span class="sd">    non-zero.  On wave32 backends (CUDA, RDNA wave32, most Vulkan / Metal) the high 32 bits of the result are always</span>
 <span class="sd">    zero, since lanes ``&gt;= 32`` do not exist; on wave64 backends (AMDGPU CDNA, GFX9, RDNA explicit-wave64) all 64 bits</span>
@@ -459,40 +463,69 @@
 
 
 
+<span class="n">_ballot_full_subgroup_deprecation_warned</span> <span class="o">=</span> <span class="kc">False</span>
+
+
+<div class="viewcode-block" id="ballot_full_subgroup">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.ballot_full_subgroup">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">ballot_full_subgroup</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Deprecated alias for :func:`ballot`.</span>
+
+<span class="sd">    Emits a ``DeprecationWarning`` on first use and forwards to :func:`ballot`.  Will be removed in a future</span>
+<span class="sd">    release; rename call sites to ``ballot(predicate)``.  Full-subgroup ops are unsuffixed throughout this module</span>
+<span class="sd">    (``reduce_add`` / ``all_true`` / ``inclusive_max`` / etc.); tiled variants take a ``_tiled`` suffix and an extra</span>
+<span class="sd">    ``log2_size`` template parameter.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">_ballot_full_subgroup_deprecation_warned</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_ballot_full_subgroup_deprecation_warned</span><span class="p">:</span>
+        <span class="n">_ballot_full_subgroup_deprecation_warned</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="s2">&quot;qd.simt.subgroup.ballot_full_subgroup() is deprecated; use qd.simt.subgroup.ballot() instead &quot;</span>
+            <span class="s2">&quot;(full-subgroup ops are unsuffixed; tiled forms use _tiled, e.g. reduce_add_tiled).&quot;</span><span class="p">,</span>
+            <span class="ne">DeprecationWarning</span><span class="p">,</span>
+            <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">ballot</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span></div>
+
+
+
 <span class="c1"># --- Voting / predicate ops ------------------------------------------------------------</span>
 <span class="c1">#</span>
-<span class="c1"># All three are group-scoped over ``2**log2_size`` consecutive lanes, mirror the API of ``reduce_all_add`` /</span>
+<span class="c1"># All three are group-scoped over ``2**log2_size`` consecutive lanes, mirror the API of ``reduce_all_add_tiled`` /</span>
 <span class="c1"># ``inclusive_*`` / ``exclusive_*``, and broadcast the result to every lane in the group as an ``i32`` (``0`` or ``1``).</span>
 <span class="c1">#</span>
 <span class="c1"># Backend strategy</span>
 <span class="c1"># ----------------</span>
-<span class="c1"># * On CUDA, when ``log2_size == 5`` (full warp), ``all_true`` / ``any_true`` lower to ``__all_sync(0xFFFFFFFF, p)`` /</span>
-<span class="c1">#   ``__any_sync(0xFFFFFFFF, p)`` (one ``vote.all`` / ``vote.any`` instruction).  This shortcut is selected at trace</span>
-<span class="c1">#   time via ``static()`` on ``impl.current_cfg().arch`` and on the compile-time ``log2_size`` template, so it</span>
-<span class="c1">#   collapses to a single intrinsic call in the IR with no overhead vs. handwritten CUDA.</span>
+<span class="c1"># * On CUDA, when ``log2_size == 5`` (full warp), ``all_true_tiled`` / ``any_true_tiled`` lower to</span>
+<span class="c1">#   ``__all_sync(0xFFFFFFFF, p)`` / ``__any_sync(0xFFFFFFFF, p)`` (one ``vote.all`` / ``vote.any`` instruction).  This</span>
+<span class="c1">#   shortcut is selected at compile time via ``static()`` on ``impl.current_cfg().arch`` and on the compile-time</span>
+<span class="c1">#   ``log2_size`` template, so it collapses to a single intrinsic call in the IR with no overhead vs. handwritten CUDA.</span>
 <span class="c1"># * Every other backend, and CUDA for partial-warp groups, uses a portable ``shuffle_xor`` butterfly: ``log2_size``</span>
-<span class="c1">#   shuffles + ``log2_size`` ANDs / ORs, fully unrolled into the calling kernel&#39;s IR.  Same shape as ``reduce_all_add``.</span>
-<span class="c1"># * ``all_equal`` is always implemented as ``all_true(value == broadcast_group_lane_0)``, so it inherits the CUDA</span>
-<span class="c1">#   shortcut transitively.  We don&#39;t reach for ``__match_all_sync`` because (a) it requires sm_70+, (b) it does</span>
+<span class="c1">#   shuffles + ``log2_size`` ANDs / ORs, fully unrolled into the calling kernel&#39;s IR.  Same shape as</span>
+<span class="c1">#   ``reduce_all_add_tiled``.</span>
+<span class="c1"># * ``all_equal_tiled`` is always implemented as ``all_true_tiled(value == broadcast_group_lane_0)``, so it inherits</span>
+<span class="c1">#   the CUDA shortcut transitively.  We don&#39;t reach for ``__match_all_sync`` because (a) it requires sm_70+, (b) it does</span>
 <span class="c1">#   bit-equality on floats, contradicting the SPIR-V ``OpGroupNonUniformAllEqual`` semantics this op advertises</span>
 <span class="c1">#   (``NaN != NaN``, ``+0.0 == -0.0``), and (c) the broadcast-then-AND form is only one shuffle slower while staying on</span>
 <span class="c1">#   the same code path everywhere.</span>
 
 
-<span class="c1"># --- `_full` variants ------------------------------------------------------------------</span>
+<span class="c1"># --- Full-subgroup wrappers ------------------------------------------------------------</span>
 <span class="c1">#</span>
-<span class="c1"># Every ``_full`` wrapper below is a plain Python function (not ``@qd.func``) so that ``log2_group_size()`` is evaluated</span>
-<span class="c1"># in the kernel&#39;s Python tracing pass and feeds into the base function&#39;s ``log2_size: template()`` argument as a</span>
+<span class="c1"># Every wrapper below is a plain Python function (not ``@qd.func``) so that ``log2_group_size()`` is evaluated in the</span>
+<span class="c1"># kernel&#39;s Python tracing pass and feeds into the underlying ``*_tiled`` op&#39;s ``log2_size: template()`` argument as a</span>
 <span class="c1"># compile-time ``int``.  Each wrapper compiles down to exactly the same IR as a hand-written call site that hard-codes</span>
 <span class="c1"># ``log2_size=5`` (CUDA / Metal / Vulkan-wave32) or ``log2_size=6`` (AMDGPU wave64), so there is no runtime overhead vs</span>
-<span class="c1"># the base ops.  Callers reach for ``_full`` when they want &quot;operate over the entire subgroup&quot; portably without</span>
-<span class="c1"># branching on ``group_size()`` themselves -- the common case for whole-warp reductions, broadcasts, and votes.</span>
+<span class="c1"># calling the underlying ``*_tiled`` op directly.  These are the default form for &quot;operate over the entire subgroup&quot;</span>
+<span class="c1"># portably without branching on ``group_size()`` -- the common case for whole-warp reductions, broadcasts, and votes.</span>
+<span class="c1"># Reach for the ``*_tiled`` form when you want multiple independent tiles per subgroup (e.g.</span>
+<span class="c1"># ``reduce_add_tiled(v, 4)`` to fold every 16 lanes into one).</span>
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="all_true">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.all_true">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">all_true</span><span class="p">(</span><span class="n">predicate</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="all_true_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.all_true_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">all_true_tiled</span><span class="p">(</span><span class="n">predicate</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;AND-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane</span>
 <span class="sd">    of the group iff every lane in the group has a non-zero ``predicate``, else ``0``.</span>
 
@@ -511,13 +544,13 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="any_true">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.any_true">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">any_true</span><span class="p">(</span><span class="n">predicate</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="any_true_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.any_true_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">any_true_tiled</span><span class="p">(</span><span class="n">predicate</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;OR-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane</span>
 <span class="sd">    of the group iff at least one lane in the group has a non-zero ``predicate``, else ``0``.</span>
 
-<span class="sd">    See `all_true` for the size contract.</span>
+<span class="sd">    See `all_true_tiled` for the size contract.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">p</span> <span class="o">=</span> <span class="n">i32</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">and</span> <span class="n">log2_size</span> <span class="o">==</span> <span class="mi">5</span><span class="p">):</span>
@@ -530,9 +563,9 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="all_equal">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.all_equal">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">all_equal</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="all_equal_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.all_equal_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">all_equal_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ``1`` (``i32``) on every lane in each ``2**log2_size`` group iff every lane in the group has the same</span>
 <span class="sd">    ``value``, else ``0``.</span>
 
@@ -540,14 +573,14 @@
 <span class="sd">    any ``NaN`` returns ``0``) and ``+0.0 == -0.0``, matching SPIR-V ``OpGroupNonUniformAllEqual``.  Callers wanting</span>
 <span class="sd">    bit-equality on floats should bit-cast to the same-width integer dtype before calling.</span>
 
-<span class="sd">    Implementation: each lane reads the value at the start of its group via ``shuffle``, then ``all_true`` AND-reduces</span>
-<span class="sd">    the per-lane equality bit.  Cost: one ``shuffle`` plus one ``all_true`` (one ``vote.all`` on CUDA at</span>
-<span class="sd">    ``log2_size == 5``, otherwise a ``log2_size``-deep ``shuffle_xor`` butterfly).</span>
+<span class="sd">    Implementation: each lane reads the value at the start of its group via ``shuffle``, then ``all_true_tiled``</span>
+<span class="sd">    AND-reduces the per-lane equality bit.  Cost: one ``shuffle`` plus one ``all_true_tiled`` (one ``vote.all`` on</span>
+<span class="sd">    CUDA at ``log2_size == 5``, otherwise a ``log2_size``-deep ``shuffle_xor`` butterfly).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">lane</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span>
     <span class="n">group_base</span> <span class="o">=</span> <span class="n">u32</span><span class="p">(</span><span class="n">lane</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">u32</span><span class="p">(</span><span class="o">~</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFF</span><span class="p">)</span>
     <span class="n">base</span> <span class="o">=</span> <span class="n">shuffle</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">group_base</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">all_true</span><span class="p">(</span><span class="n">i32</span><span class="p">(</span><span class="n">value</span> <span class="o">==</span> <span class="n">base</span><span class="p">),</span> <span class="n">log2_size</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">all_true_tiled</span><span class="p">(</span><span class="n">i32</span><span class="p">(</span><span class="n">value</span> <span class="o">==</span> <span class="n">base</span><span class="p">),</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
@@ -655,7 +688,7 @@
 <span class="sd">    pinned to ``+wavefrontsize64``), and the device-probed value on the SPIR-V backends (read from</span>
 <span class="sd">    ``VkPhysicalDeviceSubgroupProperties::subgroupSize`` on Vulkan, fixed at 32 on Metal). Because the return type is a</span>
 <span class="sd">    plain ``int``, the value can be used as a ``qd.template()`` argument inside ``@qd.kernel`` / ``@qd.func`` bodies ---</span>
-<span class="sd">    this is how the ``_full``-suffixed reductions (e.g. ``reduce_add_full``) pick up the right ``log2_size`` per backend</span>
+<span class="sd">    this is how the full-subgroup reductions (e.g. ``reduce_add(v)``) pick up the right ``log2_size`` per backend</span>
 <span class="sd">    without the caller having to plumb it manually.</span>
 
 <span class="sd">    For use inside ``@qd.kernel`` / ``@qd.func`` bodies: the value is folded into the kernel IR as a constant on every</span>
@@ -672,10 +705,10 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">log2_group_size</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;``log2(group_size())`` as a Python ``int``, asserting the subgroup size is a power of two.</span>
 
-<span class="sd">    Equivalent to ``int(math.log2(group_size()))`` but emits a clearer error if the device ever reports a non-power-of-two</span>
-<span class="sd">    subgroup width (no current SPIR-V driver does, but the spec allows it). Like ``group_size()`` this is a compile-time</span>
-<span class="sd">    constant on every backend --- callers feed it straight into ``qd.template()`` to pick the right ``log2_size`` for a</span>
-<span class="sd">    full-subgroup reduction (e.g. ``reduce_add(v, qd.simt.subgroup.log2_group_size())``).</span>
+<span class="sd">    Equivalent to ``int(math.log2(group_size()))`` but emits a clearer error if the device ever reports a</span>
+<span class="sd">    non-power-of-two subgroup width (no current SPIR-V driver does, but the spec allows it). Like ``group_size()`` this</span>
+<span class="sd">    is a compile-time constant on every backend --- callers feed it straight into ``qd.template()`` to pick the right</span>
+<span class="sd">    ``log2_size`` for a full-subgroup reduction (e.g. ``reduce_add_tiled(v, qd.simt.subgroup.log2_group_size())``).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">size</span> <span class="o">=</span> <span class="n">group_size</span><span class="p">()</span>
     <span class="k">assert</span> <span class="n">size</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="p">(</span><span class="n">size</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;subgroup size </span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2"> is not a power of two&quot;</span>
@@ -691,9 +724,9 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="reduce_add">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="reduce_add_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_add_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_add_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Sum ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.</span>
 
 <span class="sd">    The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.</span>
@@ -711,9 +744,9 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="reduce_all_add">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="reduce_all_add_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_add_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_add_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Sum ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.</span>
 
 <span class="sd">    The result is broadcast to all ``2**log2_size`` lanes.  Caller must ensure ``2**log2_size``</span>
@@ -731,9 +764,9 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="reduce_min">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_min">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="reduce_min_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_min_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_min_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Min of ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.</span>
 
 <span class="sd">    The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial mins.  Caller must ensure</span>
@@ -754,12 +787,12 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="reduce_max">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_max">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="reduce_max_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_max_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_max_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Max of ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.</span>
 
-<span class="sd">    See `reduce_min` for the size contract, the unrolling shape, and the NaN caveat (with ``qd.max`` in place of</span>
+<span class="sd">    See `reduce_min_tiled` for the size contract, the unrolling shape, and the NaN caveat (with ``qd.max`` in place of</span>
 <span class="sd">    ``qd.min``).  The result is valid in lane 0 of each group; other lanes hold partial maxes.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
@@ -770,14 +803,14 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="reduce_all_min">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_min">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="reduce_all_min_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_min_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_min_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Min of ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.</span>
 
 <span class="sd">    The result is broadcast to all ``2**log2_size`` lanes.  Same size contract, unrolling shape, and NaN caveat as</span>
-<span class="sd">    `reduce_min`.  Use this when every lane needs the reduction (e.g. to subtract the min, or to branch on it</span>
-<span class="sd">    uniformly): same shuffle count as `reduce_min`, no extra broadcast needed.</span>
+<span class="sd">    `reduce_min_tiled`.  Use this when every lane needs the reduction (e.g. to subtract the min, or to branch on it</span>
+<span class="sd">    uniformly): same shuffle count as `reduce_min_tiled`, no extra broadcast needed.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">lane</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
@@ -788,12 +821,12 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="reduce_all_max">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_max">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="reduce_all_max_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_max_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_max_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Max of ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.</span>
 
-<span class="sd">    The result is broadcast to all ``2**log2_size`` lanes.  See `reduce_all_min` (with ``qd.max``</span>
+<span class="sd">    The result is broadcast to all ``2**log2_size`` lanes.  See `reduce_all_min_tiled` (with ``qd.max``</span>
 <span class="sd">    in place of ``qd.min``).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">lane</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span>
@@ -806,7 +839,7 @@
 
 <span class="c1"># reduce_mul / reduce_and / reduce_or / reduce_xor (no-arg, SPIR-V-only) have been removed.  Build</span>
 <span class="c1"># sized portable replacements on top of `shuffle_down` / `shuffle` following the same pattern as</span>
-<span class="c1"># `reduce_add` / `reduce_all_add` above when needed.</span>
+<span class="c1"># `reduce_add_tiled` / `reduce_all_add_tiled` above when needed.</span>
 
 
 <span class="c1"># --- Segmented reduce ------------------------------------------------------------------</span>
@@ -817,31 +850,32 @@
 <span class="c1"># group) whose ``head_flag`` is non-zero.  If no such lane exists the algorithm treats the group&#39;s first lane as an</span>
 <span class="c1"># implicit head, so a segment that runs from ``group_base`` to the lane is still aggregated correctly.</span>
 <span class="c1">#</span>
-<span class="c1"># Implementation: one ``ballot_full_subgroup`` to materialise a u64 of head positions across the whole subgroup, then</span>
+<span class="c1"># Implementation: one ``ballot`` to materialise a u64 of head positions across the whole subgroup, then</span>
 <span class="c1"># a Hillis-Steele inclusive scan bounded by ``distance &gt;= offset`` (where ``distance = lane - segment_head``).</span>
 <span class="c1"># ``segment_head`` comes from ``31 - clz(effective_mask &amp; ((1 &lt;&lt; (lane + 1)) - 1))`` with an OR-injected virtual head</span>
 <span class="c1"># at ``group_base`` to guarantee a non-zero ``lower``.  We work in half-local 32-lane coordinates so the bit-mask</span>
 <span class="c1"># arithmetic stays in u32 even on wave64; ``2**log2_size &lt;= 32`` guarantees segments never cross a half boundary, so</span>
 <span class="c1"># half-local distance equals absolute distance and the downstream ``shuffle_up`` partners stay in-half.  Cost: 1</span>
-<span class="c1"># ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` ops — the same shape as `inclusive_add` / `inclusive_min` /</span>
-<span class="c1"># `inclusive_max`, plus a single-instruction setup.</span>
+<span class="c1"># ballot + 1 clz + ``log2_size`` shuffles + ``log2_size`` ops — the same shape as `inclusive_add_tiled` /</span>
+<span class="c1"># `inclusive_min_tiled` / `inclusive_max_tiled`, plus a single-instruction setup.</span>
 <span class="c1">#</span>
-<span class="c1"># No identity argument is required (unlike `exclusive_min` / `exclusive_max`) because the per-lane ``distance &gt;=</span>
-<span class="c1"># offset`` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never</span>
-<span class="c1"># combined with the local value.</span>
+<span class="c1"># No identity element is involved at all -- the per-lane ``distance &gt;= offset`` guard ensures the scan never reaches</span>
+<span class="c1"># across a segment boundary, so a partner from another segment is never combined with the local value (i.e. the</span>
+<span class="c1"># implementation doesn&#39;t need a &quot;what to combine with at the segment head&quot; sentinel the way ``exclusive_min`` /</span>
+<span class="c1"># ``exclusive_max`` do for lane 0 within each tile).</span>
 
 
 <span class="nd">@func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">_segment_head_distance</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_segment_head_distance_tiled</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute ``lane - segment_head`` — how many lanes the current lane sits past its segment head, scoped to</span>
 <span class="sd">    ``2**log2_size`` lanes.  Returns ``0`` at the segment head, ``1, 2, ...`` for later lanes within the segment.</span>
 
-<span class="sd">    Shared by `segmented_reduce_add` / `_min` / `_max`; see the module-level note for the algorithm.</span>
+<span class="sd">    Shared by `segmented_reduce_add_tiled` / `_min` / `_max`; see the module-level note for the algorithm.</span>
 
 <span class="sd">    Two compile-time-selected paths:</span>
 
 <span class="sd">    * **``log2_size &lt;= 5`` (segments fit in a single 32-lane half)** — u32-bitmask path.  Pulls a u64</span>
-<span class="sd">      ``ballot_full_subgroup``, shifts the relevant 32-lane half down to bits 0..31, then runs the bit-mask algorithm in</span>
+<span class="sd">      ``ballot``, shifts the relevant 32-lane half down to bits 0..31, then runs the bit-mask algorithm in</span>
 <span class="sd">      half-local lane coordinates.  Half-local ``distance`` equals absolute ``distance`` because both ``lane`` and the</span>
 <span class="sd">      recovered ``segment_head`` are offset by the same ``half_base``, so the downstream ``distance &gt;= offset`` guard</span>
 <span class="sd">      still works in absolute terms.  On wave32 this collapses to the no-op (``half_base == 0`` always); on wave64</span>
@@ -850,14 +884,14 @@
 <span class="sd">      regression from supporting wave64 here.</span>
 
 <span class="sd">    * **``log2_size == 6`` (full-wave64 segments, only reachable on AMDGPU)** — u64-bitmask path.  Segments span all 64</span>
-<span class="sd">      lanes so we need the full ``ballot_full_subgroup`` u64 mask and a ``clz(u64)``.  Costs one extra ``u64`` shift +</span>
+<span class="sd">      lanes so we need the full ``ballot`` u64 mask and a ``clz(u64)``.  Costs one extra ``u64`` shift +</span>
 <span class="sd">      ``u64`` clz vs the u32 path but avoids the half-local split and stays in absolute lane coordinates throughout.</span>
 <span class="sd">      Gated by ``impl.static(log2_size &lt;= 5)`` so this entire path is dead-code-eliminated at compile time on every</span>
 <span class="sd">      ``log2_size &lt;= 5`` call site, including on AMDGPU itself when callers stay under the wave-half boundary.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># u64 mask covering the entire subgroup.  Wave32: high 32 bits are zero by definition.  Wave64: all 64 bits are</span>
     <span class="c1"># meaningful and we need both halves to handle lanes 32..63 correctly.</span>
-    <span class="n">full_mask</span> <span class="o">=</span> <span class="n">ballot_full_subgroup</span><span class="p">(</span><span class="n">i32</span><span class="p">(</span><span class="n">head_flag</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">full_mask</span> <span class="o">=</span> <span class="n">ballot</span><span class="p">(</span><span class="n">i32</span><span class="p">(</span><span class="n">head_flag</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">))</span>
     <span class="n">lane</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">log2_size</span> <span class="o">&lt;=</span> <span class="mi">5</span><span class="p">):</span>
         <span class="c1"># Which 32-lane half this lane belongs to: 0 on wave32 (always), 0 or 32 on wave64.  ``&amp; ~31`` rounds down to a</span>
@@ -902,9 +936,9 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="segmented_reduce_add">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="segmented_reduce_add_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_add_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_add_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Per-lane inclusive sum that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.</span>
 
 <span class="sd">    Lane ``i`` returns ``sum(value[head_below..i+1])``, where ``head_below`` is the largest lane index ``&lt;= i`` (within</span>
@@ -915,15 +949,15 @@
 
 <span class="sd">    * ``2**log2_size`` must not exceed the active subgroup size: up to 32 on CUDA / Metal / Vulkan-wave32, up to 64 on</span>
 <span class="sd">      AMDGPU (wave64).  ``log2_size`` is a ``qd.template()`` compile-time constant; the body is fully unrolled into</span>
-<span class="sd">      ``log2_size`` ``shuffle_up + add`` pairs.  ``_segment_head_distance`` selects between a u32-bitmask path</span>
+<span class="sd">      ``log2_size`` ``shuffle_up + add`` pairs.  ``_segment_head_distance_tiled`` selects between a u32-bitmask path</span>
 <span class="sd">      (``log2_size &lt;= 5``, identical IR to the historical wave32-only impl) and a u64-bitmask path</span>
 <span class="sd">      (``log2_size == 6``, AMDGPU-only) at compile time, so CUDA / SPIR-V callers see zero overhead from the wave64</span>
 <span class="sd">      support.</span>
 <span class="sd">    * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values work.</span>
 <span class="sd">    * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span><span class="n">log2_size</span> <span class="o">&lt;=</span> <span class="mi">6</span><span class="p">,</span> <span class="s2">&quot;segmented_reduce_add requires log2_size &lt;= 6&quot;</span><span class="p">)</span>
-    <span class="n">distance</span> <span class="o">=</span> <span class="n">_segment_head_distance</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span><span class="n">log2_size</span> <span class="o">&lt;=</span> <span class="mi">6</span><span class="p">,</span> <span class="s2">&quot;segmented_reduce_add_tiled requires log2_size &lt;= 6&quot;</span><span class="p">)</span>
+    <span class="n">distance</span> <span class="o">=</span> <span class="n">_segment_head_distance_tiled</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
         <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">)</span>
         <span class="n">partner</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">offset</span><span class="p">))</span>
@@ -934,20 +968,20 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="segmented_reduce_min">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_min">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="segmented_reduce_min_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_min_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_min_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Per-lane inclusive min that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.</span>
 
-<span class="sd">    Lane ``i`` returns ``min(value[head_below..i+1])``; see `segmented_reduce_add` for the head-flag semantics, the</span>
-<span class="sd">    ``2**log2_size &lt;= group_size()`` cap, and the truthy-predicate / uniform-CF contract.</span>
+<span class="sd">    Lane ``i`` returns ``min(value[head_below..i+1])``; see `segmented_reduce_add_tiled` for the head-flag semantics,</span>
+<span class="sd">    the ``2**log2_size &lt;= group_size()`` cap, and the truthy-predicate / uniform-CF contract.</span>
 
 <span class="sd">    Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic (``fminnm`` on</span>
 <span class="sd">    PTX, ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether NaN propagates or is suppressed.</span>
 <span class="sd">    Avoid NaN inputs if you need a portable result.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span><span class="n">log2_size</span> <span class="o">&lt;=</span> <span class="mi">6</span><span class="p">,</span> <span class="s2">&quot;segmented_reduce_min requires log2_size &lt;= 6&quot;</span><span class="p">)</span>
-    <span class="n">distance</span> <span class="o">=</span> <span class="n">_segment_head_distance</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span><span class="n">log2_size</span> <span class="o">&lt;=</span> <span class="mi">6</span><span class="p">,</span> <span class="s2">&quot;segmented_reduce_min_tiled requires log2_size &lt;= 6&quot;</span><span class="p">)</span>
+    <span class="n">distance</span> <span class="o">=</span> <span class="n">_segment_head_distance_tiled</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
         <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">)</span>
         <span class="n">partner</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">offset</span><span class="p">))</span>
@@ -958,16 +992,16 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="segmented_reduce_max">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_max">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="segmented_reduce_max_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_max_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_max_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Per-lane inclusive max that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.</span>
 
-<span class="sd">    See `segmented_reduce_min` (with ``qd.max`` in place of ``qd.min``).  Same head-flag semantics,</span>
+<span class="sd">    See `segmented_reduce_min_tiled` (with ``qd.max`` in place of ``qd.min``).  Same head-flag semantics,</span>
 <span class="sd">    ``2**log2_size &lt;= group_size()`` cap, truthy-predicate / uniform-CF contract, and NaN caveat.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span><span class="n">log2_size</span> <span class="o">&lt;=</span> <span class="mi">6</span><span class="p">,</span> <span class="s2">&quot;segmented_reduce_max requires log2_size &lt;= 6&quot;</span><span class="p">)</span>
-    <span class="n">distance</span> <span class="o">=</span> <span class="n">_segment_head_distance</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span><span class="n">log2_size</span> <span class="o">&lt;=</span> <span class="mi">6</span><span class="p">,</span> <span class="s2">&quot;segmented_reduce_max_tiled requires log2_size &lt;= 6&quot;</span><span class="p">)</span>
+    <span class="n">distance</span> <span class="o">=</span> <span class="n">_segment_head_distance_tiled</span><span class="p">(</span><span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
         <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">)</span>
         <span class="n">partner</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">offset</span><span class="p">))</span>
@@ -980,9 +1014,9 @@
 <span class="c1"># --- Inclusive scans -------------------------------------------------------------------</span>
 <span class="c1">#</span>
 <span class="c1"># All seven inclusive scans share the same Hillis-Steele tree over `shuffle_up`; only the binary operator differs.</span>
-<span class="c1"># Each operator is a tiny ``@func`` so it can be passed as a ``template()`` callable to the shared `_inclusive_scan`</span>
-<span class="c1"># helper, which inlines it into the per-lane reduce step.  ``log2_size`` is a compile-time constant so the loop fully</span>
-<span class="c1"># unrolls into ``log2_size`` shuffle+op pairs in the calling kernel&#39;s IR.</span>
+<span class="c1"># Each operator is a tiny ``@func`` so it can be passed as a ``template()`` callable to the shared</span>
+<span class="c1"># `_inclusive_scan_tiled` helper, which inlines it into the per-lane reduce step.  ``log2_size`` is a compile-time</span>
+<span class="c1"># constant so the loop fully unrolls into ``log2_size`` shuffle+op pairs in the calling kernel&#39;s IR.</span>
 
 
 <span class="nd">@func</span>
@@ -1021,9 +1055,9 @@
 
 
 <span class="nd">@func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Hillis-Steele inclusive scan of ``value`` under binary ``op``, over ``2**log2_size`` consecutive lanes.  See</span>
-<span class="sd">    `inclusive_add` for the contract; the only thing that changes between the seven `inclusive_*` ops is which</span>
+<span class="sd">    `inclusive_add_tiled` for the contract; the only thing that changes between the seven `inclusive_*` ops is which</span>
 <span class="sd">    ``_bin_*`` is passed here.</span>
 
 <span class="sd">    The shuffle is in uniform CF (every lane participates); only the per-lane reduce step is conditional, matching the</span>
@@ -1044,76 +1078,78 @@
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="inclusive_add">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="inclusive_add_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_add_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_add_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix sum across ``2**log2_size`` consecutive lanes.</span>
 
 <span class="sd">    Lane ``i`` within each group of ``2**log2_size`` lanes returns ``v[group_start] + v[group_start + 1] + ... + v[i]``.</span>
 <span class="sd">    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64</span>
 <span class="sd">    on AMDGPU — wave64 is forced on every AMDGPU target).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="inclusive_mul">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_mul">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_mul</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="inclusive_mul_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_mul_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_mul_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix product across ``2**log2_size`` consecutive lanes.</span>
 
-<span class="sd">    See `inclusive_add` for the size contract.</span>
+<span class="sd">    See `inclusive_add_tiled` for the size contract.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_mul</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_mul</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="inclusive_min">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_min">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix min across ``2**log2_size`` consecutive lanes.  See `inclusive_add` for the size contract.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+<div class="viewcode-block" id="inclusive_min_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_min_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_min_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix min across ``2**log2_size`` consecutive lanes.  See `inclusive_add_tiled` for the size</span>
+<span class="sd">    contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="inclusive_max">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_max">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix max across ``2**log2_size`` consecutive lanes.  See `inclusive_add` for the size contract.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+<div class="viewcode-block" id="inclusive_max_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_max_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_max_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix max across ``2**log2_size`` consecutive lanes.  See `inclusive_add_tiled` for the size</span>
+<span class="sd">    contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="inclusive_and">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_and">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_and</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="inclusive_and_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_and_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_and_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix bitwise-AND across ``2**log2_size`` consecutive lanes.  Integer dtypes only.  See</span>
-<span class="sd">    `inclusive_add` for the size contract.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_and</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+<span class="sd">    `inclusive_add_tiled` for the size contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_and</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="inclusive_or">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_or">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_or</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="inclusive_or_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_or_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_or_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix bitwise-OR across ``2**log2_size`` consecutive lanes.  Integer dtypes only.  See</span>
-<span class="sd">    `inclusive_add` for the size contract.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_or</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+<span class="sd">    `inclusive_add_tiled` for the size contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_or</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="inclusive_xor">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_xor">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_xor</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="inclusive_xor_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_xor_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_xor_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix bitwise-XOR across ``2**log2_size`` consecutive lanes.  Integer dtypes only.  See</span>
-<span class="sd">    `inclusive_add` for the size contract.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_xor</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+<span class="sd">    `inclusive_add_tiled` for the size contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_xor</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
@@ -1124,24 +1160,27 @@
 <span class="c1"># running the inclusive scan and shuffling the result) avoids the MoltenVK / Metal miscompile where the SPIR-V</span>
 <span class="c1"># compiler misoptimizes the register holding the inclusive-scan result when its only consumer is a shuffle intrinsic.</span>
 <span class="c1"># Lane 0&#39;s result must be set explicitly because `shuffle_up` with offset 1 returns an implementation-defined value at</span>
-<span class="c1"># lane 0 (`OpGroupNonUniformShuffleUp` calls it undefined outright).  See `_exclusive_scan` for the shared body.</span>
+<span class="c1"># lane 0 (`OpGroupNonUniformShuffleUp` calls it undefined outright).  See `_exclusive_scan_tiled` for the shared body.</span>
 <span class="c1">#</span>
-<span class="c1"># Identity per op (in `value`&#39;s dtype, expressed via dtype-preserving arithmetic so the wrapper does not need to</span>
-<span class="c1"># inspect the dtype):</span>
+<span class="c1"># Identity per op (in `value`&#39;s dtype):</span>
 <span class="c1">#</span>
-<span class="c1">#   add: ``value - value``                  (zero)</span>
+<span class="c1">#   add: ``value - value``                  (zero; built from arithmetic on ``value`` to inherit its dtype)</span>
 <span class="c1">#   mul: ``value - value + 1``              (one; the literal +1 takes value&#39;s dtype)</span>
 <span class="c1">#   or:  ``value ^ value``                  (zero; bitwise xor of value with itself)</span>
 <span class="c1">#   xor: ``value ^ value``                  (zero)</span>
 <span class="c1">#   and: ``~(value ^ value)``               (all bits set; bitwise not of zero)</span>
+<span class="c1">#   min: dtype-max constant                 (+inf for float dtypes; ``np.iinfo(dtype).max`` for integer dtypes)</span>
+<span class="c1">#   max: dtype-min constant                 (-inf for float dtypes; ``np.iinfo(dtype).min`` for integer dtypes)</span>
 <span class="c1">#</span>
-<span class="c1"># For min and max there is no portable type-extreme that can be derived from `value` alone, so those two ops take an</span>
-<span class="c1"># explicit ``identity`` argument: pass +∞ for `exclusive_min`, −∞ for `exclusive_max` (or whatever sentinel makes sense</span>
-<span class="c1"># for the caller&#39;s dtype and value range).</span>
+<span class="c1"># For add / mul / and / or / xor the identity falls out of pure arithmetic on ``value`` itself, so the body stays</span>
+<span class="c1"># inside a ``@func`` and the identity is built from typed Exprs.  For min and max there is no such trick (you can&#39;t</span>
+<span class="c1"># manufacture ``+inf`` or ``INT_MAX`` from arithmetic on a single value of unknown dtype), so ``exclusive_min_tiled``</span>
+<span class="c1"># / ``exclusive_max_tiled`` are plain Python wrappers that introspect ``value``&#39;s dtype at compile time and emit a</span>
+<span class="c1"># typed-constant identity Expr.</span>
 
 
 <span class="nd">@func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_exclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Generic exclusive scan over ``2**log2_size`` consecutive lanes.</span>
 
 <span class="sd">    Shift the input right by one lane within each group (filling lane 0 with ``identity``), then run the inclusive</span>
@@ -1153,86 +1192,113 @@
     <span class="n">prev</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
     <span class="k">if</span> <span class="n">lane_in_group</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">prev</span> <span class="o">=</span> <span class="n">identity</span>
-    <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">prev</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">prev</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="exclusive_add">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="exclusive_add_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_add_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_add_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix sum across ``2**log2_size`` consecutive lanes.</span>
 
 <span class="sd">    Lane ``i`` (with ``i &gt; 0``) within each group of ``2**log2_size`` lanes returns ``v[group_start] +</span>
 <span class="sd">    v[group_start + 1] + ... + v[i - 1]``.  Lane 0 of each group returns the additive identity (zero, in ``value``&#39;s</span>
 <span class="sd">    dtype).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">value</span> <span class="o">-</span> <span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_exclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">value</span> <span class="o">-</span> <span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="exclusive_mul">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_mul">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_mul</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="exclusive_mul_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_mul_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_mul_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix product across ``2**log2_size`` consecutive lanes.  Lane 0 of each group returns the</span>
 <span class="sd">    multiplicative identity (one, in ``value``&#39;s dtype).&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_mul</span><span class="p">,</span> <span class="n">value</span> <span class="o">-</span> <span class="n">value</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_exclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_mul</span><span class="p">,</span> <span class="n">value</span> <span class="o">-</span> <span class="n">value</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
-<span class="nd">@func</span>
-<div class="viewcode-block" id="exclusive_min">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_min">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_typed_min_identity</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a typed-constant Expr equal to the largest value representable in ``value``&#39;s dtype.</span>
+
+<span class="sd">    Suitable as the identity for an ``exclusive_min`` scan -- lane 0&#39;s &quot;predecessor&quot; must be guaranteed ``&gt;=`` every</span>
+<span class="sd">    real element, and ``+inf`` / ``INT_MAX`` / ``UINT_MAX`` are the tightest such sentinels per dtype.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">get_rvalue_type</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_real</span><span class="p">(</span><span class="n">dtype</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">make_constant_expr</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="s2">&quot;inf&quot;</span><span class="p">),</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="n">npty</span> <span class="o">=</span> <span class="n">to_numpy_type</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">npty</span> <span class="ow">is</span> <span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">make_constant_expr</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">make_constant_expr</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">iinfo</span><span class="p">(</span><span class="n">npty</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">),</span> <span class="n">dtype</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_typed_max_identity</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a typed-constant Expr equal to the smallest value representable in ``value``&#39;s dtype.</span>
+
+<span class="sd">    Suitable as the identity for an ``exclusive_max`` scan -- ``-inf`` for floats, ``INT_MIN`` for signed ints, ``0``</span>
+<span class="sd">    for unsigned ints and bool.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">get_rvalue_type</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_real</span><span class="p">(</span><span class="n">dtype</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">make_constant_expr</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="s2">&quot;-inf&quot;</span><span class="p">),</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="n">npty</span> <span class="o">=</span> <span class="n">to_numpy_type</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">npty</span> <span class="ow">is</span> <span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">make_constant_expr</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">make_constant_expr</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">iinfo</span><span class="p">(</span><span class="n">npty</span><span class="p">)</span><span class="o">.</span><span class="n">min</span><span class="p">),</span> <span class="n">dtype</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="exclusive_min_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_min_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_min_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix min across ``2**log2_size`` consecutive lanes.</span>
 
-<span class="sd">    Lane 0 of each group returns ``identity``: the caller must supply a value that is ``&gt;=`` every legal element of</span>
-<span class="sd">    the input (typically ``+∞`` for floats, the dtype&#39;s maximum for integers).  See the module-level note for why this</span>
-<span class="sd">    op alone takes an explicit identity.</span>
+<span class="sd">    Lane 0 of each group returns the dtype-typed identity: ``+inf`` for real dtypes, the dtype&#39;s maximum</span>
+<span class="sd">    (``np.iinfo(dtype).max``) for integer dtypes.  See the module-level note for why this op (and ``exclusive_max``)</span>
+<span class="sd">    is a plain Python wrapper rather than ``@func``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_exclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">_typed_min_identity</span><span class="p">(</span><span class="n">value</span><span class="p">),</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
-<span class="nd">@func</span>
-<div class="viewcode-block" id="exclusive_max">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_max">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">):</span>
+<div class="viewcode-block" id="exclusive_max_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_max_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_max_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix max across ``2**log2_size`` consecutive lanes.</span>
 
-<span class="sd">    Lane 0 of each group returns ``identity``: the caller must supply a value that is ``&lt;=`` every legal element of</span>
-<span class="sd">    the input (typically ``-∞`` for floats, the dtype&#39;s minimum for integers).  See the module-level note for why this</span>
-<span class="sd">    op alone takes an explicit identity.</span>
+<span class="sd">    Lane 0 of each group returns the dtype-typed identity: ``-inf`` for real dtypes, the dtype&#39;s minimum</span>
+<span class="sd">    (``np.iinfo(dtype).min``) for integer dtypes (``0`` for unsigned).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_exclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">_typed_max_identity</span><span class="p">(</span><span class="n">value</span><span class="p">),</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="exclusive_and">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_and">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_and</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="exclusive_and_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_and_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_and_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix bitwise-AND.  Integer dtypes only.  Lane 0 of each group returns all-bits-set in ``value``&#39;s</span>
 <span class="sd">    dtype.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_and</span><span class="p">,</span> <span class="o">~</span><span class="p">(</span><span class="n">value</span> <span class="o">^</span> <span class="n">value</span><span class="p">),</span> <span class="n">log2_size</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_exclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_and</span><span class="p">,</span> <span class="o">~</span><span class="p">(</span><span class="n">value</span> <span class="o">^</span> <span class="n">value</span><span class="p">),</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="exclusive_or">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_or">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_or</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="exclusive_or_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_or_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_or_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix bitwise-OR.  Integer dtypes only.  Lane 0 of each group returns zero in ``value``&#39;s dtype.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_or</span><span class="p">,</span> <span class="n">value</span> <span class="o">^</span> <span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_exclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_or</span><span class="p">,</span> <span class="n">value</span> <span class="o">^</span> <span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@func</span>
-<div class="viewcode-block" id="exclusive_xor">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_xor">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_xor</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="exclusive_xor_tiled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_xor_tiled">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_xor_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Exclusive prefix bitwise-XOR.  Integer dtypes only.  Lane 0 of each group returns zero in ``value``&#39;s dtype.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_xor</span><span class="p">,</span> <span class="n">value</span> <span class="o">^</span> <span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_exclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_xor</span><span class="p">,</span> <span class="n">value</span> <span class="o">^</span> <span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 
 
@@ -1273,217 +1339,222 @@
 
 
 
-<span class="c1"># Whole-subgroup convenience wrappers.  See the ``_full`` variants header for the design rationale; each one is a</span>
-<span class="c1"># one-liner that picks ``log2_size = log2_group_size()`` so the call covers every lane in the active subgroup.  Kept</span>
-<span class="c1"># as plain Python functions so the ``log2_group_size()`` int is resolved at trace time and flows into the base func&#39;s</span>
-<span class="c1"># ``template()`` argument.</span>
+<span class="c1"># Full-subgroup convenience wrappers.  See the &quot;Full-subgroup wrappers&quot; header for the design rationale; each one is</span>
+<span class="c1"># a one-liner that picks ``log2_size = log2_group_size()`` so the call covers every lane in the active subgroup.</span>
+<span class="c1"># Kept as plain Python functions so the ``log2_group_size()`` int is resolved at compile time and flows into the</span>
+<span class="c1"># underlying ``*_tiled`` op&#39;s ``template()`` argument.</span>
 
 
-<div class="viewcode-block" id="all_true_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.all_true_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">all_true_full</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``all_true`` across the entire subgroup -- see ``all_true(..., log2_size=log2_group_size())``.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">all_true</span><span class="p">(</span><span class="n">predicate</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="all_true">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.all_true">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">all_true</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``all_true_tiled`` across the entire subgroup -- see ``all_true_tiled(..., log2_size=log2_group_size())``.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">all_true_tiled</span><span class="p">(</span><span class="n">predicate</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="any_true_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.any_true_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">any_true_full</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``any_true`` across the entire subgroup -- see ``any_true(..., log2_size=log2_group_size())``.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">any_true</span><span class="p">(</span><span class="n">predicate</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="any_true">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.any_true">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">any_true</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``any_true_tiled`` across the entire subgroup -- see ``any_true_tiled(..., log2_size=log2_group_size())``.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">any_true_tiled</span><span class="p">(</span><span class="n">predicate</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="all_equal_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.all_equal_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">all_equal_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``all_equal`` across the entire subgroup -- see ``all_equal(..., log2_size=log2_group_size())``.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">all_equal</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="all_equal">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.all_equal">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">all_equal</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``all_equal_tiled`` across the entire subgroup -- see ``all_equal_tiled(..., log2_size=log2_group_size())``.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">all_equal_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="reduce_add_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_add_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_add_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_add`` over the entire subgroup -- lane 0 ends up with the sum across all ``group_size()`` lanes.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="reduce_add">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_add">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_add_tiled`` over the entire subgroup -- lane 0 ends up with the sum across all ``group_size()``</span>
+<span class="sd">    lanes.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce_add_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="reduce_all_add_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_add_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_add_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_all_add`` over the entire subgroup -- every lane ends up with the sum across all lanes.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">reduce_all_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="reduce_all_add">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_add">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_add</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_all_add_tiled`` over the entire subgroup -- every lane ends up with the sum across all lanes.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce_all_add_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="reduce_min_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_min_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_min_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_min`` over the entire subgroup -- lane 0 ends up with the min across all lanes.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="reduce_min">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_min_tiled`` over the entire subgroup -- lane 0 ends up with the min across all lanes.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce_min_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="reduce_max_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_max_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_max_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_max`` over the entire subgroup -- lane 0 ends up with the max across all lanes.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="reduce_max">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_max_tiled`` over the entire subgroup -- lane 0 ends up with the max across all lanes.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce_max_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="reduce_all_min_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_min_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_min_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_all_min`` over the entire subgroup -- every lane ends up with the min across all lanes.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">reduce_all_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="reduce_all_min">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_min</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_all_min_tiled`` over the entire subgroup -- every lane ends up with the min across all lanes.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce_all_min_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="reduce_all_max_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_max_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_max_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_all_max`` over the entire subgroup -- every lane ends up with the max across all lanes.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">reduce_all_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="reduce_all_max">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.reduce_all_max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_max</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``reduce_all_max_tiled`` over the entire subgroup -- every lane ends up with the max across all lanes.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce_all_max_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="inclusive_add_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_add_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_add_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_add`` over the entire subgroup.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">inclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="inclusive_add">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_add">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_add_tiled`` over the entire subgroup.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_add_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="inclusive_mul_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_mul_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_mul_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_mul`` over the entire subgroup.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">inclusive_mul</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="inclusive_mul">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_mul">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_mul</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_mul_tiled`` over the entire subgroup.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_mul_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="inclusive_min_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_min_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_min_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_min`` over the entire subgroup.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">inclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="inclusive_min">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_min_tiled`` over the entire subgroup.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_min_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="inclusive_max_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_max_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_max_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_max`` over the entire subgroup.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">inclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="inclusive_max">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_max_tiled`` over the entire subgroup.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_max_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="inclusive_and_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_and_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_and_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_and`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">inclusive_and</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="inclusive_and">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_and">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_and</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_and_tiled`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_and_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="inclusive_or_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_or_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_or_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_or`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">inclusive_or</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="inclusive_or">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_or">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_or</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_or_tiled`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_or_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="inclusive_xor_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_xor_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_xor_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_xor`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">inclusive_xor</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="inclusive_xor">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_xor">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_xor</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``inclusive_xor_tiled`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_xor_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="exclusive_add_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_add_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_add_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_add`` over the entire subgroup.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">exclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="exclusive_add">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_add">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_add_tiled`` over the entire subgroup.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">exclusive_add_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="exclusive_mul_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_mul_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_mul_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_mul`` over the entire subgroup.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">exclusive_mul</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="exclusive_mul">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_mul">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_mul</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_mul_tiled`` over the entire subgroup.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">exclusive_mul_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="exclusive_min_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_min_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_min_full</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">identity</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_min`` over the entire subgroup.  ``identity`` must be ``&gt;=`` every legal element (typically ``+inf``).&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">exclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">(),</span> <span class="n">identity</span><span class="p">)</span></div>
+<div class="viewcode-block" id="exclusive_min">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_min_tiled`` over the entire subgroup -- lane 0 returns the dtype&#39;s max (``+inf`` for floats).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">exclusive_min_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="exclusive_max_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_max_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_max_full</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">identity</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_max`` over the entire subgroup.  ``identity`` must be ``&lt;=`` every legal element (typically ``-inf``).&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">exclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">(),</span> <span class="n">identity</span><span class="p">)</span></div>
+<div class="viewcode-block" id="exclusive_max">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_max_tiled`` over the entire subgroup -- lane 0 returns the dtype&#39;s min (``-inf`` for floats, ``0``</span>
+<span class="sd">    for unsigned ints).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">exclusive_max_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="exclusive_and_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_and_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_and_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_and`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">exclusive_and</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="exclusive_and">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_and">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_and</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_and_tiled`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">exclusive_and_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="exclusive_or_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_or_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_or_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_or`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">exclusive_or</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="exclusive_or">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_or">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_or</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_or_tiled`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">exclusive_or_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="exclusive_xor_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_xor_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_xor_full</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_xor`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">exclusive_xor</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="exclusive_xor">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.exclusive_xor">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_xor</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``exclusive_xor_tiled`` over the entire subgroup.  Integer dtypes only.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">exclusive_xor_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
-<div class="viewcode-block" id="segmented_reduce_add_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_add_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_add_full</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``segmented_reduce_add`` over the entire subgroup (``log2_size = log2_group_size()`` — 5 on wave32 backends, 6 on AMDGPU).&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">segmented_reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+<div class="viewcode-block" id="segmented_reduce_add">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_add">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``segmented_reduce_add_tiled`` over the entire subgroup.</span>
 
+<span class="sd">    ``log2_size = log2_group_size()`` --- 5 on wave32 backends, 6 on AMDGPU.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">segmented_reduce_add_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
-<div class="viewcode-block" id="segmented_reduce_min_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_min_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_min_full</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``segmented_reduce_min`` over the entire subgroup.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">segmented_reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
+<div class="viewcode-block" id="segmented_reduce_min">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``segmented_reduce_min_tiled`` over the entire subgroup.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">segmented_reduce_min_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
-<div class="viewcode-block" id="segmented_reduce_max_full">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_max_full">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_max_full</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``segmented_reduce_max`` over the entire subgroup.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">segmented_reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="segmented_reduce_max">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.segmented_reduce_max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">segmented_reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``segmented_reduce_max_tiled`` over the entire subgroup.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">segmented_reduce_max_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">head_flag</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
@@ -1494,10 +1565,11 @@
     <span class="s2">&quot;memory_barrier&quot;</span><span class="p">,</span>
     <span class="s2">&quot;elect&quot;</span><span class="p">,</span>
     <span class="s2">&quot;ballot_first_n&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ballot&quot;</span><span class="p">,</span>
     <span class="s2">&quot;ballot_full_subgroup&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;all_true&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;any_true&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;all_equal&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;all_true_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;any_true_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;all_equal_tiled&quot;</span><span class="p">,</span>
     <span class="s2">&quot;broadcast_first&quot;</span><span class="p">,</span>
     <span class="s2">&quot;lanemask_lt&quot;</span><span class="p">,</span>
     <span class="s2">&quot;lanemask_le&quot;</span><span class="p">,</span>
@@ -1507,6 +1579,36 @@
     <span class="s2">&quot;group_size&quot;</span><span class="p">,</span>
     <span class="s2">&quot;log2_group_size&quot;</span><span class="p">,</span>
     <span class="s2">&quot;invocation_id&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;reduce_add_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;reduce_all_add_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;reduce_min_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;reduce_max_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;reduce_all_min_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;reduce_all_max_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;segmented_reduce_add_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;segmented_reduce_min_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;segmented_reduce_max_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;inclusive_add_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;inclusive_mul_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;inclusive_min_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;inclusive_max_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;inclusive_and_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;inclusive_or_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;inclusive_xor_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;exclusive_add_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;exclusive_mul_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;exclusive_min_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;exclusive_max_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;exclusive_and_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;exclusive_or_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;exclusive_xor_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;shuffle&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;shuffle_xor&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;shuffle_up&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;shuffle_down&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;all_true&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;any_true&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;all_equal&quot;</span><span class="p">,</span>
     <span class="s2">&quot;reduce_add&quot;</span><span class="p">,</span>
     <span class="s2">&quot;reduce_all_add&quot;</span><span class="p">,</span>
     <span class="s2">&quot;reduce_min&quot;</span><span class="p">,</span>
@@ -1530,36 +1632,6 @@
     <span class="s2">&quot;exclusive_and&quot;</span><span class="p">,</span>
     <span class="s2">&quot;exclusive_or&quot;</span><span class="p">,</span>
     <span class="s2">&quot;exclusive_xor&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;shuffle&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;shuffle_xor&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;shuffle_up&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;shuffle_down&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;all_true_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;any_true_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;all_equal_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;reduce_add_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;reduce_all_add_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;reduce_min_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;reduce_max_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;reduce_all_min_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;reduce_all_max_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;segmented_reduce_add_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;segmented_reduce_min_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;segmented_reduce_max_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;inclusive_add_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;inclusive_mul_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;inclusive_min_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;inclusive_max_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;inclusive_and_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;inclusive_or_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;inclusive_xor_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;exclusive_add_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;exclusive_mul_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;exclusive_min_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;exclusive_max_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;exclusive_and_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;exclusive_or_full&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;exclusive_xor_full&quot;</span><span class="p">,</span>
 <span class="p">]</span>
 </pre></div>
 
