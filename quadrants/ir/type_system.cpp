@@ -370,7 +370,7 @@ void Operations::init_internals() {
   // ``Program::subgroup_size()`` and folds into the IR as a literal on every backend.
   PLAIN_OP(subgroupInvocationId, i32, false);
   // subgroupAdd / subgroupMul / subgroupMin / subgroupMax / subgroupAnd / subgroupOr / subgroupXor
-  // are intentionally absent: the portable `subgroup.reduce_add(value, log2_size)` (and equivalents)
+  // are intentionally absent: the portable `subgroup.reduce_add_tiled(value, log2_size)` (and equivalents)
   // are implemented in Python on top of `subgroupShuffleDown` / `subgroupShuffle` and are the
   // supported APIs on all backends.
 #undef POLY_OP

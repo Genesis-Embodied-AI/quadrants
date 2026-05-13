@@ -175,9 +175,9 @@ class QD_DLL_EXPORT Program {
   // creation on the SPIR-V backends (read from ``VkPhysicalDeviceSubgroupProperties::subgroupSize`` on Vulkan, fixed to
   // 32 on Metal -- both stashed in the ``spirv_subgroup_size`` device cap).  Surfaced to Python as
   // ``qd.simt.subgroup.group_size()`` which returns a plain ``int`` -- usable as a ``qd.template()`` argument so
-  // ``_full`` variants like ``reduce_add_full(v)`` can unroll the correct ``log2_size`` at compile time on every
-  // backend.  Returns ``0`` on the x64 CPU backend and any backend that has not been initialized; callers that need
-  // ``log2(size)`` should use ``qd.simt.subgroup.log2_group_size()`` which asserts power-of-two.
+  // the full-subgroup wrappers like ``reduce_add(v)`` can unroll the correct ``log2_size`` at compile time
+  // on every backend.  Returns ``0`` on the x64 CPU backend and any backend that has not been initialized; callers
+  // that need ``log2(size)`` should use ``qd.simt.subgroup.log2_group_size()`` which asserts power-of-two.
   int subgroup_size() const;
 
   Kernel &get_snode_reader(SNode *snode);

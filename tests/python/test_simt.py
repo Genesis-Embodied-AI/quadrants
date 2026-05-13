@@ -1,3 +1,4 @@
+import math
 import platform
 
 import numpy as np
@@ -36,7 +37,7 @@ def _skip_if_f64_unsupported(dtype):
 #   5``.
 #
 # So every scenario table holds ``log2_size = 1`` (the shortest tree, catches one-step-only bugs) and ``log2_size =
-# 5`` (the full-wave32 / 32-lane-window-on-wave64 case, the most common production size) for ``i32``, plus one row
+# 5`` (the full-wave32 / 32-lane-tile-on-wave64 case, the most common production size) for ``i32``, plus one row
 # per non-i32 dtype at ``log2_size = 5``.  We don't include ``log2_size = 6`` in the bulk matrix -- that's covered by
 # the dedicated ``test_subgroup_*_log2_size_6`` tests further down, which only run on AMDGPU wave64.  Net effect:
 # ~6 cases per test instead of the previous cartesian ~25, ~4x fewer pytest invocations across the whole sized
@@ -52,9 +53,9 @@ _SCENARIOS_FULL_DTYPE = [
     (qd.f64, 5),
 ]
 
-# i32 + floats (no 64-bit ints) -- used by ``inclusive_mul`` / ``exclusive_mul`` (64-bit-int product would overflow
-# the tests' 1/2-mixed input) and the min / max scans (only ``inclusive_add`` / ``exclusive_add`` test the four-way
-# i32 / i64 / u64 / f32 / f64 matrix; min / max stick to one int width plus the two floats).
+# i32 + floats (no 64-bit ints) -- used by ``inclusive_mul_tiled`` / ``exclusive_mul_tiled`` (64-bit-int product would
+# overflow the tests' 1/2-mixed input) and the min / max scans (only ``inclusive_add_tiled`` / ``exclusive_add_tiled``
+# test the four-way i32 / i64 / u64 / f32 / f64 matrix; min / max stick to one int width plus the two floats).
 _SCENARIOS_I32_AND_FLOATS = [
     (qd.i32, 1),
     (qd.i32, 5),
@@ -62,13 +63,34 @@ _SCENARIOS_I32_AND_FLOATS = [
     (qd.f64, 5),
 ]
 
-# Integer dtypes only -- used by the bitwise ops (``inclusive_and`` / ``or`` / ``xor`` and their exclusive variants),
-# which don't accept float dtypes.
+# Integer dtypes only -- used by the bitwise ops (``inclusive_and_tiled`` / ``or`` / ``xor`` and their exclusive
+# variants), which don't accept float dtypes.
 _SCENARIOS_INT = [
     (qd.i32, 1),
     (qd.i32, 5),
     (qd.i64, 5),
     (qd.u64, 5),
+]
+
+# Same shape as ``_SCENARIOS_FULL_DTYPE`` but with ``log2_size = 0`` instead of ``1`` as the boundary case -- the
+# segmented_reduce tests accept ``log2_size = 0`` as a degenerate group-of-1 case (the implicit-head-at-group-base
+# fallback collapses to "each lane is its own segment").  Used by segmented_reduce_{add, min, max}.
+_SCENARIOS_SEGMENTED = [
+    (qd.i32, 0),
+    (qd.i32, 5),
+    (qd.i64, 5),
+    (qd.u64, 5),
+    (qd.f32, 5),
+    (qd.f64, 5),
+]
+
+# Float dtypes only -- used by ``all_equal_float_contract`` which locks the ``NaN != NaN`` / ``+0.0 == -0.0`` shape on
+# floats specifically.  ``log2_size = 1`` covers the smallest comparison group; ``5`` covers the full-warp shortcut on
+# CUDA.
+_SCENARIOS_FLOAT = [
+    (qd.f32, 1),
+    (qd.f32, 5),
+    (qd.f64, 5),
 ]
 
 
@@ -779,9 +801,9 @@ def test_block_global_thread_idx_multi_block():
 
 # The old SPIR-V-only no-arg subgroup reductions (`subgroup.reduce_add` / `reduce_mul` / `reduce_min`
 # / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`) and their Vulkan-specific tests have
-# been removed.  See `test_subgroup_reduce_add` / `test_subgroup_reduce_all_add` below for the
-# portable sized-reduction tests, and add equivalent sized portable replacements for the other
-# reductions on top of `shuffle_down` / `shuffle` if needed.
+# been removed.  See `test_subgroup_reduce_add_tiled` / `test_subgroup_reduce_all_add_tiled` below
+# for the portable sized-reduction tests, and add equivalent sized portable replacements for the
+# other reductions on top of `shuffle_down` / `shuffle` if needed.
 
 
 def _init_field(field, n, dtype):
@@ -1687,7 +1709,7 @@ def test_subgroup_shuffle_down_reduction(dtype):
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_add(dtype, log2_size):
+def test_subgroup_reduce_add_tiled(dtype, log2_size):
     """Portable shuffle_down tree reduction: lane 0 of each 2**log2_size group has the sum."""
     _skip_if_f64_unsupported(dtype)
     N = 64
@@ -1698,7 +1720,7 @@ def test_subgroup_reduce_add(dtype, log2_size):
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.reduce_add(src[i], log2_size)
+            dst[i] = subgroup.reduce_add_tiled(src[i], log2_size)
 
     _init_field(src, N, dtype)
     foo()
@@ -1714,7 +1736,7 @@ def test_subgroup_reduce_add(dtype, log2_size):
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_all_add(dtype, log2_size):
+def test_subgroup_reduce_all_add_tiled(dtype, log2_size):
     """Portable butterfly XOR reduction: every lane in each 2**log2_size group has the sum."""
     _skip_if_f64_unsupported(dtype)
     N = 64
@@ -1725,7 +1747,7 @@ def test_subgroup_reduce_all_add(dtype, log2_size):
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.reduce_all_add(src[i], log2_size)
+            dst[i] = subgroup.reduce_all_add_tiled(src[i], log2_size)
 
     _init_field(src, N, dtype)
     foo()
@@ -1740,7 +1762,7 @@ def test_subgroup_reduce_all_add(dtype, log2_size):
             assert abs(dst[i] - expected) < 1e-4 * abs(expected), f"lane {i}: got {dst[i]}, expected {expected}"
 
 
-# Min / max reductions share the same kernel + verifier shape as `reduce_add` / `reduce_all_add`.
+# Min / max reductions share the same kernel + verifier shape as `reduce_add_tiled` / `reduce_all_add_tiled`.
 # `_check_reduce_lane0` and `_check_reduce_all` factor it out so the four tests below stay one-liners.
 # Non-monotonic input (`_init_varied_int_or_float`) is required so each group's min / max actually depends on the
 # reduction running over every lane in the group, not just the first or last one.
@@ -1818,30 +1840,34 @@ def _check_reduce_all(reduce_func, py_op, dtype, log2_size, src_init):
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_min(dtype, log2_size):
+def test_subgroup_reduce_min_tiled(dtype, log2_size):
     """Portable shuffle_down tree min: lane 0 of each 2**log2_size group has the group min."""
-    _check_reduce_lane0(subgroup.reduce_min, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float)
+    _check_reduce_lane0(subgroup.reduce_min_tiled, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float)
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_max(dtype, log2_size):
+def test_subgroup_reduce_max_tiled(dtype, log2_size):
     """Portable shuffle_down tree max: lane 0 of each 2**log2_size group has the group max."""
-    _check_reduce_lane0(subgroup.reduce_max, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float)
+    _check_reduce_lane0(subgroup.reduce_max_tiled, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float)
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_all_min(dtype, log2_size):
+def test_subgroup_reduce_all_min_tiled(dtype, log2_size):
     """Portable butterfly min: every lane in each 2**log2_size group has the group min."""
-    _check_reduce_all(subgroup.reduce_all_min, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float)
+    _check_reduce_all(
+        subgroup.reduce_all_min_tiled, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float
+    )
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_all_max(dtype, log2_size):
+def test_subgroup_reduce_all_max_tiled(dtype, log2_size):
     """Portable butterfly max: every lane in each 2**log2_size group has the group max."""
-    _check_reduce_all(subgroup.reduce_all_max, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float)
+    _check_reduce_all(
+        subgroup.reduce_all_max_tiled, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float
+    )
 
 
 # Segmented reduce.  Tests use a head-flag pattern with multiple segments per group, varied widths, and at least one
@@ -1879,10 +1905,9 @@ def _python_segmented_reduce_add(values, heads, group_size):
     return _python_segmented_reduce(values, heads, group_size, _op.add)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [0, 1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_SEGMENTED)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_add(dtype, log2_size):
+def test_subgroup_segmented_reduce_add_tiled(dtype, log2_size):
     """Segmented inclusive sum, sized by ``log2_size`` (covers full warp at log2_size=5)."""
     _skip_if_f64_unsupported(dtype)
     N = 32  # ballot covers the first 32 lanes
@@ -1894,7 +1919,7 @@ def test_subgroup_segmented_reduce_add(dtype, log2_size):
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.segmented_reduce_add(src[i], head[i], log2_size)
+            dst[i] = subgroup.segmented_reduce_add_tiled(src[i], head[i], log2_size)
 
     _init_varied_int_or_float(src, N, dtype)
     # Head pattern: heads at lanes 0, 3, 7, 12, 19, 25 — varied gaps, plus one group where the group base is not a head
@@ -1918,8 +1943,8 @@ def test_subgroup_segmented_reduce_add(dtype, log2_size):
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_add_no_heads():
-    """No head flags set anywhere -> the whole group is one segment, equivalent to inclusive_add(v, log2_size)."""
+def test_subgroup_segmented_reduce_add_tiled_no_heads():
+    """No head flags set anywhere -> the whole group is one segment, equivalent to inclusive_add_tiled(v, log2_size)."""
     N = 32
     src = qd.field(dtype=qd.i32, shape=N)
     head = qd.field(dtype=qd.i32, shape=N)
@@ -1929,7 +1954,7 @@ def test_subgroup_segmented_reduce_add_no_heads():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.segmented_reduce_add(src[i], head[i], 5)
+            dst[i] = subgroup.segmented_reduce_add_tiled(src[i], head[i], 5)
 
     for i in range(N):
         src[i] = i + 1
@@ -1944,7 +1969,7 @@ def test_subgroup_segmented_reduce_add_no_heads():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_add_every_lane_is_head():
+def test_subgroup_segmented_reduce_add_tiled_every_lane_is_head():
     """Every lane is a head -> output equals input (each segment is exactly one lane)."""
     N = 32
     src = qd.field(dtype=qd.i32, shape=N)
@@ -1955,7 +1980,7 @@ def test_subgroup_segmented_reduce_add_every_lane_is_head():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.segmented_reduce_add(src[i], head[i], 5)
+            dst[i] = subgroup.segmented_reduce_add_tiled(src[i], head[i], 5)
 
     for i in range(N):
         src[i] = (i * 7 + 11) % 23 + 1
@@ -1968,7 +1993,7 @@ def test_subgroup_segmented_reduce_add_every_lane_is_head():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_add_truthy_predicate():
+def test_subgroup_segmented_reduce_add_tiled_truthy_predicate():
     """Non-binary truthy values (e.g. 7, 42) should be treated identically to 1."""
     N = 32
     src = qd.field(dtype=qd.i32, shape=N)
@@ -1980,13 +2005,13 @@ def test_subgroup_segmented_reduce_add_truthy_predicate():
     def run_binary():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst_binary[i] = subgroup.segmented_reduce_add(src[i], head[i], 5)
+            dst_binary[i] = subgroup.segmented_reduce_add_tiled(src[i], head[i], 5)
 
     @qd.kernel
     def run_truthy():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst_truthy[i] = subgroup.segmented_reduce_add(src[i], head[i] * 42, 5)
+            dst_truthy[i] = subgroup.segmented_reduce_add_tiled(src[i], head[i] * 42, 5)
 
     for i in range(N):
         src[i] = i + 1
@@ -1999,9 +2024,9 @@ def test_subgroup_segmented_reduce_add_truthy_predicate():
         assert dst_binary[i] == dst_truthy[i], f"lane {i}: binary={dst_binary[i]}, truthy={dst_truthy[i]}"
 
 
-# Segmented reduce min / max — share the head-pattern + Python-verifier strategy with `segmented_reduce_add`, but the
-# input data is a *non-monotonic* sequence (via ``_init_varied_int_or_float``) so each segment's min / max actually
-# depends on the data and not just on the segment endpoints.
+# Segmented reduce min / max — share the head-pattern + Python-verifier strategy with `segmented_reduce_add_tiled`,
+# but the input data is a *non-monotonic* sequence (via ``_init_varied_int_or_float``) so each segment's min / max
+# actually depends on the data and not just on the segment endpoints.
 
 
 def _check_segmented_reduce(qd_op, py_op, dtype, log2_size):
@@ -2036,25 +2061,23 @@ def _check_segmented_reduce(qd_op, py_op, dtype, log2_size):
             assert abs(got - ref) < 1e-5 * max(abs(ref), 1.0), f"lane {i}: got {got}, expected {ref}"
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [0, 1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_SEGMENTED)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_min(dtype, log2_size):
+def test_subgroup_segmented_reduce_min_tiled(dtype, log2_size):
     """Segmented inclusive min, sized by ``log2_size`` (covers full warp at log2_size=5)."""
-    _check_segmented_reduce(subgroup.segmented_reduce_min, lambda a, b: min(a, b), dtype, log2_size)
+    _check_segmented_reduce(subgroup.segmented_reduce_min_tiled, lambda a, b: min(a, b), dtype, log2_size)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [0, 1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_SEGMENTED)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_max(dtype, log2_size):
+def test_subgroup_segmented_reduce_max_tiled(dtype, log2_size):
     """Segmented inclusive max, sized by ``log2_size`` (covers full warp at log2_size=5)."""
-    _check_segmented_reduce(subgroup.segmented_reduce_max, lambda a, b: max(a, b), dtype, log2_size)
+    _check_segmented_reduce(subgroup.segmented_reduce_max_tiled, lambda a, b: max(a, b), dtype, log2_size)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_min_no_heads():
-    """No head flags set anywhere -> the whole group is one segment, equivalent to inclusive_min(v, log2_size)."""
+def test_subgroup_segmented_reduce_min_tiled_no_heads():
+    """No head flags set anywhere -> the whole group is one segment, equivalent to inclusive_min_tiled(v, log2_size)."""
     N = 32
     src = qd.field(dtype=qd.i32, shape=N)
     head = qd.field(dtype=qd.i32, shape=N)
@@ -2064,7 +2087,7 @@ def test_subgroup_segmented_reduce_min_no_heads():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.segmented_reduce_min(src[i], head[i], 5)
+            dst[i] = subgroup.segmented_reduce_min_tiled(src[i], head[i], 5)
 
     src_vals = [(i * 7 + 11) % 23 + 1 for i in range(N)]
     for i in range(N):
@@ -2084,7 +2107,7 @@ def test_subgroup_segmented_reduce_min_no_heads():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_max_every_lane_is_head():
+def test_subgroup_segmented_reduce_max_tiled_every_lane_is_head():
     """Every lane is a head -> output equals input (each segment is exactly one lane)."""
     N = 32
     src = qd.field(dtype=qd.i32, shape=N)
@@ -2095,7 +2118,7 @@ def test_subgroup_segmented_reduce_max_every_lane_is_head():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.segmented_reduce_max(src[i], head[i], 5)
+            dst[i] = subgroup.segmented_reduce_max_tiled(src[i], head[i], 5)
 
     for i in range(N):
         src[i] = (i * 13 + 5) % 29 - 7  # mixed-sign data so max isn't just monotone
@@ -2108,7 +2131,7 @@ def test_subgroup_segmented_reduce_max_every_lane_is_head():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_min_truthy_predicate():
+def test_subgroup_segmented_reduce_min_tiled_truthy_predicate():
     """Non-binary truthy values (e.g. 7, 42) should be treated identically to 1."""
     N = 32
     src = qd.field(dtype=qd.i32, shape=N)
@@ -2120,13 +2143,13 @@ def test_subgroup_segmented_reduce_min_truthy_predicate():
     def run_binary():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst_binary[i] = subgroup.segmented_reduce_min(src[i], head[i], 5)
+            dst_binary[i] = subgroup.segmented_reduce_min_tiled(src[i], head[i], 5)
 
     @qd.kernel
     def run_truthy():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst_truthy[i] = subgroup.segmented_reduce_min(src[i], head[i] * 7, 5)
+            dst_truthy[i] = subgroup.segmented_reduce_min_tiled(src[i], head[i] * 7, 5)
 
     for i in range(N):
         src[i] = (i * 11 + 3) % 17 + 1
@@ -2141,16 +2164,16 @@ def test_subgroup_segmented_reduce_min_truthy_predicate():
 
 @pytest.mark.parametrize("log2_size", [0, 1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_add_block64(log2_size):
-    """Run ``segmented_reduce_add`` with ``block_dim=64`` and identical patterns in both 32-lane halves.
+def test_subgroup_segmented_reduce_add_tiled_block64(log2_size):
+    """Run ``segmented_reduce_add_tiled`` with ``block_dim=64`` and identical patterns in both 32-lane halves.
 
     On wave32 hardware (CUDA, RDNA wave32, Vulkan / Metal on most desktop GPUs) this dispatches as two independent
     32-lane subgroups, so each half exercises the lanes-0..31 path that the existing N=32 tests already cover.
 
     On wave64 hardware (AMDGPU CDNA, GFX9, RDNA explicit-wave64) this runs as a single 64-lane wavefront.  Lanes
     32..63 then need correct results inside their own ``log2_size`` group — which only works after the half-local
-    ``_segment_head_distance`` rewrite (this commit).  Without the fix, lanes 32..63 hit u32 overshift / out-of-range
-    bit-mask arithmetic and produce garbage.
+    ``_segment_head_distance_tiled`` rewrite (this commit).  Without the fix, lanes 32..63 hit u32 overshift /
+    out-of-range bit-mask arithmetic and produce garbage.
 
     The test is structured so it passes on wave32 either way; the wave64 fix is what makes it pass on wave64.  We
     don't have wave64 hardware to test on right now (MI300X pending), but this case will then exercise it.
@@ -2164,7 +2187,7 @@ def test_subgroup_segmented_reduce_add_block64(log2_size):
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.segmented_reduce_add(src[i], head[i], log2_size)
+            dst[i] = subgroup.segmented_reduce_add_tiled(src[i], head[i], log2_size)
 
     head_lanes_in_half = {0, 3, 7, 12, 19, 25}
     for i in range(N):
@@ -2228,9 +2251,9 @@ def _check_inclusive_scan(scan_func, py_op, dtype, log2_size, src_init):
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_add(dtype, log2_size):
+def test_subgroup_inclusive_add_tiled(dtype, log2_size):
     """Portable inclusive prefix sum: lane k of each 2**log2_size group has sum(src[group_base..group_base+k+1])."""
-    _check_inclusive_scan(subgroup.inclusive_add, lambda a, b: a + b, dtype, log2_size, _init_field)
+    _check_inclusive_scan(subgroup.inclusive_add_tiled, lambda a, b: a + b, dtype, log2_size, _init_field)
 
 
 def _init_small_int_or_float(field, n, dtype):
@@ -2243,10 +2266,10 @@ def _init_small_int_or_float(field, n, dtype):
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_mul(dtype, log2_size):
+def test_subgroup_inclusive_mul_tiled(dtype, log2_size):
     """Inclusive prefix product.  Inputs are 1 / 2 mixed so the 32-way product is at most 2**8 == 256 (well within i32
     and f32-exact)."""
-    _check_inclusive_scan(subgroup.inclusive_mul, lambda a, b: a * b, dtype, log2_size, _init_small_int_or_float)
+    _check_inclusive_scan(subgroup.inclusive_mul_tiled, lambda a, b: a * b, dtype, log2_size, _init_small_int_or_float)
 
 
 def _init_varied_int_or_float(field, n, dtype):
@@ -2259,16 +2282,20 @@ def _init_varied_int_or_float(field, n, dtype):
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_min(dtype, log2_size):
+def test_subgroup_inclusive_min_tiled(dtype, log2_size):
     """Inclusive prefix min."""
-    _check_inclusive_scan(subgroup.inclusive_min, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float)
+    _check_inclusive_scan(
+        subgroup.inclusive_min_tiled, lambda a, b: min(a, b), dtype, log2_size, _init_varied_int_or_float
+    )
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_max(dtype, log2_size):
+def test_subgroup_inclusive_max_tiled(dtype, log2_size):
     """Inclusive prefix max."""
-    _check_inclusive_scan(subgroup.inclusive_max, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float)
+    _check_inclusive_scan(
+        subgroup.inclusive_max_tiled, lambda a, b: max(a, b), dtype, log2_size, _init_varied_int_or_float
+    )
 
 
 def _init_bitwise_int(field, n, dtype):
@@ -2280,26 +2307,26 @@ def _init_bitwise_int(field, n, dtype):
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_and(dtype, log2_size):
+def test_subgroup_inclusive_and_tiled(dtype, log2_size):
     """Inclusive prefix bitwise-AND.  Integer dtypes only."""
     _skip_if_f64_unsupported(dtype)  # also handles 64-bit-int Metal/MoltenVK skips
-    _check_inclusive_scan(subgroup.inclusive_and, lambda a, b: a & b, dtype, log2_size, _init_bitwise_int)
+    _check_inclusive_scan(subgroup.inclusive_and_tiled, lambda a, b: a & b, dtype, log2_size, _init_bitwise_int)
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_or(dtype, log2_size):
+def test_subgroup_inclusive_or_tiled(dtype, log2_size):
     """Inclusive prefix bitwise-OR.  Integer dtypes only."""
     _skip_if_f64_unsupported(dtype)
-    _check_inclusive_scan(subgroup.inclusive_or, lambda a, b: a | b, dtype, log2_size, _init_bitwise_int)
+    _check_inclusive_scan(subgroup.inclusive_or_tiled, lambda a, b: a | b, dtype, log2_size, _init_bitwise_int)
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_xor(dtype, log2_size):
+def test_subgroup_inclusive_xor_tiled(dtype, log2_size):
     """Inclusive prefix bitwise-XOR.  Integer dtypes only."""
     _skip_if_f64_unsupported(dtype)
-    _check_inclusive_scan(subgroup.inclusive_xor, lambda a, b: a ^ b, dtype, log2_size, _init_bitwise_int)
+    _check_inclusive_scan(subgroup.inclusive_xor_tiled, lambda a, b: a ^ b, dtype, log2_size, _init_bitwise_int)
 
 
 # --- Exclusive scans ------------------------------------------------------------------
@@ -2309,28 +2336,17 @@ def test_subgroup_inclusive_xor(dtype, log2_size):
 # pass through here.
 
 
-def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_init, *, takes_identity_arg=False):
+def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_init):
     _skip_if_f64_unsupported(dtype)
     N = 64
     src = qd.field(dtype=dtype, shape=N)
     dst = qd.field(dtype=dtype, shape=N)
 
-    if takes_identity_arg:
-        identity_value = py_identity
-
-        @qd.kernel
-        def foo():
-            qd.loop_config(block_dim=N)
-            for i in range(N):
-                dst[i] = scan_func(src[i], log2_size, identity_value)
-
-    else:
-
-        @qd.kernel
-        def foo():
-            qd.loop_config(block_dim=N)
-            for i in range(N):
-                dst[i] = scan_func(src[i], log2_size)
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = scan_func(src[i], log2_size)
 
     src_init(src, N, dtype)
     foo()
@@ -2352,6 +2368,8 @@ def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_i
             got = dst[global_lane]
             if dtype in _INT_DTYPES:
                 assert got == expected, f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
+            elif math.isinf(expected) or math.isnan(expected):
+                assert got == expected, f"group {g} lane {k} (global {global_lane}): got {got}, expected {expected}"
             else:
                 assert abs(got - expected) < 1e-4 * max(
                     abs(expected), 1.0
@@ -2360,55 +2378,44 @@ def _check_exclusive_scan(scan_func, py_op, py_identity, dtype, log2_size, src_i
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_add(dtype, log2_size):
+def test_subgroup_exclusive_add_tiled(dtype, log2_size):
     """Exclusive prefix sum.  Lane 0 of each group is 0."""
-    _check_exclusive_scan(subgroup.exclusive_add, lambda a, b: a + b, 0, dtype, log2_size, _init_field)
+    _check_exclusive_scan(subgroup.exclusive_add_tiled, lambda a, b: a + b, 0, dtype, log2_size, _init_field)
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_mul(dtype, log2_size):
+def test_subgroup_exclusive_mul_tiled(dtype, log2_size):
     """Exclusive prefix product.  Lane 0 of each group is 1."""
-    _check_exclusive_scan(subgroup.exclusive_mul, lambda a, b: a * b, 1, dtype, log2_size, _init_small_int_or_float)
-
-
-@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_min(dtype, log2_size):
-    """Exclusive prefix min.  Lane 0 of each group is the explicit `identity` we pass.  Use a sentinel larger than any
-    element produced by `_init_varied_int_or_float` (max is 23)."""
-    identity = 1_000_000 if dtype == qd.i32 else 1e30
     _check_exclusive_scan(
-        subgroup.exclusive_min,
-        lambda a, b: min(a, b),
-        identity,
-        dtype,
-        log2_size,
-        _init_varied_int_or_float,
-        takes_identity_arg=True,
+        subgroup.exclusive_mul_tiled, lambda a, b: a * b, 1, dtype, log2_size, _init_small_int_or_float
     )
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_max(dtype, log2_size):
-    """Exclusive prefix max.  Lane 0 of each group is the explicit `identity` we pass.  Use a sentinel smaller than
-    any element produced by `_init_varied_int_or_float` (min is 1)."""
-    identity = -1_000_000 if dtype == qd.i32 else -1e30
+def test_subgroup_exclusive_min_tiled(dtype, log2_size):
+    """Exclusive prefix min.  Lane 0 of each group is the dtype-typed identity (+inf for floats, INT_MAX for ints) --
+    the wrapper auto-derives it from ``value``'s dtype, so the caller doesn't pass one."""
+    identity = float("inf") if dtype in (qd.f32, qd.f64) else int(np.iinfo(np.int32).max)
     _check_exclusive_scan(
-        subgroup.exclusive_max,
-        lambda a, b: max(a, b),
-        identity,
-        dtype,
-        log2_size,
-        _init_varied_int_or_float,
-        takes_identity_arg=True,
+        subgroup.exclusive_min_tiled, lambda a, b: min(a, b), identity, dtype, log2_size, _init_varied_int_or_float
+    )
+
+
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_I32_AND_FLOATS)
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_exclusive_max_tiled(dtype, log2_size):
+    """Exclusive prefix max.  Lane 0 of each group is the dtype-typed identity (-inf for floats, INT_MIN for ints)."""
+    identity = float("-inf") if dtype in (qd.f32, qd.f64) else int(np.iinfo(np.int32).min)
+    _check_exclusive_scan(
+        subgroup.exclusive_max_tiled, lambda a, b: max(a, b), identity, dtype, log2_size, _init_varied_int_or_float
     )
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_and(dtype, log2_size):
+def test_subgroup_exclusive_and_tiled(dtype, log2_size):
     """Exclusive prefix bitwise-AND.  Lane 0 of each group is all-bits-set."""
     _skip_if_f64_unsupported(dtype)
     if dtype == qd.i32:
@@ -2417,23 +2424,25 @@ def test_subgroup_exclusive_and(dtype, log2_size):
         identity = -1
     else:  # u64
         identity = (1 << 64) - 1
-    _check_exclusive_scan(subgroup.exclusive_and, lambda a, b: a & b, identity, dtype, log2_size, _init_bitwise_int)
+    _check_exclusive_scan(
+        subgroup.exclusive_and_tiled, lambda a, b: a & b, identity, dtype, log2_size, _init_bitwise_int
+    )
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_or(dtype, log2_size):
+def test_subgroup_exclusive_or_tiled(dtype, log2_size):
     """Exclusive prefix bitwise-OR.  Lane 0 of each group is 0."""
     _skip_if_f64_unsupported(dtype)
-    _check_exclusive_scan(subgroup.exclusive_or, lambda a, b: a | b, 0, dtype, log2_size, _init_bitwise_int)
+    _check_exclusive_scan(subgroup.exclusive_or_tiled, lambda a, b: a | b, 0, dtype, log2_size, _init_bitwise_int)
 
 
 @pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_INT)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_xor(dtype, log2_size):
+def test_subgroup_exclusive_xor_tiled(dtype, log2_size):
     """Exclusive prefix bitwise-XOR.  Lane 0 of each group is 0."""
     _skip_if_f64_unsupported(dtype)
-    _check_exclusive_scan(subgroup.exclusive_xor, lambda a, b: a ^ b, 0, dtype, log2_size, _init_bitwise_int)
+    _check_exclusive_scan(subgroup.exclusive_xor_tiled, lambda a, b: a ^ b, 0, dtype, log2_size, _init_bitwise_int)
 
 
 # Voting / predicate ops.  All three are group-scoped over 2**log2_size lanes; the scenario tables below exercise (a)
@@ -2444,11 +2453,11 @@ def test_subgroup_exclusive_xor(dtype, log2_size):
 # the launch spans two CUDA / Metal / RDNA subgroups so cross-subgroup leakage would also be caught).
 
 
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("log2_size", [1, 5])
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_all_true(log2_size):
-    """``all_true(predicate, log2_size)`` is ``i32(all(predicate != 0))`` over each ``2**log2_size`` group, broadcast
-    to every lane in the group."""
+def test_subgroup_all_true_tiled(log2_size):
+    """``all_true_tiled(predicate, log2_size)`` is ``i32(all(predicate != 0))`` over each ``2**log2_size`` group,
+    broadcast to every lane in the group."""
     N = 64
     src = qd.field(dtype=qd.i32, shape=N)
     dst = qd.field(dtype=qd.i32, shape=N)
@@ -2457,7 +2466,7 @@ def test_subgroup_all_true(log2_size):
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.all_true(src[i], log2_size)
+            dst[i] = subgroup.all_true_tiled(src[i], log2_size)
 
     group_size = 1 << log2_size
 
@@ -2485,11 +2494,11 @@ def test_subgroup_all_true(log2_size):
     run_and_check("nonbinary-mixed", [((i * 17) % 13) - 6 for i in range(N)])
 
 
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("log2_size", [1, 5])
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_any_true(log2_size):
-    """``any_true(predicate, log2_size)`` is ``i32(any(predicate != 0))`` over each ``2**log2_size`` group, broadcast
-    to every lane in the group."""
+def test_subgroup_any_true_tiled(log2_size):
+    """``any_true_tiled(predicate, log2_size)`` is ``i32(any(predicate != 0))`` over each ``2**log2_size`` group,
+    broadcast to every lane in the group."""
     N = 64
     src = qd.field(dtype=qd.i32, shape=N)
     dst = qd.field(dtype=qd.i32, shape=N)
@@ -2498,7 +2507,7 @@ def test_subgroup_any_true(log2_size):
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.any_true(src[i], log2_size)
+            dst[i] = subgroup.any_true_tiled(src[i], log2_size)
 
     group_size = 1 << log2_size
 
@@ -2526,11 +2535,10 @@ def test_subgroup_any_true(log2_size):
     run_and_check("nonbinary-mixed", [((i * 17) % 13) - 6 for i in range(N)])
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FULL_DTYPE)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_all_equal(dtype, log2_size):
-    """``all_equal(value, log2_size)`` is ``i32(all values equal)`` over each ``2**log2_size`` group, broadcast to
+def test_subgroup_all_equal_tiled(dtype, log2_size):
+    """``all_equal_tiled(value, log2_size)`` is ``i32(all values equal)`` over each ``2**log2_size`` group, broadcast to
     every lane in the group.  Equality is the backend's native ``==``; we restrict scenarios to exactly-representable
     values (small integers / their f32+f64 castings) so float ``==`` is unambiguous."""
     _skip_if_f64_unsupported(dtype)
@@ -2542,7 +2550,7 @@ def test_subgroup_all_equal(dtype, log2_size):
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.all_equal(src[i], log2_size)
+            dst[i] = subgroup.all_equal_tiled(src[i], log2_size)
 
     group_size = 1 << log2_size
 
@@ -2572,13 +2580,12 @@ def test_subgroup_all_equal(dtype, log2_size):
     )
 
 
-@pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
-@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("dtype, log2_size", _SCENARIOS_FLOAT)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_all_equal_float_contract(dtype, log2_size):
-    """``all_equal`` on floats uses the backend's native ``==``: ``NaN != NaN`` and ``+0.0 == -0.0``, matching SPIR-V
-    ``OpGroupNonUniformAllEqual``.  Locks both contracts so a future refactor (e.g. swapping in ``__match_all_sync`` on
-    CUDA) can't silently regress to bit-equality."""
+def test_subgroup_all_equal_tiled_float_contract(dtype, log2_size):
+    """``all_equal_tiled`` on floats uses the backend's native ``==``: ``NaN != NaN`` and ``+0.0 == -0.0``, matching
+    SPIR-V ``OpGroupNonUniformAllEqual``.  Locks both contracts so a future refactor (e.g. swapping in
+    ``__match_all_sync`` on CUDA) can't silently regress to bit-equality."""
     _skip_if_f64_unsupported(dtype)
     N = 64
     src = qd.field(dtype=dtype, shape=N)
@@ -2588,7 +2595,7 @@ def test_subgroup_all_equal_float_contract(dtype, log2_size):
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.all_equal(src[i], log2_size)
+            dst[i] = subgroup.all_equal_tiled(src[i], log2_size)
 
     group_size = 1 << log2_size
 
@@ -2754,12 +2761,12 @@ def test_subgroup_ballot_first_n_partial_truthy_per_lane():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_full_subgroup_all_true():
-    """``ballot_full_subgroup(1)`` with every lane voting true returns a u64 bitmask covering the whole subgroup.
+def test_subgroup_ballot_all_true():
+    """``ballot(1)`` with every lane voting true returns a u64 bitmask covering the whole subgroup.
     On wave32 we expect ``0xFFFFFFFF`` (low 32 bits set, high 32 zero); on wave64 we expect ``0xFFFFFFFFFFFFFFFF``.
 
     Uses ``block_dim=64`` so every wave has every lane active on both wave32 (two full 32-lane waves) and wave64
-    (one full 64-lane wave) — required to satisfy the ``ballot_full_subgroup`` "all lanes active" contract on wave64.
+    (one full 64-lane wave) — required to satisfy the ``ballot`` "all lanes active" contract on wave64.
     """
     N = 64
     result = qd.field(dtype=qd.u64, shape=N)
@@ -2769,7 +2776,7 @@ def test_subgroup_ballot_full_subgroup_all_true():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            result[i] = subgroup.ballot_full_subgroup(1)
+            result[i] = subgroup.ballot(1)
             sg_size[i] = subgroup.group_size()
 
     foo()
@@ -2782,8 +2789,8 @@ def test_subgroup_ballot_full_subgroup_all_true():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_full_subgroup_all_false():
-    """``ballot_full_subgroup(0)`` returns zero everywhere — verifies no spurious bits leak in from
+def test_subgroup_ballot_all_false():
+    """``ballot(0)`` returns zero everywhere — verifies no spurious bits leak in from
     uninitialised wave64 high-half lanes."""
     N = 32
     result = qd.field(dtype=qd.u64, shape=N)
@@ -2792,7 +2799,7 @@ def test_subgroup_ballot_full_subgroup_all_false():
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            result[i] = subgroup.ballot_full_subgroup(0)
+            result[i] = subgroup.ballot(0)
 
     foo()
 
@@ -2801,13 +2808,13 @@ def test_subgroup_ballot_full_subgroup_all_false():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_full_subgroup_even_lanes():
+def test_subgroup_ballot_even_lanes():
     """Even lanes vote true; odd lanes vote false.  Result: ``0x5555...`` over the whole subgroup width.
 
     On wave32 we get ``0x0000000055555555`` (low 32 bits, high 32 zero); on wave64 we get
     ``0x5555555555555555`` (all 64 bits in the alternating pattern).
 
-    Uses ``block_dim=64`` to keep every lane active on wave64 (required by the ``ballot_full_subgroup`` "all lanes
+    Uses ``block_dim=64`` to keep every lane active on wave64 (required by the ``ballot`` "all lanes
     active" contract); on wave32 the workgroup splits into two waves and each wave's ballot covers its own 32 lanes.
     """
     N = 64
@@ -2819,7 +2826,7 @@ def test_subgroup_ballot_full_subgroup_even_lanes():
         qd.loop_config(block_dim=N)
         for i in range(N):
             lane = subgroup.invocation_id()
-            result[i] = subgroup.ballot_full_subgroup(1 - lane % 2)
+            result[i] = subgroup.ballot(1 - lane % 2)
             sg_size[i] = subgroup.group_size()
 
     foo()
@@ -2835,7 +2842,7 @@ def test_subgroup_ballot_full_subgroup_even_lanes():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_ballot_full_subgroup_high_half_only():
+def test_subgroup_ballot_high_half_only():
     """Only lanes ``>= 32`` vote true.  On wave32 the result is zero (no such lanes exist); on wave64 the result is
     ``0xFFFFFFFF00000000``.  This is the test that distinguishes a *correct* wave64 implementation from a wave32-only
     one: a broken wave64 path that always uses the i32 ballot would silently report 0 here."""
@@ -2848,7 +2855,7 @@ def test_subgroup_ballot_full_subgroup_high_half_only():
         qd.loop_config(block_dim=N)
         for i in range(N):
             lane = subgroup.invocation_id()
-            result[i] = subgroup.ballot_full_subgroup(qd.i32(lane >= qd.u32(32)))
+            result[i] = subgroup.ballot(qd.i32(lane >= qd.u32(32)))
             sg_size[i] = subgroup.group_size()
 
     foo()
@@ -3316,7 +3323,7 @@ def test_subgroup_group_size_stable_across_reinit(req_arch, req_options):
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_log2_group_size_feeds_into_template():
-    """``log2_group_size()`` can be passed directly into ``qd.template()`` arguments — e.g. ``reduce_add(v,
+    """``log2_group_size()`` can be passed directly into ``qd.template()`` arguments — e.g. ``reduce_add_tiled(v,
     log2_group_size())`` matches what hand-written ``log2_size=5/6`` would produce."""
     N = 64
     src = qd.field(dtype=qd.i32, shape=N)
@@ -3327,7 +3334,7 @@ def test_subgroup_log2_group_size_feeds_into_template():
         qd.loop_config(block_dim=N)
         for i in range(N):
             src[i] = 1
-            out[i] = subgroup.reduce_add(src[i], subgroup.log2_group_size())
+            out[i] = subgroup.reduce_add_tiled(src[i], subgroup.log2_group_size())
 
     fill_and_reduce()
     # Lane 0 of each subgroup gets the full sum: group_size on each.
@@ -3337,14 +3344,15 @@ def test_subgroup_log2_group_size_feeds_into_template():
 
 
 # --------------------------------------------------------------------------------------------------------------------
-# `_full` variants: smoke-test each one against its base op with explicit `log2_size=log2_group_size()`.  Picks N to be
-# ``group_size()`` so the full-subgroup variant is meaningful on both wave32 and wave64.
+# Full-subgroup wrappers: smoke-test each full-subgroup op against its ``_tiled`` form with explicit
+# ``log2_size=log2_group_size()``.  Picks N to be ``group_size()`` so the full-subgroup form is meaningful on both
+# wave32 and wave64.
 # --------------------------------------------------------------------------------------------------------------------
 
 
-def _check_full_variant_matches_base(full_fn, base_fn, *, dtype=qd.i32, host_init=None, atol=1e-5):
-    """Run ``full_fn(v)`` and ``base_fn(v, log2_size=log2_group_size())`` over the active subgroup and confirm they
-    produce identical results in every lane.  Both calls are inside the same kernel so the trace-time-resolved
+def _check_full_matches_tiled(full_fn, tiled_fn, *, dtype=qd.i32, host_init=None, atol=1e-5):
+    """Run ``full_fn(v)`` and ``tiled_fn(v, log2_size=log2_group_size())`` over the active subgroup and confirm they
+    produce identical results in every lane.  Both calls are inside the same kernel so the compile-time-resolved
     ``log2_group_size()`` lines up with whatever subgroup width Quadrants picked for the launch.
 
     ``dtype``: lane-value dtype (defaults to ``qd.i32``).  Float dtypes use a tolerance compare.
@@ -3365,14 +3373,14 @@ def _check_full_variant_matches_base(full_fn, base_fn, *, dtype=qd.i32, host_ini
         for i in range(N):
             src[i] = i + 1
             out_full[i] = full_fn(src[i])
-            out_base[i] = base_fn(src[i], l2)
+            out_base[i] = tiled_fn(src[i], l2)
 
     @qd.kernel
     def run_only():
         qd.loop_config(block_dim=N)
         for i in range(N):
             out_full[i] = full_fn(src[i])
-            out_base[i] = base_fn(src[i], l2)
+            out_base[i] = tiled_fn(src[i], l2)
 
     if host_init is None:
         fill_in_kernel()
@@ -3404,101 +3412,97 @@ def _init_full_bitwise(src, n):
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_add_full():
-    _check_full_variant_matches_base(subgroup.reduce_add_full, subgroup.reduce_add)
+def test_subgroup_reduce_add():
+    _check_full_matches_tiled(subgroup.reduce_add, subgroup.reduce_add_tiled)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_all_add_full():
-    _check_full_variant_matches_base(subgroup.reduce_all_add_full, subgroup.reduce_all_add)
+def test_subgroup_reduce_all_add():
+    _check_full_matches_tiled(subgroup.reduce_all_add, subgroup.reduce_all_add_tiled)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_min_full():
-    _check_full_variant_matches_base(subgroup.reduce_min_full, subgroup.reduce_min)
+def test_subgroup_reduce_min():
+    _check_full_matches_tiled(subgroup.reduce_min, subgroup.reduce_min_tiled)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_max_full():
-    _check_full_variant_matches_base(subgroup.reduce_max_full, subgroup.reduce_max)
+def test_subgroup_reduce_max():
+    _check_full_matches_tiled(subgroup.reduce_max, subgroup.reduce_max_tiled)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_all_min_full():
-    _check_full_variant_matches_base(subgroup.reduce_all_min_full, subgroup.reduce_all_min)
+def test_subgroup_reduce_all_min():
+    _check_full_matches_tiled(subgroup.reduce_all_min, subgroup.reduce_all_min_tiled)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_all_max_full():
-    _check_full_variant_matches_base(subgroup.reduce_all_max_full, subgroup.reduce_all_max)
+def test_subgroup_reduce_all_max():
+    _check_full_matches_tiled(subgroup.reduce_all_max, subgroup.reduce_all_max_tiled)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_add_full():
-    _check_full_variant_matches_base(subgroup.inclusive_add_full, subgroup.inclusive_add)
+def test_subgroup_inclusive_add():
+    _check_full_matches_tiled(subgroup.inclusive_add, subgroup.inclusive_add_tiled)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_min_full():
-    _check_full_variant_matches_base(subgroup.inclusive_min_full, subgroup.inclusive_min)
+def test_subgroup_inclusive_min():
+    _check_full_matches_tiled(subgroup.inclusive_min, subgroup.inclusive_min_tiled)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_max_full():
-    _check_full_variant_matches_base(subgroup.inclusive_max_full, subgroup.inclusive_max)
+def test_subgroup_inclusive_max():
+    _check_full_matches_tiled(subgroup.inclusive_max, subgroup.inclusive_max_tiled)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_mul_full():
-    _check_full_variant_matches_base(
-        subgroup.inclusive_mul_full, subgroup.inclusive_mul, host_init=_init_full_small_int
-    )
+def test_subgroup_inclusive_mul():
+    _check_full_matches_tiled(subgroup.inclusive_mul, subgroup.inclusive_mul_tiled, host_init=_init_full_small_int)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_and_full():
-    _check_full_variant_matches_base(subgroup.inclusive_and_full, subgroup.inclusive_and, host_init=_init_full_bitwise)
+def test_subgroup_inclusive_and():
+    _check_full_matches_tiled(subgroup.inclusive_and, subgroup.inclusive_and_tiled, host_init=_init_full_bitwise)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_or_full():
-    _check_full_variant_matches_base(subgroup.inclusive_or_full, subgroup.inclusive_or, host_init=_init_full_bitwise)
+def test_subgroup_inclusive_or():
+    _check_full_matches_tiled(subgroup.inclusive_or, subgroup.inclusive_or_tiled, host_init=_init_full_bitwise)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_xor_full():
-    _check_full_variant_matches_base(subgroup.inclusive_xor_full, subgroup.inclusive_xor, host_init=_init_full_bitwise)
+def test_subgroup_inclusive_xor():
+    _check_full_matches_tiled(subgroup.inclusive_xor, subgroup.inclusive_xor_tiled, host_init=_init_full_bitwise)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_add_full():
-    _check_full_variant_matches_base(subgroup.exclusive_add_full, subgroup.exclusive_add)
+def test_subgroup_exclusive_add():
+    _check_full_matches_tiled(subgroup.exclusive_add, subgroup.exclusive_add_tiled)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_mul_full():
-    _check_full_variant_matches_base(
-        subgroup.exclusive_mul_full, subgroup.exclusive_mul, host_init=_init_full_small_int
-    )
+def test_subgroup_exclusive_mul():
+    _check_full_matches_tiled(subgroup.exclusive_mul, subgroup.exclusive_mul_tiled, host_init=_init_full_small_int)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_and_full():
-    _check_full_variant_matches_base(subgroup.exclusive_and_full, subgroup.exclusive_and, host_init=_init_full_bitwise)
+def test_subgroup_exclusive_and():
+    _check_full_matches_tiled(subgroup.exclusive_and, subgroup.exclusive_and_tiled, host_init=_init_full_bitwise)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_or_full():
-    _check_full_variant_matches_base(subgroup.exclusive_or_full, subgroup.exclusive_or, host_init=_init_full_bitwise)
+def test_subgroup_exclusive_or():
+    _check_full_matches_tiled(subgroup.exclusive_or, subgroup.exclusive_or_tiled, host_init=_init_full_bitwise)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_xor_full():
-    _check_full_variant_matches_base(subgroup.exclusive_xor_full, subgroup.exclusive_xor, host_init=_init_full_bitwise)
+def test_subgroup_exclusive_xor():
+    _check_full_matches_tiled(subgroup.exclusive_xor, subgroup.exclusive_xor_tiled, host_init=_init_full_bitwise)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_all_equal_full():
+def test_subgroup_all_equal():
     """All-equal case is 1 across the full subgroup; flipping one lane drops it to 0."""
     N = subgroup.group_size()
     src = qd.field(dtype=qd.i32, shape=N)
@@ -3508,7 +3512,7 @@ def test_subgroup_all_equal_full():
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            out[i] = subgroup.all_equal_full(src[i])
+            out[i] = subgroup.all_equal(src[i])
 
     for i in range(N):
         src[i] = 7
@@ -3523,22 +3527,21 @@ def test_subgroup_all_equal_full():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_min_full():
-    """``exclusive_min_full(value, identity)`` matches ``exclusive_min(value, log2_group_size(), identity)`` lane-by-lane.
-    ``identity`` must be ``>=`` every legal element; we pass ``999`` (greater than every src value below)."""
+def test_subgroup_exclusive_min():
+    """``exclusive_min(value)`` matches ``exclusive_min_tiled(value, log2_group_size())`` lane-by-lane.  Lane 0 holds
+    the dtype's auto-derived identity (``np.iinfo(qd.i32).max`` here)."""
     N = subgroup.group_size()
     src = qd.field(dtype=qd.i32, shape=N)
     out_full = qd.field(dtype=qd.i32, shape=N)
     out_base = qd.field(dtype=qd.i32, shape=N)
     l2 = subgroup.log2_group_size()
-    identity = 999
 
     @qd.kernel
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            out_full[i] = subgroup.exclusive_min_full(src[i], identity)
-            out_base[i] = subgroup.exclusive_min(src[i], l2, identity)
+            out_full[i] = subgroup.exclusive_min(src[i])
+            out_base[i] = subgroup.exclusive_min_tiled(src[i], l2)
 
     for i in range(N):
         src[i] = ((i * 7 + 11) % 23) + 1  # 11, 7, 13, 3, 17, 5, 19, ... -- varied, all < 24
@@ -3546,27 +3549,28 @@ def test_subgroup_exclusive_min_full():
 
     for i in range(N):
         assert out_full[i] == out_base[i], f"lane {i}: full={out_full[i]}, base={out_base[i]}"
-    # Lane 0 (and lane log2_group_size()-aligned starts in general) must equal identity.
-    assert out_full[0] == identity, f"lane 0 of first group should be identity ({identity}), got {out_full[0]}"
+    expected_identity = int(np.iinfo(np.int32).max)
+    assert (
+        out_full[0] == expected_identity
+    ), f"lane 0 of first group should be dtype max ({expected_identity}), got {out_full[0]}"
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_max_full():
-    """``exclusive_max_full(value, identity)`` matches ``exclusive_max(value, log2_group_size(), identity)`` lane-by-lane.
-    ``identity`` must be ``<=`` every legal element; we pass ``-999``."""
+def test_subgroup_exclusive_max():
+    """``exclusive_max(value)`` matches ``exclusive_max_tiled(value, log2_group_size())`` lane-by-lane.  Lane 0 holds
+    the dtype's auto-derived identity (``np.iinfo(qd.i32).min`` here)."""
     N = subgroup.group_size()
     src = qd.field(dtype=qd.i32, shape=N)
     out_full = qd.field(dtype=qd.i32, shape=N)
     out_base = qd.field(dtype=qd.i32, shape=N)
     l2 = subgroup.log2_group_size()
-    identity = -999
 
     @qd.kernel
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            out_full[i] = subgroup.exclusive_max_full(src[i], identity)
-            out_base[i] = subgroup.exclusive_max(src[i], l2, identity)
+            out_full[i] = subgroup.exclusive_max(src[i])
+            out_base[i] = subgroup.exclusive_max_tiled(src[i], l2)
 
     for i in range(N):
         src[i] = ((i * 7 + 11) % 23) + 1
@@ -3574,12 +3578,16 @@ def test_subgroup_exclusive_max_full():
 
     for i in range(N):
         assert out_full[i] == out_base[i], f"lane {i}: full={out_full[i]}, base={out_base[i]}"
-    assert out_full[0] == identity, f"lane 0 of first group should be identity ({identity}), got {out_full[0]}"
+    expected_identity = int(np.iinfo(np.int32).min)
+    assert (
+        out_full[0] == expected_identity
+    ), f"lane 0 of first group should be dtype min ({expected_identity}), got {out_full[0]}"
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_min_full():
-    """``segmented_reduce_min_full(value, head_flag)`` matches ``segmented_reduce_min(value, head_flag, log2_group_size())``."""
+def test_subgroup_segmented_reduce_min():
+    """``segmented_reduce_min(value, head_flag)`` matches
+    ``segmented_reduce_min_tiled(value, head_flag, log2_group_size())``."""
     N = subgroup.group_size()
     src = qd.field(dtype=qd.i32, shape=N)
     head = qd.field(dtype=qd.i32, shape=N)
@@ -3591,8 +3599,8 @@ def test_subgroup_segmented_reduce_min_full():
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            out_full[i] = subgroup.segmented_reduce_min_full(src[i], head[i])
-            out_base[i] = subgroup.segmented_reduce_min(src[i], head[i], l2)
+            out_full[i] = subgroup.segmented_reduce_min(src[i], head[i])
+            out_base[i] = subgroup.segmented_reduce_min_tiled(src[i], head[i], l2)
 
     for i in range(N):
         src[i] = ((i * 11 + 5) % 31) + 1  # varied 1..31, non-monotonic
@@ -3604,8 +3612,9 @@ def test_subgroup_segmented_reduce_min_full():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_max_full():
-    """``segmented_reduce_max_full(value, head_flag)`` matches ``segmented_reduce_max(value, head_flag, log2_group_size())``."""
+def test_subgroup_segmented_reduce_max():
+    """``segmented_reduce_max(value, head_flag)`` matches
+    ``segmented_reduce_max_tiled(value, head_flag, log2_group_size())``."""
     N = subgroup.group_size()
     src = qd.field(dtype=qd.i32, shape=N)
     head = qd.field(dtype=qd.i32, shape=N)
@@ -3617,8 +3626,8 @@ def test_subgroup_segmented_reduce_max_full():
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            out_full[i] = subgroup.segmented_reduce_max_full(src[i], head[i])
-            out_base[i] = subgroup.segmented_reduce_max(src[i], head[i], l2)
+            out_full[i] = subgroup.segmented_reduce_max(src[i], head[i])
+            out_base[i] = subgroup.segmented_reduce_max_tiled(src[i], head[i], l2)
 
     for i in range(N):
         src[i] = ((i * 11 + 5) % 31) + 1
@@ -3636,21 +3645,21 @@ def test_subgroup_segmented_reduce_max_full():
 
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_add_full_float(dtype):
-    _check_full_variant_matches_base(subgroup.reduce_add_full, subgroup.reduce_add, dtype=dtype)
+def test_subgroup_reduce_add_float(dtype):
+    _check_full_matches_tiled(subgroup.reduce_add, subgroup.reduce_add_tiled, dtype=dtype)
 
 
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_add_full_float(dtype):
-    _check_full_variant_matches_base(subgroup.inclusive_add_full, subgroup.inclusive_add, dtype=dtype)
+def test_subgroup_inclusive_add_float(dtype):
+    _check_full_matches_tiled(subgroup.inclusive_add, subgroup.inclusive_add_tiled, dtype=dtype)
 
 
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_add_full_float(dtype):
-    """Float-dtype variant of `test_subgroup_segmented_reduce_add_full` -- inline because the head-flag-driven init
-    doesn't fit the shared `_check_full_variant_matches_base` template."""
+def test_subgroup_segmented_reduce_add_float(dtype):
+    """Float-dtype variant of `test_subgroup_segmented_reduce_add` -- inline because the head-flag-driven init doesn't
+    fit the shared `_check_full_matches_tiled` template."""
     _skip_if_f64_unsupported(dtype)
     N = subgroup.group_size()
     src = qd.field(dtype=dtype, shape=N)
@@ -3663,8 +3672,8 @@ def test_subgroup_segmented_reduce_add_full_float(dtype):
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            out_full[i] = subgroup.segmented_reduce_add_full(src[i], head[i])
-            out_base[i] = subgroup.segmented_reduce_add(src[i], head[i], l2)
+            out_full[i] = subgroup.segmented_reduce_add(src[i], head[i])
+            out_base[i] = subgroup.segmented_reduce_add_tiled(src[i], head[i], l2)
 
     for i in range(N):
         src[i] = (i + 1) * 1.5
@@ -3678,8 +3687,8 @@ def test_subgroup_segmented_reduce_add_full_float(dtype):
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_all_true_full():
-    """``all_true_full`` reduces across every lane in the subgroup.  Setting one lane false flips the result."""
+def test_subgroup_all_true():
+    """``all_true`` reduces across every lane in the subgroup.  Setting one lane false flips the result."""
     N = subgroup.group_size()
     flag = qd.field(dtype=qd.i32, shape=N)
     out = qd.field(dtype=qd.i32, shape=N)
@@ -3688,7 +3697,7 @@ def test_subgroup_all_true_full():
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            out[i] = subgroup.all_true_full(flag[i])
+            out[i] = subgroup.all_true(flag[i])
 
     for i in range(N):
         flag[i] = 1
@@ -3703,8 +3712,8 @@ def test_subgroup_all_true_full():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_any_true_full():
-    """``any_true_full`` ORs across every lane: 0 only when every lane votes false."""
+def test_subgroup_any_true():
+    """``any_true`` ORs across every lane: 0 only when every lane votes false."""
     N = subgroup.group_size()
     flag = qd.field(dtype=qd.i32, shape=N)
     out = qd.field(dtype=qd.i32, shape=N)
@@ -3713,7 +3722,7 @@ def test_subgroup_any_true_full():
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            out[i] = subgroup.any_true_full(flag[i])
+            out[i] = subgroup.any_true(flag[i])
 
     for i in range(N):
         flag[i] = 0
@@ -3728,8 +3737,8 @@ def test_subgroup_any_true_full():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_segmented_reduce_add_full():
-    """``segmented_reduce_add_full`` uses ``log2_size = log2_group_size()``; on wave32 backends that's 5 (covers the
+def test_subgroup_segmented_reduce_add():
+    """``segmented_reduce_add`` uses ``log2_size = log2_group_size()``; on wave32 backends that's 5 (covers the
     full warp), on AMDGPU wave64 it's 6 (covers the full wave).  Compares against the base call with the same
     ``log2_size``."""
     N = subgroup.group_size()
@@ -3743,8 +3752,8 @@ def test_subgroup_segmented_reduce_add_full():
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            out_full[i] = subgroup.segmented_reduce_add_full(src[i], head[i])
-            out_base[i] = subgroup.segmented_reduce_add(src[i], head[i], l2)
+            out_full[i] = subgroup.segmented_reduce_add(src[i], head[i])
+            out_base[i] = subgroup.segmented_reduce_add_tiled(src[i], head[i], l2)
 
     for i in range(N):
         src[i] = i + 1
@@ -3758,14 +3767,14 @@ def test_subgroup_segmented_reduce_add_full():
 # --------------------------------------------------------------------------------------------------------------------
 # `segmented_reduce_*` with `log2_size = 6` (wave64 / full AMDGPU subgroup).  On wave32 hardware this would violate
 # `2**log2_size <= group_size()`, so the test is gated on AMDGPU.  Exercises the u64-bitmask branch of
-# `_segment_head_distance`.
+# `_segment_head_distance_tiled`.
 # --------------------------------------------------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.amdgpu)
-def test_subgroup_segmented_reduce_add_log2_size_6():
+def test_subgroup_segmented_reduce_add_tiled_log2_size_6():
     """``log2_size=6`` reduces across all 64 lanes of an AMDGPU wave64 wavefront.  Exercises the u64-bitmask path
-    in ``_segment_head_distance``."""
+    in ``_segment_head_distance_tiled``."""
     N = 64
     src = qd.field(dtype=qd.i32, shape=N)
     head = qd.field(dtype=qd.i32, shape=N)
@@ -3775,7 +3784,7 @@ def test_subgroup_segmented_reduce_add_log2_size_6():
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.segmented_reduce_add(src[i], head[i], 6)
+            dst[i] = subgroup.segmented_reduce_add_tiled(src[i], head[i], 6)
 
     head_lanes = {0, 9, 23, 40, 57}
     for i in range(N):
@@ -3795,9 +3804,9 @@ def test_subgroup_segmented_reduce_add_log2_size_6():
 
 
 @test_utils.test(arch=qd.amdgpu)
-def test_subgroup_segmented_reduce_max_log2_size_6():
-    """``log2_size=6`` ``segmented_reduce_max`` across a wave64 wavefront — same coverage as the ``_add`` variant for
-    the u64 path."""
+def test_subgroup_segmented_reduce_max_tiled_log2_size_6():
+    """``log2_size=6`` ``segmented_reduce_max_tiled`` across a wave64 wavefront — same coverage as the ``_add``
+    variant for the u64 path."""
     N = 64
     src = qd.field(dtype=qd.i32, shape=N)
     head = qd.field(dtype=qd.i32, shape=N)
@@ -3807,7 +3816,7 @@ def test_subgroup_segmented_reduce_max_log2_size_6():
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.segmented_reduce_max(src[i], head[i], 6)
+            dst[i] = subgroup.segmented_reduce_max_tiled(src[i], head[i], 6)
 
     head_lanes = {0, 17, 50}
     for i in range(N):
@@ -3839,31 +3848,32 @@ def test_subgroup_segmented_reduce_max_log2_size_6():
 
 
 @test_utils.test(arch=qd.amdgpu)
-def test_subgroup_reduce_add_log2_size_6():
-    """``log2_size = 6`` ``reduce_add`` over a wave64 subgroup.  Exercises the cross-half ``shuffle_down(v, 32)``
+def test_subgroup_reduce_add_tiled_log2_size_6():
+    """``log2_size = 6`` ``reduce_add_tiled`` over a wave64 subgroup.  Exercises the cross-half ``shuffle_down(v, 32)``
     step of the tree, which on RDNA pre-fix silently dropped the upper-half contribution."""
-    _check_reduce_lane0(subgroup.reduce_add, lambda a, b: a + b, qd.i32, 6, _init_field)
+    _check_reduce_lane0(subgroup.reduce_add_tiled, lambda a, b: a + b, qd.i32, 6, _init_field)
 
 
 @test_utils.test(arch=qd.amdgpu)
-def test_subgroup_reduce_all_add_log2_size_6():
-    """``log2_size = 6`` ``reduce_all_add`` over a wave64 subgroup.  Butterfly uses ``shuffle_xor(v, 32)`` at the
+def test_subgroup_reduce_all_add_tiled_log2_size_6():
+    """``log2_size = 6`` ``reduce_all_add_tiled`` over a wave64 subgroup.  Butterfly uses ``shuffle_xor(v, 32)`` at the
     final step, which on RDNA pre-fix wrapped within SIMD32 and broadcast the wrong value to every lane."""
-    _check_reduce_all(subgroup.reduce_all_add, lambda a, b: a + b, qd.i32, 6, _init_field)
+    _check_reduce_all(subgroup.reduce_all_add_tiled, lambda a, b: a + b, qd.i32, 6, _init_field)
 
 
 @test_utils.test(arch=qd.amdgpu)
-def test_subgroup_inclusive_add_log2_size_6():
-    """``log2_size = 6`` ``inclusive_add`` over a wave64 subgroup.  Final Hillis-Steele step does
+def test_subgroup_inclusive_add_tiled_log2_size_6():
+    """``log2_size = 6`` ``inclusive_add_tiled`` over a wave64 subgroup.  Final Hillis-Steele step does
     ``shuffle_up(v, 32)``, exercising the cross-half path."""
-    _check_inclusive_scan(subgroup.inclusive_add, lambda a, b: a + b, qd.i32, 6, _init_field)
+    _check_inclusive_scan(subgroup.inclusive_add_tiled, lambda a, b: a + b, qd.i32, 6, _init_field)
 
 
 @test_utils.test(arch=qd.amdgpu)
-def test_subgroup_exclusive_add_log2_size_6():
-    """``log2_size = 6`` ``exclusive_add`` over a wave64 subgroup.  Same shuffle_up tree as ``inclusive_add`` plus
-    an extra ``shuffle_up`` to shift the result down by one lane and an identity-at-lane-0 substitution."""
-    _check_exclusive_scan(subgroup.exclusive_add, lambda a, b: a + b, 0, qd.i32, 6, _init_field)
+def test_subgroup_exclusive_add_tiled_log2_size_6():
+    """``log2_size = 6`` ``exclusive_add_tiled`` over a wave64 subgroup.  Same shuffle_up tree as
+    ``inclusive_add_tiled`` plus an extra ``shuffle_up`` to shift the result down by one lane and an
+    identity-at-lane-0 substitution."""
+    _check_exclusive_scan(subgroup.exclusive_add_tiled, lambda a, b: a + b, 0, qd.i32, 6, _init_field)
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -3994,8 +4004,8 @@ def test_subgroup_shuffle_absolute_lane_high_half(dtype):
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_add_full_absolute():
-    """End-to-end correctness: ``reduce_add_full`` over a wave64 subgroup must equal the Python sum.  Pre-fix the
+def test_subgroup_reduce_add_absolute():
+    """End-to-end correctness: ``reduce_add`` over a wave64 subgroup must equal the Python sum.  Pre-fix the
     top-half lanes never contributed on RDNA, so this returned half the expected value (or worse)."""
     _skip_unless_wave64()
     N = 64
@@ -4006,7 +4016,7 @@ def test_subgroup_reduce_add_full_absolute():
     def k():
         qd.loop_config(block_dim=N)
         for i in range(N):
-            dst[i] = subgroup.reduce_add_full(src[i])
+            dst[i] = subgroup.reduce_add(src[i])
 
     payload = [i * 3 + 1 for i in range(N)]
     for i in range(N):
@@ -4015,6 +4025,6 @@ def test_subgroup_reduce_add_full_absolute():
 
     k()
 
-    # ``reduce_add`` returns the full sum in lane 0 of each window; for log2_size = log2_group_size() the window is
-    # the whole subgroup, so we only check lane 0.  (The other lanes' values are implementation-defined.)
-    assert dst[0] == expected, f"reduce_add_full lane 0: got {dst[0]}, expected {expected}"
+    # ``reduce_add_tiled`` returns the full sum in lane 0 of each tile; for log2_size = log2_group_size() the tile
+    # is the whole subgroup, so we only check lane 0.  (The other lanes' values are implementation-defined.)
+    assert dst[0] == expected, f"reduce_add lane 0: got {dst[0]}, expected {expected}"

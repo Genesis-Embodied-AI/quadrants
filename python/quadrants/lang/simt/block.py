@@ -134,9 +134,9 @@ class SharedArray:
 # `block.sync` + (NUM_SUBGROUPS - 1) ops on thread 0.  The subgroup size is read from `subgroup.group_size()` (a
 # compile-time Python int) at the top of every block op, so callers never plumb it in.
 #
-# The per-subgroup step delegates to `subgroup._reduce`, the generic-op private helper that mirrors
-# `subgroup.reduce_add` / `_min` / `_max` but takes a caller-supplied template operator -- so the same block skeleton
-# covers add / min / max / mul / bitwise / custom monoids.
+# The per-subgroup step delegates to `subgroup._reduce_tiled`, the generic-op private helper that mirrors
+# `subgroup.reduce_add_tiled` / `_min_tiled` / `_max_tiled` but takes a caller-supplied template operator -- so the
+# same block skeleton covers add / min / max / mul / bitwise / custom monoids.
 
 
 @_func
@@ -165,7 +165,7 @@ def reduce(value, block_dim: template(), op: template(), dtype: template()):
     )
     NUM_SUBGROUPS = impl.static(block_dim // SUBGROUP_SIZE)
 
-    subgroup_agg = _subgroup._reduce(value, op, log2_subgroup)
+    subgroup_agg = _subgroup._reduce_tiled(value, op, log2_subgroup)
 
     if impl.static(NUM_SUBGROUPS == 1):
         return subgroup_agg
@@ -279,7 +279,7 @@ def inclusive_scan(value, block_dim: template(), op: template(), dtype: template
     )
     NUM_SUBGROUPS = impl.static(block_dim // SUBGROUP_SIZE)
 
-    inclusive = _subgroup._inclusive_scan(value, op, log2_subgroup)
+    inclusive = _subgroup._inclusive_scan_tiled(value, op, log2_subgroup)
 
     if impl.static(NUM_SUBGROUPS == 1):
         return inclusive
@@ -326,7 +326,7 @@ def exclusive_scan(value, block_dim: template(), op: template(), identity, dtype
     )
     NUM_SUBGROUPS = impl.static(block_dim // SUBGROUP_SIZE)
 
-    exclusive = _subgroup._exclusive_scan(value, op, identity, log2_subgroup)
+    exclusive = _subgroup._exclusive_scan_tiled(value, op, identity, log2_subgroup)
 
     if impl.static(NUM_SUBGROUPS == 1):
         return exclusive
