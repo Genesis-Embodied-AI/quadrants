@@ -31,6 +31,26 @@ struct HipKernelNodeParams {
   unsigned int sharedMemBytes;
 };
 
+// Kernel node arg-packing wrapper. HIP's hipModuleLaunchKernel on AMD requires
+// args via the `extra` byte-buffer convention (see
+// `rhi/amdgpu/amdgpu_context.cpp::AMDGPUContext::launch`), not via the per-arg
+// `kernelParams` pointer array. Graph kernel nodes follow the same calling
+// convention, so we mirror the non-graph launcher's setup: a packed byte
+// buffer + a 5-element extra config with HIP_LAUNCH_PARAM_* markers.
+//
+// One instance per graph (not per node): all kernel nodes in a cached graph
+// share a single `device_runtime_ctx` pointer arg, and the size never changes.
+struct CachedKernelArgs {
+  // Byte-packed copy of the single kernel arg: the device-side RuntimeContext
+  // pointer. Sized for `sizeof(void *)`.
+  void *packed_runtime_ctx_ptr{nullptr};
+  std::size_t pack_size{sizeof(void *)};
+  // {HIP_LAUNCH_PARAM_BUFFER_POINTER=0x01, &packed_runtime_ctx_ptr,
+  //  HIP_LAUNCH_PARAM_BUFFER_SIZE=0x02, &pack_size, HIP_LAUNCH_PARAM_END=0x03}.
+  // Held by value so its address is stable for the graph's lifetime.
+  void *extra_config[5]{};
+};
+
 // Per-(launch_id) graph cache entry. Construction allocates the persistent
 // device-side buffers that the cached graph reads through; destruction frees
 // them and the instantiated `hipGraphExec_t`.
@@ -58,6 +78,11 @@ struct CachedGraph {
   // device-stages the `RuntimeContext` (see `runtime/amdgpu/kernel_launcher.cpp`
   // for the per-launch equivalent).
   void *device_runtime_ctx{nullptr};
+  // Per-graph kernel-arg packing (see CachedKernelArgs). Held by value so the
+  // `extra_config` array's address is stable for the cached graph's lifetime.
+  // All kernel nodes in this graph share the same packed args (the device
+  // RuntimeContext pointer).
+  CachedKernelArgs kernel_args;
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
   std::size_t num_nodes{0};
@@ -115,7 +140,7 @@ class GraphManager {
                         unsigned int grid_dim,
                         unsigned int block_dim,
                         unsigned int shared_mem,
-                        void **kernel_params);
+                        CachedKernelArgs &kernel_args);
 
   // Keyed by `launch_id`, which uniquely identifies a compiled kernel variant
   // (each template specialization gets its own launch_id).

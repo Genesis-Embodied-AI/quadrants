@@ -1,6 +1,8 @@
-# CUDA Graph
+# GPU Graphs (CUDA / HIP)
 
-CUDA graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch. On non-CUDA platforms, the cuda graph annotation is simply ignored, and code runs normally.
+GPU graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch. Quadrants supports basic `graph=True` on both CUDA (via CUDA graphs) and AMDGPU (via HIP graphs). On backends without a graph runtime (e.g. CPU, Vulkan), the `graph=True` annotation is silently ignored and code runs normally.
+
+Device-side iteration with `graph_do_while` is currently only fully native on CUDA SM 9.0+ (Hopper); on AMDGPU and older CUDA GPUs it falls back to a host-side loop (see [GPU-side iteration with `graph_do_while`](#gpu-side-iteration-with-graph_do_while) below).
 
 ## Basic usage
 
@@ -30,10 +32,14 @@ my_kernel(x, y)  # first call: builds and caches the graph
 my_kernel(x, y)  # subsequent calls: replays the cached graph
 ```
 
+This works the same way on CUDA and AMDGPU. The cache is keyed per (compiled-kernel-specialization, launch-id), so different template instantiations (different field bindings, etc.) get their own cached graph.
+
 ### Restrictions
 
-- **No struct return values.** Kernels that return values (e.g. `-> qd.i32`) cannot use CUDA graphs. An error is raised if `graph=True` is set on such a kernel.
+- **No struct return values.** Kernels that return values (e.g. `-> qd.i32`) cannot use GPU graphs. An error is raised if `graph=True` is set on such a kernel.
 - **Primal kernels only.** The `graph=True` flag is applied to the primal (forward) kernel only, not its adjoint. Autodiff kernels use the normal launch path.
+- **Device-resident ndarrays.** Graph mode bakes device pointers into the cached graph, so all ndarray arguments must be on the GPU. Passing a host-resident ndarray raises an error.
+- **`qd_stream` is incompatible** with `graph=True`. Choose one or the other.
 
 ### Passing different arguments
 
@@ -77,8 +83,8 @@ solve(x, counter)
 
 The argument to `qd.graph_do_while()` must be the name of a scalar `qd.i32` ndarray parameter. The loop body repeats while this value is non-zero.
 
-- On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
-- On older CUDA GPUs and non-CUDA backends, it falls back to a host-side do-while loop.
+- On CUDA SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
+- On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see [Caveats](#caveats)). HIP does not currently expose conditional / while graph nodes, so AMDGPU cannot run the loop fully on the device today.
 
 ### Patterns
 
@@ -128,11 +134,13 @@ However, other parameters can be any supported Quadrants kernel parameter type.
 
 ### Caveats
 
-On currently unsupported GPU platforms, such as AMDGPU at the time of writing, the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:
+On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and **AMDGPU** (HIP has no conditional / while node API as of ROCm 7.2) — the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:
 - wait for GPU async queue to finish processing
 - copy condition value to hostside
 - evaluate condition value on hostside
 - launch new kernels for next loop iteration, if not finished yet
+
+Note: the basic `graph=True` path (without `graph_do_while`) does **not** stall the host like this on either CUDA or AMDGPU — the entire kernel sequence runs as a single GPU-side graph replay.
 
 Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:
 - fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:
