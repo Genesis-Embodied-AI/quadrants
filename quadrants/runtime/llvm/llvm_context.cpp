@@ -524,7 +524,32 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_intrinsic("thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
       patch_intrinsic("block_thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
       patch_intrinsic("block_idx", llvm::Intrinsic::amdgcn_workgroup_id_x);
-      patch_intrinsic("block_barrier", llvm::Intrinsic::amdgcn_s_barrier, false);
+
+      // Synthesize ``block_barrier`` as ``fence release "workgroup" -> s_barrier -> fence acquire "workgroup"`` (the
+      // same sequence HIP's ``__syncthreads()`` emits via ``__work_group_barrier`` in
+      // ``hip/amd_detail/amd_device_functions.h``). The bare ``llvm.amdgcn.s.barrier`` intrinsic only emits the
+      // ``s_barrier`` instruction; without the surrounding fences, LDS writes issued before the barrier are not
+      // guaranteed to be visible to other lanes after the barrier on RDNA3 because the AMDGCN backend has no
+      // memory-model edge tying the barrier to prior stores. Symptom that motivated this fix: at ``BLOCK_DIM=256`` /
+      // ``NUM_SUBGROUPS=4``, ``block.reduce`` reads stale garbage from its inter-subgroup ``SharedArray`` at
+      // ``NBLOCKS>=~200`` (intermittent below, near-deterministic above) -- exactly the "publish to LDS, barrier,
+      // read LDS" pattern that needs the release/acquire pair to be sound.
+      {
+        auto func = module->getFunction("block_barrier");
+        if (func) {
+          func->deleteBody();
+          auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+          IRBuilder<> builder(*ctx);
+          builder.SetInsertPoint(bb);
+          llvm::SyncScope::ID workgroup = ctx->getOrInsertSyncScopeID("workgroup");
+          builder.CreateFence(llvm::AtomicOrdering::Release, workgroup);
+          builder.CreateIntrinsic(llvm::Intrinsic::amdgcn_s_barrier, llvm::ArrayRef<llvm::Type *>{},
+                                  llvm::ArrayRef<llvm::Value *>{});
+          builder.CreateFence(llvm::AtomicOrdering::Acquire, workgroup);
+          builder.CreateRetVoid();
+          QuadrantsLLVMContext::mark_inline(func);
+        }
+      }
       patch_intrinsic("amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
       patch_intrinsic("amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
       // ``llvm.amdgcn.permlane64`` exchanges a 32-bit value between lanes ``i`` and ``i ^ 32`` in a single instruction.

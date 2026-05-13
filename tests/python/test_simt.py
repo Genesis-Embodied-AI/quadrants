@@ -959,6 +959,48 @@ def test_block_reduce_max(dtype, sg_per_block):
             assert abs(dst[b] - expected) < 1e-5, f"block {b}: got {dst[b]}, expected {expected}"
 
 
+@pytest.mark.parametrize("sg_per_block", [4, 8])
+@test_utils.test(arch=qd.gpu)
+def test_block_reduce_add_many_blocks(sg_per_block):
+    """Block sum-reduce stress test: many concurrent blocks driving the multi-subgroup shared-memory combine path.
+
+    Regression guard for an AMDGPU bug where ``block.sync()`` lowered to a bare ``llvm.amdgcn.s.barrier`` (without the
+    surrounding ``fence release / acquire syncscope("workgroup")`` pair that HIP's ``__syncthreads()`` emits via
+    ``__work_group_barrier``). On RDNA3 (``gfx1100``) at ``BLOCK_DIM>=4*SUBGROUP_SIZE`` and ``NUM_BLOCKS>=~200``, the
+    ``shared[w]`` reads in ``block.reduce``'s inter-subgroup fold would intermittently see uninitialized LDS, leaking
+    seemingly-random 4-byte values into the per-block aggregate; lower block counts and ``sg_per_block in [1, 2]``
+    didn't trip it. Patched in ``quadrants/runtime/llvm/llvm_context.cpp`` to inline the fence-barrier-fence sequence
+    in the AMDGPU ``block_barrier`` body. We stay on ``i32`` add for deterministic comparison and only stress
+    ``sg_per_block in [4, 8]`` (the multi-subgroup combine path); single-subgroup short-circuits the LDS hop and isn't
+    affected.
+    """
+    block_dim = sg_per_block * _arch_subgroup_size()
+    NUM_BLOCKS = 512
+    N = NUM_BLOCKS * block_dim
+    src = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=NUM_BLOCKS)
+    rng = np.random.default_rng(20260513)
+    src_np = rng.integers(low=-1000, high=1000, size=N, dtype=np.int32)
+    src.from_numpy(src_np)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            agg = block.reduce_add(src[i], block_dim, qd.i32)
+            if tid == 0:
+                dst[i // block_dim] = agg
+
+    foo()
+    got = dst.to_numpy()
+    expected = src_np.reshape(NUM_BLOCKS, block_dim).sum(axis=1, dtype=np.int32)
+    bad = np.where(got != expected)[0]
+    assert (
+        len(bad) == 0
+    ), f"{len(bad)} of {NUM_BLOCKS} block reductions wrong; first 5 bad blocks {bad[:5]}, got {got[bad[:5]]}, expected {expected[bad[:5]]}"
+
+
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
 @pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
