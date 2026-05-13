@@ -18,7 +18,10 @@ from quadrants.lang.matrix_ops_utils import (
     same_shapes,
     square_matrix,
 )
+from quadrants.lang.misc import loop_config
 from quadrants.types.annotations import template
+
+_MATMUL_UNROLL_THRESHOLD = 64
 
 
 @preconditions(arg_at(0, assert_tensor))
@@ -266,6 +269,22 @@ def fill(mat: template(), val):
 @preconditions(check_matmul)
 @pyfunc
 def _matmul_helper(mat_x, mat_y):
+    """Compute ``mat_x @ mat_y`` for vectors and matrices.
+
+    Loop unrolling strategy for the matrix–matrix path: when the unrolled FMA count ``M*K*N`` is at most
+    :data:`_MATMUL_UNROLL_THRESHOLD` (= 64, i.e. up to ``4×4·4×4``), all three loops stay
+    ``static(range)`` and the kernel is fully straight-line. Above the threshold, the largest of the three
+    dimensions is promoted to a runtime ``range`` so the unrolled body stays bounded by the product of the
+    *other* two dims; the runtime loop is tagged ``loop_config(serialize=True)`` so a calling
+    ``@qd.kernel`` with no top-level outer loop does not parallelize the matmul (see
+    ``perso_hugh/doc/quadrants_runtime_range_in_func_parallelized_gotcha_20260510.md``). Tie-break on the
+    largest dim prefers ``K`` (rank-1-update form, uniform per-iteration access pattern), then ``M``,
+    then ``N``.
+
+    Empirically on cluster CUDA, the cold-compile time of a square ``N×N · N×N`` matmul drops from ~12 s
+    at ``N=12`` (fully unrolled, 1728 FMAs) to <1 s with the hybrid path (144 FMAs unrolled in the inner
+    block, 12 runtime iterations). Vector dot and matrix-vector cases are unaffected and stay fully unrolled.
+    """
     shape_x = static(mat_x.get_shape())
     shape_y = static(mat_y.get_shape())
     if static(len(shape_x) == 1 and len(shape_y) == 1):
@@ -277,12 +296,38 @@ def _matmul_helper(mat_x, mat_y):
             for j in static(range(shape_x[1])):
                 vec_z[i] = vec_z[i] + mat_x[i, j] * mat_y[j]
         return vec_z
+
+    M = static(shape_x[0])
+    K = static(shape_x[1])
+    N = static(shape_y[1])
     zero_elem = mat_x[0, 0] * mat_y[0, 0] * 0  # for correct return type
-    mat_z = _filled_matrix(shape_x[0], shape_y[1], None, zero_elem)
-    for i in static(range(shape_x[0])):
-        for j in static(range(shape_y[1])):
-            for k in static(range(shape_x[1])):
-                mat_z[i, j] = mat_z[i, j] + mat_x[i, k] * mat_y[k, j]
+    mat_z = _filled_matrix(M, N, None, zero_elem)
+    if static(M * K * N <= _MATMUL_UNROLL_THRESHOLD):
+        for i in static(range(M)):
+            for j in static(range(N)):
+                for k in static(range(K)):
+                    mat_z[i, j] = mat_z[i, j] + mat_x[i, k] * mat_y[k, j]
+    elif static(K >= M and K >= N):
+        # K-runtime (rank-1 update): each iteration accumulates one outer product into mat_z.
+        loop_config(serialize=True)
+        for k in range(K):
+            for i in static(range(M)):
+                for j in static(range(N)):
+                    mat_z[i, j] = mat_z[i, j] + mat_x[i, k] * mat_y[k, j]
+    elif static(M >= N):
+        # M-runtime (row-major): each iteration computes one row of mat_z.
+        loop_config(serialize=True)
+        for i in range(M):
+            for j in static(range(N)):
+                for k in static(range(K)):
+                    mat_z[i, j] = mat_z[i, j] + mat_x[i, k] * mat_y[k, j]
+    else:
+        # N-runtime (column-major): each iteration computes one column of mat_z.
+        loop_config(serialize=True)
+        for j in range(N):
+            for i in static(range(M)):
+                for k in static(range(K)):
+                    mat_z[i, j] = mat_z[i, j] + mat_x[i, k] * mat_y[k, j]
     return mat_z
 
 
