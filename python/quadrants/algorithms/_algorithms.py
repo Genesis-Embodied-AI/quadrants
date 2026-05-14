@@ -19,14 +19,11 @@ def parallel_sort(keys, values=None):
     """Odd-even merge sort (deprecated).
 
     .. deprecated::
-        Prefer ``qd.algorithms.device_radix_sort(keys, *, tmp_keys, values=...,
-        tmp_values=...)``. The new functional API is asymptotically
-        ``O(N log_radix N)`` rather than ``O(N log^2 N)``, supports
-        ``{u32, i32, f32}`` keys across CUDA / AMDGPU / Vulkan / Metal, and
-        takes a caller-supplied tmp buffer so the call stays fully async.
-        ``parallel_sort`` is kept for one release cycle for backward compat
-        and will be removed thereafter. See
-        ``docs/source/user_guide/algorithms.md`` for the migration recipe.
+        Prefer ``qd.algorithms.device_radix_sort(keys, *, tmp_keys, values=..., tmp_values=...)``. The new
+        functional API is asymptotically ``O(N log_radix N)`` rather than ``O(N log^2 N)``, supports
+        ``{u32, i32, f32}`` keys across CUDA / AMDGPU / Vulkan / Metal, and takes a caller-supplied tmp buffer so
+        the call stays fully async. ``parallel_sort`` is kept for one release cycle for backward compat and will be
+        removed thereafter. See ``docs/source/user_guide/algorithms.md`` for the migration recipe.
 
     References:
         https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-46-improved-gpu-sorting
@@ -64,12 +61,10 @@ class PrefixSumExecutor:
     """Parallel Prefix Sum (Scan) Helper.
 
     .. deprecated::
-        Prefer ``qd.algorithms.device_exclusive_scan_add(arr, out)``. The
-        new functional API supports ``{i32, u32, f32}`` on every backend
-        (CUDA, AMDGPU, Vulkan, Metal) and runs the exclusive variant directly.
-        ``PrefixSumExecutor`` is inclusive-only, ``i32``-only, and limited to
-        CUDA / Vulkan; it is kept for one release cycle for backward compat
-        and will be removed thereafter. See
+        Prefer ``qd.algorithms.device_exclusive_scan_add(arr, out)``. The new functional API supports
+        ``{i32, u32, f32}`` on every backend (CUDA, AMDGPU, Vulkan, Metal) and runs the exclusive variant directly.
+        ``PrefixSumExecutor`` is inclusive-only, ``i32``-only, and limited to CUDA / Vulkan; it is kept for one
+        release cycle for backward compat and will be removed thereafter. See
         ``docs/source/user_guide/algorithms.md`` for the migration recipe.
 
     Use this helper to perform an inclusive in-place's parallel prefix sum.

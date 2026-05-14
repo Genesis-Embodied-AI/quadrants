@@ -302,9 +302,7 @@ def _device_exclusive_scan(arr, *, out, op, identity_value):
     if not hasattr(arr, "shape") or len(arr.shape) != 1:
         raise TypeError(f"device exclusive scan expects a 1-D input tensor; got shape {getattr(arr, 'shape', None)}")
     if not hasattr(out, "shape") or out.shape != arr.shape:
-        raise TypeError(
-            f"device exclusive scan expects out.shape == arr.shape; got arr={arr.shape}, out={out.shape}"
-        )
+        raise TypeError(f"device exclusive scan expects out.shape == arr.shape; got arr={arr.shape}, out={out.shape}")
     if arr.dtype != out.dtype:
         raise TypeError(f"device exclusive scan dtype mismatch: arr={arr.dtype}, out={out.dtype}")
     if arr is out:
@@ -469,8 +467,8 @@ def device_exclusive_scan_add(arr, out):
     scratch fields (``Field(u32)`` for 4-byte dtypes, ``Field(u64)`` for 8-byte). Recurses on the partials buffer
     when ``N`` is large enough that the partials count exceeds ``BLOCK_DIM``.
 
-    See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md``
-    for the algorithmic background and the ``bit_cast``-into-scratch scheme.
+    See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the algorithmic background and
+    the ``bit_cast``-into-scratch scheme.
     """
     _device_exclusive_scan(arr, out=out, op=_bin_add, identity_value=0)
 

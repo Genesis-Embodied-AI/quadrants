@@ -110,9 +110,7 @@ def device_select(arr, flags, out, num_out):
     if not hasattr(arr, "shape") or len(arr.shape) != 1:
         raise TypeError(f"device_select expects a 1-D arr; got shape {getattr(arr, 'shape', None)}")
     if not hasattr(flags, "shape") or flags.shape != arr.shape:
-        raise TypeError(
-            f"device_select expects flags.shape == arr.shape; got arr={arr.shape}, flags={flags.shape}"
-        )
+        raise TypeError(f"device_select expects flags.shape == arr.shape; got arr={arr.shape}, flags={flags.shape}")
     if flags.dtype != i32:
         raise TypeError(f"device_select expects flags.dtype == qd.i32; got {flags.dtype}")
     if not hasattr(out, "shape") or len(out.shape) != 1:

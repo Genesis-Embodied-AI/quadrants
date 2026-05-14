@@ -262,7 +262,19 @@ user_api[qd.ad] = [
     "grad_replaced",
     "no_grad",
 ]
-user_api[qd.algorithms] = ["PrefixSumExecutor", "parallel_sort"]
+user_api[qd.algorithms] = [
+    "PrefixSumExecutor",
+    "device_exclusive_scan_add",
+    "device_exclusive_scan_max",
+    "device_exclusive_scan_min",
+    "device_radix_sort",
+    "device_reduce_add",
+    "device_reduce_by_key_add",
+    "device_reduce_max",
+    "device_reduce_min",
+    "device_select",
+    "parallel_sort",
+]
 user_api[qd.Field] = [
     "copy_from",
     "dtype",

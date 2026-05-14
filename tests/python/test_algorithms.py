@@ -19,6 +19,7 @@ each).
 """
 
 import math
+import platform
 import struct
 
 import numpy as np
@@ -27,6 +28,36 @@ import pytest
 import quadrants as qd
 from quadrants import _scratch
 from quadrants.lang.util import to_numpy_type
+
+
+def _is_64bit_unsupported_on_current_arch(dtype):
+    """Return True iff ``dtype`` is an 8-byte type the current backend can't represent.
+
+    Metal has no f64 / i64 / u64 in buffer-backed I/O at all; Vulkan-on-Darwin (MoltenVK) has neither f64 nor 64-bit
+    integers. CUDA / Vulkan-on-Linux / AMDGPU support all three. The device-tier algorithms inherit the underlying
+    lang's dtype support.
+    """
+    arch = qd.lang.impl.current_cfg().arch
+    if dtype in (qd.i64, qd.u64) and arch == qd.metal:
+        return True
+    if dtype in (qd.i64, qd.u64) and arch == qd.vulkan and platform.system() == "Darwin":
+        return True
+    if dtype == qd.f64 and arch == qd.metal:
+        return True
+    if dtype == qd.f64 and arch == qd.vulkan and platform.system() == "Darwin":
+        return True
+    return False
+
+
+def _skip_if_64bit_unsupported(dtype):
+    """Skip the calling test if ``dtype`` is an 8-byte type that the current backend can't represent. Mirrors the
+    same gate used in ``test_simt.py`` so device-tier dtype coverage matches block / subgroup-tier coverage."""
+    if not _is_64bit_unsupported_on_current_arch(dtype):
+        return
+    if dtype in (qd.i64, qd.u64):
+        pytest.skip(f"64-bit integer type {dtype} not supported on the current backend")
+    pytest.skip(f"f64 not supported on the current backend")
+
 
 from tests import test_utils
 
@@ -99,15 +130,14 @@ def test_scratch_round_trips_bit_cast_f64():
     We push the host-computed bit pattern in via a u64 source field rather than arithmetic on f64 literals to dodge
     kernel-side fp-contract / FMA-reassociation that can offset the result by 1 ulp from the host-side value.
     """
+    _skip_if_64bit_unsupported(qd.f64)
     N = 64
     s = _scratch.get_scratch_u64()
     src_bits = qd.field(qd.u64, shape=N)
     out = qd.field(qd.f64, shape=N)
 
     expected = [i * 0.5 - 7.25 + 1.0e-100 * i for i in range(N)]
-    bits_host = np.array(
-        [struct.unpack("<Q", struct.pack("<d", float(v)))[0] for v in expected], dtype=np.uint64
-    )
+    bits_host = np.array([struct.unpack("<Q", struct.pack("<d", float(v)))[0] for v in expected], dtype=np.uint64)
     src_bits.from_numpy(bits_host)
 
     @qd.kernel
@@ -209,6 +239,7 @@ def _rand_reduce_host(rng, dtype, N, *, bound=1000):
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_add(dtype, N):
     """device_reduce_add matches numpy.sum across the full size sweep + dtype set."""
+    _skip_if_64bit_unsupported(dtype)
     inp, out = _alloc_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     host = _rand_reduce_host(rng, dtype, N)
@@ -222,14 +253,16 @@ def test_device_reduce_add(dtype, N):
         # f32: ~N * eps_f32 drift; f64: ~N * eps_f64. rtol scales with dtype precision.
         rtol = 1e-4 if dtype == qd.f32 else 1e-12
         atol = 1e-4 if dtype == qd.f32 else 1e-9
-        assert math.isclose(got, expected, rel_tol=rtol, abs_tol=atol), (
-            f"{dtype} reduce_add(N={N}): got {got}, expected {expected}"
-        )
+        assert math.isclose(
+            got, expected, rel_tol=rtol, abs_tol=atol
+        ), f"{dtype} reduce_add(N={N}): got {got}, expected {expected}"
     else:
         # Promote to Python int for an arbitrary-width reference; mask both sides to dtype width to handle the
         # u32 / u64 mod-wrap case at large N.
         mod = 1 << (32 if dtype in (qd.i32, qd.u32) else 64) if _is_unsigned(dtype) else None
-        ref = int(np.sum(host.astype(np.int64 if dtype in (qd.i32, qd.u32) else (np.int64 if dtype == qd.i64 else np.uint64))))  # noqa: E501
+        ref = int(
+            np.sum(host.astype(np.int64 if dtype in (qd.i32, qd.u32) else (np.int64 if dtype == qd.i64 else np.uint64)))
+        )  # noqa: E501
         got_int = int(got)
         if mod is not None:
             ref &= mod - 1
@@ -242,6 +275,7 @@ def test_device_reduce_add(dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_min(dtype, N):
     """device_reduce_min(identity=type-positive-extreme) matches numpy.min."""
+    _skip_if_64bit_unsupported(dtype)
     inp, out = _alloc_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     if _is_float(dtype):
@@ -265,6 +299,7 @@ def test_device_reduce_min(dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_max(dtype, N):
     """device_reduce_max(identity=type-negative-extreme) matches numpy.max."""
+    _skip_if_64bit_unsupported(dtype)
     inp, out = _alloc_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     if _is_float(dtype):
@@ -289,6 +324,8 @@ def test_device_reduce_min_derives_identity_from_dtype():
     ``block.reduce_min`` / ``subgroup.reduce_min`` contract). On an all-min-identity input the reduction returns
     the identity itself (largest representable value), which exercises the auto-derivation end-to-end."""
     for dtype in _REDUCE_DTYPES:
+        if _is_64bit_unsupported_on_current_arch(dtype):
+            continue
         inp = qd.field(dtype, shape=4)
         out = qd.field(dtype, shape=1)
         identity = _MIN_IDENTITY[dtype]
@@ -348,6 +385,7 @@ def _scan_dtype_mask(dtype):
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_add(dtype, N):
     """device_exclusive_scan_add(out[i] = sum(arr[0:i])) matches numpy.cumsum-shifted across the full 6-dtype set."""
+    _skip_if_64bit_unsupported(dtype)
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     host = _rand_reduce_host(rng, dtype, N, bound=100)
@@ -393,6 +431,7 @@ def test_device_exclusive_scan_add(dtype, N):
 def test_device_exclusive_scan_min(dtype, N):
     """device_exclusive_scan_min(out[i] = min(arr[0:i])) matches numpy.minimum.accumulate-shifted across the full
     6-dtype set."""
+    _skip_if_64bit_unsupported(dtype)
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     np_dt = _DTYPE_TO_NP[dtype]
@@ -420,6 +459,7 @@ def test_device_exclusive_scan_min(dtype, N):
 def test_device_exclusive_scan_max(dtype, N):
     """device_exclusive_scan_max(out[i] = max(arr[0:i])) matches numpy.maximum.accumulate-shifted across the full
     6-dtype set."""
+    _skip_if_64bit_unsupported(dtype)
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     np_dt = _DTYPE_TO_NP[dtype]
@@ -497,6 +537,7 @@ def test_device_select_basic(dtype, N):
     """device_select packs the elements with flags != 0 into a dense prefix of out, in stable input order; num_out[0]
     holds the count. Covers all 6 supported scalar dtypes - the scatter (``dst[idx] = src[i]``) is dtype-agnostic, so
     a single parametrized test serves both the 4-byte and 8-byte paths."""
+    _skip_if_64bit_unsupported(dtype)
     rng = np.random.default_rng(seed=1234)
     np_dt = _DTYPE_TO_NP[dtype]
     if dtype in (qd.f32, qd.f64):
@@ -699,6 +740,7 @@ def _gen_keys(rng, dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_keys_only(dtype, N):
     """device_radix_sort matches numpy.sort for every supported key dtype ({u32, i32, f32, u64, i64, f64})."""
+    _skip_if_64bit_unsupported(dtype)
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
 
@@ -718,6 +760,7 @@ def test_device_radix_sort_keys_only(dtype, N):
 def test_device_radix_sort_key_value(dtype, N):
     """Key-value sort: values permute in lock-step with keys; sort is stable. Exercises the libuipc-shaped u64-key
     + i32-value path (``MatrixConverter::ij_hash`` sorted with ``sort_index``) among the parametrized cases."""
+    _skip_if_64bit_unsupported(dtype)
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
 
@@ -1087,6 +1130,7 @@ def test_device_radix_sort_n_1m(dtype, big_scratch):  # pylint: disable=unused-a
     """N = 1_000_000 - qipc's hot-path size. Requires scratch bumped to ~5 MB; the ``big_scratch`` fixture supplies
     8 MB and restores after. 8-byte key dtypes run twice as many passes (8 instead of 4) for the same N. Scratch
     requirement is unchanged - the histograms are always u32 - so the same ``big_scratch`` covers both widths."""
+    _skip_if_64bit_unsupported(dtype)
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
@@ -1159,7 +1203,9 @@ def test_parallel_sort_emits_deprecation_warning():
 # point is reachable with a small N (cheap to allocate, runtime-independent of the DEFAULT_SCRATCH_BYTES knob).
 
 
-_TINY_SCRATCH_BYTES = 64 << 10  # 64 KB; covers ~16K u32 slots, ~4M u32 slots after the BLOCK_DIM divide for reduce/scan.
+_TINY_SCRATCH_BYTES = (
+    64 << 10
+)  # 64 KB; covers ~16K u32 slots, ~4M u32 slots after the BLOCK_DIM divide for reduce/scan.
 
 
 @test_utils.test(arch=qd.gpu)
@@ -1239,6 +1285,7 @@ def test_device_reduce_add_n_1m(dtype):
     """N = 1_000_000 reduce over the full dtype matrix. 4-byte dtypes use the u32 scratch (4K slots for top-level
     partials, recursion adds ~16); 8-byte dtypes use the u64 scratch with the same slot count at half the byte cost.
     Default 5 MB capacity covers both by a wide margin."""
+    _skip_if_64bit_unsupported(dtype)
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     host = _rand_reduce_host(rng, dtype, N)
@@ -1276,6 +1323,7 @@ def test_device_exclusive_scan_add_n_1m(dtype):
     """N = 1_000_000 exclusive scan over the full dtype matrix. 4-byte dtypes go through the u32 scratch; 8-byte
     dtypes through the u64 scratch (4K slots at the top level for both, recursion adds ~16). Both fit in default
     5 MB by a wide margin."""
+    _skip_if_64bit_unsupported(dtype)
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     np_dt = _DTYPE_TO_NP[dtype]
