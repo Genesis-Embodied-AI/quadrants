@@ -6,15 +6,15 @@ Device-wide algorithms are primitives that consume and produce whole arrays, exe
 
 | Op                                                          | What it does                                                       | CUDA | AMDGPU | Vulkan | Metal |
 |-------------------------------------------------------------|--------------------------------------------------------------------|------|--------|--------|-------|
-| `qd.algorithms.device_reduce_add(input, *, out)`            | `out[0] = sum(input)` (two-or-more-pass tree reduction)            | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_reduce_min(input, id, *, out)`        | `out[0] = min(input)` (same recursion, caller-supplied identity)   | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_reduce_max(input, id, *, out)`        | `out[0] = max(input)` (same recursion, caller-supplied identity)   | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_exclusive_scan_add(input, *, out)`    | `out[i] = sum(input[0:i])` (three-pass Blelloch-style scan; 32-bit + 64-bit scalars) | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_exclusive_scan_min(input, id, *, out)` | `out[i] = min(input[0:i])` (same pipeline, caller-supplied identity; 32-bit + 64-bit scalars) | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_exclusive_scan_max(input, id, *, out)` | `out[i] = max(input[0:i])` (same pipeline, caller-supplied identity; 32-bit + 64-bit scalars) | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_select(input, flags, *, out, num_out)` | Stream compaction: copy `input[i]` to a dense prefix of `out` for every `flags[i] != 0`. | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_radix_sort(keys, *, tmp_keys, values=None, tmp_values=None, end_bit=None)` | LSB radix sort for 32-bit or 64-bit scalar keys (optional key-value). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, *, keys_out, values_out, num_runs)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)`. | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_reduce_add(input, out)`               | `out[0] = sum(input)` (two-or-more-pass tree reduction)            | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_reduce_min(input, out)`               | `out[0] = min(input)` (same recursion; identity derived from dtype)   | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_reduce_max(input, out)`               | `out[0] = max(input)` (same recursion; identity derived from dtype)   | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_exclusive_scan_add(input, out)`       | `out[i] = sum(input[0:i])` (three-pass Blelloch-style scan; 32-bit + 64-bit scalars) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_exclusive_scan_min(input, out)`       | `out[i] = min(input[0:i])` (same pipeline; identity derived from dtype; 32-bit + 64-bit scalars) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_exclusive_scan_max(input, out)`       | `out[i] = max(input[0:i])` (same pipeline; identity derived from dtype; 32-bit + 64-bit scalars) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_select(input, flags, out, num_out)`   | Stream compaction: copy `input[i]` to a dense prefix of `out` for every `flags[i] != 0`. | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_radix_sort(keys, tmp_keys, values=None, tmp_values=None, end_bit=None)` | LSB radix sort for 32-bit or 64-bit scalar keys (optional key-value). | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)`. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.parallel_sort`                               | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `device_radix_sort`. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.PrefixSumExecutor`                           | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `device_exclusive_scan_add`. | yes  | no     | yes    | no    |
 
@@ -22,7 +22,7 @@ Device-wide algorithms are primitives that consume and produce whole arrays, exe
 
 ## Semantics
 
-### `qd.algorithms.device_reduce_{add,min,max}(input, [identity,] *, out)`
+### `qd.algorithms.device_reduce_{add,min,max}(input, out)`
 
 Device-wide tree reduction over a 1-D tensor.
 
@@ -39,9 +39,9 @@ total = float(out.to_numpy()[0])   # explicit device->host hop
 
 Signatures:
 
-- `device_reduce_add(input, *, out)` - sum reduction. Identity (`0` for the dtype) is derived automatically.
-- `device_reduce_min(input, identity, *, out)` - min reduction. `identity` is **required** and must be a value `e` such that `min(e, x) == x` for every `x` in the dtype (e.g. `math.inf` for `f32` / `f64`, `2**31 - 1` for `i32`, `2**63 - 1` for `i64`, `2**32 - 1` for `u32`, `2**64 - 1` for `u64`).
-- `device_reduce_max(input, identity, *, out)` - max reduction. `identity` is **required** and must be the dtype's negative extremum (e.g. `-math.inf` for `f32` / `f64`, `-2**31` for `i32`, `-2**63` for `i64`, `0` for `u32` / `u64`).
+- `device_reduce_add(input, out)` - sum reduction. Identity (`0` for the dtype) is derived automatically.
+- `device_reduce_min(input, out)` - min reduction. The monoid identity is derived from `input.dtype` automatically (largest representable value: `+inf` for `f32` / `f64`, `INT32_MAX` / `INT64_MAX` for signed ints, `UINT32_MAX` / `UINT64_MAX` for unsigned).
+- `device_reduce_max(input, out)` - max reduction. The monoid identity is derived from `input.dtype` automatically (smallest representable value: `-inf` for `f32` / `f64`, `INT32_MIN` / `INT64_MIN` for signed ints, `0` for unsigned ints).
 
 Arguments:
 
@@ -52,7 +52,7 @@ Constraints:
 
 - **Dtypes:** scalar `qd.i32`, `qd.u32`, `qd.f32`, `qd.i64`, `qd.u64`, `qd.f64`. Narrower / wider scalar dtypes (e.g. `qd.i16`, `qd.f16`) and struct dtypes raise `NotImplementedError`. 4-byte dtypes are staged through a shared `Field(u32)` scratch and 8-byte dtypes through a shared `Field(u64)` scratch; the byte budget is the same.
 - **Shape:** `input` must be 1-D; `out.shape` must be `(1,)`. Both must share the same dtype.
-- **Identity (min / max only):** mandatory. Calling `device_reduce_min` / `device_reduce_max` without an `identity` argument raises `TypeError`.
+- **Identity (min / max):** *not* a user argument - derived from the dtype on the host, mirroring the `block.reduce_min` / `subgroup.reduce_min` typed wrappers, which don't take an identity for the same reason.
 - **f32 / f64 non-associativity:** `device_reduce_add` on a floating-point dtype is not bitwise-reproducible across `N` changes, nor bitwise-equal to host `numpy.sum`. Tests tolerate a small relative error rather than asserting bitwise.
 
 Implementation:
@@ -68,7 +68,7 @@ from quadrants import _scratch
 _scratch.set_scratch_bytes(4 << 20)   # 4 MB, before any qd.algorithms.* call
 ```
 
-### `qd.algorithms.device_exclusive_scan_{add,min,max}(input, [identity,] *, out)`
+### `qd.algorithms.device_exclusive_scan_{add,min,max}(input, out)`
 
 Device-wide exclusive prefix scan over a 1-D tensor: `out[i]` holds the reduction (`sum` / `min` / `max`) of `input[0:i]`. `out[0]` is always the monoid identity.
 
@@ -86,16 +86,16 @@ qd.algorithms.device_exclusive_scan_add(inp, out=out)
 
 Signatures:
 
-- `device_exclusive_scan_add(input, *, out)` - exclusive sum. Identity (`0` for the dtype) is derived automatically.
-- `device_exclusive_scan_min(input, identity, *, out)` - exclusive min. `identity` is **required** (e.g. `math.inf` for `f32` / `f64`, `2**31 - 1` for `i32`, `2**63 - 1` for `i64`).
-- `device_exclusive_scan_max(input, identity, *, out)` - exclusive max. `identity` is **required** (e.g. `-math.inf` for `f32` / `f64`, `-2**31` for `i32`, `-2**63` for `i64`, `0` for unsigned).
+- `device_exclusive_scan_add(input, out)` - exclusive sum. Identity (`0` for the dtype) is derived automatically.
+- `device_exclusive_scan_min(input, out)` - exclusive min. The monoid identity is derived from `input.dtype` automatically (largest representable value: `+inf` for floats, `INT{32,64}_MAX` for signed ints, `UINT{32,64}_MAX` for unsigned).
+- `device_exclusive_scan_max(input, out)` - exclusive max. The monoid identity is derived from `input.dtype` automatically (smallest representable value: `-inf` for floats, `INT{32,64}_MIN` for signed ints, `0` for unsigned).
 
 Constraints:
 
 - **Dtypes:** scalar `qd.i32`, `qd.u32`, `qd.f32`, `qd.i64`, `qd.u64`, `qd.f64`. Narrower / wider scalar dtypes (e.g. `qd.i16`, `qd.f16`) and struct dtypes raise `NotImplementedError`. 4-byte dtypes stage through the shared `Field(u32)` scratch, 8-byte integer dtypes (`i64` / `u64`) stage through the shared `Field(u64)` scratch, and `f64` stages through a separate shared `Field(f64)` scratch (see Implementation below); the byte budget is the same for all three.
 - **Shape:** `input` and `out` must both be 1-D with the same shape and dtype.
 - **No in-place scan:** `out` must be a distinct buffer from `input`. Calling with `out is input` raises `ValueError`. (The kernels do not protect against same-buffer aliasing; allocating one extra buffer once is cheap relative to the scan itself.)
-- **Identity (min / max only):** mandatory. Passing `None` or omitting `identity` raises `TypeError`.
+- **Identity (min / max):** *not* a user argument - derived from `input.dtype` on the host, mirroring the `block.exclusive_min` / `subgroup.exclusive_min_tiled` typed wrappers.
 - **Float non-associativity:** the order of additions inside a scan tree is not the same as a left-to-right host scan, so `f32` / `f64` results are *not* bitwise-equal to `numpy.cumsum`. Tests tolerate a small relative error (scaled by dtype precision).
 
 Implementation:
@@ -107,7 +107,7 @@ Implementation:
 - `BLOCK_DIM = 256`. Total scratch usage at `N = 1M` is `4096 + 16 = 4112` slots (~16 KB for 4-byte dtypes, ~32 KB for 8-byte), well under the 1 MB default.
 - `f64` uses a dedicated `Field(f64)` scratch (rather than reinterpreting the u64 scratch via `bit_cast`) because `bit_cast(scan_result_f64, u64)` currently loses precision in Quadrants; routing partials through an f64-typed buffer side-steps the cast on the write side entirely. Same byte budget as the u64 scratch.
 
-### `qd.algorithms.device_select(input, flags, *, out, num_out)`
+### `qd.algorithms.device_select(input, flags, out, num_out)`
 
 Stream compaction. Copy every `input[i]` whose corresponding `flags[i]` is non-zero into a dense prefix of `out`, in stable input order, and write the count of selected elements to `num_out[0]`.
 
@@ -144,7 +144,7 @@ Algorithm: the textbook scan-based compaction.
 
 Scratch budget: at the default 1 MB, `N + ceil(N/256) + ... ≤ 262144`, so roughly `N ≤ 260_000` works out of the box. Raise the budget via `_scratch.set_scratch_bytes(...)` before any algorithm runs for larger inputs.
 
-### `qd.algorithms.device_radix_sort(keys, *, tmp_keys, values=None, tmp_values=None, end_bit=None)`
+### `qd.algorithms.device_radix_sort(keys, tmp_keys, values=None, tmp_values=None, end_bit=None)`
 
 Ascending in-place radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (`u32` / `i32` / `f32` / `u64` / `i64` / `f64`), with optional lock-step permutation of an `values` tensor (key-value sort).
 
@@ -203,7 +203,7 @@ _scratch.set_scratch_bytes(5 << 20)   # 5 MB; covers N up to ~1.3M
 
 A single-pass decoupled-lookback variant ("Onesweep") is a perf follow-up; the first land prioritizes simplicity and small LoC over peak throughput.
 
-### `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, *, keys_out, values_out, num_runs)`
+### `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs)`
 
 Collapse every **consecutive run of equal keys** into a single output entry `(unique_key, sum_of_values_in_run)`. Keys that compare equal but are separated by other keys form separate runs. For a global per-key sum, sort by key first (e.g. with `qd.algorithms.device_radix_sort`) and then reduce-by-key.
 
@@ -255,7 +255,7 @@ Scratch budget: `~1.004 * N` u32 slots. The default 1 MB scratch covers `N` up t
 
 ### `qd.algorithms.parallel_sort(keys, values=None)`
 
-> **Deprecated.** New code should call `qd.algorithms.device_radix_sort(keys, tmp_keys=..., values=..., tmp_values=...)` instead. `device_radix_sort` is asymptotically `O(N log_radix N)` rather than `O(N log^2 N)`, is **stable** (odd-even merge sort is not), supports 32-bit and 64-bit scalar keys across CUDA / AMDGPU / Vulkan / Metal, and accepts `qd.field`, `qd.ndarray`, and `qd.Tensor` (`parallel_sort` is field-only). The only thing `parallel_sort` is competitive on is very small N (~4K and below); even there the radix path is comparable on modern hardware. To migrate, allocate a `tmp_keys` field of the same shape and dtype as `keys`, then call `device_radix_sort`. `parallel_sort` is kept for one release cycle for backward compat and will be removed thereafter.
+> **Deprecated.** New code should call `qd.algorithms.device_radix_sort(keys, tmp_keys, values=..., tmp_values=...)` instead. `device_radix_sort` is asymptotically `O(N log_radix N)` rather than `O(N log^2 N)`, is **stable** (odd-even merge sort is not), supports 32-bit and 64-bit scalar keys across CUDA / AMDGPU / Vulkan / Metal, and accepts `qd.field`, `qd.ndarray`, and `qd.Tensor` (`parallel_sort` is field-only). The only thing `parallel_sort` is competitive on is very small N (~4K and below); even there the radix path is comparable on modern hardware. To migrate, allocate a `tmp_keys` field of the same shape and dtype as `keys`, then call `device_radix_sort`. `parallel_sort` is kept for one release cycle for backward compat and will be removed thereafter.
 
 In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `qd.field` - `parallel_sort` reaches into `snode.ptr.offset` internally, so `ndarray` is **not** supported and will fail at compile time with an `AttributeError`.
 
@@ -280,7 +280,7 @@ qd.algorithms.parallel_sort(keys, vals)
 
 ### `qd.algorithms.PrefixSumExecutor`
 
-> **Deprecated.** New code should call `qd.algorithms.device_exclusive_scan_add(input, *, out)` instead. `PrefixSumExecutor` is **inclusive**-only, **`i32`**-only, and **CUDA / Vulkan**-only; the new functional API covers `{i32, u32, f32, i64, u64, f64}` on every supported backend and runs the exclusive variant directly. To migrate from inclusive in-place to exclusive out-of-place, drop the `Executor` wrapper, allocate a distinct `out` field, and post-process if you actually need the inclusive form (`inclusive[i] = exclusive[i] + input[i]`). `PrefixSumExecutor` is kept for one release cycle for backward compat and will be removed in a future release.
+> **Deprecated.** New code should call `qd.algorithms.device_exclusive_scan_add(input, out)` instead. `PrefixSumExecutor` is **inclusive**-only, **`i32`**-only, and **CUDA / Vulkan**-only; the new functional API covers `{i32, u32, f32, i64, u64, f64}` on every supported backend and runs the exclusive variant directly. To migrate from inclusive in-place to exclusive out-of-place, drop the `Executor` wrapper, allocate a distinct `out` field, and post-process if you actually need the inclusive form (`inclusive[i] = exclusive[i] + input[i]`). `PrefixSumExecutor` is kept for one release cycle for backward compat and will be removed in a future release.
 
 Inclusive in-place prefix sum (scan) over a 1-D `i32` field. Construct once with the array length, then call `.run(field)` to scan.
 

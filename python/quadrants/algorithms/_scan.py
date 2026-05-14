@@ -49,6 +49,8 @@ from ._reduce import (
     BLOCK_DIM,
     _dtype_width_bytes,
     _identity_bits,
+    _max_identity,
+    _min_identity,
     _reduce_pass,
     _reduce_pass_u64,
 )
@@ -682,7 +684,7 @@ def _scan_trivial_n1_f64(dst: template(), identity_bits: u64):
         dst[0] = bit_cast(identity_bits, f64)
 
 
-def device_exclusive_scan_add(input, *, out):  # pylint: disable=redefined-builtin
+def device_exclusive_scan_add(input, out):  # pylint: disable=redefined-builtin
     """Compute ``out[i] = sum(input[0:i])`` (exclusive prefix sum) on the device.
 
     Args:
@@ -700,27 +702,27 @@ def device_exclusive_scan_add(input, *, out):  # pylint: disable=redefined-built
     _device_exclusive_scan(input, out=out, op=_bin_add, identity_value=0)
 
 
-def device_exclusive_scan_min(input, identity, *, out):  # pylint: disable=redefined-builtin
+def device_exclusive_scan_min(input, out):  # pylint: disable=redefined-builtin
     """Compute ``out[i] = min(input[0:i])`` (exclusive prefix min) on the device.
 
     Args:
         input: see ``device_exclusive_scan_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
-        identity: the monoid identity for ``min`` over ``input.dtype`` - i.e. a value ``e`` such that
-            ``min(e, x) == x`` for every ``x`` in the dtype (``math.inf`` for ``f32`` / ``f64``, ``2**31 - 1`` for
-            ``i32``, ``2**63 - 1`` for ``i64``, ``2**32 - 1`` for ``u32``, ``2**64 - 1`` for ``u64``). Mandatory:
-            no portable type-extreme is derivable from a value alone.
         out: see ``device_exclusive_scan_add``.
+
+    The monoid identity is derived from ``input.dtype`` automatically (largest representable value: ``+inf`` for
+    floats, ``INT{32,64}_MAX`` for signed ints, ``UINT{32,64}_MAX`` for unsigned). Mirrors the
+    ``block.exclusive_min`` / ``subgroup.exclusive_min_tiled`` contract: the typed scan primitives do not take an
+    identity argument because (op, dtype) fixes it.
     """
-    _device_exclusive_scan(input, out=out, op=_bin_min, identity_value=identity)
+    _device_exclusive_scan(input, out=out, op=_bin_min, identity_value=_min_identity(input.dtype))
 
 
-def device_exclusive_scan_max(input, identity, *, out):  # pylint: disable=redefined-builtin
-    """Compute ``out[i] = max(input[0:i])`` (exclusive prefix max) on the device.
-
-    Mirror of :func:`device_exclusive_scan_min` with ``max`` and the dtype's *negative* extremum (``-inf`` for
-    floats, ``-2**31`` / ``-2**63`` for signed ints, ``0`` for unsigned ints).
+def device_exclusive_scan_max(input, out):  # pylint: disable=redefined-builtin
+    """Compute ``out[i] = max(input[0:i])`` (exclusive prefix max) on the device. Mirror of
+    :func:`device_exclusive_scan_min` with ``max`` and the dtype's *negative* extremum (``-inf`` for floats,
+    ``INT{32,64}_MIN`` for signed ints, ``0`` for unsigned), again derived from ``input.dtype`` automatically.
     """
-    _device_exclusive_scan(input, out=out, op=_bin_max, identity_value=identity)
+    _device_exclusive_scan(input, out=out, op=_bin_max, identity_value=_max_identity(input.dtype))
 
 
 __all__ = [

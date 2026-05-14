@@ -96,6 +96,51 @@ def _identity_bits(value, dtype) -> int:
     raise NotImplementedError(f"identity bit-pattern for dtype {dtype} not implemented")
 
 
+# Host-side per-dtype identity tables. The block / subgroup tier introspects ``value``'s dtype in-kernel
+# (``_typed_min_identity(value)`` etc.) and emits a typed-constant identity Expr from there, so callers of
+# ``block.reduce_min`` / ``block.exclusive_max`` etc. never have to pass an identity. The device tier mirrors
+# that contract: dtype is known on the host, so we look up the identity here instead of asking the user.
+_MIN_IDENTITY_BY_DTYPE = {
+    i32: (1 << 31) - 1,  # INT32_MAX
+    u32: (1 << 32) - 1,  # UINT32_MAX
+    f32: float("inf"),
+    i64: (1 << 63) - 1,  # INT64_MAX
+    u64: (1 << 64) - 1,  # UINT64_MAX
+    f64: float("inf"),
+}
+
+_MAX_IDENTITY_BY_DTYPE = {
+    i32: -(1 << 31),  # INT32_MIN
+    u32: 0,
+    f32: float("-inf"),
+    i64: -(1 << 63),  # INT64_MIN
+    u64: 0,
+    f64: float("-inf"),
+}
+
+
+def _min_identity(dtype):
+    """Return the additive-monoid identity for ``min`` over ``dtype`` (largest representable value).
+
+    Mirror of ``simt.reductions._typed_min_identity(value)`` from the in-kernel side, but operates on a host-known
+    dtype object. Raises ``NotImplementedError`` for any dtype outside the device-tier supported set.
+    """
+    if dtype not in _MIN_IDENTITY_BY_DTYPE:
+        raise NotImplementedError(f"device min identity for dtype {dtype} not supported")
+    return _MIN_IDENTITY_BY_DTYPE[dtype]
+
+
+def _max_identity(dtype):
+    """Return the additive-monoid identity for ``max`` over ``dtype`` (smallest representable value).
+
+    Mirror of ``simt.reductions._typed_max_identity(value)`` from the in-kernel side, but operates on a host-known
+    dtype object. Raises ``NotImplementedError`` for any dtype outside the device-tier supported set.
+    """
+    if dtype not in _MAX_IDENTITY_BY_DTYPE:
+        raise NotImplementedError(f"device max identity for dtype {dtype} not supported")
+    return _MAX_IDENTITY_BY_DTYPE[dtype]
+
+
 @kernel
 def _reduce_pass(
     src: template(),
@@ -313,7 +358,7 @@ def _device_reduce_trivial(input, *, out, identity_bits):  # pylint: disable=red
         raise AssertionError(f"_device_reduce_trivial called with N={N}")
 
 
-def device_reduce_add(input, *, out):  # pylint: disable=redefined-builtin
+def device_reduce_add(input, out):  # pylint: disable=redefined-builtin
     """Compute ``out[0] = sum(input)`` on the device.
 
     Args:
@@ -331,26 +376,27 @@ def device_reduce_add(input, *, out):  # pylint: disable=redefined-builtin
     _device_reduce(input, out=out, op=_bin_add, identity_value=0)
 
 
-def device_reduce_min(input, identity, *, out):  # pylint: disable=redefined-builtin
+def device_reduce_min(input, out):  # pylint: disable=redefined-builtin
     """Compute ``out[0] = min(input)`` on the device.
 
     Args:
         input: see ``device_reduce_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
-        identity: the monoid identity for ``min`` over ``input.dtype`` - i.e. a value ``e`` such that
-            ``min(e, x) == x`` for every ``x`` in the dtype. For ``f32`` / ``f64``, that's ``+inf`` (``math.inf``).
-            For ``i32`` / ``i64``, that's ``2**31 - 1`` / ``2**63 - 1``. For ``u32`` / ``u64``, that's
-            ``2**32 - 1`` / ``2**64 - 1``. Mandatory: there is no portable type-extreme derivable from a value
-            alone, and giving callers an implicit one would silently bake in a backend assumption.
         out: see ``device_reduce_add``.
+
+    The monoid identity is derived from ``input.dtype`` automatically (the largest representable value:
+    ``+inf`` for ``f32`` / ``f64``, ``INT32_MAX`` / ``INT64_MAX`` for signed ints, ``UINT32_MAX`` / ``UINT64_MAX``
+    for unsigned). Mirrors the ``block.reduce_min`` / ``subgroup.reduce_min`` contract: the typed reduce
+    primitives do not take an identity argument because (op, dtype) fixes it.
     """
-    _device_reduce(input, out=out, op=_bin_min, identity_value=identity)
+    _device_reduce(input, out=out, op=_bin_min, identity_value=_min_identity(input.dtype))
 
 
-def device_reduce_max(input, identity, *, out):  # pylint: disable=redefined-builtin
+def device_reduce_max(input, out):  # pylint: disable=redefined-builtin
     """Compute ``out[0] = max(input)`` on the device. Mirror of :func:`device_reduce_min` with ``max`` and the
-    dtype's *negative* extremum (``-inf`` for floats, ``-2**31`` / ``-2**63`` for signed ints, ``0`` for unsigned
-    ints)."""
-    _device_reduce(input, out=out, op=_bin_max, identity_value=identity)
+    dtype's *negative* extremum (``-inf`` for floats, ``INT32_MIN`` / ``INT64_MIN`` for signed ints, ``0`` for
+    unsigned ints), again derived from ``input.dtype`` automatically.
+    """
+    _device_reduce(input, out=out, op=_bin_max, identity_value=_max_identity(input.dtype))
 
 
 __all__ = ["device_reduce_add", "device_reduce_min", "device_reduce_max"]

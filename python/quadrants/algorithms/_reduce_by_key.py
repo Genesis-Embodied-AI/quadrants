@@ -183,7 +183,7 @@ def _validate_inputs(keys_in, values_in, keys_out, values_out, num_runs):
         )
 
 
-def device_reduce_by_key_add(keys_in, values_in, *, keys_out, values_out, num_runs):
+def device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs):
     """Collapse every consecutive run of equal ``keys_in`` into ``(key, sum_of_values)``.
 
     Args:

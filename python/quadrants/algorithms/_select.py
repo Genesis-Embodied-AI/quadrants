@@ -85,7 +85,7 @@ def _select_count(
         num_out[0] = last_idx + last_inc
 
 
-def device_select(input, flags, *, out, num_out):  # pylint: disable=redefined-builtin
+def device_select(input, flags, out, num_out):  # pylint: disable=redefined-builtin
     """Stream-compact ``input`` by ``flags``: copy ``input[i]`` to a dense prefix of ``out`` for every ``i`` where
     ``flags[i] != 0``, in stable input order. Write the count of selected elements to ``num_out[0]``.
 

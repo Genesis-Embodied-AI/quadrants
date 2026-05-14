@@ -388,7 +388,7 @@ def _validate_inputs(keys, tmp_keys, values, tmp_values, end_bit):
         )
 
 
-def device_radix_sort(keys, *, tmp_keys, values=None, tmp_values=None, end_bit=None):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+def device_radix_sort(keys, tmp_keys, values=None, tmp_values=None, end_bit=None):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     """Sort ``keys`` ascending on the device using LSB radix sort.
 
     Args:

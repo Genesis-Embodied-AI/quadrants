@@ -250,7 +250,7 @@ def test_device_reduce_min(dtype, N):
         host = _rand_reduce_host(rng, dtype, N, bound=10000)
     _fill_field(inp, host)
 
-    qd.algorithms.device_reduce_min(inp, _MIN_IDENTITY[dtype], out=out)
+    qd.algorithms.device_reduce_min(inp, out=out)
     got = out.to_numpy()[0]
     expected = host.min()
 
@@ -273,7 +273,7 @@ def test_device_reduce_max(dtype, N):
         host = _rand_reduce_host(rng, dtype, N, bound=10000)
     _fill_field(inp, host)
 
-    qd.algorithms.device_reduce_max(inp, _MAX_IDENTITY[dtype], out=out)
+    qd.algorithms.device_reduce_max(inp, out=out)
     got = out.to_numpy()[0]
     expected = host.max()
 
@@ -284,13 +284,19 @@ def test_device_reduce_max(dtype, N):
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_rejects_missing_identity_for_min():
-    """Calling device_reduce_min without identity should raise - there's no
-    portable type-extreme derivable from a value alone."""
-    inp = qd.field(qd.i32, shape=4)
-    out = qd.field(qd.i32, shape=1)
-    with pytest.raises(TypeError):
-        qd.algorithms.device_reduce_min(inp, out=out)  # type: ignore[call-arg]
+def test_device_reduce_min_derives_identity_from_dtype():
+    """``device_reduce_min`` does not take an identity argument; it's derived from ``input.dtype`` (mirror of the
+    ``block.reduce_min`` / ``subgroup.reduce_min`` contract). On an all-min-identity input the reduction returns
+    the identity itself (largest representable value), which exercises the auto-derivation end-to-end."""
+    for dtype in _REDUCE_DTYPES:
+        inp = qd.field(dtype, shape=4)
+        out = qd.field(dtype, shape=1)
+        identity = _MIN_IDENTITY[dtype]
+        host = np.full(4, identity, dtype=_DTYPE_TO_NP[dtype])
+        _fill_field(inp, host)
+        qd.algorithms.device_reduce_min(inp, out=out)
+        got = out.to_numpy()[0]
+        assert got == _DTYPE_TO_NP[dtype](identity), f"{dtype}: got {got}, expected {identity}"
 
 
 @test_utils.test(arch=qd.gpu)
@@ -396,8 +402,7 @@ def test_device_exclusive_scan_min(dtype, N):
         host = _rand_reduce_host(rng, dtype, N, bound=10000)
     _fill_field(inp, host)
 
-    identity = _MIN_IDENTITY[dtype]
-    qd.algorithms.device_exclusive_scan_min(inp, identity, out=out)
+    qd.algorithms.device_exclusive_scan_min(inp, out=out)
     got = out.to_numpy()
 
     if _is_float(dtype):
@@ -424,8 +429,7 @@ def test_device_exclusive_scan_max(dtype, N):
         host = _rand_reduce_host(rng, dtype, N, bound=10000)
     _fill_field(inp, host)
 
-    identity = _MAX_IDENTITY[dtype]
-    qd.algorithms.device_exclusive_scan_max(inp, identity, out=out)
+    qd.algorithms.device_exclusive_scan_max(inp, out=out)
     got = out.to_numpy()
 
     if _is_float(dtype):
