@@ -38,7 +38,7 @@ from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import bit_cast
 from quadrants.lang.simt import block as _block
-from quadrants.lang.simt.subgroup import _bin_add, _bin_max, _bin_min
+from quadrants.lang.simt.reductions import _bin_add, _bin_max, _bin_min
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import f64, i32, u32, u64
 

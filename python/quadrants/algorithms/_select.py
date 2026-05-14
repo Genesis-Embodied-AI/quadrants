@@ -33,7 +33,7 @@ together must not exceed ``scratch_capacity_u32()``. For the default 1 MB budget
 from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
 from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.ops import bit_cast
-from quadrants.lang.simt.subgroup import _bin_add
+from quadrants.lang.simt.reductions import _bin_add
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import i32
 

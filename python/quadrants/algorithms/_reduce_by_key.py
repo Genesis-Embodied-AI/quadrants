@@ -41,7 +41,7 @@ from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
 from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import atomic_add, bit_cast
-from quadrants.lang.simt.subgroup import _bin_add
+from quadrants.lang.simt.reductions import _bin_add
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import f32, i32, u32
 
