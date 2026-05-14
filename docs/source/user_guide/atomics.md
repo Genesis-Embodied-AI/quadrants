@@ -65,7 +65,7 @@ Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
-Bitwise atomics. Integer dtypes only - passing `f32` / `f64` raises a type error at compile time.
+Bitwise atomics. Integer dtypes only — passing `f32` / `f64` raises a type error at compile time.
 
 ### `qd.atomic_sub(x, y)` / `qd.atomic_mul(x, y)`
 

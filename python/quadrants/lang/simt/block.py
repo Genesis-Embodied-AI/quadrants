@@ -702,7 +702,7 @@ def radix_rank_match_atomic_or(
 
     The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
     `subgroup.group_size()` at compile time.  Supports both wave32 (CUDA, Vulkan-on-NVIDIA, Metal) and wave64
-    (AMDGPU — Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private
+    (AMDGPU - Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private
     implementations at compile time based on subgroup size; the match-mask shared-memory region's dtype is the only
     semantic difference (``i32`` on wave32, ``i64`` on wave64), but Quadrants' AST transformer doesn't carry locals
     across ``if impl.static`` branches so the two paths are written as separate ``@func`` bodies.  Atomic ``or`` on

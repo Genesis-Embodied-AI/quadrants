@@ -63,7 +63,7 @@ static std::vector<std::uint8_t> get_offline_cache_key_of_compile_config(const C
     // Mix the per-arch subgroup / warp / wave size into the cache key so cached kernels are invalidated whenever the
     // constant changes (e.g. flipping AMDGPU between wave32 and wave64). Today CUDA is fixed at 32 and AMDGPU is fixed
     // at 64 (see kAmdgpuWaveSize in rhi/arch.h); this serialization path future-proofs the cache against any later
-    // toggle. SPIR-V (Vulkan / Metal) returns ``0`` here - the device-probed ``DeviceCapability::spirv_subgroup_size``
+    // toggle. SPIR-V (Vulkan / Metal) returns ``0`` here — the device-probed ``DeviceCapability::spirv_subgroup_size``
     // is part of ``DeviceCapabilityConfig::devcaps`` and gets mixed into the key via
     // ``get_offline_cache_key_of_device_caps`` below, so wave32 vs wave64 SPIR-V devices already get distinct cache
     // entries without needing to plumb the value through here.
