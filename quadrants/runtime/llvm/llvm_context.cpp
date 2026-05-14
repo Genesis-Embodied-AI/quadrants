@@ -687,7 +687,24 @@ void QuadrantsLLVMContext::link_module_with_cuda_libdevice(std::unique_ptr<llvm:
 
   libdevice_module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
   strip_nvvmir_version(libdevice_module.get());
-  module->setDataLayout(libdevice_module->getDataLayout());
+
+  // `slim_libdevice.10.bc` ships without an explicit `target datalayout` line
+  // (only the `nvptx64-nvidia-gpulibs` triple), so its `getDataLayout()` returns
+  // the empty LLVM-default DL where `i64` ABI alignment is 4 bytes. Previously
+  // we copied that empty DL straight into the kernel module, which made every
+  // CreateStore / CreateLoad of i64 emit `align 4` -> the NVPTX backend then
+  // split each `align 4` i64 store into two `st.b32` halves, and ptxas in turn
+  // mis-combined those halves into a single `ST.E.64` that dropped the low 32
+  // bits of values produced by f64 / i64 arithmetic (single 64-bit virtual reg
+  // holding the full bit pattern). End result: silent precision loss for
+  // `bit_cast(scan_result_f64, u64)` and friends.
+  //
+  // Pin the canonical NVPTX64 DL (matches LLVM's `NVPTXTargetMachine::
+  // computeDataLayout(is64Bit=true, UseShortPointers=false)`) so CreateStore /
+  // CreateLoad see `i64:64` and emit single aligned `st.b64` / `ld.b64`.
+  static const char *kNVPTX64DataLayout = "e-p6:32:32-i64:64-i128:128-v16:16-v32:32-n16:32:64";
+  module->setDataLayout(kNVPTX64DataLayout);
+  libdevice_module->setDataLayout(kNVPTX64DataLayout);
 
   bool failed = llvm::Linker::linkModules(*module, std::move(libdevice_module));
   if (failed) {
