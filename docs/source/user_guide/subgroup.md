@@ -172,8 +172,8 @@ With `log2_size = k`, the subgroup splits into tiles of `2**k` consecutive lanes
 
 | `log2_size` | wave32 (CUDA / most Vulkan / Metal) | wave64 (AMDGPU - see [supported_systems](supported_systems.md)) |
 | --- | --- | --- |
-| 5 (tile = 32) | 1 tile: lanes 0–31 (= base op)             | 2 tiles: 0–31, 32–63 |
-| 4 (tile = 16) | 2 tiles: 0–15, 16–31                       | 4 tiles: 0–15, 16–31, 32–47, 48–63 |
+| 5 (tile = 32) | 1 tile: lanes 0-31 (= base op)             | 2 tiles: 0-31, 32-63 |
+| 4 (tile = 16) | 2 tiles: 0-15, 16-31                       | 4 tiles: 0-15, 16-31, 32-47, 48-63 |
 | 3 (tile = 8)  | 4 tiles of 8                               | 8 tiles of 8 |
 | 0 (tile = 1)  | every lane is its own tile (no-op)         | same |
 
@@ -359,7 +359,7 @@ Closed-form `u32` lane-mask constants parametrised by a lane id. Bit `i` of the 
 - `lane_id` is any integer scalar. Pass `subgroup.invocation_id()` to get the classic CUDA built-in form (current lane's mask), or any other expression to query an arbitrary lane's mask. The op is pure arithmetic - no shuffle, no ballot - so per-lane-varying `lane_id` works the same as a uniform one.
 - Returns `u32`. Bit 0 corresponds to lane 0, bit 31 to lane 31.
 - Caller contract: `lane_id` must be in `[0, 31]` (matching the `u32` return type, which represents 32 lanes). Passing `lane_id == 32` triggers an undefined-behaviour shift on most backends.
-- Implemented portably as a `@qd.func` over `<<`, `-`, `|`, `~`. Inlines at compile time into 1–3 ALU ops on every backend.
+- Implemented portably as a `@qd.func` over `<<`, `-`, `|`, `~`. Inlines at compile time into 1-3 ALU ops on every backend.
 - AMDGPU CDNA wave64 caveat: only the low 32 lanes are representable in this op (the return type is `u32`). If you need a mask covering all 64 wave64 lanes, use `subgroup.ballot` instead - it returns a `u64` and includes lanes 32..63.
 
 ## Examples
