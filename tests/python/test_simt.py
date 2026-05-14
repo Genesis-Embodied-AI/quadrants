@@ -2443,12 +2443,12 @@ def test_subgroup_exclusive_mul_tiled(dtype, log2_size):
     )
 
 
-# Unlike inclusive_mul / inclusive_min / inclusive_max / exclusive_mul which all live in
-# ``_SCENARIOS_I32_AND_FLOATS`` (no dtype-specific identity code path -- they either don't need a lane-0 sentinel or
-# inherit the universal ``1`` literal), exclusive_min / exclusive_max emit a dtype-typed identity constant in the
-# generated IR (``np.iinfo(dtype).{max,min}`` / ``+-inf``).  The u64 max path in particular routes through
-# ``_clamp_unsigned_to_range`` (val > int64 max -> two's-complement conversion to -1).  Extend the parameter set
-# here so every supported int width and signedness exercises the identity-emission code in ``_typed_min_identity`` /
+# Unlike inclusive_mul / inclusive_min / inclusive_max / exclusive_mul which all live in ``_SCENARIOS_I32_AND_FLOATS``
+# (no dtype-specific identity code path -- they either don't need a lane-0 sentinel or inherit the universal ``1``
+# literal), exclusive_min / exclusive_max emit a dtype-typed identity constant in the generated IR
+# (``np.iinfo(dtype).{max,min}`` / ``+-inf``).  The u64 max path in particular routes through
+# ``_clamp_unsigned_to_range`` (val > int64 max -> two's-complement conversion to -1).  Extend the parameter set here
+# so every supported int width and signedness exercises the identity-emission code in ``_typed_min_identity`` /
 # ``_typed_max_identity``.
 _SCENARIOS_EXCLUSIVE_MINMAX = _SCENARIOS_I32_AND_FLOATS + [(qd.i64, 5), (qd.u32, 5), (qd.u64, 5)]
 
@@ -2861,8 +2861,8 @@ def test_subgroup_ballot_all_true():
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_ballot_all_false():
-    """``ballot(0)`` returns zero everywhere — verifies no spurious bits leak in from
-    uninitialised wave64 high-half lanes."""
+    """``ballot(0)`` returns zero everywhere — verifies no spurious bits leak in from uninitialised wave64
+    high-half lanes."""
     N = 32
     result = qd.field(dtype=qd.u64, shape=N)
 
@@ -2882,8 +2882,8 @@ def test_subgroup_ballot_all_false():
 def test_subgroup_ballot_even_lanes():
     """Even lanes vote true; odd lanes vote false.  Result: ``0x5555...`` over the whole subgroup width.
 
-    On wave32 we get ``0x0000000055555555`` (low 32 bits, high 32 zero); on wave64 we get
-    ``0x5555555555555555`` (all 64 bits in the alternating pattern).
+    On wave32 we get ``0x0000000055555555`` (low 32 bits, high 32 zero); on wave64 we get ``0x5555555555555555``
+    (all 64 bits in the alternating pattern).
 
     Uses ``block_dim=64`` to keep every lane active on wave64 (required by the ``ballot`` "all lanes
     active" contract); on wave32 the workgroup splits into two waves and each wave's ballot covers its own 32 lanes.
