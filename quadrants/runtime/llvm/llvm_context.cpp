@@ -583,13 +583,15 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
         // lane = mbcnt_hi(-1, mbcnt_lo(-1, 0))
         auto neg_one = llvm::ConstantInt::get(i32_ty, -1, /*IsSigned=*/true);
         auto zero32 = llvm::ConstantInt::get(i32_ty, 0);
-        auto mbcnt_lo_fn = llvm::Intrinsic::getDeclaration(module.get(), llvm::Intrinsic::amdgcn_mbcnt_lo);
-        auto mbcnt_hi_fn = llvm::Intrinsic::getDeclaration(module.get(), llvm::Intrinsic::amdgcn_mbcnt_hi);
-        auto lane_lo = builder.CreateCall(mbcnt_lo_fn, {neg_one, zero32});
-        auto lane = builder.CreateCall(mbcnt_hi_fn, {neg_one, lane_lo});
+        auto mbcnt_lo_fn = llvm::Intrinsic::getOrInsertDeclaration(module.get(), llvm::Intrinsic::amdgcn_mbcnt_lo);
+        auto mbcnt_hi_fn = llvm::Intrinsic::getOrInsertDeclaration(module.get(), llvm::Intrinsic::amdgcn_mbcnt_hi);
+        llvm::Value *mbcnt_lo_args[] = {neg_one, zero32};
+        auto lane_lo = builder.CreateCall(mbcnt_lo_fn, llvm::ArrayRef<llvm::Value *>(mbcnt_lo_args));
+        llvm::Value *mbcnt_hi_args[] = {neg_one, lane_lo};
+        auto lane = builder.CreateCall(mbcnt_hi_fn, llvm::ArrayRef<llvm::Value *>(mbcnt_hi_args));
 
         // wave_base = (workitem.id.x >> 6) << 6 (wave64-scoped slot offset within the workgroup LDS buffer).
-        auto tid_fn = llvm::Intrinsic::getDeclaration(module.get(), llvm::Intrinsic::amdgcn_workitem_id_x);
+        auto tid_fn = llvm::Intrinsic::getOrInsertDeclaration(module.get(), llvm::Intrinsic::amdgcn_workitem_id_x);
         auto tid = builder.CreateCall(tid_fn);
         auto wave_id = builder.CreateLShr(tid, llvm::ConstantInt::get(i32_ty, 6));
         auto wave_base = builder.CreateShl(wave_id, llvm::ConstantInt::get(i32_ty, 6));
@@ -597,7 +599,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
 
         // lds[slot] = value
         auto value_arg = &*permlane64_func->arg_begin();
-        auto store_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, {zero32, slot});
+        llvm::Value *store_idxs[] = {zero32, slot};
+        auto store_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(store_idxs));
         builder.CreateStore(value_arg, store_ptr);
 
         // Wavefront-scope acquire-release fence -> ``s_waitcnt lgkmcnt(0)`` on AMDGPU; orders LDS writes against
@@ -609,7 +612,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
         // partner_lane = lane ^ 32; result = lds[wave_base + partner_lane]
         auto partner_lane = builder.CreateXor(lane, llvm::ConstantInt::get(i32_ty, 32));
         auto partner_slot = builder.CreateAdd(wave_base, partner_lane);
-        auto load_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, {zero32, partner_slot});
+        llvm::Value *load_idxs[] = {zero32, partner_slot};
+        auto load_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(load_idxs));
         auto result = builder.CreateAlignedLoad(i32_ty, load_ptr, llvm::Align(4));
         builder.CreateRet(result);
 
