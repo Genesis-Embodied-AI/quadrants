@@ -1040,10 +1040,11 @@ def test_substruct_passed_to_func_kwargs() -> None:
 
 @test_utils.test()
 def test_substruct_pruning() -> None:
-    """When the callee uses only one of the sub-struct's leaves, the unused leaf must not be touched.
-    Exercises pruning across the sub-struct boundary."""
+    """When the callee uses only one of the sub-struct's leaves, the unused leaves must be pruned from the kernel's
+    compiled argument list. Exercises pruning across the sub-struct boundary."""
     c = qd.ndarray(qd.i32, shape=(8,))
     d = qd.ndarray(qd.i32, shape=(8,))
+    a = qd.ndarray(qd.i32, shape=(8,))
 
     @dataclass
     class CD:
@@ -1057,17 +1058,21 @@ def test_substruct_pruning() -> None:
 
     @qd.func
     def fcd(cd: CD) -> None:
-        # only writes cd.c — cd.d is unused and should be pruned
         cd.c[0] += 5
 
     @qd.kernel
     def k(s: AB) -> None:
         fcd(s.cd)
 
-    a = qd.ndarray(qd.i32, shape=(8,))
     k(AB(a=a, cd=CD(c=c, d=d)))
+
     assert c[0] == 5
     assert d[0] == 0
+    assert a[0] == 0
+
+    k_primal: Kernel = k._primal
+    kernel_args_count_by_type = k_primal.launch_stats.kernel_args_count_by_type
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 1
 
 
 @test_utils.test()
