@@ -201,8 +201,6 @@ from quadrants import _scratch
 _scratch.set_scratch_bytes(5 << 20)   # 5 MB; covers N up to ~1.3M
 ```
 
-A single-pass decoupled-lookback variant ("Onesweep") is a perf follow-up; the first land prioritizes simplicity and small LoC over peak throughput.
-
 ### `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs)`
 
 Collapse every **consecutive run of equal keys** into a single output entry `(unique_key, sum_of_values_in_run)`. Keys that compare equal but are separated by other keys form separate runs. For a global per-key sum, sort by key first (e.g. with `qd.algorithms.device_radix_sort`) and then reduce-by-key.
