@@ -16,11 +16,17 @@ Algorithm (textbook scan-based compaction):
 
 Scratch layout for the scan: ``scratch[0 : N]`` holds the per-element indices (i32 bit-cast to u32).
 ``scratch[N : N + B0]`` holds the level-0 partials, ``scratch[N + B0 : ...]`` deeper recursion levels (mirrors the
-device scan).
+device scan). The scratch is *always* u32 regardless of the input element dtype, because the scan operates on
+flags-as-counts (i32) which always fit in u32; the input dtype only shows up at scatter time as
+``dst[idx] = src[i]``, which lowers per-field for struct dtypes without any scratch reinterpretation.
+
+This is why ``device_select`` works on any element dtype Quadrants supports for field assignment - scalars
+(``i32`` / ``u32`` / ``f32`` / ``i64`` / ``u64`` / ``f64``) and structs (libuipc ``Vector{2,3,4}i``,
+``LinearBVHAABB``, etc.).
 
 Constraints (first land): ``N`` must fit comfortably within the configured scratch budget - the indices + partials
 together must not exceed ``scratch_capacity_u32()``. For the default 1 MB budget that's
-``N + ceil(N / 256) + ... ≤ 262144``, so roughly ``N ≤ 260_000``. Raise the budget via
+``N + ceil(N / 256) + ... <= 262144``, so roughly ``N <= 260_000``. Raise the budget via
 ``_scratch.set_scratch_bytes(...)`` before any algorithm runs to unlock larger inputs.
 """
 
@@ -84,7 +90,11 @@ def device_select(input, flags, *, out, num_out):  # pylint: disable=redefined-b
     ``flags[i] != 0``, in stable input order. Write the count of selected elements to ``num_out[0]``.
 
     Args:
-        input: 1-D tensor of any first-land dtype (``i32`` / ``u32`` / ``f32``).
+        input: 1-D tensor of any element dtype that Quadrants supports field-element assignment for: scalars
+            (``i32`` / ``u32`` / ``f32`` / ``i64`` / ``u64`` / ``f64``) and structs (``qd.Struct.field({...})`` or
+            ``qd.types.struct(...)`` - e.g. the libuipc ``Vector{2,3,4}i`` shapes). The scatter is
+            ``dst[idx] = src[i]``, which lowers per-field for struct dtypes, so no scratch reinterpretation is
+            needed for wider / composite element types.
         flags: 1-D ``i32`` tensor, same shape as ``input``. Each entry is treated as a boolean (``!= 0`` selects).
             Caller-built (e.g. populated by a separate kernel applying a predicate to ``input``).
         out: 1-D tensor with the same dtype as ``input``. Must hold at least ``N`` elements (so a

@@ -482,19 +482,24 @@ def test_device_exclusive_scan_rejects_unsupported_dtype():
 _SELECT_SIZES = [1, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000]
 
 
+_SELECT_DTYPES = [qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64]
+
+
 @pytest.mark.parametrize("N", _SELECT_SIZES)
-@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.parametrize("dtype", _SELECT_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_select_basic(dtype, N):
-    """device_select packs the elements with flags != 0 into a dense prefix
-    of out, in stable input order; num_out[0] holds the count."""
+    """device_select packs the elements with flags != 0 into a dense prefix of out, in stable input order; num_out[0]
+    holds the count. Covers all 6 supported scalar dtypes - the scatter (``dst[idx] = src[i]``) is dtype-agnostic, so
+    a single parametrized test serves both the 4-byte and 8-byte paths."""
     rng = np.random.default_rng(seed=1234)
-    if dtype == qd.f32:
-        host = rng.uniform(-1.0, 1.0, size=N).astype(np.float32)
-    elif dtype == qd.u32:
-        host = rng.integers(0, 10000, size=N, dtype=np.uint32)
+    np_dt = _DTYPE_TO_NP[dtype]
+    if dtype in (qd.f32, qd.f64):
+        host = rng.uniform(-1.0, 1.0, size=N).astype(np_dt)
+    elif dtype in (qd.u32, qd.u64):
+        host = rng.integers(0, 10000, size=N, dtype=np_dt)
     else:
-        host = rng.integers(-10000, 10000, size=N, dtype=np.int32)
+        host = rng.integers(-10000, 10000, size=N, dtype=np_dt)
     # Roughly 30% selection rate so the test exercises a non-trivial mix.
     flags_host = (rng.random(N) < 0.3).astype(np.int32)
     expected = host[flags_host == 1]
@@ -512,10 +517,52 @@ def test_device_select_basic(dtype, N):
     assert got_n == expected_n, f"{dtype} N={N}: got count {got_n}, expected {expected_n}"
 
     got = out.to_numpy()[:got_n]
-    if dtype == qd.f32:
-        np.testing.assert_array_equal(got, expected, err_msg=f"f32 select(N={N})")
-    else:
-        np.testing.assert_array_equal(got, expected, err_msg=f"{dtype} select(N={N})")
+    np.testing.assert_array_equal(got, expected, err_msg=f"{dtype} select(N={N})")
+
+
+_SELECT_STRUCT_SIZES = [1, 7, 256, 1024, 65537]
+_SELECT_STRUCT_NFIELDS = [2, 3, 4]  # mirrors libuipc Vector2i / Vector3i / Vector4i
+
+
+@pytest.mark.parametrize("N", _SELECT_STRUCT_SIZES)
+@pytest.mark.parametrize("nfields", _SELECT_STRUCT_NFIELDS)
+@test_utils.test(arch=qd.gpu)
+def test_device_select_struct_dtype(nfields, N):
+    """device_select over a Struct-of-i32 (libuipc-shape: Vector2i / Vector3i / Vector4i).
+
+    No code path inside ``device_select`` knows about struct dtypes; the scatter is ``dst[idx] = src[i]`` which
+    lowers per-field. This test pins that contract end-to-end across nfields = 2 / 3 / 4 and a range of N.
+    Fill / read-back goes through the struct-field ``from_numpy`` / ``to_numpy`` dict APIs to avoid per-element
+    Python-scope assignment (which is O(N) host hops and dominates the test runtime for larger N).
+    """
+    field_names = ["a", "b", "c", "d"][:nfields]
+    StructDT = qd.types.struct(**{name: qd.i32 for name in field_names})
+
+    inp = StructDT.field(shape=(N,))
+    out = StructDT.field(shape=(N,))
+    flags = qd.field(qd.i32, shape=N)
+    num_out = qd.field(qd.i32, shape=1)
+
+    rng = np.random.default_rng(seed=1234)
+    fields_host = {name: rng.integers(-1000, 1000, size=N, dtype=np.int32) for name in field_names}
+    flags_host = (rng.random(N) < 0.3).astype(np.int32)
+    inp.from_numpy(fields_host)
+    _fill_field(flags, flags_host)
+
+    qd.algorithms.device_select(inp, flags, out=out, num_out=num_out)
+
+    expected_n = int(flags_host.sum())
+    got_n = int(num_out.to_numpy()[0])
+    assert got_n == expected_n, f"struct(n={nfields}) N={N}: got count {got_n}, expected {expected_n}"
+
+    got = out.to_numpy()
+    sel_idx = np.where(flags_host != 0)[0]
+    for name in field_names:
+        np.testing.assert_array_equal(
+            got[name][:got_n],
+            fields_host[name][sel_idx],
+            err_msg=f"struct(n={nfields}) N={N} field={name}",
+        )
 
 
 @test_utils.test(arch=qd.gpu)
