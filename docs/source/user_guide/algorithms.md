@@ -1,6 +1,6 @@
 # Algorithms
 
-Device-wide algorithms - primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above grid-scope synchronization: they *use* block, subgroup, and grid primitives internally and expose a high-level entry point that the user calls from host (Python) code, not from inside a kernel.
+Device-wide algorithms are primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above grid-scope synchronization: they *use* block, subgroup, and grid primitives internally and expose a high-level entry point that the user calls from host (Python) code, not from inside a kernel.
 
 ## What's available
 
