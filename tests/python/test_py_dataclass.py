@@ -914,32 +914,40 @@ _SUBSTRUCT_LEAF_KINDS = [
 
 @test_utils.test()
 @pytest.mark.parametrize("qd_make,qd_anno", _SUBSTRUCT_LEAF_KINDS)
-def test_substruct_passed_to_func(qd_make: Any, qd_anno: Any) -> None:
+def test_substruct_passed_to_func(qd_make: Any, qd_anno: Any, request) -> None:
     """``f(s.struct_cd)`` where the kernel arg is a nested dataclass and the callee is typed with the child dataclass.
     Mirrors test_ndarray_struct_nested_ndarray but passes the sub-struct (not the whole struct) into the inner func.
-    Parametrized across the three supported leaf kinds (raw ndarray, field/template, qd.Tensor wrapper)."""
+    Parametrized across the three supported leaf kinds (raw ndarray, field/template, qd.Tensor wrapper).
+    Every dataclass also carries one ``extra`` leaf that no kernel/func ever reads, so pruning is checked end-to-end
+    via ``kernel_args_count_by_type``."""
     a = qd_make(qd.i32, shape=(101,))
     b = qd_make(qd.i32, shape=(57,))
     c = qd_make(qd.i32, shape=(211,))
     d = qd_make(qd.i32, shape=(211,))
     e = qd_make(qd.i32, shape=(251,))
     f = qd_make(qd.i32, shape=(251,))
+    extra_ab = qd_make(qd.i32, shape=(8,))
+    extra_cd = qd_make(qd.i32, shape=(8,))
+    extra_ef = qd_make(qd.i32, shape=(8,))
 
     @dataclass
     class MyStructEF:
         e: qd_anno[qd.i32, 1]
         f: qd_anno[qd.i32, 1]
+        extra: qd_anno[qd.i32, 1]
 
     @dataclass
     class MyStructCD:
         c: qd_anno[qd.i32, 1]
         d: qd_anno[qd.i32, 1]
+        extra: qd_anno[qd.i32, 1]
         struct_ef: MyStructEF
 
     @dataclass
     class MyStructAB:
         a: qd_anno[qd.i32, 1]
         b: qd_anno[qd.i32, 1]
+        extra: qd_anno[qd.i32, 1]
         struct_cd: MyStructCD
 
     @qd.func
@@ -960,7 +968,13 @@ def test_substruct_passed_to_func(qd_make: Any, qd_anno: Any) -> None:
         fcd(my_struct_ab.struct_cd)
         fef(my_struct_ab.struct_cd.struct_ef)
 
-    s = MyStructAB(a=a, b=b, struct_cd=MyStructCD(c=c, d=d, struct_ef=MyStructEF(e=e, f=f)))
+    s = MyStructAB(
+        a=a, b=b, extra=extra_ab,
+        struct_cd=MyStructCD(
+            c=c, d=d, extra=extra_cd,
+            struct_ef=MyStructEF(e=e, f=f, extra=extra_ef),
+        ),
+    )
     k1(s)
 
     assert a[7] == 3
@@ -970,10 +984,18 @@ def test_substruct_passed_to_func(qd_make: Any, qd_anno: Any) -> None:
     assert e[12] == 28
     assert f[18] == 48
 
+    # The three ``extra`` leaves must be pruned. ndarray/tensor leaves show up in QD_ARRAY; field leaves are template
+    # globals and never appear as kernel args at all (QD_ARRAY == 0 across the board).
+    leaf_kind = request.node.callspec.id.split("-")[0]
+    expected_qd_arrays = 6 if leaf_kind in ("ndarray", "tensor") else 0
+    k1_primal: Kernel = k1._primal
+    assert k1_primal.launch_stats.kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == expected_qd_arrays
+
 
 @test_utils.test()
 def test_substruct_passed_to_func_kwargs() -> None:
-    """``f(child=s.struct_cd)`` — kwargs at the sub-struct call site."""
+    """``f(child=s.struct_cd)`` — kwargs at the sub-struct call site. ``a``, ``extra_ab``, ``extra_cd`` are all
+    unread and must be pruned out of the compiled kernel arg list."""
     c = qd.ndarray(qd.i32, shape=(8,))
     d = qd.ndarray(qd.i32, shape=(8,))
 
@@ -981,10 +1003,12 @@ def test_substruct_passed_to_func_kwargs() -> None:
     class CD:
         c: qd.types.NDArray[qd.i32, 1]
         d: qd.types.NDArray[qd.i32, 1]
+        extra: qd.types.NDArray[qd.i32, 1]
 
     @dataclass
     class AB:
         a: qd.types.NDArray[qd.i32, 1]
+        extra: qd.types.NDArray[qd.i32, 1]
         cd: CD
 
     @qd.func
@@ -997,9 +1021,14 @@ def test_substruct_passed_to_func_kwargs() -> None:
         fcd(cd=s.cd)
 
     a = qd.ndarray(qd.i32, shape=(8,))
-    k(AB(a=a, cd=CD(c=c, d=d)))
+    extra_ab = qd.ndarray(qd.i32, shape=(8,))
+    extra_cd = qd.ndarray(qd.i32, shape=(8,))
+    k(AB(a=a, extra=extra_ab, cd=CD(c=c, d=d, extra=extra_cd)))
+
     assert c[0] == 7
     assert d[0] == 9
+    k_primal: Kernel = k._primal
+    assert k_primal.launch_stats.kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
 
 
 @test_utils.test()
@@ -1042,16 +1071,19 @@ def test_substruct_pruning() -> None:
 @test_utils.test()
 def test_substruct_inside_func() -> None:
     """The sub-struct call site is inside a ``qd.func`` body (not directly in the kernel).
-    Exercises ``_transform_as_func``'s intermediate sentinel binding."""
+    Exercises ``_transform_as_func``'s intermediate sentinel binding. ``a``, ``extra_a``, ``extra_c`` are all unread
+    and must be pruned out of the compiled kernel arg list (only ``c`` survives)."""
     c = qd.ndarray(qd.i32, shape=(8,))
 
     @dataclass
     class C:
         c: qd.types.NDArray[qd.i32, 1]
+        extra: qd.types.NDArray[qd.i32, 1]
 
     @dataclass
     class A:
         a: qd.types.NDArray[qd.i32, 1]
+        extra: qd.types.NDArray[qd.i32, 1]
         child: C
 
     @qd.func
@@ -1060,7 +1092,6 @@ def test_substruct_inside_func() -> None:
 
     @qd.func
     def f1(s: A) -> None:
-        # call site inside a qd.func body
         f2(s.child)
 
     @qd.kernel
@@ -1068,14 +1099,21 @@ def test_substruct_inside_func() -> None:
         f1(s)
 
     a = qd.ndarray(qd.i32, shape=(8,))
-    k(A(a=a, child=C(c=c)))
+    extra_a = qd.ndarray(qd.i32, shape=(8,))
+    extra_c = qd.ndarray(qd.i32, shape=(8,))
+    k(A(a=a, extra=extra_a, child=C(c=c, extra=extra_c)))
+
     assert c[0] == 11
+    k_primal: Kernel = k._primal
+    assert k_primal.launch_stats.kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 1
 
 
 @test_utils.test()
 def test_substruct_scalar_leaf() -> None:
-    """Sub-struct contains scalar (int) fields, mixed with an ndarray sibling."""
+    """Sub-struct contains scalar (int) fields, mixed with an ndarray sibling. ``extra_ab`` is an unused ndarray on
+    the outer struct and must be pruned out of the kernel arg list (only ``out`` survives as QD_ARRAY)."""
     out = qd.ndarray(qd.i32, shape=(8,))
+    extra_ab = qd.ndarray(qd.i32, shape=(8,))
 
     @dataclass
     class CD:
@@ -1085,6 +1123,7 @@ def test_substruct_scalar_leaf() -> None:
     @dataclass
     class AB:
         out: qd.types.NDArray[qd.i32, 1]
+        extra: qd.types.NDArray[qd.i32, 1]
         cd: CD
 
     @qd.func
@@ -1095,8 +1134,11 @@ def test_substruct_scalar_leaf() -> None:
     def k(s: AB) -> None:
         add_pair(s.cd, s.out)
 
-    k(AB(out=out, cd=CD(c=3, d=4)))
+    k(AB(out=out, extra=extra_ab, cd=CD(c=3, d=4)))
+
     assert out[0] == 7
+    k_primal: Kernel = k._primal
+    assert k_primal.launch_stats.kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 1
 
 
 @test_utils.test()
@@ -1104,29 +1146,39 @@ def test_substruct_deep_nesting() -> None:
     """Three levels of dataclass nesting (L0 -> L1 -> L2 -> L3) combined with a three-level func-call chain
     (kernel -> touch_l1 -> touch_l2 -> touch_l3). Each layer writes its own leaf and forwards its inner sub-struct to
     the next callee. The kernel also exercises a direct 3-deep attribute access ``s.inner.inner.inner`` to make sure
-    multi-level call-site flattening works straight from the kernel body, not just via intermediate funcs."""
+    multi-level call-site flattening works straight from the kernel body, not just via intermediate funcs.
+    Every level also carries an unused ``extra`` leaf to confirm pruning works at every depth — only the 4 ``leaf``
+    fields must survive in the compiled kernel arg list."""
     n0 = qd.ndarray(qd.i32, shape=(4,))
     n1 = qd.ndarray(qd.i32, shape=(4,))
     n2 = qd.ndarray(qd.i32, shape=(4,))
     n3 = qd.ndarray(qd.i32, shape=(4,))
+    x0 = qd.ndarray(qd.i32, shape=(4,))
+    x1 = qd.ndarray(qd.i32, shape=(4,))
+    x2 = qd.ndarray(qd.i32, shape=(4,))
+    x3 = qd.ndarray(qd.i32, shape=(4,))
 
     @dataclass
     class L3:
         leaf: qd.types.NDArray[qd.i32, 1]
+        extra: qd.types.NDArray[qd.i32, 1]
 
     @dataclass
     class L2:
         leaf: qd.types.NDArray[qd.i32, 1]
+        extra: qd.types.NDArray[qd.i32, 1]
         inner: L3
 
     @dataclass
     class L1:
         leaf: qd.types.NDArray[qd.i32, 1]
+        extra: qd.types.NDArray[qd.i32, 1]
         inner: L2
 
     @dataclass
     class L0:
         leaf: qd.types.NDArray[qd.i32, 1]
+        extra: qd.types.NDArray[qd.i32, 1]
         inner: L1
 
     @qd.func
@@ -1149,13 +1201,24 @@ def test_substruct_deep_nesting() -> None:
         touch_l1(s.inner)
         touch_l3(s.inner.inner.inner)
 
-    s = L0(leaf=n0, inner=L1(leaf=n1, inner=L2(leaf=n2, inner=L3(leaf=n3))))
+    s = L0(
+        leaf=n0, extra=x0,
+        inner=L1(
+            leaf=n1, extra=x1,
+            inner=L2(
+                leaf=n2, extra=x2,
+                inner=L3(leaf=n3, extra=x3),
+            ),
+        ),
+    )
     k(s)
 
     assert n0[0] == 1000
     assert n1[0] == 100
     assert n2[0] == 10
     assert n3[0] == 1 + 1
+    k_primal: Kernel = k._primal
+    assert k_primal.launch_stats.kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
 
 
 @pytest.mark.parametrize("use_slots", [False, True])
