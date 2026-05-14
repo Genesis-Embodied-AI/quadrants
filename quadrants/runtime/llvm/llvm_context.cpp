@@ -556,12 +556,29 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       // We use it to extend the SIMD32-scoped ``ds_bpermute`` (every shuffle op lowers to that) into a wave64-aware
       // cross-half shuffle on RDNA: ``ds_bpermute`` reads within the lane's own 32-lane SIMD cluster, ``permlane64``
       // brings the other SIMD's value to this lane, and we select between the two based on which half the target lane
-      // sits in. See ``amdgpu_cross_half_shuffle_i32`` in runtime.cpp. Available on gfx10.3+ (RDNA2/3/4) and on every
-      // CDNA target (gfx9xx, gfx940/942); we force wave64 on all AMDGPU so there's no wave32 codepath that could call
-      // this in an undefined state. The intrinsic is overloaded on its element type (signature
-      // ``T -> T`` for any 32-bit-or-smaller ``T``), so we have to pass the explicit ``i32`` type alongside the
-      // ID -- otherwise ``CreateIntrinsic`` segfaults inside getDeclaration() while resolving the mangled name.
-      patch_intrinsic("amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true, {llvm::Type::getInt32Ty(*ctx)});
+      // sits in. See ``amdgpu_cross_half_shuffle_i32`` in runtime.cpp. The instruction itself is gfx940+ (CDNA3) and
+      // gfx11+ (RDNA3+) only -- on earlier wave64-capable targets (gfx9xx CDNA1/2, gfx10.x RDNA1/2) the AMDGPU LLVM
+      // backend hits "Cannot select" while lowering the intrinsic and the JIT crashes. We force wave64 on all AMDGPU
+      // targets (no wave32 codepath that could call this in an undefined state), but we still need the runtime to be
+      // usable on the older wave64 hardware: patch the stub to the identity function there, so the cross-half helper
+      // degrades to a plain ``ds_bpermute`` (correct for same-SIMD reads, wrong for cross-SIMD on RDNA1/2 -- matches
+      // pre-cross-half-fix behavior). Same-SIMD-only call sites (the common shuffle pattern, e.g. reductions over the
+      // first 32 lanes) keep working correctly. The intrinsic is overloaded on its element type (signature ``T -> T``
+      // for any 32-bit-or-smaller ``T``), so we have to pass the explicit ``i32`` type alongside the ID -- otherwise
+      // ``CreateIntrinsic`` segfaults inside getDeclaration() while resolving the mangled name.
+      auto mcpu_str = AMDGPUContext::get_instance().get_mcpu();
+      bool has_permlane64 = (mcpu_str == "gfx940" || mcpu_str == "gfx941" || mcpu_str == "gfx942" ||
+                             mcpu_str.substr(0, 5) == "gfx11" || mcpu_str.substr(0, 5) == "gfx12");
+      if (has_permlane64) {
+        patch_intrinsic("amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true, {llvm::Type::getInt32Ty(*ctx)});
+      } else if (auto permlane64_func = module->getFunction("amdgpu_permlane64")) {
+        permlane64_func->deleteBody();
+        auto bb = llvm::BasicBlock::Create(*ctx, "entry", permlane64_func);
+        IRBuilder<> builder(*ctx);
+        builder.SetInsertPoint(bb);
+        builder.CreateRet(&*permlane64_func->arg_begin());
+        QuadrantsLLVMContext::mark_inline(permlane64_func);
+      }
       patch_intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
       patch_intrinsic("amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
       patch_intrinsic("amdgpu_ballot_w32", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt32Ty(*ctx)});

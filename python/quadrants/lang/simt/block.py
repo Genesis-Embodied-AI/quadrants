@@ -8,8 +8,18 @@ from quadrants.lang import impl
 from quadrants.lang import ops as _ops
 from quadrants.lang.expr import make_expr_group
 from quadrants.lang.kernel_impl import func as _func
-from quadrants.lang.simt import subgroup as _subgroup
-from quadrants.lang.simt.subgroup import _bin_add, _bin_max, _bin_min
+
+# Import order matters: ``subgroup`` must come before ``reductions``.  ``reductions.py`` does ``from
+# quadrants.lang.simt.subgroup import (ballot, invocation_id, ...)`` at its top, and ``subgroup.py`` does ``from
+# quadrants.lang.simt.reductions import *`` at its bottom.  If ``reductions`` is imported here first, it triggers a
+# circular load that leaves ``subgroup``'s wildcard re-export running while ``reductions.__all__`` isn't yet defined,
+# so ``subgroup.reduce_add_tiled`` etc. silently end up missing.  Importing ``subgroup`` first (which then drives
+# ``reductions`` to completion via the wildcard) keeps the fully-loaded layout downstream callers expect.  ``isort:
+# skip_file`` would disable sorting for the whole file; the local ``noqa`` comments below scope the override to just
+# these two lines.
+from quadrants.lang.simt import subgroup as _subgroup  # noqa: I001  isort: skip
+from quadrants.lang.simt import reductions as _reductions  # noqa: I001
+from quadrants.lang.simt.reductions import _bin_add, _bin_max, _bin_min
 from quadrants.lang.util import quadrants_scope
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import i32 as _i32
@@ -134,9 +144,10 @@ class SharedArray:
 # `block.sync` + (NUM_SUBGROUPS - 1) ops on thread 0.  The subgroup size is read from `subgroup.group_size()` (a
 # compile-time Python int) at the top of every block op, so callers never plumb it in.
 #
-# The per-subgroup step delegates to `subgroup._reduce_tiled`, the generic-op private helper that mirrors
-# `subgroup.reduce_add_tiled` / `_min_tiled` / `_max_tiled` but takes a caller-supplied template operator -- so the
-# same block skeleton covers add / min / max / mul / bitwise / custom monoids.
+# The per-subgroup step delegates to `reductions._reduce_tiled`, the generic-op private helper (alongside
+# `reductions._inclusive_scan_tiled` / `_exclusive_scan_tiled`) that mirrors `subgroup.reduce_add_tiled` / `_min_tiled`
+# / `_max_tiled` but takes a caller-supplied template operator -- so the same block skeleton covers add / min / max /
+# mul / bitwise / custom monoids.
 
 
 @_func
@@ -165,7 +176,7 @@ def reduce(value, block_dim: template(), op: template(), dtype: template()):
     )
     NUM_SUBGROUPS = impl.static(block_dim // SUBGROUP_SIZE)
 
-    subgroup_agg = _subgroup._reduce_tiled(value, op, log2_subgroup)
+    subgroup_agg = _reductions._reduce_tiled(value, op, log2_subgroup)
 
     if impl.static(NUM_SUBGROUPS == 1):
         return subgroup_agg
@@ -240,7 +251,7 @@ def reduce_all_max(value, block_dim: template(), dtype: template()):
 
 # --- Block scans -----------------------------------------------------------------------
 #
-# Two-stage block scan.  Each subgroup does a Hillis-Steele scan via `subgroup.{_inclusive_scan_tiled,
+# Two-stage block scan.  Each subgroup does a Hillis-Steele scan via `reductions.{_inclusive_scan_tiled,
 # _exclusive_scan_tiled}`, the last lane of every subgroup publishes the subgroup aggregate to shared memory, then
 # every thread sequentially folds the subgroup prefixes and applies its own subgroup's prefix to its scan value.
 # All threads receive a valid result; cost: one subgroup scan + 1 shared-mem write/read per subgroup + 1
@@ -277,7 +288,7 @@ def inclusive_scan(value, block_dim: template(), op: template(), dtype: template
     )
     NUM_SUBGROUPS = impl.static(block_dim // SUBGROUP_SIZE)
 
-    inclusive = _subgroup._inclusive_scan_tiled(value, op, log2_subgroup)
+    inclusive = _reductions._inclusive_scan_tiled(value, op, log2_subgroup)
 
     if impl.static(NUM_SUBGROUPS == 1):
         return inclusive
@@ -325,7 +336,7 @@ def exclusive_scan(value, block_dim: template(), op: template(), identity, dtype
     )
     NUM_SUBGROUPS = impl.static(block_dim // SUBGROUP_SIZE)
 
-    exclusive = _subgroup._exclusive_scan_tiled(value, op, identity, log2_subgroup)
+    exclusive = _reductions._exclusive_scan_tiled(value, op, identity, log2_subgroup)
 
     if impl.static(NUM_SUBGROUPS == 1):
         return exclusive
@@ -387,14 +398,14 @@ def exclusive_add(value, block_dim: template(), dtype: template()):
 # Plain Python wrappers (not ``@func``): the identity for an exclusive min / max scan is uniquely determined by
 # ``value``'s dtype, so we introspect it at compile time and emit a typed-constant identity Expr rather than asking
 # callers to provide one.  Mirrors the subgroup convention (``subgroup.exclusive_min`` and friends).  The identity
-# helpers (``_typed_min_identity`` / ``_typed_max_identity``) are reused from ``subgroup.py`` so the per-dtype
+# helpers (``_typed_min_identity`` / ``_typed_max_identity``) are reused from ``reductions.py`` so the per-dtype
 # sentinel choices stay consistent across the two scopes.
 def exclusive_min(value, block_dim: template(), dtype: template()):
     """Block-scope exclusive prefix min.  After the call, thread ``i > 0`` holds ``min(v[0], ..., v[i-1])`` and
     thread 0 holds the dtype-derived identity: ``+inf`` for real dtypes, ``np.iinfo(dtype).max`` for integer dtypes
     (``UINT_MAX`` for unsigned, ``INT_MAX`` for signed).  See `exclusive_scan` for the underlying contract.
     """
-    return exclusive_scan(value, block_dim, _bin_min, _subgroup._typed_min_identity(value), dtype)
+    return exclusive_scan(value, block_dim, _bin_min, _reductions._typed_min_identity(value), dtype)
 
 
 def exclusive_max(value, block_dim: template(), dtype: template()):
@@ -402,7 +413,7 @@ def exclusive_max(value, block_dim: template(), dtype: template()):
     thread 0 holds the dtype-derived identity: ``-inf`` for real dtypes, ``np.iinfo(dtype).min`` for signed integer
     dtypes, ``0`` for unsigned and bool.  See `exclusive_scan` for the underlying contract.
     """
-    return exclusive_scan(value, block_dim, _bin_max, _subgroup._typed_max_identity(value), dtype)
+    return exclusive_scan(value, block_dim, _bin_max, _reductions._typed_max_identity(value), dtype)
 
 
 # --- Block radix rank ------------------------------------------------------------------

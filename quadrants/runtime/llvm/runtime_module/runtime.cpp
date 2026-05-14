@@ -980,9 +980,13 @@ i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
   return 0;
 }
 
-// Exchanges a 32-bit value between lanes ``i`` and ``i ^ 32`` in a single instruction. Available on every wave64
-// AMDGPU target Quadrants compiles for (gfx10.3+ RDNA2/3/4 and every CDNA). Used by ``amdgpu_cross_half_shuffle_i32``
-// below to repair the cross-half story for ``ds_bpermute``, which is SIMD32-scoped on RDNA.
+// Exchanges a 32-bit value between lanes ``i`` and ``i ^ 32`` in a single instruction. The instruction is only
+// available on gfx940+ (CDNA3) and gfx11+ (RDNA3+); ``llvm_context.cpp`` detects the target at JIT time and patches
+// this stub to either the ``llvm.amdgcn.permlane64`` intrinsic (on supported hardware) or the identity function (on
+// gfx9xx CDNA1/2 and gfx10.x RDNA1/2, where the cross-half helper below then degrades to a plain ``ds_bpermute`` --
+// correct for same-SIMD reads, wrong for cross-SIMD on RDNA wave64 but doesn't crash the JIT). Used by
+// ``amdgpu_cross_half_shuffle_i32`` below to repair the cross-half story for ``ds_bpermute``, which is SIMD32-scoped
+// on RDNA.
 i32 amdgpu_permlane64(i32 value) {
   __builtin_trap();
   return 0;
@@ -1039,9 +1043,10 @@ i32 amdgpu_lane_id() {
 // Note this is correct on every AMDGPU target we run on. On CDNA (gfx9xx, gfx940/942) ``ds_bpermute`` could in
 // principle directly address all 64 lanes, but because we always mask the byte argument to ``(target_lane & 31) * 4``
 // we never test that path -- on both ISAs the byte index is in [0, 128) and only addresses the bottom half. The
-// ``permlane64`` swap then supplies the top-half data. (``permlane64`` itself is available on every wave64-capable
-// target Quadrants supports: gfx9xx + gfx10.3+; gfx10.0/10.1/10.2 are RDNA1/RDNA2 with optional wave64, which we
-// don't currently target.)
+// ``permlane64`` swap then supplies the top-half data on hardware that has the instruction (gfx940+ CDNA3 / gfx11+
+// RDNA3+); on older wave64-capable targets (gfx9xx CDNA1/2, gfx10.x RDNA1/2) ``permlane64`` is patched to an identity
+// stub at JIT time, so this helper degrades to a plain ``ds_bpermute`` -- correct for same-SIMD reads, wrong for
+// cross-SIMD on RDNA wave64 but doesn't crash the JIT (see the patching logic in ``llvm_context.cpp``).
 //
 // OOR target lanes (``target_lane < 0`` or ``target_lane >= 64``): we mask to ``target_lane & 31`` for the byte and
 // ``& 32`` for the half-bit. The behaviour for OOR targets is implementation-defined on every backend (CUDA's
