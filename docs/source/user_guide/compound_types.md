@@ -114,8 +114,8 @@ def touch_outer(s: Outer) -> None:
 
 @qd.kernel
 def k(s: Outer) -> None:
-    touch_outer(s)              # whole-struct call (already supported)
-    touch_inner(s.inner)        # sub-struct call (also supported)
+    touch_outer(s)              # whole-struct call
+    touch_inner(s.inner)        # sub-struct call
 ```
 
 Sub-struct passing supports:
