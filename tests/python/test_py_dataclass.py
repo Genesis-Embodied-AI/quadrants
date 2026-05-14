@@ -887,6 +887,250 @@ def test_ndarray_struct_multiple_child_structs_field():
     assert f[0] == 77
 
 
+# --- Sub-struct passing: f(s.child) where the child is itself a dataclass ---
+
+
+@test_utils.test()
+def test_ndarray_substruct_passed_to_func():
+    """``f(s.struct_cd)`` where the kernel arg is a nested dataclass and the func
+    is typed with the child dataclass. Mirrors test_ndarray_struct_nested_ndarray
+    but passes the sub-struct (not the whole struct) into the inner func."""
+    a = qd.ndarray(qd.i32, shape=(101,))
+    b = qd.ndarray(qd.i32, shape=(57,))
+    c = qd.ndarray(qd.i32, shape=(211,))
+    d = qd.ndarray(qd.i32, shape=(211,))
+    e = qd.ndarray(qd.i32, shape=(251,))
+    f = qd.ndarray(qd.i32, shape=(251,))
+
+    @dataclass
+    class MyStructEF:
+        e: qd.types.NDArray[qd.i32, 1]
+        f: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass
+    class MyStructCD:
+        c: qd.types.NDArray[qd.i32, 1]
+        d: qd.types.NDArray[qd.i32, 1]
+        struct_ef: MyStructEF
+
+    @dataclass
+    class MyStructAB:
+        a: qd.types.NDArray[qd.i32, 1]
+        b: qd.types.NDArray[qd.i32, 1]
+        struct_cd: MyStructCD
+
+    @qd.func
+    def fef(struct_ef: MyStructEF) -> None:
+        struct_ef.e[12] += 14
+        struct_ef.f[18] += 24
+
+    @qd.func
+    def fcd(struct_cd: MyStructCD) -> None:
+        struct_cd.c[11] += 13
+        struct_cd.d[17] += 23
+        # call site: pass sub-struct into another func
+        fef(struct_cd.struct_ef)
+
+    @qd.kernel
+    def k1(my_struct_ab: MyStructAB) -> None:
+        my_struct_ab.a[7] += 3
+        my_struct_ab.b[2] += 5
+        # call site: pass sub-struct directly from kernel into a func
+        fcd(my_struct_ab.struct_cd)
+        # also a 2-level deep sub-struct call
+        fef(my_struct_ab.struct_cd.struct_ef)
+
+    s = MyStructAB(a=a, b=b, struct_cd=MyStructCD(c=c, d=d, struct_ef=MyStructEF(e=e, f=f)))
+    k1(s)
+
+    assert a[7] == 3
+    assert b[2] == 5
+    assert c[11] == 13
+    assert d[17] == 23
+    # fef called twice: once from fcd, once directly from kernel
+    assert e[12] == 28
+    assert f[18] == 48
+
+
+@test_utils.test()
+def test_field_substruct_passed_to_func() -> None:
+    """Field/template variant of test_ndarray_substruct_passed_to_func."""
+    a = qd.field(qd.i32, shape=(55,))
+    b = qd.field(qd.i32, shape=(57,))
+    c = qd.field(qd.i32, shape=(211,))
+    d = qd.field(qd.i32, shape=(211,))
+    e = qd.field(qd.i32, shape=(251,))
+    f = qd.field(qd.i32, shape=(251,))
+
+    @dataclass
+    class MyStructEF:
+        e: qd.Template
+        f: qd.Template
+
+    @dataclass
+    class MyStructCD:
+        c: qd.Template
+        d: qd.Template
+        struct_ef: MyStructEF
+
+    @dataclass
+    class MyStructAB:
+        a: qd.Template
+        b: qd.Template
+        struct_cd: MyStructCD
+
+    @qd.func
+    def fef(struct_ef: MyStructEF) -> None:
+        struct_ef.e[12] += 14
+        struct_ef.f[18] += 24
+
+    @qd.func
+    def fcd(struct_cd: MyStructCD) -> None:
+        struct_cd.c[11] += 13
+        struct_cd.d[17] += 23
+        fef(struct_cd.struct_ef)
+
+    @qd.kernel
+    def k1(my_struct_ab: MyStructAB) -> None:
+        my_struct_ab.a[7] += 3
+        my_struct_ab.b[2] += 5
+        fcd(my_struct_ab.struct_cd)
+        fef(my_struct_ab.struct_cd.struct_ef)
+
+    s = MyStructAB(a=a, b=b, struct_cd=MyStructCD(c=c, d=d, struct_ef=MyStructEF(e=e, f=f)))
+    k1(s)
+
+    assert a[7] == 3
+    assert b[2] == 5
+    assert c[11] == 13
+    assert d[17] == 23
+    assert e[12] == 28
+    assert f[18] == 48
+
+
+@test_utils.test()
+def test_substruct_passed_to_func_kwargs() -> None:
+    """``f(child=s.struct_cd)`` — kwargs at the sub-struct call site."""
+    c = qd.ndarray(qd.i32, shape=(8,))
+    d = qd.ndarray(qd.i32, shape=(8,))
+
+    @dataclass
+    class CD:
+        c: qd.types.NDArray[qd.i32, 1]
+        d: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass
+    class AB:
+        a: qd.types.NDArray[qd.i32, 1]
+        cd: CD
+
+    @qd.func
+    def fcd(cd: CD) -> None:
+        cd.c[0] += 7
+        cd.d[0] += 9
+
+    @qd.kernel
+    def k(s: AB) -> None:
+        fcd(cd=s.cd)
+
+    a = qd.ndarray(qd.i32, shape=(8,))
+    k(AB(a=a, cd=CD(c=c, d=d)))
+    assert c[0] == 7
+    assert d[0] == 9
+
+
+@test_utils.test()
+def test_substruct_pruning() -> None:
+    """When the callee uses only one of the sub-struct's leaves, the unused leaf
+    must not be touched. Exercises pruning across the sub-struct boundary."""
+    c = qd.ndarray(qd.i32, shape=(8,))
+    d = qd.ndarray(qd.i32, shape=(8,))
+
+    @dataclass
+    class CD:
+        c: qd.types.NDArray[qd.i32, 1]
+        d: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass
+    class AB:
+        a: qd.types.NDArray[qd.i32, 1]
+        cd: CD
+
+    @qd.func
+    def fcd(cd: CD) -> None:
+        # only writes cd.c — cd.d is unused and should be pruned
+        cd.c[0] += 5
+
+    @qd.kernel
+    def k(s: AB) -> None:
+        fcd(s.cd)
+
+    a = qd.ndarray(qd.i32, shape=(8,))
+    k(AB(a=a, cd=CD(c=c, d=d)))
+    assert c[0] == 5
+    assert d[0] == 0
+
+
+@test_utils.test()
+def test_substruct_inside_func() -> None:
+    """The sub-struct call site is inside a ``qd.func`` body (not directly in
+    the kernel). Exercises ``_transform_as_func``'s intermediate sentinel binding."""
+    c = qd.ndarray(qd.i32, shape=(8,))
+
+    @dataclass
+    class C:
+        c: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass
+    class A:
+        a: qd.types.NDArray[qd.i32, 1]
+        child: C
+
+    @qd.func
+    def f2(child: C) -> None:
+        child.c[0] += 11
+
+    @qd.func
+    def f1(s: A) -> None:
+        # call site inside a qd.func body
+        f2(s.child)
+
+    @qd.kernel
+    def k(s: A) -> None:
+        f1(s)
+
+    a = qd.ndarray(qd.i32, shape=(8,))
+    k(A(a=a, child=C(c=c)))
+    assert c[0] == 11
+
+
+@test_utils.test()
+def test_substruct_scalar_leaf() -> None:
+    """Sub-struct contains scalar (int) fields, mixed with an ndarray sibling."""
+    out = qd.ndarray(qd.i32, shape=(8,))
+
+    @dataclass
+    class CD:
+        c: int
+        d: int
+
+    @dataclass
+    class AB:
+        out: qd.types.NDArray[qd.i32, 1]
+        cd: CD
+
+    @qd.func
+    def add_pair(cd: CD, out: qd.types.NDArray[qd.i32, 1]) -> None:
+        out[0] = cd.c + cd.d
+
+    @qd.kernel
+    def k(s: AB) -> None:
+        add_pair(s.cd, s.out)
+
+    k(AB(out=out, cd=CD(c=3, d=4)))
+    assert out[0] == 7
+
+
 @pytest.mark.parametrize("use_slots", [False, True])
 @test_utils.test()
 def test_template_mapper_cache(use_slots, monkeypatch):
