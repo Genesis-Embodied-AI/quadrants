@@ -834,7 +834,7 @@
 <span class="c1"># 2. ComputeOffsetsSubgroupUpsweep: every thread sums per-subgroup histograms column-wise to produce a block-wide</span>
 <span class="c1">#    bin count for digit ``= tid``, while rewriting the subgroup histogram entries into per-subgroup running</span>
 <span class="c1">#    exclusive prefixes.</span>
-<span class="c1"># 3. ExclusiveSum on the per-thread bin counts — uses the block exclusive scan defined above.</span>
+<span class="c1"># 3. ExclusiveSum on the per-thread bin counts - uses the block exclusive scan defined above.</span>
 <span class="c1"># 4. ComputeOffsetsSubgroupDownsweep: add the block-wide exclusive prefix into every subgroup&#39;s offset entry.</span>
 <span class="c1"># 5. ComputeRanksItem (atomic-OR match): per-subgroup match via ``atomic_or`` on a per-digit lane-mask, then leader</span>
 <span class="c1">#    (highest set lane) does a single ``atomic_add`` on the subgroup offset and broadcasts via ``subgroup.shuffle``;</span>
@@ -855,7 +855,7 @@
 
 <span class="nd">@_func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_subgroup_sync_fence</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Subgroup-scope barrier + memory fence — CUDA ``__syncwarp`` semantics across every backend.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Subgroup-scope barrier + memory fence - CUDA ``__syncwarp`` semantics across every backend.</span>
 
 <span class="sd">    Why both ops: on CUDA, `subgroup.sync()` already lowers to `__syncwarp` which folds in a memory fence, so the</span>
 <span class="sd">    extra `subgroup.mem_fence()` is redundant (a `__threadfence_block`).  On SPIR-V, however, the codegen emits</span>
@@ -882,7 +882,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Wave32 implementation of `radix_rank_match_atomic_or`. See the public wrapper for the contract.</span>
 
 <span class="sd">    Match-mask region is ``i32``; atomic_or, ballot, clz, popcnt all operate on 32 bits.  This path is taken on CUDA,</span>
-<span class="sd">    Vulkan-on-NVIDIA, and Metal — none of which require ``i64`` threadgroup atomics.</span>
+<span class="sd">    Vulkan-on-NVIDIA, and Metal - none of which require ``i64`` threadgroup atomics.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">SUBGROUP_THREADS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
     <span class="n">RADIX_DIGITS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">radix_bits</span><span class="p">)</span>
@@ -926,7 +926,7 @@
     <span class="c1"># Step 3: block-wide exclusive sum on the per-thread bin counts.</span>
     <span class="n">exclusive_digit_prefix</span> <span class="o">=</span> <span class="n">exclusive_add</span><span class="p">(</span><span class="n">bin_count</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_i32</span><span class="p">)</span>
 
-    <span class="c1"># Step 4: ComputeOffsetsSubgroupDownsweep — fold the block-wide exclusive prefix into every subgroup&#39;s offset.</span>
+    <span class="c1"># Step 4: ComputeOffsetsSubgroupDownsweep - fold the block-wide exclusive prefix into every subgroup&#39;s offset.</span>
     <span class="k">for</span> <span class="n">j_subgroup</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BLOCK_SUBGROUPS</span><span class="p">)):</span>
         <span class="n">smem_offsets</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_subgroup</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
             <span class="n">smem_offsets</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_subgroup</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span> <span class="o">+</span> <span class="n">exclusive_digit_prefix</span>
@@ -996,7 +996,7 @@
 
 <span class="sd">    Match-mask region is ``i64``; atomic_or on shared ``i64`` is native on AMDGPU LDS.  Subgroup ``lanemask_le`` is</span>
 <span class="sd">    u32-only by contract (see ``subgroup.py``: &quot;lane_id in [0, 31]&quot;), so the 64-lane form is synthesized inline as</span>
-<span class="sd">    ``one_at_lane | (one_at_lane - 1)`` — avoids the UB of shifting by 64 when lane == 63.</span>
+<span class="sd">    ``one_at_lane | (one_at_lane - 1)`` - avoids the UB of shifting by 64 when lane == 63.</span>
 
 <span class="sd">    Structural twin of the wave32 path; duplicated rather than parameterised because Quadrants&#39; AST transformer</span>
 <span class="sd">    doesn&#39;t carry locals across ``if impl.static`` branches and the smem_match dtype + match-phase widths are the only</span>

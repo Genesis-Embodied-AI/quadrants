@@ -745,12 +745,12 @@
 </thead>
 <tbody>
 <tr class="row-even"><td><p>5 (tile = 32)</p></td>
-<td><p>1 tile: lanes 0–31 (= base op)</p></td>
-<td><p>2 tiles: 0–31, 32–63</p></td>
+<td><p>1 tile: lanes 0-31 (= base op)</p></td>
+<td><p>2 tiles: 0-31, 32-63</p></td>
 </tr>
 <tr class="row-odd"><td><p>4 (tile = 16)</p></td>
-<td><p>2 tiles: 0–15, 16–31</p></td>
-<td><p>4 tiles: 0–15, 16–31, 32–47, 48–63</p></td>
+<td><p>2 tiles: 0-15, 16-31</p></td>
+<td><p>4 tiles: 0-15, 16-31, 32-47, 48-63</p></td>
 </tr>
 <tr class="row-even"><td><p>3 (tile = 8)</p></td>
 <td><p>4 tiles of 8</p></td>
@@ -1027,7 +1027,7 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">lane_id</span></code> is any integer scalar. Pass <code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code> to get the classic CUDA built-in form (current lane’s mask), or any other expression to query an arbitrary lane’s mask. The op is pure arithmetic - no shuffle, no ballot - so per-lane-varying <code class="docutils literal notranslate"><span class="pre">lane_id</span></code> works the same as a uniform one.</p></li>
 <li><p>Returns <code class="docutils literal notranslate"><span class="pre">u32</span></code>. Bit 0 corresponds to lane 0, bit 31 to lane 31.</p></li>
 <li><p>Caller contract: <code class="docutils literal notranslate"><span class="pre">lane_id</span></code> must be in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">31]</span></code> (matching the <code class="docutils literal notranslate"><span class="pre">u32</span></code> return type, which represents 32 lanes). Passing <code class="docutils literal notranslate"><span class="pre">lane_id</span> <span class="pre">==</span> <span class="pre">32</span></code> triggers an undefined-behaviour shift on most backends.</p></li>
-<li><p>Implemented portably as a <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> over <code class="docutils literal notranslate"><span class="pre">&lt;&lt;</span></code>, <code class="docutils literal notranslate"><span class="pre">-</span></code>, <code class="docutils literal notranslate"><span class="pre">|</span></code>, <code class="docutils literal notranslate"><span class="pre">~</span></code>. Inlines at compile time into 1–3 ALU ops on every backend.</p></li>
+<li><p>Implemented portably as a <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> over <code class="docutils literal notranslate"><span class="pre">&lt;&lt;</span></code>, <code class="docutils literal notranslate"><span class="pre">-</span></code>, <code class="docutils literal notranslate"><span class="pre">|</span></code>, <code class="docutils literal notranslate"><span class="pre">~</span></code>. Inlines at compile time into 1-3 ALU ops on every backend.</p></li>
 <li><p>AMDGPU CDNA wave64 caveat: only the low 32 lanes are representable in this op (the return type is <code class="docutils literal notranslate"><span class="pre">u32</span></code>). If you need a mask covering all 64 wave64 lanes, use <code class="docutils literal notranslate"><span class="pre">subgroup.ballot</span></code> instead - it returns a <code class="docutils literal notranslate"><span class="pre">u64</span></code> and includes lanes 32..63.</p></li>
 </ul>
 </section>
