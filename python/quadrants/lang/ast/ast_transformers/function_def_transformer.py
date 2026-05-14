@@ -408,6 +408,25 @@ class FunctionDefTransformer:
         return None
 
     @staticmethod
+    def _bind_intermediate_dataclass_sentinels(ctx: ASTTransformerFuncContext, basename: str, dc_type: Any) -> None:
+        """Recursively bind every nested dataclass node ``__qd_<basename>__qd_<field>`` to its
+        dataclass type, so AST-flattened intermediate names (e.g. ``s.child`` rewritten to
+        ``Name("__qd_s__qd_child")`` by FlattenAttributeNameTransformer) resolve at lookup
+        time and call-site expansion in ``_expand_Call_dataclass_args`` triggers correctly.
+
+        Mirrors what ``_transform_kernel_arg`` already does kernel-side via its recursion
+        (each recursive call's first action is ``ctx.create_variable(flat_name, field.type)``).
+        On the func side these intermediates are missing, because ``_transform_func_arg`` is
+        invoked once per *leaf* arg (``fuse_args`` has already expanded the dataclass into
+        leaf arg-metas by then).
+        """
+        for field in dataclasses.fields(dc_type):
+            if dataclasses.is_dataclass(field.type):
+                child_name = create_flat_name(basename, field.name)
+                ctx.create_variable(child_name, field.type)
+                FunctionDefTransformer._bind_intermediate_dataclass_sentinels(ctx, child_name, field.type)
+
+    @staticmethod
     def _transform_as_func(ctx: ASTTransformerFuncContext, node: ast.FunctionDef, args: ast.arguments) -> None:
         # pylint: disable=import-outside-toplevel
         from quadrants.lang.kernel_impl import Func
@@ -422,6 +441,7 @@ class FunctionDefTransformer:
         for v in ctx.func.orig_arguments:
             if dataclasses.is_dataclass(v.annotation):
                 ctx.create_variable(v.name, v.annotation)
+                FunctionDefTransformer._bind_intermediate_dataclass_sentinels(ctx, v.name, v.annotation)
 
     @staticmethod
     def build_FunctionDef(
