@@ -917,10 +917,14 @@ def test_device_radix_sort_n_1m(dtype, big_scratch):  # pylint: disable=unused-a
     8 MB and restores after.
 
     Marked ``run_in_serial`` so conftest gives this test the 1 GB ``device_memory_GB`` pool instead of the 0.3 GB
-    non-serial default. On AMDGPU (gfx1100) running the full suite, the 0.3 GB pool plus the ``hipMallocAsync`` mempool
-    behaviour of ROCm 7.2 occasionally returned this test allocations against fragmented memory by the time it ran,
-    surfacing as a one-in-many-runs spurious sort mismatch with no algorithmic flaw on isolated reruns (700+ in-process
-    trials and 200 reset/init trials clean). The 1 GB pool removes the fragmentation pressure."""
+    non-serial default. AMDGPU (gfx1100, ROCm 7.2) saw a one-off sort mismatch in the ``[arch=amdgpu-1-dtype0]`` (u32)
+    parametrization during a full-suite run; that single observation is the only flake on record, and an extensive
+    follow-up investigation could not reproduce it (607+ attempts across 57 full-suite runs at multiple commits, 6
+    parallel-2way + 8 parallel-4way runs, and 550 in-process trials with varied seeds at the 0.3 GB pool, all clean -
+    upper-bound flake rate < 0.5% at 95% CI). The ``run_in_serial`` bump to a 1 GB pool is therefore retained as
+    defense-in-depth against allocator-pressure / fragmentation hypotheses, not as a verified-load-bearing fix; the
+    underlying root cause remains unknown. The previously-landed AMDGPU ``block_barrier`` fence-wrap fix
+    (``c030a806e1``) is a separately-verified real bug fix that may also have addressed the latent cause."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
