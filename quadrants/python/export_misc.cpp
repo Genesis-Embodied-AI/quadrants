@@ -23,6 +23,7 @@
 
 #include "quadrants/platform/amdgpu/detect_amdgpu.h"
 #if defined(QD_WITH_AMDGPU)
+#include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #endif
 
@@ -118,6 +119,20 @@ void export_misc(py::module &m) {
   m.def("toggle_python_print_buffer", [](bool opt) { py_cout.enabled = opt; });
   m.def("with_cuda", is_cuda_api_available);
   m.def("with_amdgpu", is_rocm_api_available);
+  // Return the active AMDGPU mcpu (e.g. ``"gfx1100"``, ``"gfx1011"``, ``"gfx940"``).  Exposed for diagnostics and
+  // for tests that need to assert on the active target architecture (e.g. verifying that the LDS-based
+  // ``permlane64`` software fallback is exercised on gfx10.x where the native instruction is unavailable).  Returns
+  // the empty string when AMDGPU is not built in or the runtime hasn't detected an AMDGPU device yet.
+#if defined(QD_WITH_AMDGPU)
+  m.def("amdgpu_mcpu", []() -> std::string {
+    if (!is_rocm_api_available() || !lang::AMDGPUContext::get_instance().detected()) {
+      return "";
+    }
+    return lang::AMDGPUContext::get_instance().get_mcpu();
+  });
+#else
+  m.def("amdgpu_mcpu", []() -> std::string { return ""; });
+#endif
 #ifdef QD_WITH_METAL
   m.def("with_metal", quadrants::lang::metal::is_metal_api_available);
 #else
