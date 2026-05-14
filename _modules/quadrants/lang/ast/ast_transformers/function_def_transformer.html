@@ -729,6 +729,24 @@
         <span class="k">return</span> <span class="kc">None</span>
 
     <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_bind_intermediate_dataclass_sentinels</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">basename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">dc_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Recursively bind every nested dataclass node ``__qd_&lt;basename&gt;__qd_&lt;field&gt;`` to its dataclass type, so</span>
+<span class="sd">        AST-flattened intermediate names (e.g. ``s.child`` rewritten to ``Name(&quot;__qd_s__qd_child&quot;)`` by</span>
+<span class="sd">        FlattenAttributeNameTransformer) resolve at lookup time and call-site expansion in</span>
+<span class="sd">        ``_expand_Call_dataclass_args`` triggers correctly.</span>
+
+<span class="sd">        Mirrors what ``_transform_kernel_arg`` already does kernel-side via its recursion (each recursive call&#39;s first</span>
+<span class="sd">        action is ``ctx.create_variable(flat_name, field.type)``). On the func side these intermediates are missing,</span>
+<span class="sd">        because ``_transform_func_arg`` is invoked once per *leaf* arg (``fuse_args`` has already expanded the dataclass</span>
+<span class="sd">        into leaf arg-metas by then).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">dc_type</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
+                <span class="n">child_name</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">basename</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">child_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">)</span>
+                <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_bind_intermediate_dataclass_sentinels</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">child_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_transform_as_func</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">FunctionDef</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">arguments</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="c1"># pylint: disable=import-outside-toplevel</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">Func</span>
@@ -743,6 +761,7 @@
         <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">orig_arguments</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">annotation</span><span class="p">):</span>
                 <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">annotation</span><span class="p">)</span>
+                <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_bind_intermediate_dataclass_sentinels</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">annotation</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="FunctionDefTransformer.build_FunctionDef">
