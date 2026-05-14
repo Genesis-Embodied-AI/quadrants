@@ -6,7 +6,7 @@ This enables two main capabilities:
 - **Compile-time branching**: eliminating branches entirely from the compiled kernel
 - **Loop unrolling**: unrolling loops at compile time
 
-Since the expressions are evaluated at compile time, the arguments to `qd.static()` must be known at compile time - they cannot depend on non-templated kernel parameters or other runtime values.
+Since the expressions are evaluated at compile time, the arguments to `qd.static()` must be known at compile time — they cannot depend on non-templated kernel parameters or other runtime values.
 
 ## Compile-time branching
 
@@ -22,7 +22,7 @@ def compute(use_fast_path: qd.Template, a: qd.Template) -> None:
 compute(True, my_field)
 ```
 
-Because `use_fast_path` is a templated parameter, it is known at compile time. The compiler will eliminate the `if/else` entirely - the compiled kernel will contain only `a[i] = i * 2`, with no branch at all. Calling `compute(False, my_field)` would trigger a recompilation that keeps only the `else` branch.
+Because `use_fast_path` is a templated parameter, it is known at compile time. The compiler will eliminate the `if/else` entirely — the compiled kernel will contain only `a[i] = i * 2`, with no branch at all. Calling `compute(False, my_field)` would trigger a recompilation that keeps only the `else` branch.
 
 Without `qd.static`, the condition would be evaluated at runtime for every thread, which is slower. In addition, the kernel will contain the code for both branches, which will increase register pressure, and likely reduce occupancy.
 
@@ -51,7 +51,7 @@ This is useful when the loop count is small and known at compile time, and you w
 
 A top-level for loop is normally parallelized across GPU threads. Wrapping it in `qd.static()` changes the behavior: the loop is unrolled at compile time instead of being parallelized.
 
-A `qd.static` `if` wrapping a top-level for loop does **not** prevent the for loop from being parallelized - the `if` is resolved at compile time, leaving the for loop as a top-level construct.
+A `qd.static` `if` wrapping a top-level for loop does **not** prevent the for loop from being parallelized — the `if` is resolved at compile time, leaving the for loop as a top-level construct.
 
 ```python
 @qd.kernel

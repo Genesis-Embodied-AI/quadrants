@@ -1,6 +1,6 @@
 # Matrix and Vector
 
-Quadrants provides `qd.Matrix` and `qd.Vector` types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast - but should be kept small for best performance (more than 32 elements total will trigger a warning).
+Quadrants provides `qd.Matrix` and `qd.Vector` types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small for best performance (more than 32 elements total will trigger a warning).
 
 `qd.Vector` is a special case of `qd.Matrix` with one column.
 
@@ -157,8 +157,8 @@ def mat_vec() -> None:
 
 ### Other operations
 
-- `qd.Matrix.diag(dim, val)` - create a diagonal matrix
-- `a.outer_product(b)` - outer product of two vectors
+- `qd.Matrix.diag(dim, val)` — create a diagonal matrix
+- `a.outer_product(b)` — outer product of two vectors
 
 ## Size limit
 

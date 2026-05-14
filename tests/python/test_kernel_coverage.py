@@ -186,7 +186,7 @@ def test_harvest_field_exception_path():
         kcov._cov_field_prog = object()
         kcov._probe_map[999999] = ("fake.py", 1)
 
-        # Should not raise - the exception is caught and logged
+        # Should not raise — the exception is caught and logged
         kcov._harvest_field()
 
         assert kcov._cov_field is None, "Field should be cleared after failure"
@@ -313,7 +313,7 @@ def test_kernel_coverage_survives_reinit():
     fired_first = {pid for pid in probes_first if arr[pid] != 0}
     assert len(fired_first) > 0, "Probes from first kernel should have fired"
 
-    # Don't call _harvest_field() manually - let qd.reset() trigger it via the _hooked_clear hook
+    # Don't call _harvest_field() manually — let qd.reset() trigger it via the _hooked_clear hook
     qd.reset()
 
     # Verify the hook harvested data from the first session

@@ -18,7 +18,7 @@ The quadrants project was originally forked from [Taichi](https://github.com/tai
 >
 > The Supreme Polarity (Taichi) gives rise to the Two Modes (Ying & Yang), which in turn give rise to the Four Forms (_Quadrants_).
 
-_Quadrants_ captures the idea of progression originated from taichi - built on the same foundation, evolving in its own direction while acknowledging its roots.
+_Quadrants_ captures the idea of progression originated from taichi — built on the same foundation, evolving in its own direction while acknowledging its roots.
 This project is now fully independent and does not aim to maintain backward compatibility with upstream Taichi.
 
 ## How Quadrants differs from upstream Taichi
@@ -31,14 +31,14 @@ While the repository still resembles upstream in structure, major changes includ
 
 ### CI
 
-* Kernel-level [code coverage](https://genesis-embodied-ai.github.io/quadrants/user_guide/kernel_coverage.html) - device-side branch coverage in standard `coverage.py` format, integrated with pytest-cov
+* Kernel-level [code coverage](https://genesis-embodied-ai.github.io/quadrants/user_guide/kernel_coverage.html) — device-side branch coverage in standard `coverage.py` format, integrated with pytest-cov
 * AI-driven checks for line wrapping, deleted comments, test coverage, and feature factorization
 
 ### Structural improvements
 
-* `dataclasses.dataclass` structs - work with ndarrays and fields, nestable, passable to `qd.func`, zero kernel-runtime overhead
-* [`qd.Tensor`](https://genesis-embodied-ai.github.io/quadrants/user_guide/tensor.html) - unified API over fields and ndarrays with per-tensor layout control, pickle support, and a `backend=` switch
-* [`BufferView`](https://genesis-embodied-ai.github.io/quadrants/user_guide/buffer_view.html) - safe sub-range ndarray access with bounds checking in debug mode
+* `dataclasses.dataclass` structs — work with ndarrays and fields, nestable, passable to `qd.func`, zero kernel-runtime overhead
+* [`qd.Tensor`](https://genesis-embodied-ai.github.io/quadrants/user_guide/tensor.html) — unified API over fields and ndarrays with per-tensor layout control, pickle support, and a `backend=` switch
+* [`BufferView`](https://genesis-embodied-ai.github.io/quadrants/user_guide/buffer_view.html) — safe sub-range ndarray access with bounds checking in debug mode
 
 ### Removed components
 
@@ -46,26 +46,26 @@ To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API
 
 ### Performance
 
-* **Reduced launch latency** - ndarray CPU performance improved **4.5×**; ndarray GPU performance went from 11× slower than fields to ~30% slower (5090 GPU, Genesis benchmark)
-* **[Fastcache](https://genesis-embodied-ai.github.io/quadrants/user_guide/fastcache.html)** - opt-in source-level cache (`@qd.kernel(fastcache=True)`) that bypasses front-end AST parsing; reduces warm-cache kernel load from **7.2 s → 0.3 s** on Genesis benchmarks
-* **[GPU Graphs](https://genesis-embodied-ai.github.io/quadrants/user_guide/graph.html)** - `@qd.kernel(graph=True)` captures kernel sequences into a graph; `qd.graph_do_while` runs GPU-side iteration loops (hardware conditional nodes on CUDA SM 9.0+)
-* **[perf_dispatch](https://genesis-embodied-ai.github.io/quadrants/user_guide/perf_dispatch.html)** - auto-benchmarks multiple kernel implementations and selects the fastest at runtime
-* **[Zero-copy interop](https://genesis-embodied-ai.github.io/quadrants/user_guide/interop.html)** - `to_torch(copy=False)` / `to_numpy(copy=False)` via DLPack on CUDA, CPU, AMDGPU, and Metal; direct torch tensor pass-through into kernels
+* **Reduced launch latency** — ndarray CPU performance improved **4.5×**; ndarray GPU performance went from 11× slower than fields to ~30% slower (5090 GPU, Genesis benchmark)
+* **[Fastcache](https://genesis-embodied-ai.github.io/quadrants/user_guide/fastcache.html)** — opt-in source-level cache (`@qd.kernel(fastcache=True)`) that bypasses front-end AST parsing; reduces warm-cache kernel load from **7.2 s → 0.3 s** on Genesis benchmarks
+* **[GPU Graphs](https://genesis-embodied-ai.github.io/quadrants/user_guide/graph.html)** — `@qd.kernel(graph=True)` captures kernel sequences into a graph; `qd.graph_do_while` runs GPU-side iteration loops (hardware conditional nodes on CUDA SM 9.0+)
+* **[perf_dispatch](https://genesis-embodied-ai.github.io/quadrants/user_guide/perf_dispatch.html)** — auto-benchmarks multiple kernel implementations and selects the fastest at runtime
+* **[Zero-copy interop](https://genesis-embodied-ai.github.io/quadrants/user_guide/interop.html)** — `to_torch(copy=False)` / `to_numpy(copy=False)` via DLPack on CUDA, CPU, AMDGPU, and Metal; direct torch tensor pass-through into kernels
 
 ### SIMT primitives
 
-* **[Tile16x16](https://genesis-embodied-ai.github.io/quadrants/user_guide/tile16.html)** - register-resident 16×16 matrix tiles with Cholesky, triangular solve, and rank-1 updates; 5× faster than shared-memory baselines on blocked linear algebra
-* **[Subgroup ops](https://genesis-embodied-ai.github.io/quadrants/user_guide/subgroup.html)** - cross-platform `shuffle`, `shuffle_down`, `reduce_add`, `reduce_all_add` across CUDA, AMDGPU, Metal and Vulkan
+* **[Tile16x16](https://genesis-embodied-ai.github.io/quadrants/user_guide/tile16.html)** — register-resident 16×16 matrix tiles with Cholesky, triangular solve, and rank-1 updates; 5× faster than shared-memory baselines on blocked linear algebra
+* **[Subgroup ops](https://genesis-embodied-ai.github.io/quadrants/user_guide/subgroup.html)** — cross-platform `shuffle`, `shuffle_down`, `reduce_add`, `reduce_all_add` across CUDA, AMDGPU, Metal and Vulkan
 
 ### Autodiff
 
-* [**Autodiff with dynamic loops**](https://genesis-embodied-ai.github.io/quadrants/user_guide/autodiff.html#autodiff-with-dynamic-loops) - computes the gradient of any kernel transparently using reverse-mode differentiation and runtime-based memory allocation
+* [**Autodiff with dynamic loops**](https://genesis-embodied-ai.github.io/quadrants/user_guide/autodiff.html#autodiff-with-dynamic-loops) — computes the gradient of any kernel transparently using reverse-mode differentiation and runtime-based memory allocation
 * Forward-mode AD, custom gradients (`@qd.ad.grad_replaced`), `qd.ad.Tape`
 
 
 ### Debugging & development
 
-* **[Python backend](https://genesis-embodied-ai.github.io/quadrants/user_guide/python_backend.html)** - `qd.init(qd.python)` interprets kernels as plain Python so they can be stepped through in a standard Python debugger
+* **[Python backend](https://genesis-embodied-ai.github.io/quadrants/user_guide/python_backend.html)** — `qd.init(qd.python)` interprets kernels as plain Python so they can be stepped through in a standard Python debugger
 
 ---
 

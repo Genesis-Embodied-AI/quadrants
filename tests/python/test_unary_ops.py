@@ -75,7 +75,7 @@ def test_logic_not_invalid():
 
 
 # Mirrors test_bit_not_invalid / test_logic_not_invalid: ffs is integer-only at the frontend. Real-typed operand must
-# raise QuadrantsTypeError with the same diagnostic, before any codegen is reached - this is what gates ffs on a
+# raise QuadrantsTypeError with the same diagnostic, before any codegen is reached — this is what gates ffs on a
 # usefully restricted operand domain on every backend.
 @test_utils.test(print_full_traceback=False)
 def test_ffs_invalid():
@@ -173,7 +173,7 @@ def test_clz():
     assert test_u32(0xFFFFFFFF) == 0
 
 
-# clz on 64-bit ints - runs on every supported backend. CPU / CUDA use native 64-bit leading-zero ops (`__nv_clzll`);
+# clz on 64-bit ints — runs on every supported backend. CPU / CUDA use native 64-bit leading-zero ops (`__nv_clzll`);
 # AMDGPU lowers via llvm.ctlz; SPIR-V (Vulkan / Metal) synthesises the 64-bit case from a hi/lo FindUMsb decomposition.
 # u64 routes through the same paths as i64 since the operation is on the bit pattern.
 @test_utils.test()
@@ -258,7 +258,7 @@ def test_ffs_i64():
     assert test_i64(0) == 0
     assert test_i64(1) == 1
     assert test_i64(2) == 2
-    # First bit at position 32 (in the high half) - exercises the SPIR-V hi/lo decomposition split.
+    # First bit at position 32 (in the high half) — exercises the SPIR-V hi/lo decomposition split.
     assert test_i64(1 << 31) == 32
     assert test_i64(1 << 32) == 33
     assert test_i64(1 << 62) == 63
@@ -281,8 +281,8 @@ def test_ffs_i64():
 
 # Regression sentinel for the i32 return-type normalisation: every bit-op (popcnt / clz / ffs) must return i32 from the
 # type-checking pass onward, not just at codegen time. If the inferred ret_type were the operand's type (i64),
-# promotion of `op(x: i64) + i64(1)` to i64 would skip the i32 → i64 cast, and CUDA / AMDGPU codegen - which truncates
-# the libdevice / llvm.ctpop result to i32 - would emit an `Add(i32, i64)` and trip an LLVM "operand type mismatch"
+# promotion of `op(x: i64) + i64(1)` to i64 would skip the i32 → i64 cast, and CUDA / AMDGPU codegen — which truncates
+# the libdevice / llvm.ctpop result to i32 — would emit an `Add(i32, i64)` and trip an LLVM "operand type mismatch"
 # assertion. Direct-return tests above hide this because they don't compose the result with any other operand.
 @test_utils.test()
 def test_bit_ops_compound_i64():

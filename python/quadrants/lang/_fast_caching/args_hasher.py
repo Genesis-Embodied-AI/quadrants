@@ -66,7 +66,7 @@ def _mark_should_warn() -> None:
 
 def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], arg: Any) -> str | None:
     # PERF: For frozen dataclasses, the repr never changes. Cache it on the instance to avoid repeated
-    # ``dataclasses.fields()`` calls (which are slow due to extra runtime checks - see _template_mapper_hotpath.py
+    # ``dataclasses.fields()`` calls (which are slow due to extra runtime checks — see _template_mapper_hotpath.py
     # module docstring). The cache is stored as ``_qd_dc_repr`` via ``object.__setattr__`` to bypass frozen guards.
     # A cached ``None`` is stored as the sentinel ``_DC_REPR_NONE`` to distinguish "not yet computed" from
     # "computed but not fast-cacheable".

@@ -786,8 +786,8 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
 
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
     // Parallel rand-state init on the GPU. Both CUDA and AMDGPU launch one thread per state via
-    // `runtime_initialize_rand_states_cuda` (the function uses generic GPU intrinsics - `block_dim()`, `block_idx()`,
-    // `thread_idx()` - so the same kernel works on both backends despite the historical name). Previously AMDGPU fell
+    // `runtime_initialize_rand_states_cuda` (the function uses generic GPU intrinsics — `block_dim()`, `block_idx()`,
+    // `thread_idx()` — so the same kernel works on both backends despite the historical name). Previously AMDGPU fell
     // through to `runtime_initialize_rand_states_serial`, which initialised every state sequentially from a single GPU
     // lane: at the default config that is `saturating_grid_dim * max_block_dim` states (~20M on a typical GPU),
     // spending ~4 s on the device for every `qd.init()`. Because the runtime dispatch is async on the default stream,

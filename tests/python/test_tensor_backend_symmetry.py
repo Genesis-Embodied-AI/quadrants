@@ -116,7 +116,7 @@ def test_to_numpy_accepts_dtype_kwarg(backend, layout):
 
 # ----------------------------------------------------------------------------
 # Pickle: symmetric across backends as of stork-19. The wrapper's ``__reduce__`` round-trips via ``to_numpy()``, so
-# Field - whose bare impl never supported pickle upstream - is now picklable through the wrapper that
+# Field — whose bare impl never supported pickle upstream — is now picklable through the wrapper that
 # ``qd.tensor()`` returns. The reducer also forwards ``layout=`` to the rebuild path, so non-identity layout tags
 # survive the round-trip on both backends (see
 # ``test_tensor_layout_interop.test_pickle_layout_tagged_ndarray_roundtrip_preserves_layout`` for the explicit

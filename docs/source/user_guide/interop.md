@@ -109,7 +109,7 @@ On **NumPy >= 2.1**, `to_numpy(copy=False)` returns a **writable** array (via a 
 | `None` | Zero-copy view via DLPack when available, otherwise falls back to a copy silently. |
 | `False` | Zero-copy view via DLPack, or `ValueError` if zero-copy is unsupported for this backend/dtype. |
 
-The default `copy=True` always returns a buffer that is safe to mutate without affecting the field/ndarray. Use `copy=None` when you want zero-copy as a best-effort optimisation without having to handle exceptions - it gives you a view when possible and a safe copy otherwise.
+The default `copy=True` always returns a buffer that is safe to mutate without affecting the field/ndarray. Use `copy=None` when you want zero-copy as a best-effort optimisation without having to handle exceptions — it gives you a view when possible and a safe copy otherwise.
 
 ### Examples
 
@@ -225,7 +225,7 @@ capsule = f.to_dlpack()                                   # v0 capsule ("dltenso
 t = torch.utils.dlpack.from_dlpack(capsule)                # zero-copy torch tensor
 ```
 
-For NumPy, prefer `to_numpy(copy=False)` which handles the DLPack protocol adapter internally. If you need a raw v1 capsule for another consumer, use `f.to_dlpack(versioned=True)`. Note that `np.from_dlpack` does not accept raw `PyCapsule` objects - it requires an object exposing `__dlpack__()` and `__dlpack_device__()`, which `to_numpy(copy=False)` provides via an internal adapter.
+For NumPy, prefer `to_numpy(copy=False)` which handles the DLPack protocol adapter internally. If you need a raw v1 capsule for another consumer, use `f.to_dlpack(versioned=True)`. Note that `np.from_dlpack` does not accept raw `PyCapsule` objects — it requires an object exposing `__dlpack__()` and `__dlpack_device__()`, which `to_numpy(copy=False)` provides via an internal adapter.
 
 The `versioned` parameter selects the DLPack protocol version:
 
@@ -234,7 +234,7 @@ The `versioned` parameter selects the DLPack protocol version:
 | `False` (default) | `DLManagedTensor` (v0) | `"dltensor"` | `torch.utils.dlpack.from_dlpack`, CuPy, JAX, and other v0 consumers. |
 | `True` | `DLManagedTensorVersioned` (v1) | `"dltensor_versioned"` | `np.from_dlpack` on NumPy >= 2.1 (v0 capsules produce read-only arrays on NumPy >= 2.0; v1 consumer support requires >= 2.1). |
 
-The same backend, dtype, and layout restrictions that apply to `to_torch(copy=False)` / `to_numpy(copy=False)` apply here - `to_dlpack()` is the underlying mechanism. The caller is responsible for calling `qd.sync()` between modifying the field and consuming the capsule.
+The same backend, dtype, and layout restrictions that apply to `to_torch(copy=False)` / `to_numpy(copy=False)` apply here — `to_dlpack()` is the underlying mechanism. The caller is responsible for calling `qd.sync()` between modifying the field and consuming the capsule.
 
 ## Direct torch tensor pass-through
 

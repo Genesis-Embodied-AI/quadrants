@@ -30,12 +30,12 @@ fill(a)
 
 ## Supported features
 
-- `@qd.kernel` and `@qd.func` - executed directly as Python functions
-- `qd.field()` - scalar, vector, and matrix fields
-- `qd.ndarray()` - scalar, vector, and matrix ndarrays
+- `@qd.kernel` and `@qd.func` — executed directly as Python functions
+- `qd.field()` — scalar, vector, and matrix fields
+- `qd.ndarray()` — scalar, vector, and matrix ndarrays
 - Struct fields (`qd.types.struct`)
 - Atomics (`atomic_add`, `atomic_sub`, `atomic_mul`, `atomic_min`, `atomic_max`, `atomic_and`, `atomic_or`, `atomic_xor`)
-- `qd.grouped(field)` - struct-for iteration over field indices
+- `qd.grouped(field)` — struct-for iteration over field indices
 - `qd.ndrange()`
 - `qd.static()`
 - `qd.cast()`
@@ -58,6 +58,6 @@ The `.shape` property returns the **batch dimensions only**, consistent with how
 
 ```python
 f = qd.field(qd.math.vec3, shape=(10,))
-f.shape     # torch.Size([10])    - batch dims, what kernels see
-f.size()    # torch.Size([10, 3]) - real tensor shape
+f.shape     # torch.Size([10])    — batch dims, what kernels see
+f.size()    # torch.Size([10, 3]) — real tensor shape
 ```

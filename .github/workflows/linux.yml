@@ -173,7 +173,7 @@ jobs:
               truncated = true;
             }
             const summary = truncated
-              ? 'Per-line coverage annotations (truncated - see artifacts for full report).'
+              ? 'Per-line coverage annotations (truncated — see artifacts for full report).'
               : 'See details below for per-line coverage annotations.';
             const check = await github.rest.checks.create({
               owner: context.repo.owner,

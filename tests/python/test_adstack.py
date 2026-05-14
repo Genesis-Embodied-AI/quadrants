@@ -224,7 +224,7 @@ def test_unary_collections_audit():
     # the `unary_collections` trade-off.
     #
     # Use `re.findall` rather than `re.search` so a future branch that ORs multiple `UnaryOpType::X` conditions
-    # (e.g. `op_type == floor || op_type == ceil`) still classifies every op in the branch - capturing just the
+    # (e.g. `op_type == floor || op_type == ceil`) still classifies every op in the branch — capturing just the
     # first match would silently skip later ops in an OR chain.
     branches = re.split(r"\belse if\b", adj_block)
     diffable_math = set()

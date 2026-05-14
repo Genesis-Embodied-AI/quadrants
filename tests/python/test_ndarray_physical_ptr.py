@@ -244,7 +244,7 @@ def test_ndarray_atomic_min_max():
 
 @test_utils.test(arch=archs_with_physical_storage_buffer)
 def test_ndarray_atomic_histogram():
-    """Build a histogram via atomic_add - multiple threads write to same ndarray."""
+    """Build a histogram via atomic_add — multiple threads write to same ndarray."""
     n = 1024
     num_bins = 8
 

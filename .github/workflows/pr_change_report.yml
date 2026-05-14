@@ -212,7 +212,7 @@ jobs:
               truncated = true;
             }
             const summary = truncated
-              ? 'Per-file totals + per-function breakdown (truncated - see artifacts for full report).'
+              ? 'Per-file totals + per-function breakdown (truncated — see artifacts for full report).'
               : 'Per-file totals + per-function breakdown of code-line additions and removals.';
             const check = await github.rest.checks.create({
               owner: context.repo.owner,

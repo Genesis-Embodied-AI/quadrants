@@ -91,7 +91,7 @@ def test_layout_grad_canonical_kernel_roundtrip_rank2(backend):
 
 
 # ----------------------------------------------------------------------------
-# Rank-3 canonical kernel roundtrip - single non-trivial permutation.
+# Rank-3 canonical kernel roundtrip — single non-trivial permutation.
 # ----------------------------------------------------------------------------
 
 

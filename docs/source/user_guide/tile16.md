@@ -1,10 +1,10 @@
 # Tile16x16: register-resident 16x16 tiles
 
-`Tile16x16` provides a 16x16 matrix tile that lives entirely in registers, distributed across 16 threads in a subgroup (warp). Each thread holds one row as 16 scalar registers. Cross-thread communication uses subgroup shuffles - no shared memory needed.
+`Tile16x16` provides a 16x16 matrix tile that lives entirely in registers, distributed across 16 threads in a subgroup (warp). Each thread holds one row as 16 scalar registers. Cross-thread communication uses subgroup shuffles — no shared memory needed.
 
 This is useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.
 
-Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on `qd.simt.subgroup.shuffle`, which is cross-platform - no vendor-specific libraries required. Using Tile16x16 on a CPU backend raises `QuadrantsSyntaxError`.
+Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on `qd.simt.subgroup.shuffle`, which is cross-platform — no vendor-specific libraries required. Using Tile16x16 on a CPU backend raises `QuadrantsSyntaxError`.
 
 ## Quick start
 
@@ -32,7 +32,7 @@ t = qd.simt.Tile16x16.eye(dtype=qd.f32)      # 16x16 identity, f32
 t = qd.simt.Tile16x16.eye(dtype=qd.f64)      # 16x16 identity, f64
 ```
 
-The `dtype` argument is optional - if omitted it defaults to the runtime's `default_fp` (usually `qd.f32`). The underlying tile dataclass has 16 fields (`r0`–`r15`) - the scalar registers for one row.
+The `dtype` argument is optional — if omitted it defaults to the runtime's `default_fp` (usually `qd.f32`). The underlying tile dataclass has 16 fields (`r0`–`r15`) — the scalar registers for one row.
 
 ## Loading and storing
 
@@ -57,7 +57,7 @@ arr[batch, row0:row1, col0:col1] = t       # store to 3D array
 
 ### Notes
 
-The `[:]` on the load LHS is required - it distinguishes an in-place tile load from a variable rebinding. The store side does not need `[:]` because the array subscript on the LHS already triggers the correct assignment path.
+The `[:]` on the load LHS is required — it distinguishes an in-place tile load from a variable rebinding. The store side does not need `[:]` because the array subscript on the LHS already triggers the correct assignment path.
 
 ## Identity initialization
 
@@ -77,7 +77,7 @@ t -= qd.outer(v, v)    # t -= v @ v^T  (symmetric)
 t -= qd.outer(a, b)    # t -= a @ b^T  (general)
 ```
 
-Each thread provides its element(s) of the vector(s). The outer product is computed via subgroup shuffles and subtracted from the tile in-place. `qd.outer(a, b)` returns a deferred proxy - it is only valid as the RHS of `-=` on a Tile16x16. Composition like `qd.outer(a, b) + qd.outer(c, d)` raises `TypeError`.
+Each thread provides its element(s) of the vector(s). The outer product is computed via subgroup shuffles and subtracted from the tile in-place. `qd.outer(a, b)` returns a deferred proxy — it is only valid as the RHS of `-=` on a Tile16x16. Composition like `qd.outer(a, b) + qd.outer(c, d)` raises `TypeError`.
 
 ### Loading column vectors for outer products
 
@@ -135,13 +135,13 @@ t2 = qd.simt.Tile16x16.zeros(dtype=qd.f32)
 t2[:] = sh[0:N, 0:N]      # load tile from shared memory
 ```
 
-Column clamping applies the same way as for device arrays - columns beyond the SharedArray width are left as zero on load or skipped on store. Column vector slices (`v = sh[K0:K1, col]`) also work with SharedArray.
+Column clamping applies the same way as for device arrays — columns beyond the SharedArray width are left as zero on load or skipped on store. Column vector slices (`v = sh[K0:K1, col]`) also work with SharedArray.
 
 ## Kernel structure
 
 ### Block size
 
-Set `block_dim=qd.simt.Tile16x16.SIZE` so that each thread block contains exactly 16 threads - one per tile row:
+Set `block_dim=qd.simt.Tile16x16.SIZE` so that each thread block contains exactly 16 threads — one per tile row:
 
 ```python
 @qd.kernel
@@ -157,7 +157,7 @@ def my_kernel(A: qd.types.NDArray[qd.f32, 3]):
 
 ### Subgroup size
 
-Tile operations communicate between threads using `qd.simt.subgroup.shuffle`. The hardware subgroup (warp) size is typically larger than 16 (e.g. 32 on NVIDIA). Quadrants handles this internally - tile operations only use the first 16 lanes, and the remaining lanes are idle.
+Tile operations communicate between threads using `qd.simt.subgroup.shuffle`. The hardware subgroup (warp) size is typically larger than 16 (e.g. 32 on NVIDIA). Quadrants handles this internally — tile operations only use the first 16 lanes, and the remaining lanes are idle.
 
 ## f64 support
 

@@ -151,7 +151,7 @@ def test_layout_is_trailing_feature_slot():
 @test_utils.test(arch=qd.cpu)
 def test_ndim_distinct_in_cache_key():
     """Distinct kernel objects keep their mappers separate; verify a rank-1 and rank-2 (layout-tagged) ndarray each get
-    exactly one cache entry on their own kernel - no cross-pollution."""
+    exactly one cache entry on their own kernel — no cross-pollution."""
 
     @qd.kernel
     def k1d(x: qd.types.ndarray()):

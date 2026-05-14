@@ -37,7 +37,7 @@ def _all_non_identity_perms(dim):
 @pytest.mark.parametrize("layout", [(1, 0), (0, 1)])
 @test_utils.test(arch=qd.cpu)
 def test_flat_snode_rank2(layout):
-    """A field with order= must produce exactly ONE dense SNode above its place node - not ``dim`` nested rank-1
+    """A field with order= must produce exactly ONE dense SNode above its place node — not ``dim`` nested rank-1
     SNodes."""
     X, Y = 5, 7
     order = _order_string(layout)
@@ -50,7 +50,7 @@ def test_flat_snode_rank2(layout):
     root_snode = dense_snode.parent()
     # The root's parent is None.
     assert root_snode.parent() is None, (
-        "Expected root's parent to be None - got an extra SNode level, "
+        "Expected root's parent to be None — got an extra SNode level, "
         "indicating nested rank-1 allocation instead of flat rank-N."
     )
 

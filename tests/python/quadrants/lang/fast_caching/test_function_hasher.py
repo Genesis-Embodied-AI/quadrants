@@ -46,7 +46,7 @@ def test_read_file_with_arrows(monkeypatch, tmp_path: pathlib.Path) -> None:
             """0
 1 →
 2 😂
-3 🙌 -
+3 🙌 —
 4 🙃
 5 🔥
 """
@@ -59,7 +59,7 @@ def test_read_file_with_arrows(monkeypatch, tmp_path: pathlib.Path) -> None:
         "".join(src)
         == """1 →
 2 😂
-3 🙌 -
+3 🙌 —
 """
     )
 

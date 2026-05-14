@@ -879,7 +879,7 @@ class Matrix(QuadrantsOperations):
         entries = []
         element_dim = ndim if ndim is not None else 2
         if isinstance(dtype, (list, tuple, np.ndarray)):
-            # set different dtype for each element in Matrix - see #2135
+            # set different dtype for each element in Matrix — see #2135
             if m == 1:
                 assert (
                     len(np.shape(dtype)) == 1 and len(dtype) == n
@@ -1321,7 +1321,7 @@ class MatrixField(Field):
                 "MatrixField.to_dlpack() requires torch to be installed "
                 "(the C++ layer checks torch version for DLPack byte_offset support)"
             ) from None
-        # See ``Field.to_dlpack`` for the rationale. Only the outer ``len(layout)`` spatial axes are permuted - the
+        # See ``Field.to_dlpack`` for the rationale. Only the outer ``len(layout)`` spatial axes are permuted — the
         # trailing element axes (``n``, ``m``) sit innermost and stay identity.
         layout = getattr(self, "_qd_layout", None)
         if layout is not None:
@@ -1619,7 +1619,7 @@ class MatrixType(CompoundType):
                 entries = [args[0] for _ in range(self.m) for _ in range(self.n)]
                 return self._instantiate(entries)
             args = args[0]
-        # collect all input entries to a 1d list and then reshape - this is mostly for glsl style like vec4(v.xyz, 1.)
+        # collect all input entries to a 1d list and then reshape — this is mostly for glsl style like vec4(v.xyz, 1.)
         entries = []
         for x in args:
             if isinstance(x, (list, tuple)):
@@ -1769,7 +1769,7 @@ class VectorType(MatrixType):
                 entries = [args[0] for _ in range(self.n)]
                 return self._instantiate(entries)
             args = args[0]
-        # collect all input entries to a 1d list and then reshape - this is mostly for glsl style like vec4(v.xyz, 1.)
+        # collect all input entries to a 1d list and then reshape — this is mostly for glsl style like vec4(v.xyz, 1.)
         entries = []
         for x in args:
             if isinstance(x, (list, tuple)):

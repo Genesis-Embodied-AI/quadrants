@@ -254,7 +254,7 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
              static_cast<int>(mem_layout.size()), ndim);
   }
   // mem_layout must be a permutation of {0, 1, ..., ndim-1}. Fields built with non-contiguous axis identifiers (e.g.
-  // qd.i + qd.l, skipping qd.j and qd.k) are rejected - the canonical view is undefined.
+  // qd.i + qd.l, skipping qd.j and qd.k) are rejected — the canonical view is undefined.
   {
     std::vector<int> sorted_layout = mem_layout;
     std::sort(sorted_layout.begin(), sorted_layout.end());

@@ -1,6 +1,6 @@
 """Kernel code coverage via Python AST rewriting.
 
-When enabled (QD_KERNEL_COVERAGE=1), this module rewrites kernel and func ASTs to insert coverage probes - field
+When enabled (QD_KERNEL_COVERAGE=1), this module rewrites kernel and func ASTs to insert coverage probes — field
 stores that record which source lines actually execute on the GPU. At process exit, the collected data is written
 to a .coverage file compatible with coverage.py / pytest-cov / diff-cover.
 
@@ -167,7 +167,7 @@ def flush() -> None:
     if use_arcs:
         arcs_by_file: dict[str, list[tuple[int, int]]] = {}
         for filepath, lines in snapshot.items():
-            # Emit only entry/exit arcs per line - we know which lines ran but not the actual transitions
+            # Emit only entry/exit arcs per line — we know which lines ran but not the actual transitions
             # between them, so we avoid fabricating inter-line arcs that would misrepresent branch coverage.
             arcs = []
             for line in sorted(lines):

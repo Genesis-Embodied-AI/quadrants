@@ -277,9 +277,9 @@ class ASTTransformer(Builder):
 
         Handles both forms a single subscript can take inside a kernel:
 
-        - ``Matrix`` (Python class) - produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``
+        - ``Matrix`` (Python class) — produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``
           returning a ``[Matrix([i, j])]`` list.
-        - ``Expr`` with tensor shape ``(N,)`` - produced by ``matrix.make_matrix(loop_indices, ...)`` in
+        - ``Expr`` with tensor shape ``(N,)`` — produced by ``matrix.make_matrix(loop_indices, ...)`` in
           :func:`build_struct_for` / :func:`build_grouped_ndrange_for`, which is what real kernels see for
           ``for I in qd.grouped(...)``.
         """
@@ -304,14 +304,14 @@ class ASTTransformer(Builder):
         # Both backends use the same attribute name (``_qd_layout``) and the same storage contract: the underlying
         # buffer is allocated at the permuted physical shape (``[shape[a] for a in layout]``) with natural axis order,
         # and the rewrite here translates each user-supplied canonical index tuple ``(i0, ..., i_{N-1})`` into
-        # ``(i_{layout[0]}, ..., i_{layout[N-1]})`` - the physical index tuple that the flat rank-N SNode / Ndarray
+        # ``(i_{layout[0]}, ..., i_{layout[N-1]})`` — the physical index tuple that the flat rank-N SNode / Ndarray
         # expects.
         #
         # Two indexing forms must be permuted:
         # 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is already a list of N scalars; permute by axis.
         # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack into N
         #    scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller physical
-        #    buffer - silently OOB on permuted layouts.
+        #    buffer — silently OOB on permuted layouts.
         layout = getattr(node.value.ptr, "_qd_layout", None)
         if layout is not None:
             if len(node.slice.ptr) == 1:

@@ -11,13 +11,13 @@ kernel-arg annotation (``def f(x: qd.Tensor): ...``), and is what ``qd.tensor()`
 Surface:
 
 - Introspection: ``shape``, ``dtype``, ``layout``, ``_unwrap()``.
-- Layout-aware host-side ``__getitem__`` / ``__setitem__`` - permutes the canonical user key to the physical slot on
+- Layout-aware host-side ``__getitem__`` / ``__setitem__`` — permutes the canonical user key to the physical slot on
   layout-tagged ndarrays. Fixes gotcha B from the design doc (§8.11).
-- Symmetric pickle via ``__reduce__`` - round-trips through ``to_numpy()`` so it works uniformly on both backends
+- Symmetric pickle via ``__reduce__`` — round-trips through ``to_numpy()`` so it works uniformly on both backends
   (Field, which never supported pickle upstream, is picklable through the wrapper).
 - Forwards for ``to_numpy`` / ``from_numpy`` / ``to_torch`` / ``from_torch`` / ``to_dlpack`` / ``fill`` /
-  ``copy_from`` - already layout-aware on both backends after stork-15/16, the wrapper delegates.
-- Lazy-wrapped ``.grad`` - returns a ``Tensor`` wrapping ``impl.grad`` (identity-stable via
+  ``copy_from`` — already layout-aware on both backends after stork-15/16, the wrapper delegates.
+- Lazy-wrapped ``.grad`` — returns a ``Tensor`` wrapping ``impl.grad`` (identity-stable via
   ``functools.cached_property``).
 - ``VectorTensor`` / ``MatrixTensor`` subclasses carrying ``element_shape``.
 
@@ -248,7 +248,7 @@ class Tensor:
 
         Works uniformly on both backends: the upstream ``Field`` never supported pickle because it needs
         runtime-allocated SNodes, but the wrapper bypasses that by reconstructing via ``qd.tensor(...)`` +
-        ``from_numpy(...)`` on the other side - ``qd.tensor`` handles the SNode allocation through the usual factory
+        ``from_numpy(...)`` on the other side — ``qd.tensor`` handles the SNode allocation through the usual factory
         path.
 
         Only *scalar* tensors are supported here. Vector/matrix wrappers override this (they need to encode element

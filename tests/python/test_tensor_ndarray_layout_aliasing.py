@@ -1,17 +1,17 @@
 """Aliasing of layout metadata across the supported Quadrants aliasing patterns.
 
-Note: in-kernel rebinding (``y = x; y[i, j] = ...``) is **not** supported by Quadrants for any ndarray - that's an
+Note: in-kernel rebinding (``y = x; y[i, j] = ...``) is **not** supported by Quadrants for any ndarray — that's an
 upstream limitation not specific to tensor (it raises ``QuadrantsTypeError: Invalid constant scalar data type:
 <class 'quadrants.lang.any_array.AnyArray'>``). So this file pins down the aliasing patterns Quadrants *does* support
 and that tensor layout metadata must propagate through:
 
-1. Same ``Ndarray`` passed twice to the same kernel - two distinct ``AnyArray`` instances inside the kernel, both must
+1. Same ``Ndarray`` passed twice to the same kernel — two distinct ``AnyArray`` instances inside the kernel, both must
    carry the same layout.
-2. Same ``Ndarray`` shared across two consecutive kernel calls - the layout cannot leak or get lost between calls.
-3. Repeated access through ``.grad`` inside a single kernel - every call must return an ``AnyArray`` with the same
+2. Same ``Ndarray`` shared across two consecutive kernel calls — the layout cannot leak or get lost between calls.
+3. Repeated access through ``.grad`` inside a single kernel — every call must return an ``AnyArray`` with the same
    layout (an earlier change covered the single-access path; this exercises the repeated-access cache).
 4. The same ``Ndarray`` via two different kernel signatures (one annotated as ``qd.types.ndarray()`` directly, one via
-   a wrapper) - metadata must travel via the runtime feature tuple, not the annotation.
+   a wrapper) — metadata must travel via the runtime feature tuple, not the annotation.
 """
 
 import numpy as np
@@ -43,7 +43,7 @@ def test_layout_same_ndarray_passed_twice():
     def write_via_two_handles(x: qd.types.ndarray(), y: qd.types.ndarray()):
         for i, j in qd.ndrange(M, N):
             x[i, j] = 7
-            # `y` aliases `x` - write through it; result must agree.
+            # `y` aliases `x` — write through it; result must agree.
             y[i, j] = x[i, j] + (i * 10 + j)
 
     write_via_two_handles(a, a)
@@ -97,7 +97,7 @@ def test_layout_repeated_grad_access_in_kernel():
     def write_grad_repeatedly(x: qd.types.ndarray()):
         for i, j in qd.ndrange(M, N):
             x.grad[i, j] = float(i * 100)
-            # Re-access .grad in the same iteration - must hit same layout.
+            # Re-access .grad in the same iteration — must hit same layout.
             x.grad[i, j] += float(j * 10)
             x.grad[i, j] += 1.0
 
@@ -164,7 +164,7 @@ def test_layout_isolated_between_args():
 
 
 # ----------------------------------------------------------------------------
-# 6. Two separately-allocated layout-tagged ndarrays - independence
+# 6. Two separately-allocated layout-tagged ndarrays — independence
 # ----------------------------------------------------------------------------
 
 

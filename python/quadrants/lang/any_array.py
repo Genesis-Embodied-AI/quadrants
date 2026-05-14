@@ -19,7 +19,7 @@ class AnyArray:
     Attributes:
         _qd_layout (tuple of int | None): Optional canonical-axis permutation.
             When set, ``build_Subscript`` permutes user-supplied canonical indices into physical storage order before
-            forwarding to the underlying expression. ``None`` (the default) means identity - no rewrite, behaviour
+            forwarding to the underlying expression. ``None`` (the default) means identity — no rewrite, behaviour
             identical to legacy AnyArray.
     """
 
@@ -59,7 +59,7 @@ class AnyArray:
         """A list containing sizes for each dimension. Note that element shape will be excluded.
 
         When ``_qd_layout`` is set the underlying buffer is allocated at the *physical* (permuted) shape; this
-        property inverts the layout so callers always see the *canonical* shape - matching ``Ndarray.shape`` and
+        property inverts the layout so callers always see the *canonical* shape — matching ``Ndarray.shape`` and
         ``Field.shape``.
 
         Returns:

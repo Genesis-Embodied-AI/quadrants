@@ -64,7 +64,7 @@ The following Python features will raise errors or produce unexpected behavior i
 ### Control flow restrictions
 
 - **`return` inside non-static `if`/`for`**: not allowed in `@qd.func` (allowed in `@qd.real_func`)
-- **`break` in the outermost (parallelized) for loop**: not allowed - the outermost loop is mapped to GPU threads
+- **`break` in the outermost (parallelized) for loop**: not allowed — the outermost loop is mapped to GPU threads
 - **`break`/`continue` in a static `for` inside a non-static `if`**: not allowed
 - **Reassigning kernel arguments**: kernel parameters are immutable; create a local copy instead
 

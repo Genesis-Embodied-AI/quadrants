@@ -81,7 +81,7 @@ Typically, Quadrants kernels use `atomic_` operations for synchronization. This 
 
 When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads. The block-level primitives (`qd.simt.block.sync`, `qd.simt.block.mem_fence`, the predicate-reducing barriers, and `SharedArray` itself) are documented in [block](block.md), which also discusses the important distinction between a thread-converging barrier and a memory-only fence.
 
-However, these block-scope fences and barriers do not work for synchronizing writes across blocks. For cross-block coordination through global memory, use `qd.simt.grid.mem_fence()` (a device-scope fence; see [grid](grid.md)) - or, if you need full cross-block thread synchronization, finish the current kernel and launch a new kernel.
+However, these block-scope fences and barriers do not work for synchronizing writes across blocks. For cross-block coordination through global memory, use `qd.simt.grid.mem_fence()` (a device-scope fence; see [grid](grid.md)) — or, if you need full cross-block thread synchronization, finish the current kernel and launch a new kernel.
 
 ## Avoiding synchronization
 

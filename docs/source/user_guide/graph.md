@@ -4,7 +4,7 @@ Graphs reduce kernel launch overhead by capturing a sequence of GPU operations i
 
 ## Backend support
 
-Both features run on every backend. They are only *hardware accelerated* on CUDA (and `graph_do_while` additionally requires SM 9.0+ / Hopper). On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `graph_do_while` falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall - see [Caveats](#caveats)).
+Both features run on every backend. They are only *hardware accelerated* on CUDA (and `graph_do_while` additionally requires SM 9.0+ / Hopper). On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `graph_do_while` falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall — see [Caveats](#caveats)).
 
 | Feature | `qd.cuda` SM 9.0+ | `qd.cuda` < SM 9.0 | `qd.amdgpu` | `qd.metal` | `qd.vulkan` | `qd.cpu` |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -29,7 +29,7 @@ def my_kernel(
 
 The top level for-loops will be compiled into a single graph. The parallelism is the same as before, but the launch latency much reduced.
 
-The kernel is used normally - no other API changes are needed:
+The kernel is used normally — no other API changes are needed:
 
 ```python
 x = qd.ndarray(qd.f32, shape=(1024,))
@@ -46,7 +46,7 @@ my_kernel(x, y)  # subsequent calls: replays the cached graph
 
 ### Passing different arguments
 
-You can pass different ndarrays to the same kernel on subsequent calls. The cached graph is replayed with the updated arguments - no graph rebuild occurs:
+You can pass different ndarrays to the same kernel on subsequent calls. The cached graph is replayed with the updated arguments — no graph rebuild occurs:
 
 ```python
 x1 = qd.ndarray(qd.f32, shape=(1024,))
@@ -86,7 +86,7 @@ solve(x, counter)
 
 The argument to `qd.graph_do_while()` must be the name of a scalar `qd.i32` ndarray parameter. The loop body repeats while this value is non-zero.
 
-- On SM 9.0+ (Hopper), this uses CUDA conditional while nodes - the entire iteration runs on the GPU with no host involvement.
+- On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
 - On older CUDA GPUs and non-CUDA backends, it falls back to a host-side do-while loop.
 
 ### Patterns

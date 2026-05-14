@@ -235,7 +235,7 @@ def test_tensor_is_in_qd_namespace():
 # Module-scope kernel decl with qd.Tensor annotation.
 #
 # This is the *Genesis* pattern: every Genesis kernel is a module-level global, decorated with ``@qd.kernel`` at import
-# time - long before ``qd.init()`` runs and long before any tensor is allocated. The tests above all decorate inside
+# time — long before ``qd.init()`` runs and long before any tensor is allocated. The tests above all decorate inside
 # the test body (after ``@test_utils.test`` has called ``qd.init()``), so they don't exercise this code path.
 #
 # Pinning here that:

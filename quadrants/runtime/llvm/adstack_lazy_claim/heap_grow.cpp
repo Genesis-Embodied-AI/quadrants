@@ -256,13 +256,13 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
   // slot has not yet been flushed from the device.  The per-launch call site does NOT synchronize before polling, so
   // the device's two atomic writes (flag OR, then task_id cmpxchg) may arrive at the host out of order.  If we
   // consumed the flag here but the task_id hadn't landed, the diagnostic would lack the kernel name and the later
-  // qd.sync() would see both slots clean - losing the identity forever.
+  // qd.sync() would see both slots clean — losing the identity forever.
   int64_t flag =
       reinterpret_cast<std::atomic<int64_t> *>(adstack_overflow_flag_host_ptr_)->load(std::memory_order_relaxed);
   if (flag == 0) {
     return;
   }
-  // Flag is set - drain the default stream so that the companion task_id write is guaranteed to be host-visible
+  // Flag is set — drain the default stream so that the companion task_id write is guaranteed to be host-visible
   // before we read it.  This sync only fires on the rare overflow path, so it has zero cost on the fast path.
   synchronize();
   // Now consume both slots.  Both cleared so the next overflow records a fresh identity.  `task_id == 0` means the

@@ -437,7 +437,7 @@ class MetalCommandList final : public CommandList {
 class MetalStream final : public Stream {
  public:
   // When `owns_queue` is true (the default), `mtl_command_queue` should be already retained; the stream will
-  // release it on destruction.  When false, the queue is borrowed - the stream will NOT retain or release it,
+  // release it on destruction.  When false, the queue is borrowed — the stream will NOT retain or release it,
   // and the caller must keep it alive for the stream's lifetime.
   explicit MetalStream(const MetalDevice &device, MTLCommandQueue_id mtl_command_queue, bool owns_queue = true);
   ~MetalStream() override;
@@ -509,7 +509,7 @@ class MetalDevice final : public GraphicsDevice {
  public:
   // `mtl_device` should be already retained.
   // If `external_command_queue` is non-null, it is used instead of creating a new one.  The queue is borrowed
-  // (not retained) - the caller must keep it alive for the device's lifetime.
+  // (not retained) — the caller must keep it alive for the device's lifetime.
   explicit MetalDevice(MTLDevice_id mtl_device, MTLCommandQueue_id external_command_queue = nullptr);
   ~MetalDevice() override;
 

@@ -30,7 +30,7 @@ view = qd.BufferView(data, offset=16, size=32)
 
 ## Slicing a view (subview)
 
-A `BufferView` can be sliced again to create a narrower subview. All views share the same backing ndarray - offsets accumulate automatically:
+A `BufferView` can be sliced again to create a narrower subview. All views share the same backing ndarray — offsets accumulate automatically:
 
 ```python
 a = data[8:24]      # BufferView: offset=8,  size=16
@@ -51,13 +51,13 @@ Use `BufferView` as a parameter annotation on `@qd.kernel`. The element dtype ca
 ```python
 from quadrants import BufferView
 
-# Explicit dtype - the annotation declares the expected element type:
+# Explicit dtype — the annotation declares the expected element type:
 @qd.kernel
 def scale(v: BufferView[qd.f32], factor: qd.f32):
     for i in range(v.size):
         v[i] = v[i] * factor
 
-# No dtype - Quadrants infers it from the ndarray passed at call time:
+# No dtype — Quadrants infers it from the ndarray passed at call time:
 @qd.kernel
 def scale_any(v: BufferView):
     for i in range(v.size):

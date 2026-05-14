@@ -4,7 +4,7 @@ Background
 ----------
 The canonical -> physical index permutation for layout-tagged tensors is implemented in ``ast_transformer.py``
 (``build_Subscript`` and ``build_struct_for``), which only fires inside ``@qd.kernel`` bodies. Python-scope (host)
-``__getitem__`` / ``__setitem__`` on the *bare* ``Ndarray`` is **not** layout-aware - the index hits the host accessor
+``__getitem__`` / ``__setitem__`` on the *bare* ``Ndarray`` is **not** layout-aware — the index hits the host accessor
 directly. Field is layout-aware for free because its host accessor walks the SNode tree (which applies ``order=``).
 
 Per the user-stated rule that ``layout=`` must be invisible to users ("anything that doesn't work with non-identity

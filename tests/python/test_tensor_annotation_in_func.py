@@ -216,7 +216,7 @@ def test_tensor_func_param_2d_with_layout(backend):
 
 
 # ---------------------------------------------------------------------------
-# 8. Struct with qd.Tensor vector-compound field - exercises populate_global_vars_from_dataclass +
+# 8. Struct with qd.Tensor vector-compound field — exercises populate_global_vars_from_dataclass +
 #    element_shape propagation
 # ---------------------------------------------------------------------------
 
@@ -261,7 +261,7 @@ def test_tensor_struct_vector_field_roundtrip(backend):
 
 
 # ---------------------------------------------------------------------------
-# 9. Frozen dataclass with qd.Tensor field, kernel arg is struct TYPE (not qd.template()) - exercises
+# 9. Frozen dataclass with qd.Tensor field, kernel arg is struct TYPE (not qd.template()) — exercises
 #    _predeclare_struct_ndarrays + ndarray_to_any_array resolution in impl.subscript (Option C path)
 # ---------------------------------------------------------------------------
 
@@ -408,7 +408,7 @@ def test_mixed_tensor_and_ndarray_frozen_dataclass_kernel():
 
 @test_utils.test(arch=qd.cpu)
 def test_mixed_many_tensor_and_ndarray_fields():
-    """Frozen dataclass with multiple qd.Tensor and multiple qd.types.ndarray() fields interleaved - mirrors Genesis
+    """Frozen dataclass with multiple qd.Tensor and multiple qd.types.ndarray() fields interleaved — mirrors Genesis
     ConstraintState which has ~6 Tensor fields among ~30 ndarray fields."""
     N = 4
 

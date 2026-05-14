@@ -347,7 +347,7 @@ def test_args_hasher_dataclass_with_ndarray_child_returns_hash() -> None:
 
 @test_utils.test()
 def test_args_hasher_dataclass_field_none_not_collide_with_ndarray() -> None:
-    """Two frozen dataclass instances - one with fields, one with ndarrays - must not share a cache key.
+    """Two frozen dataclass instances — one with fields, one with ndarrays — must not share a cache key.
 
     This is the core collision scenario: before the fix, the field-backed instance produced a non-None hash
     containing "(None)" strings, which could collide with other instances.

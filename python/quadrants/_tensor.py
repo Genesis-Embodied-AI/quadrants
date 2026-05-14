@@ -17,7 +17,7 @@ annotation. The dispatch sites that previously keyed off the ``_TensorAnnotation
 
 from enum import IntEnum
 
-# Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` - keeps the wildcard import in
+# Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` — keeps the wildcard import in
 # ``__init__.py`` simple and atomic.
 from quadrants._tensor_wrapper import Tensor
 from quadrants._tensor_wrapper import wrap as _wrap_impl
@@ -103,7 +103,7 @@ def _coerce_backend(backend):
 # ``n`` / ``m``). The factories hard-validate against these sets so typos and backend-specific options don't silently
 # work on one backend and raise cryptic errors deep in the other. Users who need backend-specific knobs (e.g.
 # ``offset=`` for field offset indexing, ``order=`` for SoA layouts) should call ``qd.field`` / ``qd.ndarray`` directly
-# - they have explicitly opted out of the unified tensor API.
+# — they have explicitly opted out of the unified tensor API.
 #
 # ``layout=`` is on the scalar ``qd.tensor`` factory only; the Vector/Matrix factories reject it because layout
 # semantics over an extra element axis are out of scope for now.
@@ -130,7 +130,7 @@ def _validate_kwargs(kwargs, *, factory_name, accepted):
 def _layout_to_order(layout, ndim):
     """Validate ``layout`` and translate it to the ``order=`` string accepted by :func:`quadrants.field`.
 
-    ``layout`` is a tuple of ``ndim`` ints - a permutation of ``range(ndim)`` - listing the *canonical* axis index at
+    ``layout`` is a tuple of ``ndim`` ints — a permutation of ``range(ndim)`` — listing the *canonical* axis index at
     each successive memory-nesting level, outermost first. ``layout=(1, 0)`` for a 2-D tensor means axis 1 is the
     outer SNode, axis 0 is the inner one (i.e. transposed storage), which translates to ``order='ji'``.
 
@@ -144,7 +144,7 @@ def _layout_to_order(layout, ndim):
     if sorted(layout) != list(range(ndim)):
         raise ValueError(f"layout={layout!r} is not a permutation of range({ndim})")
     if layout == tuple(range(ndim)):
-        return None  # identity layout - no order= needed
+        return None  # identity layout — no order= needed
     return "".join(chr(ord("i") + axis) for axis in layout)
 
 
@@ -244,8 +244,8 @@ def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     """Private impl backing ``qd.Vector.tensor``.
 
     Dispatcher over ``qd.Vector.field`` and ``qd.Vector.ndarray`` selected by the ``backend=`` keyword. Not part of
-    the public API - call ``qd.Vector.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``
-    (no ``layout=`` - layout semantics over an extra element axis are out of scope for now).
+    the public API — call ``qd.Vector.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``
+    (no ``layout=`` — layout semantics over an extra element axis are out of scope for now).
     """
     _validate_kwargs(kwargs, factory_name="qd.Vector.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
@@ -265,8 +265,8 @@ def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     """Private impl backing ``qd.Matrix.tensor``.
 
     Dispatcher over ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` selected by the ``backend=`` keyword. Not part of
-    the public API - call ``qd.Matrix.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``
-    (no ``layout=`` - layout semantics over an extra element axis are out of scope for now).
+    the public API — call ``qd.Matrix.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``
+    (no ``layout=`` — layout semantics over an extra element axis are out of scope for now).
     """
     _validate_kwargs(kwargs, factory_name="qd.Matrix.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)

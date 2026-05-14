@@ -441,7 +441,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_intrinsic("cuda_active_mask", Intrinsic::nvvm_activemask);
 
       // nvvm_match_all_sync_i32p returns {i32, i1}; extract only the i32.
-      // (The predicate is discarded - same as the old inline asm did.)
+      // (The predicate is discarded — same as the old inline asm did.)
       {
         auto func = module->getFunction("cuda_match_all_sync_i32");
         if (func) {

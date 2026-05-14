@@ -22,7 +22,7 @@ def get_mps_command_queue() -> int:
     Returns the pointer value on success, or 0 if extraction fails (e.g. PyTorch not installed, non-macOS platform,
     or unsupported PyTorch build).
 
-    The returned pointer is borrowed - it remains valid for the lifetime of the PyTorch MPS runtime (i.e. until process
+    The returned pointer is borrowed — it remains valid for the lifetime of the PyTorch MPS runtime (i.e. until process
     exit or an explicit ``torch._C._mps_emptyCache()``).
     """
     if sys.platform != "darwin":
