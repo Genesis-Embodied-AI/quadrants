@@ -827,8 +827,42 @@ def _init_field(field, n, dtype):
 # at collection time.  Inside the kernel, the subgroup size is still read from ``subgroup.group_size()`` at compile
 # time, so the same source compiles correctly on every backend without an API knob.
 
-_BLOCK_REDUCE_DTYPES = [qd.i32, qd.f32]
+# Dtype matrix for the block reduce / scan tests.  We cover all five "core" Quadrants scalar dtypes - i32 / i64 / u64 /
+# f32 / f64 - because QIPC needs 64-bit reductions for both index arithmetic (i64 / u64 prefix sums on segment offsets)
+# and double-precision physics (f64 reductions).  ``_skip_if_f64_unsupported`` filters out i64 / u64 / f64 on backends
+# that genuinely can't carry those dtypes through buffer / kernel I/O (Metal, MoltenVK on Darwin), so the same matrix
+# parametrizes every test even though some scenarios skip on some backends.
+#
+# No implementation change is needed for 64-bit support: the block reductions / scans are pure ``shuffle*`` +
+# ``SharedArray`` + per-thread folds, every layer of which is already dtype-generic in subgroup.py.  The only thing
+# that genuinely couldn't go to 64-bit cheaply would be an op that reduces via shared-memory atomic_min / atomic_max on
+# floats - those expand to a CAS loop on every backend, which would tank perf - and the block ops in this file
+# deliberately avoid that path.
+_BLOCK_REDUCE_DTYPES = [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64]
+_BLOCK_REDUCE_INT_DTYPES = (qd.i32, qd.i64, qd.u64)
 _BLOCK_REDUCE_SG_PER_BLOCK = [1, 4, 8]
+
+
+def _block_exclusive_min_sentinel(dtype):
+    """Host-side mirror of ``_subgroup._typed_min_identity``: lane-0 sentinel for an exclusive_min scan in ``dtype``.
+
+    ``+inf`` for real dtypes, ``np.iinfo(dtype).max`` for integer dtypes (``UINT_MAX`` / ``INT_MAX`` per signedness).
+    """
+    if dtype in (qd.f32, qd.f64):
+        return float("inf")
+    npty = {qd.i32: np.int32, qd.i64: np.int64, qd.u64: np.uint64}[dtype]
+    return int(np.iinfo(npty).max)
+
+
+def _block_exclusive_max_sentinel(dtype):
+    """Host-side mirror of ``_subgroup._typed_max_identity``: lane-0 sentinel for an exclusive_max scan in ``dtype``.
+
+    ``-inf`` for real dtypes, ``np.iinfo(dtype).min`` for signed ints, ``0`` for unsigned ints.
+    """
+    if dtype in (qd.f32, qd.f64):
+        return float("-inf")
+    npty = {qd.i32: np.int32, qd.i64: np.int64, qd.u64: np.uint64}[dtype]
+    return int(np.iinfo(npty).min)
 
 
 def _arch_subgroup_size():
@@ -858,6 +892,7 @@ def _ref_reduce_max(values):
 @test_utils.test(arch=qd.gpu)
 def test_block_reduce_add(dtype, sg_per_block):
     """Block sum-reduce: thread 0 of each block holds `sum(src[block_base:block_base+block_dim])`."""
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -879,7 +914,7 @@ def test_block_reduce_add(dtype, sg_per_block):
     for b in range(NUM_BLOCKS):
         block_vals = [src[b * block_dim + j] for j in range(block_dim)]
         expected = _ref_reduce_add(block_vals)
-        if dtype == qd.i32:
+        if dtype in _BLOCK_REDUCE_INT_DTYPES:
             assert dst[b] == expected, f"block {b}: got {dst[b]}, expected {expected}"
         else:
             assert abs(dst[b] - expected) < 1e-4 * abs(expected), f"block {b}: got {dst[b]}, expected {expected}"
@@ -890,6 +925,7 @@ def test_block_reduce_add(dtype, sg_per_block):
 @test_utils.test(arch=qd.gpu)
 def test_block_reduce_min(dtype, sg_per_block):
     """Block min-reduce: thread 0 of each block holds `min(src[block_base:block_base+block_dim])`."""
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -906,16 +942,15 @@ def test_block_reduce_min(dtype, sg_per_block):
                 dst[i // block_dim] = agg
 
     # Permuted (non-monotone) initialisation so the min depends on lanes other than the first / last.
-    int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
         v = ((i * 1009) % 997) + 1  # in [1, 997]; stable hash, no collisions w/ block_dim values up to 256
-        src[i] = v if dtype in int_dtypes else 1.0 * v
+        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
     foo()
 
     for b in range(NUM_BLOCKS):
         block_vals = [src[b * block_dim + j] for j in range(block_dim)]
         expected = _ref_reduce_min(block_vals)
-        if dtype == qd.i32:
+        if dtype in _BLOCK_REDUCE_INT_DTYPES:
             assert dst[b] == expected, f"block {b}: got {dst[b]}, expected {expected}"
         else:
             assert abs(dst[b] - expected) < 1e-5, f"block {b}: got {dst[b]}, expected {expected}"
@@ -926,6 +961,7 @@ def test_block_reduce_min(dtype, sg_per_block):
 @test_utils.test(arch=qd.gpu)
 def test_block_reduce_max(dtype, sg_per_block):
     """Block max-reduce: thread 0 of each block holds `max(src[block_base:block_base+block_dim])`."""
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -941,16 +977,15 @@ def test_block_reduce_max(dtype, sg_per_block):
             if tid == 0:
                 dst[i // block_dim] = agg
 
-    int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
         v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in int_dtypes else 1.0 * v
+        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
     foo()
 
     for b in range(NUM_BLOCKS):
         block_vals = [src[b * block_dim + j] for j in range(block_dim)]
         expected = _ref_reduce_max(block_vals)
-        if dtype == qd.i32:
+        if dtype in _BLOCK_REDUCE_INT_DTYPES:
             assert dst[b] == expected, f"block {b}: got {dst[b]}, expected {expected}"
         else:
             assert abs(dst[b] - expected) < 1e-5, f"block {b}: got {dst[b]}, expected {expected}"
@@ -965,6 +1000,7 @@ def test_block_reduce_all_add(dtype, sg_per_block):
     Verifies the broadcast variant by writing the per-thread output to a flat field, then asserting every thread of a
     given block reads the same aggregate.
     """
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -985,7 +1021,7 @@ def test_block_reduce_all_add(dtype, sg_per_block):
         expected = _ref_reduce_add(block_vals)
         for j in range(block_dim):
             actual = dst[b * block_dim + j]
-            if dtype == qd.i32:
+            if dtype in _BLOCK_REDUCE_INT_DTYPES:
                 assert actual == expected, f"block {b} thread {j}: got {actual}, expected {expected}"
             else:
                 assert abs(actual - expected) < 1e-4 * abs(
@@ -998,6 +1034,7 @@ def test_block_reduce_all_add(dtype, sg_per_block):
 @test_utils.test(arch=qd.gpu)
 def test_block_reduce_all_min(dtype, sg_per_block):
     """Block min-reduce broadcast: every thread reads the block-wide min."""
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -1010,10 +1047,9 @@ def test_block_reduce_all_min(dtype, sg_per_block):
         for i in range(N):
             dst[i] = block.reduce_all_min(src[i], block_dim, dtype)
 
-    int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
         v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in int_dtypes else 1.0 * v
+        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
     foo()
 
     for b in range(NUM_BLOCKS):
@@ -1021,7 +1057,7 @@ def test_block_reduce_all_min(dtype, sg_per_block):
         expected = _ref_reduce_min(block_vals)
         for j in range(block_dim):
             actual = dst[b * block_dim + j]
-            if dtype == qd.i32:
+            if dtype in _BLOCK_REDUCE_INT_DTYPES:
                 assert actual == expected, f"block {b} thread {j}: got {actual}, expected {expected}"
             else:
                 assert abs(actual - expected) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected}"
@@ -1032,6 +1068,7 @@ def test_block_reduce_all_min(dtype, sg_per_block):
 @test_utils.test(arch=qd.gpu)
 def test_block_reduce_all_max(dtype, sg_per_block):
     """Block max-reduce broadcast: every thread reads the block-wide max."""
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -1044,10 +1081,9 @@ def test_block_reduce_all_max(dtype, sg_per_block):
         for i in range(N):
             dst[i] = block.reduce_all_max(src[i], block_dim, dtype)
 
-    int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
         v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in int_dtypes else 1.0 * v
+        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
     foo()
 
     for b in range(NUM_BLOCKS):
@@ -1055,7 +1091,7 @@ def test_block_reduce_all_max(dtype, sg_per_block):
         expected = _ref_reduce_max(block_vals)
         for j in range(block_dim):
             actual = dst[b * block_dim + j]
-            if dtype == qd.i32:
+            if dtype in _BLOCK_REDUCE_INT_DTYPES:
                 assert actual == expected, f"block {b} thread {j}: got {actual}, expected {expected}"
             else:
                 assert abs(actual - expected) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected}"
@@ -1116,6 +1152,7 @@ def _ref_exclusive_scan_op(values, op, identity):
 @test_utils.test(arch=qd.gpu)
 def test_block_inclusive_add(dtype, sg_per_block):
     """Block inclusive prefix sum: thread `i` holds `sum(src[block_base..i])`."""
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -1136,7 +1173,7 @@ def test_block_inclusive_add(dtype, sg_per_block):
         expected = _ref_inclusive_scan_add(block_vals)
         for j in range(block_dim):
             actual = dst[b * block_dim + j]
-            if dtype == qd.i32:
+            if dtype in _BLOCK_REDUCE_INT_DTYPES:
                 assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
             else:
                 assert abs(actual - expected[j]) < 1e-4 * abs(
@@ -1149,6 +1186,7 @@ def test_block_inclusive_add(dtype, sg_per_block):
 @test_utils.test(arch=qd.gpu)
 def test_block_exclusive_add(dtype, sg_per_block):
     """Block exclusive prefix sum: thread `i` holds `sum(src[block_base..i-1])`; thread 0 holds 0."""
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -1169,7 +1207,7 @@ def test_block_exclusive_add(dtype, sg_per_block):
         expected = _ref_exclusive_scan_add(block_vals)
         for j in range(block_dim):
             actual = dst[b * block_dim + j]
-            if dtype == qd.i32:
+            if dtype in _BLOCK_REDUCE_INT_DTYPES:
                 assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
             else:
                 # First thread's expected is 0; gate the relative tolerance so it doesn't blow up.
@@ -1184,6 +1222,7 @@ def test_block_exclusive_add(dtype, sg_per_block):
 @test_utils.test(arch=qd.gpu)
 def test_block_inclusive_min(dtype, sg_per_block):
     """Block inclusive prefix min."""
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -1196,10 +1235,9 @@ def test_block_inclusive_min(dtype, sg_per_block):
         for i in range(N):
             dst[i] = block.inclusive_min(src[i], block_dim, dtype)
 
-    int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
         v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in int_dtypes else 1.0 * v
+        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
     foo()
 
     py_min = lambda a, b: a if a < b else b  # noqa: E731 (intentional 1-line lambda for ref oracle)
@@ -1208,7 +1246,7 @@ def test_block_inclusive_min(dtype, sg_per_block):
         expected = _ref_inclusive_scan_op(block_vals, py_min, 0)
         for j in range(block_dim):
             actual = dst[b * block_dim + j]
-            if dtype == qd.i32:
+            if dtype in _BLOCK_REDUCE_INT_DTYPES:
                 assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
             else:
                 assert abs(actual - expected[j]) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
@@ -1219,6 +1257,7 @@ def test_block_inclusive_min(dtype, sg_per_block):
 @test_utils.test(arch=qd.gpu)
 def test_block_inclusive_max(dtype, sg_per_block):
     """Block inclusive prefix max."""
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -1231,10 +1270,9 @@ def test_block_inclusive_max(dtype, sg_per_block):
         for i in range(N):
             dst[i] = block.inclusive_max(src[i], block_dim, dtype)
 
-    int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
         v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in int_dtypes else 1.0 * v
+        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
     foo()
 
     py_max = lambda a, b: a if a > b else b  # noqa: E731
@@ -1243,7 +1281,7 @@ def test_block_inclusive_max(dtype, sg_per_block):
         expected = _ref_inclusive_scan_op(block_vals, py_max, 0)
         for j in range(block_dim):
             actual = dst[b * block_dim + j]
-            if dtype == qd.i32:
+            if dtype in _BLOCK_REDUCE_INT_DTYPES:
                 assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
             else:
                 assert abs(actual - expected[j]) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
@@ -1254,6 +1292,7 @@ def test_block_inclusive_max(dtype, sg_per_block):
 @test_utils.test(arch=qd.gpu)
 def test_block_exclusive_min(dtype, sg_per_block):
     """Block exclusive prefix min; thread 0 holds the dtype-derived identity (``+inf`` / ``np.iinfo(dtype).max``)."""
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -1266,20 +1305,19 @@ def test_block_exclusive_min(dtype, sg_per_block):
         for i in range(N):
             dst[i] = block.exclusive_min(src[i], block_dim, dtype)
 
-    int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
         v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in int_dtypes else 1.0 * v
+        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
     foo()
 
-    sentinel = np.iinfo(np.int32).max if dtype == qd.i32 else float("inf")
+    sentinel = _block_exclusive_min_sentinel(dtype)
     py_min = lambda a, b: a if a < b else b  # noqa: E731
     for b in range(NUM_BLOCKS):
         block_vals = [src[b * block_dim + j] for j in range(block_dim)]
         expected = _ref_exclusive_scan_op(block_vals, py_min, sentinel)
         for j in range(block_dim):
             actual = dst[b * block_dim + j]
-            if dtype == qd.i32:
+            if dtype in _BLOCK_REDUCE_INT_DTYPES:
                 assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
             elif math.isinf(expected[j]):
                 # Thread 0 of each block gets the +inf identity; ``inf - inf`` is NaN, so check by equality / sign.
@@ -1422,6 +1460,7 @@ def test_block_radix_rank_match_atomic_or(key_pattern, bit_start, num_bits):
 @test_utils.test(arch=qd.gpu)
 def test_block_exclusive_max(dtype, sg_per_block):
     """Block exclusive prefix max; thread 0 holds the dtype-derived identity (``-inf`` / ``np.iinfo(dtype).min``)."""
+    _skip_if_f64_unsupported(dtype)
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -1434,20 +1473,19 @@ def test_block_exclusive_max(dtype, sg_per_block):
         for i in range(N):
             dst[i] = block.exclusive_max(src[i], block_dim, dtype)
 
-    int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(N):
         v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in int_dtypes else 1.0 * v
+        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
     foo()
 
-    sentinel = np.iinfo(np.int32).min if dtype == qd.i32 else float("-inf")
+    sentinel = _block_exclusive_max_sentinel(dtype)
     py_max = lambda a, b: a if a > b else b  # noqa: E731
     for b in range(NUM_BLOCKS):
         block_vals = [src[b * block_dim + j] for j in range(block_dim)]
         expected = _ref_exclusive_scan_op(block_vals, py_max, sentinel)
         for j in range(block_dim):
             actual = dst[b * block_dim + j]
-            if dtype == qd.i32:
+            if dtype in _BLOCK_REDUCE_INT_DTYPES:
                 assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
             elif math.isinf(expected[j]):
                 # Thread 0 of each block gets the -inf identity; ``-inf - -inf`` is NaN, so check by equality / sign.
