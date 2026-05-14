@@ -6,6 +6,20 @@
 * *format/linter*: Before pushing any commits, ensure you set up `pre-commit` and run it using `pre-commit run -a`
 * No need to force push to keep a clean history as the merging is eventually done by squashing commits.
 
+## Running tests
+
+Run the test suite with `python tests/run_tests.py`. CLI arguments are forwarded to pytest. For example, to run only Metal tests matching a keyword:
+
+```
+python tests/run_tests.py --arch metal -k "test_tile16_cholesky"
+```
+
+### Kernel compilation cache
+
+During test runs, compiled kernels are cached to disk so that the same kernel is not recompiled after each `qd.reset()`/`qd.init()` cycle.
+
+A fresh, empty cache directory is created for each test session by pytest's `tmp_path_factory` (typically under `/tmp/pytest-of-<user>/pytest-<N>/qdcache0/`). Pytest's `tmp_path_retention_count` setting (default: 3) controls how many old sessions' cache dirs are kept. This cache is separate from the user-facing `~/.cache/quadrants/` cache.
+
 ## Creating your build/dev environment
 
 It is recommended to use a virtual env. Quadrants supports Python 3.10–3.13 for building and testing. However, `pre-commit` is configured with a pinned Python `3.10` to ensure consistent formatting, so you will need Python 3.10 available for running pre-commit hooks.
