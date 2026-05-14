@@ -606,14 +606,18 @@ def test_device_select_rejects_short_out():
 _RADIX_SORT_SIZES = [1, 7, 256, 257, 1023, 1024, 1025, 65536, 200_000]
 
 
+_RADIX_KEY_DTYPES = [qd.u32, qd.i32, qd.f32, qd.u64, qd.i64, qd.f64]
+
+
 def _gen_keys(rng, dtype, N):
+    """Generate sortable test inputs for every supported key dtype. The float paths sprinkle a few signed-zero /
+    inf / denormal specials at the front of the array to exercise the sort-twiddle pattern."""
     if dtype == qd.u32:
         return rng.integers(0, 2**32, size=N, dtype=np.uint32)
     if dtype == qd.i32:
         return rng.integers(-(2**31), 2**31 - 1, size=N, dtype=np.int32)
     if dtype == qd.f32:
         arr = rng.standard_normal(N).astype(np.float32) * 1e3
-        # Sprinkle a few specials to verify the f32 sort-twiddle pattern.
         if N >= 6:
             arr[0] = -0.0
             arr[1] = 0.0
@@ -622,14 +626,29 @@ def _gen_keys(rng, dtype, N):
             arr[4] = np.float32(1e-30)
             arr[5] = np.float32(-1e-30)
         return arr
+    if dtype == qd.u64:
+        # Span the high half of the u64 range too so all 8 byte-passes see non-zero histograms.
+        return rng.integers(0, 2**63, size=N, dtype=np.uint64).astype(np.uint64) * np.uint64(2)
+    if dtype == qd.i64:
+        return rng.integers(-(2**62), 2**62, size=N, dtype=np.int64)
+    if dtype == qd.f64:
+        arr = rng.standard_normal(N).astype(np.float64) * 1e6
+        if N >= 6:
+            arr[0] = -0.0
+            arr[1] = 0.0
+            arr[2] = np.float64(np.inf)
+            arr[3] = np.float64(-np.inf)
+            arr[4] = np.float64(1e-300)
+            arr[5] = np.float64(-1e-300)
+        return arr
     raise ValueError(dtype)
 
 
 @pytest.mark.parametrize("N", _RADIX_SORT_SIZES)
-@pytest.mark.parametrize("dtype", [qd.u32, qd.i32, qd.f32])
+@pytest.mark.parametrize("dtype", _RADIX_KEY_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_keys_only(dtype, N):
-    """device_radix_sort matches numpy.sort for u32 / i32 / f32 keys."""
+    """device_radix_sort matches numpy.sort for every supported key dtype ({u32, i32, f32, u64, i64, f64})."""
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
 
@@ -644,10 +663,11 @@ def test_device_radix_sort_keys_only(dtype, N):
 
 
 @pytest.mark.parametrize("N", _RADIX_SORT_SIZES)
-@pytest.mark.parametrize("dtype", [qd.u32, qd.i32, qd.f32])
+@pytest.mark.parametrize("dtype", _RADIX_KEY_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_key_value(dtype, N):
-    """Key-value sort: values permute in lock-step with keys; sort is stable."""
+    """Key-value sort: values permute in lock-step with keys; sort is stable. Exercises the libuipc-shaped u64-key
+    + i32-value path (``MatrixConverter::ij_hash`` sorted with ``sort_index``) among the parametrized cases."""
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
 
@@ -740,9 +760,9 @@ def test_device_radix_sort_rejects_aliasing():
 
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_rejects_unsupported_dtype():
-    """First-land set is {u32, i32, f32}; i64 / f64 are follow-up."""
-    keys = qd.field(qd.i64, shape=8)
-    tmp = qd.field(qd.i64, shape=8)
+    """Supported set is {u32, i32, f32, u64, i64, f64}; narrower / wider dtypes raise NotImplementedError."""
+    keys = qd.field(qd.i16, shape=8)
+    tmp = qd.field(qd.i16, shape=8)
     with pytest.raises(NotImplementedError):
         qd.algorithms.device_radix_sort(keys, tmp_keys=tmp)
 
@@ -1011,11 +1031,12 @@ def big_scratch():
     yield
 
 
-@pytest.mark.parametrize("dtype", [qd.u32, qd.i32, qd.f32])
+@pytest.mark.parametrize("dtype", _RADIX_KEY_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_n_1m(dtype, big_scratch):  # pylint: disable=unused-argument,redefined-outer-name
     """N = 1_000_000 - qipc's hot-path size. Requires scratch bumped to ~5 MB; the ``big_scratch`` fixture supplies
-    8 MB and restores after."""
+    8 MB and restores after. 8-byte key dtypes run twice as many passes (8 instead of 4) for the same N. Scratch
+    requirement is unchanged - the histograms are always u32 - so the same ``big_scratch`` covers both widths."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)

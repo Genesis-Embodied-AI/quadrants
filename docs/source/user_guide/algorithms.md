@@ -13,7 +13,7 @@ Device-wide algorithms - primitives that consume and produce whole arrays, execu
 | `qd.algorithms.device_exclusive_scan_min(input, id, *, out)` | `out[i] = min(input[0:i])` (same pipeline, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_exclusive_scan_max(input, id, *, out)` | `out[i] = max(input[0:i])` (same pipeline, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_select(input, flags, *, out, num_out)` | Stream compaction: copy `input[i]` to a dense prefix of `out` for every `flags[i] != 0`. | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_radix_sort(keys, *, tmp_keys, values=None, tmp_values=None, end_bit=32)` | LSB radix sort for `u32` / `i32` / `f32` keys (optional key-value). | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_radix_sort(keys, *, tmp_keys, values=None, tmp_values=None, end_bit=None)` | LSB radix sort for 32-bit or 64-bit scalar keys (optional key-value). | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, *, keys_out, values_out, num_runs)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)`. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.parallel_sort`                               | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `device_radix_sort`. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.PrefixSumExecutor`                           | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `device_exclusive_scan_add`. | yes  | no     | yes    | no    |
@@ -143,9 +143,9 @@ Algorithm: the textbook scan-based compaction.
 
 Scratch budget: at the default 1 MB, `N + ceil(N/256) + ... ≤ 262144`, so roughly `N ≤ 260_000` works out of the box. Raise the budget via `_scratch.set_scratch_bytes(...)` before any algorithm runs for larger inputs.
 
-### `qd.algorithms.device_radix_sort(keys, *, tmp_keys, values=None, tmp_values=None, end_bit=32)`
+### `qd.algorithms.device_radix_sort(keys, *, tmp_keys, values=None, tmp_values=None, end_bit=None)`
 
-Ascending in-place radix sort over a 1-D tensor of `u32`, `i32`, or `f32` keys, with optional lock-step permutation of an `values` tensor (key-value sort).
+Ascending in-place radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (`u32` / `i32` / `f32` / `u64` / `i64` / `f64`), with optional lock-step permutation of an `values` tensor (key-value sort).
 
 ```python
 import quadrants as qd
@@ -173,13 +173,13 @@ Arguments:
 
 - `keys`: 1-D tensor. Sorted **in place**. Pass `qd.field`, `qd.ndarray`, or `qd.Tensor`.
 - `tmp_keys`: ping-pong workspace, same shape & dtype as `keys`, distinct buffer. Contents on return are intermediate and should be considered garbage.
-- `values`: optional 1-D tensor (`u32` / `i32` / `f32`), same shape as `keys`. If provided, permuted in lock-step with the keys.
+- `values`: optional 1-D tensor of any supported scalar dtype (the value dtype is independent of the key dtype), same shape as `keys`. If provided, permuted in lock-step with the keys.
 - `tmp_values`: required iff `values` is provided. Same shape & dtype as `values`, distinct buffer. Same workspace semantics as `tmp_keys`.
-- `end_bit`: number of low bits of the key to consider (default `32` = entire u32 range). Must be a positive multiple of `8` (the radix-digit width). An even number of digit passes is required so the result lands back in `keys`; with the default `end_bit = 32` this is automatic.
+- `end_bit`: number of low bits of the key to consider. Defaults to the full key width (32 for 4-byte keys, 64 for 8-byte keys). Must be a positive multiple of `8` (the radix-digit width). An even number of digit passes is required so the result lands back in `keys`; with the default `end_bit` this is automatic. Pass a smaller value when the high bits are known to be zero (e.g. `end_bit=16` for keys with values `< 2**16`) to save passes.
 
 Constraints:
 
-- **Dtypes (first land):** `keys.dtype` and `values.dtype` ∈ {`qd.u32`, `qd.i32`, `qd.f32`}. Other dtypes raise `NotImplementedError`.
+- **Dtypes:** `keys.dtype` and `values.dtype` are each independently one of `{qd.u32, qd.i32, qd.f32, qd.u64, qd.i64, qd.f64}`. Narrower scalar dtypes (`qd.i16`, `qd.f16`, ...) and struct dtypes raise `NotImplementedError`. 8-byte keys run 8 digit passes per sort; 4-byte keys run 4. Scratch footprint is the same for both widths (the per-tile histograms are `u32` regardless).
 - **Aliasing:** `keys` and `tmp_keys` must be distinct buffers; same for `values` / `tmp_values`. Calling with the same buffer raises `ValueError`.
 - **Stability:** stable sort - equal keys keep their original input order in the output.
 - **NaN handling (f32):** matches `numpy.sort` (NaNs land at the end). NaNs are not tested separately and should not be relied on for ordering invariants beyond `numpy.sort`.
@@ -191,7 +191,7 @@ Implementation:
   2. **Scan** - in-place exclusive scan over the flat tile_histograms buffer. The digit-major layout makes a single 1-D scan enough to produce per-(digit, block) global offsets.
   3. **Scatter** - each block ranks its keys via `block.radix_rank_match_atomic_or` (wave32 + wave64 clean), looks up the per-(digit, block) global offset from the scan output, and scatters keys (and values, if provided) to the destination buffer.
 - After each pass we swap `keys` ↔ `tmp_keys`. Four passes is even, so the sorted keys end up back in `keys`.
-- `i32` and `f32` keys are mapped to a sortable `u32` representation before the first pass and mapped back after the last pass via in-place "twiddle" kernels (`i32`: XOR sign bit; `f32`: flip sign bit on positives, flip all bits on negatives - the standard sortable-key transform).
+- Signed-integer (`i32` / `i64`) and floating-point (`f32` / `f64`) keys are mapped to a sortable unsigned representation (`u32` / `u64`) before the first pass and mapped back after the last pass via in-place "twiddle" kernels (signed: XOR sign bit; float: flip sign bit on positives, flip all bits on negatives - the standard sortable-key transform). `u32` / `u64` keys are sorted directly with no twiddle.
 
 Scratch budget: `num_blocks * 256 + ...` `u32` slots per pass (re-used across passes), where `num_blocks = ceil(N / 256)`. The default 1 MB scratch budget covers `N` up to **≈ 260_000**. For `N = 1M` (qipc's hot path), raise the budget to **5 MB** before any algorithm runs:
 
@@ -254,7 +254,7 @@ Scratch budget: `~1.004 * N` u32 slots. The default 1 MB scratch covers `N` up t
 
 ### `qd.algorithms.parallel_sort(keys, values=None)`
 
-> **Deprecated.** New code should call `qd.algorithms.device_radix_sort(keys, tmp_keys=..., values=..., tmp_values=...)` instead. `device_radix_sort` is asymptotically `O(N log_radix N)` rather than `O(N log² N)`, is **stable** (odd-even merge sort is not), supports `u32` / `i32` / `f32` keys across CUDA / AMDGPU / Vulkan / Metal, and accepts `qd.field`, `qd.ndarray`, and `qd.Tensor` (`parallel_sort` is field-only). The only thing `parallel_sort` is competitive on is very small N (≲ 4K); even there the radix path is comparable on modern hardware. To migrate, allocate a `tmp_keys` field of the same shape and dtype as `keys`, then call `device_radix_sort`. `parallel_sort` is kept for one release cycle for backward compat and will be removed thereafter.
+> **Deprecated.** New code should call `qd.algorithms.device_radix_sort(keys, tmp_keys=..., values=..., tmp_values=...)` instead. `device_radix_sort` is asymptotically `O(N log_radix N)` rather than `O(N log^2 N)`, is **stable** (odd-even merge sort is not), supports 32-bit and 64-bit scalar keys across CUDA / AMDGPU / Vulkan / Metal, and accepts `qd.field`, `qd.ndarray`, and `qd.Tensor` (`parallel_sort` is field-only). The only thing `parallel_sort` is competitive on is very small N (~4K and below); even there the radix path is comparable on modern hardware. To migrate, allocate a `tmp_keys` field of the same shape and dtype as `keys`, then call `device_radix_sort`. `parallel_sort` is kept for one release cycle for backward compat and will be removed thereafter.
 
 In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `qd.field` - `parallel_sort` reaches into `snode.ptr.offset` internally, so `ndarray` is **not** supported and will fail at compile time with an `AttributeError`.
 
