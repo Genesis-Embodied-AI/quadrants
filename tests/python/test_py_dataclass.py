@@ -892,9 +892,8 @@ def test_ndarray_struct_multiple_child_structs_field():
 
 @test_utils.test()
 def test_ndarray_substruct_passed_to_func():
-    """``f(s.struct_cd)`` where the kernel arg is a nested dataclass and the func
-    is typed with the child dataclass. Mirrors test_ndarray_struct_nested_ndarray
-    but passes the sub-struct (not the whole struct) into the inner func."""
+    """``f(s.struct_cd)`` where the kernel arg is a nested dataclass and the func is typed with the child dataclass.
+    Mirrors test_ndarray_struct_nested_ndarray but passes the sub-struct (not the whole struct) into the inner func."""
     a = qd.ndarray(qd.i32, shape=(101,))
     b = qd.ndarray(qd.i32, shape=(57,))
     c = qd.ndarray(qd.i32, shape=(211,))
@@ -1041,8 +1040,8 @@ def test_substruct_passed_to_func_kwargs() -> None:
 
 @test_utils.test()
 def test_substruct_pruning() -> None:
-    """When the callee uses only one of the sub-struct's leaves, the unused leaf
-    must not be touched. Exercises pruning across the sub-struct boundary."""
+    """When the callee uses only one of the sub-struct's leaves, the unused leaf must not be touched.
+    Exercises pruning across the sub-struct boundary."""
     c = qd.ndarray(qd.i32, shape=(8,))
     d = qd.ndarray(qd.i32, shape=(8,))
 
@@ -1073,8 +1072,8 @@ def test_substruct_pruning() -> None:
 
 @test_utils.test()
 def test_substruct_inside_func() -> None:
-    """The sub-struct call site is inside a ``qd.func`` body (not directly in
-    the kernel). Exercises ``_transform_as_func``'s intermediate sentinel binding."""
+    """The sub-struct call site is inside a ``qd.func`` body (not directly in the kernel).
+    Exercises ``_transform_as_func``'s intermediate sentinel binding."""
     c = qd.ndarray(qd.i32, shape=(8,))
 
     @dataclass
