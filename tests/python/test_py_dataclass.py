@@ -969,9 +969,13 @@ def test_substruct_passed_to_func(qd_make: Any, qd_anno: Any, request) -> None:
         fef(my_struct_ab.struct_cd.struct_ef)
 
     s = MyStructAB(
-        a=a, b=b, extra=extra_ab,
+        a=a,
+        b=b,
+        extra=extra_ab,
         struct_cd=MyStructCD(
-            c=c, d=d, extra=extra_cd,
+            c=c,
+            d=d,
+            extra=extra_cd,
             struct_ef=MyStructEF(e=e, f=f, extra=extra_ef),
         ),
     )
@@ -1202,11 +1206,14 @@ def test_substruct_deep_nesting() -> None:
         touch_l3(s.inner.inner.inner)
 
     s = L0(
-        leaf=n0, extra=x0,
+        leaf=n0,
+        extra=x0,
         inner=L1(
-            leaf=n1, extra=x1,
+            leaf=n1,
+            extra=x1,
             inner=L2(
-                leaf=n2, extra=x2,
+                leaf=n2,
+                extra=x2,
                 inner=L3(leaf=n3, extra=x3),
             ),
         ),
