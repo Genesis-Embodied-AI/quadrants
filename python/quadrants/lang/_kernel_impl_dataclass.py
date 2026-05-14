@@ -49,14 +49,23 @@ def _populate_struct_locals_from_params_dict(basename: str, struct_locals, struc
     And the members of struct_locals should be:
     - __qd_struct_ab__qd_a
     - __qd_struct_ab__qd_b
+    - __qd_struct_ab__qd_struct_cd
     - __qd_struct_ab__qd_struct_cd__qd_c
     - __qd_struct_ab__qd_struct_cd__qd_d
+    - __qd_struct_ab__qd_struct_cd__qd_struct_ef
     - __qd_struct_ab__qd_struct_cd__qd_struct_ef__qd_e
     - __qd_struct_ab__qd_struct_cd__qd_struct_ef__qd_f
+
+    Intermediate (non-leaf) dataclass nodes are included in struct_locals so that
+    expressions like ``struct_ab.struct_cd`` get rewritten to a single
+    ``Name("__qd_struct_ab__qd_struct_cd")`` by FlattenAttributeNameTransformer.
+    This is needed to support passing sub-structs to ``qd.func``, e.g.
+    ``f(struct_ab.struct_cd)`` where ``f`` is typed ``(c: StructCD)``.
     """
     for field in dataclasses.fields(struct_type):
         child_name = create_flat_name(basename, field.name)
         if dataclasses.is_dataclass(field.type):
+            struct_locals.add(child_name)
             _populate_struct_locals_from_params_dict(child_name, struct_locals, field.type)
         else:
             struct_locals.add(child_name)
@@ -86,6 +95,8 @@ def extract_struct_locals_from_context(ctx: ASTTransformerFuncContext) -> set[st
             for field in dataclasses.fields(dc_type):
                 child_name = create_flat_name(param_name, field.name)
                 if dataclasses.is_dataclass(field.type):
+                    # Intermediate node — see _populate_struct_locals_from_params_dict docstring.
+                    struct_locals.add(child_name)
                     _populate_struct_locals_from_params_dict(child_name, struct_locals, field.type)
                     continue
                 struct_locals.add(child_name)
