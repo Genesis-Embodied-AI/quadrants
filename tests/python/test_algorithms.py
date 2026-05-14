@@ -325,113 +325,114 @@ def _alloc_scan_input_out(dtype, N):
     return inp, out
 
 
+_SCAN_DTYPES = [qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64]
+
+
+def _scan_dtype_mask(dtype):
+    """Return the wrap-around mask for unsigned scans, or -1 (no mask) for signed / floats."""
+    if dtype == qd.u32:
+        return 0xFFFFFFFF
+    if dtype == qd.u64:
+        return 0xFFFFFFFFFFFFFFFF
+    return -1
+
+
 @pytest.mark.parametrize("N", _SCAN_SIZES)
-@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.parametrize("dtype", _SCAN_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_add(dtype, N):
-    """device_exclusive_scan_add(out[i] = sum(input[0:i])) matches numpy.cumsum-shifted."""
+    """device_exclusive_scan_add(out[i] = sum(input[0:i])) matches numpy.cumsum-shifted across the full 6-dtype set."""
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
-    if dtype == qd.f32:
-        host = rng.uniform(-1.0, 1.0, size=N).astype(np.float32)
-    elif dtype == qd.u32:
-        host = rng.integers(0, 100, size=N, dtype=np.uint32)
-    else:
-        host = rng.integers(-100, 100, size=N, dtype=np.int32)
+    host = _rand_reduce_host(rng, dtype, N, bound=100)
     _fill_field(inp, host)
 
     qd.algorithms.device_exclusive_scan_add(inp, out=out)
     got = out.to_numpy()
 
-    # numpy.cumsum is inclusive; convert to exclusive by shifting right and
-    # prepending the identity (0).
-    if dtype == qd.f32:
+    if _is_float(dtype):
         ref = np.concatenate([[0.0], np.cumsum(host.astype(np.float64))[:-1]])
-        # f32 accumulation drift across N=1M can reach ~N * eps_f32 * mean-magnitude.
-        # rtol=1e-3 is generous but still catches structural errors (off-by-one tile,
-        # missing block prefix, etc.). abs_tol covers values near zero.
+        # f32 accumulation drift across N=1M can reach ~N * eps_f32 * mean-magnitude; f64 ~N * eps_f64. rtol scales
+        # with dtype precision. abs_tol covers values near zero.
+        rtol = 1e-3 if dtype == qd.f32 else 1e-12
+        atol = 1e-3 if dtype == qd.f32 else 1e-9
         np.testing.assert_allclose(
             got.astype(np.float64),
             ref,
-            rtol=1e-3,
-            atol=1e-3,
-            err_msg=f"f32 scan_add(N={N})",
+            rtol=rtol,
+            atol=atol,
+            err_msg=f"{dtype} scan_add(N={N})",
         )
     else:
-        host64 = host.astype(np.int64)
-        ref = np.concatenate([[0], np.cumsum(host64)[:-1]])
-        # u32 wraps mod 2**32; mask both sides to that width for comparison.
-        got_mask = got.astype(np.int64) & (0xFFFFFFFF if dtype == qd.u32 else -1)
-        ref_mask = ref & (0xFFFFFFFF if dtype == qd.u32 else -1)
+        # Promote to a width that survives the cumulative sum: u64 / i64 inputs use a Python int reference; smaller
+        # ints can still use int64.
+        promote = np.int64 if dtype in (qd.i32, qd.u32, qd.i64) else np.uint64
+        host_wide = host.astype(promote)
+        ref = np.concatenate([[promote(0)], np.cumsum(host_wide)[:-1]]).astype(promote)
+        mask = _scan_dtype_mask(dtype)
+        got_view = got.astype(np.int64 if dtype != qd.u64 else np.uint64)
+        if mask != -1:
+            got_view = got_view & promote(mask)
+            ref = ref & promote(mask)
         np.testing.assert_array_equal(
-            got_mask,
-            ref_mask,
+            got_view,
+            ref,
             err_msg=f"{dtype} scan_add(N={N})",
         )
 
 
 @pytest.mark.parametrize("N", _SCAN_SIZES)
-@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.parametrize("dtype", _SCAN_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_min(dtype, N):
-    """device_exclusive_scan_min(out[i] = min(input[0:i])) matches numpy.minimum.accumulate-shifted."""
+    """device_exclusive_scan_min(out[i] = min(input[0:i])) matches numpy.minimum.accumulate-shifted across the full
+    6-dtype set."""
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
-    if dtype == qd.f32:
-        host = rng.uniform(-10.0, 10.0, size=N).astype(np.float32)
-    elif dtype == qd.u32:
-        host = rng.integers(0, 10000, size=N, dtype=np.uint32)
+    np_dt = _DTYPE_TO_NP[dtype]
+    if _is_float(dtype):
+        host = rng.uniform(-10.0, 10.0, size=N).astype(np_dt)
     else:
-        host = rng.integers(-10000, 10000, size=N, dtype=np.int32)
+        host = _rand_reduce_host(rng, dtype, N, bound=10000)
     _fill_field(inp, host)
 
     identity = _MIN_IDENTITY[dtype]
     qd.algorithms.device_exclusive_scan_min(inp, identity, out=out)
     got = out.to_numpy()
 
-    # Exclusive: out[i] = min(input[0:i]); out[0] = identity.
-    if dtype == qd.f32:
-        ref = np.concatenate([[float("inf")], np.minimum.accumulate(host.astype(np.float64))[:-1]]).astype(np.float32)
-        np.testing.assert_allclose(got, ref, rtol=0, atol=0, err_msg=f"f32 scan_min(N={N})")
+    if _is_float(dtype):
+        ref = np.concatenate([[float("inf")], np.minimum.accumulate(host.astype(np.float64))[:-1]]).astype(np_dt)
+        atol = 0 if dtype == qd.f32 else 0  # min is bitwise-exact for monotone ops on float
+        np.testing.assert_allclose(got, ref, rtol=0, atol=atol, err_msg=f"{dtype} scan_min(N={N})")
     else:
-        if dtype == qd.u32:
-            ref = np.concatenate([[np.uint32(_MIN_IDENTITY[dtype])], np.minimum.accumulate(host)[:-1]]).astype(
-                np.uint32
-            )
-        else:
-            ref = np.concatenate([[np.int32(_MIN_IDENTITY[dtype])], np.minimum.accumulate(host)[:-1]]).astype(np.int32)
+        ref = np.concatenate([[np_dt(_MIN_IDENTITY[dtype])], np.minimum.accumulate(host)[:-1]]).astype(np_dt)
         np.testing.assert_array_equal(got, ref, err_msg=f"{dtype} scan_min(N={N})")
 
 
 @pytest.mark.parametrize("N", _SCAN_SIZES)
-@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.parametrize("dtype", _SCAN_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_max(dtype, N):
-    """device_exclusive_scan_max(out[i] = max(input[0:i])) matches numpy.maximum.accumulate-shifted."""
+    """device_exclusive_scan_max(out[i] = max(input[0:i])) matches numpy.maximum.accumulate-shifted across the full
+    6-dtype set."""
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
-    if dtype == qd.f32:
-        host = rng.uniform(-10.0, 10.0, size=N).astype(np.float32)
-    elif dtype == qd.u32:
-        host = rng.integers(0, 10000, size=N, dtype=np.uint32)
+    np_dt = _DTYPE_TO_NP[dtype]
+    if _is_float(dtype):
+        host = rng.uniform(-10.0, 10.0, size=N).astype(np_dt)
     else:
-        host = rng.integers(-10000, 10000, size=N, dtype=np.int32)
+        host = _rand_reduce_host(rng, dtype, N, bound=10000)
     _fill_field(inp, host)
 
     identity = _MAX_IDENTITY[dtype]
     qd.algorithms.device_exclusive_scan_max(inp, identity, out=out)
     got = out.to_numpy()
 
-    if dtype == qd.f32:
-        ref = np.concatenate([[float("-inf")], np.maximum.accumulate(host.astype(np.float64))[:-1]]).astype(np.float32)
-        np.testing.assert_allclose(got, ref, rtol=0, atol=0, err_msg=f"f32 scan_max(N={N})")
+    if _is_float(dtype):
+        ref = np.concatenate([[float("-inf")], np.maximum.accumulate(host.astype(np.float64))[:-1]]).astype(np_dt)
+        np.testing.assert_allclose(got, ref, rtol=0, atol=0, err_msg=f"{dtype} scan_max(N={N})")
     else:
-        if dtype == qd.u32:
-            ref = np.concatenate([[np.uint32(_MAX_IDENTITY[dtype])], np.maximum.accumulate(host)[:-1]]).astype(
-                np.uint32
-            )
-        else:
-            ref = np.concatenate([[np.int32(_MAX_IDENTITY[dtype])], np.maximum.accumulate(host)[:-1]]).astype(np.int32)
+        ref = np.concatenate([[np_dt(_MAX_IDENTITY[dtype])], np.maximum.accumulate(host)[:-1]]).astype(np_dt)
         np.testing.assert_array_equal(got, ref, err_msg=f"{dtype} scan_max(N={N})")
 
 
@@ -464,9 +465,9 @@ def test_device_exclusive_scan_rejects_dtype_mismatch():
 
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_rejects_unsupported_dtype():
-    """First-land dtype set is {i32, u32, f32}; i64 / f64 are follow-up."""
-    inp = qd.field(qd.i64, shape=4)
-    out = qd.field(qd.i64, shape=4)
+    """Supported set is {i32, u32, f32, i64, u64, f64}; narrower / wider scalar dtypes raise NotImplementedError."""
+    inp = qd.field(qd.i16, shape=4)
+    out = qd.field(qd.i16, shape=4)
     with pytest.raises(NotImplementedError):
         qd.algorithms.device_exclusive_scan_add(inp, out=out)
 
@@ -1260,18 +1261,23 @@ def test_device_reduce_add_n_1m(dtype):
         assert got_int == expected
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.parametrize("dtype", _SCAN_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_add_n_1m(dtype):
-    """N = 1_000_000 exclusive scan. Same scratch story as reduce - fits in default 1 MB by a wide margin."""
+    """N = 1_000_000 exclusive scan over the full dtype matrix. 4-byte dtypes go through the u32 scratch; 8-byte
+    dtypes through the u64 scratch (4K slots at the top level for both, recursion adds ~16). Both fit in default
+    1 MB by a wide margin."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
+    np_dt = _DTYPE_TO_NP[dtype]
     if dtype == qd.f32:
-        host = rng.uniform(-0.01, 0.01, size=N).astype(np.float32)
-    elif dtype == qd.u32:
-        host = rng.integers(0, 10, size=N, dtype=np.uint32)
+        host = rng.uniform(-0.01, 0.01, size=N).astype(np_dt)
+    elif dtype == qd.f64:
+        host = rng.uniform(-0.01, 0.01, size=N).astype(np_dt)
+    elif dtype in (qd.u32, qd.u64):
+        host = rng.integers(0, 10, size=N, dtype=np_dt)
     else:
-        host = rng.integers(-5, 5, size=N, dtype=np.int32)
+        host = rng.integers(-5, 5, size=N, dtype=np_dt)
 
     inp = qd.field(dtype, shape=N)
     out = qd.field(dtype, shape=N)
@@ -1279,16 +1285,19 @@ def test_device_exclusive_scan_add_n_1m(dtype):
     qd.algorithms.device_exclusive_scan_add(inp, out=out)
 
     got = out.to_numpy()
-    if dtype == qd.f32:
-        ref = np.concatenate([[0.0], np.cumsum(host.astype(np.float64))[:-1]]).astype(np.float32)
-        # f32 cumulative drift over 1M adds is real; check head + tail only, with a generous rtol.
-        np.testing.assert_allclose(got[:64], ref[:64], rtol=1e-3, atol=1e-3)
-        # Tail: just sanity-check finite-ness - the drift bound past 1M elements at uniform(-0.01, 0.01) is hard to
-        # pin tightly without a Kahan sum.
-        assert np.isfinite(got[-1])
+    if _is_float(dtype):
+        ref = np.concatenate([[0.0], np.cumsum(host.astype(np.float64))[:-1]]).astype(np_dt)
+        # f32: cumulative drift over 1M adds is real; check head only with a generous rtol, then verify finite at
+        # the tail. f64: 12 orders of magnitude more precision, can check the whole array with tight tolerance.
+        if dtype == qd.f32:
+            np.testing.assert_allclose(got[:64], ref[:64], rtol=1e-3, atol=1e-3)
+            assert np.isfinite(got[-1])
+        else:
+            np.testing.assert_allclose(got, ref, rtol=1e-12, atol=1e-9)
     else:
-        ref = np.concatenate([[0], np.cumsum(host.astype(np.int64))[:-1]])
-        np.testing.assert_array_equal(got.astype(np.int64), ref)
+        promote = np.int64 if dtype in (qd.i32, qd.u32, qd.i64) else np.uint64
+        ref = np.concatenate([[promote(0)], np.cumsum(host.astype(promote))[:-1]]).astype(promote)
+        np.testing.assert_array_equal(got.astype(promote), ref)
 
 
 # --- End-to-end round-trip: bump scratch, run a 1M algorithm, qd.reset + qd.init, then run a default-scratch-sized

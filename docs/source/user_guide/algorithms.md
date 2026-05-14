@@ -9,9 +9,9 @@ Device-wide algorithms - primitives that consume and produce whole arrays, execu
 | `qd.algorithms.device_reduce_add(input, *, out)`            | `out[0] = sum(input)` (two-or-more-pass tree reduction)            | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_reduce_min(input, id, *, out)`        | `out[0] = min(input)` (same recursion, caller-supplied identity)   | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_reduce_max(input, id, *, out)`        | `out[0] = max(input)` (same recursion, caller-supplied identity)   | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_exclusive_scan_add(input, *, out)`    | `out[i] = sum(input[0:i])` (three-pass Blelloch-style scan)        | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_exclusive_scan_min(input, id, *, out)` | `out[i] = min(input[0:i])` (same pipeline, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_exclusive_scan_max(input, id, *, out)` | `out[i] = max(input[0:i])` (same pipeline, caller-supplied identity) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_exclusive_scan_add(input, *, out)`    | `out[i] = sum(input[0:i])` (three-pass Blelloch-style scan; 32-bit + 64-bit scalars) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_exclusive_scan_min(input, id, *, out)` | `out[i] = min(input[0:i])` (same pipeline, caller-supplied identity; 32-bit + 64-bit scalars) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_exclusive_scan_max(input, id, *, out)` | `out[i] = max(input[0:i])` (same pipeline, caller-supplied identity; 32-bit + 64-bit scalars) | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_select(input, flags, *, out, num_out)` | Stream compaction: copy `input[i]` to a dense prefix of `out` for every `flags[i] != 0`. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_radix_sort(keys, *, tmp_keys, values=None, tmp_values=None, end_bit=None)` | LSB radix sort for 32-bit or 64-bit scalar keys (optional key-value). | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, *, keys_out, values_out, num_runs)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)`. | yes  | yes\*  | yes    | yes\* |
@@ -58,7 +58,7 @@ Constraints:
 Implementation:
 
 - Two-or-more-pass tree reduction. Each pass uses `BLOCK_DIM = 256` threads per block and reduces 256 elements per block via `block.reduce_{add,min,max}`. For `N <= 256` one pass suffices; for `N` up to `256^2 = 65536`, two passes; for larger `N`, additional intermediate passes are added until the reduction terminates in a single block.
-- Per-block partials are written to a **shared scratch field**. There are actually two scratch fields under the hood (a `Field(u32)` for 4-byte dtypes and a `Field(u64)` for 8-byte dtypes), both lazily allocated at first algorithm call and sized to the same byte budget (default 1 MB each, which covers `N` up to ~64M 4-byte elements or ~32M 8-byte elements). Each scratch is bit-cast on access so a single field per width backs every supported dtype.
+- Per-block partials are written to a **shared scratch field**. There are actually three scratch fields under the hood (a `Field(u32)` for 4-byte dtypes, a `Field(u64)` for 8-byte integer dtypes and 8-byte reduce, and a `Field(f64)` for `f64` exclusive scan), all lazily allocated at first algorithm call and sized to the same byte budget (default 1 MB each, which covers `N` up to ~64M 4-byte elements or ~32M 8-byte elements). The u32 / u64 scratches are bit-cast on access so a single field per width backs every dtype that goes through them; the f64 scratch is used directly to side-step a known precision loss in `bit_cast(f64, u64)` on scan results.
 - The last pass writes the final value to `out[0]` directly. The kernel launches are pipelined back-to-back; correctness relies on the kernel-boundary serialization that Quadrants provides between host-launched kernels.
 
 If you scan or reduce on `N > ≈ 64M`, raise the scratch budget *before any algorithm runs*:
@@ -87,24 +87,25 @@ qd.algorithms.device_exclusive_scan_add(inp, out=out)
 Signatures:
 
 - `device_exclusive_scan_add(input, *, out)` - exclusive sum. Identity (`0` for the dtype) is derived automatically.
-- `device_exclusive_scan_min(input, identity, *, out)` - exclusive min. `identity` is **required** (e.g. `math.inf` for `f32`, `2**31 - 1` for `i32`).
-- `device_exclusive_scan_max(input, identity, *, out)` - exclusive max. `identity` is **required** (e.g. `-math.inf` for `f32`, `-2**31` for `i32`).
+- `device_exclusive_scan_min(input, identity, *, out)` - exclusive min. `identity` is **required** (e.g. `math.inf` for `f32` / `f64`, `2**31 - 1` for `i32`, `2**63 - 1` for `i64`).
+- `device_exclusive_scan_max(input, identity, *, out)` - exclusive max. `identity` is **required** (e.g. `-math.inf` for `f32` / `f64`, `-2**31` for `i32`, `-2**63` for `i64`, `0` for unsigned).
 
 Constraints:
 
-- **Dtypes (first land):** `qd.i32`, `qd.u32`, `qd.f32`. Calls with `qd.i64` / `qd.f64` raise `NotImplementedError`.
+- **Dtypes:** scalar `qd.i32`, `qd.u32`, `qd.f32`, `qd.i64`, `qd.u64`, `qd.f64`. Narrower / wider scalar dtypes (e.g. `qd.i16`, `qd.f16`) and struct dtypes raise `NotImplementedError`. 4-byte dtypes stage through the shared `Field(u32)` scratch, 8-byte integer dtypes (`i64` / `u64`) stage through the shared `Field(u64)` scratch, and `f64` stages through a separate shared `Field(f64)` scratch (see Implementation below); the byte budget is the same for all three.
 - **Shape:** `input` and `out` must both be 1-D with the same shape and dtype.
 - **No in-place scan:** `out` must be a distinct buffer from `input`. Calling with `out is input` raises `ValueError`. (The kernels do not protect against same-buffer aliasing; allocating one extra buffer once is cheap relative to the scan itself.)
 - **Identity (min / max only):** mandatory. Passing `None` or omitting `identity` raises `TypeError`.
-- **f32 non-associativity:** the order of additions inside a scan tree is not the same as a left-to-right host scan, so `f32` results are *not* bitwise-equal to `numpy.cumsum`. Tests tolerate a small relative error.
+- **Float non-associativity:** the order of additions inside a scan tree is not the same as a left-to-right host scan, so `f32` / `f64` results are *not* bitwise-equal to `numpy.cumsum`. Tests tolerate a small relative error (scaled by dtype precision).
 
 Implementation:
 
 - Blelloch 1990 three-pass exclusive scan:
-  1. **Pass 1** - per-block tile reduce into the shared `Field(u32)` scratch (one `u32` per block).
+  1. **Pass 1** - per-block tile reduce into the shared scratch (one slot per block).
   2. **Pass 2** - exclusive-scan the partials buffer in place. For `N ≤ BLOCK_DIM²` (= 65536) a single block does this. For larger `N`, the driver recurses: another tile-reduce on the partials, a recursive scan, then a downsweep that applies the higher-level prefixes.
   3. **Pass 3** - per-block tile scan + add the block prefix from scratch. Each block re-reads its tile from the input, runs `block.exclusive_scan` to get per-thread tile prefixes, and adds its `block_prefix` from the scanned partials.
-- `BLOCK_DIM = 256`. Total scratch usage at `N = 1M` is `4096 + 16 = 4112` `u32` slots (~16 KB), well under the 1 MB default.
+- `BLOCK_DIM = 256`. Total scratch usage at `N = 1M` is `4096 + 16 = 4112` slots (~16 KB for 4-byte dtypes, ~32 KB for 8-byte), well under the 1 MB default.
+- `f64` uses a dedicated `Field(f64)` scratch (rather than reinterpreting the u64 scratch via `bit_cast`) because `bit_cast(scan_result_f64, u64)` currently loses precision in Quadrants; routing partials through an f64-typed buffer side-steps the cast on the write side entirely. Same byte budget as the u64 scratch.
 
 ### `qd.algorithms.device_select(input, flags, *, out, num_out)`
 
@@ -279,7 +280,7 @@ qd.algorithms.parallel_sort(keys, vals)
 
 ### `qd.algorithms.PrefixSumExecutor`
 
-> **Deprecated.** New code should call `qd.algorithms.device_exclusive_scan_add(input, *, out)` instead. `PrefixSumExecutor` is **inclusive**-only, **`i32`**-only, and **CUDA / Vulkan**-only; the new functional API covers `{i32, u32, f32}` on every supported backend and runs the exclusive variant directly. To migrate from inclusive in-place to exclusive out-of-place, drop the `Executor` wrapper, allocate a distinct `out` field, and post-process if you actually need the inclusive form (`inclusive[i] = exclusive[i] + input[i]`). `PrefixSumExecutor` is kept for one release cycle for backward compat and will be removed in a future release.
+> **Deprecated.** New code should call `qd.algorithms.device_exclusive_scan_add(input, *, out)` instead. `PrefixSumExecutor` is **inclusive**-only, **`i32`**-only, and **CUDA / Vulkan**-only; the new functional API covers `{i32, u32, f32, i64, u64, f64}` on every supported backend and runs the exclusive variant directly. To migrate from inclusive in-place to exclusive out-of-place, drop the `Executor` wrapper, allocate a distinct `out` field, and post-process if you actually need the inclusive form (`inclusive[i] = exclusive[i] + input[i]`). `PrefixSumExecutor` is kept for one release cycle for backward compat and will be removed in a future release.
 
 Inclusive in-place prefix sum (scan) over a 1-D `i32` field. Construct once with the array length, then call `.run(field)` to scan.
 
