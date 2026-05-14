@@ -19,6 +19,7 @@ each).
 """
 
 import math
+import struct
 
 import numpy as np
 import pytest
@@ -74,6 +75,58 @@ def test_scratch_round_trips_bit_cast_f32():
         assert out[i] == expected, f"slot {i}: got {out[i]}, expected {expected}"
 
 
+@test_utils.test(arch=qd.gpu)
+def test_scratch_u64_allocates_with_expected_capacity():
+    """First call to ``get_scratch_u64`` returns a Field(u64) sized to the same byte budget as the u32 scratch."""
+    s = _scratch.get_scratch_u64()
+    assert s.dtype == qd.u64
+    assert s.shape == (_scratch.DEFAULT_SCRATCH_BYTES // 8,)
+    assert _scratch.scratch_capacity_u64() == _scratch.DEFAULT_SCRATCH_BYTES // 8
+
+
+@test_utils.test(arch=qd.gpu)
+def test_scratch_u64_is_shared_across_calls():
+    s1 = _scratch.get_scratch_u64()
+    s2 = _scratch.get_scratch_u64()
+    assert s1 is s2
+
+
+@test_utils.test(arch=qd.gpu)
+def test_scratch_round_trips_bit_cast_f64():
+    """Smoke: feed exact-known f64 bit patterns into the kernel, bit_cast through the u64 scratch, read back. Mirrors
+    ``test_scratch_round_trips_bit_cast_f32`` for the 8-byte-dtype path used by 64-bit ``device_reduce_*``.
+
+    We push the host-computed bit pattern in via a u64 source field rather than arithmetic on f64 literals to dodge
+    kernel-side fp-contract / FMA-reassociation that can offset the result by 1 ulp from the host-side value.
+    """
+    N = 64
+    s = _scratch.get_scratch_u64()
+    src_bits = qd.field(qd.u64, shape=N)
+    out = qd.field(qd.f64, shape=N)
+
+    expected = [i * 0.5 - 7.25 + 1.0e-100 * i for i in range(N)]
+    bits_host = np.array(
+        [struct.unpack("<Q", struct.pack("<d", float(v)))[0] for v in expected], dtype=np.uint64
+    )
+    src_bits.from_numpy(bits_host)
+
+    @qd.kernel
+    def write():
+        for i in range(N):
+            v = qd.bit_cast(src_bits[i], qd.f64)
+            s[i] = qd.bit_cast(v, qd.u64)
+
+    @qd.kernel
+    def read():
+        for i in range(N):
+            out[i] = qd.bit_cast(s[i], qd.f64)
+
+    write()
+    read()
+    for i in range(N):
+        assert out[i] == expected[i], f"slot {i}: got {out[i]}, expected {expected[i]}"
+
+
 # Sizes spanning the trivial single-element path (1), within-one-block (< BLOCK_DIM), block boundaries (BLOCK_DIM,
 # BLOCK_DIM + 1), within-two-passes (BLOCK_DIM ** 2 and slightly above), and a "large-ish" three-pass-trigger size
 # that exercises the recursion loop without making the test slow. (Quadrants doesn't support 0-shape tensors, so N=0
@@ -100,87 +153,132 @@ def _alloc_input_out(dtype, N):
     return inp, out
 
 
+_REDUCE_DTYPES = [qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64]
+
+# Identities span the full {i32, u32, f32, i64, u64, f64} matrix: the floating-point cases use the dtype's infinity
+# extremum; the integer cases use the dtype's positive / negative range extreme. These are passed to
+# device_reduce_min / max as the monoid identity.
+_MIN_IDENTITY = {
+    qd.i32: 2**31 - 1,
+    qd.u32: 2**32 - 1,
+    qd.f32: float("inf"),
+    qd.i64: 2**63 - 1,
+    qd.u64: 2**64 - 1,
+    qd.f64: float("inf"),
+}
+_MAX_IDENTITY = {
+    qd.i32: -(2**31),
+    qd.u32: 0,
+    qd.f32: float("-inf"),
+    qd.i64: -(2**63),
+    qd.u64: 0,
+    qd.f64: float("-inf"),
+}
+
+_DTYPE_TO_NP = {
+    qd.i32: np.int32,
+    qd.u32: np.uint32,
+    qd.f32: np.float32,
+    qd.i64: np.int64,
+    qd.u64: np.uint64,
+    qd.f64: np.float64,
+}
+
+
+def _is_float(dtype):
+    return dtype in (qd.f32, qd.f64)
+
+
+def _is_unsigned(dtype):
+    return dtype in (qd.u32, qd.u64)
+
+
+def _rand_reduce_host(rng, dtype, N, *, bound=1000):
+    """Generate test inputs of the right numpy dtype, bounded so accumulations stay representable."""
+    np_dt = _DTYPE_TO_NP[dtype]
+    if _is_float(dtype):
+        # Keep values bounded so float sums don't drift far from numpy's promoted ref.
+        return rng.uniform(-1.0, 1.0, size=N).astype(np_dt)
+    if _is_unsigned(dtype):
+        return rng.integers(0, bound, size=N, dtype=np_dt)
+    return rng.integers(-bound, bound, size=N, dtype=np_dt)
+
+
 @pytest.mark.parametrize("N", _REDUCE_SIZES)
-@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.parametrize("dtype", _REDUCE_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_add(dtype, N):
     """device_reduce_add matches numpy.sum across the full size sweep + dtype set."""
     inp, out = _alloc_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
-    if dtype == qd.f32:
-        # Keep values bounded so f32 sums don't drift far from numpy's f64 ref.
-        host = rng.uniform(-1.0, 1.0, size=N).astype(np.float32)
-    elif dtype == qd.u32:
-        host = rng.integers(0, 1000, size=N, dtype=np.uint32)
-    else:
-        host = rng.integers(-1000, 1000, size=N, dtype=np.int32)
+    host = _rand_reduce_host(rng, dtype, N)
     _fill_field(inp, host)
 
     qd.algorithms.device_reduce_add(inp, out=out)
 
     got = out.to_numpy()[0]
-    if dtype == qd.f32:
+    if _is_float(dtype):
         expected = float(np.sum(host.astype(np.float64)))
-        # f32 tree-reduce drift: tolerate ~N * eps_f32 in the worst case;
-        # with bounded random inputs at N=200k, rtol=1e-4 is plenty.
-        assert math.isclose(
-            got, expected, rel_tol=1e-4, abs_tol=1e-4
-        ), f"f32 reduce_add(N={N}): got {got}, expected {expected}"
+        # f32: ~N * eps_f32 drift; f64: ~N * eps_f64. rtol scales with dtype precision.
+        rtol = 1e-4 if dtype == qd.f32 else 1e-12
+        atol = 1e-4 if dtype == qd.f32 else 1e-9
+        assert math.isclose(got, expected, rel_tol=rtol, abs_tol=atol), (
+            f"{dtype} reduce_add(N={N}): got {got}, expected {expected}"
+        )
     else:
-        expected = int(np.sum(host.astype(np.int64)))
-        assert int(got) == expected, f"{dtype} reduce_add(N={N}): got {got}, expected {expected}"
-
-
-_MIN_IDENTITY = {qd.i32: 2**31 - 1, qd.u32: 2**32 - 1, qd.f32: float("inf")}
-_MAX_IDENTITY = {qd.i32: -(2**31), qd.u32: 0, qd.f32: float("-inf")}
+        # Promote to Python int for an arbitrary-width reference; mask both sides to dtype width to handle the
+        # u32 / u64 mod-wrap case at large N.
+        mod = 1 << (32 if dtype in (qd.i32, qd.u32) else 64) if _is_unsigned(dtype) else None
+        ref = int(np.sum(host.astype(np.int64 if dtype in (qd.i32, qd.u32) else (np.int64 if dtype == qd.i64 else np.uint64))))  # noqa: E501
+        got_int = int(got)
+        if mod is not None:
+            ref &= mod - 1
+            got_int &= mod - 1
+        assert got_int == ref, f"{dtype} reduce_add(N={N}): got {got_int}, expected {ref}"
 
 
 @pytest.mark.parametrize("N", _REDUCE_SIZES)
-@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.parametrize("dtype", _REDUCE_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_min(dtype, N):
     """device_reduce_min(identity=type-positive-extreme) matches numpy.min."""
     inp, out = _alloc_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
-    if dtype == qd.f32:
-        host = rng.uniform(-10.0, 10.0, size=N).astype(np.float32)
-    elif dtype == qd.u32:
-        host = rng.integers(0, 10000, size=N, dtype=np.uint32)
+    if _is_float(dtype):
+        host = rng.uniform(-10.0, 10.0, size=N).astype(_DTYPE_TO_NP[dtype])
     else:
-        host = rng.integers(-10000, 10000, size=N, dtype=np.int32)
+        host = _rand_reduce_host(rng, dtype, N, bound=10000)
     _fill_field(inp, host)
 
     qd.algorithms.device_reduce_min(inp, _MIN_IDENTITY[dtype], out=out)
     got = out.to_numpy()[0]
     expected = host.min()
 
-    if dtype == qd.f32:
-        assert got == pytest.approx(expected, abs=1e-6)
+    if _is_float(dtype):
+        assert got == pytest.approx(expected, abs=1e-6 if dtype == qd.f32 else 1e-12)
     else:
         assert int(got) == int(expected), f"{dtype} reduce_min(N={N}): got {got}, expected {expected}"
 
 
 @pytest.mark.parametrize("N", _REDUCE_SIZES)
-@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.parametrize("dtype", _REDUCE_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_max(dtype, N):
     """device_reduce_max(identity=type-negative-extreme) matches numpy.max."""
     inp, out = _alloc_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
-    if dtype == qd.f32:
-        host = rng.uniform(-10.0, 10.0, size=N).astype(np.float32)
-    elif dtype == qd.u32:
-        host = rng.integers(0, 10000, size=N, dtype=np.uint32)
+    if _is_float(dtype):
+        host = rng.uniform(-10.0, 10.0, size=N).astype(_DTYPE_TO_NP[dtype])
     else:
-        host = rng.integers(-10000, 10000, size=N, dtype=np.int32)
+        host = _rand_reduce_host(rng, dtype, N, bound=10000)
     _fill_field(inp, host)
 
     qd.algorithms.device_reduce_max(inp, _MAX_IDENTITY[dtype], out=out)
     got = out.to_numpy()[0]
     expected = host.max()
 
-    if dtype == qd.f32:
-        assert got == pytest.approx(expected, abs=1e-6)
+    if _is_float(dtype):
+        assert got == pytest.approx(expected, abs=1e-6 if dtype == qd.f32 else 1e-12)
     else:
         assert int(got) == int(expected), f"{dtype} reduce_max(N={N}): got {got}, expected {expected}"
 
@@ -206,9 +304,10 @@ def test_device_reduce_rejects_dtype_mismatch():
 
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_rejects_unsupported_dtype():
-    """First-land dtype set is {i32, u32, f32}; i64 / f64 are follow-up."""
-    inp = qd.field(qd.i64, shape=4)
-    out = qd.field(qd.i64, shape=1)
+    """Supported set is {i32, u32, f32, i64, u64, f64}; narrower dtypes (i16, f16, etc.) are out of scope and must
+    raise NotImplementedError so callers don't silently get bit-cast nonsense."""
+    inp = qd.field(qd.i16, shape=4)
+    out = qd.field(qd.i16, shape=1)
     with pytest.raises(NotImplementedError):
         qd.algorithms.device_reduce_add(inp, out=out)
 
@@ -886,14 +985,17 @@ def test_scratch_invalidate_resets_bytes_to_default():
         "test's qd.reset() teardown should have left it that way"
     )
     saved_field = _scratch._scratch_field
+    saved_field_u64 = _scratch._scratch_field_u64
     try:
         _scratch._scratch_bytes = 8 << 20
         _scratch._invalidate()
         assert _scratch._scratch_bytes == _scratch.DEFAULT_SCRATCH_BYTES
         assert _scratch._scratch_field is None
+        assert _scratch._scratch_field_u64 is None, "_scratch_field_u64 must also be invalidated on qd.reset()"
     finally:
         _scratch._scratch_bytes = _scratch.DEFAULT_SCRATCH_BYTES
         _scratch._scratch_field = saved_field
+        _scratch._scratch_field_u64 = saved_field_u64
 
 
 @pytest.fixture
@@ -1053,18 +1155,15 @@ def test_device_exclusive_scan_add_rejects_oversized_n():
 # included here just to round out the qipc-hot-path coverage on the same dtypes as the other 1M tests.
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
+@pytest.mark.parametrize("dtype", _REDUCE_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_add_n_1m(dtype):
-    """N = 1_000_000 reduce. Default scratch is plenty (4K u32 slots for the top-level partials, recursion adds ~16)."""
+    """N = 1_000_000 reduce over the full dtype matrix. 4-byte dtypes use the u32 scratch (4K slots for top-level
+    partials, recursion adds ~16); 8-byte dtypes use the u64 scratch with the same slot count at half the byte cost.
+    Default 1 MB capacity covers both by a wide margin."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
-    if dtype == qd.f32:
-        host = rng.uniform(-1.0, 1.0, size=N).astype(np.float32)
-    elif dtype == qd.u32:
-        host = rng.integers(0, 1000, size=N, dtype=np.uint32)
-    else:
-        host = rng.integers(-1000, 1000, size=N, dtype=np.int32)
+    host = _rand_reduce_host(rng, dtype, N)
 
     inp = qd.field(dtype, shape=N)
     out = qd.field(dtype, shape=1)
@@ -1072,12 +1171,25 @@ def test_device_reduce_add_n_1m(dtype):
     qd.algorithms.device_reduce_add(inp, out=out)
 
     got = out.to_numpy()[0]
-    if dtype == qd.f32:
+    if _is_float(dtype):
         expected = float(np.sum(host.astype(np.float64)))
-        assert math.isclose(got, expected, rel_tol=1e-3, abs_tol=1e-3)
+        rtol = 1e-3 if dtype == qd.f32 else 1e-12
+        atol = 1e-3 if dtype == qd.f32 else 1e-9
+        assert math.isclose(got, expected, rel_tol=rtol, abs_tol=atol)
     else:
-        expected = int(np.sum(host.astype(np.int64)))
-        assert int(got) == expected
+        # Promote to a wide enough Python int / numpy int for the reference, then mask both to dtype width.
+        if dtype in (qd.i32, qd.i64):
+            expected = int(np.sum(host.astype(np.int64)))
+        else:
+            expected = int(np.sum(host.astype(np.uint64)))
+        got_int = int(got)
+        if dtype == qd.u32:
+            got_int &= 0xFFFFFFFF
+            expected &= 0xFFFFFFFF
+        elif dtype == qd.u64:
+            got_int &= 0xFFFFFFFFFFFFFFFF
+            expected &= 0xFFFFFFFFFFFFFFFF
+        assert got_int == expected
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
@@ -1144,6 +1256,7 @@ def test_scratch_round_trip_across_qd_reset(req_arch):
         _scratch._scratch_bytes == _scratch.DEFAULT_SCRATCH_BYTES
     ), "_scratch_bytes did not reset to default across qd.reset() + qd.init() - the very leak this test pins"
     assert _scratch._scratch_field is None, "_scratch_field handle was not invalidated across qd.reset()"
+    assert _scratch._scratch_field_u64 is None, "_scratch_field_u64 handle was not invalidated across qd.reset()"
 
     # --- Cycle 2: run a small algorithm with default scratch. Should just work - and crucially, attempting a 1M sort
     # NOW (without re-bumping) should *raise* RuntimeError because the bumped capacity is gone.

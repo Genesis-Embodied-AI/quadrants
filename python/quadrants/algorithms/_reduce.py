@@ -28,7 +28,12 @@ unsigned identities, and keeps ``identity`` out of the kernel template key (one 
 
 import struct
 
-from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
+from quadrants._scratch import (
+    get_scratch_u32,
+    get_scratch_u64,
+    scratch_capacity_u32,
+    scratch_capacity_u64,
+)
 from quadrants.lang.impl import static
 from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
@@ -38,8 +43,11 @@ from quadrants.lang.simt.subgroup import _bin_add, _bin_max, _bin_min
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import (
     f32,
+    f64,
     i32,
+    i64,
     u32,
+    u64,
 )
 
 BLOCK_DIM = 256
@@ -50,15 +58,28 @@ AMDGPU), and small enough to fit comfortably in shared memory budgets across bac
 benchmarks land per the design doc's open questions.
 """
 
-_SUPPORTED_DTYPES = (i32, u32, f32)
+_SUPPORTED_DTYPES_4B = (i32, u32, f32)
+_SUPPORTED_DTYPES_8B = (i64, u64, f64)
+_SUPPORTED_DTYPES = _SUPPORTED_DTYPES_4B + _SUPPORTED_DTYPES_8B
+
+
+def _dtype_width_bytes(dtype) -> int:
+    """Return the byte width of ``dtype``: 4 for ``{i32, u32, f32}``, 8 for ``{i64, u64, f64}``. Raises for any
+    other dtype.
+    """
+    if dtype in _SUPPORTED_DTYPES_4B:
+        return 4
+    if dtype in _SUPPORTED_DTYPES_8B:
+        return 8
+    raise NotImplementedError(f"device reduce dtype {dtype} not supported")
 
 
 def _identity_bits(value, dtype) -> int:
-    """Reinterpret-cast ``value`` to its 32-bit unsigned bit pattern.
+    """Reinterpret-cast ``value`` to its unsigned bit pattern: ``u32`` for 4-byte dtypes, ``u64`` for 8-byte.
 
-    Used to ferry monoid identities (e.g. ``+inf`` for ``min`` over ``f32``, ``2**31 - 1`` for ``min`` over ``i32``)
-    into the reduce kernel as a ``u32`` runtime arg, sidestepping the ``default_ip`` overflow check that
-    ``cast(literal, dtype)`` would hit on wide unsigned identities.
+    Used to ferry monoid identities (e.g. ``+inf`` for ``min`` over ``f32``, ``2**31 - 1`` for ``min`` over ``i32``,
+    ``+inf`` over ``f64``, ``2**63 - 1`` over ``i64``) into the reduce kernel as a runtime arg, sidestepping the
+    ``default_ip`` overflow check that ``cast(literal, dtype)`` would hit on wide unsigned identities.
     """
     if dtype == u32:
         return int(value) & 0xFFFFFFFF
@@ -66,6 +87,12 @@ def _identity_bits(value, dtype) -> int:
         return struct.unpack("<I", struct.pack("<i", int(value)))[0]
     if dtype == f32:
         return struct.unpack("<I", struct.pack("<f", float(value)))[0]
+    if dtype == u64:
+        return int(value) & 0xFFFFFFFFFFFFFFFF
+    if dtype == i64:
+        return struct.unpack("<Q", struct.pack("<q", int(value)))[0]
+    if dtype == f64:
+        return struct.unpack("<Q", struct.pack("<d", float(value)))[0]
     raise NotImplementedError(f"identity bit-pattern for dtype {dtype} not implemented")
 
 
@@ -83,7 +110,7 @@ def _reduce_pass(
     src_is_u32: template(),
     dst_is_u32: template(),
 ):
-    """Generic per-pass reduce kernel; one pass of the multi-level driver.
+    """Generic per-pass reduce kernel for 4-byte dtypes ({i32, u32, f32}); one pass of the multi-level driver.
 
     Reads ``src[src_off : src_off + n_valid]`` (out-of-range threads use the monoid identity so the per-block
     aggregate is correct), reduces in tiles of ``BLOCK_DIM`` via ``block.reduce(op, dtype)``, and writes per-block
@@ -111,6 +138,45 @@ def _reduce_pass(
         if tid == 0:
             if static(dst_is_u32):
                 dst[dst_off + block_id] = bit_cast(agg, u32)
+            else:
+                dst[dst_off + block_id] = agg
+
+
+@kernel
+def _reduce_pass_u64(
+    src: template(),
+    dst: template(),
+    src_off: i32,
+    dst_off: i32,
+    n_valid: i32,
+    total_threads: i32,
+    identity_bits: u64,
+    op: template(),
+    dtype: template(),
+    src_is_u64: template(),
+    dst_is_u64: template(),
+):
+    """8-byte sibling of :func:`_reduce_pass` for ``{i64, u64, f64}``.
+
+    Identical algorithmic shape, but staged through the ``Field(u64)`` scratch instead of the ``Field(u32)`` one,
+    with a ``u64`` ``identity_bits`` runtime arg. Kept as a separate kernel rather than a templated single one
+    because Quadrants runtime arg dtypes can't be expressed as a template of another template, and the two paths are
+    short enough that the duplication is cheaper than the alternative gymnastics.
+    """
+    loop_config(block_dim=BLOCK_DIM)
+    for i in range(total_threads):
+        tid = i % BLOCK_DIM
+        block_id = i // BLOCK_DIM
+        v = bit_cast(identity_bits, dtype)
+        if i < n_valid:
+            if static(src_is_u64):
+                v = bit_cast(src[src_off + i], dtype)
+            else:
+                v = src[src_off + i]
+        agg = _block.reduce(v, BLOCK_DIM, op, dtype)
+        if tid == 0:
+            if static(dst_is_u64):
+                dst[dst_off + block_id] = bit_cast(agg, u64)
             else:
                 dst[dst_off + block_id] = agg
 
@@ -146,7 +212,12 @@ def _plan_levels(N: int):
 
 
 def _device_reduce(input, *, out, op, identity_value):  # pylint: disable=redefined-builtin
-    """Internal driver shared by ``device_reduce_{add,min,max}``."""
+    """Internal driver shared by ``device_reduce_{add,min,max}``.
+
+    Dispatches on ``input.dtype`` width: 4-byte dtypes go through the ``Field(u32)`` scratch and ``_reduce_pass``;
+    8-byte dtypes go through the ``Field(u64)`` scratch and ``_reduce_pass_u64``. Everything else (control flow,
+    recursion plan, identity ferrying) is shared.
+    """
     if not hasattr(input, "shape") or len(input.shape) != 1:
         raise TypeError(f"device reduce expects a 1-D input tensor; got shape {getattr(input, 'shape', None)}")
     if not hasattr(out, "shape") or out.shape != (1,):
@@ -156,19 +227,20 @@ def _device_reduce(input, *, out, op, identity_value):  # pylint: disable=redefi
     dtype = input.dtype
     if dtype not in _SUPPORTED_DTYPES:
         raise NotImplementedError(
-            f"device reduce dtype {dtype} not in first-land set "
-            f"{[d for d in _SUPPORTED_DTYPES]}; see design doc dtype matrix"
+            f"device reduce dtype {dtype} not supported (need one of "
+            f"{[d for d in _SUPPORTED_DTYPES]}); see design doc dtype matrix"
         )
+    width = _dtype_width_bytes(dtype)
 
     N = input.shape[0]
     sizes, dst_offsets, total_scratch = _plan_levels(N)
 
-    if total_scratch > scratch_capacity_u32():
+    scratch_cap = scratch_capacity_u32() if width == 4 else scratch_capacity_u64()
+    if total_scratch > scratch_cap:
         raise RuntimeError(
-            f"device reduce on N={N} needs {total_scratch} u32 scratch slots, "
-            f"but only {scratch_capacity_u32()} are configured. Call "
-            f"quadrants._scratch.set_scratch_bytes(...) before any algorithm "
-            f"runs to raise the cap."
+            f"device reduce on N={N} (dtype={dtype}) needs {total_scratch} "
+            f"u{width * 8} scratch slots, but only {scratch_cap} are configured. "
+            f"Call quadrants._scratch.set_scratch_bytes(...) before any algorithm runs to raise the cap."
         )
 
     num_passes = len(sizes) - 1
@@ -180,7 +252,8 @@ def _device_reduce(input, *, out, op, identity_value):  # pylint: disable=redefi
         _device_reduce_trivial(input, out=out, identity_bits=identity_bits)
         return
 
-    scratch = get_scratch_u32()
+    scratch = get_scratch_u32() if width == 4 else get_scratch_u64()
+    pass_kernel = _reduce_pass if width == 4 else _reduce_pass_u64
 
     for k in range(num_passes):
         n_in = sizes[k]
@@ -192,7 +265,7 @@ def _device_reduce(input, *, out, op, identity_value):  # pylint: disable=redefi
         dst = out if is_last else scratch
         src_off = 0 if is_first else _src_off(k, dst_offsets)
         dst_off = 0 if is_last else dst_offsets[k]
-        _reduce_pass(
+        pass_kernel(
             src,
             dst,
             src_off,
@@ -244,15 +317,16 @@ def device_reduce_add(input, *, out):  # pylint: disable=redefined-builtin
     """Compute ``out[0] = sum(input)`` on the device.
 
     Args:
-        input: 1-D tensor of ``i32``, ``u32``, or ``f32``. Pass a ``qd.field``,
+        input: 1-D tensor of any supported scalar dtype - ``{i32, u32, f32, i64, u64, f64}``. Pass a ``qd.field``,
             ``qd.ndarray``, or ``qd.Tensor`` wrapper around either.
         out: 1-element tensor of the same dtype as ``input``. Caller-supplied so the call is fully asynchronous - no
-            implicit device→host sync. To get a Python scalar, do ``out.to_numpy()[0]`` explicitly after this call.
+            implicit device-to-host sync. To get a Python scalar, do ``out.to_numpy()[0]`` explicitly after this
+            call.
 
     The implementation is a two-or-more-pass tree reduction built on ``block.reduce_add``. Scratch is drawn from the
-    quadrants-level shared scratch field; no per-call allocation. See the design doc at
-    ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the recursion plan and the ``bit_cast``-into-scratch
-    scheme.
+    quadrants-level shared scratch field (``Field(u32)`` for 4-byte dtypes, ``Field(u64)`` for 8-byte); no per-call
+    allocation. See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the recursion plan and
+    the ``bit_cast``-into-scratch scheme.
     """
     _device_reduce(input, out=out, op=_bin_add, identity_value=0)
 
@@ -261,11 +335,12 @@ def device_reduce_min(input, identity, *, out):  # pylint: disable=redefined-bui
     """Compute ``out[0] = min(input)`` on the device.
 
     Args:
-        input: see ``device_reduce_add``.
+        input: see ``device_reduce_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
         identity: the monoid identity for ``min`` over ``input.dtype`` - i.e. a value ``e`` such that
-            ``min(e, x) == x`` for every ``x`` in the dtype. For ``f32``, that's ``+inf`` (``math.inf``). For ``i32``,
-            that's ``2**31 - 1``. Mandatory: there is no portable type-extreme derivable from a value alone, and
-            giving callers an implicit one would silently bake in a backend assumption.
+            ``min(e, x) == x`` for every ``x`` in the dtype. For ``f32`` / ``f64``, that's ``+inf`` (``math.inf``).
+            For ``i32`` / ``i64``, that's ``2**31 - 1`` / ``2**63 - 1``. For ``u32`` / ``u64``, that's
+            ``2**32 - 1`` / ``2**64 - 1``. Mandatory: there is no portable type-extreme derivable from a value
+            alone, and giving callers an implicit one would silently bake in a backend assumption.
         out: see ``device_reduce_add``.
     """
     _device_reduce(input, out=out, op=_bin_min, identity_value=identity)
@@ -273,7 +348,8 @@ def device_reduce_min(input, identity, *, out):  # pylint: disable=redefined-bui
 
 def device_reduce_max(input, identity, *, out):  # pylint: disable=redefined-builtin
     """Compute ``out[0] = max(input)`` on the device. Mirror of :func:`device_reduce_min` with ``max`` and the
-    dtype's *negative* extremum (``-inf`` for ``f32``, ``-2**31`` for ``i32``)."""
+    dtype's *negative* extremum (``-inf`` for floats, ``-2**31`` / ``-2**63`` for signed ints, ``0`` for unsigned
+    ints)."""
     _device_reduce(input, out=out, op=_bin_max, identity_value=identity)
 
 

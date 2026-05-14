@@ -40,8 +40,8 @@ total = float(out.to_numpy()[0])   # explicit device->host hop
 Signatures:
 
 - `device_reduce_add(input, *, out)` - sum reduction. Identity (`0` for the dtype) is derived automatically.
-- `device_reduce_min(input, identity, *, out)` - min reduction. `identity` is **required** and must be a value `e` such that `min(e, x) == x` for every `x` in the dtype (e.g. `math.inf` for `f32`, `2**31 - 1` for `i32`, `2**32 - 1` for `u32`).
-- `device_reduce_max(input, identity, *, out)` - max reduction. `identity` is **required** and must be the dtype's negative extremum (e.g. `-math.inf` for `f32`, `-2**31` for `i32`, `0` for `u32`).
+- `device_reduce_min(input, identity, *, out)` - min reduction. `identity` is **required** and must be a value `e` such that `min(e, x) == x` for every `x` in the dtype (e.g. `math.inf` for `f32` / `f64`, `2**31 - 1` for `i32`, `2**63 - 1` for `i64`, `2**32 - 1` for `u32`, `2**64 - 1` for `u64`).
+- `device_reduce_max(input, identity, *, out)` - max reduction. `identity` is **required** and must be the dtype's negative extremum (e.g. `-math.inf` for `f32` / `f64`, `-2**31` for `i32`, `-2**63` for `i64`, `0` for `u32` / `u64`).
 
 Arguments:
 
@@ -50,15 +50,15 @@ Arguments:
 
 Constraints:
 
-- **Dtypes (first land):** `qd.i32`, `qd.u32`, `qd.f32`. Calls with `qd.i64` / `qd.f64` raise `NotImplementedError`; lifting that is on the roadmap and gated on extending `block.reduce` to those dtypes.
+- **Dtypes:** scalar `qd.i32`, `qd.u32`, `qd.f32`, `qd.i64`, `qd.u64`, `qd.f64`. Narrower / wider scalar dtypes (e.g. `qd.i16`, `qd.f16`) and struct dtypes raise `NotImplementedError`. 4-byte dtypes are staged through a shared `Field(u32)` scratch and 8-byte dtypes through a shared `Field(u64)` scratch; the byte budget is the same.
 - **Shape:** `input` must be 1-D; `out.shape` must be `(1,)`. Both must share the same dtype.
 - **Identity (min / max only):** mandatory. Calling `device_reduce_min` / `device_reduce_max` without an `identity` argument raises `TypeError`.
-- **f32 non-associativity:** `device_reduce_add` on `f32` is not bitwise-reproducible across `N` changes, nor bitwise-equal to host `numpy.sum`. Tests tolerate a small relative error rather than asserting bitwise.
+- **f32 / f64 non-associativity:** `device_reduce_add` on a floating-point dtype is not bitwise-reproducible across `N` changes, nor bitwise-equal to host `numpy.sum`. Tests tolerate a small relative error rather than asserting bitwise.
 
 Implementation:
 
-- Two-or-more-pass tree reduction. Each pass uses `BLOCK_DIM = 256` threads per block and reduces 256 elements per block via `block.reduce_{add,min,max}`. For `N ≤ 256` one pass suffices; for `N` up to `256² = 65536`, two passes; for larger `N`, additional intermediate passes are added until the reduction terminates in a single block.
-- Per-block partials are written to a **shared scratch field** (single `Field(u32)`, allocated lazily at first algorithm call, default 1 MB which covers `N` up to ≈ 64M elements). The shared scratch is bit-cast on access so a single field backs every supported dtype.
+- Two-or-more-pass tree reduction. Each pass uses `BLOCK_DIM = 256` threads per block and reduces 256 elements per block via `block.reduce_{add,min,max}`. For `N <= 256` one pass suffices; for `N` up to `256^2 = 65536`, two passes; for larger `N`, additional intermediate passes are added until the reduction terminates in a single block.
+- Per-block partials are written to a **shared scratch field**. There are actually two scratch fields under the hood (a `Field(u32)` for 4-byte dtypes and a `Field(u64)` for 8-byte dtypes), both lazily allocated at first algorithm call and sized to the same byte budget (default 1 MB each, which covers `N` up to ~64M 4-byte elements or ~32M 8-byte elements). Each scratch is bit-cast on access so a single field per width backs every supported dtype.
 - The last pass writes the final value to `out[0]` directly. The kernel launches are pipelined back-to-back; correctness relies on the kernel-boundary serialization that Quadrants provides between host-launched kernels.
 
 If you scan or reduce on `N > ≈ 64M`, raise the scratch budget *before any algorithm runs*:
