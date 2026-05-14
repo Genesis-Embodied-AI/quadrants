@@ -91,10 +91,7 @@ def k2(s: Outer) -> None:
 
 ### Passing nested sub-structs to a `qd.func`
 
-You can pass either a whole nested-dataclass argument or one of its
-sub-struct fields to a `qd.func`. The callee declares the sub-struct's
-type as the parameter annotation; the caller writes the attribute access
-at the call site:
+You can pass either a whole nested-dataclass argument or one of its sub-struct fields to a `qd.func`. The callee declares the sub-struct's type as the parameter annotation; the caller writes the attribute access at the call site:
 
 ```python
 @dataclass
@@ -128,9 +125,7 @@ Sub-struct passing supports:
 - call sites both directly inside `@qd.kernel` bodies and inside other `@qd.func` bodies
 - pruning of the sub-struct's leaf fields that the callee never reads
 
-Note: assigning a sub-struct to a local variable and then passing it
-(`t = s.inner; touch_inner(t)`) is **not** supported. Pass the attribute
-access directly at the call site.
+Note: assigning a sub-struct to a local variable and then passing it (`t = s.inner; touch_inner(t)`) is **not** supported. Pass the attribute access directly at the call site.
 
 ## qd.data_oriented
 
