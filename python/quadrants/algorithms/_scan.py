@@ -26,10 +26,8 @@ functional API is preferred for new code - see ``docs/source/user_guide/algorith
 """
 
 from quadrants._scratch import (
-    get_scratch_f64,
     get_scratch_u32,
     get_scratch_u64,
-    scratch_capacity_f64,
     scratch_capacity_u32,
     scratch_capacity_u64,
 )
@@ -40,7 +38,7 @@ from quadrants.lang.ops import bit_cast
 from quadrants.lang.simt import block as _block
 from quadrants.lang.simt.reductions import _bin_add, _bin_max, _bin_min
 from quadrants.types.annotations import template
-from quadrants.types.primitive_types import f64, i32, u32, u64
+from quadrants.types.primitive_types import i32, u32, u64
 
 from ._reduce import (
     _SUPPORTED_DTYPES as _REDUCE_SUPPORTED_DTYPES,
@@ -55,52 +53,7 @@ from ._reduce import (
     _reduce_pass_u64,
 )
 
-# f64 scan uses an f64-typed scratch instead of the u64 one because
-# bit_cast(scan_result_f64, u64) loses precision in Quadrants today: the
-# bits returned by block.exclusive_scan are full f64 (verified by writing
-# directly to an f64 field), but routing them through bit_cast to a u64 slot
-# truncates the mantissa down to f32 precision. The reduce path's bit_cast
-# uses a different IR shape and is unaffected, so device_reduce_f64 still
-# uses the u64 scratch. Issue tracked under qipc_gaps_device.md.
-
 _SUPPORTED_DTYPES = _REDUCE_SUPPORTED_DTYPES  # {i32, u32, f32, i64, u64, f64}
-
-
-@kernel
-def _reduce_pass_f64(
-    src: template(),
-    dst: template(),
-    src_off: i32,
-    dst_off: i32,
-    n_valid: i32,
-    total_threads: i32,
-    identity_bits: u64,
-    op: template(),
-    dtype: template(),
-    src_is_f64: template(),
-    dst_is_f64: template(),
-):
-    """f64-staged tile-reduce: write per-block aggregate directly to ``Field(f64)`` scratch (no ``bit_cast`` on the
-    write side).
-
-    Mirrors :func:`_reduce_pass_u64` from ``_reduce.py`` in shape, but routes the per-block aggregate through an
-    f64-typed slot. ``src`` may be the user's input tensor (``src_is_f64=False``, plain read) or the f64 scratch
-    (``src_is_f64=True``, plain read - no cast needed since both sides are f64). ``identity_bits`` is still passed as
-    ``u64`` so the host-side identity helper can stay uniform across the 8-byte dtype paths; the kernel casts it
-    via ``bit_cast(identity_bits, f64)`` on the read side (which works - the u64 -> f64 reinterpret has no
-    precision loss).
-    """
-    loop_config(block_dim=BLOCK_DIM)
-    for i in range(total_threads):
-        tid = i % BLOCK_DIM
-        block_id = i // BLOCK_DIM
-        identity = bit_cast(identity_bits, dtype)
-        v = identity
-        if i < n_valid:
-            v = src[src_off + i]
-        agg = _block.reduce(v, BLOCK_DIM, op, dtype)
-        if tid == 0:
-            dst[dst_off + block_id] = agg
 
 
 @kernel
@@ -150,26 +103,6 @@ def _scan_block_inplace_u64(
         prefix = _block.exclusive_scan(v, BLOCK_DIM, op, identity, dtype)
         if i < n_valid:
             buf[buf_off + i] = bit_cast(prefix, u64)
-
-
-@kernel
-def _scan_block_inplace_f64(
-    buf: template(),
-    buf_off: i32,
-    n_valid: i32,
-    identity_bits: u64,
-    op: template(),
-):
-    """f64 sibling of :func:`_scan_block_inplace_u64`. ``buf`` is a ``Field(f64)`` so reads / writes are direct."""
-    loop_config(block_dim=BLOCK_DIM)
-    for i in range(BLOCK_DIM):
-        identity = bit_cast(identity_bits, f64)
-        v = identity
-        if i < n_valid:
-            v = buf[buf_off + i]
-        prefix = _block.exclusive_scan(v, BLOCK_DIM, op, identity, f64)
-        if i < n_valid:
-            buf[buf_off + i] = prefix
 
 
 @kernel
@@ -256,39 +189,6 @@ def _scan_pass3_u64(
                 dst[dst_off + i] = bit_cast(scanned, u64)
             else:
                 dst[dst_off + i] = scanned
-
-
-@kernel
-def _scan_pass3_f64(
-    src: template(),
-    src_off: i32,
-    prefixes: template(),
-    prefixes_off: i32,
-    dst: template(),
-    dst_off: i32,
-    n_valid: i32,
-    total_threads: i32,
-    identity_bits: u64,
-    op: template(),
-    src_is_f64: template(),
-    dst_is_f64: template(),
-):
-    """f64 sibling of :func:`_scan_pass3_u64`. Reads / writes the f64 scratch directly (no ``bit_cast`` on either
-    side). The template-switched ``src`` / ``dst`` lets the toplevel pass read from the user's input tensor and
-    write to the user's output, while the recursive level uses the same f64 scratch buffer on both sides."""
-    loop_config(block_dim=BLOCK_DIM)
-    for i in range(total_threads):
-        tid = i % BLOCK_DIM
-        block_id = i // BLOCK_DIM
-        identity = bit_cast(identity_bits, f64)
-        v = identity
-        if i < n_valid:
-            v = src[src_off + i]
-        tile_prefix = _block.exclusive_scan(v, BLOCK_DIM, op, identity, f64)
-        block_prefix = prefixes[prefixes_off + block_id]
-        if i < n_valid:
-            scanned = op(block_prefix, tile_prefix)
-            dst[dst_off + i] = scanned
 
 
 def _exclusive_scan_inplace_u32(scratch, off: int, n: int, identity_bits: int, op, dtype, partials_cursor: int):
@@ -397,57 +297,6 @@ def _exclusive_scan_inplace_u64(scratch, off: int, n: int, identity_bits: int, o
     )
 
 
-def _exclusive_scan_inplace_f64(scratch, off: int, n: int, identity_bits: int, op, partials_cursor: int):
-    """f64 sibling of :func:`_exclusive_scan_inplace_u64`. Stages through the ``Field(f64)`` scratch.
-
-    Same recursion shape; uses :func:`_reduce_pass_f64` + :func:`_scan_pass3_f64` which write f64 directly to the
-    scratch (no ``bit_cast`` on the write side, side-stepping the f64 -> u64 precision bug).
-    """
-    if n <= BLOCK_DIM:
-        _scan_block_inplace_f64(scratch, off, n, identity_bits, op)
-        return
-
-    B = (n + BLOCK_DIM - 1) // BLOCK_DIM
-    partials_off = partials_cursor
-    if partials_off + B > scratch_capacity_f64():
-        raise RuntimeError(
-            f"device exclusive scan ran out of f64 scratch at recursion level n={n}, B={B}, "
-            f"partials_off={partials_off}, capacity={scratch_capacity_f64()}. "
-            f"Call _scratch.set_scratch_bytes(...) before any algorithm runs."
-        )
-
-    _reduce_pass_f64(
-        scratch,
-        scratch,
-        off,
-        partials_off,
-        n,
-        B * BLOCK_DIM,
-        identity_bits,
-        op,
-        f64,
-        True,
-        True,
-    )
-
-    _exclusive_scan_inplace_f64(scratch, partials_off, B, identity_bits, op, partials_off + B)
-
-    _scan_pass3_f64(
-        scratch,
-        off,
-        scratch,
-        partials_off,
-        scratch,
-        off,
-        n,
-        B * BLOCK_DIM,
-        identity_bits,
-        op,
-        True,
-        True,
-    )
-
-
 def _device_exclusive_scan(arr, *, out, op, identity_value):
     """Internal driver shared by ``device_exclusive_scan_{add,min,max}``."""
     if not hasattr(arr, "shape") or len(arr.shape) != 1:
@@ -478,32 +327,23 @@ def _device_exclusive_scan(arr, *, out, op, identity_value):
     N = arr.shape[0]
     identity_bits = _identity_bits(identity_value, dtype)
 
-    is_f64 = dtype == f64
-
     if N == 0:
         return
     if N == 1:
         if width == 4:
             _scan_trivial_n1(out, identity_bits, dtype)
-        elif not is_f64:
-            _scan_trivial_n1_u64(out, identity_bits, dtype)
         else:
-            _scan_trivial_n1_f64(out, identity_bits)
+            _scan_trivial_n1_u64(out, identity_bits, dtype)
         return
 
     if N <= BLOCK_DIM:
         if width == 4:
             _scan_single_tile_input_to_out(arr, out, N, identity_bits, op, dtype)
-        elif not is_f64:
-            _scan_single_tile_input_to_out_u64(arr, out, N, identity_bits, op, dtype)
         else:
-            _scan_single_tile_input_to_out_f64(arr, out, N, identity_bits, op)
+            _scan_single_tile_input_to_out_u64(arr, out, N, identity_bits, op, dtype)
         return
 
-    if is_f64:
-        scratch = get_scratch_f64()
-        scratch_cap = scratch_capacity_f64()
-    elif width == 4:
+    if width == 4:
         scratch = get_scratch_u32()
         scratch_cap = scratch_capacity_u32()
     else:
@@ -518,40 +358,6 @@ def _device_exclusive_scan(arr, *, out, op, identity_value):
             f"but only {scratch_cap} are configured. "
             f"Call _scratch.set_scratch_bytes(...) before any algorithm runs."
         )
-
-    if is_f64:
-        # Pass 1: tile-reduce arr -> f64 scratch[0:B0] (no bit_cast on the write)
-        _reduce_pass_f64(
-            arr,
-            scratch,
-            0,
-            0,
-            N,
-            B0 * BLOCK_DIM,
-            identity_bits,
-            op,
-            f64,
-            False,
-            True,
-        )
-        # Pass 2: exclusive-scan f64 scratch[0:B0] in place
-        _exclusive_scan_inplace_f64(scratch, 0, B0, identity_bits, op, B0)
-        # Pass 3: arr + f64 scratch[0:B0] -> out (no bit_cast on either side)
-        _scan_pass3_f64(
-            arr,
-            0,
-            scratch,
-            0,
-            out,
-            0,
-            N,
-            B0 * BLOCK_DIM,
-            identity_bits,
-            op,
-            False,
-            False,
-        )
-        return
 
     reduce_pass_kernel = _reduce_pass if width == 4 else _reduce_pass_u64
     scan_inplace_driver = _exclusive_scan_inplace_u32 if width == 4 else _exclusive_scan_inplace_u64
@@ -637,31 +443,6 @@ def _scan_single_tile_input_to_out_u64(
 
 
 @kernel
-def _scan_single_tile_input_to_out_f64(
-    src: template(),
-    dst: template(),
-    n_valid: i32,
-    identity_bits: u64,
-    op: template(),
-):
-    """f64 sibling of :func:`_scan_single_tile_input_to_out_u64`.
-
-    Functionally identical to the u64 variant for f64 dtype (no scratch involved on the write side), but spelled
-    out to keep the f64 scan path free of all ``bit_cast(..., u64)`` of scan results - which is the failure mode we
-    work around in the multi-tile path. Templating the dtype out also lets the kernel monomorphise tightly.
-    """
-    loop_config(block_dim=BLOCK_DIM)
-    for i in range(BLOCK_DIM):
-        identity = bit_cast(identity_bits, f64)
-        v = identity
-        if i < n_valid:
-            v = src[i]
-        prefix = _block.exclusive_scan(v, BLOCK_DIM, op, identity, f64)
-        if i < n_valid:
-            dst[i] = prefix
-
-
-@kernel
 def _scan_trivial_n1(dst: template(), identity_bits: u32, dtype: template()):
     """N == 1 path (4-byte dtype): write the identity to out[0]. Exclusive scan of a single element is just the
     identity."""
@@ -674,14 +455,6 @@ def _scan_trivial_n1_u64(dst: template(), identity_bits: u64, dtype: template())
     """8-byte sibling of :func:`_scan_trivial_n1`."""
     for _ in range(1):
         dst[0] = bit_cast(identity_bits, dtype)
-
-
-@kernel
-def _scan_trivial_n1_f64(dst: template(), identity_bits: u64):
-    """f64 sibling of :func:`_scan_trivial_n1_u64`. Same shape; written separately to keep the f64 dispatch
-    self-contained."""
-    for _ in range(1):
-        dst[0] = bit_cast(identity_bits, f64)
 
 
 def device_exclusive_scan_add(arr, out):

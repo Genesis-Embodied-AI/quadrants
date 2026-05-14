@@ -24,15 +24,14 @@ Device-wide algorithms are primitives that consume and produce whole arrays, exe
 
 Every device-wide algorithm in this module decomposes into "per-block partial → cross-block combine → finalize" passes (tree reduction, three-pass Blelloch scan, four-pass radix sort, scan-then-scatter compaction). The per-block partials need somewhere to live between kernel launches - that buffer is called **scratch**. Rather than ask each algorithm to allocate its own (forcing a `qd.field(...)` per call and undermining the no-implicit-allocation contract of the rest of the API), `qd.algorithms` shares a single set of module-level scratch fields across every call.
 
-There are **three scratch fields**, one per element width / type that algorithm partials need to live in:
+There are **two scratch fields**, one per element width that algorithm partials need to live in:
 
 - `Field(u32)` - used by every 4-byte algorithm: `i32` / `u32` / `f32` reduce + scan, `device_select` indices, `device_reduce_by_key_add` flags + values, `device_radix_sort` tile histograms (regardless of key width). 4-byte values are `bit_cast` to / from `u32` on the way in and out.
-- `Field(u64)` - used by 8-byte integer algorithms (`i64` / `u64` reduce + scan, `u64` radix-sort keys) and `f64` reduce. Same `bit_cast` story, just at 8-byte width.
-- `Field(f64)` - used by `device_exclusive_scan_*` over `f64` only. The f64 scan path can't share the u64 scratch because `bit_cast(scan_result_f64, u64)` currently loses precision in Quadrants (reproduced down to a 2-element block scan; the reduce path is unaffected). Routing partials through an f64-typed buffer side-steps the cast entirely. To be removed once the underlying `bit_cast` precision bug is fixed; tracked in the design doc.
+- `Field(u64)` - used by every 8-byte algorithm: `i64` / `u64` / `f64` reduce + scan, `u64` radix-sort keys. Same `bit_cast` story, just at 8-byte width.
 
-Sizing: each field defaults to **5 MB** (`DEFAULT_SCRATCH_BYTES = 5 << 20`). That covers `N` up to ~1.3M elements for `device_select` / `device_radix_sort` / `device_reduce_by_key_add` (`~N` u32 slots, qipc's hot path), and well past `N = 64M` for `device_reduce_*` / `device_exclusive_scan_*` (`~N / BLOCK_DIM` u32 slots, `BLOCK_DIM = 256`). The u64 / f64 fields are sized to the same byte budget, so they cover half as many elements.
+Sizing: each field defaults to **5 MB** (`DEFAULT_SCRATCH_BYTES = 5 << 20`). That covers `N` up to ~1.3M elements for `device_select` / `device_radix_sort` / `device_reduce_by_key_add` (`~N` u32 slots, qipc's hot path), and well past `N = 64M` for `device_reduce_*` / `device_exclusive_scan_*` (`~N / BLOCK_DIM` u32 slots, `BLOCK_DIM = 256`). The u64 field is sized to the same byte budget, so it covers half as many elements.
 
-**Allocation is lazy.** A scratch field is only allocated on its first `get_scratch_*()` call from inside an algorithm. Programs that never touch `qd.algorithms.*` pay nothing; programs that only touch 4-byte algorithms never allocate the u64 / f64 buffers. (The default budget is therefore a per-field worst case, not a fixed cost: a 4-byte-only caller pays 5 MB, not 15 MB.)
+**Allocation is lazy.** A scratch field is only allocated on its first `get_scratch_*()` call from inside an algorithm. Programs that never touch `qd.algorithms.*` pay nothing; programs that only touch 4-byte algorithms never allocate the u64 buffer. (The default budget is therefore a per-field worst case, not a fixed cost: a 4-byte-only caller pays 5 MB, not 10 MB.)
 
 **`qd.reset()` invalidates every scratch field** via an `impl.on_reset` hook, and resets the byte budget back to `DEFAULT_SCRATCH_BYTES`. The next algorithm call after a `qd.init()` reallocates against the fresh runtime at the default capacity. This keeps `qd.init` / `qd.reset` a "clean slate" - all runtime-scoped state (resource handles *and* config) goes away on reset, by design. Apps that need a persistent bump should call `set_scratch_bytes` immediately after each `qd.init`.
 
@@ -114,7 +113,7 @@ Signatures:
 
 Constraints:
 
-- **Dtypes:** scalar `qd.i32`, `qd.u32`, `qd.f32`, `qd.i64`, `qd.u64`, `qd.f64`. Narrower / wider scalar dtypes (e.g. `qd.i16`, `qd.f16`) and struct dtypes raise `NotImplementedError`. 4-byte dtypes stage through the shared u32 scratch, 8-byte integer dtypes (`i64` / `u64`) stage through the shared u64 scratch, and `f64` stages through a separate shared f64 scratch; see [Scratch space](#scratch-space).
+- **Dtypes:** scalar `qd.i32`, `qd.u32`, `qd.f32`, `qd.i64`, `qd.u64`, `qd.f64`. Narrower / wider scalar dtypes (e.g. `qd.i16`, `qd.f16`) and struct dtypes raise `NotImplementedError`. 4-byte dtypes stage through the shared u32 scratch and 8-byte dtypes through the shared u64 scratch; see [Scratch space](#scratch-space) for the mechanics.
 - **Shape:** `arr` and `out` must both be 1-D with the same shape and dtype.
 - **No in-place scan:** `out` must be a distinct buffer from `arr`. Calling with `out is arr` raises `ValueError`. (The kernels do not protect against same-buffer aliasing; allocating one extra buffer once is cheap relative to the scan itself.)
 - **Identity (min / max):** *not* a user argument - derived from `arr.dtype` on the host, mirroring the `block.exclusive_min` / `subgroup.exclusive_min_tiled` typed wrappers.
