@@ -910,21 +910,10 @@ def big_scratch():
 
 
 @pytest.mark.parametrize("dtype", [qd.u32, qd.i32, qd.f32])
-@pytest.mark.run_in_serial
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_n_1m(dtype, big_scratch):  # pylint: disable=unused-argument,redefined-outer-name
     """N = 1_000_000 - qipc's hot-path size. Requires scratch bumped to ~5 MB; the ``big_scratch`` fixture supplies
-    8 MB and restores after.
-
-    Marked ``run_in_serial`` so conftest gives this test the 1 GB ``device_memory_GB`` pool instead of the 0.3 GB
-    non-serial default. AMDGPU (gfx1100, ROCm 7.2) saw a one-off sort mismatch in the ``[arch=amdgpu-1-dtype0]`` (u32)
-    parametrization during a full-suite run; that single observation is the only flake on record, and an extensive
-    follow-up investigation could not reproduce it (607+ attempts across 57 full-suite runs at multiple commits, 6
-    parallel-2way + 8 parallel-4way runs, and 550 in-process trials with varied seeds at the 0.3 GB pool, all clean -
-    upper-bound flake rate < 0.5% at 95% CI). The ``run_in_serial`` bump to a 1 GB pool is therefore retained as
-    defense-in-depth against allocator-pressure / fragmentation hypotheses, not as a verified-load-bearing fix; the
-    underlying root cause remains unknown. The previously-landed AMDGPU ``block_barrier`` fence-wrap fix
-    (``c030a806e1``) is a separately-verified real bug fix that may also have addressed the latent cause."""
+    8 MB and restores after."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
@@ -937,12 +926,10 @@ def test_device_radix_sort_n_1m(dtype, big_scratch):  # pylint: disable=unused-a
     np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"))
 
 
-@pytest.mark.run_in_serial
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_by_key_add_n_1m(big_scratch):  # pylint: disable=unused-argument,redefined-outer-name
     """N = 1_000_000 reduce-by-key. Same scratch requirement as the 1M radix sort; the kernel sequence is different
-    (just scan + scatter) but the in-place scan over scratch[0:N] needs the bump. Marked ``run_in_serial`` for the
-    same 1 GB ``device_memory_GB`` pool reason as ``test_device_radix_sort_n_1m``."""
+    (just scan + scatter) but the in-place scan over scratch[0:N] needs the bump."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     keys_host = _gen_run_keys(rng, qd.i32, N)
@@ -1067,11 +1054,9 @@ def test_device_exclusive_scan_add_rejects_oversized_n():
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
-@pytest.mark.run_in_serial
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_add_n_1m(dtype):
-    """N = 1_000_000 reduce. Default scratch is plenty (4K u32 slots for the top-level partials, recursion adds ~16).
-    Marked ``run_in_serial`` for the 1 GB ``device_memory_GB`` pool, consistent with the other 1M tests."""
+    """N = 1_000_000 reduce. Default scratch is plenty (4K u32 slots for the top-level partials, recursion adds ~16)."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     if dtype == qd.f32:
@@ -1096,11 +1081,9 @@ def test_device_reduce_add_n_1m(dtype):
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
-@pytest.mark.run_in_serial
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_add_n_1m(dtype):
-    """N = 1_000_000 exclusive scan. Same scratch story as reduce - fits in default 1 MB by a wide margin.
-    Marked ``run_in_serial`` for the 1 GB ``device_memory_GB`` pool, consistent with the other 1M tests."""
+    """N = 1_000_000 exclusive scan. Same scratch story as reduce - fits in default 1 MB by a wide margin."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     if dtype == qd.f32:
@@ -1133,7 +1116,6 @@ def test_device_exclusive_scan_add_n_1m(dtype):
 # before it" - the bumped capacity from the first cycle must NOT leak into the second cycle's scratch.
 
 
-@pytest.mark.run_in_serial
 @test_utils.test(arch=qd.gpu)
 def test_scratch_round_trip_across_qd_reset(req_arch):
     """Run a bumped-scratch algorithm; ``qd.reset()`` + ``qd.init()``; then run another algorithm at default scratch.
