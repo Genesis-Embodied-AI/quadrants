@@ -890,92 +890,56 @@ def test_ndarray_struct_multiple_child_structs_field():
 # --- Sub-struct passing: f(s.child) where the child is itself a dataclass ---
 
 
+class _TemplateBuilder:
+    """Makes ``qd.Template`` subscriptable so ``_TemplateBuilder()[qd.i32, 1]`` returns ``qd.Template`` (matching the
+    shape of ``qd.types.ndarray[qd.i32, 1]``). Lets a single test body work for both NDArray-annotated and
+    Template-annotated leaves."""
+
+    def __getitem__(self, _):
+        return qd.Template
+
+
+# (leaf-value factory, leaf-annotation builder). NDArray and qd.Tensor share the same annotation form (qd.Tensor
+# wrappers are unwrapped to bare impls at arg-binding time, so the annotation stays NDArray).
+_SUBSTRUCT_LEAF_KINDS = [
+    pytest.param(qd.ndarray, qd.types.ndarray, id="ndarray"),
+    pytest.param(qd.field, _TemplateBuilder(), id="field"),
+    pytest.param(
+        lambda dtype, shape: qd.tensor(dtype, shape=shape, backend=qd.Backend.NDARRAY),
+        qd.types.ndarray,
+        id="tensor",
+    ),
+]
+
+
 @test_utils.test()
-def test_ndarray_substruct_passed_to_func():
-    """``f(s.struct_cd)`` where the kernel arg is a nested dataclass and the func is typed with the child dataclass.
-    Mirrors test_ndarray_struct_nested_ndarray but passes the sub-struct (not the whole struct) into the inner func."""
-    a = qd.ndarray(qd.i32, shape=(101,))
-    b = qd.ndarray(qd.i32, shape=(57,))
-    c = qd.ndarray(qd.i32, shape=(211,))
-    d = qd.ndarray(qd.i32, shape=(211,))
-    e = qd.ndarray(qd.i32, shape=(251,))
-    f = qd.ndarray(qd.i32, shape=(251,))
+@pytest.mark.parametrize("qd_make,qd_anno", _SUBSTRUCT_LEAF_KINDS)
+def test_substruct_passed_to_func(qd_make: Any, qd_anno: Any) -> None:
+    """``f(s.struct_cd)`` where the kernel arg is a nested dataclass and the callee is typed with the child dataclass.
+    Mirrors test_ndarray_struct_nested_ndarray but passes the sub-struct (not the whole struct) into the inner func.
+    Parametrized across the three supported leaf kinds (raw ndarray, field/template, qd.Tensor wrapper)."""
+    a = qd_make(qd.i32, shape=(101,))
+    b = qd_make(qd.i32, shape=(57,))
+    c = qd_make(qd.i32, shape=(211,))
+    d = qd_make(qd.i32, shape=(211,))
+    e = qd_make(qd.i32, shape=(251,))
+    f = qd_make(qd.i32, shape=(251,))
 
     @dataclass
     class MyStructEF:
-        e: qd.types.NDArray[qd.i32, 1]
-        f: qd.types.NDArray[qd.i32, 1]
+        e: qd_anno[qd.i32, 1]
+        f: qd_anno[qd.i32, 1]
 
     @dataclass
     class MyStructCD:
-        c: qd.types.NDArray[qd.i32, 1]
-        d: qd.types.NDArray[qd.i32, 1]
+        c: qd_anno[qd.i32, 1]
+        d: qd_anno[qd.i32, 1]
         struct_ef: MyStructEF
 
     @dataclass
     class MyStructAB:
-        a: qd.types.NDArray[qd.i32, 1]
-        b: qd.types.NDArray[qd.i32, 1]
-        struct_cd: MyStructCD
-
-    @qd.func
-    def fef(struct_ef: MyStructEF) -> None:
-        struct_ef.e[12] += 14
-        struct_ef.f[18] += 24
-
-    @qd.func
-    def fcd(struct_cd: MyStructCD) -> None:
-        struct_cd.c[11] += 13
-        struct_cd.d[17] += 23
-        # call site: pass sub-struct into another func
-        fef(struct_cd.struct_ef)
-
-    @qd.kernel
-    def k1(my_struct_ab: MyStructAB) -> None:
-        my_struct_ab.a[7] += 3
-        my_struct_ab.b[2] += 5
-        # call site: pass sub-struct directly from kernel into a func
-        fcd(my_struct_ab.struct_cd)
-        # also a 2-level deep sub-struct call
-        fef(my_struct_ab.struct_cd.struct_ef)
-
-    s = MyStructAB(a=a, b=b, struct_cd=MyStructCD(c=c, d=d, struct_ef=MyStructEF(e=e, f=f)))
-    k1(s)
-
-    assert a[7] == 3
-    assert b[2] == 5
-    assert c[11] == 13
-    assert d[17] == 23
-    # fef called twice: once from fcd, once directly from kernel
-    assert e[12] == 28
-    assert f[18] == 48
-
-
-@test_utils.test()
-def test_field_substruct_passed_to_func() -> None:
-    """Field/template variant of test_ndarray_substruct_passed_to_func."""
-    a = qd.field(qd.i32, shape=(55,))
-    b = qd.field(qd.i32, shape=(57,))
-    c = qd.field(qd.i32, shape=(211,))
-    d = qd.field(qd.i32, shape=(211,))
-    e = qd.field(qd.i32, shape=(251,))
-    f = qd.field(qd.i32, shape=(251,))
-
-    @dataclass
-    class MyStructEF:
-        e: qd.Template
-        f: qd.Template
-
-    @dataclass
-    class MyStructCD:
-        c: qd.Template
-        d: qd.Template
-        struct_ef: MyStructEF
-
-    @dataclass
-    class MyStructAB:
-        a: qd.Template
-        b: qd.Template
+        a: qd_anno[qd.i32, 1]
+        b: qd_anno[qd.i32, 1]
         struct_cd: MyStructCD
 
     @qd.func
@@ -1133,6 +1097,65 @@ def test_substruct_scalar_leaf() -> None:
 
     k(AB(out=out, cd=CD(c=3, d=4)))
     assert out[0] == 7
+
+
+@test_utils.test()
+def test_substruct_deep_nesting() -> None:
+    """Three levels of dataclass nesting (L0 -> L1 -> L2 -> L3) combined with a three-level func-call chain
+    (kernel -> touch_l1 -> touch_l2 -> touch_l3). Each layer writes its own leaf and forwards its inner sub-struct to
+    the next callee. The kernel also exercises a direct 3-deep attribute access ``s.inner.inner.inner`` to make sure
+    multi-level call-site flattening works straight from the kernel body, not just via intermediate funcs."""
+    n0 = qd.ndarray(qd.i32, shape=(4,))
+    n1 = qd.ndarray(qd.i32, shape=(4,))
+    n2 = qd.ndarray(qd.i32, shape=(4,))
+    n3 = qd.ndarray(qd.i32, shape=(4,))
+
+    @dataclass
+    class L3:
+        leaf: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass
+    class L2:
+        leaf: qd.types.NDArray[qd.i32, 1]
+        inner: L3
+
+    @dataclass
+    class L1:
+        leaf: qd.types.NDArray[qd.i32, 1]
+        inner: L2
+
+    @dataclass
+    class L0:
+        leaf: qd.types.NDArray[qd.i32, 1]
+        inner: L1
+
+    @qd.func
+    def touch_l3(s: L3) -> None:
+        s.leaf[0] += 1
+
+    @qd.func
+    def touch_l2(s: L2) -> None:
+        s.leaf[0] += 10
+        touch_l3(s.inner)
+
+    @qd.func
+    def touch_l1(s: L1) -> None:
+        s.leaf[0] += 100
+        touch_l2(s.inner)
+
+    @qd.kernel
+    def k(s: L0) -> None:
+        s.leaf[0] += 1000
+        touch_l1(s.inner)
+        touch_l3(s.inner.inner.inner)
+
+    s = L0(leaf=n0, inner=L1(leaf=n1, inner=L2(leaf=n2, inner=L3(leaf=n3))))
+    k(s)
+
+    assert n0[0] == 1000
+    assert n1[0] == 100
+    assert n2[0] == 10
+    assert n3[0] == 1 + 1
 
 
 @pytest.mark.parametrize("use_slots", [False, True])
