@@ -17,8 +17,8 @@ Layout (host driver builds a recursion plan, kernels are the per-pass workers):
 A single generic kernel handles every pass; ``src_is_u32`` and ``dst_is_u32`` are compile-time template flags
 selecting between the bit_cast and direct-read / direct-write paths.
 
-The shared scratch field is owned by ``quadrants._scratch`` (see that module). For first land, the default 1 MB
-capacity covers reductions up to ~64M elements at ``BLOCK_DIM=256``.
+The shared scratch field is owned by ``quadrants._scratch`` (see that module). The default 5 MB capacity covers
+reductions well past ``N = 64M`` elements at ``BLOCK_DIM=256`` (reduce uses only ``~N / BLOCK_DIM`` slots).
 
 The reduce monoid identity (e.g. ``+inf`` for ``min`` over ``f32``, ``2**31 - 1`` for ``min`` over ``i32``) is passed
 to the kernel as its raw 4-byte bit pattern in a ``u32`` runtime arg, then ``qd.bit_cast``-ed to ``dtype`` inside the

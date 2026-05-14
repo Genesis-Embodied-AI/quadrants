@@ -25,8 +25,8 @@ This is why ``device_select`` works on any element dtype Quadrants supports for 
 ``LinearBVHAABB``, etc.).
 
 Constraints (first land): ``N`` must fit comfortably within the configured scratch budget - the indices + partials
-together must not exceed ``scratch_capacity_u32()``. For the default 1 MB budget that's
-``N + ceil(N / 256) + ... <= 262144``, so roughly ``N <= 260_000``. Raise the budget via
+together must not exceed ``scratch_capacity_u32()``. For the default 5 MB budget that's
+``N + ceil(N / 256) + ... <= ~1.3M``, which covers qipc's hot path (``N = 1M``) out of the box. Raise the budget via
 ``_scratch.set_scratch_bytes(...)`` before any algorithm runs to unlock larger inputs.
 """
 

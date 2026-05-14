@@ -33,8 +33,8 @@ Algorithm (scan + scatter; no segmented-scan primitive needed):
 This first-land scope supports only the ``add`` reduction. ``min`` / ``max`` variants would need ``atomic_min`` /
 ``atomic_max``, which have spottier cross-backend support for ``f32`` - defer to a follow-up gated on real qipc usage.
 
-Scratch budget: ``N + ceil(N / 256) + ...`` ``u32`` slots, ≈ ``1.004 * N``. The default 1 MB scratch covers ``N`` up
-to ~260_000. For larger ``N``, raise via ``quadrants._scratch.set_scratch_bytes(...)`` before any algorithm call.
+Scratch budget: ``N + ceil(N / 256) + ...`` ``u32`` slots, ≈ ``1.004 * N``. The default 5 MB scratch covers ``N`` up
+to ~1.3M. For larger ``N``, raise via ``quadrants._scratch.set_scratch_bytes(...)`` before any algorithm call.
 """
 
 from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
@@ -203,7 +203,7 @@ def device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs)
     **NaN handling for f32 keys**: NaN ``!=`` NaN is true, so each NaN becomes its own run. This is consistent with
     treating NaN as "different from everything", which matches the run-length-encoding spirit of reduce-by-key.
 
-    **Scratch budget**: ~``1.004 * N`` u32 slots. Default 1 MB covers ``N`` up to ~260_000; raise via
+    **Scratch budget**: ~``1.004 * N`` u32 slots. Default 5 MB covers ``N`` up to ~1.3M; raise via
     ``quadrants._scratch.set_scratch_bytes(...)`` for larger inputs.
     """
     _validate_inputs(keys_in, values_in, keys_out, values_out, num_runs)

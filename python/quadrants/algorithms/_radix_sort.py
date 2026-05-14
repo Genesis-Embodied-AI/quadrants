@@ -50,7 +50,7 @@ highest thread indices and the rank is computed stably by thread index.
 
 **Scratch budget.** Each digit pass uses ``num_blocks * RADIX_DIGITS = N`` (rounded up to ``BLOCK_DIM`` granularity)
 u32 slots in scratch for the tile_histograms, plus the partials buffers that the in-place exclusive scan introduces.
-Total scratch footprint: ``≈ N * (1 + 1/256) u32 slots``. The default 1 MB scratch budget covers ``N ≤ ~260_000``;
+Total scratch footprint: ``≈ N * (1 + 1/256) u32 slots``. The default 5 MB scratch budget covers ``N ≤ ~1.3M`` (qipc's hot path);
 for ``N = 1M`` (qipc's hot path) the caller must call ``quadrants._scratch.set_scratch_bytes(8 << 20)`` (or larger)
 before any algorithm runs. We raise a clear error when scratch is short rather than silently scaling.
 """
@@ -416,7 +416,7 @@ def device_radix_sort(keys, tmp_keys, values=None, tmp_values=None, end_bit=None
     **Scratch budget**: requires ``ceil(N / BLOCK_DIM) * RADIX_DIGITS + ...`` u32 slots in the shared scratch (see
     module docstring on ``_radix_sort.py`` for the exact formula). The histograms are u32 regardless of key width,
     so 8-byte-key sorts have the same scratch footprint as 4-byte ones (the key dtype only affects digit extraction
-    and scatter). For the default 1 MB scratch, that caps ``N`` at ~260_000; ``N = 1M`` needs ~5 MB.
+    and scatter). The default 5 MB scratch caps ``N`` at ~1.3M; raise the budget via ``set_scratch_bytes`` for larger.
     """
     if end_bit is None:
         end_bit = _key_width_bits(keys.dtype) if keys.dtype in _SUPPORTED_KEY_DTYPES else 32

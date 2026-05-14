@@ -19,7 +19,7 @@ Algorithm (three-pass, multi-level when needed):
   scanned partials buffer, and writes ``out[i] = op(block_prefix, tile_prefix)``.
 
 Total scratch usage at ``N = 1M`` and ``BLOCK_DIM = 256``: ``B0 = 4096`` plus
-``B1 = 16`` u32 slots = 4112 slots = ~16 KB, well under the 1 MB default.
+``B1 = 16`` u32 slots = 4112 slots = ~16 KB, trivial relative to the 5 MB default.
 
 The ``PrefixSumExecutor`` class in ``_algorithms.py`` predates this work; it is kept for backward compat. The new
 functional API is preferred for new code - see ``docs/source/user_guide/algorithms.md``.

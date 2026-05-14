@@ -30,17 +30,17 @@ There are **three scratch fields**, one per element width / type that algorithm 
 - `Field(u64)` - used by 8-byte integer algorithms (`i64` / `u64` reduce + scan, `u64` radix-sort keys) and `f64` reduce. Same `bit_cast` story, just at 8-byte width.
 - `Field(f64)` - used by `device_exclusive_scan_*` over `f64` only. The f64 scan path can't share the u64 scratch because `bit_cast(scan_result_f64, u64)` currently loses precision in Quadrants (reproduced down to a 2-element block scan; the reduce path is unaffected). Routing partials through an f64-typed buffer side-steps the cast entirely. To be removed once the underlying `bit_cast` precision bug is fixed; tracked in the design doc.
 
-Sizing: each field defaults to **1 MB** (`DEFAULT_SCRATCH_BYTES = 1 << 20`). That covers `N` up to ~262 144 elements for `device_select` / `device_radix_sort` (`~N` u32 slots), and up to ~64M for `device_reduce_*` / `device_exclusive_scan_*` (`~N / BLOCK_DIM` u32 slots, `BLOCK_DIM = 256`).
+Sizing: each field defaults to **5 MB** (`DEFAULT_SCRATCH_BYTES = 5 << 20`). That covers `N` up to ~1.3M elements for `device_select` / `device_radix_sort` / `device_reduce_by_key_add` (`~N` u32 slots, qipc's hot path), and well past `N = 64M` for `device_reduce_*` / `device_exclusive_scan_*` (`~N / BLOCK_DIM` u32 slots, `BLOCK_DIM = 256`). The u64 / f64 fields are sized to the same byte budget, so they cover half as many elements.
 
-**Allocation is lazy.** A scratch field is only allocated on its first `get_scratch_*()` call from inside an algorithm. Programs that never touch `qd.algorithms.*` pay nothing; programs that only touch 4-byte algorithms never allocate the u64 / f64 buffers.
+**Allocation is lazy.** A scratch field is only allocated on its first `get_scratch_*()` call from inside an algorithm. Programs that never touch `qd.algorithms.*` pay nothing; programs that only touch 4-byte algorithms never allocate the u64 / f64 buffers. (The default budget is therefore a per-field worst case, not a fixed cost: a 4-byte-only caller pays 5 MB, not 15 MB.)
 
 **`qd.reset()` invalidates every scratch field** via an `impl.on_reset` hook, and resets the byte budget back to `DEFAULT_SCRATCH_BYTES`. The next algorithm call after a `qd.init()` reallocates against the fresh runtime at the default capacity. This keeps `qd.init` / `qd.reset` a "clean slate" - all runtime-scoped state (resource handles *and* config) goes away on reset, by design. Apps that need a persistent bump should call `set_scratch_bytes` immediately after each `qd.init`.
 
-**Bumping the budget.** Call `quadrants._scratch.set_scratch_bytes(N)` before any algorithm runs (or before any algorithm runs after a `qd.reset()`):
+**Tuning the budget.** Call `quadrants._scratch.set_scratch_bytes(N)` before any algorithm runs (or before any algorithm runs after a `qd.reset()`). Pass a larger value to cover bigger `N`, or a smaller value to reduce the resident footprint on memory-constrained devices:
 
 ```python
 from quadrants import _scratch
-_scratch.set_scratch_bytes(5 << 20)   # 5 MB; covers N up to ~1.3M for device_select / radix sort
+_scratch.set_scratch_bytes(20 << 20)   # 20 MB; covers N up to ~5M for device_select / radix sort
 ```
 
 `set_scratch_bytes` raises `RuntimeError` if any scratch field has already been allocated in the current runtime cycle (re-`qd.init`-ing wipes that constraint). `scratch_bytes` must be a positive multiple of 8.
@@ -88,7 +88,7 @@ Implementation:
 - Per-block partials are written to the shared scratch field (u32 for 4-byte dtypes, u64 for 8-byte dtypes; see [Scratch space](#scratch-space)).
 - The last pass writes the final value to `out[0]` directly. The kernel launches are pipelined back-to-back; correctness relies on the kernel-boundary serialization that Quadrants provides between host-launched kernels.
 
-Scratch footprint: `ceil(N / BLOCK_DIM)` slots, where `BLOCK_DIM = 256`. The default 1 MB scratch covers `N` up to ~64M for 4-byte dtypes (~32M for 8-byte). For larger `N`, bump the budget per [Scratch space](#scratch-space).
+Scratch footprint: `ceil(N / BLOCK_DIM)` slots, where `BLOCK_DIM = 256`. Well under the 5 MB default for any reasonable `N` (`N = 1G` is ~4M slots); see [Scratch space](#scratch-space) if you need a different budget.
 
 ### `qd.algorithms.device_exclusive_scan_{add,min,max}(input, out)`
 
@@ -126,7 +126,7 @@ Implementation:
   1. **Pass 1** - per-block tile reduce into the shared scratch (one slot per block).
   2. **Pass 2** - exclusive-scan the partials buffer in place. For `N ≤ BLOCK_DIM²` (= 65536) a single block does this. For larger `N`, the driver recurses: another tile-reduce on the partials, a recursive scan, then a downsweep that applies the higher-level prefixes.
   3. **Pass 3** - per-block tile scan + add the block prefix from scratch. Each block re-reads its tile from the input, runs `block.exclusive_scan` to get per-thread tile prefixes, and adds its `block_prefix` from the scanned partials.
-- `BLOCK_DIM = 256`. Total scratch usage at `N = 1M` is `4096 + 16 = 4112` slots (~16 KB for 4-byte dtypes, ~32 KB for 8-byte), well under the 1 MB default. See [Scratch space](#scratch-space) for budget mechanics.
+- `BLOCK_DIM = 256`. Total scratch usage at `N = 1M` is `4096 + 16 = 4112` slots (~16 KB for 4-byte dtypes, ~32 KB for 8-byte), trivial relative to the 5 MB default. See [Scratch space](#scratch-space) for budget mechanics.
 
 ### `qd.algorithms.device_select(input, flags, out, num_out)`
 
@@ -163,7 +163,7 @@ Algorithm: the textbook scan-based compaction.
 2. **Scatter:** one parallel kernel reads each `(input[i], flags[i], indices[i])` and, if the flag is set, writes `out[indices[i]] = input[i]`. No races by construction of the exclusive scan over 0 / 1 flags.
 3. **Count tail:** one-thread kernel computes `indices[N-1] + flags[N-1]` and stores it in `num_out[0]`.
 
-Scratch footprint: ~`N` u32 slots (one write index per input element). The default 1 MB scratch covers `N` up to ~262 144; bump the budget per [Scratch space](#scratch-space) for larger inputs (e.g. `5 << 20` for `N = 1M`).
+Scratch footprint: ~`N` u32 slots (one write index per input element). The default 5 MB scratch covers `N` up to ~1.3M (qipc's hot path lands here out of the box); bump the budget per [Scratch space](#scratch-space) for larger inputs.
 
 ### `qd.algorithms.device_radix_sort(keys, tmp_keys, values=None, tmp_values=None, end_bit=None)`
 
@@ -215,7 +215,7 @@ Implementation:
 - After each pass we swap `keys` ↔ `tmp_keys`. Four passes is even, so the sorted keys end up back in `keys`.
 - Signed-integer (`i32` / `i64`) and floating-point (`f32` / `f64`) keys are mapped to a sortable unsigned representation (`u32` / `u64`) before the first pass and mapped back after the last pass via in-place "twiddle" kernels (signed: XOR sign bit; float: flip sign bit on positives, flip all bits on negatives - the standard sortable-key transform). `u32` / `u64` keys are sorted directly with no twiddle.
 
-Scratch footprint: `num_blocks * 256 + ...` u32 slots per pass (re-used across passes), where `num_blocks = ceil(N / 256)`. The default 1 MB scratch covers `N` up to ~260 000; bump the budget per [Scratch space](#scratch-space) for larger inputs (e.g. `5 << 20` for `N = 1M`, qipc's hot path).
+Scratch footprint: `num_blocks * 256 + ...` u32 slots per pass (re-used across passes), where `num_blocks = ceil(N / 256)`. The default 5 MB scratch covers `N` up to ~1.3M (qipc's hot path lands here out of the box); bump the budget per [Scratch space](#scratch-space) for larger inputs.
 
 ### `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs)`
 
@@ -265,7 +265,7 @@ Algorithm: scan + scatter + atomic_add - no segmented-scan primitive needed.
 4. **Scatter.** For each `i`, recompute `head_flag(i)` from `keys[i]` / `keys[i-1]`, derive the run index `pos = scratch[i] + head_flag(i) - 1` (inclusive scan minus 1), and write `keys_out[pos] = keys[i]` + `atomic_add(values_out[pos], values[i])`.
 5. **Count.** `num_runs[0] = scratch[N-1] + head_flag(N-1)`.
 
-Scratch footprint: ~`1.004 * N` u32 slots. The default 1 MB scratch covers `N` up to ~260 000; bump the budget per [Scratch space](#scratch-space) for larger inputs.
+Scratch footprint: ~`1.004 * N` u32 slots. The default 5 MB scratch covers `N` up to ~1.3M; bump the budget per [Scratch space](#scratch-space) for larger inputs.
 
 ### `qd.algorithms.parallel_sort(keys, values=None)`
 

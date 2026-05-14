@@ -481,9 +481,9 @@ def test_device_exclusive_scan_rejects_unsupported_dtype():
 # ---------------------------------------------------------------------------
 
 # Sizes that exercise: single-block path, two-pass path with even split,
-# off-by-one tile (B0 ends mid-block), three-pass recursion. Default 1 MB
-# scratch holds N + ceil(N/256) + ... <= 262144 u32 slots, so the largest
-# size below (200_000) fits with ~780-slot partials -> still ok.
+# off-by-one tile (B0 ends mid-block), three-pass recursion. Default 5 MB
+# scratch holds N + ceil(N/256) + ... <= ~1.3M u32 slots, so the largest
+# size below (200_000) fits comfortably with ~780-slot partials.
 _SELECT_SIZES = [1, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000]
 
 
@@ -650,11 +650,9 @@ def test_device_select_rejects_short_out():
 # Device radix sort
 # ---------------------------------------------------------------------------
 
-# Sizes chosen to stay within the default 1 MB scratch budget (256K u32 slots, of which radix sort uses ~N + N/256 per
-# pass - so ceiling ~ 250K elements). We hit single-block (N<=256), block boundary, off-by-one, two-block, many-block
-# (200K, 4-pass histogram-scan-scatter recursion all exercised). Larger N (1M, ~5 MB scratch) is covered by hand-runs
-# and the bench script; bumping scratch in the suite would force a process-wide cap change that could break other
-# tests' assumptions.
+# Sizes chosen to stay within the default 5 MB scratch budget (~1.3M u32 slots, of which radix sort uses ~N + N/256
+# per pass). We hit single-block (N<=256), block boundary, off-by-one, two-block, many-block (200K, 4-pass
+# histogram-scan-scatter recursion all exercised). N = 1M is covered separately by the qipc-hot-path tests below.
 _RADIX_SORT_SIZES = [1, 7, 256, 257, 1023, 1024, 1025, 65536, 200_000]
 
 
@@ -1157,14 +1155,19 @@ def test_parallel_sort_emits_deprecation_warning():
 
 
 # --- Scratch-capacity error paths. Each algorithm raises a clear RuntimeError when N would push the scratch budget
-# over the configured capacity, rather than corrupting data. Tests run at default 1 MB.
+# over the configured capacity, rather than corrupting data. Tests shrink scratch to a tiny budget so the trip
+# point is reachable with a small N (cheap to allocate, runtime-independent of the DEFAULT_SCRATCH_BYTES knob).
+
+
+_TINY_SCRATCH_BYTES = 64 << 10  # 64 KB; covers ~16K u32 slots, ~4M u32 slots after the BLOCK_DIM divide for reduce/scan.
 
 
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_rejects_oversized_n():
-    """At default 1 MB scratch, ``N`` past ~260K should fail with a clear RuntimeError pointing the caller at
-    ``set_scratch_bytes``."""
-    N = 400_000  # comfortably over the ~260K default-scratch ceiling
+    """``device_radix_sort`` raises ``RuntimeError`` pointing the caller at ``set_scratch_bytes`` when N exceeds the
+    scratch budget. Shrink scratch first so the trip point is reachable with a tiny N."""
+    _scratch.set_scratch_bytes(_TINY_SCRATCH_BYTES)
+    N = 4 * _scratch.scratch_capacity_u32()  # comfortably over the tiny-scratch ceiling
     keys = qd.field(qd.i32, shape=N)
     tmp = qd.field(qd.i32, shape=N)
     with pytest.raises(RuntimeError, match="scratch"):
@@ -1174,7 +1177,8 @@ def test_device_radix_sort_rejects_oversized_n():
 @test_utils.test(arch=qd.gpu)
 def test_device_select_rejects_oversized_n():
     """Same scratch-capacity error path for device_select."""
-    N = 400_000
+    _scratch.set_scratch_bytes(_TINY_SCRATCH_BYTES)
+    N = 4 * _scratch.scratch_capacity_u32()
     inp = qd.field(qd.i32, shape=N)
     flags = qd.field(qd.i32, shape=N)
     out = qd.field(qd.i32, shape=N)
@@ -1186,7 +1190,8 @@ def test_device_select_rejects_oversized_n():
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_by_key_add_rejects_oversized_n():
     """Same scratch-capacity error path for reduce-by-key."""
-    N = 400_000
+    _scratch.set_scratch_bytes(_TINY_SCRATCH_BYTES)
+    N = 4 * _scratch.scratch_capacity_u32()
     keys_in = qd.field(qd.i32, shape=N)
     values_in = qd.field(qd.i32, shape=N)
     keys_out = qd.field(qd.i32, shape=N)
@@ -1200,11 +1205,11 @@ def test_device_reduce_by_key_add_rejects_oversized_n():
 
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_add_rejects_oversized_n():
-    """Same scratch-capacity error path for device_reduce_add. ``device_reduce_*`` needs ~(B + B/256 + …) u32 slots
-    where ``B = ceil(N / BLOCK_DIM)``; at default 1 MB the ceiling is ~64M, so we need a large N to trigger the raise.
-    Use ``80M`` - comfortably over the default ceiling but small enough to allocate the input ``Field`` without OOM
-    on a 4 GB consumer GPU. The kernel itself never launches; the validate-budget check trips first."""
-    N = 80_000_000
+    """``device_reduce_*`` needs ~(B + B/256 + …) u32 slots where ``B = ceil(N / BLOCK_DIM)``; the trip point in N is
+    ``BLOCK_DIM * capacity_u32``. With the tiny scratch budget that's ~256 * 16K = 4M; use 5M to be comfortably over.
+    The kernel itself never launches; the validate-budget check trips first."""
+    _scratch.set_scratch_bytes(_TINY_SCRATCH_BYTES)
+    N = 256 * _scratch.scratch_capacity_u32() + 100_000
     inp = qd.field(qd.i32, shape=N)
     out = qd.field(qd.i32, shape=1)
     with pytest.raises(RuntimeError, match="scratch"):
@@ -1214,9 +1219,9 @@ def test_device_reduce_add_rejects_oversized_n():
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_add_rejects_oversized_n():
     """Same scratch-capacity error path for device_exclusive_scan_add. ``device_exclusive_scan_*`` needs ``B`` u32
-    partials slots at the top level (plus recursive); default 1 MB caps that at ``B = 256K``, so ``N`` of order
-    ``N = B * BLOCK_DIM = 64M`` is the boundary. Use ``80M`` to be comfortably over."""
-    N = 80_000_000
+    partials slots at the top level (plus recursive); trip point in N is ``BLOCK_DIM * capacity_u32``."""
+    _scratch.set_scratch_bytes(_TINY_SCRATCH_BYTES)
+    N = 256 * _scratch.scratch_capacity_u32() + 100_000
     inp = qd.field(qd.i32, shape=N)
     out = qd.field(qd.i32, shape=N)
     with pytest.raises(RuntimeError, match="scratch"):
@@ -1224,7 +1229,7 @@ def test_device_exclusive_scan_add_rejects_oversized_n():
 
 
 # --- Reduce / scan at N = 1M alongside the radix sort + RBK 1M coverage. Reduce / scan's scratch budget at 1M is
-# small (4K + recursion ~ 16 u32 slots), well below the default 1 MB, so no ``big_scratch`` fixture is needed -
+# small (4K + recursion ~ 16 u32 slots), trivially below the default 5 MB, so no ``big_scratch`` fixture is needed -
 # included here just to round out the qipc-hot-path coverage on the same dtypes as the other 1M tests.
 
 
@@ -1233,7 +1238,7 @@ def test_device_exclusive_scan_add_rejects_oversized_n():
 def test_device_reduce_add_n_1m(dtype):
     """N = 1_000_000 reduce over the full dtype matrix. 4-byte dtypes use the u32 scratch (4K slots for top-level
     partials, recursion adds ~16); 8-byte dtypes use the u64 scratch with the same slot count at half the byte cost.
-    Default 1 MB capacity covers both by a wide margin."""
+    Default 5 MB capacity covers both by a wide margin."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     host = _rand_reduce_host(rng, dtype, N)
@@ -1270,7 +1275,7 @@ def test_device_reduce_add_n_1m(dtype):
 def test_device_exclusive_scan_add_n_1m(dtype):
     """N = 1_000_000 exclusive scan over the full dtype matrix. 4-byte dtypes go through the u32 scratch; 8-byte
     dtypes through the u64 scratch (4K slots at the top level for both, recursion adds ~16). Both fit in default
-    1 MB by a wide margin."""
+    5 MB by a wide margin."""
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     np_dt = _DTYPE_TO_NP[dtype]
@@ -1317,9 +1322,13 @@ def test_scratch_round_trip_across_qd_reset(req_arch):
     against the unwanted bump. This is the *behavioural* version of ``test_scratch_invalidate_resets_bytes_to_default``
     (which only manipulates module state directly).
     """
-    # --- Cycle 1: bump scratch, run a 1M radix sort.
-    _scratch.set_scratch_bytes(8 << 20)
-    N1 = 1_000_000
+    # Pick a "too big" N relative to the default scratch, so the cycle-2 retry trips the budget guard regardless of
+    # what ``DEFAULT_SCRATCH_BYTES`` happens to be. ``2 * capacity_u32`` overshoots the default by 2x.
+    default_capacity_u32 = _scratch.DEFAULT_SCRATCH_BYTES // 4
+    N1 = 2 * default_capacity_u32  # comfortably over the default scratch ceiling for radix sort
+
+    # --- Cycle 1: bump scratch enough to cover N1, run the sort.
+    _scratch.set_scratch_bytes(4 * _scratch.DEFAULT_SCRATCH_BYTES)
     rng = np.random.default_rng(seed=1234)
     host1 = rng.integers(0, 2**31 - 1, size=N1, dtype=np.int32)
     keys1 = qd.field(qd.i32, shape=N1)
@@ -1339,8 +1348,8 @@ def test_scratch_round_trip_across_qd_reset(req_arch):
     assert _scratch._scratch_field is None, "_scratch_field handle was not invalidated across qd.reset()"
     assert _scratch._scratch_field_u64 is None, "_scratch_field_u64 handle was not invalidated across qd.reset()"
 
-    # --- Cycle 2: run a small algorithm with default scratch. Should just work - and crucially, attempting a 1M sort
-    # NOW (without re-bumping) should *raise* RuntimeError because the bumped capacity is gone.
+    # --- Cycle 2: run a small algorithm with default scratch. Should just work - and crucially, attempting an
+    # over-budget sort NOW (without re-bumping) should *raise* RuntimeError because the bumped capacity is gone.
     N2 = 1024
     host2 = rng.integers(0, 100, size=N2, dtype=np.int32)
     keys2 = qd.field(qd.i32, shape=N2)
@@ -1349,7 +1358,7 @@ def test_scratch_round_trip_across_qd_reset(req_arch):
     qd.algorithms.device_radix_sort(keys2, tmp_keys=tmp2)
     np.testing.assert_array_equal(keys2.to_numpy(), np.sort(host2))
 
-    # Re-attempting the 1M sort without re-bumping must fail - proves the capacity really did drop back to default.
+    # Re-attempting the over-budget sort without re-bumping must fail - proves the capacity really did drop back.
     keys3 = qd.field(qd.i32, shape=N1)
     tmp3 = qd.field(qd.i32, shape=N1)
     with pytest.raises(RuntimeError, match="scratch"):

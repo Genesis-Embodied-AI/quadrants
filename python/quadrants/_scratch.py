@@ -6,24 +6,26 @@ scalar dtype: 4-byte ``i32`` / ``u32`` / ``f32`` go through the u32 scratch; 8-b
 through the u64 scratch; 8-byte floating-point ``f64`` goes through the f64 scratch *directly* (no bit_cast on
 write), as a workaround for an upstream Quadrants compiler bug where ``bit_cast(scan_result_f64, u64)`` loses
 precision (the reduce path is unaffected, so the u64 scratch is fine for f64 reduce). Sized to comfortably cover
-device-wide reduce, exclusive scan, select / compact, radix sort, and reduce-by-key on inputs up to roughly 64M
-elements per the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
+device-wide reduce, exclusive scan, select / compact, radix sort, and reduce-by-key on inputs up to ``N = 1M``
+out of the box (qipc's hot path), per the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
 
-Sizing rationale: every first-land algorithm needs at most one ``(B,)``-shaped partials buffer where
-``B = ceil(N / BLOCK_DIM)``. For ``BLOCK_DIM = 256`` and ``N = 64M`` that is ``B = 262144`` u32 slots = 1 MB.
-Two-level recursion adds ``ceil(B / BLOCK_DIM)`` more slots = a couple of KB, which is in the noise. The u64 and
-f64 scratches see half as many slots at the same byte budget; 1 MB still covers ``N = 32M`` 8-byte elements.
+Sizing rationale: ``device_select`` / ``device_radix_sort`` need ~``N`` u32 slots per call (one write index /
+tile-histogram entry per input element). At ``N = 1M`` that is 4 MB of u32 slots; we round up to 5 MB to leave
+headroom for the recursion overhead (``ceil(N / BLOCK_DIM)`` extra slots) and the second-level scan partials.
+``device_reduce_*`` / ``device_exclusive_scan_*`` need only ~``N / BLOCK_DIM`` u32 slots, so the same 5 MB
+covers them well past ``N = 64M``. The u64 and f64 scratches see half as many slots at the same byte budget.
 
 Allocation strategy: lazy on first use, invalidated on ``qd.reset()`` via the ``impl.on_reset`` hook. This avoids
-paying the 1 MB-per-width allocation cost in programs that never touch ``qd.algorithms``, and avoids coupling
-``qd.init()``'s argument surface to the device-algos work for the first land. A future change can add
-``qd.init(scratch_bytes=...)`` if a caller needs to override the default before any allocation has happened.
+paying the 5 MB-per-width allocation cost in programs that never touch ``qd.algorithms``, and avoids coupling
+``qd.init()``'s argument surface to the device-algos work for the first land. Programs that only touch 4-byte
+algorithms never pay for the u64 / f64 buffers. A future change can add ``qd.init(scratch_bytes=...)`` if a
+caller needs to override the default before any allocation has happened.
 """
 
 from quadrants.lang.impl import field, on_reset
 from quadrants.types.primitive_types import f64, u32, u64
 
-DEFAULT_SCRATCH_BYTES: int = 1 << 20
+DEFAULT_SCRATCH_BYTES: int = 5 * (1 << 20)
 
 _scratch_field = None
 _scratch_field_u64 = None
@@ -114,7 +116,8 @@ def _invalidate() -> None:
     The persistence-vs-clean-slate trade-off was explicitly resolved in favour of clean slate: ``qd.init`` /
     ``qd.reset`` is meant to be "free to use whenever, no constraints", which only holds if all module state tied to
     a runtime cycle (resource handles *and* runtime-scoped config) goes away on reset. Apps that want a persistent
-    bump should call ``set_scratch_bytes`` immediately after each ``qd.init``.
+    bump (or persistent shrink, for apps that know their N is small and don't want to pay 15 MB across the three
+    scratch fields) should call ``set_scratch_bytes`` immediately after each ``qd.init``.
     """
     global _scratch_field, _scratch_field_u64, _scratch_field_f64, _scratch_bytes
     _scratch_field = None
