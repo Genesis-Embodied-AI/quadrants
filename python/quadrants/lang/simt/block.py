@@ -8,8 +8,17 @@ from quadrants.lang import impl
 from quadrants.lang import ops as _ops
 from quadrants.lang.expr import make_expr_group
 from quadrants.lang.kernel_impl import func as _func
-from quadrants.lang.simt import reductions as _reductions
-from quadrants.lang.simt import subgroup as _subgroup
+
+# Import order matters: ``subgroup`` must come before ``reductions``.  ``reductions.py`` does ``from
+# quadrants.lang.simt.subgroup import (ballot, invocation_id, ...)`` at its top, and ``subgroup.py`` does ``from
+# quadrants.lang.simt.reductions import *`` at its bottom.  If ``reductions`` is imported here first, it triggers a
+# circular load that leaves ``subgroup``'s wildcard re-export running while ``reductions.__all__`` isn't yet defined,
+# so ``subgroup.reduce_add_tiled`` etc. silently end up missing.  Importing ``subgroup`` first (which then drives
+# ``reductions`` to completion via the wildcard) keeps the fully-loaded layout downstream callers expect.  ``isort:
+# skip_file`` would disable sorting for the whole file; the local ``noqa`` comments below scope the override to just
+# these two lines.
+from quadrants.lang.simt import subgroup as _subgroup  # noqa: I001  isort: skip
+from quadrants.lang.simt import reductions as _reductions  # noqa: I001
 from quadrants.lang.simt.reductions import _bin_add, _bin_max, _bin_min
 from quadrants.lang.util import quadrants_scope
 from quadrants.types.annotations import template
