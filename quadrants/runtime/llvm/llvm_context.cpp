@@ -551,6 +551,15 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       auto mcpu_str = AMDGPUContext::get_instance().get_mcpu();
       bool has_permlane64 = (mcpu_str == "gfx940" || mcpu_str == "gfx941" || mcpu_str == "gfx942" ||
                              mcpu_str.substr(0, 5) == "gfx11" || mcpu_str.substr(0, 5) == "gfx12");
+      // Escape hatch for validating the LDS software emulation on hardware that natively supports
+      // ``v_permlane64_b32``: setting ``QD_AMDGPU_FORCE_PERMLANE64_FALLBACK=1`` forces the JIT to take the LDS path
+      // even on gfx11+ / gfx940+, so we can exercise the fallback on a working AMD box (gfx1100 / gfx942) without
+      // needing a gfx10.x runner.  Has no effect on non-AMDGPU backends.
+      if (const char *force_fallback = std::getenv("QD_AMDGPU_FORCE_PERMLANE64_FALLBACK")) {
+        if (force_fallback[0] == '1') {
+          has_permlane64 = false;
+        }
+      }
       if (has_permlane64) {
         patch_intrinsic("amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true, {llvm::Type::getInt32Ty(*ctx)});
       } else if (auto permlane64_func = module->getFunction("amdgpu_permlane64")) {
