@@ -1,7 +1,7 @@
 # type: ignore
 """Device-wide stream compaction (``select`` / ``compact``).
 
-``qd.algorithms.device_select(input, flags, *, out, num_out)`` packs the elements of ``input`` for which the
+``qd.algorithms.device_select(arr, flags, out, num_out)`` packs the elements of ``arr`` for which the
 corresponding ``flags`` entry is non-zero into a dense prefix of ``out``, in stable input order, and writes the count
 of selected elements to ``num_out[0]``.
 
@@ -10,14 +10,14 @@ Algorithm (textbook scan-based compaction):
 1. Exclusive prefix-sum the ``flags`` (treated as 0 / 1) into the shared ``Field(u32)`` scratch, producing per-element
    write indices. This reuses the same three-pass scan internals as ``device_exclusive_scan_add`` but targets a
    scratch slice for the output instead of a caller-supplied ``out`` tensor.
-2. A single fused "scatter" kernel reads ``input[i]`` and ``flags[i]``, and if the flag is set, writes
-   ``out[indices[i]] = input[i]``.
+2. A single fused "scatter" kernel reads ``arr[i]`` and ``flags[i]``, and if the flag is set, writes
+   ``out[indices[i]] = arr[i]``.
 3. A 1-thread tail kernel sums ``indices[N-1] + flags[N-1]`` (= total count) and stores it in ``num_out[0]``.
 
 Scratch layout for the scan: ``scratch[0 : N]`` holds the per-element indices (i32 bit-cast to u32).
 ``scratch[N : N + B0]`` holds the level-0 partials, ``scratch[N + B0 : ...]`` deeper recursion levels (mirrors the
-device scan). The scratch is *always* u32 regardless of the input element dtype, because the scan operates on
-flags-as-counts (i32) which always fit in u32; the input dtype only shows up at scatter time as
+device scan). The scratch is *always* u32 regardless of the element dtype, because the scan operates on
+flags-as-counts (i32) which always fit in u32; the element dtype only shows up at scatter time as
 ``dst[idx] = src[i]``, which lowers per-field for struct dtypes without any scratch reinterpretation.
 
 This is why ``device_select`` works on any element dtype Quadrants supports for field assignment - scalars
@@ -85,19 +85,19 @@ def _select_count(
         num_out[0] = last_idx + last_inc
 
 
-def device_select(input, flags, out, num_out):  # pylint: disable=redefined-builtin
-    """Stream-compact ``input`` by ``flags``: copy ``input[i]`` to a dense prefix of ``out`` for every ``i`` where
+def device_select(arr, flags, out, num_out):
+    """Stream-compact ``arr`` by ``flags``: copy ``arr[i]`` to a dense prefix of ``out`` for every ``i`` where
     ``flags[i] != 0``, in stable input order. Write the count of selected elements to ``num_out[0]``.
 
     Args:
-        input: 1-D tensor of any element dtype that Quadrants supports field-element assignment for: scalars
+        arr: 1-D tensor of any element dtype that Quadrants supports field-element assignment for: scalars
             (``i32`` / ``u32`` / ``f32`` / ``i64`` / ``u64`` / ``f64``) and structs (``qd.Struct.field({...})`` or
             ``qd.types.struct(...)`` - e.g. the libuipc ``Vector{2,3,4}i`` shapes). The scatter is
             ``dst[idx] = src[i]``, which lowers per-field for struct dtypes, so no scratch reinterpretation is
             needed for wider / composite element types.
-        flags: 1-D ``i32`` tensor, same shape as ``input``. Each entry is treated as a boolean (``!= 0`` selects).
-            Caller-built (e.g. populated by a separate kernel applying a predicate to ``input``).
-        out: 1-D tensor with the same dtype as ``input``. Must hold at least ``N`` elements (so a
+        flags: 1-D ``i32`` tensor, same shape as ``arr``. Each entry is treated as a boolean (``!= 0`` selects).
+            Caller-built (e.g. populated by a separate kernel applying a predicate to ``arr``).
+        out: 1-D tensor with the same dtype as ``arr``. Must hold at least ``N`` elements (so a
             worst-case-everyone-selected run fits); only the prefix ``out[0 : num_out[0]]`` is meaningful on return.
         num_out: 1-element ``i32`` tensor receiving the selected count.
 
@@ -107,21 +107,21 @@ def device_select(input, flags, out, num_out):  # pylint: disable=redefined-buil
     See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md``
     for the scratch-into-indices layout and the algorithm reference.
     """
-    if not hasattr(input, "shape") or len(input.shape) != 1:
-        raise TypeError(f"device_select expects a 1-D input; got shape {getattr(input, 'shape', None)}")
-    if not hasattr(flags, "shape") or flags.shape != input.shape:
+    if not hasattr(arr, "shape") or len(arr.shape) != 1:
+        raise TypeError(f"device_select expects a 1-D arr; got shape {getattr(arr, 'shape', None)}")
+    if not hasattr(flags, "shape") or flags.shape != arr.shape:
         raise TypeError(
-            f"device_select expects flags.shape == input.shape; got input={input.shape}, flags={flags.shape}"
+            f"device_select expects flags.shape == arr.shape; got arr={arr.shape}, flags={flags.shape}"
         )
     if flags.dtype != i32:
         raise TypeError(f"device_select expects flags.dtype == qd.i32; got {flags.dtype}")
     if not hasattr(out, "shape") or len(out.shape) != 1:
         raise TypeError(f"device_select expects a 1-D out; got shape {getattr(out, 'shape', None)}")
-    if out.dtype != input.dtype:
-        raise TypeError(f"device_select dtype mismatch: input={input.dtype}, out={out.dtype}")
-    if out.shape[0] < input.shape[0]:
+    if out.dtype != arr.dtype:
+        raise TypeError(f"device_select dtype mismatch: arr={arr.dtype}, out={out.dtype}")
+    if out.shape[0] < arr.shape[0]:
         raise ValueError(
-            f"device_select out.shape[0]={out.shape[0]} < input.shape[0]={input.shape[0]}; "
+            f"device_select out.shape[0]={out.shape[0]} < arr.shape[0]={arr.shape[0]}; "
             "out must hold at least the input size to be safe in the all-selected case"
         )
     if not hasattr(num_out, "shape") or num_out.shape != (1,):
@@ -129,7 +129,7 @@ def device_select(input, flags, out, num_out):  # pylint: disable=redefined-buil
     if num_out.dtype != i32:
         raise TypeError(f"device_select expects num_out.dtype == qd.i32; got {num_out.dtype}")
 
-    N = input.shape[0]
+    N = arr.shape[0]
     if N == 0:
         return
 
@@ -187,7 +187,7 @@ def device_select(input, flags, out, num_out):  # pylint: disable=redefined-buil
     )
 
     # Step 2: scatter src[i] -> dst[indices[i]] for every selected i.
-    _select_scatter(input, flags, scratch, indices_off, out, N)
+    _select_scatter(arr, flags, scratch, indices_off, out, N)
 
     # Step 3: write the count.
     _select_count(flags, scratch, indices_off, N, num_out)

@@ -285,7 +285,7 @@ def test_device_reduce_max(dtype, N):
 
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_min_derives_identity_from_dtype():
-    """``device_reduce_min`` does not take an identity argument; it's derived from ``input.dtype`` (mirror of the
+    """``device_reduce_min`` does not take an identity argument; it's derived from ``arr.dtype`` (mirror of the
     ``block.reduce_min`` / ``subgroup.reduce_min`` contract). On an all-min-identity input the reduction returns
     the identity itself (largest representable value), which exercises the auto-derivation end-to-end."""
     for dtype in _REDUCE_DTYPES:
@@ -347,7 +347,7 @@ def _scan_dtype_mask(dtype):
 @pytest.mark.parametrize("dtype", _SCAN_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_add(dtype, N):
-    """device_exclusive_scan_add(out[i] = sum(input[0:i])) matches numpy.cumsum-shifted across the full 6-dtype set."""
+    """device_exclusive_scan_add(out[i] = sum(arr[0:i])) matches numpy.cumsum-shifted across the full 6-dtype set."""
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     host = _rand_reduce_host(rng, dtype, N, bound=100)
@@ -391,7 +391,7 @@ def test_device_exclusive_scan_add(dtype, N):
 @pytest.mark.parametrize("dtype", _SCAN_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_min(dtype, N):
-    """device_exclusive_scan_min(out[i] = min(input[0:i])) matches numpy.minimum.accumulate-shifted across the full
+    """device_exclusive_scan_min(out[i] = min(arr[0:i])) matches numpy.minimum.accumulate-shifted across the full
     6-dtype set."""
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
@@ -418,7 +418,7 @@ def test_device_exclusive_scan_min(dtype, N):
 @pytest.mark.parametrize("dtype", _SCAN_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_max(dtype, N):
-    """device_exclusive_scan_max(out[i] = max(input[0:i])) matches numpy.maximum.accumulate-shifted across the full
+    """device_exclusive_scan_max(out[i] = max(arr[0:i])) matches numpy.maximum.accumulate-shifted across the full
     6-dtype set."""
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)

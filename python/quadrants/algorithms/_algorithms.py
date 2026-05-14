@@ -64,7 +64,7 @@ class PrefixSumExecutor:
     """Parallel Prefix Sum (Scan) Helper.
 
     .. deprecated::
-        Prefer ``qd.algorithms.device_exclusive_scan_add(input, *, out)``. The
+        Prefer ``qd.algorithms.device_exclusive_scan_add(arr, out)``. The
         new functional API supports ``{i32, u32, f32}`` on every backend
         (CUDA, AMDGPU, Vulkan, Metal) and runs the exclusive variant directly.
         ``PrefixSumExecutor`` is inclusive-only, ``i32``-only, and limited to
@@ -84,7 +84,7 @@ class PrefixSumExecutor:
 
         warnings.warn(
             "qd.algorithms.PrefixSumExecutor is deprecated. Use "
-            "qd.algorithms.device_exclusive_scan_add(input, *, out) instead. "
+            "qd.algorithms.device_exclusive_scan_add(arr, out) instead. "
             "See docs/source/user_guide/algorithms.md for migration.",
             DeprecationWarning,
             stacklevel=2,

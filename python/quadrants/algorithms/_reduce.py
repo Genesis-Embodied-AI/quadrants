@@ -256,20 +256,20 @@ def _plan_levels(N: int):
     return sizes, dst_offsets, cumul
 
 
-def _device_reduce(input, *, out, op, identity_value):  # pylint: disable=redefined-builtin
+def _device_reduce(arr, *, out, op, identity_value):
     """Internal driver shared by ``device_reduce_{add,min,max}``.
 
-    Dispatches on ``input.dtype`` width: 4-byte dtypes go through the ``Field(u32)`` scratch and ``_reduce_pass``;
+    Dispatches on ``arr.dtype`` width: 4-byte dtypes go through the ``Field(u32)`` scratch and ``_reduce_pass``;
     8-byte dtypes go through the ``Field(u64)`` scratch and ``_reduce_pass_u64``. Everything else (control flow,
     recursion plan, identity ferrying) is shared.
     """
-    if not hasattr(input, "shape") or len(input.shape) != 1:
-        raise TypeError(f"device reduce expects a 1-D input tensor; got shape {getattr(input, 'shape', None)}")
+    if not hasattr(arr, "shape") or len(arr.shape) != 1:
+        raise TypeError(f"device reduce expects a 1-D input tensor; got shape {getattr(arr, 'shape', None)}")
     if not hasattr(out, "shape") or out.shape != (1,):
         raise TypeError(f"device reduce expects out.shape == (1,); got {out.shape}")
-    if input.dtype != out.dtype:
-        raise TypeError(f"device reduce dtype mismatch: input={input.dtype}, out={out.dtype}")
-    dtype = input.dtype
+    if arr.dtype != out.dtype:
+        raise TypeError(f"device reduce dtype mismatch: arr={arr.dtype}, out={out.dtype}")
+    dtype = arr.dtype
     if dtype not in _SUPPORTED_DTYPES:
         raise NotImplementedError(
             f"device reduce dtype {dtype} not supported (need one of "
@@ -277,7 +277,7 @@ def _device_reduce(input, *, out, op, identity_value):  # pylint: disable=redefi
         )
     width = _dtype_width_bytes(dtype)
 
-    N = input.shape[0]
+    N = arr.shape[0]
     sizes, dst_offsets, total_scratch = _plan_levels(N)
 
     scratch_cap = scratch_capacity_u32() if width == 4 else scratch_capacity_u64()
@@ -293,8 +293,8 @@ def _device_reduce(input, *, out, op, identity_value):  # pylint: disable=redefi
 
     if num_passes == 0:
         # Trivially short input (N == 0 or N == 1): no reduce kernel needed.
-        # N == 0: write `identity` to out[0]. N == 1: out[0] = input[0].
-        _device_reduce_trivial(input, out=out, identity_bits=identity_bits)
+        # N == 0: write `identity` to out[0]. N == 1: out[0] = arr[0].
+        _device_reduce_trivial(arr, out=out, identity_bits=identity_bits)
         return
 
     scratch = get_scratch_u32() if width == 4 else get_scratch_u64()
@@ -306,7 +306,7 @@ def _device_reduce(input, *, out, op, identity_value):  # pylint: disable=redefi
         total_threads = n_out * BLOCK_DIM
         is_first = k == 0
         is_last = k == num_passes - 1
-        src = input if is_first else scratch
+        src = arr if is_first else scratch
         dst = out if is_last else scratch
         src_off = 0 if is_first else _src_off(k, dst_offsets)
         dst_off = 0 if is_last else dst_offsets[k]
@@ -331,10 +331,10 @@ def _src_off(k: int, dst_offsets):
 
 
 @kernel
-def _trivial_write_input(input: template(), out: template()):  # pylint: disable=redefined-builtin
-    """N == 1 path: copy input[0] to out[0]. Two-element kernel keeps the host driver loop-free for the trivial case."""
+def _trivial_write_arr(arr: template(), out: template()):
+    """N == 1 path: copy arr[0] to out[0]. Two-element kernel keeps the host driver loop-free for the trivial case."""
     for _ in range(1):
-        out[0] = input[0]
+        out[0] = arr[0]
 
 
 @kernel
@@ -348,23 +348,23 @@ def _trivial_write_identity(out: template(), identity_bits: u32, dtype: template
         out[0] = bit_cast(identity_bits, dtype)
 
 
-def _device_reduce_trivial(input, *, out, identity_bits):  # pylint: disable=redefined-builtin
-    N = input.shape[0]
+def _device_reduce_trivial(arr, *, out, identity_bits):
+    N = arr.shape[0]
     if N == 0:
         _trivial_write_identity(out, identity_bits, out.dtype)
     elif N == 1:
-        _trivial_write_input(input, out)
+        _trivial_write_arr(arr, out)
     else:
         raise AssertionError(f"_device_reduce_trivial called with N={N}")
 
 
-def device_reduce_add(input, out):  # pylint: disable=redefined-builtin
-    """Compute ``out[0] = sum(input)`` on the device.
+def device_reduce_add(arr, out):
+    """Compute ``out[0] = sum(arr)`` on the device.
 
     Args:
-        input: 1-D tensor of any supported scalar dtype - ``{i32, u32, f32, i64, u64, f64}``. Pass a ``qd.field``,
+        arr: 1-D tensor of any supported scalar dtype - ``{i32, u32, f32, i64, u64, f64}``. Pass a ``qd.field``,
             ``qd.ndarray``, or ``qd.Tensor`` wrapper around either.
-        out: 1-element tensor of the same dtype as ``input``. Caller-supplied so the call is fully asynchronous - no
+        out: 1-element tensor of the same dtype as ``arr``. Caller-supplied so the call is fully asynchronous - no
             implicit device-to-host sync. To get a Python scalar, do ``out.to_numpy()[0]`` explicitly after this
             call.
 
@@ -373,30 +373,30 @@ def device_reduce_add(input, out):  # pylint: disable=redefined-builtin
     allocation. See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the recursion plan and
     the ``bit_cast``-into-scratch scheme.
     """
-    _device_reduce(input, out=out, op=_bin_add, identity_value=0)
+    _device_reduce(arr, out=out, op=_bin_add, identity_value=0)
 
 
-def device_reduce_min(input, out):  # pylint: disable=redefined-builtin
-    """Compute ``out[0] = min(input)`` on the device.
+def device_reduce_min(arr, out):
+    """Compute ``out[0] = min(arr)`` on the device.
 
     Args:
-        input: see ``device_reduce_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
+        arr: see ``device_reduce_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
         out: see ``device_reduce_add``.
 
-    The monoid identity is derived from ``input.dtype`` automatically (the largest representable value:
+    The monoid identity is derived from ``arr.dtype`` automatically (the largest representable value:
     ``+inf`` for ``f32`` / ``f64``, ``INT32_MAX`` / ``INT64_MAX`` for signed ints, ``UINT32_MAX`` / ``UINT64_MAX``
     for unsigned). Mirrors the ``block.reduce_min`` / ``subgroup.reduce_min`` contract: the typed reduce
     primitives do not take an identity argument because (op, dtype) fixes it.
     """
-    _device_reduce(input, out=out, op=_bin_min, identity_value=_min_identity(input.dtype))
+    _device_reduce(arr, out=out, op=_bin_min, identity_value=_min_identity(arr.dtype))
 
 
-def device_reduce_max(input, out):  # pylint: disable=redefined-builtin
-    """Compute ``out[0] = max(input)`` on the device. Mirror of :func:`device_reduce_min` with ``max`` and the
+def device_reduce_max(arr, out):
+    """Compute ``out[0] = max(arr)`` on the device. Mirror of :func:`device_reduce_min` with ``max`` and the
     dtype's *negative* extremum (``-inf`` for floats, ``INT32_MIN`` / ``INT64_MIN`` for signed ints, ``0`` for
-    unsigned ints), again derived from ``input.dtype`` automatically.
+    unsigned ints), again derived from ``arr.dtype`` automatically.
     """
-    _device_reduce(input, out=out, op=_bin_max, identity_value=_max_identity(input.dtype))
+    _device_reduce(arr, out=out, op=_bin_max, identity_value=_max_identity(arr.dtype))
 
 
 __all__ = ["device_reduce_add", "device_reduce_min", "device_reduce_max"]

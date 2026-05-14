@@ -448,17 +448,17 @@ def _exclusive_scan_inplace_f64(scratch, off: int, n: int, identity_bits: int, o
     )
 
 
-def _device_exclusive_scan(inp, *, out, op, identity_value):
+def _device_exclusive_scan(arr, *, out, op, identity_value):
     """Internal driver shared by ``device_exclusive_scan_{add,min,max}``."""
-    if not hasattr(inp, "shape") or len(inp.shape) != 1:
-        raise TypeError(f"device exclusive scan expects a 1-D input tensor; got shape {getattr(inp, 'shape', None)}")
-    if not hasattr(out, "shape") or out.shape != inp.shape:
+    if not hasattr(arr, "shape") or len(arr.shape) != 1:
+        raise TypeError(f"device exclusive scan expects a 1-D input tensor; got shape {getattr(arr, 'shape', None)}")
+    if not hasattr(out, "shape") or out.shape != arr.shape:
         raise TypeError(
-            f"device exclusive scan expects out.shape == input.shape; got input={inp.shape}, out={out.shape}"
+            f"device exclusive scan expects out.shape == arr.shape; got arr={arr.shape}, out={out.shape}"
         )
-    if inp.dtype != out.dtype:
-        raise TypeError(f"device exclusive scan dtype mismatch: input={inp.dtype}, out={out.dtype}")
-    if inp is out:
+    if arr.dtype != out.dtype:
+        raise TypeError(f"device exclusive scan dtype mismatch: arr={arr.dtype}, out={out.dtype}")
+    if arr is out:
         # See design doc: in-place scan is rejected (no benefit when the caller already allocates `out` once and
         # reuses it; protecting against same-buffer aliasing would just complicate the kernels).
         raise ValueError(
@@ -467,7 +467,7 @@ def _device_exclusive_scan(inp, *, out, op, identity_value):
             "caller-supplied out, see qipc_device_algos_design.md)"
         )
 
-    dtype = inp.dtype
+    dtype = arr.dtype
     if dtype not in _SUPPORTED_DTYPES:
         raise NotImplementedError(
             f"device exclusive scan dtype {dtype} not supported (need one of "
@@ -475,7 +475,7 @@ def _device_exclusive_scan(inp, *, out, op, identity_value):
         )
     width = _dtype_width_bytes(dtype)
 
-    N = inp.shape[0]
+    N = arr.shape[0]
     identity_bits = _identity_bits(identity_value, dtype)
 
     is_f64 = dtype == f64
@@ -493,11 +493,11 @@ def _device_exclusive_scan(inp, *, out, op, identity_value):
 
     if N <= BLOCK_DIM:
         if width == 4:
-            _scan_single_tile_input_to_out(inp, out, N, identity_bits, op, dtype)
+            _scan_single_tile_input_to_out(arr, out, N, identity_bits, op, dtype)
         elif not is_f64:
-            _scan_single_tile_input_to_out_u64(inp, out, N, identity_bits, op, dtype)
+            _scan_single_tile_input_to_out_u64(arr, out, N, identity_bits, op, dtype)
         else:
-            _scan_single_tile_input_to_out_f64(inp, out, N, identity_bits, op)
+            _scan_single_tile_input_to_out_f64(arr, out, N, identity_bits, op)
         return
 
     if is_f64:
@@ -520,9 +520,9 @@ def _device_exclusive_scan(inp, *, out, op, identity_value):
         )
 
     if is_f64:
-        # Pass 1: tile-reduce input -> f64 scratch[0:B0] (no bit_cast on the write)
+        # Pass 1: tile-reduce arr -> f64 scratch[0:B0] (no bit_cast on the write)
         _reduce_pass_f64(
-            inp,
+            arr,
             scratch,
             0,
             0,
@@ -536,9 +536,9 @@ def _device_exclusive_scan(inp, *, out, op, identity_value):
         )
         # Pass 2: exclusive-scan f64 scratch[0:B0] in place
         _exclusive_scan_inplace_f64(scratch, 0, B0, identity_bits, op, B0)
-        # Pass 3: input + f64 scratch[0:B0] -> out (no bit_cast on either side)
+        # Pass 3: arr + f64 scratch[0:B0] -> out (no bit_cast on either side)
         _scan_pass3_f64(
-            inp,
+            arr,
             0,
             scratch,
             0,
@@ -557,9 +557,9 @@ def _device_exclusive_scan(inp, *, out, op, identity_value):
     scan_inplace_driver = _exclusive_scan_inplace_u32 if width == 4 else _exclusive_scan_inplace_u64
     pass3_kernel = _scan_pass3 if width == 4 else _scan_pass3_u64
 
-    # Pass 1: tile-reduce input -> scratch[0:B0]
+    # Pass 1: tile-reduce arr -> scratch[0:B0]
     reduce_pass_kernel(
-        inp,
+        arr,
         scratch,
         0,
         0,
@@ -575,9 +575,9 @@ def _device_exclusive_scan(inp, *, out, op, identity_value):
     # Pass 2: exclusive-scan scratch[0:B0] in place (recursive if B0 > BLOCK_DIM).
     scan_inplace_driver(scratch, 0, B0, identity_bits, op, dtype, B0)
 
-    # Pass 3: input + scratch[0:B0] -> out
+    # Pass 3: arr + scratch[0:B0] -> out
     pass3_kernel(
-        inp,
+        arr,
         0,
         scratch,
         0,
@@ -684,13 +684,13 @@ def _scan_trivial_n1_f64(dst: template(), identity_bits: u64):
         dst[0] = bit_cast(identity_bits, f64)
 
 
-def device_exclusive_scan_add(input, out):  # pylint: disable=redefined-builtin
-    """Compute ``out[i] = sum(input[0:i])`` (exclusive prefix sum) on the device.
+def device_exclusive_scan_add(arr, out):
+    """Compute ``out[i] = sum(arr[0:i])`` (exclusive prefix sum) on the device.
 
     Args:
-        input: 1-D tensor of any supported scalar dtype - ``{i32, u32, f32, i64, u64, f64}``. Pass a ``qd.field``,
+        arr: 1-D tensor of any supported scalar dtype - ``{i32, u32, f32, i64, u64, f64}``. Pass a ``qd.field``,
             ``qd.ndarray``, or ``qd.Tensor`` wrapper around either.
-        out: 1-D tensor with the same dtype and shape as ``input``. Must be a distinct buffer (no in-place scan).
+        out: 1-D tensor with the same dtype and shape as ``arr``. Must be a distinct buffer (no in-place scan).
 
     The implementation is the three-pass Blelloch-style scan built on ``block.exclusive_scan`` and the shared
     scratch fields (``Field(u32)`` for 4-byte dtypes, ``Field(u64)`` for 8-byte). Recurses on the partials buffer
@@ -699,30 +699,30 @@ def device_exclusive_scan_add(input, out):  # pylint: disable=redefined-builtin
     See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md``
     for the algorithmic background and the ``bit_cast``-into-scratch scheme.
     """
-    _device_exclusive_scan(input, out=out, op=_bin_add, identity_value=0)
+    _device_exclusive_scan(arr, out=out, op=_bin_add, identity_value=0)
 
 
-def device_exclusive_scan_min(input, out):  # pylint: disable=redefined-builtin
-    """Compute ``out[i] = min(input[0:i])`` (exclusive prefix min) on the device.
+def device_exclusive_scan_min(arr, out):
+    """Compute ``out[i] = min(arr[0:i])`` (exclusive prefix min) on the device.
 
     Args:
-        input: see ``device_exclusive_scan_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
+        arr: see ``device_exclusive_scan_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
         out: see ``device_exclusive_scan_add``.
 
-    The monoid identity is derived from ``input.dtype`` automatically (largest representable value: ``+inf`` for
+    The monoid identity is derived from ``arr.dtype`` automatically (largest representable value: ``+inf`` for
     floats, ``INT{32,64}_MAX`` for signed ints, ``UINT{32,64}_MAX`` for unsigned). Mirrors the
     ``block.exclusive_min`` / ``subgroup.exclusive_min_tiled`` contract: the typed scan primitives do not take an
     identity argument because (op, dtype) fixes it.
     """
-    _device_exclusive_scan(input, out=out, op=_bin_min, identity_value=_min_identity(input.dtype))
+    _device_exclusive_scan(arr, out=out, op=_bin_min, identity_value=_min_identity(arr.dtype))
 
 
-def device_exclusive_scan_max(input, out):  # pylint: disable=redefined-builtin
-    """Compute ``out[i] = max(input[0:i])`` (exclusive prefix max) on the device. Mirror of
+def device_exclusive_scan_max(arr, out):
+    """Compute ``out[i] = max(arr[0:i])`` (exclusive prefix max) on the device. Mirror of
     :func:`device_exclusive_scan_min` with ``max`` and the dtype's *negative* extremum (``-inf`` for floats,
-    ``INT{32,64}_MIN`` for signed ints, ``0`` for unsigned), again derived from ``input.dtype`` automatically.
+    ``INT{32,64}_MIN`` for signed ints, ``0`` for unsigned), again derived from ``arr.dtype`` automatically.
     """
-    _device_exclusive_scan(input, out=out, op=_bin_max, identity_value=_max_identity(input.dtype))
+    _device_exclusive_scan(arr, out=out, op=_bin_max, identity_value=_max_identity(arr.dtype))
 
 
 __all__ = [
