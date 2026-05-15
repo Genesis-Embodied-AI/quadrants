@@ -2,7 +2,7 @@
 
 Atomic read-modify-write operations on a single memory location. They do not synchronize threads; the only ordering they provide is the per-location atomicity of the read-modify-write itself. For cooperative ops across threads see the `qd.simt.block.*`, `qd.simt.subgroup.*`, and `qd.simt.grid.*` namespaces. Bit-counting helpers on integer registers (`qd.math.popcnt`, `qd.math.clz`) are documented in [math](math.md).
 
-The companion read-side primitive `qd.volatile_load(target)` is documented at the end of this page (`### qd.volatile_load(target)`); it pairs with atomic stores in producer / consumer patterns where the reader must observe every update from another thread or block, and is the recommended spelling for spin-wait loops.
+The companion read-side primitive `qd.volatile_load(target)` is documented at the end of this page (`### qd.volatile_load(target)`); it pairs with atomic stores in producer / consumer patterns where the reader must observe every update from another thread or block, and is the recommended approach for spin-wait loops.
 
 ## What's available
 
@@ -161,14 +161,14 @@ Quadrants additionally suppresses the optimisations that would otherwise let an 
 
 #### Spin-wait pattern (the canonical use case)
 
-The naive spelling
+The naive approach
 
 ```python
 while flags[prev] == STATE_INVALID:
     pass
 ```
 
-is undefined: the compiler may hoist `flags[prev]` out of the loop, turning the spin into an infinite loop. `qd.volatile_load` is the cheapest correct spelling on every backend:
+is undefined: the compiler may hoist `flags[prev]` out of the loop, turning the spin into an infinite loop. `qd.volatile_load` is the cheapest correct approach on every backend:
 
 ```python
 while qd.volatile_load(flags[prev]) == STATE_INVALID:
