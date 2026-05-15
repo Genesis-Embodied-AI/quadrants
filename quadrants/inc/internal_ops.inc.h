@@ -33,12 +33,22 @@ PER_INTERNAL_OP(subgroupBroadcast)
 PER_INTERNAL_OP(subgroupShuffle)
 PER_INTERNAL_OP(subgroupShuffleDown)
 PER_INTERNAL_OP(subgroupShuffleUp)
-PER_INTERNAL_OP(subgroupSize)
+// Two ballot variants: u32 covers lanes [0, 32) (the most common case, used by `subgroup.ballot_first_n`); u64 covers
+// the whole subgroup ([0, 32) on wave32 with the high 32 bits zero, [0, 64) on wave64).  See `subgroup.py` for the
+// public API and the per-backend codegen (CUDA / AMDGPU / SPIR-V) for the lowering details.
+PER_INTERNAL_OP(subgroupBallotU32)
+PER_INTERNAL_OP(subgroupBallotU64)
+// ``subgroupSize`` (the previous IR op) was removed: ``qd.simt.subgroup.group_size()`` now resolves at compile time via
+// ``Program::subgroup_size()`` and returns a Python ``int`` (32 on CUDA, 64 on AMDGPU, device-probed on Vulkan /
+// Metal), so the value is folded into the kernel IR as a literal on every backend instead of going through an
+// internal-op- dispatched ``OpLoad`` / constant-fold on each codegen.  Net effect: one fewer op, identical generated
+// code, and the value is usable as a ``qd.template()`` argument (which an IR op couldn't be).
 PER_INTERNAL_OP(subgroupInvocationId)
 // subgroupAdd / subgroupMul / subgroupMin / subgroupMax / subgroupAnd / subgroupOr / subgroupXor and subgroupInclusive*
-// / subgroupExclusive* removed: use portable Python `subgroup.reduce_add(value, log2_size)` / `subgroup.inclusive_add`
-// / `subgroup.exclusive_add` (and equivalents), implemented as `@qd.func` Hillis-Steele scans on top of
-// `subgroupShuffleDown` / `subgroupShuffleUp` / `subgroupShuffle`, which work on all backends.
+// / subgroupExclusive* removed: use portable Python `subgroup.reduce_add_tiled(value, log2_size)` /
+// `subgroup.inclusive_add_tiled` / `subgroup.exclusive_add_tiled` (and equivalents), implemented as `@qd.func`
+// Hillis-Steele scans on top of `subgroupShuffleDown` / `subgroupShuffleUp` / `subgroupShuffle`, which work on all
+// backends.
 PER_INTERNAL_OP(spirv_clock_i64)
 
 // CUDA

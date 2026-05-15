@@ -1154,6 +1154,12 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
   caps.set(DeviceCapability::spirv_has_int16, 1);
   caps.set(DeviceCapability::spirv_has_float16, 1);
   caps.set(DeviceCapability::spirv_has_subgroup_basic, 1);
+  // Apple silicon (M1+) and every AMD / Intel discrete GPU we support on macOS
+  // run with a 32-wide SIMD group.  Metal exposes `threadExecutionWidth` only
+  // on a compiled `MTLComputePipelineState`, not on the device, but every
+  // shipping family is 32 so we hard-code it here.  Surfaces via
+  // `Program::subgroup_size()` and goes into the fe-ll cache key.
+  caps.set(DeviceCapability::spirv_subgroup_size, 32);
 
   if (feature_64_bit_integer_math) {
     caps.set(DeviceCapability::spirv_has_int64, 1);

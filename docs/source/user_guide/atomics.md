@@ -16,7 +16,7 @@ All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y
 | `atomic_min`, `atomic_max`                  | int native; floats via CAS                 | int native; floats via CAS            | int native; floats via CAS                             | int native; floats via CAS       |
 | `atomic_and`, `atomic_or`, `atomic_xor`     | int only (native)                          | int only (native)                     | int only (native)                                      | int only (native)                |
 | `atomic_exchange`                           | int / float native (`atomicExch`)          | int / float native (`*_atomic_swap`)  | int native; f32 / f64 global via uint-bitcast `OpAtomicExchange`; f16, shared float, workgroup f64 deferred‡ | int / float native (`xchg`)      |
-| `atomic_cas`                                | int native (`atomicCAS`)                   | int native (`*_atomic_cmpswap`)       | int native (`OpAtomicCompareExchange`); f32 / f64 rejected at trace time§                                 | int native (`cmpxchg`)           |
+| `atomic_cas`                                | int native (`atomicCAS`)                   | int native (`*_atomic_cmpswap`)       | int native (`OpAtomicCompareExchange`); f32 / f64 rejected at compile time§                               | int native (`cmpxchg`)           |
 
 A few cross-cutting notes that the cells above abbreviate:
 
@@ -31,7 +31,7 @@ A few cross-cutting notes that the cells above abbreviate:
 
 ‡ `atomic_exchange` on `f16`, on shared (`qd.simt.block.SharedArray`) float arrays, and on f64 in workgroup memory is not yet wired up. Global-memory `atomic_exchange` on every other dtype/backend combination listed above is supported; the SPIR-V path bitcasts through the corresponding uint type so no `spirv_has_atomic_float_*` capability is required.
 
-§ `atomic_cas` on `f32` / `f64` is rejected at trace time (raises `QuadrantsTypeError`). Integer CAS (`i32` / `u32` / `i64` / `u64`) is supported on every backend listed in the table above, with the same Metal caveat for `i64` / `u64` (†) as the rest of the 64-bit integer atomic family.
+§ `atomic_cas` on `f32` / `f64` is rejected at compile time (raises `QuadrantsTypeError`). Integer CAS (`i32` / `u32` / `i64` / `u64`) is supported on every backend listed in the table above, with the same Metal caveat for `i64` / `u64` (†) as the rest of the 64-bit integer atomic family.
 
 All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space - to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.mem_fence()` (device scope).
 
@@ -65,7 +65,7 @@ Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
-Bitwise atomics. Integer dtypes only - passing `f32` / `f64` raises a type error at trace time.
+Bitwise atomics. Integer dtypes only — passing `f32` / `f64` raises a type error at compile time.
 
 ### `qd.atomic_sub(x, y)` / `qd.atomic_mul(x, y)`
 
@@ -129,7 +129,7 @@ def cas_loop_max():
         # Otherwise some other thread won the race; loop back and re-read.
 ```
 
-Currently restricted to integer dtypes (`i32` / `u32` / `i64` / `u64`); float CAS is rejected at trace time. The Metal `i64` / `u64` caveat in the support table footnote applies here too. There is no shared-memory CAS path yet.
+Currently restricted to integer dtypes (`i32` / `u32` / `i64` / `u64`); float CAS is rejected at compile time. The Metal `i64` / `u64` caveat in the support table footnote applies here too. There is no shared-memory CAS path yet.
 
 ## Performance and portability notes
 

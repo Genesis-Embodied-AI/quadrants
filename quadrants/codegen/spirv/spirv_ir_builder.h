@@ -416,7 +416,6 @@ class IRBuilder {
   Value get_local_invocation_id(uint32_t dim_index);
   Value get_global_invocation_id(uint32_t dim_index);
   Value get_subgroup_invocation_id();
-  Value get_subgroup_size();
 
   // Expressions
   Value add(Value a, Value b);
@@ -508,6 +507,9 @@ class IRBuilder {
   SType f32_type() const {
     return t_fp32_;
   }
+  SType v4_u32_type() const {
+    return t_v4_uint_;
+  }
 
   SType i16_type() const {
     return t_int16_;
@@ -582,6 +584,7 @@ class IRBuilder {
   SType t_v2_int_;
   SType t_v3_int_;
   SType t_v3_uint_;
+  SType t_v4_uint_;
   SType t_v4_fp32_;
   SType t_v3_fp32_;
   SType t_v2_fp32_;
@@ -590,7 +593,6 @@ class IRBuilder {
   Value gl_num_work_groups_;
   Value gl_work_group_size_;
   Value subgroup_local_invocation_id_;
-  Value subgroup_size_;
 
   // Random function and variables
   bool init_rand_{false};

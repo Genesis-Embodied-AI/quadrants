@@ -285,13 +285,14 @@ def warp_shfl_up_i32(val: template()):
 
 @func
 def subgroup_inclusive_add_warp_i32(val: template()):
-    """Single-arg adapter around ``subgroup.inclusive_add(val, 5)``.
+    """Single-arg adapter around ``subgroup.inclusive_add_tiled(val, 5)``.
 
-    The prefix-sum kernel ``scan_add_inclusive`` takes its scan primitive as a ``template()`` callable invoked as
-    ``inclusive_add(val)`` (one argument).  The portable ``subgroup.inclusive_add`` takes ``(value, log2_size)`` — pass
-    ``log2_size=5`` to scan a full 32-lane warp/wave, matching ``WARP_SZ`` in ``scan_add_inclusive``.
+    The prefix-sum kernel ``scan_add_inclusive`` takes its scan primitive as a ``template()`` callable invoked with
+    one argument ``fn(val)``.  The portable ``subgroup.inclusive_add_tiled`` takes ``(value, log2_size)`` — this
+    adapter pre-binds ``log2_size=5`` to scan a full 32-lane warp/wave, matching ``WARP_SZ`` in
+    ``scan_add_inclusive``.
     """
-    return subgroup.inclusive_add(val, 5)
+    return subgroup.inclusive_add_tiled(val, 5)
 
 
 @kernel
@@ -300,7 +301,7 @@ def scan_add_inclusive(
     in_beg: i32,
     in_end: i32,
     single_block: template(),
-    inclusive_add: template(),
+    inclusive_add_tiled: template(),
 ):
     WARP_SZ = 32
     BLOCK_SZ = 64
@@ -315,7 +316,7 @@ def scan_add_inclusive(
 
         pad_shared = block.SharedArray((65,), i32)
 
-        val = inclusive_add(val)
+        val = inclusive_add_tiled(val)
         block.sync()
 
         # Put warp scan results to smem

@@ -451,15 +451,27 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       llvm_val[stmt] = emit_amdgpu_shuffle_up(
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type, offset);
+    } else if (stmt->func_name == "subgroupBallotU32") {
+      // We always lower to ``llvm.amdgcn.ballot.i64`` and truncate to i32, on both wave32 and wave64.  In principle
+      // ``llvm.amdgcn.ballot.i32`` exists exactly for this case and is documented as well-defined on wave64 (PR
+      // https://github.com/llvm/llvm-project/pull/71556 in LLVM 18: SETCC at wavefront width, then zext/trunc to the
+      // requested return type, i.e. the low 32 bits = lanes 0..31's predicates on wave64).  In practice the LLVM
+      // versions we've tested (20 and 22.1.0) still fail to select ``ballot.i32`` on gfx942 when the predicate is a
+      // non-constant ``i1`` — isel hits "Cannot select: AMDGPUISD::SETCC ..." for the ``i1 -> i32 != 0`` predicate
+      // shape that ``ballot_first_n`` produces in real kernels.  ``ballot.i64 + trunc to i32`` works around the bug
+      // and produces identical assembly (same single ``v_cmp_*_e64`` + low-half store) since LLVM's CSE folds the
+      // i64 ballot's high half away as soon as the trunc is observed.  See min repro in the PR thread; the workaround
+      // costs nothing and is robust regardless of upstream LLVM fix status.
+      auto ballot64 = call("amdgpu_ballot_u64", llvm_val[stmt->args[0]]);
+      llvm_val[stmt] = builder->CreateTrunc(ballot64, llvm::Type::getInt32Ty(*llvm_context));
+    } else if (stmt->func_name == "subgroupBallotU64") {
+      // ``llvm.amdgcn.ballot.i64`` returns a 64-bit ballot for the full subgroup: on wave64 every lane contributes;
+      // on wave32 only lanes 0..31 contribute and bits 32..63 of the result are zero.  Either way the i64 return is
+      // uniform across wavefront modes, which is what ``ballot`` advertises to the user.  ``ballot.i64``
+      // on either wave32 or wave64 selects cleanly in current LLVM (only the i32 form has the isel bug noted above).
+      llvm_val[stmt] = call("amdgpu_ballot_u64", llvm_val[stmt->args[0]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
-    } else if (stmt->func_name == "subgroupSize") {
-      // AMDGPU wavefront size is 32 (RDNA / wave32) or 64 (CDNA, GFX9, RDNA wave64).  The `llvm.amdgcn.wavefrontsize`
-      // intrinsic returns the wavefront size as i32; the AMDGPU backend folds it to 32 or 64 at codegen time based on
-      // the function's `+wavefrontsize32` / `+wavefrontsize64` target feature.  Returning the intrinsic (rather than a
-      // Quadrants-side constant) lets LLVM pick the right value for the active wavefront mode without Quadrants
-      // having to track it.
-      llvm_val[stmt] = builder->CreateIntrinsic(Intrinsic::amdgcn_wavefrontsize, ArrayRef<llvm::Value *>{});
     } else if (stmt->func_name == "subgroupBarrier") {
       // Wave-scope thread reconvergence barrier.  `llvm.amdgcn.wave.barrier` is the LLVM intrinsic AMDGPU exposes for
       // wave-level sync: on chips where waves are lockstep (GCN) it acts as a compiler reordering barrier; on RDNA it

@@ -412,6 +412,7 @@ void export_lang(py::module &m) {
       .def("compile_kernel", &Program::compile_kernel, py::return_value_policy::reference)
       .def("launch_kernel", &Program::launch_kernel)
       .def("get_device_caps", &Program::get_device_caps)
+      .def("subgroup_size", &Program::subgroup_size)
       .def("get_graph_cache_size", &Program::get_graph_cache_size)
       .def("get_graph_cache_used_on_last_call", &Program::get_graph_cache_used_on_last_call)
       .def("get_num_offloaded_tasks_on_last_call", &Program::get_num_offloaded_tasks_on_last_call)

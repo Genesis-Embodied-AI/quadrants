@@ -1481,6 +1481,16 @@ inline bool TaskCodegen::ends_with(std::string const &value, std::string const &
 void TaskCodegen::visit(InternalFuncStmt *stmt) {
   spirv::Value val;
 
+  // Note: the SPIR-V-only `subgroupAdd` / `subgroupMul` / `subgroupMin` / `subgroupMax` / `subgroupAnd` /
+  // `subgroupOr` / `subgroupXor` reductions have been removed.  Likewise the
+  // `subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}` ops are gone: all seven are implemented as portable ``@qd.func``
+  // Hillis-Steele scans over `subgroupShuffleUp` in Python, so the SPIR-V codegen branch and the matching internal-op
+  // registrations have been removed.  An ``InternalFuncStmt`` carrying one of those removed names would fall through
+  // the dispatcher below and hit the final ``QD_ERROR``, surfacing the mismatch instead of registering a
+  // default-constructed ``spirv::Value`` and producing invalid SPIR-V at run time.
+
+  const std::unordered_set<std::string> shuffle_ops{"subgroupShuffleDown", "subgroupShuffleUp", "subgroupShuffle"};
+
   if (stmt->func_name == "composite_extract_0") {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 0);
   } else if (stmt->func_name == "composite_extract_1") {
@@ -1489,17 +1499,7 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 2);
   } else if (stmt->func_name == "composite_extract_3") {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 3);
-  }
-
-  // Note: the SPIR-V-only `subgroupAdd` / `subgroupMul` / `subgroupMin` / `subgroupMax` / `subgroupAnd` /
-  // `subgroupOr` / `subgroupXor` reductions have been removed.  Likewise the
-  // `subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}` ops are gone: all seven are implemented as portable ``@qd.func``
-  // Hillis-Steele scans over `subgroupShuffleUp` in Python, so the SPIR-V codegen branch and the matching internal-op
-  // registrations have been removed.
-
-  const std::unordered_set<std::string> shuffle_ops{"subgroupShuffleDown", "subgroupShuffleUp", "subgroupShuffle"};
-
-  if (stmt->func_name == "workgroupBarrier") {
+  } else if (stmt->func_name == "workgroupBarrier") {
     ir_->make_inst(spv::OpControlBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeWorkgroup),
                    ir_->int_immediate_number(ir_->i32_type(), spv::ScopeWorkgroup),
                    ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsWorkgroupMemoryMask |
@@ -1545,8 +1545,6 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                                                                   spv::MemorySemanticsWorkgroupMemoryMask |
                                                                   spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
-  } else if (stmt->func_name == "subgroupSize") {
-    val = ir_->cast(ir_->i32_type(), ir_->get_subgroup_size());
   } else if (stmt->func_name == "subgroupInvocationId") {
     val = ir_->cast(ir_->i32_type(), ir_->get_subgroup_invocation_id());
   } else if (stmt->func_name == "subgroupBroadcast") {
@@ -1554,6 +1552,32 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     auto index = ir_->query_value(stmt->args[1]->raw_name());
     val = ir_->make_value(spv::OpGroupNonUniformBroadcast, value.stype,
                           ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), value, index);
+  } else if (stmt->func_name == "subgroupBallotU32") {
+    // ``OpGroupNonUniformBallot`` produces a uvec4 of 128 ballot bits.  Component 0 covers lanes 0..31, which is
+    // exactly what the ``u32`` ballot form ( ``ballot_first_n``) advertises; lanes 32..63 (on wave64 backends) are not
+    // represented in the u32 result, matching the AMDGPU / CUDA u32 forms.
+    auto predicate = ir_->query_value(stmt->args[0]->raw_name());
+    auto pred_bool =
+        ir_->make_value(spv::OpINotEqual, ir_->bool_type(), predicate, ir_->int_immediate_number(ir_->i32_type(), 0));
+    auto ballot_vec = ir_->make_value(spv::OpGroupNonUniformBallot, ir_->v4_u32_type(),
+                                      ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), pred_bool);
+    val = ir_->make_value(spv::OpCompositeExtract, ir_->u32_type(), ballot_vec, 0);
+  } else if (stmt->func_name == "subgroupBallotU64") {
+    // For the full-subgroup u64 form we extract components 0 and 1 (lanes 0..31 and 32..63 respectively) and pack
+    // them into a single u64: ``u64(hi) << 32 | u64(lo)``.  On wave32 component 1 is naturally zero (no lanes 32+
+    // exist), so the high half of the result is zero and the API is uniform across wavefront modes.
+    auto predicate = ir_->query_value(stmt->args[0]->raw_name());
+    auto pred_bool =
+        ir_->make_value(spv::OpINotEqual, ir_->bool_type(), predicate, ir_->int_immediate_number(ir_->i32_type(), 0));
+    auto ballot_vec = ir_->make_value(spv::OpGroupNonUniformBallot, ir_->v4_u32_type(),
+                                      ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), pred_bool);
+    auto lo = ir_->make_value(spv::OpCompositeExtract, ir_->u32_type(), ballot_vec, 0);
+    auto hi = ir_->make_value(spv::OpCompositeExtract, ir_->u32_type(), ballot_vec, 1);
+    auto lo64 = ir_->cast(ir_->u64_type(), lo);
+    auto hi64 = ir_->cast(ir_->u64_type(), hi);
+    auto shift = ir_->uint_immediate_number(ir_->u64_type(), 32u);
+    auto hi_shifted = ir_->make_value(spv::OpShiftLeftLogical, ir_->u64_type(), hi64, shift);
+    val = ir_->make_value(spv::OpBitwiseOr, ir_->u64_type(), lo64, hi_shifted);
   } else if (shuffle_ops.find(stmt->func_name) != shuffle_ops.end()) {
     auto arg0 = ir_->query_value(stmt->args[0]->raw_name());
     auto arg1 = ir_->query_value(stmt->args[1]->raw_name());
@@ -1583,6 +1607,8 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
       // Return 0 if shader clock is not supported
       val = ir_->int_immediate_number(ir_->i64_type(), 0);
     }
+  } else {
+    QD_ERROR("Unsupported InternalFuncStmt for SPIR-V codegen: {}", stmt->func_name);
   }
   ir_->register_value(stmt->raw_name(), val);
 }

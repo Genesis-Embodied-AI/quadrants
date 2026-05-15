@@ -659,6 +659,11 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
 
     vkGetPhysicalDeviceProperties2(physical_device_, &physical_device_properties);
 
+    // Vulkan exposes `subgroupSize` as a per-device property that's uniform across every dispatch we submit (the
+    // `VK_EXT_subgroup_size_control` extension can vary it per-pipeline, but Quadrants doesn't opt in). Stash it in the
+    // device cap so `Program::subgroup_size()` and the fe-ll cache key can see it on the SPIR-V backends.
+    caps.set(DeviceCapability::spirv_subgroup_size, subgroup_properties.subgroupSize);
+
     if (subgroup_properties.supportedOperations & VK_SUBGROUP_FEATURE_BASIC_BIT) {
       caps.set(DeviceCapability::spirv_has_subgroup_basic, true);
     }
