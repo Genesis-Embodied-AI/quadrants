@@ -104,8 +104,8 @@ def device_select(arr, flags, out, num_out):
     Same async / no-implicit-sync contract as ``device_reduce_*`` and ``device_exclusive_scan_*``: ``num_out`` is a
     tensor, not a Python scalar - call ``num_out.to_numpy()[0]`` explicitly to get the count host-side.
 
-    See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md``
-    for the scratch-into-indices layout and the algorithm reference.
+    See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the scratch-into-indices layout and
+    the algorithm reference.
     """
     if not hasattr(arr, "shape") or len(arr.shape) != 1:
         raise TypeError(f"device_select expects a 1-D arr; got shape {getattr(arr, 'shape', None)}")

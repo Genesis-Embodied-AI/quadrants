@@ -194,8 +194,8 @@ def _scan_pass3_u64(
 def _exclusive_scan_inplace_u32(scratch, off: int, n: int, identity_bits: int, op, dtype, partials_cursor: int):
     """Exclusive-scan ``scratch[off : off + n]`` in place. Recursive.
 
-    ``partials_cursor`` is the next free u32 slot to use for the partials of
-    the recursive level; the driver bumps it down each level.
+    ``partials_cursor`` is the next free u32 slot to use for the partials of the recursive level; the driver bumps it
+    down each level.
     """
     if n <= BLOCK_DIM:
         _scan_block_inplace_u32(scratch, off, n, identity_bits, op, dtype)

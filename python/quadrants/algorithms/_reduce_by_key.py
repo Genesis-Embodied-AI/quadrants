@@ -1,8 +1,8 @@
 # type: ignore
 """Device-wide reduce-by-key.
 
-Implements ``qd.algorithms.device_reduce_by_key_add`` on top of the existing
-device exclusive scan internals and the shared ``Field(u32)`` scratch.
+Implements ``qd.algorithms.device_reduce_by_key_add`` on top of the existing device exclusive scan internals and the
+shared ``Field(u32)`` scratch.
 
 Reduce-by-key takes two parallel 1-D tensors - ``keys`` and ``values`` - and collapses every **consecutive run of
 equal keys** into a single output entry ``(unique_key, sum_of_values_in_run)``. Keys that are equal but separated by
