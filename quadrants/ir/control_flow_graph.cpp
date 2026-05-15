@@ -1006,6 +1006,19 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
 // a flat per-node loop for S2L/DSE).
 // ===========================================================================
 
+void ControlFlowGraph::assert_structural_invariants() const {
+  // These invariants are established by `analysis::build_cfg` and preserved by every
+  // ControlFlowGraph method below. They are also assumed by every helper in this file (e.g. the
+  // worklist seeding `nodes[start_node]->reach_gen.insert(...)`, the DP scratch buffer indexed by
+  // start_node, the dump-graph loop that skips start_node / final_node by index). If they ever
+  // fail, the code following will segfault or silently corrupt -- catch it here instead.
+  QD_ASSERT_INFO(!nodes.empty(), "ControlFlowGraph has no nodes");
+  QD_ASSERT_INFO(start_node >= 0 && start_node < (int)nodes.size(), "start_node out of range");
+  QD_ASSERT_INFO(final_node >= 0 && final_node < (int)nodes.size(), "final_node out of range");
+  QD_ASSERT_INFO(nodes[start_node] != nullptr, "start_node entry is null");
+  QD_ASSERT_INFO(nodes[final_node] != nullptr, "final_node entry is null");
+}
+
 void ControlFlowGraph::erase(int node_id) {
   // Erase an empty node.
   QD_ASSERT(node_id >= 0 && node_id < (int)size());
@@ -1116,6 +1129,7 @@ void write_cfg_node_statements(std::ostream &out, const CFGNode *node) {
 void ControlFlowGraph::dump_graph_to_file(const CompileConfig &config,
                                           const std::string &kernel_name,
                                           const std::string &suffix) const {
+  assert_structural_invariants();
   const std::filesystem::path ir_dump_dir = config.debug_dump_path;
   std::filesystem::create_directories(ir_dump_dir);
   const std::filesystem::path filename = ir_dump_dir / (kernel_name + "_CFG" + suffix + ".txt");
@@ -1219,6 +1233,7 @@ void ControlFlowGraph::reaching_definition_analysis(bool after_lower_access) {
   //   - reach_in:  union of reach_out of all predecessor nodes.
   //   - reach_out: reach_gen + { stmts from reach_in whose dest is not in reach_kill }.
   QD_AUTO_PROF;
+  assert_structural_invariants();
   const int num_nodes = size();
   QD_ASSERT(nodes[start_node]->empty());
   seed_start_node_reach_gen(nodes[start_node].get(), nodes, after_lower_access);
@@ -1304,6 +1319,7 @@ void ControlFlowGraph::live_variable_analysis(bool after_lower_access,
   //   - live_in:  live_gen + (live_out - live_kill).
   //   - live_out: union of live_in of all successor nodes.
   QD_AUTO_PROF;
+  assert_structural_invariants();
   const int num_nodes = size();
   QD_ASSERT(nodes[final_node]->empty());
   seed_final_node_live_gen(nodes[final_node].get(), nodes, after_lower_access, config_opt);
@@ -1352,6 +1368,7 @@ void ControlFlowGraph::live_variable_analysis(bool after_lower_access,
 
 void ControlFlowGraph::simplify_graph() {
   // Simplify the graph structure, do not modify the IR.
+  assert_structural_invariants();
   const int num_nodes = size();
   while (true) {
     bool modified = false;
@@ -1386,6 +1403,7 @@ bool ControlFlowGraph::unreachable_code_elimination() {
   // Note that container statements are not in the control-flow graph, so
   // this pass cannot eliminate container statements properly for now.
   QD_AUTO_PROF;
+  assert_structural_invariants();
   std::unordered_set<CFGNode *> visited;
   std::queue<CFGNode *> to_visit;
   to_visit.push(nodes[start_node].get());
@@ -1428,6 +1446,7 @@ bool ControlFlowGraph::store_to_load_forwarding(bool after_lower_access, bool au
   //   This is done in CFGNode::store_to_load_forwarding() of each node
 
   QD_AUTO_PROF;
+  assert_structural_invariants();
   reaching_definition_analysis(after_lower_access);
   const int num_nodes = size();
   bool modified = false;
@@ -1441,6 +1460,7 @@ bool ControlFlowGraph::store_to_load_forwarding(bool after_lower_access, bool au
 bool ControlFlowGraph::dead_store_elimination(bool after_lower_access,
                                               const std::optional<LiveVarAnalysisConfig> &lva_config_opt) {
   QD_AUTO_PROF;
+  assert_structural_invariants();
   live_variable_analysis(after_lower_access, lva_config_opt);
   const int num_nodes = size();
   bool modified = false;
@@ -1453,6 +1473,7 @@ bool ControlFlowGraph::dead_store_elimination(bool after_lower_access,
 
 std::unordered_set<SNode *> ControlFlowGraph::gather_loaded_snodes() {
   QD_AUTO_PROF;
+  assert_structural_invariants();
   reaching_definition_analysis(/*after_lower_access=*/false);
   const int num_nodes = size();
   std::unordered_set<SNode *> snodes;

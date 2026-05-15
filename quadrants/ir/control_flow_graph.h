@@ -186,6 +186,12 @@ class ControlFlowGraph {
   // Erase an empty node.
   void erase(int node_id);
 
+  // Assert structural invariants that every whole-graph driver assumes: `nodes` non-empty,
+  // `start_node` and `final_node` in range, both endpoints actually allocated. Called from each
+  // public driver. Cheap (a handful of comparisons); leave on even in release builds since the
+  // alternative on violation is silent corruption.
+  void assert_structural_invariants() const;
+
  public:
   struct LiveVarAnalysisConfig {
     // This is mostly useful for SFG task-level dead store elimination. SFG may

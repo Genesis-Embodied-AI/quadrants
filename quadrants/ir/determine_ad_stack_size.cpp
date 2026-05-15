@@ -619,6 +619,7 @@ void ControlFlowGraph::determine_ad_stack_size() {
    * `vector<vector<int>>` indexed by contiguous int stack id, not `unordered_map`, to keep the
    * hot inner loop branch-and-cache friendly.
    */
+  assert_structural_invariants();
   AdStackIndex idx = collect_adaptive_ad_stacks(nodes);
   const int num_stacks = static_cast<int>(idx.stacks.size());
   if (num_stacks == 0) {
