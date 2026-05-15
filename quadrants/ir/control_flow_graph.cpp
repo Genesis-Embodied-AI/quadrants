@@ -1173,38 +1173,56 @@ void ControlFlowGraph::reaching_definition_analysis(bool after_lower_access) {
   }
 }
 
-void ControlFlowGraph::live_variable_analysis(bool after_lower_access,
-                                              const std::optional<LiveVarAnalysisConfig> &config_opt) {
-  // [live_variable_analysis]
-  // live_gen: address loaded with no previous stored in this node. One cannot
-  // load before storing so
-  //           addrs in live_gen must come from previous nodes
-  // live_kill: address stored in this node
-  // live_in: live_gen + (live_out - live_kill)
-  // live_out: collection of all the live_in of next nodes
-  QD_AUTO_PROF;
-  const int num_nodes = size();
-  std::queue<CFGNode *> to_visit;
-  std::unordered_map<CFGNode *, bool> in_queue;
-  QD_ASSERT(nodes[final_node]->empty());
-  nodes[final_node]->live_gen.clear();
-  nodes[final_node]->live_kill.clear();
+namespace {
 
-  if (!after_lower_access) {
-    for (int i = 0; i < num_nodes; i++) {
-      for (int j = nodes[i]->begin_location; j < nodes[i]->end_location; j++) {
-        auto stmt = nodes[i]->block->statements[j].get();
-        for (auto store_ptr : irpass::analysis::get_store_destination(stmt, true /*get_alias*/)) {
-          if (in_final_node_live_gen(store_ptr, config_opt)) {
-            nodes[final_node]->live_gen.insert(store_ptr);
-          }
+// === Helpers for ControlFlowGraph::live_variable_analysis ===
+
+// Seed the synthetic exit node's live_gen with every store destination in the kernel that may
+// still be observable after the kernel exits (globals not flagged eliminable by the SFG, plus any
+// aliased pointers via `get_alias`). Skipped entirely after access lowering, when only locals
+// remain and nothing escapes.
+void seed_final_node_live_gen(CFGNode *final_node_ptr,
+                              const std::vector<std::unique_ptr<CFGNode>> &nodes,
+                              bool after_lower_access,
+                              const std::optional<ControlFlowGraph::LiveVarAnalysisConfig> &config_opt) {
+  final_node_ptr->live_gen.clear();
+  final_node_ptr->live_kill.clear();
+  if (after_lower_access) {
+    return;
+  }
+  for (const auto &node : nodes) {
+    for (int j = node->begin_location; j < node->end_location; j++) {
+      auto *stmt = node->block->statements[j].get();
+      for (auto *store_ptr : irpass::analysis::get_store_destination(stmt, /*get_alias=*/true)) {
+        if (in_final_node_live_gen(store_ptr, config_opt)) {
+          final_node_ptr->live_gen.insert(store_ptr);
         }
       }
     }
   }
+}
 
+}  // namespace
+
+void ControlFlowGraph::live_variable_analysis(bool after_lower_access,
+                                              const std::optional<LiveVarAnalysisConfig> &config_opt) {
+  // Per-node:
+  //   - live_gen:  address loaded with no preceding store in this node (must live in from
+  //                somewhere -- you can't load before storing).
+  //   - live_kill: address stored in this node.
+  // Per-graph (worklist fixpoint, propagated backwards):
+  //   - live_in:  live_gen + (live_out - live_kill).
+  //   - live_out: union of live_in of all successor nodes.
+  QD_AUTO_PROF;
+  const int num_nodes = size();
+  QD_ASSERT(nodes[final_node]->empty());
+  seed_final_node_live_gen(nodes[final_node].get(), nodes, after_lower_access, config_opt);
+
+  std::queue<CFGNode *> to_visit;
+  std::unordered_map<CFGNode *, bool> in_queue;
+  // Push in reversed order: backwards analysis converges slightly faster when the worklist seeds
+  // are dequeued from the back of the graph first.
   for (int i = num_nodes - 1; i >= 0; i--) {
-    // push into the queue in reversed order to make it slightly faster
     if (i != final_node) {
       nodes[i]->live_variable_analysis(after_lower_access);
     }
@@ -1214,26 +1232,25 @@ void ControlFlowGraph::live_variable_analysis(bool after_lower_access,
     in_queue[nodes[i].get()] = true;
   }
 
-  // The worklist algorithm.
+  // [Worklist algorithm] Converge live_in / live_out iteratively (backwards).
   while (!to_visit.empty()) {
-    auto now = to_visit.front();
+    auto *now = to_visit.front();
     to_visit.pop();
     in_queue[now] = false;
 
     now->live_out.clear();
-    for (auto next_node : now->next) {
+    for (auto *next_node : now->next) {
       now->live_out.insert(next_node->live_in.begin(), next_node->live_in.end());
     }
     auto old_in = std::move(now->live_in);
     now->live_in = now->live_gen;
-    for (auto stmt : now->live_out) {
+    for (auto *stmt : now->live_out) {
       if (!CFGNode::contain_variable(now->live_kill, stmt)) {
         now->live_in.insert(stmt);
       }
     }
     if (now->live_in != old_in) {
-      // changed
-      for (auto prev_node : now->prev) {
+      for (auto *prev_node : now->prev) {
         if (!in_queue[prev_node]) {
           to_visit.push(prev_node);
           in_queue[prev_node] = true;
