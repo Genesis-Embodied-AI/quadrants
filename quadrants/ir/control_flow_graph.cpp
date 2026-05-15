@@ -2006,35 +2006,56 @@ void apply_ad_stack_dp_results(const std::vector<AdStackAllocaStmt *> &stacks,
 
 void ControlFlowGraph::determine_ad_stack_size() {
   /**
-   * Determine the necessary size of every adaptive AD-stack on the control-flow graph (CFG). For each AD-stack we
-   * compute the maximum running net push count along any walk from the kernel entry. AD-stacks whose forward kernel
-   * contains a positive cycle (pushes > pops around a loop) are left at `max_size = 0`, and the caller routes them
-   * through the structural bounded-loop pre-pass for a symbolic `SizeExpr`, hard-erroring if the grammar still
-   * cannot resolve them. There is no compile-time size fallback.
+   * What problem this solves
+   * ------------------------
+   * Reverse-mode autodiff records each primal write to a variable by pushing the value onto a
+   * per-variable stack (an "AD-stack"), then pops in reverse order during the backward pass. The
+   * stack's *capacity* must be known at allocation time. Some stacks are sized explicitly by the
+   * user (`max_size != 0`); the rest are "adaptive" (`max_size == 0`) and we have to figure out
+   * how many pushes can stack up on them at runtime by walking the CFG and bookkeeping pushes
+   * minus pops along every reachable path from kernel entry.
    *
-   * Implementation notes for compile-time perf on large reverse-mode kernels:
-   *   1. Per-stack per-node pre-aggregates (`max_increased_size`, `increased_size`) are stored in dense
-   *      `vector<vector<int>>` indexed by a contiguous int stack id, instead of an
-   *      `unordered_map<AdStackAllocaStmt*, vector<int>>` -- this removes hash traffic from the hot inner loop.
-   *   2. Stacks whose `(increased_size, max_increased_size)` row pair is bit-identical share a single dynamic
-   *      programming run -- typical kernels generate one alloca per autodiff variable in the same loop body, so
-   *      most rows collapse to a few representatives.
-   *   3. The CFG is condensed via Tarjan into strongly connected components (SCCs). DFS finish times recorded
-   *      during the same Tarjan pass split each cyclic SCC's intra-edges into a forward set (target finishes
-   *      before source) and a back set (target finishes at or after source). Per representative we run a
-   *      single-pass dynamic-programming (DP) sweep over the forward edges in descending finish-time order, then
-   *      check the back edges once for positive-cycle relaxation. Correctness: any walk inside an SCC decomposes
-   *      into a forward path plus zero or more cycles, and an SCC with no positive cycle has the same max-walk-sum
-   *      as the back-edge-removed DAG; a positive cycle is exactly the case where some back-edge would still relax
-   *      after the forward DP. This drops the per-cyclic-SCC cost from O(|S| * |E_S|) to O(|S| + |E_S|).
-   *   4. Two sign-based fast paths short-circuit the DP for trivial cyclic SCCs: an SCC with `min_is >= 0 && max_is
-   *      > 0` for this stack must contain a positive cycle (every node lies on some cycle, and a cycle through a
-   *      strictly-positive node with all non-negative `is` along it sums positive); an SCC with `min_is == 0 ==
-   *      max_is` has no `is` contribution at all and is handled by spreading the max entry-side
-   *      `max_size_at_node_begin` to every node in O(|S|).
-   * Per-rep cost becomes O(V + E + sum_{cyclic S} |S| * |E_S|) (with the SCC sum dropping to O(|S| + |E_S|) for
-   * the common autodiff push/pop pattern); overall cost is O(V + E + R * (V + E)) with R the number of distinct
-   * row-pair representatives.
+   * For each adaptive AD-stack we want: the maximum value of (pushes - pops) over any walk from
+   * the entry node. Set that as `max_size`. If the kernel has a loop where pushes > pops on every
+   * iteration the maximum is unbounded; we leave `max_size = 0` and let the caller's structural
+   * bounded-loop pre-pass derive a symbolic `SizeExpr` from the loop ranges (and hard-error if
+   * even that fails -- there is no compile-time default fallback).
+   *
+   * High-level algorithm
+   * --------------------
+   * 1. Index every adaptive AD-stack (`collect_adaptive_ad_stacks`).
+   * 2. For every (stack, CFG node) pair, precompute the net push/pop delta inside that node and
+   *    the max running push-count prefix inside that node
+   *    (`accumulate_per_stack_per_node_size_deltas`). After this point the actual stmts are
+   *    irrelevant; everything below operates on int matrices.
+   * 3. Condense the CFG with Tarjan's SCC algorithm (`tarjan_scc`). Inside any cyclic SCC, the
+   *    "max walk-sum from entry" question becomes "is there a positive cycle, and if not, what's
+   *    the DAG longest path inside this SCC?". The condensation lets us solve those questions
+   *    once per SCC, in topological order across SCCs.
+   * 4. For each *distinct* push/pop fingerprint across stacks (`group_stacks_by_fingerprint`),
+   *    run the DP once: walk SCCs in topological order, per cyclic SCC try two cheap sign-based
+   *    fast paths and fall back to a single-pass DAG DP + back-edge relaxation check for cycle
+   *    detection. Broadcast the result to every stack that shares this fingerprint
+   *    (`apply_ad_stack_dp_results`). In practice many autodiff kernels generate identical
+   *    push/pop schedules across stacks (one alloca per AD variable in the same loop body), so
+   *    the fingerprint dedup collapses N stacks to a handful of DP runs.
+   *
+   * The two cheap fast paths for a cyclic SCC:
+   *   (a) min_is >= 0 and max_is > 0  =>  positive cycle exists for this stack (every node in an
+   *       SCC is on a cycle; a cycle through a strictly-positive node with non-negative weights
+   *       sums positive). Bail out.
+   *   (b) min_is == 0 == max_is       =>  the SCC adds nothing; just spread the maximum entry-
+   *       side `max_size_at_node_begin` to every node in the SCC in O(|S|).
+   * The full mixed-sign DP runs only when neither shortcut applies.
+   *
+   * Performance summary
+   * -------------------
+   * Per representative cost: O(V + E + sum_{cyclic SCC S} |S| * |E_S|), with the inner sum
+   * collapsing to O(|S| + |E_S|) for the common autodiff push/pop pattern (one DP sweep + one
+   * back-edge check). Overall: O(V + E + R * (V + E)), with R = number of distinct row-pair
+   * fingerprints (typically << number of stacks). Per-stack per-node tables are dense
+   * `vector<vector<int>>` indexed by contiguous int stack id, not `unordered_map`, to keep the
+   * hot inner loop branch-and-cache friendly.
    */
   AdStackIndex idx = collect_adaptive_ad_stacks(nodes);
   const int num_stacks = static_cast<int>(idx.stacks.size());
