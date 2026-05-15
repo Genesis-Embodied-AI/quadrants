@@ -2,20 +2,15 @@
 
 Covers:
 
-- ``quadrants._scratch`` - the shared ``Field(u32)`` scratch buffer that backs
-  every device algorithm.
-- ``qd.algorithms.device_reduce_{add,min,max}`` - two-or-more-pass tree
-  reduction with shared scratch + ``bit_cast``.
+- ``quadrants._scratch`` - the shared ``Field(u32)`` scratch buffer that backs every device algorithm.
+- ``qd.algorithms.device_reduce_{add,min,max}`` - two-or-more-pass tree reduction with shared scratch + ``bit_cast``.
 - ``qd.algorithms.device_exclusive_scan_{add,min,max}`` - three-pass scan.
 - ``qd.algorithms.device_select`` - scan-based stream compaction.
-- ``qd.algorithms.device_radix_sort`` - LSB radix sort built on
-  ``block.radix_rank_match_atomic_or``.
-- ``qd.algorithms.device_reduce_by_key_add`` - scan + scatter +
-  atomic_add reduce-by-key.
+- ``qd.algorithms.device_radix_sort`` - LSB radix sort built on ``block.radix_rank_match_atomic_or``.
+- ``qd.algorithms.device_reduce_by_key_add`` - scan + scatter + atomic_add reduce-by-key.
 
-Each test runs across the full ``arch=qd.gpu`` parametrization so the kernels
-are exercised on CUDA, AMDGPU, Vulkan, and Metal (where the host supports
-each).
+Each test runs across the full ``arch=qd.gpu`` parametrization so the kernels are exercised on CUDA, AMDGPU, Vulkan,
+and Metal (where the host supports each).
 """
 
 import math
@@ -211,8 +206,8 @@ def test_scratch_is_shared_across_calls():
 
 @test_utils.test(arch=qd.gpu)
 def test_scratch_round_trips_bit_cast_f32():
-    """Smoke: write f32 values into the u32 scratch via qd.bit_cast and read
-    them back. Verifies the bit_cast pattern used by every algorithm."""
+    """Smoke: write f32 values into the u32 scratch via qd.bit_cast and read them back. Verifies the bit_cast pattern
+    used by every algorithm."""
     s = _scratch.get_scratch_u32()
     N = 64
 
@@ -292,8 +287,8 @@ def _np_dtype_for(qd_dtype):
 
 
 def _fill_field(f, vals):
-    """Host-side initialization of a Field from a numpy array. Uses
-    ``from_numpy`` so layout permutations are handled correctly."""
+    """Host-side initialization of a Field from a numpy array. Uses ``from_numpy`` so layout permutations are handled
+    correctly."""
     f.from_numpy(np.asarray(vals, dtype=_np_dtype_for(f.dtype)))
 
 
@@ -558,8 +553,8 @@ def test_device_exclusive_scan_max(dtype, N):
 
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_rejects_inplace():
-    """In-place scan (out is input) is rejected per the design doc - see
-    'API design' / 'Aliasing' in qipc_device_algos_design.md."""
+    """In-place scan (out is input) is rejected per the design doc - see 'API design' / 'Aliasing' in
+    qipc_device_algos_design.md."""
     arr = qd.field(qd.i32, shape=4)
     with pytest.raises(ValueError):
         qd.algorithms.device_exclusive_scan_add(arr, out=arr)
@@ -942,8 +937,7 @@ def test_device_radix_sort_rejects_odd_passes():
 
 
 def _ref_rbk_add(keys, values):
-    """Reference reduce-by-key: collapse consecutive runs of equal keys,
-    returning ``(unique_keys, sums)``."""
+    """Reference reduce-by-key: collapse consecutive runs of equal keys, returning ``(unique_keys, sums)``."""
     if len(keys) == 0:
         return np.array([], dtype=keys.dtype), np.array([], dtype=values.dtype)
     uniq_keys = [keys[0]]
@@ -960,9 +954,8 @@ def _ref_rbk_add(keys, values):
 def _gen_run_keys(rng, dtype, N):
     """Build a key vector of size N with a realistic run-length distribution.
 
-    Runs are drawn from a small alphabet of 5-15 distinct values and repeated
-    1-8 times, then concatenated and truncated to N. This guarantees both
-    multi-element runs (so the scatter's atomic_add path is exercised) and
+    Runs are drawn from a small alphabet of 5-15 distinct values and repeated 1-8 times, then concatenated and
+    truncated to N. This guarantees both multi-element runs (so the scatter's atomic_add path is exercised) and
     single-element runs (so the position math is exercised at boundary).
     """
     np_t = to_numpy_type(dtype)
