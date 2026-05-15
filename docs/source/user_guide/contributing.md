@@ -14,11 +14,13 @@ Run the test suite with `python tests/run_tests.py`. CLI arguments are forwarded
 python tests/run_tests.py --arch metal -k "test_tile16_cholesky"
 ```
 
+The target architecture can also be set via the `QD_WANTED_ARCHS` environment variable.
+
 ### Kernel compilation cache
 
 During test runs, compiled kernels are cached to disk so that the same kernel is not recompiled after each `qd.reset()`/`qd.init()` cycle.
 
-A fresh, empty cache directory is created for each test session by pytest's `tmp_path_factory` (typically under `/tmp/pytest-of-<user>/pytest-<N>/qdcache0/`). Pytest's `tmp_path_retention_count` setting (default: 3) controls how many old sessions' cache dirs are kept. This cache is separate from the user-facing `~/.cache/quadrants/` cache.
+A fresh, empty cache directory is created for each test session by pytest's [`tmp_path_factory`](https://docs.pytest.org/en/stable/how-to/tmp_path.html) (typically under `/tmp/pytest-of-<user>/pytest-<N>/qdcache0/`). Old session directories are cleaned up automatically by pytest's retention policy. This cache is separate from the user-facing `~/.cache/quadrants/` cache.
 
 ## Creating your build/dev environment
 
