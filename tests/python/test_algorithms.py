@@ -705,6 +705,35 @@ def test_device_select_none_selected():
 
 
 @test_utils.test(arch=qd.gpu)
+def test_device_select_zero_one_flag_contract():
+    """Pin the 0/1 flag contract documented in ``algorithms.md`` and the ``device_select`` docstring.
+
+    ``device_select`` prefix-sums ``flags`` *directly* as counts (no implicit normalization), so the contract is
+    that every entry is exactly ``0`` or ``1`` and ``1`` selects. This regression test pins the contract by
+    construction: an interleaved ``[1, 0, 1, 0, ...]`` pattern of length ``N`` selects exactly the even indices
+    (``N/2`` elements, in input order). If a future change accidentally re-introduces an implicit normalization
+    or breaks the prefix-sum-as-count semantics, this test is the canary.
+    """
+    N = 1024
+    flags_host = np.zeros(N, dtype=np.int32)
+    flags_host[::2] = 1  # exactly 0 or 1, interleaved -> selects the even indices
+    inp_host = np.arange(N, dtype=np.int32)
+
+    inp = qd.field(qd.i32, shape=N)
+    flags = qd.field(qd.i32, shape=N)
+    out = qd.field(qd.i32, shape=N)
+    num_out = qd.field(qd.i32, shape=1)
+    _fill_field(inp, inp_host)
+    _fill_field(flags, flags_host)
+
+    qd.algorithms.device_select(inp, flags, out=out, num_out=num_out)
+    got_n = int(num_out.to_numpy()[0])
+    assert got_n == N // 2, f"interleaved 0/1 flags should select N/2 = {N // 2} entries, got {got_n}"
+    expected = inp_host[::2]
+    np.testing.assert_array_equal(out.to_numpy()[:got_n], expected)
+
+
+@test_utils.test(arch=qd.gpu)
 def test_device_select_rejects_shape_mismatch():
     inp = qd.field(qd.i32, shape=4)
     flags = qd.field(qd.i32, shape=5)
@@ -1261,6 +1290,59 @@ def test_device_radix_sort_rejects_oversized_n():
     tmp = qd.field(qd.i32, shape=N)
     with pytest.raises(RuntimeError, match="scratch"):
         qd.algorithms.device_radix_sort(keys, tmp_keys=tmp)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_recursive_scratch_check_keys_unchanged():
+    """Regression: ``device_radix_sort`` must refuse the call *before* ``_twiddle_pass`` mutates the user's keys
+    when the scratch budget is too small for the *recursive* in-place scan footprint.
+
+    The bug this guards against (PR 693 review): the up-front scratch check counted only one level of scan
+    partials (``hist_len + ceil(hist_len/BLOCK_DIM)``). For ``N`` large enough to force the in-place exclusive
+    scan to recurse (``hist_len > BLOCK_DIM**2``), a budget that's just a few slots too small slipped past that
+    single-level check, then ``_twiddle_pass`` ran (in-place XOR of sign bits for ``i32`` / ``f32`` keys), and
+    only *then* did the recursive scan raise a ``RuntimeError`` - leaving the caller's ``keys`` corrupted with
+    no recovery path. After the fix, the check uses ``_scan_total_scratch_slots`` to account for the full
+    recursion up front, so we refuse the call before any side effect runs.
+
+    Setup picks a budget in the (single-level-pass, full-recursion-fail) window so the test would have *failed*
+    against the buggy old check (twiddle would have run, ``keys`` would be XOR'd) and *passes* against the fixed
+    check (``keys`` are byte-identical to what the user wrote in).
+    """
+    from quadrants.algorithms._radix_sort import BLOCK_DIM, RADIX_DIGITS
+    from quadrants.algorithms._scan import _scan_total_scratch_slots
+
+    N = 1_000_000  # large enough that hist_len > BLOCK_DIM**2 = 65_536, forcing the scan to recurse one level
+    num_blocks = (N + BLOCK_DIM - 1) // BLOCK_DIM
+    hist_len = num_blocks * RADIX_DIGITS
+    old_needed = hist_len + (hist_len + BLOCK_DIM - 1) // BLOCK_DIM  # buggy single-level estimate
+    new_needed = _scan_total_scratch_slots(hist_len, partials_cursor=hist_len)  # full recursive footprint
+    assert new_needed > old_needed, (
+        "test setup invariant: scan must recurse for the test to discriminate against the bug; "
+        f"got old_needed={old_needed}, new_needed={new_needed} at N={N} - increase N if BLOCK_DIM grew"
+    )
+    # Budget in the bug window: passes the buggy old check, fails the fixed one. (new - old is small, ~16 slots
+    # at N=1M, so any midpoint works.) Round to even so the bytes count is a multiple of 8 (a ``set_scratch_bytes``
+    # precondition that holds because the u64 scratch field shares the same byte budget).
+    cap_target = old_needed + (new_needed - old_needed) // 2
+    cap_target += cap_target & 1  # snap up to even
+    assert old_needed < cap_target < new_needed, (
+        f"bug-window selection invariant: old_needed={old_needed} < cap_target={cap_target} < "
+        f"new_needed={new_needed} should hold for the test to discriminate against the bug"
+    )
+    _scratch.set_scratch_bytes(cap_target * 4)
+
+    rng = np.random.default_rng(seed=1234)
+    host = rng.integers(-(2**30), 2**30, size=N, dtype=np.int32)  # signed -> hits the in-place twiddle path
+    keys = qd.field(qd.i32, shape=N)
+    tmp = qd.field(qd.i32, shape=N)
+    _fill_field(keys, host)
+
+    with pytest.raises(RuntimeError, match="scratch"):
+        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp)
+
+    # The crucial assertion: keys are still the user's original bit pattern, not XOR'd by twiddle.
+    np.testing.assert_array_equal(keys.to_numpy(), host)
 
 
 @test_utils.test(arch=qd.gpu)
