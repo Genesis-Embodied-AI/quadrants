@@ -1025,54 +1025,88 @@ void ControlFlowGraph::dump_graph_to_file(const CompileConfig &config,
   QD_INFO("CFG dumped to: {}", filename.string());
 }
 
-void ControlFlowGraph::reaching_definition_analysis(bool after_lower_access) {
-  // Prerequisite analysis for load-store-forwarding to help determine
-  // cross-block use-define chain
-  //
-  // The algorithm is separated into two parts:
-  // 1. Determine reach_gen and reach_kill within each node
-  // 2. Propagate reach_in and reach_out through the graph
-  //
-  // - reach_gen: instruction that defines a variable (store stmts) in the
-  // current node
-  // - reach_kill: address (GlobalPtrStmt, AllocaStmt, ...) that's been defined
-  // (stored to) in the current node
-  //
-  // In general, reach_gen and reach_kill are the same except that reach_gen
-  // tracks the store stmts and reach_kill tracks the address
-  //
-  // - reach_out: reach_gen + { reach_in's dest not in reach_kill }
-  // - reach_in: collection of all the reach_out of previous nodes
-  //
-  // reach_out and reach_in is the ultimate result that helps analyze
-  // cross-block use-define chain
+namespace {
 
-  QD_AUTO_PROF;
-  const int num_nodes = size();
-  std::queue<CFGNode *> to_visit;
-  std::unordered_map<CFGNode *, bool> in_queue;
-  QD_ASSERT(nodes[start_node]->empty());
-  nodes[start_node]->reach_gen.clear();
-  nodes[start_node]->reach_kill.clear();
-  for (int i = 0; i < num_nodes; i++) {
-    for (int j = nodes[i]->begin_location; j < nodes[i]->end_location; j++) {
-      auto stmt = nodes[i]->block->statements[j].get();
-      if ((stmt->is<MatrixPtrStmt>() && stmt->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
-          (stmt->is<MatrixPtrStmt>() && stmt->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
-          (!after_lower_access &&
-           (stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() || stmt->is<BlockLocalPtrStmt>() ||
-            stmt->is<ThreadLocalPtrStmt>() || stmt->is<GlobalTemporaryStmt>() || stmt->is<MatrixPtrStmt>() ||
-            stmt->is<GetChStmt>() || stmt->is<MatrixOfGlobalPtrStmt>() || stmt->is<MatrixOfMatrixPtrStmt>()))) {
-        // TODO: unify them
-        // A global pointer that may contain some data before this kernel.
-        nodes[start_node]->reach_gen.insert(stmt);
-      } else if (auto func_call = stmt->cast<FuncCallStmt>()) {
+// === Helpers for ControlFlowGraph::reaching_definition_analysis ===
+
+// Statements that carry data into this kernel from outside its CFG. Treated as definitions in the
+// synthetic entry node's reach_gen so cross-block forwarding correctly sees them. After access
+// lowering, only MatrixPtrStmt aliases of allocas/matrix-pointers remain in scope; before, the
+// full menagerie of pointer flavors applies.
+// TODO: unify them.
+bool is_external_input_pointer(const Stmt *stmt, bool after_lower_access) {
+  if (stmt->is<MatrixPtrStmt>()) {
+    const auto *origin = stmt->as<MatrixPtrStmt>()->origin;
+    if (origin->is<AllocaStmt>() || origin->is<MatrixPtrStmt>()) {
+      return true;
+    }
+  }
+  if (after_lower_access) {
+    return false;
+  }
+  return stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() || stmt->is<BlockLocalPtrStmt>() ||
+         stmt->is<ThreadLocalPtrStmt>() || stmt->is<GlobalTemporaryStmt>() || stmt->is<MatrixPtrStmt>() ||
+         stmt->is<GetChStmt>() || stmt->is<MatrixOfGlobalPtrStmt>() || stmt->is<MatrixOfMatrixPtrStmt>();
+}
+
+// Seed the synthetic entry node's reach_gen with definitions that "exist" before this kernel
+// begins executing: external pointer loads (so a load before the first store still has a
+// UD-chain) plus FuncCallStmt store destinations (the callee may have written anything declared
+// in its `store_dests`).
+void seed_start_node_reach_gen(CFGNode *start_node,
+                               const std::vector<std::unique_ptr<CFGNode>> &nodes,
+                               bool after_lower_access) {
+  start_node->reach_gen.clear();
+  start_node->reach_kill.clear();
+  for (const auto &node : nodes) {
+    for (int j = node->begin_location; j < node->end_location; j++) {
+      auto *stmt = node->block->statements[j].get();
+      if (is_external_input_pointer(stmt, after_lower_access)) {
+        start_node->reach_gen.insert(stmt);
+      } else if (auto *func_call = stmt->cast<FuncCallStmt>()) {
         const auto &dests = func_call->func->store_dests;
-        nodes[start_node]->reach_gen.insert(dests.begin(), dests.end());
+        start_node->reach_gen.insert(dests.begin(), dests.end());
       }
     }
   }
+}
 
+// Is |stmt| killed at |node| (i.e., excluded from reach_out)? For stmts with explicit store
+// destinations, killed iff every dest is killed at |node|. For stmts without dests (e.g. raw
+// global pointers seeded into start_node's reach_gen), killed iff the stmt itself is killed.
+bool is_reach_in_stmt_killed_at(CFGNode *node, Stmt *stmt) {
+  const auto store_ptrs = irpass::analysis::get_store_destination(stmt);
+  if (store_ptrs.empty()) {
+    return node->reach_kill_variable(stmt);
+  }
+  for (auto *store_ptr : store_ptrs) {
+    if (!node->reach_kill_variable(store_ptr)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
+void ControlFlowGraph::reaching_definition_analysis(bool after_lower_access) {
+  // Prerequisite analysis for load-store-forwarding; computes the cross-block use-define chain.
+  //
+  // Per-node:
+  //   - reach_gen:  store stmts that define a variable in this node.
+  //   - reach_kill: addresses (GlobalPtrStmt, AllocaStmt, ...) stored to in this node.
+  // (reach_gen tracks the defining stmts; reach_kill tracks the killed addresses.)
+  //
+  // Per-graph (worklist fixpoint):
+  //   - reach_in:  union of reach_out of all predecessor nodes.
+  //   - reach_out: reach_gen + { stmts from reach_in whose dest is not in reach_kill }.
+  QD_AUTO_PROF;
+  const int num_nodes = size();
+  QD_ASSERT(nodes[start_node]->empty());
+  seed_start_node_reach_gen(nodes[start_node].get(), nodes, after_lower_access);
+
+  std::queue<CFGNode *> to_visit;
+  std::unordered_map<CFGNode *, bool> in_queue;
   for (int i = 0; i < num_nodes; i++) {
     if (i != start_node) {
       nodes[i]->reaching_definition_analysis(after_lower_access);
@@ -1083,40 +1117,25 @@ void ControlFlowGraph::reaching_definition_analysis(bool after_lower_access) {
     in_queue[nodes[i].get()] = true;
   }
 
-  // [The worklist algorithm]
-  // Determines reach_in and reach_out for each node iteratively.
+  // [Worklist algorithm] Converge reach_in / reach_out iteratively.
   while (!to_visit.empty()) {
-    auto now = to_visit.front();
+    auto *now = to_visit.front();
     to_visit.pop();
     in_queue[now] = false;
 
     now->reach_in.clear();
-    for (auto prev_node : now->prev) {
+    for (auto *prev_node : now->prev) {
       now->reach_in.insert(prev_node->reach_out.begin(), prev_node->reach_out.end());
     }
     auto old_out = std::move(now->reach_out);
     now->reach_out = now->reach_gen;
-    for (auto stmt : now->reach_in) {
-      auto store_ptrs = irpass::analysis::get_store_destination(stmt);
-      bool killed;
-      if (store_ptrs.empty()) {  // the case of a global pointer
-        killed = now->reach_kill_variable(stmt);
-      } else {
-        killed = true;
-        for (auto store_ptr : store_ptrs) {
-          if (!now->reach_kill_variable(store_ptr)) {
-            killed = false;
-            break;
-          }
-        }
-      }
-      if (!killed) {
+    for (auto *stmt : now->reach_in) {
+      if (!is_reach_in_stmt_killed_at(now, stmt)) {
         now->reach_out.insert(stmt);
       }
     }
     if (now->reach_out != old_out) {
-      // changed
-      for (auto next_node : now->next) {
+      for (auto *next_node : now->next) {
         if (!in_queue[next_node]) {
           to_visit.push(next_node);
           in_queue[next_node] = true;
