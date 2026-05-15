@@ -14,7 +14,7 @@ Run the test suite with `python tests/run_tests.py`. CLI arguments are forwarded
 python tests/run_tests.py --arch metal -k "test_tile16_cholesky"
 ```
 
-The target architecture can also be set via the `QD_WANTED_ARCHS` environment variable.
+The target architecture can also be set via the `QD_WANTED_ARCHS` environment variable (comma-separated, e.g. `QD_WANTED_ARCHS=metal,vulkan`).
 
 ### Kernel compilation cache
 
