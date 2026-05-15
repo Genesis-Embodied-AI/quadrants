@@ -186,10 +186,16 @@ class ControlFlowGraph {
   // Erase an empty node.
   void erase(int node_id);
 
-  // Assert structural invariants that every whole-graph driver assumes: `nodes` non-empty,
-  // `start_node` and `final_node` in range, both endpoints actually allocated. Called from each
-  // public driver. Cheap (a handful of comparisons); leave on even in release builds since the
-  // alternative on violation is silent corruption.
+  // Assert structural invariants that every whole-graph driver assumes:
+  //   (1) endpoint invariants -- nodes non-empty, start_node / final_node in range, both
+  //       endpoints actually allocated (O(1));
+  //   (2) edge consistency  -- for every node n and every successor m in n->next, n is in
+  //       m->prev (and symmetrically for predecessors). This catches the dangling / asymmetric
+  //       edges produced when a pre-CFG IR transform leaves the IR in a shape `analysis::build_cfg`
+  //       cannot canonicalise (O(V+E)).
+  // Called from each public driver. Always-on (release builds too); the cost is dominated by the
+  // analyses that follow and the alternative on violation is silent corruption / a segfault deep
+  // in worklist processing.
   void assert_structural_invariants() const;
 
  public:

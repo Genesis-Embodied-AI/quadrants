@@ -1034,11 +1034,45 @@ void ControlFlowGraph::assert_structural_invariants() const {
   // worklist seeding `nodes[start_node]->reach_gen.insert(...)`, the DP scratch buffer indexed by
   // start_node, the dump-graph loop that skips start_node / final_node by index). If they ever
   // fail, the code following will segfault or silently corrupt -- catch it here instead.
+
+  // (1) Endpoint invariants -- O(1).
   QD_ASSERT_INFO(!nodes.empty(), "ControlFlowGraph has no nodes");
   QD_ASSERT_INFO(start_node >= 0 && start_node < (int)nodes.size(), "start_node out of range");
   QD_ASSERT_INFO(final_node >= 0 && final_node < (int)nodes.size(), "final_node out of range");
   QD_ASSERT_INFO(nodes[start_node] != nullptr, "start_node entry is null");
   QD_ASSERT_INFO(nodes[final_node] != nullptr, "final_node entry is null");
+
+  // (2) Edge consistency -- O(V+E). For each forward edge n->next[k] == m, we require the
+  // corresponding back edge m->prev to contain n, and vice versa. This catches the dangling-
+  // pointer / asymmetric-edge corruption that surfaces when a pre-CFG pass (e.g. an unstructured
+  // control-flow normaliser like structure_continues) produces malformed IR -- precisely the
+  // failure mode that currently shows up as a segfault deep in worklist propagation rather than
+  // at the boundary. Null entries are tolerated: `erase()` clears entries before `simplify_graph`
+  // compacts, so a non-compact `nodes` vector with embedded nulls is a legal intermediate state.
+  for (std::size_t i = 0; i < nodes.size(); ++i) {
+    if (!nodes[i]) {
+      continue;
+    }
+    CFGNode *n = nodes[i].get();
+    for (CFGNode *m : n->next) {
+      QD_ASSERT_INFO(m != nullptr, "CFG node {} has a null entry in `next`", i);
+      const bool back_link =
+          std::find(m->prev.begin(), m->prev.end(), n) != m->prev.end();
+      QD_ASSERT_INFO(back_link,
+                     "CFG edge asymmetry: node {} -> next contains a successor whose `prev` does "
+                     "not list back to node {}",
+                     i, i);
+    }
+    for (CFGNode *m : n->prev) {
+      QD_ASSERT_INFO(m != nullptr, "CFG node {} has a null entry in `prev`", i);
+      const bool fwd_link =
+          std::find(m->next.begin(), m->next.end(), n) != m->next.end();
+      QD_ASSERT_INFO(fwd_link,
+                     "CFG edge asymmetry: node {} <- prev contains a predecessor whose `next` "
+                     "does not list forward to node {}",
+                     i, i);
+    }
+  }
 }
 
 void ControlFlowGraph::erase(int node_id) {
