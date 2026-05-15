@@ -104,6 +104,31 @@ class CFGNode {
                                 int position,
                                 Stmt *&result,
                                 bool &result_visible) const;
+
+  // Helper for get_store_forwarding_data: walk this node's block backwards
+  // from |position| and return the index of the most recent store to |var|,
+  // or -1 if none is in this block. Handles the quant-store exclusion plus the
+  // MatrixInitStmt-via-MatrixPtrStmt forwarding special case.
+  int find_intra_block_last_def(Stmt *var, int position) const;
+
+  // Helper for get_store_forwarding_data: scan |reach_in| and |reach_gen| for
+  // definitions of |var| reaching |position|, folding each into |result| /
+  // |result_visible| via update_forwarding_result. Returns nullopt if any
+  // visited def is unforwardable (caller must return nullptr); otherwise the
+  // last_def_position (0 if only reach_in matched, an in-block index if
+  // reach_gen matched, -1 if no eligible def was found).
+  std::optional<int> find_cross_block_def(Stmt *var,
+                                          int position,
+                                          Stmt *&result,
+                                          bool &result_visible) const;
+
+  // Helper for get_store_forwarding_data: scan block statements in
+  // [from, to_exclusive) for a store that may write a different value to an
+  // address aliasing |var|. Returns true iff such a store exists (so
+  // forwarding |result| must abort). The check is skipped (returns false) for
+  // non-tensor alloca destinations, where aliasing through MatrixPtrStmt
+  // cannot apply.
+  bool any_aliased_store_breaks_forwarding(Stmt *result, Stmt *var, int from, int to_exclusive) const;
 };
 
 class ControlFlowGraph {

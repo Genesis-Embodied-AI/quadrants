@@ -248,16 +248,11 @@ bool CFGNode::update_forwarding_result(Stmt *stmt,
   return true;
 }
 
-// var: dest_addr
-Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
-  // Return the stored data if all definitions in the UD-chain of |var| at
-  // this position store the same data.
-  // [Intra-block Search]
-  int last_def_position = -1;
+int CFGNode::find_intra_block_last_def(Stmt *var, int position) const {
   for (int i = position - 1; i >= begin_location; i--) {
     // Find previous store stmt to the same dest_addr, stop at the closest one.
     // store_ptr: prev-store dest_addr
-    for (auto store_ptr : irpass::analysis::get_store_destination(block->statements[i].get())) {
+    for (auto *store_ptr : irpass::analysis::get_store_destination(block->statements[i].get())) {
       // Exclude `store_ptr` as a potential store destination due to mixed
       // semantics of store statements for quant types. The store operation
       // involves implicit casting before storing, which may result in a loss of
@@ -273,8 +268,7 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
       // TODO: Still forward the store if the value can be statically proven to
       // fit into the quant type.
       if (!is_quant(store_ptr->ret_type.ptr_removed()) && irpass::analysis::definitely_same_address(var, store_ptr)) {
-        last_def_position = i;
-        break;
+        return i;
       }
 
       // Special case:
@@ -284,107 +278,103 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
       // $3 = load $2
       // We can forward MatrixInitStmt->values[offset] to $3
       if (var->is<MatrixPtrStmt>() && var->as<MatrixPtrStmt>()->offset->is<ConstStmt>()) {
-        auto var_origin = var->as<MatrixPtrStmt>()->origin;
-        // Check for same origin address
+        auto *var_origin = var->as<MatrixPtrStmt>()->origin;
         if (irpass::analysis::definitely_same_address(var_origin, store_ptr)) {
-          // Check for MatrixInitStmt
           Stmt *store_data = irpass::analysis::get_store_data(block->statements[i].get());
           if (store_data->is<MatrixInitStmt>()) {
-            last_def_position = i;
-            break;
+            return i;
           }
         }
       }
-    }
-    if (last_def_position != -1) {
-      break;
     }
   }
+  return -1;
+}
 
-  // Check for aliased address
-  // There's a store to the same dest_addr before this stmt
-  if (last_def_position != -1) {
-    // result: the value to store
-    Stmt *result = irpass::analysis::get_store_data(block->statements[last_def_position].get());
-    bool is_tensor_involved = var->ret_type.ptr_removed()->is<TensorType>();
-    if (!(var->is<AllocaStmt>() && !is_tensor_involved)) {
-      // In between the store stmt and current stmt,
-      // if there's a third-stmt that "may" have stored a "different value" to
-      // the "same dest_addr", then we can't forward the stored data.
-      for (int i = last_def_position + 1; i < position; i++) {
-        if (!irpass::analysis::same_value(result, irpass::analysis::get_store_data(block->statements[i].get()))) {
-          if (may_contain_address(block->statements[i].get(), var)) {
-            return nullptr;
-          }
-        }
+std::optional<int> CFGNode::find_cross_block_def(Stmt *var,
+                                                 int position,
+                                                 Stmt *&result,
+                                                 bool &result_visible) const {
+  int last_def_position = -1;
+  // [Global Addr only] Stores reaching the entry of this node from previous blocks. `var == stmt`
+  // is for the case that a global ptr is never stored; in that case `stmt` comes from
+  // nodes[start_node]->reach_gen.
+  for (auto *stmt : reach_in) {
+    if (var == stmt || may_contain_address(stmt, var)) {
+      if (!update_forwarding_result(stmt, position, result, result_visible)) {
+        return std::nullopt;
       }
+      last_def_position = 0;
+    }
+  }
+  // Stores generated within this node (in reach_gen) that precede |position|.
+  for (auto *stmt : reach_gen) {
+    if (may_contain_address(stmt, var) && stmt->parent->locate(stmt) < position) {
+      if (!update_forwarding_result(stmt, position, result, result_visible)) {
+        return std::nullopt;
+      }
+      last_def_position = stmt->parent->locate(stmt);
+    }
+  }
+  return last_def_position;
+}
+
+bool CFGNode::any_aliased_store_breaks_forwarding(Stmt *result, Stmt *var, int from, int to_exclusive) const {
+  // Allocas without tensor type cannot be aliased through MatrixPtrStmt, so the check is moot.
+  const bool is_tensor_involved = var->ret_type.ptr_removed()->is<TensorType>();
+  if (var->is<AllocaStmt>() && !is_tensor_involved) {
+    return false;
+  }
+  for (int i = from; i < to_exclusive; i++) {
+    auto *s = block->statements[i].get();
+    if (!irpass::analysis::same_value(result, irpass::analysis::get_store_data(s))) {
+      if (may_contain_address(s, var)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// var: dest_addr. Return the stored data if all definitions in the UD-chain of |var| at this
+// position store the same data; otherwise nullptr. Looks intra-block first (cheaper, dominates
+// cross-block forwarding when present), then falls back to the cross-block search over reach_in
+// and reach_gen. In both cases an intervening aliased store that may write a different value
+// breaks the forward.
+Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
+  // [Intra-block search] Walks backwards in this node's block.
+  if (int last_def = find_intra_block_last_def(var, position); last_def != -1) {
+    Stmt *result = irpass::analysis::get_store_data(block->statements[last_def].get());
+    if (any_aliased_store_breaks_forwarding(result, var, last_def + 1, position)) {
+      return nullptr;
     }
     return result;
   }
 
-  // [Cross-block search]
-  // Search for store to the same dest_addr in reach_in and reach_gen
+  // [Cross-block search] Walks reach_in / reach_gen, accumulating a single forwardable result.
   Stmt *result = nullptr;
   bool result_visible = false;
-
-  // [Global Addr only]
-  // test whether there's a store to the same dest_addr in a previous block.
-  // if the store values are the same, then return the value
-  last_def_position = -1;
-  for (auto stmt : reach_in) {
-    // var == stmt is for the case that a global ptr is never stored.
-    // In this case, stmt is from nodes[start_node]->reach_gen.
-    if (var == stmt || may_contain_address(stmt, var)) {
-      if (!update_forwarding_result(stmt, position, result, result_visible))
-        return nullptr;
-      else
-        last_def_position = 0;
-    }
-  }
-
-  // test whether there's a store to the same dest_addr before this stmt (in
-  // reach_gen)
-  //  if the store values are the same, then return the value
-  for (auto stmt : reach_gen) {
-    if (may_contain_address(stmt, var) && stmt->parent->locate(stmt) < position) {
-      if (!update_forwarding_result(stmt, position, result, result_visible))
-        return nullptr;
-      else
-        last_def_position = stmt->parent->locate(stmt);
-    }
+  std::optional<int> last_def = find_cross_block_def(var, position, result, result_visible);
+  if (!last_def.has_value()) {
+    return nullptr;
   }
   if (!result) {
     // The UD-chain is empty.
-    auto offending_load = block->statements[position].get();
+    auto *offending_load = block->statements[position].get();
     ErrorEmitter(QuadrantsIrWarning(), offending_load,
                  fmt::format("Loading variable {} before anything is stored to it.", var->id));
     return nullptr;
   }
   if (!result_visible) {
-    // The data is store-to-load forwardable but not visible at the place we
-    // are going to forward. We cannot forward it in this case.
+    // The data is store-to-load forwardable but not visible at the place we are going to forward.
     return nullptr;
   }
-
-  if (last_def_position == -1)
+  if (*last_def == -1) {
     return nullptr;
-
-  // Check for aliased address
-  // There's a store to the same dest_addr before this stmt
-  bool is_tensor_involved = var->ret_type.ptr_removed()->is<TensorType>();
-  if (!(var->is<AllocaStmt>() && !is_tensor_involved)) {
-    // In between the store stmt and current stmt,
-    // if there's a third-stmt that "may" have stored a "different value" to
-    // the "same dest_addr", then we can't forward the stored data.
-    for (int i = last_def_position; i < position; i++) {
-      if (!irpass::analysis::same_value(result, irpass::analysis::get_store_data(block->statements[i].get()))) {
-        if (may_contain_address(block->statements[i].get(), var)) {
-          return nullptr;
-        }
-      }
-    }
   }
-
+  if (any_aliased_store_breaks_forwarding(result, var, *last_def, position)) {
+    return nullptr;
+  }
   return result;
 }
 
