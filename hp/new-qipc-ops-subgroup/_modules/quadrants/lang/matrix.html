@@ -623,9 +623,9 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">entries</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">dt</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">to_numpy_type</span><span class="p">(</span><span class="n">dt</span><span class="p">))</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">is_host_access</span> <span class="o">=</span> <span class="kc">False</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">&gt;</span> <span class="mi">32</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">&gt;</span> <span class="mi">144</span><span class="p">:</span>
             <span class="n">warning</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Quadrants matrices/vectors with </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> &gt; 32 entries are not suggested.&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Quadrants matrices/vectors with </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> &gt; 144 entries are not suggested.&quot;</span>
                 <span class="s2">&quot; Matrices/vectors will be automatically unrolled at compile-time for performance.&quot;</span>
                 <span class="s2">&quot; So the compilation time could be extremely long if the matrix size is too big.&quot;</span>
                 <span class="s2">&quot; You may use a field to store a large matrix like this, e.g.:</span><span class="se">\n</span><span class="s2">&quot;</span>
@@ -992,6 +992,33 @@
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
         <span class="k">return</span> <span class="n">matrix_ops</span><span class="o">.</span><span class="n">norm_sqr</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Matrix.frobenius_inner">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.frobenius_inner">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">frobenius_inner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the Frobenius inner product :math:`\\langle A, B \\rangle = \\sum_{ij} A_{ij} B_{ij}`.</span>
+
+<span class="sd">        Both operands must have the same shape. Defined for any tensor shape (vector or matrix); for matrices this</span>
+<span class="sd">        is the standard Frobenius inner product, and :meth:`norm_sqr` is the special case ``A.frobenius_inner(A)``.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            other (:class:`~quadrants.Matrix`): The other operand. Must have the same shape as ``self``.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            DataType: The scalar Frobenius inner product.</span>
+
+<span class="sd">        Example::</span>
+
+<span class="sd">            &gt;&gt;&gt; A = qd.Matrix([[1.0, 2.0], [3.0, 4.0]])</span>
+<span class="sd">            &gt;&gt;&gt; B = qd.Matrix([[5.0, 6.0], [7.0, 8.0]])</span>
+<span class="sd">            &gt;&gt;&gt; A.frobenius_inner(B)</span>
+<span class="sd">            70.0</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
+
+        <span class="k">return</span> <span class="n">matrix_ops</span><span class="o">.</span><span class="n">frobenius_inner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Matrix.max">

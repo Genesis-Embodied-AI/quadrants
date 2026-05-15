@@ -702,13 +702,21 @@
 <span class="sd">    Note: ``qd.select`` cannot be used here instead of ``if`` because ``OpSelect`` on MoltenVK / Metal miscompiles when</span>
 <span class="sd">    one operand is an f32 produced by a shuffle intrinsic - the select silently returns the false-branch value</span>
 <span class="sd">    regardless of the condition.  The ``if`` form works correctly on its own.</span>
+
+<span class="sd">    Argument order: each step folds the *predecessor* into the current lane&#39;s running value, i.e.</span>
+<span class="sd">    ``value = op(partner, value)`` -- ``partner`` is ``shuffle_up(value, offset)``, which is lane</span>
+<span class="sd">    ``self - offset``&#39;s value (the lane to the left in scan order).  After ``log2(N)`` steps lane ``k`` holds</span>
+<span class="sd">    ``op(a[0], op(a[1], ..., op(a[k-1], a[k])))`` -- the left-fold over lanes ``[group_start, k]`` in lane order.</span>
+<span class="sd">    All seven typed wrappers (``_bin_add`` / ``_mul`` / ``_min`` / ``_max`` / ``_and`` / ``_or`` / ``_xor``) are</span>
+<span class="sd">    commutative so the order is invisible there, but the generic primitive must preserve direction for</span>
+<span class="sd">    non-commutative associative monoids (matrix multiply, function composition, string-concat-like ops).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">lane_in_group</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
         <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">)</span>
         <span class="n">partner</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">offset</span><span class="p">))</span>
         <span class="k">if</span> <span class="n">lane_in_group</span> <span class="o">&gt;=</span> <span class="n">offset</span><span class="p">:</span>
-            <span class="n">value</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">partner</span><span class="p">)</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">partner</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">value</span>
 
 

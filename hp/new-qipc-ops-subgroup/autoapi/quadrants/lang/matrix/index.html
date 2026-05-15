@@ -55,6 +55,8 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/matrix/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
@@ -634,6 +636,32 @@ of its elements.</p>
 <dt class="sig sig-object py" id="quadrants.lang.matrix.Matrix.norm_sqr">
 <span class="sig-name descname"><span class="pre">norm_sqr</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Matrix.norm_sqr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Matrix.norm_sqr" title="Link to this definition">#</a></dt>
 <dd><p>Returns the sum of the absolute squares of its elements.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.matrix.Matrix.frobenius_inner">
+<span class="sig-name descname"><span class="pre">frobenius_inner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Matrix.frobenius_inner"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Matrix.frobenius_inner" title="Link to this definition">#</a></dt>
+<dd><p>Returns the Frobenius inner product <span class="math notranslate nohighlight">\(\langle A, B \rangle = \sum_{ij} A_{ij} B_{ij}\)</span>.</p>
+<p>Both operands must have the same shape. Defined for any tensor shape (vector or matrix); for matrices this
+is the standard Frobenius inner product, and <a class="reference internal" href="#quadrants.lang.matrix.Matrix.norm_sqr" title="quadrants.lang.matrix.Matrix.norm_sqr"><code class="xref py py-meth docutils literal notranslate"><span class="pre">norm_sqr()</span></code></a> is the special case <code class="docutils literal notranslate"><span class="pre">A.frobenius_inner(A)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>other</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>) – The other operand. Must have the same shape as <code class="docutils literal notranslate"><span class="pre">self</span></code>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The scalar Frobenius inner product.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>DataType</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">A</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">B</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">A</span><span class="o">.</span><span class="n">frobenius_inner</span><span class="p">(</span><span class="n">B</span><span class="p">)</span>
+<span class="go">70.0</span>
+</pre></div>
+</div>
 </dd></dl>
 
 <dl class="py method">
@@ -1548,6 +1576,7 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.norm"><code class="docutils literal notranslate"><span class="pre">Matrix.norm()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.norm_inv"><code class="docutils literal notranslate"><span class="pre">Matrix.norm_inv()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.norm_sqr"><code class="docutils literal notranslate"><span class="pre">Matrix.norm_sqr()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.frobenius_inner"><code class="docutils literal notranslate"><span class="pre">Matrix.frobenius_inner()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.max"><code class="docutils literal notranslate"><span class="pre">Matrix.max()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.min"><code class="docutils literal notranslate"><span class="pre">Matrix.min()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.any"><code class="docutils literal notranslate"><span class="pre">Matrix.any()</span></code></a></li>

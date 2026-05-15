@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Building the CUDA graph conditional fatbin &#8212; Quadrants 0.7.9 documentation</title>
+    <title>Per-thread matrix and vector operations &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/building_cudagraph_conditional_fatbin';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/matrix_vector_per_thread';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="API Reference" href="../autoapi/index.html" />
-    <link rel="prev" title="Contributing to quadrants" href="contributing.html" />
+    <link rel="next" title="Per-thread linear algebra" href="linalg_per_thread.html" />
+    <link rel="prev" title="Matrix and Vector" href="matrix_vector.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.7.9" />
@@ -284,11 +284,11 @@
 <li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
-<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Per-thread matrix and vector operations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
@@ -344,8 +344,8 @@
 <li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
-<ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Building the CUDA graph conditional fatbin</a></li>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
 </ul>
 </div>
 </nav></div>
@@ -389,7 +389,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Building the CUDA graph conditional fatbin</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Per-thread matrix and vector operations</span></li>
   </ul>
 </nav>
 </div>
@@ -406,94 +406,100 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="building-the-cuda-graph-conditional-fatbin">
-<h1>Building the CUDA graph conditional fatbin<a class="headerlink" href="#building-the-cuda-graph-conditional-fatbin" title="Link to this heading">#</a></h1>
-<p>The <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> feature uses a tiny CUDA kernel that calls
-<code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code> (a device-side function from NVIDIA’s
-<code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code>) to control CUDA graph conditional while nodes. These
-conditional nodes require SM 9.0+ (Hopper or later); on older GPUs,
-<code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side loop automatically.</p>
-<p>There are three distinct phases:</p>
-<ol class="arabic simple">
-<li><p><strong>Fatbin generation</strong> (rare, manual) — A developer runs
-<code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code>, which compiles the kernel and
-device-links it with <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code> to resolve <code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code>.
-The output is a self-contained fatbin, committed to git as a C header.
-Requires <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> and the CUDA toolkit.</p></li>
-<li><p><strong>Quadrants build</strong> (CI / developers) — The C header is <code class="docutils literal notranslate"><span class="pre">#include</span></code>d as a
-plain byte array. No CUDA toolkit needed.</p></li>
-<li><p><strong>Runtime</strong> (end users) — The fatbin is loaded via <code class="docutils literal notranslate"><span class="pre">cuModuleLoadData</span></code>.
-No CUDA toolkit needed.</p></li>
-</ol>
-<p>This page documents phase 1: regenerating the pre-built fatbin.</p>
-<section id="when-to-regenerate">
-<h2>When to regenerate<a class="headerlink" href="#when-to-regenerate" title="Link to this heading">#</a></h2>
-<p>You only need to regenerate the fatbin if:</p>
-<ul class="simple">
-<li><p>The condition kernel source (<code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code>)
-changes.</p></li>
-<li><p>You need to add support for a new SM architecture.</p></li>
-</ul>
-</section>
-<section id="prerequisites">
-<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">#</a></h2>
-<ul class="simple">
-<li><p>CUDA toolkit with <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> (13.0 or later, required for SM 110 support;
-earlier toolkits will fail with <code class="docutils literal notranslate"><span class="pre">Unsupported</span> <span class="pre">gpu</span> <span class="pre">architecture</span> <span class="pre">'compute_110'</span></code>).</p></li>
-<li><p>The <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> binary must be on your <code class="docutils literal notranslate"><span class="pre">PATH</span></code>, or set <code class="docutils literal notranslate"><span class="pre">CUDA_HOME</span></code>.</p></li>
-</ul>
-</section>
-<section id="regenerating">
-<h2>Regenerating<a class="headerlink" href="#regenerating" title="Link to this heading">#</a></h2>
-<p>Run the script from the repo root:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>scripts/build_condition_kernel_fatbin.py
+  <section class="tex2jax_ignore mathjax_ignore" id="per-thread-matrix-and-vector-operations">
+<h1>Per-thread matrix and vector operations<a class="headerlink" href="#per-thread-matrix-and-vector-operations" title="Link to this heading">#</a></h1>
+<p>Element-wise arithmetic and closed-form helpers on <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> — every op below runs <strong>per thread, in registers, with no cross-thread cooperation</strong>. A kernel that calls these on a million-element field runs a million independent copies in parallel; there is no shared memory, no sync, no warp / subgroup primitive involved.</p>
+<p>For the data type itself (declarations, fields, ndarrays, type annotations) see <a class="reference internal" href="matrix_vector.html"><span class="std std-doc">matrix_vector</span></a>. For per-thread numerical algorithms (<code class="docutils literal notranslate"><span class="pre">qd.svd</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.solve</span></code>, etc. — the iterative / pivoting cousins of the closed-form ops below) see <a class="reference internal" href="linalg_per_thread.html"><span class="std std-doc">linalg_per_thread</span></a>.</p>
+<section id="arithmetic">
+<h2>Arithmetic<a class="headerlink" href="#arithmetic" title="Link to this heading">#</a></h2>
+<p>Standard arithmetic works element-wise:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">example</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">])</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">])</span>
+
+    <span class="n">c</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>       <span class="c1"># [5.0, 7.0, 9.0]</span>
+    <span class="n">d</span> <span class="o">=</span> <span class="n">a</span> <span class="o">*</span> <span class="mf">2.0</span>     <span class="c1"># [2.0, 4.0, 6.0]</span>
+    <span class="n">e</span> <span class="o">=</span> <span class="n">a</span> <span class="o">*</span> <span class="n">b</span>       <span class="c1"># element-wise: [4.0, 10.0, 18.0]</span>
 </pre></div>
 </div>
-<p>This will:</p>
-<ol class="arabic simple">
-<li><p>Compile <code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code> with relocatable device
-code for each target SM architecture.</p></li>
-<li><p>Device-link the result with <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code> to resolve the
-<code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code> extern.</p></li>
-<li><p>Write the fatbin as a C byte array to
-<code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond_fatbin.h</span></code>.</p></li>
-</ol>
-<p>After regenerating, commit the updated header. Quadrants must be rebuilt to
-pick up the new fatbin.</p>
 </section>
-<section id="adding-a-new-sm-architecture">
-<h2>Adding a new SM architecture<a class="headerlink" href="#adding-a-new-sm-architecture" title="Link to this heading">#</a></h2>
-<p>Edit the <code class="docutils literal notranslate"><span class="pre">SM_VERSIONS</span></code> list in <code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code> to
-add the new SM version number (e.g., <code class="docutils literal notranslate"><span class="pre">130</span></code>), then regenerate.</p>
+<section id="dot-and-cross-product">
+<h2>Dot and cross product<a class="headerlink" href="#dot-and-cross-product" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">products</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">])</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">])</span>
+
+    <span class="n">d</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>      <span class="c1"># 0.0</span>
+    <span class="n">c</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>    <span class="c1"># [0.0, 0.0, 1.0]</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">cross</span></code> works for 2D vectors (returns a scalar) and 3D vectors (returns a vector).</p>
 </section>
-<section id="files">
-<h2>Files<a class="headerlink" href="#files" title="Link to this heading">#</a></h2>
-<div class="pst-scrollable-table-container"><table class="table">
-<thead>
-<tr class="row-odd"><th class="head"><p>File</p></th>
-<th class="head"><p>Purpose</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code></p></td>
-<td><p>CUDA C source for the condition kernel</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code></p></td>
-<td><p>Regeneration script</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond_fatbin.h</span></code></p></td>
-<td><p>Generated C header (checked into git)</p></td>
-</tr>
-</tbody>
-</table>
+<section id="norm-and-normalize">
+<h2>Norm and normalize<a class="headerlink" href="#norm-and-normalize" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">norms</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">v</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">])</span>
+
+    <span class="n">length</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span>              <span class="c1"># 5.0</span>
+    <span class="n">length_sq</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">norm_sqr</span><span class="p">()</span>       <span class="c1"># 25.0</span>
+    <span class="n">unit</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">normalized</span><span class="p">()</span>          <span class="c1"># [0.6, 0.8]</span>
+    <span class="n">inv_len</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">norm_inv</span><span class="p">()</span>         <span class="c1"># 0.2</span>
+</pre></div>
+</div>
+<p>Pass an <code class="docutils literal notranslate"><span class="pre">eps</span></code> argument for numerical safety: <code class="docutils literal notranslate"><span class="pre">v.normalized(eps=1e-8)</span></code>.</p>
+</section>
+<section id="matrix-operations">
+<h2>Matrix operations<a class="headerlink" href="#matrix-operations" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">mat_ops</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]])</span>
+
+    <span class="n">t</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">transpose</span><span class="p">()</span>       <span class="c1"># [[1, 3], [2, 4]]</span>
+    <span class="n">d</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">determinant</span><span class="p">()</span>     <span class="c1"># -2.0</span>
+    <span class="n">tr</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">trace</span><span class="p">()</span>          <span class="c1"># 5.0</span>
+    <span class="n">inv</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">inverse</span><span class="p">()</span>       <span class="c1"># [[-2, 1], [1.5, -0.5]]</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">determinant()</span></code> supports matrices up to 4×4 (closed-form expansion).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">inverse()</span></code> supports matrices up to 12×12. Sizes 1–4 use the closed-form cofactor expansion; sizes 5–12 use Gauss elimination with partial pivoting (fully unrolled). For the larger sizes, achievable precision scales as <code class="docutils literal notranslate"><span class="pre">cond(A)</span> <span class="pre">·</span> <span class="pre">eps</span></code> — a well-conditioned 12×12 in <code class="docutils literal notranslate"><span class="pre">f64</span></code> typically reconstructs to ~1e-12.</p></li>
+</ul>
+</section>
+<section id="frobenius-inner-product-and-norm">
+<h2>Frobenius inner product and norm<a class="headerlink" href="#frobenius-inner-product-and-norm" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">inner_products</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]])</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]])</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">frobenius_inner</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>   <span class="c1"># 2 + 3 = 5.0   (sum_ij a[i,j] * b[i,j])</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span>               <span class="c1"># sqrt(1 + 4 + 9 + 16) = sqrt(30)</span>
+    <span class="n">n_sq</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">norm_sqr</span><span class="p">()</span>        <span class="c1"># 30.0  (== a.frobenius_inner(a))</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">frobenius_inner(other)</span></code> requires both matrices to have the same shape and supports any size. It’s the natural inner product on matrices viewed as vectors of length <code class="docutils literal notranslate"><span class="pre">n</span> <span class="pre">×</span> <span class="pre">m</span></code> and is the correct bilinear form behind <code class="docutils literal notranslate"><span class="pre">norm</span></code> / <code class="docutils literal notranslate"><span class="pre">norm_sqr</span></code> (<code class="docutils literal notranslate"><span class="pre">A.frobenius_inner(A)</span> <span class="pre">==</span> <span class="pre">A.norm_sqr()</span></code>).</p>
+</section>
+<section id="matrix-vector-multiply">
+<h2>Matrix-vector multiply<a class="headerlink" href="#matrix-vector-multiply" title="Link to this heading">#</a></h2>
+<p>Use the <code class="docutils literal notranslate"><span class="pre">&#64;</span></code> operator:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">mat_vec</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">]])</span>
+    <span class="n">v</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">])</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">m</span> <span class="o">@</span> <span class="n">v</span>    <span class="c1"># [3.0, 8.0]</span>
+</pre></div>
 </div>
 </section>
-<section id="how-it-s-used-at-runtime">
-<h2>How it’s used at runtime<a class="headerlink" href="#how-it-s-used-at-runtime" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">GraphManager::ensure_condition_kernel_loaded()</span></code> in
-<code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_manager.cpp</span></code> loads the fatbin via
-<code class="docutils literal notranslate"><span class="pre">cuModuleLoadData</span></code>. If the fatbin does not contain SASS for the current GPU’s
-SM architecture, loading fails with a clear error pointing to this script.</p>
+<section id="other-operations">
+<h2>Other operations<a class="headerlink" href="#other-operations" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.Matrix.diag(dim,</span> <span class="pre">val)</span></code> — create a diagonal matrix</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">a.outer_product(b)</span></code> — outer product of two vectors</p></li>
+</ul>
 </section>
 </section>
 
@@ -508,20 +514,20 @@ SM architecture, loading fails with a clear error pointing to this script.</p>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="contributing.html"
+       href="matrix_vector.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Contributing to quadrants</p>
+        <p class="prev-next-title">Matrix and Vector</p>
       </div>
     </a>
     <a class="right-next"
-       href="../autoapi/index.html"
+       href="linalg_per_thread.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">API Reference</p>
+        <p class="prev-next-title">Per-thread linear algebra</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -544,19 +550,20 @@ SM architecture, loading fails with a clear error pointing to this script.</p>
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#when-to-regenerate">When to regenerate</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#prerequisites">Prerequisites</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#regenerating">Regenerating</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#adding-a-new-sm-architecture">Adding a new SM architecture</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#files">Files</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-it-s-used-at-runtime">How it’s used at runtime</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#arithmetic">Arithmetic</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dot-and-cross-product">Dot and cross product</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#norm-and-normalize">Norm and normalize</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#matrix-operations">Matrix operations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#frobenius-inner-product-and-norm">Frobenius inner product and norm</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#matrix-vector-multiply">Matrix-vector multiply</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#other-operations">Other operations</a></li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/user_guide/building_cudagraph_conditional_fatbin.md.txt">
+    <a href="../_sources/user_guide/matrix_vector_per_thread.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
