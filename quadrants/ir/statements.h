@@ -1633,8 +1633,13 @@ class InternalFuncStmt : public Stmt {
  */
 class AdStackAllocaStmt : public Stmt {
  public:
+  // Sentinel value of `max_size` meaning "size has not been resolved yet; treat as adaptive".
+  // Used as a state marker in multiple passes (see `is_adaptive()`); do not redefine to a real
+  // capacity even if 0-sized adstacks were valid.
+  static constexpr std::size_t kAdaptiveSentinel = 0;
+
   DataType dt;
-  std::size_t max_size{0};  // 0 = adaptive
+  std::size_t max_size{kAdaptiveSentinel};
   // Compile-time captured symbolic expression for `max_size`, populated by
   // `determine_ad_stack_size` when the bound is derivable from constants and scalar field loads.
   // Host-evaluated pre-launch to size the adstack heap; null until the pre-pass runs.
@@ -1646,6 +1651,14 @@ class AdStackAllocaStmt : public Stmt {
   AdStackAllocaStmt(const DataType &dt, std::size_t max_size) : dt(dt), max_size(max_size) {
     ret_type = dt;
     QD_STMT_REG_FIELDS;
+  }
+
+  // True iff this stack's capacity has not yet been resolved by `determine_ad_stack_size` (or any
+  // prior pass that may seed it). Prefer this over comparing `max_size` to a literal `0` -- it
+  // keeps the "0 means adaptive" sentinel encapsulated and lets a future change to the sentinel
+  // (e.g. to a typed enum) touch only this class.
+  bool is_adaptive() const {
+    return max_size == kAdaptiveSentinel;
   }
 
   std::size_t element_size_in_bytes() const {
