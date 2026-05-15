@@ -6,6 +6,7 @@
 #include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/launch_context_builder.h"
 #include "quadrants/program/program.h"
+#include "quadrants/runtime/amdgpu/amdgpu_utils.h"
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 
 namespace quadrants::lang {
@@ -228,15 +229,27 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
 }
 
 bool KernelLauncher::on_amdgpu_device(void *ptr) {
-  unsigned int attr_val[8];
-  // mem_get_attribute doesn't work well on ROCm
-  uint32_t ret_code = AMDGPUDriver::get_instance().mem_get_attributes.call(attr_val, ptr);
-
-  return ret_code == HIP_SUCCESS && attr_val[0] == HIP_MEMORYTYPE_DEVICE;
+  return ::quadrants::lang::amdgpu::on_amdgpu_device(ptr);
 }
 
 void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
+
+  // HIP graph fast path. Used when the kernel was declared `@qd.kernel(graph=True)` AND there is no `graph_do_while`
+  // arg. The `graph_do_while` case falls through to the regular streaming launch below, which handles it via
+  // `launch_offloaded_tasks_with_do_while` (host-side loop + DtoH of the counter ndarray each iteration). HIP exposes
+  // kernel-launch graph nodes but no conditional / while nodes today, so the CUDA fast path that builds a conditional
+  // graph cannot be ported. The `AmdgpuDefaultStreamPinGuard` further down is skipped on this branch; that's fine
+  // because `graph_launch` enqueues a single op on the active stream and there are no recursive launches to reorder.
+  if (ctx.use_graph && ctx.graph_do_while_arg_id < 0) {
+    auto &lctx = contexts_[handle.get_launch_id()];
+    if (graph_manager_.try_launch(handle.get_launch_id(), ctx, lctx.jit_module, *lctx.parameters, lctx.offloaded_tasks,
+                                  get_runtime_executor())) {
+      return;
+    }
+  }
+  graph_manager_.mark_not_used();
+
   // Mutable reference: per-handle persistent buffers are lazy-allocated / grow on demand on the first launch of
   // each kernel. Recursive launches from `publish_adstack_metadata`'s host-eval (snode-reader kernels) hit a
   // *different* handle's `Context` and so cannot clobber the parent's `arg_buffer_dev_ptr` / `runtime_context_dev_ptr`.
