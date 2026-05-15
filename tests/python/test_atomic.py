@@ -644,8 +644,8 @@ def test_atomic_bitwise_int_widths(op, seed, arg, expected, dtype):
     assert int(f[None]) == expected
 
 
-# Pins the doc claim that bitwise atomics on float dtypes raise a type error at trace time (atomics page: "Integer
-# dtypes only -- passing f32 / f64 raises a type error at trace time"). Enforced by the is_integral check in
+# Pins the doc claim that bitwise atomics on float dtypes raise a type error at compile time (atomics page: "Integer
+# dtypes only -- passing f32 / f64 raises a type error at compile time"). Enforced by the is_integral check in
 # AtomicOpExpression::type_check (quadrants/ir/frontend_ir.cpp) for bit_and / bit_or / bit_xor.
 @pytest.mark.parametrize("op", ["and", "or", "xor"])
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])

@@ -40,6 +40,28 @@ from quadrants.types.primitive_types import i32, u32, u64
 
 
 @func
+def _reduce_tiled(value, op: template(), log2_size: template()):
+    """Tree-reduce ``value`` across ``2**log2_size`` consecutive lanes via ``shuffle_down`` under a caller-supplied
+    binary ``op``.  Mirrors the operator-specialized public ``reduce_add_tiled`` / ``reduce_min_tiled`` /
+    ``reduce_max_tiled`` but takes a template operator so cross-module callers (currently ``block.reduce`` and the
+    typed ``block.reduce_{add,min,max}``) can compose the per-subgroup step with custom monoids without reimplementing
+    the shuffle tree.
+
+    Result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial values.  ``log2_size`` is a
+    compile-time template, so the body unrolls into ``log2_size`` shuffle+op pairs.  Caller must ensure
+    ``2**log2_size`` does not exceed the active subgroup size on the target.
+
+    Underscore-prefixed because the generic-op contract is fragile (``op`` must be associative and side-effect-free)
+    and we don't want to invite ad-hoc subgroup-scope reductions from arbitrary kernels; the typed
+    ``reduce_{add,min,max}_tiled`` cover the common cases.
+    """
+    for i in impl.static(range(log2_size)):
+        offset = impl.static(1 << (log2_size - 1 - i))
+        value = op(value, shuffle_down(value, u32(offset)))
+    return value
+
+
+@func
 def reduce_add_tiled(value, log2_size: template()):
     """Sum ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
 
