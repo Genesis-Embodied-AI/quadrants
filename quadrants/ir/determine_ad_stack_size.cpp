@@ -42,7 +42,7 @@ AdStackIndex collect_adaptive_ad_stacks(const std::vector<std::unique_ptr<CFGNod
     for (int j = node->begin_location; j < node->end_location; j++) {
       Stmt *stmt = node->block->statements[j].get();
       auto *stack = stmt->cast<AdStackAllocaStmt>();
-      if (!stack || stack->max_size != 0) {
+      if (!stack || !stack->is_adaptive()) {
         continue;
       }
       if (idx.stack_id.emplace(stack, static_cast<int>(idx.stacks.size())).second) {
@@ -89,7 +89,7 @@ AdStackPerNodeSizes accumulate_per_stack_per_node_size_deltas(
       } else {
         continue;
       }
-      if (stack->max_size != 0 /*non-adaptive*/) {
+      if (!stack->is_adaptive()) {
         continue;
       }
       auto it = stack_id.find(stack);
