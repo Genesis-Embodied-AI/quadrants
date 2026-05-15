@@ -138,6 +138,12 @@ bool in_final_node_live_gen(const Stmt *stmt,
 
 }  // namespace
 
+// ===========================================================================
+// CFGNode -- per-block (intra-block) methods.
+// Each method here does the *per-node* work; the whole-graph driver with the
+// same name lives on ControlFlowGraph further down this file.
+// ===========================================================================
+
 CFGNode::CFGNode(Block *block,
                  int begin_location,
                  int end_location,
@@ -991,6 +997,14 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
   }
   return modified;
 }
+
+// ===========================================================================
+// ControlFlowGraph -- whole-graph methods.
+// Each analysis/transform below is the driver for the same-named per-node
+// method on CFGNode above. It calls the per-node method on every node, then
+// runs whatever cross-node work the pass needs (worklist fixpoint for RD/LV,
+// a flat per-node loop for S2L/DSE).
+// ===========================================================================
 
 void ControlFlowGraph::erase(int node_id) {
   // Erase an empty node.

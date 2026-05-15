@@ -9,12 +9,21 @@ namespace quadrants::lang {
 
 class Function;
 /**
- * A basic block in control-flow graph.
- * A CFGNode contains a reference to a part of the CHI IR, or more precisely,
- * an interval of statements in a Block.
- * The edges in the graph are stored in |prev| and |next|. The control flow is
- * possible to go from any node in |prev| to this node, and is possible to go
- * from this node to any node in |next|.
+ * A basic block in the control-flow graph (one node).
+ *
+ * A CFGNode references an interval of statements in a Block:
+ * `block->statements[i]` for `i in [begin_location, end_location)`.
+ * The graph edges are stored in `prev` and `next`: control may flow from any
+ * node in `prev` into this node, and out of this node into any node in `next`.
+ *
+ * Scope of the methods on this class: each analysis/transform method on
+ * CFGNode does only the *intra-block* work for that pass (e.g.
+ * `reaching_definition_analysis` computes `reach_gen` / `reach_kill` from this
+ * node's statements; `store_to_load_forwarding` rewrites loads/stores within
+ * this node's slice of the block). The same-named method on
+ * `ControlFlowGraph` is the *whole-graph driver*: it calls this per-node
+ * method on every node, then runs the worklist fixpoint or post-processing
+ * that needs cross-node state.
  */
 class CFGNode {
  public:
@@ -82,11 +91,23 @@ class CFGNode {
   bool reach_kill_variable(Stmt *var) const;
   Stmt *get_store_forwarding_data(Stmt *var, int position) const;
 
-  // Analyses and optimizations inside a CFGNode.
+  // Per-node (intra-block) analyses and transforms. Each is driven across the
+  // whole graph by the same-named method on ControlFlowGraph; see below.
+  // Per-node `reaching_definition_analysis`: populate this node's reach_gen /
+  // reach_kill from its statements.
   void reaching_definition_analysis(bool after_lower_access);
+  // Per-node `store_to_load_forwarding`: rewrite loads/stores within this
+  // node's statement range. Returns true if any IR change was made.
   bool store_to_load_forwarding(bool after_lower_access, bool autodiff_enabled);
+  // Per-node helper for `ControlFlowGraph::gather_loaded_snodes`: append this
+  // node's loaded SNodes into `snodes`.
   void gather_loaded_snodes(std::unordered_set<SNode *> &snodes) const;
+  // Per-node `live_variable_analysis`: populate this node's live_gen /
+  // live_kill from its statements.
   void live_variable_analysis(bool after_lower_access);
+  // Per-node `dead_store_elimination`: erase dead stores / weaken dead
+  // atomics within this node's statement range. Returns true if any IR change
+  // was made.
   bool dead_store_elimination(bool after_lower_access);
 
  private:
@@ -150,6 +171,16 @@ class CFGNode {
                                         bool &modified);
 };
 
+/**
+ * The whole control-flow graph (all nodes plus their edges).
+ *
+ * Owns the `nodes` vector, the synthetic entry node (`start_node`, always
+ * empty), and the synthetic exit node (`final_node`, always empty). Each
+ * analysis/transform method on this class is the *whole-graph driver*: it
+ * invokes the same-named per-node method on `CFGNode` for every node, then
+ * runs the worklist fixpoint (RD / LV) or per-node IR rewrite loop (S2L /
+ * DSE). `determine_ad_stack_size` has no per-node counterpart.
+ */
 class ControlFlowGraph {
  private:
   // Erase an empty node.
@@ -182,22 +213,26 @@ class ControlFlowGraph {
                           const std::string &suffix = "") const;
 
   /**
-   * Perform reaching definition analysis using the worklist algorithm,
-   * and store the results in CFGNodes.
+   * Whole-graph driver: reaching-definition analysis via worklist fixpoint.
+   * Seeds the entry node's reach_gen with external-input pointers, calls
+   * `CFGNode::reaching_definition_analysis` per node, then converges
+   * reach_in/reach_out. Results are stored on each CFGNode.
    * https://en.wikipedia.org/wiki/Reaching_definition
    *
    * @param after_lower_access
-   *   When after_lower_access is true, only consider local variables (allocas).
+   *   When true, only consider local variables (allocas).
    */
   void reaching_definition_analysis(bool after_lower_access);
 
   /**
-   * Perform live variable analysis using the worklist algorithm,
-   * and store the results in CFGNodes.
+   * Whole-graph driver: live-variable analysis via worklist fixpoint (run
+   * backwards). Seeds the exit node's live_gen with kernel-escaping stores,
+   * calls `CFGNode::live_variable_analysis` per node, then converges
+   * live_in/live_out. Results are stored on each CFGNode.
    * https://en.wikipedia.org/wiki/Live_variable_analysis
    *
    * @param after_lower_access
-   *   When after_lower_access is true, only consider local variables (allocas).
+   *   When true, only consider local variables (allocas).
    * @param config_opt
    *   The set of SNodes which is never loaded after this task.
    */
@@ -213,12 +248,19 @@ class ControlFlowGraph {
   bool unreachable_code_elimination();
 
   /**
-   * Perform store-to-load forwarding and identical store elimination.
+   * Whole-graph driver: store-to-load forwarding + identical-store elimination.
+   * Calls `CFGNode::store_to_load_forwarding` on every node and ORs the
+   * per-node "did we change the IR" return. Caller is responsible for
+   * (re)running `reaching_definition_analysis` first to populate reach_in /
+   * reach_out.
    */
   bool store_to_load_forwarding(bool after_lower_access, bool autodiff_enabled);
 
   /**
-   * Perform dead store elimination and identical load elimination.
+   * Whole-graph driver: dead-store elimination + identical-load elimination.
+   * Calls `CFGNode::dead_store_elimination` on every node and ORs the
+   * per-node return. Caller is responsible for (re)running
+   * `live_variable_analysis` first to populate live_in / live_out.
    */
   bool dead_store_elimination(bool after_lower_access, const std::optional<LiveVarAnalysisConfig> &lva_config_opt);
 
