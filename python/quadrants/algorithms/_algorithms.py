@@ -56,7 +56,6 @@ class PrefixSumExecutor:
         self.sorting_length = length
 
         BLOCK_SZ = 64
-        GRID_SZ = int((length + BLOCK_SZ - 1) / BLOCK_SZ)
 
         # Buffer position and length
         # This is a single buffer implementation for ease of aot usage
