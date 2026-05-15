@@ -1698,6 +1698,101 @@ def test_subgroup_inclusive_xor_tiled(dtype, log2_size):
     _check_inclusive_scan(subgroup.inclusive_xor_tiled, lambda a, b: a ^ b, dtype, log2_size, _init_bitwise_int)
 
 
+# --- Generic-op (non-commutative) inclusive scan --------------------------------------
+#
+# The seven typed wrappers above are all commutative (``a + b == b + a`` etc.), so they're direction-invariant: an
+# implementation of ``_inclusive_scan_tiled`` that folds ``op(current, predecessor)`` and one that folds
+# ``op(predecessor, current)`` produce the same numeric result for every commutative ``op``.  That means none of the
+# above tests catch a fold-direction bug in the generic primitive itself.
+#
+# This test wires a deliberately non-commutative associative monoid into ``_inclusive_scan_tiled`` directly: the
+# affine semigroup over ``i32`` where each lane holds a packed ``(m, c)`` representing the function
+# ``f(x) = m*x + c``, with ``m`` in the high 16 bits and ``c`` in the low 16 bits, both mod ``2**16``.  Composition
+# of two affine functions ``f1`` then ``f2`` is
+#
+#     (m, c) = (m1 * m2, m1 * c2 + c1)   (mod 2**16 per component)
+#
+# Easy to verify (it's standard associativity of function composition); the second component is asymmetric in
+# ``(a, b)`` so swapping argument order produces a measurably different ``(m, c)`` for the inputs used here.  Pure
+# Python-trace logic, so one arch (CUDA) is enough.
+
+
+def _affine_pack(m, c):
+    return ((m & 0xFFFF) << 16) | (c & 0xFFFF)
+
+
+def _affine_unpack(v):
+    return (v >> 16) & 0xFFFF, v & 0xFFFF
+
+
+def _affine_compose_py(a, b):
+    m_a, c_a = _affine_unpack(a)
+    m_b, c_b = _affine_unpack(b)
+    m = (m_a * m_b) & 0xFFFF
+    c = (m_a * c_b + c_a) & 0xFFFF
+    return _affine_pack(m, c)
+
+
+@pytest.mark.parametrize("log2_size", [1, 2, 5])
+@test_utils.test(arch=qd.cuda)
+def test_subgroup_inclusive_scan_tiled_noncommutative(log2_size):
+    """Regression test for ``_inclusive_scan_tiled``'s fold direction.
+
+    Hillis-Steele scan at step ``i`` reads ``partner = shuffle_up(value, 1<<i)`` -- the predecessor lane.  The correct
+    left-fold recurrence is ``value = op(partner, value)`` (lane ``k`` accumulates
+    ``op(a[0], op(a[1], ..., op(a[k-1], a[k])))``).  The previous implementation had ``op(value, partner)``, which on
+    commutative ops (every existing typed wrapper) is invisible but on non-commutative ops produces the reversed
+    composition.  Verify lane ``k`` of each ``2**log2_size``-lane group matches the host-side left-fold under affine
+    function composition, which is associative but explicitly non-commutative.
+    """
+    from quadrants.lang.simt.reductions import _inclusive_scan_tiled
+
+    @qd.func
+    def _affine_compose(a, b):
+        m_a = (a >> 16) & 0xFFFF
+        c_a = a & 0xFFFF
+        m_b = (b >> 16) & 0xFFFF
+        c_b = b & 0xFFFF
+        m = (m_a * m_b) & 0xFFFF
+        c = (m_a * c_b + c_a) & 0xFFFF
+        return (m << 16) | c
+
+    N = 64
+    src = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = _inclusive_scan_tiled(src[i], _affine_compose, log2_size)
+
+    # Per-lane affine: lane k -> m = (k % 7) + 2, c = (k * 5 + 3) & 0xff.  Small distinct prime-ish values so the
+    # cumulative ``m`` doesn't trivialise (constant-1 m's would collapse the test to commutative addition on the c
+    # component) and the cumulative ``c`` mixes both factors at every step.
+    for k in range(N):
+        src[k] = _affine_pack((k % 7) + 2, (k * 5 + 3) & 0xFF)
+
+    foo()
+
+    group_size = 1 << log2_size
+    for g in range(N // group_size):
+        base = g * group_size
+        running = src[base]
+        for k in range(group_size):
+            if k > 0:
+                running = _affine_compose_py(running, src[base + k])
+            # ``src``/``dst`` are ``qd.i32`` so the kernel returns a signed Python int via the field accessor; the
+            # host fold above is in unbounded Python ints.  Compare in unsigned 32-bit form -- the (m, c) packing
+            # already lives in the low 32 bits and we never inspect the sign separately.
+            got = dst[base + k] & 0xFFFFFFFF
+            running = running & 0xFFFFFFFF
+            assert got == running, (
+                f"group {g} lane {k} (global {base + k}): got {got:#010x} ({_affine_unpack(got)}), "
+                f"expected {running:#010x} ({_affine_unpack(running)})"
+            )
+
+
 # --- Exclusive scans ------------------------------------------------------------------
 #
 # Same kernel + verification shape as the inclusive tests above; the only differences are (1) lane 0 of each group is
