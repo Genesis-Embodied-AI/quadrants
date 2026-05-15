@@ -359,6 +359,28 @@
 
 
 <span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_reduce_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Tree-reduce ``value`` across ``2**log2_size`` consecutive lanes via ``shuffle_down`` under a caller-supplied</span>
+<span class="sd">    binary ``op``.  Mirrors the operator-specialized public ``reduce_add_tiled`` / ``reduce_min_tiled`` /</span>
+<span class="sd">    ``reduce_max_tiled`` but takes a template operator so cross-module callers (currently ``block.reduce`` and the</span>
+<span class="sd">    typed ``block.reduce_{add,min,max}``) can compose the per-subgroup step with custom monoids without reimplementing</span>
+<span class="sd">    the shuffle tree.</span>
+
+<span class="sd">    Result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial values.  ``log2_size`` is a</span>
+<span class="sd">    compile-time template, so the body unrolls into ``log2_size`` shuffle+op pairs.  Caller must ensure</span>
+<span class="sd">    ``2**log2_size`` does not exceed the active subgroup size on the target.</span>
+
+<span class="sd">    Underscore-prefixed because the generic-op contract is fragile (``op`` must be associative and side-effect-free)</span>
+<span class="sd">    and we don&#39;t want to invite ad-hoc subgroup-scope reductions from arbitrary kernels; the typed</span>
+<span class="sd">    ``reduce_{add,min,max}_tiled`` cover the common cases.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">log2_size</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">i</span><span class="p">))</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">shuffle_down</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">offset</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">value</span>
+
+
+<span class="nd">@func</span>
 <div class="viewcode-block" id="reduce_add_tiled">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/reductions/index.html#quadrants.lang.simt.reductions.reduce_add_tiled">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce_add_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
