@@ -66,6 +66,23 @@ PER_AMDGPU_FUNCTION(launch_kernel,
                     void **);
 PER_AMDGPU_FUNCTION(kernel_get_attribute, hipFuncGetAttribute, int *, uint32, void *);
 PER_AMDGPU_FUNCTION(kernel_get_occupancy, hipOccupancyMaxActiveBlocksPerMultiprocessor, int *, void *, int, size_t);
+PER_AMDGPU_FUNCTION(kernel_set_attribute, hipFuncSetAttribute, const void *, uint32, int);
+
+// Graph management. HIP exposes the kernel-launch / instantiate / launch / destroy subset that we need for
+// `@qd.kernel(graph=True)`. Conditional / while nodes are not yet available in HIP, so device-side
+// `graph_do_while` falls back to the host-side loop in `KernelLauncher::launch_offloaded_tasks_with_do_while`.
+PER_AMDGPU_FUNCTION(graph_create, hipGraphCreate, void **, uint32);
+PER_AMDGPU_FUNCTION(graph_add_kernel_node,
+                    hipGraphAddKernelNode,
+                    void **,
+                    void *,
+                    const void *,
+                    std::size_t,
+                    const void *);
+PER_AMDGPU_FUNCTION(graph_instantiate, hipGraphInstantiate, void **, void *, void *, char *, std::size_t);
+PER_AMDGPU_FUNCTION(graph_launch, hipGraphLaunch, void *, void *);
+PER_AMDGPU_FUNCTION(graph_destroy, hipGraphDestroy, void *);
+PER_AMDGPU_FUNCTION(graph_exec_destroy, hipGraphExecDestroy, void *);
 
 // Stream management
 PER_AMDGPU_FUNCTION(stream_synchronize, hipStreamSynchronize, void *);

@@ -302,9 +302,9 @@ class Matrix(QuadrantsOperations):
                 self.entries = np.array(arr, None if dt is None else to_numpy_type(dt))
                 self.is_host_access = False
 
-        if self.n * self.m > 32:
+        if self.n * self.m > 144:
             warning(
-                f"Quadrants matrices/vectors with {self.n}x{self.m} > 32 entries are not suggested."
+                f"Quadrants matrices/vectors with {self.n}x{self.m} > 144 entries are not suggested."
                 " Matrices/vectors will be automatically unrolled at compile-time for performance."
                 " So the compilation time could be extremely long if the matrix size is too big."
                 " You may use a field to store a large matrix like this, e.g.:\n"
@@ -633,6 +633,30 @@ class Matrix(QuadrantsOperations):
         from quadrants.lang import matrix_ops
 
         return matrix_ops.norm_sqr(self)
+
+    def frobenius_inner(self, other):
+        """Returns the Frobenius inner product :math:`\\langle A, B \\rangle = \\sum_{ij} A_{ij} B_{ij}`.
+
+        Both operands must have the same shape. Defined for any tensor shape (vector or matrix); for matrices this
+        is the standard Frobenius inner product, and :meth:`norm_sqr` is the special case ``A.frobenius_inner(A)``.
+
+        Args:
+            other (:class:`~quadrants.Matrix`): The other operand. Must have the same shape as ``self``.
+
+        Returns:
+            DataType: The scalar Frobenius inner product.
+
+        Example::
+
+            >>> A = qd.Matrix([[1.0, 2.0], [3.0, 4.0]])
+            >>> B = qd.Matrix([[5.0, 6.0], [7.0, 8.0]])
+            >>> A.frobenius_inner(B)
+            70.0
+        """
+        # pylint: disable=C0415
+        from quadrants.lang import matrix_ops
+
+        return matrix_ops.frobenius_inner(self, other)
 
     def max(self):
         """Returns the maximum element value."""

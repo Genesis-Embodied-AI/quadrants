@@ -378,13 +378,21 @@ def _inclusive_scan_tiled(value, op: template(), log2_size: template()):
     Note: ``qd.select`` cannot be used here instead of ``if`` because ``OpSelect`` on MoltenVK / Metal miscompiles when
     one operand is an f32 produced by a shuffle intrinsic - the select silently returns the false-branch value
     regardless of the condition.  The ``if`` form works correctly on its own.
+
+    Argument order: each step folds the *predecessor* into the current lane's running value, i.e.
+    ``value = op(partner, value)`` -- ``partner`` is ``shuffle_up(value, offset)``, which is lane
+    ``self - offset``'s value (the lane to the left in scan order).  After ``log2(N)`` steps lane ``k`` holds
+    ``op(a[0], op(a[1], ..., op(a[k-1], a[k])))`` -- the left-fold over lanes ``[group_start, k]`` in lane order.
+    All seven typed wrappers (``_bin_add`` / ``_mul`` / ``_min`` / ``_max`` / ``_and`` / ``_or`` / ``_xor``) are
+    commutative so the order is invisible there, but the generic primitive must preserve direction for
+    non-commutative associative monoids (matrix multiply, function composition, string-concat-like ops).
     """
     lane_in_group = invocation_id() & impl.static((1 << log2_size) - 1)
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << i)
         partner = shuffle_up(value, u32(offset))
         if lane_in_group >= offset:
-            value = op(value, partner)
+            value = op(partner, value)
     return value
 
 

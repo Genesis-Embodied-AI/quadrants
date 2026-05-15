@@ -12,6 +12,7 @@ from quadrants.lang.impl import current_cfg, field
 from quadrants.lang.kernel_impl import data_oriented
 from quadrants.lang.misc import cuda, vulkan
 from quadrants.lang.runtime_ops import sync
+from quadrants.lang.simt import subgroup
 from quadrants.types.primitive_types import i32
 
 
@@ -118,9 +119,21 @@ class PrefixSumExecutor:
         if current_cfg().arch == cuda:
             scan_primitive = warp_shfl_up_i32
         elif current_cfg().arch == vulkan:
-            # `subgroup.inclusive_add_tiled` takes `(value, log2_size)`; the prefix-sum kernel passes the primitive as
-            # a template callable invoked with a single argument, so use the adapter that pre-binds `log2_size=5`
-            # (full 32-lane warp/wave scan).
+            # `subgroup.inclusive_add_tiled` takes `(value, log2_size)`; the prefix-sum kernel passes the primitive
+            # as a template callable invoked with a single argument, so use the adapter that pre-binds
+            # `log2_size=5` (full 32-lane warp/wave scan).  The kernel itself hard-codes `WARP_SZ=32` for the
+            # inter-warp accumulation and the shared-memory layout, so the device subgroup width *must* be exactly
+            # 32 for the result to be correct.  Vulkan reports the subgroup width per physical device
+            # (`VkPhysicalDeviceSubgroupProperties::subgroupSize`) -- 32 on NVIDIA, MoltenVK, and most desktop
+            # drivers, but 16 on some Intel iGPUs and 64 on AMDGPU Vulkan in wave64 mode.  Fail loudly here rather
+            # than silently producing wrong results.
+            actual = subgroup.group_size()
+            if actual != 32:
+                raise RuntimeError(
+                    f"PrefixSumExecutor on Vulkan requires subgroup size == 32 (got {actual}). "
+                    f"The kernel hard-codes a 32-wide warp scan; running on a {actual}-wide subgroup would "
+                    f"silently compute the wrong result."
+                )
             scan_primitive = subgroup_inclusive_add_warp_i32
         else:
             raise RuntimeError(f"{str(current_cfg().arch)} is not supported for prefix sum.")

@@ -89,6 +89,44 @@ def k2(s: Outer) -> None:
     s.y[0] = 2.0
 ```
 
+### Passing nested sub-structs to a `qd.func`
+
+You can pass either a whole nested-dataclass argument or one of its sub-struct fields to a `qd.func`. The callee declares the sub-struct's type as the parameter annotation; the caller writes the attribute access at the call site:
+
+```python
+@dataclass
+class Inner:
+    x: qd.types.NDArray[qd.f32, 1]
+
+@dataclass
+class Outer:
+    inner: Inner
+    y: qd.types.NDArray[qd.f32, 1]
+
+@qd.func
+def touch_inner(inner: Inner) -> None:
+    inner.x[0] += 1.0
+
+@qd.func
+def touch_outer(s: Outer) -> None:
+    s.y[0] += 10.0
+    touch_inner(s.inner)        # call site inside a qd.func body
+
+@qd.kernel
+def k(s: Outer) -> None:
+    touch_outer(s)              # whole-struct call
+    touch_inner(s.inner)        # sub-struct call
+```
+
+Sub-struct passing supports:
+
+- arbitrary nesting depth (`f(s.a.b.c)` where each level is a dataclass)
+- positional and keyword call sites (`f(s.inner)` and `f(inner=s.inner)`)
+- call sites both directly inside `@qd.kernel` bodies and inside other `@qd.func` bodies
+- pruning of the sub-struct's leaf fields that the callee never reads
+
+Note: assigning a sub-struct to a local variable and then passing it (`t = s.inner; touch_inner(t)`) is **not** supported. Pass the attribute access directly at the call site.
+
 ## qd.data_oriented
 
 `@qd.data_oriented` is designed for classes that define `@qd.kernel` methods as class members. It wraps these methods to correctly bind `self` during kernel compilation.

@@ -17,7 +17,8 @@ supported_systems
 tensor_types
 scalar_tensors
 matrix_vector
-decompositions
+matrix_vector_per_thread
+linalg_per_thread
 tensor
 compound_types
 buffer_view

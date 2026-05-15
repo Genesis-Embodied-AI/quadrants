@@ -1481,6 +1481,16 @@ inline bool TaskCodegen::ends_with(std::string const &value, std::string const &
 void TaskCodegen::visit(InternalFuncStmt *stmt) {
   spirv::Value val;
 
+  // Note: the SPIR-V-only `subgroupAdd` / `subgroupMul` / `subgroupMin` / `subgroupMax` / `subgroupAnd` /
+  // `subgroupOr` / `subgroupXor` reductions have been removed.  Likewise the
+  // `subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}` ops are gone: all seven are implemented as portable ``@qd.func``
+  // Hillis-Steele scans over `subgroupShuffleUp` in Python, so the SPIR-V codegen branch and the matching internal-op
+  // registrations have been removed.  An ``InternalFuncStmt`` carrying one of those removed names would fall through
+  // the dispatcher below and hit the final ``QD_ERROR``, surfacing the mismatch instead of registering a
+  // default-constructed ``spirv::Value`` and producing invalid SPIR-V at run time.
+
+  const std::unordered_set<std::string> shuffle_ops{"subgroupShuffleDown", "subgroupShuffleUp", "subgroupShuffle"};
+
   if (stmt->func_name == "composite_extract_0") {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 0);
   } else if (stmt->func_name == "composite_extract_1") {
@@ -1489,17 +1499,7 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 2);
   } else if (stmt->func_name == "composite_extract_3") {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 3);
-  }
-
-  // Note: the SPIR-V-only `subgroupAdd` / `subgroupMul` / `subgroupMin` / `subgroupMax` / `subgroupAnd` /
-  // `subgroupOr` / `subgroupXor` reductions have been removed.  Likewise the
-  // `subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}` ops are gone: all seven are implemented as portable ``@qd.func``
-  // Hillis-Steele scans over `subgroupShuffleUp` in Python, so the SPIR-V codegen branch and the matching internal-op
-  // registrations have been removed.
-
-  const std::unordered_set<std::string> shuffle_ops{"subgroupShuffleDown", "subgroupShuffleUp", "subgroupShuffle"};
-
-  if (stmt->func_name == "workgroupBarrier") {
+  } else if (stmt->func_name == "workgroupBarrier") {
     ir_->make_inst(spv::OpControlBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeWorkgroup),
                    ir_->int_immediate_number(ir_->i32_type(), spv::ScopeWorkgroup),
                    ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsWorkgroupMemoryMask |
@@ -1607,6 +1607,8 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
       // Return 0 if shader clock is not supported
       val = ir_->int_immediate_number(ir_->i64_type(), 0);
     }
+  } else {
+    QD_ERROR("Unsupported InternalFuncStmt for SPIR-V codegen: {}", stmt->func_name);
   }
   ir_->register_value(stmt->raw_name(), val);
 }
