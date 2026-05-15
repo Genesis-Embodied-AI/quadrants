@@ -50,9 +50,10 @@ highest thread indices and the rank is computed stably by thread index.
 
 **Scratch budget.** Each digit pass uses ``num_blocks * RADIX_DIGITS = N`` (rounded up to ``BLOCK_DIM`` granularity)
 u32 slots in scratch for the tile_histograms, plus the partials buffers that the in-place exclusive scan introduces.
-Total scratch footprint: ``≈ N * (1 + 1/256) u32 slots``. The default 5 MB scratch budget covers ``N ≤ ~1.3M`` (qipc's hot path);
-for ``N = 1M`` (qipc's hot path) the caller must call ``quadrants._scratch.set_scratch_bytes(8 << 20)`` (or larger)
-before any algorithm runs. We raise a clear error when scratch is short rather than silently scaling.
+Total scratch footprint: ``≈ N * (1 + 1/256) u32 slots``. The default 5 MB scratch budget covers ``N ≤ ~1.3M``
+(qipc's hot path); for ``N = 1M`` (qipc's hot path) the caller must call ``quadrants._scratch.set_scratch_bytes(8 <<
+20)`` (or larger) before any algorithm runs. We raise a clear error when scratch is short rather than silently
+scaling.
 """
 
 from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
@@ -66,7 +67,7 @@ from quadrants.types.annotations import template
 from quadrants.types.primitive_types import f32, f64, i32, i64, u32, u64
 
 from ._reduce import BLOCK_DIM, _identity_bits
-from ._scan import _exclusive_scan_inplace_u32
+from ._scan import _exclusive_scan_inplace_u32, _scan_total_scratch_slots
 
 _SUPPORTED_KEY_DTYPES_32 = (u32, i32, f32)
 _SUPPORTED_KEY_DTYPES_64 = (u64, i64, f64)
@@ -442,17 +443,19 @@ def device_radix_sort(
 
     scratch = get_scratch_u32()
     cap = scratch_capacity_u32()
-    # Scratch layout: scratch[0 : hist_len] = current pass's tile_histograms. The in-place scan over scratch[0 :
-    # hist_len] sub-allocates partials from scratch[hist_len : ...] up to its own recursion depth. Worst case the scan
-    # needs roughly `hist_len / BLOCK_DIM + ...` extra u32 slots - well under hist_len / 100.
-    if hist_len + (hist_len + BLOCK_DIM - 1) // BLOCK_DIM > cap:
-        needed = hist_len + (hist_len + BLOCK_DIM - 1) // BLOCK_DIM
+    # Scratch layout: scratch[0 : hist_len] = current pass's tile_histograms. The in-place scan over
+    # scratch[0 : hist_len] sub-allocates partials from scratch[hist_len : ...] for *all* of its recursive levels.
+    # We must account for the full recursive footprint up front (via ``_scan_total_scratch_slots``): otherwise we
+    # accept budgets that pass a single-level estimate but blow up mid-recursion, and ``_twiddle_pass`` below will
+    # have already mutated the user's keys in place by the time the recursive ``RuntimeError`` fires - leaving the
+    # caller with corrupted ``keys`` and no recovery path.
+    needed = _scan_total_scratch_slots(hist_len, partials_cursor=hist_len)
+    if needed > cap:
         raise RuntimeError(
             f"device_radix_sort on N={N} needs >= {needed} u32 scratch slots "
-            f"({needed * 4} bytes), but only {cap} are configured "
-            f"({cap * 4} bytes). Call quadrants._scratch.set_scratch_bytes(...) "
-            f"before any algorithm runs to raise the cap. For N=1M expect to "
-            f"need ~5 MB; for N=10M ~50 MB."
+            f"({needed * 4} bytes, including all levels of the in-place scan recursion), but only {cap} are "
+            f"configured ({cap * 4} bytes). Call quadrants._scratch.set_scratch_bytes(...) before any algorithm "
+            f"runs to raise the cap. For N=1M expect to need ~5 MB; for N=10M ~50 MB."
         )
 
     # Pre-twiddle keys (in-place) for signed-int / float. Unsigned-int path is a no-op.

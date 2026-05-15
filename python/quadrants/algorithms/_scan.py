@@ -191,6 +191,29 @@ def _scan_pass3_u64(
                 dst[dst_off + i] = scanned
 
 
+def _scan_total_scratch_slots(n: int, partials_cursor: int) -> int:
+    """Return the high-water-mark scratch slot index that ``_exclusive_scan_inplace_{u32,u64}`` will use to scan
+    ``n`` elements with its partials starting at ``partials_cursor`` (i.e. the smallest required ``capacity`` such
+    that ``capacity >= return_value`` is sufficient for the entire recursion).
+
+    Mirrors the level-by-level allocation that the recursion does internally: at each level we bump
+    ``partials_cursor`` by ``B = ceil(n / BLOCK_DIM)`` and recurse on ``B``, until ``B <= BLOCK_DIM`` (base case, no
+    further partials). Callers (e.g. ``device_radix_sort``) should use this helper for their *up-front* scratch
+    check so they refuse the call before any in-place mutation runs (see PR 693 review: a single-level estimate
+    misses deeper recursion levels and lets ``_twiddle_pass`` corrupt the user's keys before the recursive
+    ``RuntimeError`` fires).
+
+    The check inside ``_exclusive_scan_inplace_*`` itself stays as a defensive backstop; this helper is the
+    contract that the *outer* drivers should honour first.
+    """
+    cursor = partials_cursor
+    while n > BLOCK_DIM:
+        B = (n + BLOCK_DIM - 1) // BLOCK_DIM
+        cursor += B
+        n = B
+    return cursor
+
+
 def _exclusive_scan_inplace_u32(scratch, off: int, n: int, identity_bits: int, op, dtype, partials_cursor: int):
     """Exclusive-scan ``scratch[off : off + n]`` in place. Recursive.
 
@@ -349,11 +372,13 @@ def _device_exclusive_scan(arr, *, out, op, identity_value):
         scratch_cap = scratch_capacity_u64()
     B0 = (N + BLOCK_DIM - 1) // BLOCK_DIM
     # Reserve scratch slots: scratch[0:B0] for the top-level partials. The recursive scan sub-allocates from
-    # scratch[B0:] for any deeper levels.
-    if B0 > scratch_cap:
+    # scratch[B0:] for any deeper levels. Use ``_scan_total_scratch_slots`` to account for the *full* recursion
+    # up front, so we refuse the call before pass 1 instead of partway through pass 2.
+    needed = _scan_total_scratch_slots(B0, partials_cursor=B0)
+    if needed > scratch_cap:
         raise RuntimeError(
-            f"device exclusive scan on N={N} (dtype={dtype}) needs >= {B0} {scratch.dtype} scratch slots, "
-            f"but only {scratch_cap} are configured. "
+            f"device exclusive scan on N={N} (dtype={dtype}) needs >= {needed} {scratch.dtype} scratch slots "
+            f"(top-level partials B0={B0} plus deeper recursion levels), but only {scratch_cap} are configured. "
             f"Call _scratch.set_scratch_bytes(...) before any algorithm runs."
         )
 
