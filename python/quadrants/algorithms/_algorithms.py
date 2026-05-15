@@ -64,8 +64,8 @@ class PrefixSumExecutor:
         Prefer ``qd.algorithms.device_exclusive_scan_add(arr, out)``. The new functional API supports
         ``{i32, u32, f32}`` on every backend (CUDA, AMDGPU, Vulkan, Metal) and runs the exclusive variant directly.
         ``PrefixSumExecutor`` is inclusive-only, ``i32``-only, and limited to CUDA / Vulkan; it is kept for one
-        release cycle for backward compat and will be removed thereafter. See
-        ``docs/source/user_guide/algorithms.md`` for the migration recipe.
+        release cycle for backward compat and will be removed thereafter. See ``docs/source/user_guide/algorithms.md``
+        for the migration recipe.
 
     Use this helper to perform an inclusive in-place's parallel prefix sum.
 

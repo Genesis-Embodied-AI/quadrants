@@ -115,8 +115,8 @@ def _twiddle_pass(keys: template(), N: i32, dtype: template(), do_twiddle: templ
                 else:
                     keys[i] = bit_cast(v ^ u32(0x80000000), dtype)
             else:
-                # sort-u32 -> f32: pick mask from *output* sign bit, which is the
-                # *opposite* of the sort-u32 sign bit (twiddle swaps them).
+                # sort-u32 -> f32: pick mask from *output* sign bit, which is the *opposite* of the sort-u32 sign
+                # bit (twiddle swaps them).
                 if (v & u32(0x80000000)) != u32(0):
                     keys[i] = bit_cast(v ^ u32(0x80000000), dtype)
                 else:
@@ -166,8 +166,8 @@ def _radix_histogram_pass(
 ):
     """Per-block histogram of digit ``(key >> bit_start) & 0xFF``.
 
-    Writes to ``tile_histograms[histograms_off + d * num_blocks + b]``
-    (digit-major layout - see module docstring on why).
+    Writes to ``tile_histograms[histograms_off + d * num_blocks + b]`` (digit-major layout - see module docstring on
+    why).
 
     Out-of-range threads (in the tail block when ``N % BLOCK_DIM != 0``) do not contribute to the histogram. The
     shared-mem zeroing and final write-out still cover all 256 digits.
@@ -243,8 +243,8 @@ def _radix_scatter_pass(
 
     For each thread:
       - Read its key (or sentinel ``0xFFFFFFFF`` if past the tail).
-      - Compute its block-local rank via ``block.radix_rank_match_atomic_or``,
-        which also fills shared ``bins`` and ``excl_prefix`` arrays.
+      - Compute its block-local rank via ``block.radix_rank_match_atomic_or``, which also fills shared ``bins`` and
+        ``excl_prefix`` arrays.
       - Compute the global destination as
         ``tile_histograms[digit * num_blocks + block_id] + (rank - excl_prefix[digit])``. (The subtraction normalizes
         ``rank`` from "position among all keys of any digit in this block" to "position among only the digit-d keys

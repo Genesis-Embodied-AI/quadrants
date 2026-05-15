@@ -23,8 +23,8 @@ Algorithm (scan + scatter; no segmented-scan primitive needed):
 3. **Zero-init values_out**. The scatter step uses ``atomic_add`` on ``values_out[positions[i]]``; the slots must
    start at the additive identity ``0``.
 4. **Scatter pass** (``_rbk_scatter``). For every ``i``:
-   - Recompute ``head_flag(i)`` from ``i == 0 or keys[i] != keys[i-1]`` and compute the run index
-     ``pos = scratch[i] + head_flag(i) - 1``.
+   - Recompute ``head_flag(i)`` from ``i == 0 or keys[i] != keys[i-1]`` and compute the run index ``pos = scratch[i]
+     + head_flag(i) - 1``.
    - ``keys_out[pos] = keys[i]`` - race-free because every thread in a run writes the same key to the same slot.
    - ``atomic_add(values_out[pos], values[i])`` folds the run's values into the run's output slot.
 5. **Count pass** (``_rbk_count``). Computes ``num_runs[0] = scratch[N-1] + head_flag(N-1)`` where the head flag at
@@ -54,8 +54,8 @@ _SUPPORTED_VALUE_DTYPES = (u32, i32, f32)
 
 @kernel
 def _rbk_head_flags(keys_in: template(), head_flags: template(), head_flags_off: i32, N: i32):
-    """Write ``head_flags[i] = 1 if (i == 0 or keys[i] != keys[i-1]) else 0``
-    to ``head_flags[head_flags_off + i]`` (as the u32 bit pattern of i32).
+    """Write ``head_flags[i] = 1 if (i == 0 or keys[i] != keys[i-1]) else 0`` to ``head_flags[head_flags_off + i]``
+    (as the u32 bit pattern of i32).
 
     Linear-time, embarrassingly parallel: each thread reads at most two key elements (``keys[i]`` and ``keys[i-1]``)
     and writes one flag. The boundary thread at ``i == 0`` always writes ``1`` since there is no predecessor and a run
@@ -230,9 +230,9 @@ def device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs)
     # Step 1: head_flags -> scratch[0:N].
     _rbk_head_flags(keys_in, scratch, positions_off, N)
 
-    # Step 2: in-place exclusive scan of head_flags -> positions (still in scratch[0:N]).
-    # Mirrors the 3-pass dance in _select.py but with scratch as both source and dest
-    # for Pass 1 / Pass 3 (the existing kernels support src == dst aliasing).
+    # Step 2: in-place exclusive scan of head_flags -> positions (still in scratch[0:N]). Mirrors the 3-pass dance in
+    # _select.py but with scratch as both source and dest for Pass 1 / Pass 3 (the existing kernels support src ==
+    # dst aliasing).
     if N > BLOCK_DIM:
         _reduce_pass(
             scratch,

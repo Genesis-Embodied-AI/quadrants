@@ -327,8 +327,7 @@ init()
 qd.algorithms.device_radix_sort(
     keys, tmp_keys=tmp_keys, values=indices, tmp_values=tmp_idx,
 )
-# keys is now ascending; indices[k] is the original index of the k-th smallest key.
-# (Stable: ties between equal keys preserve their input-order indices.)
+# keys is now ascending; indices[k] is the original index of the k-th smallest key. (Stable: ties between equal keys preserve their input-order indices.)
 ```
 
 ### Compact-array offsets via prefix sum

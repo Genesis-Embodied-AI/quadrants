@@ -232,8 +232,8 @@ def _plan_levels(N: int):
     Returns ``(sizes, dst_offsets, total_scratch)`` where:
 
     - ``sizes[k]`` is the number of valid input elements consumed at level ``k``; ``sizes[-1] == 1``.
-    - ``dst_offsets[k]`` is the scratch offset that level ``k`` *writes* to,
-      or ``-1`` for the last pass (which writes to ``out`` instead).
+    - ``dst_offsets[k]`` is the scratch offset that level ``k`` *writes* to, or ``-1`` for the last pass (which
+      writes to ``out`` instead).
     - ``total_scratch`` is the total u32 slots used in scratch.
 
     Number of passes equals ``len(sizes) - 1``.
@@ -292,8 +292,8 @@ def _device_reduce(arr, *, out, op, identity_value):
     identity_bits = _identity_bits(identity_value, dtype)
 
     if num_passes == 0:
-        # Trivially short input (N == 0 or N == 1): no reduce kernel needed.
-        # N == 0: write `identity` to out[0]. N == 1: out[0] = arr[0].
+        # Trivially short input (N == 0 or N == 1): no reduce kernel needed. N == 0: write `identity` to out[0];
+        # N == 1: out[0] = arr[0].
         _device_reduce_trivial(arr, out=out, identity_bits=identity_bits)
         return
 

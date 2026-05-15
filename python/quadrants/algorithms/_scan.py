@@ -18,8 +18,8 @@ Algorithm (three-pass, multi-level when needed):
   per-thread tile prefixes via ``block.exclusive_scan(op, identity, dtype)``, fetches its block prefix from the
   scanned partials buffer, and writes ``out[i] = op(block_prefix, tile_prefix)``.
 
-Total scratch usage at ``N = 1M`` and ``BLOCK_DIM = 256``: ``B0 = 4096`` plus
-``B1 = 16`` u32 slots = 4112 slots = ~16 KB, trivial relative to the 5 MB default.
+Total scratch usage at ``N = 1M`` and ``BLOCK_DIM = 256``: ``B0 = 4096`` plus ``B1 = 16`` u32 slots = 4112 slots =
+~16 KB, trivial relative to the 5 MB default.
 
 The ``PrefixSumExecutor`` class in ``_algorithms.py`` predates this work; it is kept for backward compat. The new
 functional API is preferred for new code - see ``docs/source/user_guide/algorithms.md``.
@@ -70,8 +70,8 @@ def _scan_block_inplace_u32(
     Used at the recursion base of the scan driver, when the buffer being scanned fits in a single block. ``buf`` is
     the shared ``Field(u32)`` scratch; the per-thread read / write go through ``qd.bit_cast`` to / from ``dtype``.
 
-    Threads with ``i >= n_valid`` participate with ``identity`` (so the
-    block-scope scan algorithm sees a clean monoid) but do not write back.
+    Threads with ``i >= n_valid`` participate with ``identity`` (so the block-scope scan algorithm sees a clean
+    monoid) but do not write back.
     """
     loop_config(block_dim=BLOCK_DIM)
     for i in range(BLOCK_DIM):
@@ -348,8 +348,8 @@ def _device_exclusive_scan(arr, *, out, op, identity_value):
         scratch = get_scratch_u64()
         scratch_cap = scratch_capacity_u64()
     B0 = (N + BLOCK_DIM - 1) // BLOCK_DIM
-    # Reserve scratch slots: scratch[0:B0] for the top-level partials. The
-    # recursive scan sub-allocates from scratch[B0:] for any deeper levels.
+    # Reserve scratch slots: scratch[0:B0] for the top-level partials. The recursive scan sub-allocates from
+    # scratch[B0:] for any deeper levels.
     if B0 > scratch_cap:
         raise RuntimeError(
             f"device exclusive scan on N={N} (dtype={dtype}) needs >= {B0} {scratch.dtype} scratch slots, "
@@ -406,8 +406,8 @@ def _scan_single_tile_input_to_out(
     op: template(),
     dtype: template(),
 ):
-    """Fast path for ``N <= BLOCK_DIM`` (4-byte dtype): one block reads the input tile,
-    exclusive-scans, writes ``out``. No scratch needed."""
+    """Fast path for ``N <= BLOCK_DIM`` (4-byte dtype): one block reads the input tile, exclusive-scans, writes
+    ``out``. No scratch needed."""
     loop_config(block_dim=BLOCK_DIM)
     for i in range(BLOCK_DIM):
         identity = bit_cast(identity_bits, dtype)
