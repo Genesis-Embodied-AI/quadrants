@@ -29,56 +29,167 @@ import quadrants as qd
 from quadrants import _scratch
 from quadrants.lang.util import to_numpy_type
 
+from tests import test_utils
 
-def _is_64bit_unsupported_on_current_arch(dtype):
-    """Return True iff ``dtype`` is an 8-byte type the current backend can't represent.
+# ---------------------------------------------------------------------------
+# Module-level constants: dtype sets, size sweeps, identity tables.
+# ---------------------------------------------------------------------------
 
-    Metal has no f64 / i64 / u64 in buffer-backed I/O at all; Vulkan-on-Darwin (MoltenVK) has neither f64 nor 64-bit
-    integers. CUDA / Vulkan-on-Linux / AMDGPU support all three. The device-tier algorithms inherit the underlying
-    lang's dtype support.
-    """
-    arch = qd.lang.impl.current_cfg().arch
-    if dtype in (qd.i64, qd.u64) and arch == qd.metal:
-        return True
-    if dtype in (qd.i64, qd.u64) and arch == qd.vulkan and platform.system() == "Darwin":
-        return True
-    if dtype == qd.f64 and arch == qd.metal:
-        return True
-    if dtype == qd.f64 and arch == qd.vulkan and platform.system() == "Darwin":
-        return True
-    return False
+# Supported scalar dtypes per algorithm. Reduce / scan / select / RBK share the same 6-dtype set; radix sort uses a
+# slightly different ordering (u32 first because that's the natural histogram dtype).
+_REDUCE_DTYPES = [qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64]
+_SCAN_DTYPES = [qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64]
+_SELECT_DTYPES = [qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64]
+_RADIX_KEY_DTYPES = [qd.u32, qd.i32, qd.f32, qd.u64, qd.i64, qd.f64]
+
+# Numpy-dtype lookup. Used by every test that allocates a host buffer for ``from_numpy``.
+_DTYPE_TO_NP = {
+    qd.i32: np.int32,
+    qd.u32: np.uint32,
+    qd.f32: np.float32,
+    qd.i64: np.int64,
+    qd.u64: np.uint64,
+    qd.f64: np.float64,
+}
+
+# Identities for device_reduce_min / max (passed by tests that initialize an "all-identity" input). Floats use the
+# +/- inf extremum; ints use the dtype's positive / negative range extreme.
+_MIN_IDENTITY = {
+    qd.i32: 2**31 - 1,
+    qd.u32: 2**32 - 1,
+    qd.f32: float("inf"),
+    qd.i64: 2**63 - 1,
+    qd.u64: 2**64 - 1,
+    qd.f64: float("inf"),
+}
+_MAX_IDENTITY = {
+    qd.i32: -(2**31),
+    qd.u32: 0,
+    qd.f32: float("-inf"),
+    qd.i64: -(2**63),
+    qd.u64: 0,
+    qd.f64: float("-inf"),
+}
+
+# Size sweeps. Chosen to cover (across algorithms): single-block path, on-block-boundary, off-by-one tile, two-block,
+# many-block recursion. Reduce / scan / select / RBK share the structure with minor variations (radix and
+# select-struct trim a few sizes to keep test runtime bounded). The 1M size only appears in scan / scratch /
+# qipc-hot-path tests; the others top out at 200K within the default 5 MB scratch budget.
+_REDUCE_SIZES = [1, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000]
+_SCAN_SIZES = [1, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000, 1_000_000]
+_SELECT_SIZES = [1, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000]
+_SELECT_STRUCT_SIZES = [1, 7, 256, 1024, 65537]
+_SELECT_STRUCT_NFIELDS = [2, 3, 4]  # mirrors libuipc Vector2i / Vector3i / Vector4i
+_RADIX_SORT_SIZES = [1, 7, 256, 257, 1023, 1024, 1025, 65536, 200_000]
+_RBK_SIZES = [1, 2, 3, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000]
+
+# 64 KB; ~16K u32 slots. Used by the scratch-budget rejection tests so each one trips the budget guard with a tiny N
+# (cheap to allocate, runtime-independent of the DEFAULT_SCRATCH_BYTES knob).
+_TINY_SCRATCH_BYTES = 64 << 10
 
 
-def _skip_if_64bit_unsupported(dtype):
-    """Skip the calling test if ``dtype`` is an 8-byte type that the current backend can't represent. Mirrors the
-    same gate used in ``test_simt.py`` so device-tier dtype coverage matches block / subgroup-tier coverage."""
-    if not _is_64bit_unsupported_on_current_arch(dtype):
-        return
-    if dtype in (qd.i64, qd.u64):
-        pytest.skip(f"64-bit integer type {dtype} not supported on the current backend")
-    pytest.skip(f"f64 not supported on the current backend")
+# ---------------------------------------------------------------------------
+# Backend dtype-support matrix + skip helpers.
+# ---------------------------------------------------------------------------
+#
+# Anything outside the ``supported`` column is unsupported at the lang tier (the spirv / metal IR builders bail with
+# "Type X not supported"), so every device-tier test must skip those (arch, platform, dtype) triples.
+#
+#   arch                  | platform | supported dtypes
+#   ----------------------|----------|------------------------------------
+#   qd.cuda               | any      | i32, u32, f32, i64, u64, f64
+#   qd.amdgpu             | any      | i32, u32, f32, i64, u64, f64
+#   qd.vulkan             | Linux    | i32, u32, f32, i64, u64, f64
+#   qd.vulkan (MoltenVK)  | Darwin   | i32, u32, f32                (no i64 / u64 / f64)
+#   qd.metal              | any      | i32, u32, f32                (no i64 / u64 / f64)
+#
+# We encode the matrix as the *unsupported* set per backend, since that's what the skip predicates need.
 
 
 def _is_apple_gpu_backend():
-    """Metal or MoltenVK (Vulkan-on-Darwin)."""
+    """Metal or MoltenVK (Vulkan-on-Darwin). These two share the same dtype-support gaps in buffer-backed I/O."""
     arch = qd.lang.impl.current_cfg().arch
-    if arch == qd.metal:
-        return True
-    if arch == qd.vulkan and platform.system() == "Darwin":
-        return True
-    return False
+    return arch == qd.metal or (arch == qd.vulkan and platform.system() == "Darwin")
+
+
+def _unsupported_dtype_reason(dtype):
+    """Return a human-readable reason if ``dtype`` is unsupported on the current backend, else None.
+
+    Single source of truth for "should we skip this dtype?". ``_skip_if_dtype_unsupported`` wraps it for
+    parametrized-test skipping; tests that iterate dtypes inside the body check the return value directly to
+    ``continue`` past unsupported dtypes.
+    """
+    if _is_apple_gpu_backend():
+        if dtype in (qd.i64, qd.u64):
+            return f"64-bit integer type {dtype} not supported on the current backend"
+        if dtype == qd.f64:
+            return "f64 not supported on the current backend"
+    return None
+
+
+def _skip_if_dtype_unsupported(dtype):
+    """Skip the calling test if ``dtype`` is unsupported on the current backend. Mirrors the gate used in
+    ``test_simt.py`` so device-tier dtype coverage matches block / subgroup-tier coverage."""
+    reason = _unsupported_dtype_reason(dtype)
+    if reason is not None:
+        pytest.skip(reason)
 
 
 def _skip_if_radix_sort_large_n_on_apple_gpu(N):
-    """``device_radix_sort`` (and any test that calls it internally) currently fails on Metal and MoltenVK
-    (Vulkan-on-Darwin) at ``N >= 200_000``: the histogram + multi-tile partial-sum coordination produces incorrect
-    results at scale. The smaller sizes (N <= 65_536) pass cleanly. CUDA, AMDGPU, and Linux Vulkan are unaffected.
-    Tracked as a follow-up; not blocking the device-algos first-land."""
+    """Skip large-N ``device_radix_sort`` calls on Metal / MoltenVK.
+
+    *Why this skip exists.* On Apple GPUs (Metal directly, and MoltenVK / Vulkan-on-Darwin), ``device_radix_sort``
+    produces incorrect results once N crosses ``BLOCK_DIM**2 = 65_536``: the ``test_device_radix_sort_keys_only``
+    parametrization at N=200_000 reports 50-90% of elements in the wrong position on those backends. CUDA, AMDGPU,
+    and Linux Vulkan all pass at every tested size on the same code, so the regression is in the Apple-GPU codegen /
+    runtime path of one of the building blocks (most likely the histogram pass's threadgroup-shared atomic_or +
+    barrier sequence at high block counts), not in the radix-sort algorithm itself. Smaller N (N <= 65_536, the
+    single- and few-block paths) pass cleanly on Apple GPUs.
+
+    Tracked as a follow-up; not blocking the device-algos first land. Tests that *transitively* hit this path
+    (radix-sort-then-RBK at N=1M, ``test_scratch_round_trip_across_qd_reset`` at ~2.6M) also need this guard.
+    """
     if N >= 200_000 and _is_apple_gpu_backend():
-        pytest.skip("device_radix_sort fails on Metal / MoltenVK at N >= 200_000 (known backend issue)")
+        pytest.skip("device_radix_sort produces incorrect results on Metal / MoltenVK at N >= 200_000")
 
 
-from tests import test_utils
+# ---------------------------------------------------------------------------
+# Tolerance contract for f32 / f64 reduce / scan / RBK assertions.
+# ---------------------------------------------------------------------------
+#
+# Block-tree reduce: error scales as ``O(log N * eps_f32)``. At N=1M, log2(N)*eps_f32 ~ 2e-6, well under any
+# tolerance below; we use ``_F32_REDUCE_*`` for the parametrized N<=200K dtype sweep and ``_F32_LARGE_N_*`` for the
+# qipc N=1M hot path (slightly looser to absorb MoltenVK fast-math reordering headroom on the big sums).
+#
+# Block-tree scan: error scales as ``O(sqrt(N) * eps_f32)`` (Higham 2002, "Accuracy and Stability of Numerical
+# Algorithms", §4.2 on pairwise / tree summation). The ``2e-5`` constant in ``_f32_scan_tol`` is a 2x headroom over
+# the strict-IEEE bound (``eps_f32 ~ 1.2e-7``), there to absorb MoltenVK's more-aggressive fast-math reordering of
+# f32 partial sums without papering over actual algorithmic regressions on CUDA / Linux Vulkan / AMDGPU. Two asserts
+# inside the function pin the contract in plain language: at <= 100 elements f32 stays under 0.1% rel; at <= 100K
+# under 1% rel; the qipc hot-path N=1M lands at ~2% rel.
+#
+# Reduce-by-key (f32 values): adds an atomic_add reordering layer on top of scan-style scatter; uses the
+# ``_F32_LARGE_N_*`` floor so MoltenVK's reordering stays comfortably bounded.
+#
+# f64: strict-IEEE ``eps_f64 ~ 2.2e-16`` dominates everything; reordering is irrelevant at f64 precision for any
+# tested N.
+
+_F32_REDUCE_RTOL = 1e-4  # tree reduce: log(N)*eps_f32 ~ 2e-6 at N=1M; 1e-4 is plenty for the N<=200K dtype sweep
+_F32_REDUCE_ATOL = 1e-4
+_F32_LARGE_N_RTOL = 1e-3  # qipc hot path: N=1M reduce / scan-head / RBK; covers MoltenVK reorder headroom
+_F32_LARGE_N_ATOL = 1e-3
+_F64_RTOL = 1e-12  # eps_f64 dominates; tight bound across every tested N
+_F64_ATOL = 1e-9
+
+
+def _f32_scan_tol(N):
+    """Return ``(rtol, atol)`` for the f32 scan ``assert_allclose``. Scales rtol with sqrt(N); atol is constant.
+
+    See the module-level comment block above for the derivation of the constant and the contract asserts below."""
+    rtol = 2e-5 * math.sqrt(N)
+    assert rtol <= 1e-3 or N > 100, f"f32 scan rtol={rtol:g} too loose for small N={N}"
+    assert rtol <= 1e-2 or N > 100_000, f"f32 scan rtol={rtol:g} too loose for medium N={N}"
+    return rtol, 1e-3
 
 
 @test_utils.test(arch=qd.gpu)
@@ -149,7 +260,7 @@ def test_scratch_round_trips_bit_cast_f64():
     We push the host-computed bit pattern in via a u64 source field rather than arithmetic on f64 literals to dodge
     kernel-side fp-contract / FMA-reassociation that can offset the result by 1 ulp from the host-side value.
     """
-    _skip_if_64bit_unsupported(qd.f64)
+    _skip_if_dtype_unsupported(qd.f64)
     N = 64
     s = _scratch.get_scratch_u64()
     src_bits = qd.field(qd.u64, shape=N)
@@ -176,13 +287,6 @@ def test_scratch_round_trips_bit_cast_f64():
         assert out[i] == expected[i], f"slot {i}: got {out[i]}, expected {expected[i]}"
 
 
-# Sizes spanning the trivial single-element path (1), within-one-block (< BLOCK_DIM), block boundaries (BLOCK_DIM,
-# BLOCK_DIM + 1), within-two-passes (BLOCK_DIM ** 2 and slightly above), and a "large-ish" three-pass-trigger size
-# that exercises the recursion loop without making the test slow. (Quadrants doesn't support 0-shape tensors, so N=0
-# isn't exercised - the driver has a defensive N==0 branch but no caller can actually trigger it.)
-_REDUCE_SIZES = [1, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000]
-
-
 def _np_dtype_for(qd_dtype):
     return to_numpy_type(qd_dtype)
 
@@ -200,38 +304,6 @@ def _alloc_input_out(dtype, N):
     inp = qd.field(dtype, shape=N)
     out = qd.field(dtype, shape=1)
     return inp, out
-
-
-_REDUCE_DTYPES = [qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64]
-
-# Identities span the full {i32, u32, f32, i64, u64, f64} matrix: the floating-point cases use the dtype's infinity
-# extremum; the integer cases use the dtype's positive / negative range extreme. These are passed to
-# device_reduce_min / max as the monoid identity.
-_MIN_IDENTITY = {
-    qd.i32: 2**31 - 1,
-    qd.u32: 2**32 - 1,
-    qd.f32: float("inf"),
-    qd.i64: 2**63 - 1,
-    qd.u64: 2**64 - 1,
-    qd.f64: float("inf"),
-}
-_MAX_IDENTITY = {
-    qd.i32: -(2**31),
-    qd.u32: 0,
-    qd.f32: float("-inf"),
-    qd.i64: -(2**63),
-    qd.u64: 0,
-    qd.f64: float("-inf"),
-}
-
-_DTYPE_TO_NP = {
-    qd.i32: np.int32,
-    qd.u32: np.uint32,
-    qd.f32: np.float32,
-    qd.i64: np.int64,
-    qd.u64: np.uint64,
-    qd.f64: np.float64,
-}
 
 
 def _is_float(dtype):
@@ -258,7 +330,7 @@ def _rand_reduce_host(rng, dtype, N, *, bound=1000):
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_add(dtype, N):
     """device_reduce_add matches numpy.sum across the full size sweep + dtype set."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     inp, out = _alloc_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     host = _rand_reduce_host(rng, dtype, N)
@@ -269,9 +341,7 @@ def test_device_reduce_add(dtype, N):
     got = out.to_numpy()[0]
     if _is_float(dtype):
         expected = float(np.sum(host.astype(np.float64)))
-        # f32: ~N * eps_f32 drift; f64: ~N * eps_f64. rtol scales with dtype precision.
-        rtol = 1e-4 if dtype == qd.f32 else 1e-12
-        atol = 1e-4 if dtype == qd.f32 else 1e-9
+        rtol, atol = (_F32_REDUCE_RTOL, _F32_REDUCE_ATOL) if dtype == qd.f32 else (_F64_RTOL, _F64_ATOL)
         assert math.isclose(
             got, expected, rel_tol=rtol, abs_tol=atol
         ), f"{dtype} reduce_add(N={N}): got {got}, expected {expected}"
@@ -294,7 +364,7 @@ def test_device_reduce_add(dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_min(dtype, N):
     """device_reduce_min(identity=type-positive-extreme) matches numpy.min."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     inp, out = _alloc_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     if _is_float(dtype):
@@ -318,7 +388,7 @@ def test_device_reduce_min(dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_device_reduce_max(dtype, N):
     """device_reduce_max(identity=type-negative-extreme) matches numpy.max."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     inp, out = _alloc_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     if _is_float(dtype):
@@ -343,7 +413,7 @@ def test_device_reduce_min_derives_identity_from_dtype():
     ``block.reduce_min`` / ``subgroup.reduce_min`` contract). On an all-min-identity input the reduction returns
     the identity itself (largest representable value), which exercises the auto-derivation end-to-end."""
     for dtype in _REDUCE_DTYPES:
-        if _is_64bit_unsupported_on_current_arch(dtype):
+        if _unsupported_dtype_reason(dtype) is not None:
             continue
         inp = qd.field(dtype, shape=4)
         out = qd.field(dtype, shape=1)
@@ -374,20 +444,10 @@ def test_device_reduce_rejects_unsupported_dtype():
         qd.algorithms.device_reduce_add(inp, out=out)
 
 
-# Same size sweep as reduce, plus a smaller pre-block size for the single-tile
-# fast path, and a larger 1M size to exercise three-level recursion (B0=4096,
-# B1=16, B2 single-block). The recursive case is the most important to catch
-# any partials_off bookkeeping bugs.
-_SCAN_SIZES = [1, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000, 1_000_000]
-
-
 def _alloc_scan_input_out(dtype, N):
     inp = qd.field(dtype, shape=N)
     out = qd.field(dtype, shape=N)
     return inp, out
-
-
-_SCAN_DTYPES = [qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64]
 
 
 def _scan_dtype_mask(dtype):
@@ -404,7 +464,7 @@ def _scan_dtype_mask(dtype):
 @test_utils.test(arch=qd.gpu)
 def test_device_exclusive_scan_add(dtype, N):
     """device_exclusive_scan_add(out[i] = sum(arr[0:i])) matches numpy.cumsum-shifted across the full 6-dtype set."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     host = _rand_reduce_host(rng, dtype, N, bound=100)
@@ -415,23 +475,7 @@ def test_device_exclusive_scan_add(dtype, N):
 
     if _is_float(dtype):
         ref = np.concatenate([[0.0], np.cumsum(host.astype(np.float64))[:-1]])
-        # Tolerance model. The block-tree scan accumulates f32 drift ~ O(sqrt(N) * eps * max_partial) (Higham 2002,
-        # "Accuracy and Stability of Numerical Algorithms", §4.2 on pairwise/tree summation). MoltenVK reorders f32
-        # partial sums more aggressively than CUDA / Linux Vulkan / AMDGPU, so we use a 2x headroom over the strict
-        # IEEE bound (constant ``2e-5`` instead of ``eps_f32 ~= 1.2e-7``) to keep the test stable across all backends
-        # without papering over actual algorithmic regressions. The two asserts below pin the contract in
-        # plain-language form so a reader doesn't have to crunch sqrt(N) in their head: at <= 100 elements we still
-        # demand < 0.1% rel; at <= 100K elements < 1% rel; the qipc hot-path N=1M lands at ~2% rel. ``atol=1e-3``
-        # only kicks in for cumsum values near zero (the first handful of elements), where rtol * |desired| would
-        # underflow.
-        if dtype == qd.f32:
-            rtol = 2e-5 * math.sqrt(N)
-            assert rtol <= 1e-3 or N > 100, f"f32 scan rtol={rtol:g} too loose for small N={N}"
-            assert rtol <= 1e-2 or N > 100_000, f"f32 scan rtol={rtol:g} too loose for medium N={N}"
-            atol = 1e-3
-        else:
-            rtol = 1e-12
-            atol = 1e-9
+        rtol, atol = _f32_scan_tol(N) if dtype == qd.f32 else (_F64_RTOL, _F64_ATOL)
         np.testing.assert_allclose(
             got.astype(np.float64),
             ref,
@@ -463,7 +507,7 @@ def test_device_exclusive_scan_add(dtype, N):
 def test_device_exclusive_scan_min(dtype, N):
     """device_exclusive_scan_min(out[i] = min(arr[0:i])) matches numpy.minimum.accumulate-shifted across the full
     6-dtype set."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     np_dt = _DTYPE_TO_NP[dtype]
@@ -491,7 +535,7 @@ def test_device_exclusive_scan_min(dtype, N):
 def test_device_exclusive_scan_max(dtype, N):
     """device_exclusive_scan_max(out[i] = max(arr[0:i])) matches numpy.maximum.accumulate-shifted across the full
     6-dtype set."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     inp, out = _alloc_scan_input_out(dtype, N)
     rng = np.random.default_rng(seed=1234)
     np_dt = _DTYPE_TO_NP[dtype]
@@ -552,15 +596,6 @@ def test_device_exclusive_scan_rejects_unsupported_dtype():
 # Device select / compact
 # ---------------------------------------------------------------------------
 
-# Sizes that exercise: single-block path, two-pass path with even split,
-# off-by-one tile (B0 ends mid-block), three-pass recursion. Default 5 MB
-# scratch holds N + ceil(N/256) + ... <= ~1.3M u32 slots, so the largest
-# size below (200_000) fits comfortably with ~780-slot partials.
-_SELECT_SIZES = [1, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000]
-
-
-_SELECT_DTYPES = [qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64]
-
 
 @pytest.mark.parametrize("N", _SELECT_SIZES)
 @pytest.mark.parametrize("dtype", _SELECT_DTYPES)
@@ -569,7 +604,7 @@ def test_device_select_basic(dtype, N):
     """device_select packs the elements with flags != 0 into a dense prefix of out, in stable input order; num_out[0]
     holds the count. Covers all 6 supported scalar dtypes - the scatter (``dst[idx] = src[i]``) is dtype-agnostic, so
     a single parametrized test serves both the 4-byte and 8-byte paths."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     rng = np.random.default_rng(seed=1234)
     np_dt = _DTYPE_TO_NP[dtype]
     if dtype in (qd.f32, qd.f64):
@@ -596,10 +631,6 @@ def test_device_select_basic(dtype, N):
 
     got = out.to_numpy()[:got_n]
     np.testing.assert_array_equal(got, expected, err_msg=f"{dtype} select(N={N})")
-
-
-_SELECT_STRUCT_SIZES = [1, 7, 256, 1024, 65537]
-_SELECT_STRUCT_NFIELDS = [2, 3, 4]  # mirrors libuipc Vector2i / Vector3i / Vector4i
 
 
 @pytest.mark.parametrize("N", _SELECT_STRUCT_SIZES)
@@ -723,14 +754,6 @@ def test_device_select_rejects_short_out():
 # Device radix sort
 # ---------------------------------------------------------------------------
 
-# Sizes chosen to stay within the default 5 MB scratch budget (~1.3M u32 slots, of which radix sort uses ~N + N/256
-# per pass). We hit single-block (N<=256), block boundary, off-by-one, two-block, many-block (200K, 4-pass
-# histogram-scan-scatter recursion all exercised). N = 1M is covered separately by the qipc-hot-path tests below.
-_RADIX_SORT_SIZES = [1, 7, 256, 257, 1023, 1024, 1025, 65536, 200_000]
-
-
-_RADIX_KEY_DTYPES = [qd.u32, qd.i32, qd.f32, qd.u64, qd.i64, qd.f64]
-
 
 def _gen_keys(rng, dtype, N):
     """Generate sortable test inputs for every supported key dtype. The float paths sprinkle a few signed-zero /
@@ -772,7 +795,7 @@ def _gen_keys(rng, dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_keys_only(dtype, N):
     """device_radix_sort matches numpy.sort for every supported key dtype ({u32, i32, f32, u64, i64, f64})."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     _skip_if_radix_sort_large_n_on_apple_gpu(N)
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
@@ -793,7 +816,7 @@ def test_device_radix_sort_keys_only(dtype, N):
 def test_device_radix_sort_key_value(dtype, N):
     """Key-value sort: values permute in lock-step with keys; sort is stable. Exercises the libuipc-shaped u64-key
     + i32-value path (``MatrixConverter::ij_hash`` sorted with ``sort_index``) among the parametrized cases."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     _skip_if_radix_sort_large_n_on_apple_gpu(N)
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
@@ -917,9 +940,6 @@ def test_device_radix_sort_rejects_odd_passes():
 # Device reduce-by-key (add)
 # ---------------------------------------------------------------------------
 
-# Same default-scratch envelope as device_select (uses ~N + N/256 u32 slots).
-_RBK_SIZES = [1, 2, 3, 7, 255, 256, 257, 1023, 1024, 1025, 65536, 65537, 200_000]
-
 
 def _ref_rbk_add(keys, values):
     """Reference reduce-by-key: collapse consecutive runs of equal keys,
@@ -968,9 +988,8 @@ def _gen_run_keys(rng, dtype, N):
 def test_device_reduce_by_key_add(key_dtype, val_dtype, N):
     """Cross-product of key dtype × value dtype × size, against a CPU oracle.
 
-    Values are bounded so ``f32`` accumulation error stays controlled - the
-    tolerance is rtol=1e-3 for f32 (matches our scan_add f32 tolerance) and
-    bit-exact for integer types.
+    Values are bounded so ``f32`` accumulation error stays controlled - the tolerance is ``_F32_LARGE_N_*`` for f32
+    (atomic_add reorder layered on the scan-style scatter) and bit-exact for integer types.
     """
     rng = np.random.default_rng(seed=1234)
     keys_host = _gen_run_keys(rng, key_dtype, N)
@@ -1004,8 +1023,8 @@ def test_device_reduce_by_key_add(key_dtype, val_dtype, N):
         np.testing.assert_allclose(
             got_vals,
             want_vals,
-            rtol=1e-3,
-            atol=1e-3,
+            rtol=_F32_LARGE_N_RTOL,
+            atol=_F32_LARGE_N_ATOL,
             err_msg=f"{key_dtype}/{val_dtype} N={N}: values",
         )
     else:
@@ -1164,7 +1183,7 @@ def test_device_radix_sort_n_1m(dtype, big_scratch):  # pylint: disable=unused-a
     """N = 1_000_000 - qipc's hot-path size. Requires scratch bumped to ~5 MB; the ``big_scratch`` fixture supplies
     8 MB and restores after. 8-byte key dtypes run twice as many passes (8 instead of 4) for the same N. Scratch
     requirement is unchanged - the histograms are always u32 - so the same ``big_scratch`` covers both widths."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     N = 1_000_000
     _skip_if_radix_sort_large_n_on_apple_gpu(N)
     rng = np.random.default_rng(seed=1234)
@@ -1235,13 +1254,8 @@ def test_parallel_sort_emits_deprecation_warning():
 
 
 # --- Scratch-capacity error paths. Each algorithm raises a clear RuntimeError when N would push the scratch budget
-# over the configured capacity, rather than corrupting data. Tests shrink scratch to a tiny budget so the trip
-# point is reachable with a small N (cheap to allocate, runtime-independent of the DEFAULT_SCRATCH_BYTES knob).
-
-
-_TINY_SCRATCH_BYTES = (
-    64 << 10
-)  # 64 KB; covers ~16K u32 slots, ~4M u32 slots after the BLOCK_DIM divide for reduce/scan.
+# over the configured capacity, rather than corrupting data. Tests shrink scratch to ``_TINY_SCRATCH_BYTES`` so the
+# trip point is reachable with a small N (cheap to allocate, runtime-independent of the DEFAULT_SCRATCH_BYTES knob).
 
 
 @test_utils.test(arch=qd.gpu)
@@ -1321,7 +1335,7 @@ def test_device_reduce_add_n_1m(dtype):
     """N = 1_000_000 reduce over the full dtype matrix. 4-byte dtypes use the u32 scratch (4K slots for top-level
     partials, recursion adds ~16); 8-byte dtypes use the u64 scratch with the same slot count at half the byte cost.
     Default 5 MB capacity covers both by a wide margin."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     host = _rand_reduce_host(rng, dtype, N)
@@ -1334,8 +1348,7 @@ def test_device_reduce_add_n_1m(dtype):
     got = out.to_numpy()[0]
     if _is_float(dtype):
         expected = float(np.sum(host.astype(np.float64)))
-        rtol = 1e-3 if dtype == qd.f32 else 1e-12
-        atol = 1e-3 if dtype == qd.f32 else 1e-9
+        rtol, atol = (_F32_LARGE_N_RTOL, _F32_LARGE_N_ATOL) if dtype == qd.f32 else (_F64_RTOL, _F64_ATOL)
         assert math.isclose(got, expected, rel_tol=rtol, abs_tol=atol)
     else:
         # Promote to a wide enough Python int / numpy int for the reference, then mask both to dtype width.
@@ -1359,7 +1372,7 @@ def test_device_exclusive_scan_add_n_1m(dtype):
     """N = 1_000_000 exclusive scan over the full dtype matrix. 4-byte dtypes go through the u32 scratch; 8-byte
     dtypes through the u64 scratch (4K slots at the top level for both, recursion adds ~16). Both fit in default
     5 MB by a wide margin."""
-    _skip_if_64bit_unsupported(dtype)
+    _skip_if_dtype_unsupported(dtype)
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
     np_dt = _DTYPE_TO_NP[dtype]
@@ -1383,10 +1396,10 @@ def test_device_exclusive_scan_add_n_1m(dtype):
         # f32: cumulative drift over 1M adds is real; check head only with a generous rtol, then verify finite at
         # the tail. f64: 12 orders of magnitude more precision, can check the whole array with tight tolerance.
         if dtype == qd.f32:
-            np.testing.assert_allclose(got[:64], ref[:64], rtol=1e-3, atol=1e-3)
+            np.testing.assert_allclose(got[:64], ref[:64], rtol=_F32_LARGE_N_RTOL, atol=_F32_LARGE_N_ATOL)
             assert np.isfinite(got[-1])
         else:
-            np.testing.assert_allclose(got, ref, rtol=1e-12, atol=1e-9)
+            np.testing.assert_allclose(got, ref, rtol=_F64_RTOL, atol=_F64_ATOL)
     else:
         promote = np.int64 if dtype in (qd.i32, qd.u32, qd.i64) else np.uint64
         ref = np.concatenate([[promote(0)], np.cumsum(host.astype(promote))[:-1]]).astype(promote)
