@@ -21,7 +21,7 @@ All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.make_spd`, `qd.polar_
 
 A few patterns to note:
 
-- **Shapes are fixed.** Calling any of these on a matrix outside the supported shapes raises an exception at trace time (e.g. `"SVD only supports 2×2 and 3×3 matrices."`). There is no fallback for larger shapes.
+- **Shapes are fixed.** Calling any of these on a matrix outside the supported shapes raises an exception at compile time (e.g. `"SVD only supports 2×2 and 3×3 matrices."`). There is no fallback for larger shapes.
 - **All ops accept an optional `dt` argument.** When unspecified, it defaults to `impl.get_runtime().default_fp` — usually `qd.f32` unless overridden in `qd.init()`. Pass `dt=qd.f64` for the high-precision variant.
 - **Output shape matches the input shape.** A 3×3 input yields 3×3 outputs (and a length-3 vector for `solve` / eigenvalues); a 2×2 input yields 2×2 outputs.
 - **Real matrices only.** `qd.eig` returns complex results in a packed real layout (see below); the others all assume real-valued input and return real-valued output.
