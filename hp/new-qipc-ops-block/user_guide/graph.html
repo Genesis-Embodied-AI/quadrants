@@ -288,7 +288,8 @@
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
-<li class="toctree-l1"><a class="reference internal" href="decompositions.html">Matrix decompositions and solvers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
@@ -410,7 +411,7 @@
 <p>Graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch.</p>
 <section id="backend-support">
 <h2>Backend support<a class="headerlink" href="#backend-support" title="Link to this heading">#</a></h2>
-<p>Both features run on every backend. They are only <em>hardware accelerated</em> on CUDA (and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires SM 9.0+ / Hopper). On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall — see <a class="reference internal" href="#caveats">Caveats</a>).</p>
+<p>Both features run on every backend. They are <em>hardware accelerated</em> on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires CUDA SM 9.0+ / Hopper for its hardware-accelerated path. On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall — see <a class="reference internal" href="#caveats">Caveats</a>).</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Feature</p></th>
@@ -426,7 +427,7 @@
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">graph=True</span></code></p></td>
 <td><p>hardware accelerated</p></td>
 <td><p>hardware accelerated</p></td>
-<td><p>runs (no acceleration)</p></td>
+<td><p>hardware accelerated</p></td>
 <td><p>runs (no acceleration)</p></td>
 <td><p>runs (no acceleration)</p></td>
 <td><p>runs (no acceleration)</p></td>
@@ -442,6 +443,7 @@
 </tbody>
 </table>
 </div>
+<p>AMDGPU <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).</p>
 </section>
 <section id="basic-usage">
 <h2>Basic usage<a class="headerlink" href="#basic-usage" title="Link to this heading">#</a></h2>
@@ -466,11 +468,14 @@
 <span class="n">my_kernel</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># subsequent calls: replays the cached graph</span>
 </pre></div>
 </div>
+<p>This works the same way on CUDA and AMDGPU. The cache is keyed per (compiled-kernel-specialization, launch-id), so different template instantiations (different field bindings, etc.) get their own cached graph.</p>
 <section id="restrictions">
 <h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p><strong>No struct return values.</strong> Kernels that return values (e.g. <code class="docutils literal notranslate"><span class="pre">-&gt;</span> <span class="pre">qd.i32</span></code>) cannot use graphs. An error is raised if <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is set on such a kernel.</p></li>
 <li><p><strong>Primal kernels only.</strong> The <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> flag is applied to the primal (forward) kernel only, not its adjoint. Autodiff kernels use the normal launch path.</p></li>
+<li><p><strong>Device-resident ndarrays.</strong> Graph mode bakes device pointers into the cached graph, so all ndarray arguments must be on the GPU. Passing a host-resident ndarray raises an error.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> is incompatible</strong> with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>. Choose one or the other.</p></li>
 </ul>
 </section>
 <section id="passing-different-arguments">
@@ -512,8 +517,8 @@
 </div>
 <p>The argument to <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while()</span></code> must be the name of a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray parameter. The loop body repeats while this value is non-zero.</p>
 <ul class="simple">
-<li><p>On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.</p></li>
-<li><p>On older CUDA GPUs and non-CUDA backends, it falls back to a host-side do-while loop.</p></li>
+<li><p>On CUDA SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.</p></li>
+<li><p>On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see <a class="reference internal" href="#caveats">Caveats</a> and the <a class="reference internal" href="#backend-support">backend support table</a>).</p></li>
 </ul>
 <section id="patterns">
 <h3>Patterns<a class="headerlink" href="#patterns" title="Link to this heading">#</a></h3>
@@ -561,13 +566,14 @@ device pointer is baked into the graph at creation time.</p></li>
 </section>
 <section id="caveats">
 <h3>Caveats<a class="headerlink" href="#caveats" title="Link to this heading">#</a></h3>
-<p>On currently unsupported GPU platforms, such as AMDGPU at the time of writing, the value of the <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:</p>
+<p>On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and <strong>AMDGPU</strong> (HIP has no conditional / while node API as of ROCm 7.2) — the value of the <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:</p>
 <ul class="simple">
 <li><p>wait for GPU async queue to finish processing</p></li>
 <li><p>copy condition value to hostside</p></li>
 <li><p>evaluate condition value on hostside</p></li>
 <li><p>launch new kernels for next loop iteration, if not finished yet</p></li>
 </ul>
+<p>Note: the basic <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> path (without <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code>) does <strong>not</strong> stall the host like this on either CUDA or AMDGPU — the entire kernel sequence runs as a single GPU-side graph replay.</p>
 <p>Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:</p>
 <ul class="simple">
 <li><p>fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:</p></li>

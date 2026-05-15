@@ -1,6 +1,6 @@
 # Matrix and Vector
 
-Quadrants provides `qd.Matrix` and `qd.Vector` types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small for best performance (more than 32 elements total will trigger a warning).
+Quadrants provides `qd.Matrix` and `qd.Vector` types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small for best performance (more than 144 elements total — i.e. larger than 12×12 — will trigger a warning).
 
 `qd.Vector` is a special case of `qd.Matrix` with one column.
 
@@ -83,87 +83,18 @@ def transform(
 
 ## Operations
 
-### Arithmetic
+Element-wise arithmetic, dot / cross / outer products, norms, transpose / determinant / trace / inverse, Frobenius inner product, and matrix-vector / matrix-matrix multiply all live on a separate page since they all run **per thread, in registers, with no cross-thread cooperation**. See [matrix_vector_per_thread](matrix_vector_per_thread.md).
 
-Standard arithmetic works element-wise:
+For per-thread *numerical* algorithms (SVD, symmetric eigendecomposition, polar decomposition, linear solve) see [linalg_per_thread](linalg_per_thread.md).
 
-```python
-@qd.func
-def example() -> None:
-    a = qd.Vector([1.0, 2.0, 3.0])
-    b = qd.Vector([4.0, 5.0, 6.0])
-
-    c = a + b       # [5.0, 7.0, 9.0]
-    d = a * 2.0     # [2.0, 4.0, 6.0]
-    e = a * b       # element-wise: [4.0, 10.0, 18.0]
-```
-
-### Dot and cross product
-
-```python
-@qd.func
-def products() -> None:
-    a = qd.Vector([1.0, 0.0, 0.0])
-    b = qd.Vector([0.0, 1.0, 0.0])
-
-    d = a.dot(b)      # 0.0
-    c = a.cross(b)    # [0.0, 0.0, 1.0]
-```
-
-`cross` works for 2D vectors (returns a scalar) and 3D vectors (returns a vector).
-
-### Norm and normalize
-
-```python
-@qd.func
-def norms() -> None:
-    v = qd.Vector([3.0, 4.0])
-
-    length = v.norm()              # 5.0
-    length_sq = v.norm_sqr()       # 25.0
-    unit = v.normalized()          # [0.6, 0.8]
-    inv_len = v.norm_inv()         # 0.2
-```
-
-Pass an `eps` argument for numerical safety: `v.normalized(eps=1e-8)`.
-
-### Matrix operations
-
-```python
-@qd.func
-def mat_ops() -> None:
-    m = qd.Matrix([[1.0, 2.0], [3.0, 4.0]])
-
-    t = m.transpose()       # [[1, 3], [2, 4]]
-    d = m.determinant()     # -2.0
-    tr = m.trace()          # 5.0
-    inv = m.inverse()       # [[-2, 1], [1.5, -0.5]]
-```
-
-`inverse()` and `determinant()` support matrices up to 4x4.
-
-### Matrix-vector multiply
-
-Use the `@` operator:
-
-```python
-@qd.func
-def mat_vec() -> None:
-    m = qd.Matrix([[1.0, 0.0], [0.0, 2.0]])
-    v = qd.Vector([3.0, 4.0])
-
-    result = m @ v    # [3.0, 8.0]
-```
-
-### Other operations
-
-- `qd.Matrix.diag(dim, val)` — create a diagonal matrix
-- `a.outer_product(b)` — outer product of two vectors
+For cross-thread / sparse linear algebra (CG, sparse direct solvers) see `qd.linalg.*` (separate, not yet covered in user guide).
 
 ## Size limit
 
-Matrices and vectors are unrolled into scalar registers at compile time. Using more than 32 elements (e.g. a 6x6 matrix) will trigger a warning and may cause very long compile times. For larger matrices, use a field instead:
+Matrices and vectors are unrolled into scalar registers at compile time. Using more than 144 elements (i.e. larger than 12×12) will trigger a warning and may cause very long compile times. For larger matrices, use a field instead:
 
 ```python
 large = qd.field(qd.f32, shape=(64, 64))
 ```
+
+The 144-element threshold matches the largest size officially supported by the per-thread linalg APIs (`qd.sym_eig` and `qd.make_spd` up to 12×12, `Matrix.inverse` up to 12×12) — those internal constructions stay below the warning threshold.

@@ -288,7 +288,8 @@
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
-<li class="toctree-l1"><a class="reference internal" href="decompositions.html">Matrix decompositions and solvers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
@@ -410,10 +411,23 @@
 <section id="good-practice-reminder">
 <h2>Good practice reminder<a class="headerlink" href="#good-practice-reminder" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><em>testing</em>: Any new features or modified code should be tested. You have to run the test suite using <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code> which sets up the right test environment for <code class="docutils literal notranslate"><span class="pre">pytest</span></code>. CLI arguments are forwarded to <code class="docutils literal notranslate"><span class="pre">pytest</span></code>. Do not use <code class="docutils literal notranslate"><span class="pre">pytest</span></code> directly as it behaves differently.</p></li>
+<li><p><em>testing</em>: Any new features or modified code should be tested. You have to run the test suite using <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code> which sets up the right test environment for <code class="docutils literal notranslate"><span class="pre">pytest</span></code>. CLI arguments are forwarded to <code class="docutils literal notranslate"><span class="pre">pytest</span></code>. Do not use <code class="docutils literal notranslate"><span class="pre">pytest</span></code> directly as it behaves differently. To see a per-file timing breakdown (useful for identifying slow test files), set <code class="docutils literal notranslate"><span class="pre">QD_FILE_TIMING=1</span></code> — e.g. <code class="docutils literal notranslate"><span class="pre">QD_FILE_TIMING=1</span> <span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code>. This is enabled by default in the Mac CI job and the results appear in the GitHub Actions job summary.</p></li>
 <li><p><em>format/linter</em>: Before pushing any commits, ensure you set up <code class="docutils literal notranslate"><span class="pre">pre-commit</span></code> and run it using <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code></p></li>
 <li><p>No need to force push to keep a clean history as the merging is eventually done by squashing commits.</p></li>
 </ul>
+</section>
+<section id="running-tests">
+<h2>Running tests<a class="headerlink" href="#running-tests" title="Link to this heading">#</a></h2>
+<p>Run the test suite with <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code>. CLI arguments are forwarded to pytest. For example, to run only Metal tests matching a keyword:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">metal</span> <span class="o">-</span><span class="n">k</span> <span class="s2">&quot;test_tile16_cholesky&quot;</span>
+</pre></div>
+</div>
+<p>The target architecture can also be set via the <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS</span></code> environment variable (comma-separated, e.g. <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS=metal,vulkan</span></code>).</p>
+<section id="kernel-compilation-cache">
+<h3>Kernel compilation cache<a class="headerlink" href="#kernel-compilation-cache" title="Link to this heading">#</a></h3>
+<p>During test runs, compiled kernels are cached to disk so that the same kernel is not recompiled after each <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code>/<code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> cycle.</p>
+<p>A fresh, empty cache directory is created for each test session by pytest’s <a class="reference external" href="https://docs.pytest.org/en/stable/how-to/tmp_path.html"><code class="docutils literal notranslate"><span class="pre">tmp_path_factory</span></code></a> (typically under <code class="docutils literal notranslate"><span class="pre">/tmp/pytest-of-&lt;user&gt;/pytest-&lt;N&gt;/qdcache0/</span></code>). Old session directories are cleaned up automatically by pytest’s retention policy. This cache is separate from the user-facing <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/</span></code> cache.</p>
+</section>
 </section>
 <section id="creating-your-build-dev-environment">
 <h2>Creating your build/dev environment<a class="headerlink" href="#creating-your-build-dev-environment" title="Link to this heading">#</a></h2>
@@ -625,6 +639,10 @@
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#good-practice-reminder">Good practice reminder</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#running-tests">Running tests</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#kernel-compilation-cache">Kernel compilation cache</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-your-build-dev-environment">Creating your build/dev environment</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-py"><code class="docutils literal notranslate"><span class="pre">build.py</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building-the-package-for-release-purposes">Building the package for release purposes</a></li>

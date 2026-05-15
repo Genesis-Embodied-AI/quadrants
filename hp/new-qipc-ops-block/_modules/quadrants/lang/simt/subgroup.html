@@ -795,6 +795,11 @@
 <span class="c1"># ``shuffle_up``, ``shuffle_down``, ``log2_group_size``) are defined, so this back-import sits at the bottom of</span>
 <span class="c1"># the module body.  Side effect: every name in ``reductions.__all__`` becomes accessible as</span>
 <span class="c1"># ``qd.simt.subgroup.X``, preserving the historical public API.</span>
+<span class="c1">#</span>
+<span class="c1"># WARNING: reordering definitions above this line -- in particular moving any of ``ballot`` / ``invocation_id`` /</span>
+<span class="c1"># ``shuffle`` / ``shuffle_up`` / ``shuffle_down`` / ``log2_group_size`` below this back-import -- will silently</span>
+<span class="c1"># break the circular import (``reductions`` would see only a partially-populated ``subgroup`` module).  Keep this</span>
+<span class="c1"># line at the bottom of the module body, after every name ``reductions`` consumes.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.reductions</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>  <span class="c1"># noqa: E402, F401  pylint: disable=wrong-import-position,wildcard-import</span>
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>

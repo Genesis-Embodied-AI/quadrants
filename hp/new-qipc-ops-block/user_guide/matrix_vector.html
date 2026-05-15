@@ -59,7 +59,7 @@
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Matrix decompositions and solvers" href="decompositions.html" />
+    <link rel="next" title="Per-thread matrix and vector operations" href="matrix_vector_per_thread.html" />
     <link rel="prev" title="Scalar tensors" href="scalar_tensors.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -288,7 +288,8 @@
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Matrix and Vector</a></li>
-<li class="toctree-l1"><a class="reference internal" href="decompositions.html">Matrix decompositions and solvers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
@@ -407,7 +408,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="matrix-and-vector">
 <h1>Matrix and Vector<a class="headerlink" href="#matrix-and-vector" title="Link to this heading">#</a></h1>
-<p>Quadrants provides <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small for best performance (more than 32 elements total will trigger a warning).</p>
+<p>Quadrants provides <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small for best performance (more than 144 elements total — i.e. larger than 12×12 — will trigger a warning).</p>
 <p><code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> is a special case of <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> with one column.</p>
 <section id="creating-vectors-and-matrices-in-kernels">
 <h2>Creating vectors and matrices in kernels<a class="headerlink" href="#creating-vectors-and-matrices-in-kernels" title="Link to this heading">#</a></h2>
@@ -486,87 +487,17 @@
 </section>
 <section id="operations">
 <h2>Operations<a class="headerlink" href="#operations" title="Link to this heading">#</a></h2>
-<section id="arithmetic">
-<h3>Arithmetic<a class="headerlink" href="#arithmetic" title="Link to this heading">#</a></h3>
-<p>Standard arithmetic works element-wise:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">example</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">])</span>
-    <span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">])</span>
-
-    <span class="n">c</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>       <span class="c1"># [5.0, 7.0, 9.0]</span>
-    <span class="n">d</span> <span class="o">=</span> <span class="n">a</span> <span class="o">*</span> <span class="mf">2.0</span>     <span class="c1"># [2.0, 4.0, 6.0]</span>
-    <span class="n">e</span> <span class="o">=</span> <span class="n">a</span> <span class="o">*</span> <span class="n">b</span>       <span class="c1"># element-wise: [4.0, 10.0, 18.0]</span>
-</pre></div>
-</div>
-</section>
-<section id="dot-and-cross-product">
-<h3>Dot and cross product<a class="headerlink" href="#dot-and-cross-product" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">products</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">])</span>
-    <span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">])</span>
-
-    <span class="n">d</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>      <span class="c1"># 0.0</span>
-    <span class="n">c</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>    <span class="c1"># [0.0, 0.0, 1.0]</span>
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">cross</span></code> works for 2D vectors (returns a scalar) and 3D vectors (returns a vector).</p>
-</section>
-<section id="norm-and-normalize">
-<h3>Norm and normalize<a class="headerlink" href="#norm-and-normalize" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">norms</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">v</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">])</span>
-
-    <span class="n">length</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span>              <span class="c1"># 5.0</span>
-    <span class="n">length_sq</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">norm_sqr</span><span class="p">()</span>       <span class="c1"># 25.0</span>
-    <span class="n">unit</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">normalized</span><span class="p">()</span>          <span class="c1"># [0.6, 0.8]</span>
-    <span class="n">inv_len</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">norm_inv</span><span class="p">()</span>         <span class="c1"># 0.2</span>
-</pre></div>
-</div>
-<p>Pass an <code class="docutils literal notranslate"><span class="pre">eps</span></code> argument for numerical safety: <code class="docutils literal notranslate"><span class="pre">v.normalized(eps=1e-8)</span></code>.</p>
-</section>
-<section id="matrix-operations">
-<h3>Matrix operations<a class="headerlink" href="#matrix-operations" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">mat_ops</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">m</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]])</span>
-
-    <span class="n">t</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">transpose</span><span class="p">()</span>       <span class="c1"># [[1, 3], [2, 4]]</span>
-    <span class="n">d</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">determinant</span><span class="p">()</span>     <span class="c1"># -2.0</span>
-    <span class="n">tr</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">trace</span><span class="p">()</span>          <span class="c1"># 5.0</span>
-    <span class="n">inv</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">inverse</span><span class="p">()</span>       <span class="c1"># [[-2, 1], [1.5, -0.5]]</span>
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">inverse()</span></code> and <code class="docutils literal notranslate"><span class="pre">determinant()</span></code> support matrices up to 4x4.</p>
-</section>
-<section id="matrix-vector-multiply">
-<h3>Matrix-vector multiply<a class="headerlink" href="#matrix-vector-multiply" title="Link to this heading">#</a></h3>
-<p>Use the <code class="docutils literal notranslate"><span class="pre">&#64;</span></code> operator:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">mat_vec</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">m</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">]])</span>
-    <span class="n">v</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">])</span>
-
-    <span class="n">result</span> <span class="o">=</span> <span class="n">m</span> <span class="o">@</span> <span class="n">v</span>    <span class="c1"># [3.0, 8.0]</span>
-</pre></div>
-</div>
-</section>
-<section id="other-operations">
-<h3>Other operations<a class="headerlink" href="#other-operations" title="Link to this heading">#</a></h3>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.Matrix.diag(dim,</span> <span class="pre">val)</span></code> — create a diagonal matrix</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">a.outer_product(b)</span></code> — outer product of two vectors</p></li>
-</ul>
-</section>
+<p>Element-wise arithmetic, dot / cross / outer products, norms, transpose / determinant / trace / inverse, Frobenius inner product, and matrix-vector / matrix-matrix multiply all live on a separate page since they all run <strong>per thread, in registers, with no cross-thread cooperation</strong>. See <a class="reference internal" href="matrix_vector_per_thread.html"><span class="std std-doc">matrix_vector_per_thread</span></a>.</p>
+<p>For per-thread <em>numerical</em> algorithms (SVD, symmetric eigendecomposition, polar decomposition, linear solve) see <a class="reference internal" href="linalg_per_thread.html"><span class="std std-doc">linalg_per_thread</span></a>.</p>
+<p>For cross-thread / sparse linear algebra (CG, sparse direct solvers) see <code class="docutils literal notranslate"><span class="pre">qd.linalg.*</span></code> (separate, not yet covered in user guide).</p>
 </section>
 <section id="size-limit">
 <h2>Size limit<a class="headerlink" href="#size-limit" title="Link to this heading">#</a></h2>
-<p>Matrices and vectors are unrolled into scalar registers at compile time. Using more than 32 elements (e.g. a 6x6 matrix) will trigger a warning and may cause very long compile times. For larger matrices, use a field instead:</p>
+<p>Matrices and vectors are unrolled into scalar registers at compile time. Using more than 144 elements (i.e. larger than 12×12) will trigger a warning and may cause very long compile times. For larger matrices, use a field instead:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">large</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">))</span>
 </pre></div>
 </div>
+<p>The 144-element threshold matches the largest size officially supported by the per-thread linalg APIs (<code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code> up to 12×12, <code class="docutils literal notranslate"><span class="pre">Matrix.inverse</span></code> up to 12×12) — those internal constructions stay below the warning threshold.</p>
 </section>
 </section>
 
@@ -590,11 +521,11 @@
       </div>
     </a>
     <a class="right-next"
-       href="decompositions.html"
+       href="matrix_vector_per_thread.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Matrix decompositions and solvers</p>
+        <p class="prev-next-title">Per-thread matrix and vector operations</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -621,15 +552,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vector-and-matrix-fields">Vector and matrix fields</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vector-and-matrix-ndarrays">Vector and matrix ndarrays</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#type-annotations">Type annotations</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#operations">Operations</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#arithmetic">Arithmetic</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dot-and-cross-product">Dot and cross product</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#norm-and-normalize">Norm and normalize</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#matrix-operations">Matrix operations</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#matrix-vector-multiply">Matrix-vector multiply</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#other-operations">Other operations</a></li>
-</ul>
-</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#operations">Operations</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#size-limit">Size limit</a></li>
 </ul>
   </nav></div>
