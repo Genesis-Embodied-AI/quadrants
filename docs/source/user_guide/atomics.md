@@ -2,6 +2,8 @@
 
 Atomic read-modify-write operations on a single memory location. They do not synchronize threads; the only ordering they provide is the per-location atomicity of the read-modify-write itself. For cooperative ops across threads see the `qd.simt.block.*`, `qd.simt.subgroup.*`, and `qd.simt.grid.*` namespaces. Bit-counting helpers on integer registers (`qd.math.popcnt`, `qd.math.clz`) are documented in [math](math.md).
 
+The companion read-side primitive `qd.volatile_load(target)` is documented at the end of this page (`### qd.volatile_load(target)`); it pairs with atomic stores in producer / consumer patterns where the reader must observe every update from another thread or block, and is the recommended spelling for spin-wait loops.
+
 ## What's available
 
 All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y)` atomically and returns the **old** value of `x`. `x` must be a writable memory target (a field element, ndarray element, or matrix slot); scalars and constant expressions are not allowed.
@@ -130,6 +132,61 @@ def cas_loop_max():
 ```
 
 Currently restricted to integer dtypes (`i32` / `u32` / `i64` / `u64`); float CAS is rejected at compile time. The Metal `i64` / `u64` caveat in the support table footnote applies here too. There is no shared-memory CAS path yet.
+
+### `qd.volatile_load(target)`
+
+Read `target` from memory with **volatile** semantics: the compiler is forbidden from caching, hoisting, or merging the load with prior reads of the same address. Strictly speaking this is not an atomic op (it does not modify the cell, and per-thread it is no more atomic than an ordinary load) — it lives on this page because it is the read-side counterpart to `qd.atomic_*` in producer / consumer patterns. Without it, a spin-wait loop reading the location written by another thread or block is undefined at the LLVM-IR / SPIR-V level.
+
+```python
+val = qd.volatile_load(target)
+# Effect:
+#   load(target) — but the load is guaranteed to actually go to memory on every call,
+#   not be reused from a register or hoisted out of an enclosing loop.
+```
+
+`target` must be a global lvalue (a field or ndarray subscript); function-scope local arrays are rejected because a local cannot be observed by another thread. Bit-packed quant snodes are also rejected (per-field volatile semantics on a shared physical word are not meaningful).
+
+| Backend          | Lowering                                                                                  |
+|------------------|-------------------------------------------------------------------------------------------|
+| CUDA             | LLVM `load volatile` → PTX `ld.volatile.global`.                                          |
+| AMDGPU           | LLVM `load volatile` → unhoistable `global_load_*` (the optimiser is inhibited from forwarding / merging). |
+| Vulkan / Metal   | SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL. |
+| CPU (x86_64)     | LLVM `load volatile` (the optimiser cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86). |
+
+Quadrants additionally suppresses the optimisations that would otherwise let an aliased rewrite slip past codegen:
+
+- `cache_loop_invariant_global_vars` does not hoist a volatile load out of an enclosing loop.
+- `simplify` does not replace a volatile load with the value of an earlier load of the same address.
+- On CUDA, the `__ldg` / `!invariant.load` read-only-cache fast path is suppressed for volatile loads (the two attributes are contradictory).
+
+#### Spin-wait pattern (the canonical use case)
+
+The naive spelling
+
+```python
+while flags[prev] == STATE_INVALID:
+    pass
+```
+
+is undefined: the compiler may hoist `flags[prev]` out of the loop, turning the spin into an infinite loop. `qd.volatile_load` is the cheapest correct spelling on every backend:
+
+```python
+while qd.volatile_load(flags[prev]) == STATE_INVALID:
+    pass
+```
+
+The two older workarounds remain correct but pay a perf tax over the volatile load:
+
+- `qd.simt.grid.mem_fence()` inside the loop body — drains the device-scope cache on every iteration. Order-of-magnitude more expensive than a volatile read on contemporary hardware. Also does **not** help on Metal / Vulkan-on-macOS (the Metal device-scope fence only orders atomic accesses; see [grid](grid.md)).
+- `qd.atomic_or(flags[prev], 0)` — forces a memory round-trip via an atomic RMW. Pays for the read-modify-write hardware path even though we only want to read; contention with concurrent stores is worse than a plain volatile load.
+
+`qd.volatile_load` works on every backend uniformly, has no contention overhead, and matches what CUDA / OpenCL programmers reach for in the same situation.
+
+#### Pairing with the producer
+
+A volatile load only orders the location it reads. To make other writes from the producer visible to the reader after the volatile load observes the new value, the producer must publish through an ordering primitive — either an atomic store (the Metal-portable choice; see the per-store atomic ops above), or a plain store followed by `qd.simt.grid.mem_fence()` (CUDA / AMDGPU / native Vulkan only).
+
+The decoupled-look-back scan in [grid](grid.md) shows the full pattern.
 
 ## Performance and portability notes
 
