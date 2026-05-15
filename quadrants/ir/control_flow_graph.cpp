@@ -14,6 +14,79 @@
 #include "quadrants/program/function.h"
 #include "quadrants/codegen/ir_dump.h"
 
+// ===========================================================================
+// Control-flow graph: analyses and transforms.
+//
+// This file implements two classes (declared in control_flow_graph.h):
+//   - CFGNode:           a single basic block in the CFG. Holds a slice of an
+//                        IR Block (begin_location .. end_location) plus prev /
+//                        next edges and the per-node sets used by each
+//                        analysis. Its methods do the *intra-block* work
+//                        (compute reach_gen / reach_kill in this block, run
+//                        store-to-load forwarding within this block, etc.).
+//   - ControlFlowGraph:  the whole graph. Owns the vector<CFGNode> and the
+//                        synthetic entry / exit nodes. Its methods are
+//                        whole-graph *drivers*: they call the per-node method
+//                        on every node, then run the worklist fixpoint or
+//                        post-processing.
+//
+// Five analyses / transforms live here. For each, the per-node method is on
+// CFGNode and the whole-graph driver is the same-named method on
+// ControlFlowGraph:
+//   1. reaching_definition_analysis (RD): cross-block use-define chain. Output
+//                        in each node: reach_in, reach_out (sets of Stmt*).
+//                        Used by store-to-load forwarding.
+//   2. live_variable_analysis        (LV): which addresses are still loaded
+//                        after this point? Output: live_in, live_out (sets of
+//                        Stmt*). Used by dead-store elimination.
+//   3. store_to_load_forwarding      (S2L): replace each load with the value
+//                        of the closest preceding store to the same address;
+//                        also erase identical stores. IR-mutating.
+//   4. dead_store_elimination        (DSE): erase stores whose written value
+//                        is never read, weaken atomics whose store half is
+//                        dead, eliminate identical loads. IR-mutating.
+//   5. determine_ad_stack_size:       size each adaptive AD-stack (max_size==0)
+//                        from its push/pop schedule across the CFG. Whole-
+//                        graph only; no per-node counterpart.
+//
+// Glossary (these terms appear throughout; their formal definitions are
+// scattered across analysis.h / ir.h / statements.h, so collected here):
+//   - reach_gen[node]:   stmts that define some variable in `node` (store
+//                        stmts). Plus, in the synthetic entry node, stmts
+//                        whose value "exists" before this kernel runs
+//                        (external pointers, FuncCall store destinations).
+//   - reach_kill[node]:  addresses (GlobalPtrStmt / AllocaStmt / ...) that
+//                        `node` definitely overwrites. (gen tracks the *stmts*
+//                        that write; kill tracks the *addresses* written-to.)
+//   - reach_in[node]:    union of reach_out of predecessors.
+//   - reach_out[node]:   reach_gen[node] union (reach_in[node] minus killed).
+//   - live_gen[node]:    addresses loaded in `node` with no preceding store
+//                        in the same node (so they must live in from outside).
+//   - live_kill[node]:   addresses stored to in `node`.
+//   - live_in[node]:     live_gen[node] union (live_out[node] minus live_kill).
+//   - live_out[node]:    union of live_in of successors.
+//   - UD-chain:          "use-define chain". For a load (use), the set of
+//                        stores (defs) whose value may flow to it. Computed
+//                        via the RD analysis.
+//   - Adaptive AD-stack: an `AdStackAllocaStmt` with `max_size == 0`, meaning
+//                        its size has not yet been fixed and must be inferred
+//                        from the kernel's push/pop schedule. `max_size != 0`
+//                        stacks are already sized and are skipped here.
+//   - stmt_refs:         alias for `quadrants::one_or_more<Stmt *>` (see
+//                        common/one_or_more.h). A variant that holds either a
+//                        single Stmt* or a vector<Stmt*>; supports `.size()`,
+//                        `.empty()`, non-const `.begin()/.end()`. Used to
+//                        avoid heap allocation in the common "exactly one
+//                        destination" case.
+//   - MatrixPtrStmt:     a derived pointer of the form `&base[offset]` where
+//                        `base` is either an `AllocaStmt` (tensor-typed local)
+//                        or another `MatrixPtrStmt` (nested element). The
+//                        analyses treat these as aliasing their origin: a
+//                        store through the derived pointer partially defines
+//                        the origin; a store to the origin kills all
+//                        derived-pointer addresses.
+// ===========================================================================
+
 namespace quadrants::lang {
 
 namespace {
