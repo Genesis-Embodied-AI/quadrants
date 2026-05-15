@@ -597,8 +597,12 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 
   void visit(GlobalLoadStmt *stmt) override {
     if (auto get_ch = stmt->src->cast<GetChStmt>()) {
-      bool should_cache_as_read_only =
-          current_offload->mem_access_opt.has_flag(get_ch->output_snode, SNodeAccessFlag::read_only);
+      // A volatile load explicitly opts out of caching: the read-only-cache path goes through `create_intrinsic_load`
+      // which on CUDA lowers to `__ldg` / attaches `!invariant.load`, both of which let the optimiser hoist or reuse
+      // the value -- the exact behaviour `qd.volatile_load` exists to suppress.  Keep the per-snode `read_only` flag
+      // for non-volatile loads so existing kernels keep their fast path.
+      bool should_cache_as_read_only = !stmt->is_volatile && current_offload->mem_access_opt.has_flag(
+                                                                 get_ch->output_snode, SNodeAccessFlag::read_only);
       create_global_load(stmt, should_cache_as_read_only);
     } else {
       create_global_load(stmt, false);

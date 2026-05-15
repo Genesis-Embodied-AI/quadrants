@@ -1565,6 +1565,60 @@ def atomic_cas(x, expected, desired):
     )
 
 
+def volatile_load(target):
+    """Read `target` with volatile semantics: the compiler is forbidden from caching, hoisting, or merging the
+    load with prior reads of the same address.  Required for spin-wait patterns where another thread or block
+    writes the cell and the reader must observe the update on every iteration.
+
+    Without this primitive, a loop like ::
+
+        while flags[prev] == STATE_INVALID:
+            pass
+
+    is undefined: the compiler may hoist the `flags[prev]` load out of the loop and the spin becomes infinite.
+    The portable workarounds (`grid.mem_fence()` inside the loop, or `atomic_add(flags[prev], 0)`) are both
+    correct but pay an order-of-magnitude perf tax over a real volatile read.
+
+    Codegen on every backend:
+
+    * CUDA / AMDGPU: LLVM `load volatile`, lowered to `ld.volatile.global` (PTX) /  unhoistable `global_load_*`
+      (AMDGPU).
+    * Vulkan / Metal: SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to
+      a re-read on every use in the generated MSL / GLSL.
+
+    Args:
+        target: a global lvalue (field / ndarray subscript).  Function-scope local arrays are rejected -- a
+            local cannot be observed by another thread, so a volatile load there would be meaningless.
+
+    Returns:
+        The freshly-read value of `target`, with the same dtype an ordinary read would produce.
+
+    Example::
+
+        >>> @qd.kernel
+        >>> def lookback_scan(...):
+        >>>     # block-level decoupled-look-back scan: spin until the predecessor publishes its aggregate
+        >>>     while qd.volatile_load(flags[prev]) == STATE_INVALID:
+        >>>         pass
+        >>>     prev_agg = qd.volatile_load(aggregates[prev])
+
+    See also:
+        `qd.atomic_*` for the read-modify-write side; `qd.simt.grid.mem_fence` for the heavyweight
+        device-scope fence that was the only correct (but slow) workaround before this primitive existed.
+    """
+    if impl.is_python_backend():
+        return target.item() if hasattr(target, "item") else target
+    if isinstance(target, Field):
+        raise QuadrantsSyntaxError(
+            "cannot pass a Field directly to 'qd.volatile_load'; index it first (e.g. `field[None]`)"
+        )
+    if not (is_quadrants_expr(target) and target.ptr.is_lvalue()):
+        raise QuadrantsSyntaxError("qd.volatile_load requires an lvalue (field / ndarray subscript) as its argument")
+    return impl.expr_init(
+        expr.Expr(_qd_core.expr_volatile_load(target.ptr), dbg_info=_qd_core.DebugInfo(stack_info()))
+    )
+
+
 @writeback_binary
 def assign(a, b):
     impl.get_runtime().compiling_callable.ast_builder().expr_assign(a.ptr, b.ptr, _qd_core.DebugInfo(stack_info()))
@@ -1649,6 +1703,7 @@ __all__ = [
     "atomic_mul",
     "atomic_exchange",
     "atomic_cas",
+    "volatile_load",
     "bit_cast",
     "bit_shr",
     "cast",

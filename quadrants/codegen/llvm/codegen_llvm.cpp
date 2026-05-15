@@ -1463,11 +1463,21 @@ llvm::Value *TaskCodeGenLLVM::create_intrinsic_load(llvm::Value *ptr, llvm::Type
 void TaskCodeGenLLVM::create_global_load(GlobalLoadStmt *stmt, bool should_cache_as_read_only) {
   auto ptr = llvm_val[stmt->src];
   auto ptr_type = stmt->src->ret_type->as<PointerType>();
+  // `is_volatile` and `should_cache_as_read_only` are mutually contradictory: the read-only path attaches
+  // `!invariant.load` (or, on CUDA, lowers to `__ldg`), both of which give the optimiser license to hoist /
+  // reuse the load.  Volatile loads are reserved for spin-wait patterns where exactly the opposite is required;
+  // the frontend never plumbs both flags, so this is just a defensive guard against a future caller making the
+  // mistake.
+  QD_ASSERT(!(stmt->is_volatile && should_cache_as_read_only));
   if (ptr_type->is_bit_pointer()) {
     auto val_type = ptr_type->get_pointee_type();
     auto get_ch = stmt->src->as<GetChStmt>();
     auto physical_type = tlctx->get_data_type(get_ch->input_snode->physical_type);
     auto [byte_ptr, bit_offset] = load_bit_ptr(ptr);
+    // Volatile loads on quant-bit-packed snodes are not meaningful (the pointed-to physical word is shared by
+    // many quant fields, so a volatile read of the whole word does not give per-field volatile semantics).  No
+    // public Python API exposes the combination today, so reject it eagerly rather than emit silently-wrong code.
+    QD_ASSERT(!stmt->is_volatile);
     auto physical_value = should_cache_as_read_only ? create_intrinsic_load(byte_ptr, physical_type)
                                                     : builder->CreateLoad(physical_type, byte_ptr);
     if (auto qit = val_type->cast<QuantIntType>()) {
@@ -1487,7 +1497,14 @@ void TaskCodeGenLLVM::create_global_load(GlobalLoadStmt *stmt, bool should_cache
     if (should_cache_as_read_only) {
       llvm_val[stmt] = create_intrinsic_load(ptr, tlctx->get_data_type(stmt->ret_type));
     } else {
-      llvm_val[stmt] = builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      auto *load = builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      // LLVM's `setVolatile(true)` lowers to `ld.volatile.global` on PTX (for generic / addrspace(1) pointers)
+      // and to `global_load_*` with the optimiser inhibited from hoisting / reusing the load on AMDGPU.  Both
+      // backends treat this as the canonical "always re-read from memory" primitive.
+      if (stmt->is_volatile) {
+        load->setVolatile(true);
+      }
+      llvm_val[stmt] = load;
     }
   }
 }

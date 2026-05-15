@@ -732,8 +732,20 @@ class LoopUniqueStmt : public Stmt {
 class GlobalLoadStmt : public Stmt, public ir_traits::Load {
  public:
   Stmt *src;
+  // When true, codegen emits a volatile load (LLVM `load volatile`, lowered to PTX `ld.volatile.global` /
+  // unhoistable AMDGPU `global_load_*`; SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask).  Loop-invariant
+  // caching, redundant-load elimination, and the CUDA `!invariant.load` metadata are suppressed for volatile
+  // loads so the compiler cannot fold or hoist the access.  Used by `qd.volatile_load(target)` to implement
+  // spin-wait patterns (e.g. decoupled-look-back scans) where another thread / block writes the cell and the
+  // reader must observe the update on every iteration.
+  bool is_volatile;
 
-  explicit GlobalLoadStmt(Stmt *src, const DebugInfo &dbg_info = DebugInfo()) : Stmt(dbg_info), src(src) {
+  explicit GlobalLoadStmt(Stmt *src, const DebugInfo &dbg_info = DebugInfo())
+      : GlobalLoadStmt(src, /*is_volatile=*/false, dbg_info) {
+  }
+
+  GlobalLoadStmt(Stmt *src, bool is_volatile, const DebugInfo &dbg_info = DebugInfo())
+      : Stmt(dbg_info), src(src), is_volatile(is_volatile) {
     QD_STMT_REG_FIELDS;
   }
 
@@ -750,7 +762,7 @@ class GlobalLoadStmt : public Stmt, public ir_traits::Load {
     return src;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type, src);
+  QD_STMT_DEF_FIELDS(ret_type, src, is_volatile);
   QD_DEFINE_ACCEPT_AND_CLONE;
 };
 

@@ -609,6 +609,25 @@ class IndexExpression : public Expression {
   bool is_tensor() const;
 };
 
+// `qd.volatile_load(target)` -- frontend wrapper that forces the load of `target` (an lvalue subscript into a
+// global field / ndarray) to lower to a `GlobalLoadStmt` with `is_volatile=true`.  The pointer flatten path is
+// reused unchanged; only the load itself differs from the implicit rvalue conversion `flatten_rvalue` performs
+// when the same expression appears in a regular read context.  Required for spin-wait correctness on every
+// backend (LLVM `load volatile` / SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask) -- see #648.
+class VolatileLoadExpression : public Expression {
+ public:
+  Expr src;
+
+  VolatileLoadExpression(const Expr &src, const DebugInfo &dbg_info = DebugInfo()) : Expression(dbg_info), src(src) {
+  }
+
+  void type_check(const CompileConfig *config) override;
+
+  void flatten(FlattenContext *ctx) override;
+
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
+};
+
 class RangeAssumptionExpression : public Expression {
  public:
   Expr input, base;

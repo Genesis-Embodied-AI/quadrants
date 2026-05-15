@@ -726,7 +726,7 @@ void TaskCodegen::visit(GlobalStoreStmt *stmt) {
 void TaskCodegen::visit(GlobalLoadStmt *stmt) {
   auto dt = stmt->element_type();
 
-  auto val = load_buffer(stmt->src, dt);
+  auto val = load_buffer(stmt->src, dt, stmt->is_volatile);
 
   ir_->register_value(stmt->raw_name(), val);
 }
@@ -2438,13 +2438,20 @@ static DataType pick_buffer_access_type(DataType dt, const spirv::Value &ptr_val
   return ir.get_quadrants_uint_type(dt);
 }
 
-spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt) {
+spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt, bool is_volatile) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 
   DataType ti_buffer_type = pick_buffer_access_type(dt, ptr_val, *ir_);
 
   auto buf_ptr = at_buffer(ptr, ti_buffer_type);
-  auto val_bits = ir_->load_variable(buf_ptr, ir_->get_primitive_type(ti_buffer_type));
+  // The Metal-global `use_volatile_buffer_access_` flag (set on every buffer in the constructor) marks the storage
+  // *buffer* as volatile, which protects against MoltenVK's coarse-grained LICM bug.  `is_volatile` here is a
+  // per-load opt-in for `qd.volatile_load`: the OpLoad itself carries the `Volatile` `MemoryAccess` mask so the
+  // SPIR-V optimiser cannot forward / merge this specific read with prior reads of the same address, even when
+  // the surrounding buffer is not blanket-decorated.
+  auto val_bits = is_volatile
+                      ? ir_->load_variable_volatile(buf_ptr, ir_->get_primitive_type(ti_buffer_type))
+                      : ir_->load_variable(buf_ptr, ir_->get_primitive_type(ti_buffer_type));
   if (dt->is_primitive(PrimitiveTypeID::u1))
     return ir_->cast(ir_->bool_type(), val_bits);
   return ti_buffer_type == dt ? val_bits : ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(dt), val_bits);

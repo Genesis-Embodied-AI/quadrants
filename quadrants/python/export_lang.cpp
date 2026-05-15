@@ -683,6 +683,8 @@ void export_lang(py::module &m) {
     return Expr::make<AtomicOpExpression>(AtomicOpType::cas, dest, expected, desired);
   });
 
+  m.def("expr_volatile_load", [&](const Expr &target) { return Expr::make<VolatileLoadExpression>(target); });
+
   m.def("expr_assume_in_range", assume_range);
 
   m.def("expr_loop_unique", loop_unique);
