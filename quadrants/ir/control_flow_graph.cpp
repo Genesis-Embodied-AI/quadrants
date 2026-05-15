@@ -949,12 +949,87 @@ CFGNode *ControlFlowGraph::back() const {
   return nodes.back().get();
 }
 
+namespace {
+
+// === Helpers for ControlFlowGraph::dump_graph_to_file ===
+
+// Range label: "empty" or "<first_stmt_name>~<last_stmt_name> (size=N)".
+std::string format_cfg_node_range_label(const CFGNode *node) {
+  if (node->empty()) {
+    return "empty";
+  }
+  return fmt::format("{}~{} (size={})", node->block->statements[node->begin_location]->name(),
+                     node->block->statements[node->end_location - 1]->name(), node->size());
+}
+
+// Brace-delimited list of neighbor indices, e.g. "{0, 1, 2}".
+std::string format_neighbor_indices(const std::vector<CFGNode *> &neighbors,
+                                    const std::unordered_map<CFGNode *, int> &to_index) {
+  std::vector<std::string> parts;
+  parts.reserve(neighbors.size());
+  for (auto *n : neighbors) {
+    parts.push_back(std::to_string(to_index.at(n)));
+  }
+  return fmt::format("{{{}}}", fmt::join(parts, ", "));
+}
+
+// Brace-delimited list of stmt names, e.g. "{$3, $5}".
+std::string format_live_var_names(const std::unordered_set<Stmt *> &vars) {
+  std::vector<std::string> parts;
+  parts.reserve(vars.size());
+  for (auto *stmt : vars) {
+    parts.push_back(stmt->name());
+  }
+  return fmt::format("{{{}}}", fmt::join(parts, ", "));
+}
+
+// Write one node's header line: index, range label, optional prev/next/live_out lists.
+void write_cfg_node_header(std::ostream &out,
+                           int index,
+                           const CFGNode *node,
+                           const std::unordered_map<CFGNode *, int> &to_index) {
+  out << fmt::format("Node {} : ", index) << format_cfg_node_range_label(node);
+  if (!node->prev.empty()) {
+    out << "; prev=" << format_neighbor_indices(node->prev, to_index);
+  }
+  if (!node->next.empty()) {
+    out << "; next=" << format_neighbor_indices(node->next, to_index);
+  }
+  if (!node->live_out.empty()) {
+    out << "; live_out=" << format_live_var_names(node->live_out);
+  }
+  out << "\n";
+}
+
+// Write one node's statements, each line indented 4 spaces, blank line after.
+void write_cfg_node_statements(std::ostream &out, const CFGNode *node) {
+  if (node->empty()) {
+    return;
+  }
+  for (int j = node->begin_location; j < node->end_location; j++) {
+    auto *stmt = node->block->statements[j].get();
+    std::string stmt_output;
+    // print_kernel_wrapper=false to avoid the surrounding "kernel { }" wrapper.
+    irpass::print(stmt, &stmt_output, false, false);
+    std::istringstream iss(stmt_output);
+    std::string line;
+    while (std::getline(iss, line)) {
+      if (!line.empty()) {
+        out << "    " << line << "\n";
+      }
+    }
+  }
+  out << "\n";
+}
+
+}  // namespace
+
 void ControlFlowGraph::dump_graph_to_file(const CompileConfig &config,
                                           const std::string &kernel_name,
                                           const std::string &suffix) const {
-  std::filesystem::path ir_dump_dir = config.debug_dump_path;
+  const std::filesystem::path ir_dump_dir = config.debug_dump_path;
   std::filesystem::create_directories(ir_dump_dir);
-  std::filesystem::path filename = ir_dump_dir / (kernel_name + "_CFG" + suffix + ".txt");
+  const std::filesystem::path filename = ir_dump_dir / (kernel_name + "_CFG" + suffix + ".txt");
 
   std::ofstream out_file(filename.string());
   if (!out_file) {
@@ -962,63 +1037,16 @@ void ControlFlowGraph::dump_graph_to_file(const CompileConfig &config,
     return;
   }
 
-  // Write directly to the file using fmt::format
   const int num_nodes = size();
   std::unordered_map<CFGNode *, int> to_index;
+  to_index.reserve(num_nodes);
   for (int i = 0; i < num_nodes; i++) {
     to_index[nodes[i].get()] = i;
   }
 
   for (int i = 0; i < num_nodes; i++) {
-    out_file << fmt::format("Node {} : ", i);
-    if (nodes[i]->empty()) {
-      out_file << "empty";
-    } else {
-      out_file << fmt::format("{}~{} (size={})", nodes[i]->block->statements[nodes[i]->begin_location]->name(),
-                              nodes[i]->block->statements[nodes[i]->end_location - 1]->name(), nodes[i]->size());
-    }
-    if (!nodes[i]->prev.empty()) {
-      std::vector<std::string> indices;
-      for (auto prev_node : nodes[i]->prev) {
-        indices.push_back(std::to_string(to_index[prev_node]));
-      }
-      out_file << fmt::format("; prev={{{}}}", fmt::join(indices, ", "));
-    }
-    if (!nodes[i]->next.empty()) {
-      std::vector<std::string> indices;
-      for (auto next_node : nodes[i]->next) {
-        indices.push_back(std::to_string(to_index[next_node]));
-      }
-      out_file << fmt::format("; next={{{}}}", fmt::join(indices, ", "));
-    }
-    if (!nodes[i]->live_out.empty()) {
-      std::vector<std::string> vars;
-      for (auto stmt : nodes[i]->live_out) {
-        vars.push_back(stmt->name());
-      }
-      out_file << fmt::format("; live_out={{{}}}", fmt::join(vars, ", "));
-    }
-    out_file << "\n";
-
-    // Print the actual statements in this node
-    if (!nodes[i]->empty()) {
-      for (int j = nodes[i]->begin_location; j < nodes[i]->end_location; j++) {
-        auto stmt = nodes[i]->block->statements[j].get();
-        std::string stmt_output;
-        // Use print_kernel_wrapper=false to avoid the "kernel { }" wrapper
-        irpass::print(stmt, &stmt_output, false, false);
-
-        // Add indentation to each line
-        std::istringstream iss(stmt_output);
-        std::string line;
-        while (std::getline(iss, line)) {
-          if (!line.empty()) {
-            out_file << "    " << line << "\n";
-          }
-        }
-      }
-      out_file << "\n";
-    }
+    write_cfg_node_header(out_file, i, nodes[i].get(), to_index);
+    write_cfg_node_statements(out_file, nodes[i].get());
   }
 
   out_file.close();
