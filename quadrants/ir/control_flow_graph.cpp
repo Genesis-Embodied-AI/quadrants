@@ -729,21 +729,22 @@ bool is_dse_eligible_pointer(Stmt *ptr, bool after_lower_access) {
 }
 
 // Compute the store destinations of |stmt|, including AD-stack stmts whose store semantics
-// aren't yet captured by `get_store_destination`.
+// aren't yet captured by `get_store_destination`. Returns the same `stmt_refs` (= one_or_more<>)
+// type the analyzer uses so iteration and size queries are uniform.
 // TODO: Consider AD-stacks in get_store_destination instead of here for store-to-load forwarding
 // on AD-stacks.
-std::vector<Stmt *> dse_store_destinations(Stmt *stmt) {
+stmt_refs dse_store_destinations(Stmt *stmt) {
   if (auto *pop = stmt->cast<AdStackPopStmt>()) {
-    return {pop->stack};
+    return stmt_refs(pop->stack);
   }
   if (auto *push = stmt->cast<AdStackPushStmt>()) {
-    return {push->stack};
+    return stmt_refs(push->stack);
   }
   if (auto *acc = stmt->cast<AdStackAccAdjointStmt>()) {
-    return {acc->stack};
+    return stmt_refs(acc->stack);
   }
   if (stmt->is<AdStackAllocaStmt>()) {
-    return {stmt};
+    return stmt_refs(stmt);
   }
   return irpass::analysis::get_store_destination(stmt);
 }
@@ -869,8 +870,9 @@ bool try_eliminate_identical_load_at(CFGNode *node,
 }
 
 // Mark all (eligible) loads of |stmt| as live-in-this-node so that earlier-in-reverse-order stores
-// to the same address see them and abort their dead-store check.
-void mark_loads_live_in_this_node(const std::vector<Stmt *> &load_ptrs,
+// to the same address see them and abort their dead-store check. Taken by non-const reference
+// because `one_or_more::begin()` is non-const.
+void mark_loads_live_in_this_node(stmt_refs &load_ptrs,
                                   bool after_lower_access,
                                   const DseAliasMaps &alias,
                                   DseLiveState &state) {
@@ -899,16 +901,16 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
       state.live_load_in_this_node.clear();
       continue;
     }
-    const auto store_ptrs = dse_store_destinations(stmt);
+    auto store_ptrs = dse_store_destinations(stmt);
     if (store_ptrs.size() == 1) {
-      if (try_eliminate_dead_store_at(this, i, stmt, store_ptrs.front(), after_lower_access, alias, state)) {
+      if (try_eliminate_dead_store_at(this, i, stmt, *store_ptrs.begin(), after_lower_access, alias, state)) {
         modified = true;
         continue;
       }
     }
-    const auto load_ptrs = irpass::analysis::get_load_pointers(stmt);
+    auto load_ptrs = irpass::analysis::get_load_pointers(stmt);
     if (load_ptrs.size() == 1 && store_ptrs.empty()) {
-      if (try_eliminate_identical_load_at(this, stmt, load_ptrs.front(), after_lower_access, alias, state)) {
+      if (try_eliminate_identical_load_at(this, stmt, *load_ptrs.begin(), after_lower_access, alias, state)) {
         modified = true;
       }
     }
@@ -1103,7 +1105,8 @@ void seed_start_node_reach_gen(CFGNode *start_node,
 // destinations, killed iff every dest is killed at |node|. For stmts without dests (e.g. raw
 // global pointers seeded into start_node's reach_gen), killed iff the stmt itself is killed.
 bool is_reach_in_stmt_killed_at(CFGNode *node, Stmt *stmt) {
-  const auto store_ptrs = irpass::analysis::get_store_destination(stmt);
+  // Not const: `one_or_more::begin()` is non-const, so the range-for below would not compile.
+  auto store_ptrs = irpass::analysis::get_store_destination(stmt);
   if (store_ptrs.empty()) {
     return node->reach_kill_variable(stmt);
   }
