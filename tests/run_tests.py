@@ -1,9 +1,6 @@
 import argparse
-import atexit
 import importlib.util
 import os
-import shutil
-import tempfile
 
 
 def _test_python(args, default_dir="python"):
@@ -101,6 +98,13 @@ def _test_python(args, default_dir="python"):
     else:
         if int(threads) > 1:
             pytest_args += ["-n", str(threads), "--dist=worksteal"]
+    if os.environ.get("QD_FILE_TIMING", "0") == "1":
+        import sys as _sys
+
+        if test_dir not in _sys.path:
+            _sys.path.insert(0, test_dir)
+        pytest_args += ["-p", "pytest_file_timing"]
+
     import pytest  # pylint: disable=C0415
 
     return int(pytest.main(pytest_args))
@@ -239,21 +243,6 @@ def test():
         action="store_true",
         help="Exclude arch(s) from test instead of include them, together with -a",
     )
-    parser.add_argument(
-        "--with-offline-cache",
-        action="store_true",
-        default=os.environ.get("QD_TEST_OFFLINE_CACHE", "0") == "1",
-        dest="with_offline_cache",
-        help="Run tests with offline_cache=True",
-    )
-    parser.add_argument(
-        "--rerun-with-offline-cache",
-        type=int,
-        dest="rerun_with_offline_cache",
-        default=1,
-        help="Rerun all tests with offline_cache=True for given times, together with --with-offline-cache",
-    )
-
     run_count = 1
     args = parser.parse_args()
     print(args)
@@ -264,41 +253,6 @@ def test():
             arch = "^" + arch
         print(f"Running on Arch={arch}")
         os.environ["QD_WANTED_ARCHS"] = arch
-
-    if args.with_offline_cache:
-        run_count += args.rerun_with_offline_cache
-        args.timeout *= run_count
-        tmp_cache_file_path = tempfile.mkdtemp()
-        os.environ["QD_OFFLINE_CACHE"] = "1"
-        os.environ["QD_OFFLINE_CACHE_FILE_PATH"] = tmp_cache_file_path
-        if not os.environ.get("QD_OFFLINE_CACHE_CLEANING_POLICY"):
-            os.environ["QD_OFFLINE_CACHE_CLEANING_POLICY"] = "never"
-
-        def print_and_remove():
-            def size_of_dir(dir):
-                size = 0
-                for root, dirs, files in os.walk(dir):
-                    size += sum([os.path.getsize(os.path.join(root, name)) for name in files])
-                return size
-
-            size = size_of_dir(tmp_cache_file_path)
-            stat = {}
-            countof_tic = 0
-            for p in os.listdir(tmp_cache_file_path):
-                subdir_path = os.path.join(tmp_cache_file_path, p)
-                if os.path.isdir(subdir_path):
-                    stat[p] = len(os.listdir(subdir_path))
-                elif p.endswith(".tic"):
-                    countof_tic += 1
-            stat["*.tic"] = countof_tic
-            shutil.rmtree(tmp_cache_file_path)
-            print("Summary of testing the offline cache:")
-            print(f"    Simple statistics: {stat}")
-            print(f"    Size of cache files: {size / 1024:.2f} KB")
-
-        atexit.register(print_and_remove)
-    else:  # Default: disable offline cache
-        os.environ["QD_OFFLINE_CACHE"] = "0"
 
     if args.cpp:
         # C++ tests are now handled by pytest too,

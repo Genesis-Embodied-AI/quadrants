@@ -2,9 +2,25 @@
 
 ## Good practice reminder
 
-* *testing*: Any new features or modified code should be tested. You have to run the test suite using `python tests/run_tests.py` which sets up the right test environment for `pytest`. CLI arguments are forwarded to `pytest`. Do not use `pytest` directly as it behaves differently.
+* *testing*: Any new features or modified code should be tested. You have to run the test suite using `python tests/run_tests.py` which sets up the right test environment for `pytest`. CLI arguments are forwarded to `pytest`. Do not use `pytest` directly as it behaves differently. To see a per-file timing breakdown (useful for identifying slow test files), set `QD_FILE_TIMING=1` — e.g. `QD_FILE_TIMING=1 python tests/run_tests.py`. This is enabled by default in the Mac CI job and the results appear in the GitHub Actions job summary.
 * *format/linter*: Before pushing any commits, ensure you set up `pre-commit` and run it using `pre-commit run -a`
 * No need to force push to keep a clean history as the merging is eventually done by squashing commits.
+
+## Running tests
+
+Run the test suite with `python tests/run_tests.py`. CLI arguments are forwarded to pytest. For example, to run only Metal tests matching a keyword:
+
+```
+python tests/run_tests.py --arch metal -k "test_tile16_cholesky"
+```
+
+The target architecture can also be set via the `QD_WANTED_ARCHS` environment variable (comma-separated, e.g. `QD_WANTED_ARCHS=metal,vulkan`).
+
+### Kernel compilation cache
+
+During test runs, compiled kernels are cached to disk so that the same kernel is not recompiled after each `qd.reset()`/`qd.init()` cycle.
+
+A fresh, empty cache directory is created for each test session by pytest's [`tmp_path_factory`](https://docs.pytest.org/en/stable/how-to/tmp_path.html) (typically under `/tmp/pytest-of-<user>/pytest-<N>/qdcache0/`). Old session directories are cleaned up automatically by pytest's retention policy. This cache is separate from the user-facing `~/.cache/quadrants/` cache.
 
 ## Creating your build/dev environment
 

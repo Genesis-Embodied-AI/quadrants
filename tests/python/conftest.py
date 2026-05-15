@@ -15,6 +15,20 @@ import quadrants as qd
 pytest_rerunfailures.works_with_current_xdist = lambda: True
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _offline_cache_dir(tmp_path_factory):
+    """Enable the kernel compilation disk cache for the test session.
+
+    Uses pytest's tmp_path_factory so the cache directory is managed by pytest's retention policy
+    (tmp_path_retention_count / tmp_path_retention_policy) and cleaned up automatically. This avoids recompiling
+    identical kernels after each qd.reset()/qd.init() cycle within a session.
+    """
+    cache_dir = tmp_path_factory.mktemp("qdcache")
+    os.environ["QD_OFFLINE_CACHE"] = "1"
+    os.environ["QD_OFFLINE_CACHE_FILE_PATH"] = str(cache_dir)
+    os.environ.setdefault("QD_OFFLINE_CACHE_CLEANING_POLICY", "never")
+
+
 @pytest.fixture(autouse=True)
 def run_gc_after_test():
     """

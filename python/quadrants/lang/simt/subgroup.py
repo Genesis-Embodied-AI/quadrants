@@ -395,6 +395,11 @@ def all_equal(value):
 # ``shuffle_up``, ``shuffle_down``, ``log2_group_size``) are defined, so this back-import sits at the bottom of
 # the module body.  Side effect: every name in ``reductions.__all__`` becomes accessible as
 # ``qd.simt.subgroup.X``, preserving the historical public API.
+#
+# WARNING: reordering definitions above this line -- in particular moving any of ``ballot`` / ``invocation_id`` /
+# ``shuffle`` / ``shuffle_up`` / ``shuffle_down`` / ``log2_group_size`` below this back-import -- will silently
+# break the circular import (``reductions`` would see only a partially-populated ``subgroup`` module).  Keep this
+# line at the bottom of the module body, after every name ``reductions`` consumes.
 from quadrants.lang.simt.reductions import *  # noqa: E402, F401  pylint: disable=wrong-import-position,wildcard-import
 
 __all__ = [
