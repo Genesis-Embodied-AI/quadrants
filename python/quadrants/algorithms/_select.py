@@ -1,9 +1,11 @@
 # type: ignore
 """Device-wide stream compaction (``select`` / ``compact``).
 
-``qd.algorithms.device_select(arr, flags, out, num_out)`` packs the elements of ``arr`` for which the
-corresponding ``flags`` entry is non-zero into a dense prefix of ``out``, in stable input order, and writes the count
-of selected elements to ``num_out[0]``.
+``qd.algorithms.device_select(arr, flags, out, num_out)`` packs the elements of ``arr`` for which the corresponding
+``flags`` entry is set into a dense prefix of ``out``, in stable input order, and writes the count of selected
+elements to ``num_out[0]``. Each ``flags[i]`` must be exactly ``0`` or ``1`` (``1`` selects); the algorithm
+prefix-sums ``flags`` directly as counts, so non-0/1 values produce wrong indices and counts (caller's responsibility,
+no normalization pass).
 
 Algorithm (textbook scan-based compaction):
 
@@ -87,7 +89,7 @@ def _select_count(
 
 def device_select(arr, flags, out, num_out):
     """Stream-compact ``arr`` by ``flags``: copy ``arr[i]`` to a dense prefix of ``out`` for every ``i`` where
-    ``flags[i] != 0``, in stable input order. Write the count of selected elements to ``num_out[0]``.
+    ``flags[i] == 1``, in stable input order. Write the count of selected elements to ``num_out[0]``.
 
     Args:
         arr: 1-D tensor of any element dtype that Quadrants supports field-element assignment for: scalars
@@ -95,8 +97,11 @@ def device_select(arr, flags, out, num_out):
             ``qd.types.struct(...)`` - e.g. the libuipc ``Vector{2,3,4}i`` shapes). The scatter is
             ``dst[idx] = src[i]``, which lowers per-field for struct dtypes, so no scratch reinterpretation is
             needed for wider / composite element types.
-        flags: 1-D ``i32`` tensor, same shape as ``arr``. Each entry is treated as a boolean (``!= 0`` selects).
-            Caller-built (e.g. populated by a separate kernel applying a predicate to ``arr``).
+        flags: 1-D ``i32`` tensor, same shape as ``arr``. **Every entry must be exactly ``0`` or ``1``** (``1``
+            selects). Non-0/1 values produce incorrect results - the algorithm prefix-sums ``flags`` directly as
+            counts, so a stray ``2`` would advance the destination cursor by 2 and break the dense-output / count
+            contract. Caller-built: populate with a separate kernel that applies your predicate, writing exactly
+            ``1`` for selected and ``0`` otherwise.
         out: 1-D tensor with the same dtype as ``arr``. Must hold at least ``N`` elements (so a
             worst-case-everyone-selected run fits); only the prefix ``out[0 : num_out[0]]`` is meaningful on return.
         num_out: 1-element ``i32`` tensor receiving the selected count.

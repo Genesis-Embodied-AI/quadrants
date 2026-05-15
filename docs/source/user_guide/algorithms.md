@@ -8,7 +8,7 @@ Device-wide algorithms are primitives that consume and produce whole arrays, exe
 |-------------------------------------------------------------|--------------------------------------------------------------------|------|--------|--------|-------|
 | `qd.algorithms.device_reduce_{add,min,max}(arr, out)`         | `out[0] = sum/min/max(arr)` (two-or-more-pass tree reduction; identity derived from `arr.dtype` for min / max) | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_exclusive_scan_{add,min,max}(arr, out)` | `out[i] = sum/min/max(arr[0:i])` (three-pass Blelloch-style scan; 32-bit + 64-bit scalars; identity derived from `arr.dtype` for min / max) | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_select(arr, flags, out, num_out)`     | Stream compaction: copy `arr[i]` to a dense prefix of `out` for every `flags[i] != 0`. | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.device_select(arr, flags, out, num_out)`     | Stream compaction: copy `arr[i]` to a dense prefix of `out` for every `flags[i] == 1` (`flags` must be exactly 0/1). | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_radix_sort(keys, tmp_keys, values=None, tmp_values=None, end_bit=None)` | LSB radix sort for 32-bit or 64-bit scalar keys (optional key-value). | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)`. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.parallel_sort`                               | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `device_radix_sort`. | yes  | yes\*  | yes    | yes\* |
@@ -111,7 +111,7 @@ Implementation:
 
 ### `qd.algorithms.device_select(arr, flags, out, num_out)`
 
-Stream compaction. Copy every `arr[i]` whose corresponding `flags[i]` is non-zero into a dense prefix of `out`, in stable input order, and write the count of selected elements to `num_out[0]`.
+Stream compaction. Copy every `arr[i]` whose corresponding `flags[i]` is `1` into a dense prefix of `out`, in stable input order, and write the count of selected elements to `num_out[0]`. Flags must be exactly `0` or `1` - see the constraints below.
 
 ```python
 import quadrants as qd
@@ -134,7 +134,7 @@ selected = out.to_numpy()[:count]
 Constraints:
 
 - **Dtypes:** `arr.dtype` is any scalar dtype in `{qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64}` *or* any `qd.types.struct(...)` / `qd.Struct.field({...})` composite (e.g. libuipc `Vector2i` / `Vector3i` / `Vector4i` / `LinearBVHAABB`-style structs). The scatter is `dst[idx] = src[i]`, which lowers per-field, so the algorithm is dtype-agnostic - no scratch reinterpretation needed for wider or composite element types.
-- **`flags`:** 1-D `qd.i32` tensor with the same shape as `arr`. Each entry is treated as a boolean (`!= 0` selects). `flags` is caller-built - populate it with a kernel applying whatever predicate you want.
+- **`flags`:** 1-D `qd.i32` tensor with the same shape as `arr`. **Every entry must be exactly `0` or `1`** (`1` selects). The algorithm prefix-sums `flags` directly as counts, so non-0/1 values produce wrong indices and a wrong `num_out` count - the caller is responsible for normalization, no implicit normalization pass is performed. `flags` is caller-built - populate it with a kernel applying whatever predicate you want, writing exactly `1` for selected and `0` otherwise.
 - **`out`:** 1-D tensor, same dtype as `arr`, with `len(out) >= len(arr)` so the worst-case all-selected run is safe. Only `out[0 : num_out[0]]` carries meaningful data on return; the tail is left untouched (whatever was in `out` before the call remains).
 - **`num_out`:** 1-element `qd.i32` tensor. Same explicit-host-hop rule: do `int(num_out.to_numpy()[0])` after the call to get the count as a Python scalar.
 
