@@ -1614,9 +1614,7 @@ def volatile_load(target):
         )
     if not (is_quadrants_expr(target) and target.ptr.is_lvalue()):
         raise QuadrantsSyntaxError("qd.volatile_load requires an lvalue (field / ndarray subscript) as its argument")
-    return impl.expr_init(
-        expr.Expr(_qd_core.expr_volatile_load(target.ptr), dbg_info=_qd_core.DebugInfo(stack_info()))
-    )
+    return impl.expr_init(expr.Expr(_qd_core.expr_volatile_load(target.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
 @writeback_binary

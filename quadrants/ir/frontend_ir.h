@@ -618,7 +618,8 @@ class VolatileLoadExpression : public Expression {
  public:
   Expr src;
 
-  VolatileLoadExpression(const Expr &src, const DebugInfo &dbg_info = DebugInfo()) : Expression(dbg_info), src(src) {
+  explicit VolatileLoadExpression(const Expr &src, const DebugInfo &dbg_info = DebugInfo())
+      : Expression(dbg_info), src(src) {
   }
 
   void type_check(const CompileConfig *config) override;

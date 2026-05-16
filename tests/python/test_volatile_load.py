@@ -18,7 +18,7 @@ volatile bit reached codegen instead.
 import pytest
 
 import quadrants as qd
-from quadrants.lang.exception import QuadrantsSyntaxError
+from quadrants.lang.exception import QuadrantsSyntaxError, QuadrantsTypeError
 
 from tests import test_utils
 
@@ -114,5 +114,22 @@ def test_volatile_load_rejects_bare_field():
         @qd.kernel
         def k():
             y = qd.volatile_load(flags)
+
+        k()
+
+
+def test_volatile_load_rejects_local_array():
+    """C++-only guard: a function-scope local tensor (AllocaStmt) passes the Python lvalue + non-Field checks
+    but is rejected in ``VolatileLoadExpression::flatten`` because a local alloca cannot be observed by another
+    thread, so volatile semantics would be meaningless.  Exercises the path between the two Python guards and
+    the GlobalLoadStmt construction."""
+    qd.init(arch=qd.cpu)
+
+    with pytest.raises(QuadrantsTypeError, match="local array"):
+
+        @qd.kernel
+        def k():
+            v = qd.Vector([0, 0, 0, 0])
+            y = qd.volatile_load(v)
 
         k()
