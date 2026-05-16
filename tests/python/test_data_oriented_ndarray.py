@@ -301,7 +301,12 @@ def test_data_oriented_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
     captured_compiled_kernel_data = []
 
     def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
-        captured_compiled_kernel_data.append(compiled_kernel_data)
+        # Filter to the user kernel only; .to_numpy() launches an internal
+        # ``ndarray_to_ext_arr`` kernel that is not fastcache-eligible
+        # (is_pure=False) and would always make compiled_kernel_data=None,
+        # masking the actual fastcache behaviour of ``run``.
+        if self.func.__name__ == "run":
+            captured_compiled_kernel_data.append(compiled_kernel_data)
         return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
 
     monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
@@ -344,7 +349,10 @@ def test_data_oriented_nested_ndarray_fastcache_cross_init(tmp_path, monkeypatch
     captured = []
 
     def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
-        captured.append(compiled_kernel_data)
+        # Filter to the user kernel only; .to_numpy() launches a non-fastcache
+        # internal kernel that would otherwise drown the run-kernel data we care about.
+        if self.func.__name__ == "run":
+            captured.append(compiled_kernel_data)
         return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
 
     monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
@@ -390,7 +398,10 @@ def test_data_oriented_ndarray_fastcache_dtype_key_distinct(tmp_path, monkeypatc
     captured = []
 
     def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
-        captured.append(compiled_kernel_data)
+        # Filter to the user kernel only; .to_numpy() launches a non-fastcache
+        # internal kernel that would otherwise drown the run-kernel data we care about.
+        if self.func.__name__ == "run":
+            captured.append(compiled_kernel_data)
         return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
 
     monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
