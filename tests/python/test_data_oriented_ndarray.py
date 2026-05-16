@@ -23,7 +23,6 @@ import quadrants as qd
 
 from tests import test_utils
 
-
 # ---------------------------------------------------------------------------
 # 1. Single raw qd.ndarray attribute (scalar element type).
 # ---------------------------------------------------------------------------

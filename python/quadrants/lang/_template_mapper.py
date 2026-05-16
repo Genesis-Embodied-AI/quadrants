@@ -9,7 +9,11 @@ from quadrants.lang.util import is_data_oriented
 
 from .._test_tools import warnings_helper
 from ._kernel_types import ArgsHash
-from ._template_mapper_hotpath import _extract_arg, _primitive_types, _struct_nd_paths_for
+from ._template_mapper_hotpath import (
+    _extract_arg,
+    _primitive_types,
+    _struct_nd_paths_for,
+)
 
 
 def _collect_data_oriented_nd_ids(arg: Any, out: list) -> None:
@@ -23,6 +27,7 @@ def _collect_data_oriented_nd_ids(arg: Any, out: list) -> None:
         for a in chain:
             v = getattr(v, a)
         out.append(id(v))
+
 
 Key: TypeAlias = tuple[Any, ...]
 

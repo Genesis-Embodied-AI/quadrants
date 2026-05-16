@@ -9,6 +9,7 @@ import dataclasses
 import numpy as np
 
 import quadrants as qd
+
 from tests import test_utils
 
 
