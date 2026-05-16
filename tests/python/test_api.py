@@ -251,6 +251,7 @@ user_api[qd] = [
     "uint32",
     "uint64",
     "uint8",
+    "volatile_load",
     "vulkan",
     "x64",
     "x86_64",
