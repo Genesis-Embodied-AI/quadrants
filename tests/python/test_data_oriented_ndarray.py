@@ -284,6 +284,176 @@ def test_data_oriented_distinct_instances():
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# 9b. Fastcache end-to-end with ``@qd.data_oriented`` holding ndarrays. Pattern adapted from
+#     ``test_cache.test_fastcache``: call ``qd_init_same_arch`` twice with the same cache directory
+#     to simulate two processes, monkeypatch ``launch_kernel`` to capture whether
+#     ``compiled_kernel_data`` was loaded from disk. On the second init the data_oriented + ndarray
+#     kernel should be served from the on-disk fastcache.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
+    from quadrants._test_tools import qd_init_same_arch
+
+    launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
+    captured_compiled_kernel_data = []
+
+    def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
+        captured_compiled_kernel_data.append(compiled_kernel_data)
+        return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
+
+    monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, x):
+            self.x = x
+
+    @qd.kernel(fastcache=True)
+    def run(s: qd.template()):
+        for i in range(4):
+            s.x[i] = i * 3
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    state = State(x=qd.ndarray(qd.i32, shape=(4,)))
+    run(state)
+    np.testing.assert_array_equal(state.x.to_numpy(), np.arange(4) * 3)
+    assert captured_compiled_kernel_data[-1] is None, "cold init should compile, not load"
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    state = State(x=qd.ndarray(qd.i32, shape=(4,)))
+    run(state)
+    np.testing.assert_array_equal(state.x.to_numpy(), np.arange(4) * 3)
+    assert captured_compiled_kernel_data[-1] is not None, "warm init should load from disk fastcache"
+
+
+# ---------------------------------------------------------------------------
+# 9c. Same as 9b but with a *nested* ``@qd.data_oriented`` holding an ndarray. Pins that the
+#     fastcache args_hasher recursion handles nested data_oriented containers correctly across
+#     processes.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_nested_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
+    from quadrants._test_tools import qd_init_same_arch
+
+    launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
+    captured = []
+
+    def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
+        captured.append(compiled_kernel_data)
+        return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
+
+    monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
+
+    @qd.data_oriented
+    class Inner:
+        def __init__(self, y):
+            self.y = y
+
+    @qd.data_oriented
+    class Outer:
+        def __init__(self, inner):
+            self.inner = inner
+
+    @qd.kernel(fastcache=True)
+    def run(s: qd.template()):
+        for i in range(4):
+            s.inner.y[i] = i + 11
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    outer = Outer(inner=Inner(y=qd.ndarray(qd.i32, shape=(4,))))
+    run(outer)
+    assert captured[-1] is None
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    outer = Outer(inner=Inner(y=qd.ndarray(qd.i32, shape=(4,))))
+    run(outer)
+    assert captured[-1] is not None, "nested data_oriented + ndarray should load from fastcache"
+
+
+# ---------------------------------------------------------------------------
+# 9d. Fastcache key is dtype-sensitive: same kernel source, different ndarray dtype in the
+#     data_oriented member -> two distinct disk cache entries. Pins the args_hasher's
+#     ``[nd-{dtype}-{ndim}{layout}]`` repr.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_ndarray_fastcache_dtype_key_distinct(tmp_path, monkeypatch):
+    from quadrants._test_tools import qd_init_same_arch
+
+    launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
+    captured = []
+
+    def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
+        captured.append(compiled_kernel_data)
+        return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
+
+    monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, x):
+            self.x = x
+
+    @qd.kernel(fastcache=True)
+    def run(s: qd.template()):
+        for i in range(4):
+            s.x[i] = s.x[i] + 1
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    state_i32 = State(x=qd.ndarray(qd.i32, shape=(4,)))
+    state_f32 = State(x=qd.ndarray(qd.f32, shape=(4,)))
+    run(state_i32)
+    run(state_f32)
+    assert captured[-2] is None and captured[-1] is None, "both dtypes cold-compile on first init"
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    state_i32 = State(x=qd.ndarray(qd.i32, shape=(4,)))
+    state_f32 = State(x=qd.ndarray(qd.f32, shape=(4,)))
+    run(state_i32)
+    run(state_f32)
+    assert captured[-2] is not None and captured[-1] is not None, "both dtypes load from disk"
+    np.testing.assert_array_equal(state_i32.x.to_numpy(), [1, 1, 1, 1])
+    np.testing.assert_array_equal(state_f32.x.to_numpy(), np.array([1.0] * 4, dtype=np.float32))
+
+
+# ---------------------------------------------------------------------------
+# 9e. Documented fallback: a @qd.data_oriented containing a qd.field disables fastcache for the
+#     whole call (args_hasher returns None for ScalarField). The kernel still runs correctly via
+#     non-fastcache compilation. This test pins the documented fallback so a future "support
+#     fields in fastcache" change explicitly chooses to update this test.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_field_disables_fastcache_but_runs(tmp_path, monkeypatch):
+    from quadrants._test_tools import qd_init_same_arch
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, n):
+            self.f = qd.field(qd.i32, shape=(n,))
+
+    state = State(4)
+
+    @qd.kernel(fastcache=True)
+    def run(s: qd.template()):
+        for i in range(4):
+            s.f[i] = i + 7
+
+    run(state)
+    obs = run._primal.src_ll_cache_observations
+    assert obs.cache_key_generated is False, "field child should disable fastcache key generation"
+    np.testing.assert_array_equal(state.f.to_numpy(), np.arange(4) + 7)
+
+
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_ndarray_fastcache_eligible():
     N = 4
