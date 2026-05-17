@@ -289,6 +289,10 @@ class FunctionDefTransformer:
                 _qd_core.make_external_tensor_expr(element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE),
                 _qd_layout=layout,
             )
+            # Tag the AnyArray with the source ndarray id so ``_promote_ndarray_if_declared``
+            # can mark this ndarray as used even when the access reaches it via an already-
+            # promoted AnyArray (e.g. callee bodies bound to per-leaf args by Option A).
+            arr._qd_source_ndarray_id = key
             cache[key] = arr
             launch_info.append((arg_id_vec[0], arg_idx, attr_chain))
 

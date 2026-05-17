@@ -658,22 +658,37 @@ class ASTTransformer(Builder):
         """If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),
         return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.
 
-        Also records the ndarray id in ``pruning.used_struct_ndarray_ids`` on the non-enforcing
-        first pass, so that the enforcing second-pass ``_predeclare_struct_ndarrays`` can skip
-        ndarrays that the kernel never actually accesses.
+        Also records the source ndarray id in ``pruning.used_struct_ndarray_ids`` on the
+        non-enforcing first pass, so that the enforcing second-pass
+        ``_predeclare_struct_ndarrays`` can skip ndarrays that the kernel never actually
+        accesses. Both ``Ndarray`` instances and pre-existing ``AnyArray`` proxies (tagged
+        with ``_qd_source_ndarray_id``) are handled — the latter is the case for accesses
+        in inlined ``@qd.func`` bodies whose params were bound to already-promoted proxies
+        by Option A in ``call_transformer``.
         """
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
 
-        if not isinstance(value, Ndarray):
+        pruning = ctx.global_context.pruning
+        # Mirror ``build_Name``'s mark_used gate: only mark on the non-enforcing first pass
+        # and not during synthetic per-leaf argument expansion for ``@qd.func`` calls. The
+        # callee body's own accesses (which run with ``expanding_dataclass_call_parameters
+        # = False``) are what we want to count.
+        should_mark = not pruning.enforcing and not ctx.expanding_dataclass_call_parameters
+        if isinstance(value, Ndarray):
+            cache = ctx.global_context.ndarray_to_any_array
+            key = id(value)
+            arr = cache.get(key)
+            if arr is not None:
+                if should_mark:
+                    pruning.used_struct_ndarray_ids.add(key)
+                return arr
             return value
-        cache = ctx.global_context.ndarray_to_any_array
-        key = id(value)
-        arr = cache.get(key)
-        if arr is not None:
-            pruning = ctx.global_context.pruning
-            if not pruning.enforcing:
-                pruning.used_struct_ndarray_ids.add(key)
-            return arr
+        # Pre-promoted ``AnyArray`` flowing through an inlined ``@qd.func`` body. Mark the
+        # underlying ndarray as used so it survives the enforcing-pass pruning.
+        if should_mark:
+            src_id = getattr(value, "_qd_source_ndarray_id", None)
+            if src_id is not None:
+                pruning.used_struct_ndarray_ids.add(src_id)
         return value
 
     @staticmethod
