@@ -127,7 +127,7 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 ### Under the hood
 
-At kernel compile, the dataclass is walked via `dataclasses.fields(...)`. Each member is bound into the kernel's globals under a flat name (`s.a` becomes `s__a`) and attribute accesses in the kernel AST are rewritten to use those flat names. Ndarray members are additionally registered as kernel params so kernel-side subscript hits a real ndarray. `qd.Tensor` wrappers are unwrapped to their underlying impl before injection. The container itself is never materialised on the kernel side — only its leaves are.
+A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. That's why members are read-only: the values are captured once at compile time and re-assigning them afterwards has no effect on running kernels.
 
 ## qd.data_oriented
 
@@ -200,7 +200,7 @@ state.step()
 
 ### Under the hood
 
-`self` is passed via `qd.template()` semantics. At compile time the live instance is walked through `vars(self)` — no member annotations needed. Ndarrays anywhere in the tree (including in nested `@qd.data_oriented` or `dataclasses.dataclass` children) are registered as kernel params. Primitives are read live and baked into the kernel IR, so each distinct value compiles a new specialised kernel. A per-class cache of attribute paths keeps the per-call walk cheap.
+Like `dataclasses.dataclass`, a `@qd.data_oriented` object is Python-only — the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike `dataclasses.dataclass` it needs no member annotations: the compiler reads the live instance's attributes directly. Primitive members are baked into the kernel as constants, so each distinct primitive value compiles a new specialised kernel.
 
 ## qd.dataclass / qd.types.struct
 
@@ -252,7 +252,7 @@ particles = Particle.field(shape=(N,))
 
 ### Under the hood
 
-`@qd.dataclass` produces a Quadrants `StructType` — a real value type with a fixed memory layout. Members are stored by value, which is why ndarrays (heap-backed, dynamic shape) can't be members but fields, primitives, vectors, matrices, and other `StructType`s can. The struct can be the element type of a `qd.field` / `qd.tensor` (SOA or AOS layout). `@qd.func` methods on the class are inlined at the call site like any other `@qd.func`.
+Unlike the other two compound types, `@qd.dataclass` is a real kernel-side type with a fixed memory layout. Each instance is laid out contiguously in memory, members are stored by value, and a tensor of the struct can be allocated (`Particle.field(...)`). Storing by value is also why ndarrays can't be members — ndarrays are heap-allocated buffers with dynamic shape and don't fit into a fixed-size cell.
 
 ## Nesting compatibility
 
