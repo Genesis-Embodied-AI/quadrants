@@ -17,10 +17,6 @@ The following compound types are available:
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
 
-## Recommendation
-
-**Use `dataclasses.dataclass` for new code.** It supports both fields and ndarrays, can be nested, and uses standard Python — no Quadrants-specific decorator needed.
-
 The other compound types exist for historical reasons.
 
 ## dataclasses.dataclass
