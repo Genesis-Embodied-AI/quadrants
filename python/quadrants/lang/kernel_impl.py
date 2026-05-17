@@ -305,7 +305,7 @@ def data_oriented(cls):
         The decorated class.
     """
 
-    def make_kernel_indirect(fun, is_property):
+    def make_kernel_indirect(fun, is_property, attr_name):
         @wraps(fun)
         def _kernel_indirect(self, *args, **kwargs):
             nonlocal fun
@@ -314,6 +314,9 @@ def data_oriented(cls):
             return ret(*args, **kwargs)
 
         ret = QuadrantsCallable(fun, _kernel_indirect)
+        # setattr-after-class doesn't trigger __set_name__; set the name explicitly so
+        # QuadrantsCallable.__get__ can cache the BoundQuadrantsCallable on instance.__dict__.
+        ret._attr_name = attr_name
         if is_property:
             ret = property(ret)
         return ret
@@ -331,7 +334,7 @@ def data_oriented(cls):
         if isinstance(fun, (BoundQuadrantsCallable, QuadrantsCallable)):
             if fun._is_wrapped_kernel:
                 if fun._is_classkernel and attr_type is not staticmethod:
-                    setattr(cls, name, make_kernel_indirect(fun, is_property))
+                    setattr(cls, name, make_kernel_indirect(fun, is_property, name))
     cls._data_oriented = True
 
     return cls
