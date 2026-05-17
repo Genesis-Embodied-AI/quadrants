@@ -5,23 +5,19 @@
 It can be useful to combine multiple ndarrays or fields together into a single struct-like object that can be passed into kernels, and into @qd.func's.
 
 The following compound types are available:
-- `dataclasses.dataclass` — **recommended**
-- `@qd.data_oriented` — for classes that define `@qd.kernel` methods
-- `@qd.dataclass` (and its function-form equivalent `qd.types.struct(...)`) — legacy Quadrants `StructType`, field-only
+- `@dataclasses.dataclass` — lightweight container of tensors and primitives; can contain ndarrays
+- `@qd.data_oriented` — for creating objects with `self` that define `@qd.kernel` methods
+- `@qd.dataclass` — for structures that are embedded into the kernel, and don't contain ndarrays
 
-| type                               | can be passed to qd.kernel? | can be passed to qd.func? | can contain ndarray? | can contain field? | can be nested? | supports differentiation? |
-|------------------------------------|:---------------------------:|:-------------------------:|:--------------------:|:------------------:|:--------------:|:-------------------------:|
-| `dataclasses.dataclass`            | yes                         | yes                       | yes                  | yes                | yes            | no [*1]                   |
-| `@qd.data_oriented`               | yes                         | yes                       | yes                  | yes                | yes            | yes                       |
-| `@qd.dataclass` / `qd.types.struct` | yes                       | yes                       | no                   | yes                | yes            | yes                       |
+| property                            | `@dataclasses.dataclass`     | `@qd.data_oriented`              | `@qd.dataclass`                     |
+|-------------------------------------|:----------------------------:|:--------------------------------:|:-----------------------------------:|
+| Kernel-side representation          | none (flattened away)        | none (flattened away)            | real type with fixed memory layout  |
+| Can be tensor element type          | no                           | no                               | yes                                 |
+| Can hold ndarrays                   | yes                          | yes                              | no                                  |
+| `@qd.kernel` methods on `self`      | no                           | yes                              | no                                  |
+| Member declaration                  | type-annotated class fields  | live attributes (no annotations) | type-annotated class fields         |
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
-
-## Recommendation
-
-**Use `dataclasses.dataclass` for new code.** It supports both fields and ndarrays, can be nested, and uses standard Python — no Quadrants-specific decorator needed.
-
-The other compound types exist for historical reasons.
 
 ## dataclasses.dataclass
 
@@ -129,6 +125,10 @@ Sub-struct passing supports:
 
 Note: assigning a sub-struct to a local variable and then passing it (`t = s.inner; touch_inner(t)`) is **not** supported. Pass the attribute access directly at the call site.
 
+### Under the hood
+
+A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. That's why members are read-only: the values are captured at compile time and re-assigning them afterwards has no effect on running kernels.
+
 ## qd.data_oriented
 
 `@qd.data_oriented` is designed for classes that define `@qd.kernel` methods as class members. It wraps these methods to correctly bind `self` during kernel compilation.
@@ -150,31 +150,109 @@ sim.step()
 
 `@qd.data_oriented` objects can also be passed as `qd.Template` parameters to kernels defined outside the class, and they support nesting (one `@qd.data_oriented` struct containing another).
 
-### ndarray members
+### Primitive members
 
-`@qd.data_oriented` classes may also hold `qd.ndarray` (and `qd.Vector.ndarray` / `qd.Matrix.ndarray`) members. Subscript access inside kernels works the same as for `dataclasses.dataclass`:
+Primitive members on `self` (e.g. `int`, `float`, `bool`, `enum.Enum`) are supported, but they are treated as **template values**: each distinct primitive value across instances triggers a new kernel compilation, with the value baked into the kernel IR.
+
+```python
+@qd.data_oriented
+class Simulation:
+    def __init__(self, n):
+        self.n = n
+        self.x = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def step(self):
+        for i in range(self.n):
+            self.x[i] += 1.0
+
+Simulation(100).step()   # compiles kernel #1 with n=100 baked in
+Simulation(200).step()   # compiles kernel #2 with n=200 baked in
+```
+
+### Tensor members
+
+`@qd.data_oriented` classes may hold tensor members of any backend: `qd.field`, `qd.ndarray`, or `qd.Tensor`.
 
 ```python
 @qd.data_oriented
 class State:
     def __init__(self, n):
-        self.x = qd.ndarray(qd.f32, shape=(n,))
-        self.v = qd.ndarray(qd.f32, shape=(n,))
+        self.n = n
+        self.a = qd.field(qd.f32, shape=n)
+        self.b = qd.ndarray(qd.f32, shape=(n,))
+        self.c = qd.tensor(qd.f32, shape=(n,))
 
-@qd.kernel
-def step(s: qd.template()):
-    for i in range(s.x.shape[0]):
-        s.x[i] += s.v[i]
+    @qd.kernel
+    def step(self):
+        for i in range(self.n):
+            self.a[i] += 1.0
+            self.b[i] += 1.0
+            self.c[i] += 1.0
 
 state = State(100)
-step(state)
+state.step()
 ```
 
-Mixing `qd.field` and `qd.ndarray` members in the same class is also supported. Nested `@qd.data_oriented` (or nested `dataclasses.dataclass`) containers with ndarrays inside are walked recursively.
+### Fastcache
 
-Note: as with `dataclasses.dataclass`, reassigning an ndarray member between kernel calls (`state.x = other_ndarray`) is allowed; the kernel re-binds against the live value on the next launch. Reassigning to an ndarray of a different `dtype` or `ndim` also works — a fresh kernel is compiled and cached for the new shape.
+`@qd.kernel(fastcache=True)` is supported on methods of `@qd.data_oriented` classes, but is disabled for fields; see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying) for more information.
 
-For how `@qd.kernel(fastcache=True)` interacts with compound types (which member types are supported, when primitive values are baked into the kernel, the `dataclasses.dataclass` opt-in footgun, and the `qd.field`-disables behaviour), see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying) in the fastcache user guide.
+### Under the hood
+
+Like `dataclasses.dataclass`, a `@qd.data_oriented` object is Python-only — the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike `dataclasses.dataclass` it needs no member annotations: the compiler reads the live instance's attributes directly. Primitive members are baked into the kernel as constants, so each distinct primitive value compiles a new specialised kernel.
+
+## qd.dataclass / qd.types.struct
+
+Unlike `@qd.data_oriented` and `@dataclasses.dataclass`, `@qd.dataclass` creates a struct that is available within the kernels themselves. The former types are only used for structure on the python side, before compilation. `@qd.dataclass` can be used as the element type of fields. One key downside of `@qd.dataclass` is that they can only be used with fields and primitives, not with ndarray. This is because tensors are embedded in the struct by value, not as a reference pointer.
+
+```python
+@qd.dataclass
+class Particle:
+    pos: qd.types.vector(3, qd.f32)
+    vel: qd.types.vector(3, qd.f32)
+    mass: qd.f32
+
+# AOS layout: each element of `particles` is a (pos, vel, mass) cell contiguous in memory.
+# Only possible because Particle is a StructType — `@qd.data_oriented` and
+# `dataclasses.dataclass` containers can't be the element type of a tensor.
+particles = Particle.field(shape=(N,), layout=qd.Layout.AOS)
+```
+
+Methods can be added to a `@qd.dataclass` and may be decorated with `@qd.func` so they can be called from kernels via `instance.method(...)` syntax (the call is inlined at compile time, like any other `@qd.func`).
+
+```python
+@qd.dataclass
+class Particle:
+    pos: qd.types.vector(3, qd.f32)
+    vel: qd.types.vector(3, qd.f32)
+    mass: qd.f32
+
+    @qd.func
+    def kinetic_energy(self):
+        return 0.5 * self.mass * self.vel.dot(self.vel)
+
+particles = Particle.field(shape=(N,))
+
+@qd.kernel
+def total_ke() -> qd.f32:
+    total = 0.0
+    for i in range(N):
+        total += particles[i].kinetic_energy()
+    return total
+```
+
+`qd.types.struct(name1=type1, ...)` is the function-form equivalent of `@qd.dataclass`: it builds the same `StructType` without a class body.
+
+```python
+vec3 = qd.types.vector(3, qd.f32)
+Particle = qd.types.struct(pos=vec3, vel=vec3, mass=qd.f32)
+particles = Particle.field(shape=(N,))
+```
+
+### Under the hood
+
+Unlike the other two compound types, `@qd.dataclass` is a real kernel-side type with a fixed memory layout. Each instance is laid out contiguously in memory, members are stored by value, and a tensor of the struct can be allocated (`Particle.field(...)`). Storing by value is also why ndarrays can't be members — ndarrays are heap-allocated buffers with dynamic shape and don't fit into a fixed-size cell.
 
 ## Nesting compatibility
 
@@ -209,23 +287,9 @@ For both `dataclasses.dataclass` and `@qd.data_oriented` containers passed via `
 
 ### Restrictions
 
-A few combinations are still unsupported:
-
 - **`@qd.dataclass` (the Quadrants `StructType` decorator) cannot contain ndarrays.** This is a legacy field-only type. Use `dataclasses.dataclass` or `@qd.data_oriented` instead. (The function-form factory `qd.types.struct(...)` produces the same `StructType` and has the same restrictions.)
 - **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** (see [\*1] above) — errors clearly at compile time.
 - **An outer `qd.template()` arg of dataclass type must be `frozen=True`** — non-frozen dataclasses are unhashable and the template-mapper cannot use them as cache keys.
 - **Declare all ndarray members on a `@qd.data_oriented` class in `__init__`.** The template-mapper caches the set of ndarray-attribute paths reachable from the first instance walked, per class. Adding *new* ndarray attributes on later instances of the same class is safe — the per-instance weakref in the spec key disambiguates them, and the compile-time walker registers all reachable ndarrays. But:
   - **Deleting an ndarray attribute** that was present on the first launch raises `AttributeError` on the next launch (the cached path still tries to `getattr` the missing attribute).
   - **Reassigning a post-first-walk ndarray attribute** (one not present on the first instance walked, then added later and re-assigned) to one with a different `dtype` / `ndim` is *not* detected by the in-memory invalidation tracker. The stale compiled kernel is silently reused, leading to bit-reinterpretation of the new array's storage.
-
-## qd.dataclass / qd.types.struct
-
-`@qd.dataclass` is a Quadrants-native `StructType` decorator. The function-form factory `qd.types.struct(name1=type1, ...)` produces the same `StructType`. Both can only contain fields and primitive types (and other `StructType` members), not ndarrays.
-
-```python
-@qd.dataclass
-class Particle:
-    pos: qd.types.vector(3, qd.f32)
-    vel: qd.types.vector(3, qd.f32)
-    mass: qd.f32
-```
