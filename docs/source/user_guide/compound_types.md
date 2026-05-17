@@ -192,6 +192,8 @@ state.step()
 
 Mixing `qd.field` and `qd.ndarray` members in the same class is also supported. Nested `@qd.data_oriented` (or nested `dataclasses.dataclass`) containers with ndarrays inside are walked recursively.
 
+### Fastcache
+
 `@qd.kernel(fastcache=True)` is supported on `@qd.data_oriented` classes; see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying) for the cache-keying rules and what disables it.
 
 ## Nesting compatibility
