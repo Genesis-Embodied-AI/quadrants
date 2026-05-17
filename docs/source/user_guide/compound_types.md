@@ -172,7 +172,7 @@ Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 
 ### ndarray members
 
-`@qd.data_oriented` classes may also hold `qd.ndarray` (and `qd.Vector.ndarray` / `qd.Matrix.ndarray`) members. Inside a `@qd.kernel`, `self.x[i]` reads and writes the element of the ndarray member at index `i`; `self.x.shape[d]` is the length along dimension `d`.
+`@qd.data_oriented` classes may also hold `qd.ndarray` (and `qd.Vector.ndarray` / `qd.Matrix.ndarray`) members.
 
 ```python
 @qd.data_oriented
