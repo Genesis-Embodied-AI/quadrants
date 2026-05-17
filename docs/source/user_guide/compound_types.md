@@ -194,7 +194,7 @@ state = State(100)
 state.step()
 ```
 
-Mixing tensor backends in the same class is supported. Nested `@qd.data_oriented` (or nested `dataclasses.dataclass`) containers with tensor members inside are walked recursively.
+Mixing tensor backends in the same class is supported. Nested `@qd.data_oriented` containers are supported.
 
 ### Fastcache
 
