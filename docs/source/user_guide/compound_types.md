@@ -236,7 +236,7 @@ For both `dataclasses.dataclass` and `@qd.data_oriented` containers passed via `
 
 ## qd.dataclass / qd.types.struct
 
-Unlike `@qd.data_oriented` and `dataclasses.dataclass`, `@qd.dataclass` creates a struct that is available within the kernels themselves; the former types are only used for structure on the Python side, before compilation. `@qd.dataclass` can be used as the element type of tensors. One key downside of `@qd.dataclass` is that it can only be used with fields and primitives, not with ndarrays. This is because tensors are embedded in the struct by value, not as a reference pointer.
+Unlike `@qd.data_oriented` and `@dataclasses.dataclass`, `@qd.struct` creates a struct that is available within the kernels themselves. The former types are only used for structure on the python side, before compilation. `@qd.struct` can be used as the element type of tensors. One key downside of `@qd.struct` is that they can only be used with fields and primitives, not with ndarray. This is because tensors are embedded in the struct by value, not as a reference pointer.
 
 ```python
 @qd.dataclass
