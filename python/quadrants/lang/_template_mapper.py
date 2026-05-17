@@ -98,6 +98,15 @@ class TemplateMapper:
         nd_ids: list = []
         for arg in args:
             if is_data_oriented(arg):
+                # Opt-out: classes that promise their ndarray members never reassign between calls
+                # (set ``_qd_stable_members = True`` on the class, or use
+                # ``@qd.data_oriented(stable_members=True)``) skip the per-call walk. The spec key
+                # then falls back to weakref(arg) alone — see _extract_arg's data_oriented branch.
+                # Saves ~1.1-1.5 us per kernel call on Genesis-style containers. Reassigning a
+                # member on a stable-marked instance is silently undefined behaviour: the cached
+                # kernel for the prior shape will be reused.
+                if type(arg).__dict__.get("_qd_stable_members"):
+                    continue
                 _collect_data_oriented_nd_ids(arg, nd_ids)
         if nd_ids:
             args_hash = args_hash + tuple(nd_ids)

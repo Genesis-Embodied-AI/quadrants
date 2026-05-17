@@ -275,7 +275,7 @@ class _BoundedDifferentiableMethod:
         return self._adjoint(self._kernel_owner, *args, **kwargs)
 
 
-def data_oriented(cls):
+def data_oriented(cls=None, *, stable_members: bool = False):
     """Marks a class as Quadrants compatible.
 
     To allow for modularized code, Quadrants provides this decorator so that
@@ -299,11 +299,20 @@ def data_oriented(cls):
         >>> a.inc()
 
     Args:
-        cls (Class): the class to be decorated
+        cls (Class): the class to be decorated.
+        stable_members (bool): if ``True``, declares that the class's ndarray-typed members are
+            allocated once and never reassigned between kernel calls. Quadrants will skip a
+            per-call walk of the instance's attributes (~1-2 us/call savings on Genesis-style
+            containers with several ndarray attrs). Reassigning a member on a ``stable_members``
+            class is undefined behaviour — the previously-compiled kernel will be reused even if
+            the new ndarray has different dtype/ndim/layout. May also be set as a class-level
+            attribute ``_qd_stable_members = True`` (equivalent).
 
     Returns:
-        The decorated class.
+        The decorated class (or, when called with arguments, a decorator).
     """
+    if cls is None:
+        return lambda c: data_oriented(c, stable_members=stable_members)
 
     def make_kernel_indirect(fun, is_property, attr_name):
         @wraps(fun)
@@ -336,6 +345,8 @@ def data_oriented(cls):
                 if fun._is_classkernel and attr_type is not staticmethod:
                     setattr(cls, name, make_kernel_indirect(fun, is_property, name))
     cls._data_oriented = True
+    if stable_members:
+        cls._qd_stable_members = True
 
     return cls
 
