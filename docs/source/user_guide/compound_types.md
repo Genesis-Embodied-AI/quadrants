@@ -192,9 +192,7 @@ state.step()
 
 Mixing `qd.field` and `qd.ndarray` members in the same class is also supported. Nested `@qd.data_oriented` (or nested `dataclasses.dataclass`) containers with ndarrays inside are walked recursively.
 
-Note: reassigning an ndarray member between kernel calls (`state.x = other_ndarray`) is allowed; the kernel re-binds against the live value on the next launch. Reassigning to an ndarray of a different `dtype` or `ndim` also works — a fresh kernel is compiled and cached for the new shape.
-
-`@qd.kernel(fastcache=True)` is supported on `@qd.data_oriented` classes, but is disabled at runtime if any `qd.field` member is reachable from `self`. For details see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying).
+`@qd.kernel(fastcache=True)` is supported on `@qd.data_oriented` classes; see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying) for the cache-keying rules and what disables it.
 
 ## Nesting compatibility
 
