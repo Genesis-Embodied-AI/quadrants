@@ -9,11 +9,13 @@ The following compound types are available:
 - `@qd.data_oriented` — for creating objects with `self` that define `@qd.kernel` methods
 - `@qd.dataclass` — for structures that are embedded into the kernel, and don't contain ndarrays
 
-| type                               | can be passed to qd.kernel? | can be passed to qd.func? | can contain ndarray? | can contain field? | can be nested? | supports differentiation? |
-|------------------------------------|:---------------------------:|:-------------------------:|:--------------------:|:------------------:|:--------------:|:-------------------------:|
-| `@dataclasses.dataclass`           | yes                         | yes                       | yes                  | yes                | yes            | yes                       |
-| `@qd.data_oriented`                | yes                         | yes                       | yes                  | yes                | yes            | yes                       |
-| `@qd.dataclass` / `qd.types.struct`| yes                         | yes                       | no                   | yes                | yes            | yes                       |
+| property                            | `@dataclasses.dataclass`     | `@qd.data_oriented`              | `@qd.dataclass`                     |
+|-------------------------------------|:----------------------------:|:--------------------------------:|:-----------------------------------:|
+| Kernel-side representation          | none (flattened away)        | none (flattened away)            | real type with fixed memory layout  |
+| Can be tensor element type          | no                           | no                               | yes                                 |
+| Can hold ndarrays                   | yes                          | yes                              | no                                  |
+| `@qd.kernel` methods on `self`      | no                           | yes                              | no                                  |
+| Member declaration                  | type-annotated class fields  | live attributes (no annotations) | type-annotated class fields         |
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
 
