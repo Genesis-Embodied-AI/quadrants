@@ -161,13 +161,13 @@ class State:
         self.x = qd.ndarray(qd.f32, shape=(n,))
         self.v = qd.ndarray(qd.f32, shape=(n,))
 
-@qd.kernel
-def step(s: qd.template()):
-    for i in range(s.x.shape[0]):
-        s.x[i] += s.v[i]
+    @qd.kernel
+    def step(self):
+        for i in range(self.x.shape[0]):
+            self.x[i] += self.v[i]
 
 state = State(100)
-step(state)
+state.step()
 ```
 
 Mixing `qd.field` and `qd.ndarray` members in the same class is also supported. Nested `@qd.data_oriented` (or nested `dataclasses.dataclass`) containers with ndarrays inside are walked recursively.
