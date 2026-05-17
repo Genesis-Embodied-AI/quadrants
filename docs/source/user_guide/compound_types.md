@@ -150,6 +150,26 @@ sim.step()
 
 `@qd.data_oriented` objects can also be passed as `qd.Template` parameters to kernels defined outside the class, and they support nesting (one `@qd.data_oriented` struct containing another).
 
+### Primitive members
+
+Primitive members on `self` (e.g. `int`, `float`, `bool`, `enum.Enum`) are supported, but they are treated as **template values**: each distinct primitive value across instances triggers a new kernel compilation, with the value baked into the kernel IR.
+
+```python
+@qd.data_oriented
+class Simulation:
+    def __init__(self, n):
+        self.n = n
+        self.x = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def step(self):
+        for i in range(self.n):
+            self.x[i] += 1.0
+
+Simulation(100).step()   # compiles kernel #1 with n=100 baked in
+Simulation(200).step()   # compiles kernel #2 with n=200 baked in
+```
+
 ### ndarray members
 
 `@qd.data_oriented` classes may also hold `qd.ndarray` (and `qd.Vector.ndarray` / `qd.Matrix.ndarray`) members. Subscript access inside kernels works the same as for `dataclasses.dataclass`:
