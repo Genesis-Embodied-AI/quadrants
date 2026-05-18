@@ -313,10 +313,22 @@ def stringify_obj_type(
             raise_on_templated_floats, path, obj, pruning_paths=pruning_paths, parent_flat=parent_flat
         )
     if is_data_oriented(obj):
-        # Walk the data_oriented container's members. Same narrow-walk semantics as ``dataclass_to_repr``:
-        # if ``pruning_paths`` is provided, only descend into children whose flat name is in the set; otherwise
-        # walk every attr. Recognised-but-unsupported (Field/MatrixField) anywhere in a child's subtree
-        # propagates ``_FAIL_FASTCACHE`` upward.
+        # Walk the data_oriented container's members. Narrowing rules differ from ``dataclass_to_repr``:
+        #
+        # Pruning info for data_oriented containers is *only complete for ndarray members*: the kernel-compile
+        # path records each kernel-accessed ndarray's structural attribute chain in
+        # ``struct_ndarray_launch_info``, which ``Kernel._fold_struct_nd_paths_into_pruning`` folds into the
+        # flat-name pruning set. Non-ndarray attribute accesses on data_oriented args (``self.an_int``,
+        # ``self.a_float`` — values that get baked into the kernel at compile time) are *not* tracked anywhere
+        # as pruning input (data_oriented args aren't run through ``FlattenAttributeNameTransformer``).
+        #
+        # If we naively applied flat-name pruning to *every* child, an unused-but-present opaque member would
+        # match (silently dropped → safe), a kernel-read primitive member would silently disappear from the hash
+        # (BAD — its value affects codegen and we'd serve a stale cached compile when the value changes), and
+        # the templated-float raise-guard would also stop firing.
+        #
+        # Conservative fix: only narrow *ndarray* children. For everything else, walk unconditionally. The
+        # recursive call still applies narrowing to nested dataclasses (where flat-name tracking IS complete).
         child_repr_l = ["da"]
         try:
             _asdict = getattr(obj, "_asdict")
@@ -332,7 +344,14 @@ def stringify_obj_type(
             if v_type is QuadrantsCallable or v_type is BoundQuadrantsCallable:
                 continue
             child_flat = _child_flat(parent_flat, k)
-            if not _is_path_used(pruning_paths, child_flat):
+            # ndarray-only pruning narrowing — see the comment at the top of this branch for why other types
+            # cannot be safely narrowed here.
+            if (
+                pruning_paths is not None
+                and child_flat is not None
+                and child_flat not in pruning_paths
+                and isinstance(v, (ScalarNdarray, VectorNdarray, MatrixNdarray))
+            ):
                 continue
             _child_repr = stringify_obj_type(
                 raise_on_templated_floats,
