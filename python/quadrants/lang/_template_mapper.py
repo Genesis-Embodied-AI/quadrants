@@ -5,10 +5,29 @@ from weakref import ReferenceType
 from quadrants.lang import impl
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
+from quadrants.lang.util import is_data_oriented
 
 from .._test_tools import warnings_helper
 from ._kernel_types import ArgsHash
-from ._template_mapper_hotpath import _extract_arg, _primitive_types
+from ._template_mapper_hotpath import (
+    _extract_arg,
+    _primitive_types,
+    _struct_nd_paths_for,
+)
+
+
+def _collect_data_oriented_nd_ids(arg: Any, out: list) -> None:
+    """Append ``id(ndarray)`` for every ndarray reachable from ``arg``, using the per-class path cache in
+    ``_template_mapper_hotpath._struct_nd_paths_for`` so the first call walks ``vars(arg)`` once and subsequent calls
+    are just ``getattr`` chains. Empty path list short-circuits with zero work — critical for genesis's
+    ``@qd.data_oriented`` Solver passed as ``self`` to every kernel.
+    """
+    for chain in _struct_nd_paths_for(arg):
+        v = arg
+        for a in chain:
+            v = getattr(v, a)
+        out.append(id(v))
+
 
 Key: TypeAlias = tuple[Any, ...]
 
@@ -71,6 +90,17 @@ class TemplateMapper:
         # branching for primitive types dramatically improve performance of hash computation.
         mapping_cache_tracker: list[ReferenceType | None] | None = None
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
+        # ``@qd.data_oriented`` containers can have their member ndarrays reassigned between calls on the same instance
+        # (``state.x = other_ndarray``). The id(arg) alone does not capture that, so the spec-key cache below would
+        # serve a stale entry and the new ndarray's dtype/ndim would be wrong. Fold the reachable ndarray ids into the
+        # hash. No-op for data_oriented containers that hold no ndarrays — the walker returns an empty list. See
+        # ``_collect_data_oriented_nd_ids``.
+        nd_ids: list = []
+        for arg in args:
+            if is_data_oriented(arg):
+                _collect_data_oriented_nd_ids(arg, nd_ids)
+        if nd_ids:
+            args_hash = args_hash + tuple(nd_ids)
         try:
             mapping_cache_tracker = self._mapping_cache_tracker[args_hash]
         except KeyError:

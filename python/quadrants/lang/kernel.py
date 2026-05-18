@@ -51,7 +51,7 @@ from quadrants.lang.exception import (
 )
 from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
-from quadrants.lang.util import cook_dtype
+from quadrants.lang.util import cook_dtype, is_data_oriented
 from quadrants.types import (
     primitive_types,
     template,
@@ -465,12 +465,21 @@ class Kernel(FuncBase):
         # Stale-cache guard for mutable structs containing ndarrays. Frozen dataclass fields cannot be reassigned, so
         # id(struct) in args_hash is already sufficient. For mutable structs, ndarray attributes can change between
         # calls while the struct id stays the same, so we fold the live ndarray id(s) into the hash.
+        #
+        # The predicate must catch any "host container in which ndarray member references can be reassigned at runtime"
+        # case. Non-frozen dataclasses have ``__hash__ is None`` (Python sets it when ``eq=True, frozen=False``), so
+        # they hit the first arm. ``@qd.data_oriented`` classes inherit ``object.__hash__`` so the ``__hash__ is None``
+        # check is False for them — we need a separate arm. Without this arm, ``state.x = other_ndarray`` on the same
+        # data_oriented instance would not invalidate the launch-context cache and the kernel would re-launch against
+        # the stale binding.
         if key != self._mutable_nd_cached_key:
             if self._struct_ndarray_launch_info_by_key:
                 struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
                 if struct_nd_info:
                     self._mutable_nd_cached_val = [
-                        (idx, chain) for _, idx, chain in struct_nd_info if type(args[idx]).__hash__ is None
+                        (idx, chain)
+                        for _, idx, chain in struct_nd_info
+                        if type(args[idx]).__hash__ is None or is_data_oriented(args[idx])
                     ]
                 else:
                     self._mutable_nd_cached_val = []
