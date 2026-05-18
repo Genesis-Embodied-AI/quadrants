@@ -524,7 +524,8 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(GlobalLoadStmt *stmt) override {
-    print("{}{} = global load {}", stmt->type_hint(), stmt->name(), stmt->src->name());
+    print("{}{} = global load{} {}", stmt->type_hint(), stmt->name(), stmt->is_volatile ? " volatile" : "",
+          stmt->src->name());
     dbg_info_printer_(stmt);
   }
 

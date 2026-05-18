@@ -969,6 +969,29 @@ Value IRBuilder::load_variable(Value pointer, const SType &res_type) {
   }
   return ret;
 }
+
+Value IRBuilder::load_variable_volatile(Value pointer, const SType &res_type) {
+  // Like `load_variable`, but always emits the `Volatile` `MemoryAccess` mask -- including for the buffer-backed
+  // `kStructArrayPtr` path that the default helper does not decorate.  This is the SPIR-V analogue of LLVM's
+  // `LoadInst::setVolatile(true)`: SPIRV-Cross propagates `Volatile` into the generated MSL / GLSL as a re-read on
+  // every use, and the SPIR-V optimiser is forbidden from forwarding or merging the load with prior reads of the
+  // same address.  Required for `qd.volatile_load` spin-wait correctness on Vulkan / Metal.
+  QD_ASSERT(pointer.flag == ValueKind::kVariablePtr || pointer.flag == ValueKind::kStructArrayPtr ||
+            pointer.flag == ValueKind::kPhysicalPtr);
+  Value ret = new_value(res_type, ValueKind::kNormal);
+  if (pointer.flag == ValueKind::kPhysicalPtr) {
+    // Physical pointers already require the Aligned mask; OR Volatile in alongside it.  Same encoding as the
+    // default `load_variable` physical-pointer path.
+    uint32_t alignment = uint32_t(get_primitive_type_size(res_type.dt));
+    ib_.begin(spv::OpLoad)
+        .add_seq(res_type, ret, pointer, spv::MemoryAccessAlignedMask | spv::MemoryAccessVolatileMask, alignment)
+        .commit(&function_);
+  } else {
+    // Logical pointers (variable / struct-array) accept a bare `MemoryAccess` mask without alignment.
+    ib_.begin(spv::OpLoad).add_seq(res_type, ret, pointer, spv::MemoryAccessVolatileMask).commit(&function_);
+  }
+  return ret;
+}
 void IRBuilder::store_variable(Value pointer, Value value) {
   QD_ASSERT(pointer.flag == ValueKind::kVariablePtr || pointer.flag == ValueKind::kPhysicalPtr);
   QD_ASSERT(value.stype.id == pointer.stype.element_type_id);

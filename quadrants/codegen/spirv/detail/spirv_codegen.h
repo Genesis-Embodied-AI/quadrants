@@ -111,7 +111,7 @@ class TaskCodegen : public IRVisitor {
   void generate_range_for_kernel(OffloadedStmt *stmt);
   void generate_struct_for_kernel(OffloadedStmt *stmt);
   spirv::Value at_buffer(const Stmt *ptr, DataType dt);
-  spirv::Value load_buffer(const Stmt *ptr, DataType dt);
+  spirv::Value load_buffer(const Stmt *ptr, DataType dt, bool is_volatile = false);
   void store_buffer(const Stmt *ptr, spirv::Value val);
   spirv::Value get_buffer_value(BufferInfo buffer, DataType dt);
   spirv::Value make_pointer(size_t offset);
