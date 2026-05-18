@@ -16,6 +16,7 @@ import numpy as np
 from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
+from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
@@ -85,6 +86,15 @@ class ASTTransformer(Builder):
         pruning = ctx.global_context.pruning
         if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__qd_"):
             ctx.global_context.pruning.mark_used(ctx.func.func_id, node.id)
+        # Track chains rooted at non-flattened kernel args (``@qd.data_oriented`` / ``qd.template`` params, which
+        # appear in the AST with bare names like ``self``). ``build_Attribute`` propagates this annotation through
+        # ``state.dofs.x`` chains and ``mark_used``s the flat name, so the fastcache narrow walk can include them
+        # in pruning (dataclass args go through ``FlattenAttributeNameTransformer`` and reach this branch as
+        # already-flat ``__qd_…`` Names, handled by the block above).
+        if node.id in ctx.kernel_args and not node.id.startswith("__qd_"):
+            node._qd_arg_chain = node.id  # type: ignore[attr-defined]
+        else:
+            node._qd_arg_chain = None  # type: ignore[attr-defined]
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
@@ -798,6 +808,28 @@ class ASTTransformer(Builder):
                             warnings.warn(message)
                         else:
                             raise exception.QuadrantsCompilationError(message)
+        # Propagate the kernel-arg-rooted chain annotation and record this access in pruning's *separate*
+        # chain-paths set. ``build_Name`` sets ``_qd_arg_chain`` on non-flattened kernel args (e.g.
+        # data_oriented ``self``); each Attribute access in the chain extends it
+        # (``self`` → ``__qd_self__qd_x`` → ``__qd_self__qd_x__qd_y``).
+        #
+        # Why not ``mark_used``? On the enforcing pass, ``Kernel.materialize`` uses
+        # ``pruning.used_vars_by_func_id`` as ``struct_locals``, which drives
+        # ``FlattenAttributeNameTransformer`` — adding ``__qd_self__qd_x`` there would make the transformer
+        # rewrite ``self.x`` into ``Name('__qd_self__qd_x')``, and ``build_Name`` would then fail to find
+        # such a variable. ``mark_kernel_arg_chain_used`` puts the chain into a *separate* per-func set
+        # that's merged into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` only *after* both compile passes,
+        # by ``Kernel._fold_kernel_arg_chain_paths_into_pruning`` — so the fastcache args-hash narrow walk
+        # picks them up without breaking codegen.
+        parent_chain = getattr(node.value, "_qd_arg_chain", None)
+        if parent_chain is not None:
+            flat = create_flat_name(parent_chain, node.attr)
+            node._qd_arg_chain = flat  # type: ignore[attr-defined]
+            pruning = ctx.global_context.pruning
+            if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters:
+                pruning.mark_kernel_arg_chain_used(ctx.func.func_id, flat)
+        else:
+            node._qd_arg_chain = None  # type: ignore[attr-defined]
         return node.ptr
 
     @staticmethod

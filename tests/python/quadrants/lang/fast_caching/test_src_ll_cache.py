@@ -142,14 +142,16 @@ def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
 
     k1(foo=RandomClass())
     _out, err = capfd.readouterr()
-    # Unrecognised types now fall back to a deterministic ``type(v).__qualname__`` hash (instead of silently
-    # disabling fastcache via the old ``[PARAM_INVALID]`` / ``[INVALID_FUNC]`` dead-end), and emit an
-    # ``[UNKNOWN_TYPE]`` warning once per type so a new tensor-like type added to Quadrants without explicit
-    # args-hasher handling still gets noticed in the logs. ``[PARAM_INVALID]`` is gone.
+    # Unrecognised types at a (top-level) kernel-read path now fail fastcache loudly: a one-shot
+    # ``[UNKNOWN_TYPE]`` warning identifies the offending type, and ``[INVALID_FUNC]`` then reports the
+    # disabled cache. The old silent ``[PARAM_INVALID]`` dead-end is gone — the two rules driving this
+    # are documented in ``args_hasher.py::_fail_unknown_type`` and ``fastcache.md`` "Pruning-driven
+    # argument hashing": (1) only pruned paths may contribute to the cache key (so no qualname fallback),
+    # (2) unrecognised types at pruned paths must not be silently dropped.
     assert "[FASTCACHE][UNKNOWN_TYPE]" in err
     assert RandomClass.__name__ in err
+    assert "[FASTCACHE][INVALID_FUNC]" in err
     assert "[FASTCACHE][PARAM_INVALID]" not in err
-    assert "[FASTCACHE][INVALID_FUNC]" not in err
 
     @qd.kernel
     def not_pure_k1(foo: qd.Template) -> None:

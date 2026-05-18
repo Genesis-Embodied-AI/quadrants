@@ -1,12 +1,31 @@
-from ast import Name, Starred, expr, keyword
+from ast import Attribute, Name, Starred, expr, keyword
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
+from ._dataclass_util import create_flat_name
 from ._exceptions import raise_exception
 from ._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .exception import QuadrantsSyntaxError
 from .func import Func
 from .kernel_arguments import ArgMetadata
+
+
+def _flatten_arg_node(node: expr) -> str | None:
+    """Flatten an AST arg node into the corresponding kernel-arg-rooted flat name (or ``None`` if the
+    node isn't a recognisable name/attribute chain rooted at a plain Name).
+
+    Mirrors ``FlattenAttributeNameTransformer._flatten_attribute_name`` but on the raw call-arg AST.
+    Used by ``record_after_call`` to handle ``f(self.dofs)`` etc. — without this the callee's pruning
+    info for attribute-chain args is dropped at the call boundary."""
+    if isinstance(node, Name):
+        return node.id
+    if isinstance(node, Attribute):
+        parent = _flatten_arg_node(node.value)
+        if parent is None:
+            return None
+        return create_flat_name(parent, node.attr)
+    return None
+
 
 if TYPE_CHECKING:
     import ast
@@ -50,10 +69,53 @@ class Pruning:
         # therefore unreliable — in that case ``_predeclare_struct_ndarrays`` falls back to
         # registering every reachable ndarray (same as the historical behavior).
         self.pass_0_ran: bool = False
+        # Kernel-arg-rooted attribute chains used by each func, in flat-name form
+        # (``__qd_self__qd_dofs__qd_x``). Populated by ``ASTTransformer.build_Attribute``
+        # for non-flattened kernel args (data_oriented / qd.template). Kept *separate* from
+        # ``used_vars_by_func_id`` because the latter drives ``struct_locals`` on the enforcing
+        # pass (line ~230 of kernel.py), and ``FlattenAttributeNameTransformer`` would rewrite
+        # ``s.x`` → ``Name('__qd_s__qd_x')`` if these chain names appeared there — yielding a
+        # ``QuadrantsNameError: Name "__qd_s__qd_x" is not defined``. ``record_after_call``
+        # propagates entries from callee to caller (so ``f(self.dofs)`` where ``f`` reads
+        # ``s.x`` ends up with ``__qd_self__qd_dofs__qd_x`` in the kernel's set). After both
+        # compile passes, ``Kernel._fold_kernel_arg_chain_paths_into_pruning`` merges the
+        # kernel's set into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` so fastcache stores them
+        # in L1 and the args_hasher narrow walk picks them up.
+        self.kernel_arg_chain_paths_by_func_id: dict[int, set[str]] = defaultdict(set)
 
     def mark_used(self, func_id: int, parameter_flat_name: str) -> None:
         assert not self.enforcing
         self.used_vars_by_func_id[func_id].add(parameter_flat_name)
+
+    def mark_kernel_arg_chain_used(self, func_id: int, chain_flat_name: str) -> None:
+        """Record a kernel-arg-rooted attribute chain (e.g. ``__qd_self__qd_dofs__qd_x``).
+
+        Stored separately from ``used_vars_by_func_id`` — see the docstring on
+        ``kernel_arg_chain_paths_by_func_id`` for why."""
+        assert not self.enforcing
+        self.kernel_arg_chain_paths_by_func_id[func_id].add(chain_flat_name)
+
+    @staticmethod
+    def _propagate_chain_paths(
+        callee_chain_paths: set[str],
+        callee_param_name: str,
+        caller_flat: str,
+        chain_paths_to_propagate: set[str],
+    ) -> None:
+        """When ``f(self.dofs)`` is called and ``f``'s body reads ``s.x`` (callee param ``s`` bound to caller
+        attribute chain ``self.dofs``), the callee's chain-paths set contains ``__qd_s__qd_x`` but the
+        caller's chain-paths set must record ``__qd_self__qd_dofs__qd_x``. This helper does that
+        prefix substitution. Only chain paths starting with ``__qd_<callee_param>__qd_`` are propagated
+        (chains rooted in unrelated callee args don't apply to this caller arg)."""
+        prefix = f"__qd_{callee_param_name}__qd_"
+        for sub in callee_chain_paths:
+            if sub.startswith(prefix):
+                rest = sub[len(prefix) :]
+                if caller_flat.startswith("__qd_"):
+                    new_flat = f"{caller_flat}__qd_{rest}"
+                else:
+                    new_flat = f"__qd_{caller_flat}__qd_{rest}"
+                chain_paths_to_propagate.add(new_flat)
 
     def enforce(self) -> None:
         self.enforcing = True
@@ -81,7 +143,9 @@ class Pruning:
         callee_func_id = func.wrapper.func_id  # type: ignore
         # Copy the used parameters from the child function into our own function.
         callee_used_vars = self.used_vars_by_func_id[callee_func_id]
+        callee_chain_paths = self.kernel_arg_chain_paths_by_func_id.get(callee_func_id, set())
         vars_to_unprune: set[str] = set()
+        chain_paths_to_propagate: set[str] = set()
         arg_id = 0
         # node.args ordering will match that of the called function's metas_expanded,
         # because of the way calling with sequential args works.
@@ -99,6 +163,15 @@ class Pruning:
                 callee_param_name = callee_func.arg_metas_expanded[arg_id + self_offset].name  # type: ignore
                 if callee_param_name in callee_used_vars:
                     vars_to_unprune.add(caller_arg_name)
+            # NEW: propagate kernel-arg-rooted chain paths through attribute-chain args (``f(self.dofs)``)
+            # AND through plain-Name args of non-flattened types (``f(self)``). These flow into the
+            # caller's separate chain-paths set, not ``used_vars`` — see the field-level docstring.
+            caller_flat = _flatten_arg_node(arg)
+            if caller_flat is not None and not caller_flat.startswith("__qd_"):
+                callee_param_name = callee_func.arg_metas_expanded[arg_id + self_offset].name  # type: ignore
+                self._propagate_chain_paths(
+                    callee_chain_paths, callee_param_name, caller_flat, chain_paths_to_propagate
+                )
             arg_id += 1
         # Note that our own arg_metas ordering will in general NOT match that of the child's. That's
         # because our ordering is based on the order in which we pass arguments to the function, but the
@@ -112,8 +185,15 @@ class Pruning:
                 callee_param_name = kwarg.arg
                 if callee_param_name in callee_used_vars:
                     vars_to_unprune.add(caller_arg_name)
+            caller_flat = _flatten_arg_node(kwarg.value)
+            if caller_flat is not None and not caller_flat.startswith("__qd_"):
+                callee_param_name = kwarg.arg
+                self._propagate_chain_paths(
+                    callee_chain_paths, callee_param_name, caller_flat, chain_paths_to_propagate
+                )
             arg_id += 1
         self.used_vars_by_func_id[my_func_id].update(vars_to_unprune)
+        self.kernel_arg_chain_paths_by_func_id[my_func_id].update(chain_paths_to_propagate)
 
         used_callee_vars = self.used_vars_by_func_id[callee_func_id]
         child_arg_id = 0

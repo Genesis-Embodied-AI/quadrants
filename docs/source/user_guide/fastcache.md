@@ -96,16 +96,19 @@ Fastcache supports the following parameter types:
 | `torch.Tensor` | Yes | dtype, ndim |
 | `numpy.ndarray` | Yes | dtype, ndim |
 | `dataclasses.dataclass` | Yes | member types recursively; member values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
-| `@qd.data_oriented` objects | Yes | member types recursively; primitive member types and values baked into kernel (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
+| `@qd.data_oriented` objects | Yes | member types recursively, narrowed by pruning (see [Pruning-driven argument hashing](#pruning-driven-argument-hashing)); primitive member values baked into kernel |
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
-| Anything else (Pydantic models, UUIDs, back-pointers, etc.) | Yes (degraded — type identity only) | `type(v).__qualname__` (see [Pruning-driven argument hashing](#pruning-driven-argument-hashing)) |
 | `qd.field` / `ScalarField` / `MatrixField` at a kernel-read path | **No** | — |
+| Anything else at a kernel-read path | **No** | — |
 
-For *recognised-but-unsupported* tensor-like types (`qd.field` / `ScalarField` / `MatrixField`) reached at a path the kernel actually reads, fastcache is disabled for that call and the kernel falls back to normal compilation. For these arriving through a `qd.Tensor`-annotated parameter, this is silent — no warning is emitted; for other annotations a warning identifies the offending parameter.
+Two failure modes — both loud, never silent:
 
-For *unrecognised* types reached at a kernel-read path, the hasher uses `type(v).__qualname__` as a stable type-identity hash and emits a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning per type. Kernel-unused members do not need to be recognised at all — the pruning narrowing skips them.
+- **Recognised-but-unsupported** tensor-like types (`qd.field` / `ScalarField` / `MatrixField`) reached at a path the kernel actually reads → fastcache disabled for the call, kernel falls back to normal compilation. For these arriving through a `qd.Tensor`-annotated parameter the diagnostic is silent (normal usage); for other annotations a `[FASTCACHE][INVALID_FUNC]` log line identifies the offending parameter.
+- **Unrecognised** types at a kernel-read path → fastcache disabled for the call, with a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning per type identifying the offending class plus an `[INVALID_FUNC]` log line confirming the cache is off. To make a type cache-eligible, add explicit handling for it to `quadrants/lang/_fast_caching/args_hasher.py::stringify_obj_type`, or refactor the kernel so it does not read this member (pruning will then skip it).
+
+Kernel-unused members of any type — including unrecognised ones — do **not** disable fastcache. The pruning narrowing in the args hasher skips them entirely, so opaque metadata (UUIDs, Pydantic configs, parent back-pointers) attached to a `@qd.data_oriented` instance is harmless as long as the kernel doesn't read it.
 
 ### 3. Source code must be available
 
@@ -127,12 +130,27 @@ When any of these change, the resulting key is different, so a new compilation o
 
 Fastcache uses a **two-level cache**:
 
-- **L1** (source + config only): stores the set of *flat names* the kernel actually reads — e.g. `__qd_state__qd_x` for a kernel that reads `state.x`. This is the kernel's pruning info, computed at compile time.
+- **L1** (source + config only): stores the set of *flat names* the kernel actually reads — e.g. `__qd_state__qd_x` for a kernel that reads `state.x`. This is the kernel's pruning info, computed at compile time by the AST builder.
 - **L2** (L1 + narrow argument hash): stores the compiled artifact under a key that only hashes the arg paths in the L1 pruning set.
 
-The practical implication: **kernel-unused members do not affect the cache key**. If a `@qd.data_oriented` container has an opaque metadata member (e.g. a UUID, a Pydantic config, a back-pointer to a parent solver), that member is *not* hashed because the kernel cannot read it — including it in the hash would only cause spurious cache misses without any safety benefit. The kernel reading `self.dofs_state.x` does not have its cache key disturbed by changes to `self._uid` or `self.cfg`.
+#### Two rules
 
-For paths the kernel *does* read but that contain an unrecognised type (a type fastcache has no explicit handling for in `quadrants/lang/_fast_caching/args_hasher.py`), the hasher falls back to a deterministic `type(v).__qualname__`-based string and emits a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning per type. This keeps the cache key stable across instances of the same opaque class while making any missed tensor-like registration impossible to overlook — if a future tensor type is added to Quadrants but not registered with the args hasher, the warning fires on the first call so the gap can be closed before stale cache results occur.
+The args hasher enforces two strict invariants:
+
+1. **The cache key may only include contributions from kernel-pruned paths.** A path is "pruned" (in the pruning-info sense) if Quadrants's compiler recorded the kernel reading it. Pruning info covers:
+   - Dataclass-flattened param accesses (`__qd_some_dc__qd_field` Names produced by `FlattenAttributeNameTransformer`, marked via `build_Name`).
+   - Ndarray accesses on data_oriented / template args (`struct_ndarray_launch_info`, folded into the pruning set by `Kernel._fold_struct_nd_paths_into_pruning`).
+   - Any other attribute-chain access on a kernel arg (`self.dofs.x`, `cfg.n`, …) recorded by `ASTTransformer.build_Attribute`'s `_qd_arg_chain` tracking and folded by `Kernel._fold_kernel_arg_chain_paths_into_pruning`. This covers primitive members baked into the kernel, nested struct paths, and accesses through `@qd.func` callees (propagated by `Pruning.record_after_call`).
+
+   Paths *not* in the pruning set are skipped by the args hasher — they are guaranteed not to affect kernel codegen because the kernel cannot read them.
+
+2. **Unrecognised types at kernel-read paths must not be silently dropped or hashed by type-name.** If pruning says the kernel reads a path and the value at that path is a type the args hasher doesn't explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, …), fastcache is disabled for the call with a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning identifying the offending type plus an `[INVALID_FUNC]` log line confirming the cache is off. There is no qualname-fallback — capturing type identity without type parameters (dtype/shape on a hypothetical tensor type) would silently mask a value-affecting change.
+
+#### Practical implications
+
+- **Kernel-unused members do not affect the cache key.** If a `@qd.data_oriented` container has an opaque metadata member (UUID, Pydantic config, parent-solver back-pointer), and the kernel never reads it, the member is *not* hashed. Changes to `self._uid` or `self.cfg` don't disturb the cache key of a kernel that reads `self.dofs_state.x`.
+- **Kernel-unused members of unrecognised types are also fine.** Pruning narrowing skips them before the type-recognition check runs.
+- **Kernel-read members of unrecognised types fail fastcache loudly.** Either add explicit handling in `quadrants/lang/_fast_caching/args_hasher.py::stringify_obj_type` (for new tensor-like types whose dtype/shape matter), or move the access out of the kernel-read path (for opaque metadata that shouldn't be there in the first place).
 
 `qd.field` / `ScalarField` / `MatrixField` are *recognised-but-unsupported*: their shape/dtype would affect codegen but fastcache doesn't yet know how to safely include them, so encountering one at a kernel-read path disables fastcache for the call (with a warn-level diagnostic).
 
@@ -163,15 +181,17 @@ On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the
 
 The args hasher walks compound-type kernel parameters recursively. For each leaf member it decides what (if anything) contributes to the cache key. The headline rules:
 
-**`@qd.data_oriented`:** the walker descends into `vars(obj)`. Pruning narrowing applies to *ndarray children only* (the kernel-compile path tracks every kernel-accessed ndarray's structural path in `struct_ndarray_launch_info`); other children are always walked. For each walked child:
+**`@qd.data_oriented`:** the walker descends into `vars(obj)`, narrowed by pruning info — *every* child (ndarray, primitive, opaque, nested struct) is subject to the pruning check. For each walked child:
 
 - `qd.ndarray` member, kernel-read — `(dtype, ndim, layout)` is included in the cache key. Element values are not.
 - `qd.ndarray` member, kernel-unused — *skipped*. Changes to its dtype/ndim/layout don't invalidate the cache.
-- Primitive (`int` / `float` / `bool` / `enum.Enum`) member — value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries. (Quadrants does not currently track per-primitive kernel-access info on data_oriented args, so primitive members are always hashed — see the safety note in [Pruning-driven argument hashing](#pruning-driven-argument-hashing).)
-- Opaque member (Pydantic config, UUID, parent back-pointer, anything else fastcache doesn't recognise) — hashed by `type(v).__qualname__` only. The one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning fires on first encounter so a missing tensor-like registration in `args_hasher` is impossible to overlook.
+- Primitive (`int` / `float` / `bool` / `enum.Enum`) member, kernel-read — value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values that the kernel reads get different cache entries.
+- Primitive member, kernel-unused — *skipped* (the kernel cannot read it so its value cannot affect codegen).
 - Nested `@qd.data_oriented` member — recurses (with these same rules).
-- Nested `dataclasses.dataclass` member — recurses (with the dataclass rules below, including full flat-name pruning).
-- `qd.field` member reached at a kernel-read path — fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted. A `qd.field` member at a kernel-*unused* path is simply skipped (no diagnostic).
+- Nested `dataclasses.dataclass` member — recurses (with the dataclass rules below).
+- Opaque member (anything fastcache doesn't recognise), kernel-unused — *skipped*.
+- Opaque member, kernel-read — fastcache is disabled for the call with a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning. To make the type cacheable, add explicit handling to `args_hasher.py::stringify_obj_type`.
+- `qd.field` member, kernel-read — fastcache is disabled for the call (recognised-but-unsupported). A `qd.field` member at a kernel-*unused* path is simply skipped (no diagnostic).
 
 **`dataclasses.dataclass`:** the walker descends into the declared members. For each member, only the *type* is included in the cache key by default — **not** the value. To include a member's value, annotate it:
 

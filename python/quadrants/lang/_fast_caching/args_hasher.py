@@ -42,14 +42,12 @@ FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 _DC_REPR_NONE = object()
 
 
-# Sentinel returned by ``stringify_obj_type`` when a recognised-but-unsupported tensor-like type (``ScalarField`` /
-# ``MatrixField``) is encountered anywhere in the traversal. Containers (``dataclass_to_repr``, ``data_oriented``
-# branch, top-level ``hash_args`` loop) must propagate it upward — fastcache cannot safely hash the call because
-# fields have shape/dtype that would affect kernel codegen but fastcache doesn't yet know how to include them.
+# Sentinel returned by ``stringify_obj_type`` whenever fastcache cannot safely hash a value:
+#   - Recognised-but-unsupported tensor-like type (``ScalarField`` / ``MatrixField``).
+#   - Unrecognised type at a kernel-read path (no qualname fallback — see rules in fastcache.md).
 #
-# Distinct from any other return value: an unrecognised opaque type now falls back to a deterministic
-# ``type(v).__qualname__`` string (see fallback in ``stringify_obj_type``), so the only way ``stringify_obj_type``
-# disables fastcache is by returning this sentinel.
+# Containers (``dataclass_to_repr``, ``data_oriented`` branch, top-level ``hash_args`` loop) must propagate it
+# upward — fastcache is disabled for the whole call and the caller writes the appropriate diagnostic.
 class _FailFastcache:
     """Singleton sentinel; identity-compared."""
 
@@ -76,10 +74,10 @@ class FastcacheSkip(enum.Enum):
 _should_warn = False
 
 
-# Set of ``type(v).__qualname__`` strings we've already emitted the "unknown type, falling back to qualname hash"
+# Set of ``type(v).__qualname__`` strings we've already emitted the "unknown type at a kernel-read path"
 # warning for. Lets the loop run thousands of times without spamming the log while still telling the user once
-# that fastcache encountered an unrecognised type at a hashed path. Cleared by ``reset_unknown_type_warn_state``
-# (called from ``qd.init``) so each new test sees a clean log.
+# that fastcache encountered an unrecognised type. Cleared by ``reset_unknown_type_warn_state`` (called from
+# ``qd.init``) so each new test sees a clean log.
 _warned_unknown_types: set[str] = set()
 
 
@@ -100,31 +98,33 @@ def _mark_should_warn() -> None:
     _should_warn = True
 
 
-def _qualname_fallback(obj: object, path: tuple[str, ...]) -> str:
-    """Deterministic fallback for unrecognised types.
+def _fail_unknown_type(obj: object, path: tuple[str, ...]) -> _FailFastcache:
+    """Disable fastcache for the call when an unrecognised type appears at a kernel-read path.
 
-    Returns a string derived from ``type(obj)``'s module + qualname so the cache key is *stable* across calls
-    (instances of the same opaque class get the same hash contribution). Warn once per unrecognised type so a
-    new tensor-like type added to Quadrants without being added to the recognised list here gets noticed in the
-    logs without spamming the per-call hot path.
+    Two rules at work here (see ``docs/source/user_guide/fastcache.md`` "Pruning-driven argument hashing"):
 
-    Safety note: this captures type identity only, NOT value or type-parameters (e.g. dtype/shape on a hypothetical
-    ``BFloat16Tensor``). For genuinely opaque metadata (UUID, Pydantic config, back-pointers) the type-identity
-    hash is correct because the kernel cannot read non-recognised Python types. For new tensor-like types whose
-    dtype/shape *would* affect codegen, the warning is the signal that someone needs to add them to the recognised
-    set in this module.
+      1. The fastcache key may *only* contain contributions from kernel-pruned paths — never a
+         ``type(v).__qualname__`` fallback for an unrecognised type, because that hash captures type identity
+         only and would silently mask a value-affecting change (e.g. a new tensor-like type whose dtype matters).
+
+      2. We may not silently *discard* something at a kernel-read path on the basis that it's unrecognised —
+         that would let unrecognised but codegen-affecting values escape the cache key and serve stale results.
+
+    The only way to honour both rules is to fail the call's fastcache loudly, with a one-shot warning per type
+    so the user can add explicit handling in ``stringify_obj_type``.
     """
     t = type(obj)
     qualname = f"{getattr(t, '__module__', '')}.{getattr(t, '__qualname__', t.__name__)}"
     if qualname not in _warned_unknown_types:
         _warned_unknown_types.add(qualname)
         _logging.warn(
-            f"[FASTCACHE][UNKNOWN_TYPE] Falling back to type-name hash for path {path} type {qualname}. "
-            f"The cache key captures the type identity but not type parameters (e.g. dtype/shape). If this "
-            f"type's value affects kernel codegen, add explicit handling to "
-            f"``quadrants/lang/_fast_caching/args_hasher.py::stringify_obj_type``."
+            f"[FASTCACHE][UNKNOWN_TYPE] Unrecognised type {qualname} reached at kernel-read path {path}. "
+            f"Fastcache is disabled for this call. Add explicit handling for this type to "
+            f"``quadrants/lang/_fast_caching/args_hasher.py::stringify_obj_type``, or refactor the kernel "
+            f"so it does not read this member."
         )
-    return f"opaque-{qualname}"
+    _mark_should_warn()
+    return _FAIL_FASTCACHE
 
 
 def _child_flat(parent_flat: str | None, child_name: str) -> str | None:
@@ -248,25 +248,31 @@ def stringify_obj_type(
 
     Return contract:
       - ``str``: hashable; the returned string contributes to the cache key.
-      - ``_FAIL_FASTCACHE``: a recognised-but-unsupported tensor-like type (``ScalarField`` / ``MatrixField``)
-        was encountered. Containers must propagate this upward; fastcache is disabled for the whole call.
+      - ``_FAIL_FASTCACHE``: fastcache cannot safely hash this value — caller must propagate upward and
+        disable fastcache for the whole call. Triggered by:
+          * Recognised-but-unsupported tensor-like type (``ScalarField`` / ``MatrixField``).
+          * Unrecognised type at this kernel-read path (see ``_fail_unknown_type``).
 
-    For *every other* unrecognised type, this function falls back to a deterministic
-    ``type(obj).__qualname__``-based string (see ``_qualname_fallback``). The pre-refactor design returned
-    ``None`` and disabled fastcache for any unrecognised member type, which made adding a UUID or Pydantic
-    config object to a ``@qd.data_oriented`` ``self`` silently kill fastcache. The qualname fallback captures
-    type identity (sufficient for genuinely opaque metadata — kernels cannot read non-recognised Python types
-    so opaque metadata cannot affect codegen) and warns once per unrecognised type so any future tensor-like
-    addition that *does* need explicit handling gets noticed.
+    Two rules from ``docs/source/user_guide/fastcache.md`` "Pruning-driven argument hashing" govern this
+    function:
+
+      1. The cache key may *only* include contributions from paths that pruning has marked kernel-accessed
+         (``pruning_paths``). Container walkers (dataclass + data_oriented) check ``_is_path_used`` per
+         child and skip non-pruned subtrees — kernel-unread paths are *guaranteed* not to affect codegen so
+         this is safe by construction.
+
+      2. At paths the kernel *does* read, unrecognised types must not be silently dropped or hashed by
+         type-name — fastcache fails the call (loudly, with a one-shot warning) so the gap can be closed.
 
     Parameters:
       - ``arg_meta``: non-``None`` only for top-level kernel args and for ``@qd.data_oriented`` members.
         Determines whether primitive values are baked into the cache key (template-position primitives and
         all primitive members of data-oriented containers).
-      - ``pruning_paths``: optional set of kernel-accessed flat names. When provided, ``dataclass_to_repr`` and
-        the ``data_oriented`` branch below descend only into children whose flat name is in the set. Skipped
-        children are *guaranteed* not to affect kernel codegen (the kernel never reads them), so omitting them
-        from the hash is safe by construction.
+      - ``pruning_paths``: optional set of kernel-accessed flat names from L1 cache. When provided,
+        ``dataclass_to_repr`` and the ``data_oriented`` branch below descend only into children whose flat
+        name is in the set. Pruning info is populated by ``ASTTransformer.build_Name`` /
+        ``build_Attribute`` (kernel-arg-rooted chains) plus ``Kernel._fold_struct_nd_paths_into_pruning``
+        (ndarray accesses through data_oriented containers).
       - ``parent_flat``: the flat-name prefix for ``obj``'s children (e.g. ``__qd_self`` if ``obj`` is the
         ``self`` arg of a data_oriented kernel). Used together with ``pruning_paths`` to compute each child's
         flat name for the narrow-walk lookup.
@@ -313,22 +319,13 @@ def stringify_obj_type(
             raise_on_templated_floats, path, obj, pruning_paths=pruning_paths, parent_flat=parent_flat
         )
     if is_data_oriented(obj):
-        # Walk the data_oriented container's members. Narrowing rules differ from ``dataclass_to_repr``:
-        #
-        # Pruning info for data_oriented containers is *only complete for ndarray members*: the kernel-compile
-        # path records each kernel-accessed ndarray's structural attribute chain in
-        # ``struct_ndarray_launch_info``, which ``Kernel._fold_struct_nd_paths_into_pruning`` folds into the
-        # flat-name pruning set. Non-ndarray attribute accesses on data_oriented args (``self.an_int``,
-        # ``self.a_float`` — values that get baked into the kernel at compile time) are *not* tracked anywhere
-        # as pruning input (data_oriented args aren't run through ``FlattenAttributeNameTransformer``).
-        #
-        # If we naively applied flat-name pruning to *every* child, an unused-but-present opaque member would
-        # match (silently dropped → safe), a kernel-read primitive member would silently disappear from the hash
-        # (BAD — its value affects codegen and we'd serve a stale cached compile when the value changes), and
-        # the templated-float raise-guard would also stop firing.
-        #
-        # Conservative fix: only narrow *ndarray* children. For everything else, walk unconditionally. The
-        # recursive call still applies narrowing to nested dataclasses (where flat-name tracking IS complete).
+        # Walk the data_oriented container's members, narrowed by pruning info — the kernel-compile path
+        # records every kernel-accessed attribute chain (ndarrays via ``_promote_ndarray_if_declared`` +
+        # ``_fold_struct_nd_paths_into_pruning``; primitives, opaque members, nested structs via
+        # ``ASTTransformer.build_Attribute``'s ``_qd_arg_chain`` propagation calling
+        # ``pruning.mark_used``). Members not in ``pruning_paths`` are *guaranteed* not to affect kernel
+        # codegen because the kernel cannot read them. Dropping them from the hash satisfies rule 1
+        # (cache only pruned paths).
         child_repr_l = ["da"]
         try:
             _asdict = getattr(obj, "_asdict")
@@ -344,14 +341,7 @@ def stringify_obj_type(
             if v_type is QuadrantsCallable or v_type is BoundQuadrantsCallable:
                 continue
             child_flat = _child_flat(parent_flat, k)
-            # ndarray-only pruning narrowing — see the comment at the top of this branch for why other types
-            # cannot be safely narrowed here.
-            if (
-                pruning_paths is not None
-                and child_flat is not None
-                and child_flat not in pruning_paths
-                and isinstance(v, (ScalarNdarray, VectorNdarray, MatrixNdarray))
-            ):
+            if not _is_path_used(pruning_paths, child_flat):
                 continue
             _child_repr = stringify_obj_type(
                 raise_on_templated_floats,
@@ -380,9 +370,8 @@ def stringify_obj_type(
         return "np.bool_"
     if isinstance(obj, enum.Enum):
         return f"enum-{obj.name}-{obj.value}"
-    # Unrecognised type — fall back to deterministic qualname-based hash and warn once. See ``_qualname_fallback``
-    # for the safety reasoning.
-    return _qualname_fallback(obj, path)
+    # Unrecognised type at a kernel-read path — fail fastcache loudly. See ``_fail_unknown_type``.
+    return _fail_unknown_type(obj, path)
 
 
 def hash_args(
@@ -396,12 +385,16 @@ def hash_args(
     Parameters:
       - ``pruning_paths``: optional set of kernel-accessed flat names from the L1 cache (or freshly populated
         after a cold compile). When provided, the container walkers skip children whose flat name is not in
-        the set; this both narrows the cache key (so unrelated metadata changes don't cause cache misses) and
-        eliminates the brittleness of walking opaque-typed members blindly.
+        the set; this is what keeps the cache key narrow and brittleness-free (no opaque-typed member can
+        affect the key unless the kernel actually reads it).
 
-    Fastcache is disabled (``FastcacheSkip`` returned) only when a recognised-but-unsupported tensor-like type
-    (``ScalarField`` / ``MatrixField``) is encountered. Truly-unrecognised types use a ``type(v).__qualname__``
-    fallback so the cache key stays stable.
+    Fastcache is disabled (``FastcacheSkip`` returned) when either:
+      - a recognised-but-unsupported tensor-like type (``ScalarField`` / ``MatrixField``) is encountered at a
+        kernel-read path, OR
+      - an unrecognised type is encountered at a kernel-read path (see ``_fail_unknown_type``).
+
+    Both cases are loud: ``FastcacheSkip.WARN`` triggers an ``[INVALID_FUNC]`` log line and the unknown-type
+    branch additionally emits a one-shot ``[UNKNOWN_TYPE]`` warning identifying the offending type.
     """
     global g_num_calls, g_num_args, g_hashing_time, g_repr_time, g_num_ignored_calls, _should_warn  # pylint: disable=global-statement
     _should_warn = False

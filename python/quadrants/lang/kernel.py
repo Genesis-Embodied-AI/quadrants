@@ -489,6 +489,14 @@ class Kernel(FuncBase):
                     # of dtype, so changing ``state.x``'s dtype no longer invalidates the cache (the
                     # ``test_data_oriented_ndarray_fastcache_dtype_key_distinct`` pin caught this).
                     self._fold_struct_nd_paths_into_pruning(key, pruning)
+                    # Fold non-ndarray kernel-arg-rooted chain paths (primitives, opaque members, nested
+                    # struct paths) collected by ``ASTTransformer.build_Attribute``'s ``_qd_arg_chain``
+                    # tracking. Kept separate from ``used_vars_by_func_id`` during compile (would otherwise
+                    # poison ``struct_locals`` and break codegen) — see the field-level docstring on
+                    # ``Pruning.kernel_arg_chain_paths_by_func_id``. This fold + the existing ``used_vars``
+                    # assignment to ``used_py_dataclass_parameters_by_key_enforcing`` share the same set
+                    # by reference, so the final fastcache L1 entry sees all kernel-accessed paths.
+                    self._fold_kernel_arg_chain_paths_into_pruning(pruning)
                 else:
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
@@ -547,6 +555,28 @@ class Kernel(FuncBase):
             for attr in attr_chain:
                 flat = create_flat_name(flat, attr)
                 kernel_used.add(flat)
+
+    @staticmethod
+    def _fold_kernel_arg_chain_paths_into_pruning(pruning: Pruning) -> None:
+        """Merge the kernel's chain-paths set into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` *after* both
+        compile passes have completed.
+
+        Background: ``ASTTransformer.build_Attribute`` records every kernel-arg-rooted attribute chain
+        (e.g. ``__qd_self__qd_n``, ``__qd_self__qd_cfg``) into
+        ``pruning.kernel_arg_chain_paths_by_func_id`` rather than ``used_vars_by_func_id``, because the
+        latter is read on the enforcing pass to build ``struct_locals`` for
+        ``FlattenAttributeNameTransformer``. If chain names appeared there, the transformer would rewrite
+        ``self.n`` into ``Name('__qd_self__qd_n')`` and ``build_Name`` would fail to find such a variable.
+
+        Doing the merge here — after pass 1, just like ``_fold_struct_nd_paths_into_pruning`` —
+        avoids that interaction while still making the chain paths available to the fastcache args-hash
+        narrow walk. The set on ``used_py_dataclass_parameters_by_key_enforcing[key]`` is the *same*
+        object as ``used_vars_by_func_id[KERNEL_FUNC_ID]`` (assigned by reference at end of pass 0), so
+        updating one updates both."""
+        kernel_chain_paths = pruning.kernel_arg_chain_paths_by_func_id.get(Pruning.KERNEL_FUNC_ID)
+        if not kernel_chain_paths:
+            return
+        pruning.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID].update(kernel_chain_paths)
 
     def _maybe_persist_l1_and_set_l2_key(self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...]) -> None:
         """After a successful materialize, persist L1 (if missing) and set ``fast_checksum`` to the L2 key.

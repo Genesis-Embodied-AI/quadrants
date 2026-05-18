@@ -57,24 +57,35 @@ def test_template_raise_on_data_oriented_floats(raise_on_templated_floats: bool)
         def __init__(self) -> None:
             self.an_int = 123
             self.a_bool = True
+            self.scratch = qd.ndarray(qd.i32, shape=(1,))
 
     @qd.data_oriented
     class DataOrientedWithFloat:
         def __init__(self) -> None:
             self.an_int = 123
             self.a_float = 1.23
+            self.scratch = qd.ndarray(qd.i32, shape=(1,))
+
+    # Read the primitive members so the fastcache narrow walk includes them in the hash. Pre-pruning
+    # the args_hasher walked every member of every container arg blindly; with pruning the kernel must
+    # actually access ``a.a_float`` for the raise-on-templated-floats guard to fire (the value being
+    # baked-in only matters when the kernel reads it).
+    @qd.kernel(fastcache=True)
+    def k1f(a: qd.Template) -> None:
+        a.scratch[0] = qd.cast(a.a_float, qd.i32)
 
     @qd.kernel(fastcache=True)
-    def k1(a: qd.Template) -> None: ...
+    def k1i(a: qd.Template) -> None:
+        a.scratch[0] = a.an_int
 
     my_do1 = DataOrientedWithoutFloat()
-    k1(my_do1)
+    k1i(my_do1)
     my_do2 = DataOrientedWithFloat()
     if raise_on_templated_floats:
         with pytest.raises(ValueError):
-            k1(my_do2)
+            k1f(my_do2)
     else:
-        k1(my_do2)
+        k1f(my_do2)
 
 
 @pytest.mark.parametrize("raise_on_templated_floats", [False, True])
