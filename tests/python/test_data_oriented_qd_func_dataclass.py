@@ -19,13 +19,13 @@ These tests pin down the failure modes so we can fix them.
 import dataclasses
 
 import numpy as np
-import pytest
 
 import quadrants as qd
+
 from tests import test_utils
 
-
 # ----- typed-dataclass kernel-arg baseline (works) ----------------------------
+
 
 @test_utils.test(arch=qd.cpu)
 def test_baseline_typed_dataclass_kernel_arg_calls_qd_func():
@@ -55,6 +55,7 @@ def test_baseline_typed_dataclass_kernel_arg_calls_qd_func():
 
 
 # ----- data_oriented self-method calling qd.func (the broken case) -----------
+
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_method_calls_qd_func_with_dataclass_member():

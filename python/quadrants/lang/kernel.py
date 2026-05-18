@@ -486,10 +486,7 @@ class Kernel(FuncBase):
                         (idx, chain)
                         for _, idx, chain in struct_nd_info
                         if type(args[idx]).__hash__ is None
-                        or (
-                            is_data_oriented(args[idx])
-                            and not type(args[idx]).__dict__.get("_qd_stable_members")
-                        )
+                        or (is_data_oriented(args[idx]) and not type(args[idx]).__dict__.get("_qd_stable_members"))
                     ]
                 else:
                     self._mutable_nd_cached_val = []
