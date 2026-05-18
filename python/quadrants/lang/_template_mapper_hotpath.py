@@ -86,7 +86,14 @@ def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list) -> None:
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
     else:
-        children = obj.__dict__.items()
+        # ``NamedTuple`` (decorated as ``@qd.data_oriented``) has no instance ``__dict__`` — fall back to ``_asdict()``
+        # which materialises a dict view of the named fields. Mirrors the same fallback in
+        # ``args_hasher.stringify_obj_type`` so the per-class path cache here picks up ndarray members on NamedTuples
+        # too (regression covered by ``test_args_hasher_named_tuple``).
+        try:
+            children = obj._asdict().items()
+        except AttributeError:
+            children = obj.__dict__.items()
     for k, v in children:
         chain = prefix + (k,)
         if type(v) in _TENSOR_WRAPPER_TYPES:
