@@ -91,6 +91,48 @@ void IRBuilder::init_header() {
     ib_.begin(spv::OpCapability).add(spv::CapabilityShaderClockKHR).commit(&header_);
   }
 
+  // Subgroup / GroupNonUniform capabilities. Required by every SPIR-V module that lowers any
+  // `qd.simt.subgroup.*` or `qd.simt.block.*` op (the new QIPC subgroup/block work in #676/#684 has
+  // significantly broadened how often these are emitted). Strict Vulkan validation rejects
+  // `OpGroupNonUniform*` and the `SubgroupLocalInvocationId` BuiltIn unless these caps are declared
+  // — and drivers that tolerated their absence at i32 width still silently produce wrong results
+  // for i64 ops without them. Emit unconditionally whenever the device exposes the corresponding
+  // subgroup feature; the underlying caps are gated by Vulkan's
+  // `VkPhysicalDeviceSubgroupProperties::supportedOperations` query in `vulkan_device_creator.cpp`.
+  if (caps_->get(cap::spirv_has_subgroup_basic)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniform).commit(&header_);
+    // `Broadcast` / `Shuffle` and the relative variants used by `_exclusive_scan_tiled` / shuffle
+    // intrinsics. The two are separate SPIR-V caps but every desktop/mobile Vulkan implementation
+    // that advertises basic GroupNonUniform also advertises both shuffle variants in practice
+    // (and the SPIR-V spec marks both as required for any `OpGroupNonUniformShuffle{,Up,Down}` /
+    // `OpGroupNonUniformBroadcast` emission), so we tie them to `spirv_has_subgroup_basic` rather
+    // than introducing a separate device cap.
+    //
+    // FIXME: Vulkan's `VkPhysicalDeviceSubgroupProperties::supportedOperations` exposes
+    // `VK_SUBGROUP_FEATURE_SHUFFLE_BIT` / `VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT` as bits separate
+    // from `VK_SUBGROUP_FEATURE_BASIC_BIT`, and the spec permits a conformant device to advertise
+    // BASIC without SHUFFLE. A strict validator on such a device would reject every Quadrants
+    // SPIR-V module here — even kernels that do not actually use shuffle — because the declared
+    // capability is unsupported. No such device has been observed in the wild (the codepath this
+    // change broadens was already exposed pre-PR for any kernel emitting
+    // `OpGroupNonUniformShuffle*`), so this PR does not make it worse, but it does extend the
+    // surface. Fix: introduce `spirv_has_subgroup_shuffle{,_relative}` device caps in
+    // `rhi/rhi_constants.inc.h`, populate them from the two Vulkan bits in
+    // `vulkan_device_creator.cpp::populate_subgroup_caps`, and gate the two
+    // `CapabilityGroupNonUniformShuffle{,Relative}` emissions on those caps individually.
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformShuffle).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformShuffleRelative).commit(&header_);
+  }
+  if (caps_->get(cap::spirv_has_subgroup_vote)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformVote).commit(&header_);
+  }
+  if (caps_->get(cap::spirv_has_subgroup_arithmetic)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformArithmetic).commit(&header_);
+  }
+  if (caps_->get(cap::spirv_has_subgroup_ballot)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformBallot).commit(&header_);
+  }
+
   ib_.begin(spv::OpExtension).add("SPV_KHR_storage_buffer_storage_class").commit(&header_);
 
   // `SPV_KHR_{8,16}bit_storage` is paired with `CapabilityStorageBuffer{8,16}BitAccess` above.
