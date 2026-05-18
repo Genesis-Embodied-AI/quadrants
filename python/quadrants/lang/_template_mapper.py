@@ -16,17 +16,28 @@ from ._template_mapper_hotpath import (
 )
 
 
-def _collect_data_oriented_nd_ids(arg: Any, out: list) -> None:
-    """Append ``id(ndarray)`` for every ndarray reachable from ``arg``, using the per-class path cache in
-    ``_template_mapper_hotpath._struct_nd_paths_for`` so the first call walks ``vars(arg)`` once and subsequent calls
-    are just ``getattr`` chains. Empty path list short-circuits with zero work — critical for genesis's
-    ``@qd.data_oriented`` Solver passed as ``self`` to every kernel.
-    """
-    for chain in _struct_nd_paths_for(arg):
-        v = arg
-        for a in chain:
-            v = getattr(v, a)
-        out.append(id(v))
+# Per-``type(arg)`` precomputed dispatch for the args_hash ndarray-id walk in ``TemplateMapper.lookup``. Each entry is
+# either the cached attribute path list (when the class is data_oriented, opted into ndarray tracking, and actually
+# holds ndarrays) or ``None`` (when the per-call walk is a no-op — covers the common case of typed-dataclass args,
+# non-data_oriented composite args, primitives, AND data_oriented classes with ``_qd_stable_members = True`` or with
+# no ndarray members). One dict lookup per arg per call, ~30 ns, replacing the previous unconditional
+# ``is_data_oriented(arg)`` + ``type(arg).__dict__.get`` chain.
+_arg_nd_paths_or_none: dict[type, "list[tuple] | None"] = {}
+_UNCLASSIFIED = object()
+
+
+def _classify_for_args_hash(arg: Any) -> "list[tuple] | None":
+    """First-sighting classification for ``type(arg)`` in the args_hash walk. Returns the path list to walk (when the
+    arg is a data_oriented container without ``_qd_stable_members`` that actually contains ndarrays), or ``None`` to
+    skip subsequent per-call work for this type."""
+    if not is_data_oriented(arg):
+        return None
+    if type(arg).__dict__.get("_qd_stable_members"):
+        return None
+    paths = _struct_nd_paths_for(arg)
+    if not paths:
+        return None
+    return paths
 
 
 Key: TypeAlias = tuple[Any, ...]
@@ -93,21 +104,32 @@ class TemplateMapper:
         # ``@qd.data_oriented`` containers can have their member ndarrays reassigned between calls on the same instance
         # (``state.x = other_ndarray``). The id(arg) alone does not capture that, so the spec-key cache below would
         # serve a stale entry and the new ndarray's dtype/ndim would be wrong. Fold the reachable ndarray ids into the
-        # hash. No-op for data_oriented containers that hold no ndarrays — the walker returns an empty list. See
-        # ``_collect_data_oriented_nd_ids``.
+        # hash for the (small) set of arg positions that need it.
+        #
+        # The kernel's ``template_slot_locations`` already gives us the subset of arg positions annotated as
+        # ``qd.template()`` — the only positions where a data_oriented container could appear (typed-dataclass args
+        # carry a specific dataclass type by construction and a data_oriented class is never a dataclass). So we only
+        # iterate ``template_slot_locations`` instead of all args (Genesis main kernel_step_1: 4 template positions
+        # of 16 args; Genesis branch step_1/step_2: 4 of 4).
+        #
+        # For each candidate position, a per-class cache in ``_arg_nd_paths_or_none`` maps ``type(arg)`` to either the
+        # cached ndarray-path list to walk or ``None`` to skip (typical for primitive template-args, stable_members
+        # data_oriented, and data_oriented with zero ndarrays). One dict.get per candidate per call after warmup.
         nd_ids: list = []
-        for arg in args:
-            if is_data_oriented(arg):
-                # Opt-out: classes that promise their ndarray members never reassign between calls
-                # (set ``_qd_stable_members = True`` on the class, or use
-                # ``@qd.data_oriented(stable_members=True)``) skip the per-call walk. The spec key
-                # then falls back to weakref(arg) alone — see _extract_arg's data_oriented branch.
-                # Saves ~1.1-1.5 us per kernel call on Genesis-style containers. Reassigning a
-                # member on a stable-marked instance is silently undefined behaviour: the cached
-                # kernel for the prior shape will be reused.
-                if type(arg).__dict__.get("_qd_stable_members"):
-                    continue
-                _collect_data_oriented_nd_ids(arg, nd_ids)
+        for i in self.template_slot_locations:
+            arg = args[i]
+            cls = type(arg)
+            paths = _arg_nd_paths_or_none.get(cls, _UNCLASSIFIED)
+            if paths is _UNCLASSIFIED:
+                paths = _classify_for_args_hash(arg)
+                _arg_nd_paths_or_none[cls] = paths
+            if paths is None:
+                continue
+            for chain in paths:
+                v = arg
+                for a in chain:
+                    v = getattr(v, a)
+                nd_ids.append(id(v))
         if nd_ids:
             args_hash = args_hash + tuple(nd_ids)
         try:
