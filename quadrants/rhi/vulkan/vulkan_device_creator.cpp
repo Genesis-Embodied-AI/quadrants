@@ -615,6 +615,13 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_KHR_SHADER_CLOCK_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
+    } else if (name == VK_KHR_SHADER_SUBGROUP_EXTENDED_TYPES_EXTENSION_NAME) {
+      // Promoted to Vulkan 1.2 core. Push the extension here so the pre-1.2 path below
+      // (`CHECK_VERSION(1, 2) || CHECK_EXTENSION(...)`) actually finds it via `CHECK_EXTENSION`; without
+      // this branch, a Vulkan 1.1 device that advertises the KHR extension would silently skip
+      // `shaderSubgroupExtendedTypes` enablement and still trip VUID-RuntimeSpirv-None-06275 on any
+      // 8/16/64-bit `OpGroupNonUniform*` op.
+      enabled_extensions.push_back(ext.extensionName);
     } else if (std::find(params_.additional_device_extensions.begin(), params_.additional_device_extensions.end(),
                          name) != params_.additional_device_extensions.end()) {
       enabled_extensions.push_back(ext.extensionName);
