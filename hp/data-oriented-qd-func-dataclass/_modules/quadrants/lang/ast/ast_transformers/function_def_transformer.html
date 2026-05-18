@@ -662,6 +662,16 @@
         <span class="n">argument_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Record the bare (non-flattened) func param name so ``build_Name`` can seed ``_qd_arg_chain``</span>
+        <span class="c1"># for attribute accesses rooted at this param. Critical for ``qd.template()`` args bound to</span>
+        <span class="c1"># ``@qd.data_oriented`` instances (e.g. ``static_rigid_sim_config.para_level`` inside a</span>
+        <span class="c1"># ``@qd.func``): without this, the kernel&#39;s pruning set never learns about ``.para_level``,</span>
+        <span class="c1"># the args-hasher skips the value, and different ``para_level`` configurations collide in the</span>
+        <span class="c1"># fastcache key.  Flat names starting with ``__qd_`` arrive here too via the dataclass-flatten</span>
+        <span class="c1"># recursion below; they&#39;re harmless to add (``build_Name``&#39;s chain branch gates on</span>
+        <span class="c1"># ``not node.id.startswith(&quot;__qd_&quot;)``) but the bare-name entries are what enables propagation.</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">fn_param_names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">argument_name</span><span class="p">)</span>
+
         <span class="c1"># Template arguments are passed by reference.</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">argument_type</span><span class="p">,</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
