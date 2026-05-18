@@ -570,6 +570,18 @@ void AdStackCache::ensure_runtime_registry_ids_for_max_reducer(std::vector<Offlo
     // subsequent launch in O(1). Without this gate, the steady-state hot path would rebuild `allocated_max_sizes` +
     // `size_exprs` and move them into `register_adstack_sizing_info` on every launch even though the entry is already
     // there - which costs a measurable fraction of the recovered FPS on long reverse-mode loops.
+    //
+    // FIXME: this gate is not content-aware - it only checks `adstack_sizing_info_id_by_ptr_` membership, so a
+    // recycled `&ad_stack` address (cache-loaded kernel B reuses the address last held by evicted kernel A) silently
+    // short-circuits the registration, and B's `(kernel_name, task_id_in_kernel)` never lands in the `Program`
+    // registry. On overflow, B's codegen-baked cmpxchg id then resolves to A's stale entry via the diagnose path.
+    // Same recycled-pointer bug class fixed in-process by `register_adstack_sizing_info` (this PR); cache-reload
+    // path remains exposed. Fix: introduce a content-validating `is_adstack_sizing_info_registered_with_content(
+    // identity_key, kernel_name, task_id_in_kernel)` variant and call it here, so the gate only short-circuits when
+    // the live entry's `(kernel_name, task_id_in_kernel)` matches. Cheap (string compare + int compare) and
+    // preserves the FPS-sensitive fast path. Not pinned by any existing test - the cache-reload + pointer-recycling
+    // combo is rare; `test_max_reducer_registry_seeded_on_offline_cache_reload` covers reload but does not force a
+    // recycled address.
     if (is_adstack_sizing_info_registered(static_cast<const void *>(&ad_stack))) {
       continue;
     }
