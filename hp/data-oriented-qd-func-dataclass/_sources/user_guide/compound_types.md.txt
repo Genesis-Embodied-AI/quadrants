@@ -196,43 +196,9 @@ state.step()
 
 ### Fastcache
 
-`@qd.kernel(fastcache=True)` is supported on methods of `@qd.data_oriented` classes, but is disabled for fields; see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying) for more information.
+`@qd.kernel(fastcache=True)` is supported on methods of `@qd.data_oriented` classes. Cache keying is *pruning-driven*: only the members the kernel actually reads contribute to the cache key. Opaque metadata members (e.g. UUIDs, Pydantic config objects, back-pointers to parent solvers) do **not** disable fastcache and do **not** force cache misses — the kernel cannot read them so they cannot affect compiled code. See [Pruning-driven argument hashing](fastcache.md#pruning-driven-argument-hashing) for the full keying rules.
 
-The fastcache hasher classifies each member of a `@qd.data_oriented` argument by `type(member)`:
-
-| Member kind (by `type`) | Examples | Behaviour |
-|---|---|---|
-| **Recognised + valid** | `qd.ndarray` (or `qd.Tensor`-wrapped), `dataclasses.dataclass` whose fields are recognised-valid, primitives, enums, `numpy.ndarray`, `torch.Tensor`, nested `@qd.data_oriented` whose own walk succeeds | Contributes to the cache key. |
-| **Opaque** (`type(member)` is none of the above) | UUID-typed identifiers, Pydantic `BaseModel`, plain Python classes that are *not* `@qd.data_oriented` / `dataclasses.dataclass`, `list`, `dict` | Skipped silently. |
-| **Recognised + unsupported** | `qd.field`, `qd.Vector.field`, `qd.Matrix.field` (or a `dataclasses.dataclass` whose fields are fields), nested `@qd.data_oriented` whose own walk hits a field somewhere | Fastcache fails for the whole call. |
-
-Skipping opaque members from the cache key is safe by construction: the kernel can only read recognised types (ndarrays, primitives, enums, dataclasses, nested `@qd.data_oriented`). Opaque Python objects — `UUID` identifiers, Pydantic config objects, back-pointers up the object graph, etc. — cannot be read by kernel code and therefore cannot affect kernel codegen, so omitting them from the hash is correct. The classification is purely type-based; there is no special-casing for "metadata" or "back-pointer" as semantic roles.
-
-`qd.field` / `qd.Matrix.field` are NOT opaque — they are recognised tensor-like types whose shape and dtype would affect kernel codegen, but fastcache doesn't yet support hashing them. Fastcache correctly fails when those are present.
-
-### `stable_members=True`
-
-`@qd.data_oriented(stable_members=True)` is an opt-in performance hint for large container classes whose `qd.ndarray` member set is fixed after `__init__`. The flag is unrelated to fastcache — it only affects launch-time bookkeeping.
-
-```python
-@qd.data_oriented(stable_members=True)
-class Solver:
-    def __init__(self, parent, options):
-        self._uid = make_uuid()
-        self._parent = parent
-        self.options = options
-        self.dofs_state = ...          # holds ndarrays; never reassigned
-        self.links_state = ...
-```
-
-What changes:
-
-1. **Per-call template-mapper walker fast path.** The mapper skips the per-call walk that re-discovers ndarray attribute paths and reuses the path set captured on the first instance walked. For solver-style classes (one `self` argument, many attributes, many kernels) this drops a per-call cost of ~100 ns/kernel back below the noise floor.
-2. **Per-call launch-context cache.** The launch path skips the per-call `_resolve_struct_ndarray` walk that folds live ndarray ids into the launch-context cache key, reusing the cached set instead.
-
-Use it when the container has many `qd.ndarray` members that are allocated once in `__init__` and never reassigned. Do not use it if you reassign ndarray members after construction — the previously-compiled kernel will be reused even if the new ndarray has different dtype/ndim/layout (undefined behaviour). May also be set as a class-level attribute `_qd_stable_members = True` (equivalent).
-
-`stable_members=True` does **not** affect fastcache. Opaque-member silencing in the cache key is the default behaviour for all `@qd.data_oriented` classes.
+`qd.field` / `MatrixField` members reached at a kernel-read path do disable fastcache for the call (recognised-but-unsupported tensor-like types).
 
 ### Under the hood
 

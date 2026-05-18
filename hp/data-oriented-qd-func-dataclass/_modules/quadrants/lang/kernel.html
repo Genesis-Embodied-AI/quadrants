@@ -379,6 +379,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.enums</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutodiffMode</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_signed</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">._dataclass_util</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_flat_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">._func_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">FuncBase</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">._kernel_types</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">ArgsHash</span><span class="p">,</span>
@@ -754,23 +755,60 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_try_load_fastcache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">key</span><span class="p">:</span> <span class="s2">&quot;CompiledKernelKeyType&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">frontend_cache_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Two-phase fastcache lookup.</span>
+
+<span class="sd">        Phase 1 — L1 lookup keyed by source+config only (no args). Returns the set of kernel-accessed flat</span>
+<span class="sd">        names (pruning info). Hit OR miss, this only determines whether we have pruning info for the narrow</span>
+<span class="sd">        args walk; it never on its own justifies skipping pass 0 — that requires the C++ artifact to load.</span>
+
+<span class="sd">        Phase 2 — narrow args walk + L2 lookup + artifact load. Only when *all three* succeed do we return</span>
+<span class="sd">        non-None and let ``materialize`` skip pass 0. The reason: pass 0 is what populates pruning info for</span>
+<span class="sd">        *every called ``@qd.func``* (not just the kernel itself). Skipping pass 0 is only safe when pass 1</span>
+<span class="sd">        runs in ``only_parse_function_def`` mode (i.e. the C++ artifact is already loaded so the AST walker</span>
+<span class="sd">        never enters any callee body); otherwise callee variables can&#39;t be found in their func&#39;s empty</span>
+<span class="sd">        ``used_vars_by_func_id`` set and the build fails with &quot;Name __qd_… is not defined&quot;.</span>
+
+<span class="sd">        Side effects: populates ``self._l1_key`` (always when fastcache is active), ``self._pruning_paths_from_l1``</span>
+<span class="sd">        (the L1 pruning info, or None if L1 miss — used by ``materialize`` for L1-store skipping and for</span>
+<span class="sd">        post-compile narrow-hash construction), and ``self.fast_checksum`` (the L2 key, when phase 2 computed</span>
+<span class="sd">        the narrow args hash). All three are read by the post-compile path in ``_maybe_persist_l1_and_set_l2_key``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_l1_key</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># type: ignore[attr-defined]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_pruning_paths_from_l1</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># type: ignore[attr-defined]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">src_ll_cache</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span><span class="p">:</span>
             <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">_src</span> <span class="o">=</span> <span class="n">get_source_info_and_src</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">create_cache_key</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_kernel_source_info_cached</span> <span class="o">=</span> <span class="n">kernel_source_info</span>  <span class="c1"># reused by materialize / launch_kernel</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_l1_key</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">make_source_config_key</span><span class="p">(</span><span class="n">kernel_source_info</span><span class="p">)</span>
+
+            <span class="c1"># Phase 1: L1 lookup — pruning info only, no args walk yet.</span>
+            <span class="n">pruning_paths</span><span class="p">,</span> <span class="n">cached_graph_do_while_arg</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load_pruning_info</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_l1_key</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">pruning_paths</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># Cold L1. ``materialize`` will compile pass 0 + pass 1 to populate pruning info, then we</span>
+                <span class="c1"># store L1 + L2 after compile. ``cache_key_generated`` is intentionally NOT flipped to True</span>
+                <span class="c1"># here: it tracks &quot;fastcache produced a valid L2 args hash&quot; (the pre-refactor semantic), and</span>
+                <span class="c1"># we don&#39;t know yet whether the narrow args walk will succeed.</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_pruning_paths_from_l1</span> <span class="o">=</span> <span class="n">pruning_paths</span>
+
+            <span class="c1"># Phase 2: narrow args hash + L2 lookup.</span>
+            <span class="n">narrow_args_hash</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">compute_narrow_args_hash</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span> <span class="n">pruning_paths</span>
             <span class="p">)</span>
-            <span class="n">used_py_dataclass_parameters</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="n">cached_graph_do_while_arg</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
-                <span class="n">used_py_dataclass_parameters</span><span class="p">,</span> <span class="n">frontend_cache_key</span><span class="p">,</span> <span class="n">cached_graph_do_while_arg</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span>  <span class="c1"># type: ignore[reportAssignmentType]</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span>
-                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">narrow_args_hash</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># Recognised-but-unsupported tensor-like (Field / MatrixField) — fastcache off for this call.</span>
+                <span class="c1"># ``self.fast_checksum`` stays None so no L2 entry is written; ``cache_key_generated`` stays</span>
+                <span class="c1"># False to match the pre-refactor &quot;Field disables fastcache key generation&quot; contract.</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">make_full_cache_key</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_l1_key</span><span class="p">,</span> <span class="n">narrow_args_hash</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
+
+            <span class="n">used_py_dataclass_parameters</span><span class="p">,</span> <span class="n">frontend_cache_key</span><span class="p">,</span> <span class="n">cached_graph_do_while_arg_l2</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span>
+            <span class="p">)</span>
             <span class="k">if</span> <span class="n">used_py_dataclass_parameters</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">frontend_cache_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_validated</span> <span class="o">=</span> <span class="kc">True</span>
                 <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
-                <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">load_fast_cache</span><span class="p">(</span>
                     <span class="n">frontend_cache_key</span><span class="p">,</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
@@ -780,11 +818,15 @@
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_loaded</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">used_py_dataclass_parameters</span>
-                    <span class="k">if</span> <span class="n">cached_graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">cached_graph_do_while_arg</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">cached_graph_do_while_arg_l2</span> <span class="ow">or</span> <span class="n">cached_graph_do_while_arg</span>
                     <span class="k">return</span> <span class="n">used_py_dataclass_parameters</span>
+            <span class="c1"># L2 miss or artifact load failed: report cold so ``materialize`` does pass 0 + pass 1 (needed</span>
+            <span class="c1"># to populate per-callee pruning info). ``self.fast_checksum`` is still set so the post-compile</span>
+            <span class="c1"># ``src_hasher.store`` will write a fresh L2 entry under the narrow-args key.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">cached_graph_do_while_arg</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span>
+            <span class="k">return</span> <span class="kc">None</span>
 
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">print_non_pure</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">print_non_pure</span><span class="p">:</span>
             <span class="c1"># The bit in caps should not be modified without updating corresponding test</span>
             <span class="c1"># freetext can be freely modified.</span>
             <span class="c1"># As for why we are using `print` rather than eg logger.info, it is because this is only printed when</span>
@@ -797,7 +839,6 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="s2">&quot;CompiledKernelKeyType | None&quot;</span><span class="p">,</span> <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">arg_features</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">:</span>
             <span class="k">return</span>
 
@@ -854,6 +895,16 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
                         <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">&quot;struct_ndarray_launch_info&quot;</span><span class="p">,</span> <span class="p">[]</span>
                     <span class="p">)</span>
+                    <span class="c1"># Fold data_oriented ndarray attribute chains into the kernel&#39;s used-flat-names set so</span>
+                    <span class="c1"># ``args_hasher.hash_args`` can narrow data_oriented walks too. ``used_vars_by_func_id``</span>
+                    <span class="c1"># only contains flat names from dataclass-arg expansion in</span>
+                    <span class="c1"># ``extract_struct_locals_from_context``; data_oriented args don&#39;t go through that</span>
+                    <span class="c1"># expansion, so accesses like ``self.x`` on an ndarray member are only tracked via</span>
+                    <span class="c1"># ``struct_ndarray_launch_info``. Without this fold, narrow hashing for data_oriented</span>
+                    <span class="c1"># args walks nothing — every (arg_idx, attr_chain) pair gets the same hash regardless</span>
+                    <span class="c1"># of dtype, so changing ``state.x``&#39;s dtype no longer invalidates the cache (the</span>
+                    <span class="c1"># ``test_data_oriented_ndarray_fastcache_dtype_key_distinct`` pin caught this).</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_fold_struct_nd_paths_into_pruning</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">pruning</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">for</span> <span class="n">used_parameters</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
                         <span class="n">new_used_parameters</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
@@ -869,8 +920,98 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span>
                         <span class="n">Pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span>
                     <span class="p">]</span>
-                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span></div>
+                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span>
 
+            <span class="c1"># Post-compile fastcache bookkeeping. See ``_maybe_persist_l1_and_set_l2_key`` docstring.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_persist_l1_and_set_l2_key</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_fold_struct_nd_paths_into_pruning</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="s2">&quot;CompiledKernelKeyType&quot;</span><span class="p">,</span> <span class="n">pruning</span><span class="p">:</span> <span class="n">Pruning</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add data_oriented (and dataclass-nested) ndarray attribute chains to the kernel&#39;s pruning flat</span>
+<span class="sd">        name set so ``args_hasher.hash_args`` narrow-walks them correctly.</span>
+
+<span class="sd">        Background: pruning&#39;s ``used_vars_by_func_id[KERNEL_FUNC_ID]`` is populated by AST walking of flat</span>
+<span class="sd">        names produced by ``FlattenAttributeNameTransformer`` — but that transformer only flattens *dataclass*</span>
+<span class="sd">        args. ``@qd.data_oriented`` args (template-typed) stay as ``Attribute(value=Name(self), attr=…)`` in</span>
+<span class="sd">        the AST and don&#39;t contribute to ``used_vars_by_func_id``. Their kernel-accessed ndarray paths *are*</span>
+<span class="sd">        recorded — in ``struct_ndarray_launch_info`` as ``(arg_id_vec[0], arg_idx, attr_chain)`` — but only</span>
+<span class="sd">        for ndarray members.</span>
+
+<span class="sd">        Convert each ``(arg_idx, attr_chain)`` to a flat name like ``__qd_&lt;arg_name&gt;__qd_&lt;chain[0]&gt;__qd_…``</span>
+<span class="sd">        and union all prefixes into the pruning set. After this fold, narrowing in args_hasher matches the</span>
+<span class="sd">        same convention used for dataclass args.</span>
+
+<span class="sd">        Limitation: non-ndarray data_oriented members (primitive ints/floats whose values are baked in at</span>
+<span class="sd">        compile, opaque Python objects) are *not* tracked anywhere as kernel-accessed. The narrow walk</span>
+<span class="sd">        cannot distinguish &quot;kernel reads this primitive&quot; from &quot;kernel does not read this primitive&quot;. The</span>
+<span class="sd">        ``args_hasher.stringify_obj_type`` data_oriented branch handles this conservatively by walking *all*</span>
+<span class="sd">        attrs of a data_oriented container — narrowing only suppresses subtrees explicitly absent from the</span>
+<span class="sd">        pruning set. So for a data_oriented arg with mostly-ndarray members, the cache key correctly</span>
+<span class="sd">        depends on the ndarray paths it uses; for one with primitive members whose values matter, those</span>
+<span class="sd">        members are still folded into the hash (qualname-fallback / value paths).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">nd_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">nd_info</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">kernel_used</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">Pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">_arg_id_cpp</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span> <span class="ow">in</span> <span class="n">nd_info</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">arg_idx</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">arg_idx</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">arg_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">arg_idx</span><span class="p">]</span><span class="o">.</span><span class="n">name</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">arg_name</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">flat</span> <span class="o">=</span> <span class="n">arg_name</span>
+            <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">:</span>
+                <span class="n">flat</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">flat</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+                <span class="n">kernel_used</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">flat</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_maybe_persist_l1_and_set_l2_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="s2">&quot;CompiledKernelKeyType&quot;</span><span class="p">,</span> <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;After a successful materialize, persist L1 (if missing) and set ``fast_checksum`` to the L2 key.</span>
+
+<span class="sd">        Called at the end of ``materialize`` once both passes have completed (or once pass 1 has completed</span>
+<span class="sd">        with a loaded artifact). Two responsibilities:</span>
+
+<span class="sd">          1. If L1 was missing (``self._pruning_paths_from_l1 is None``), write the freshly-computed</span>
+<span class="sd">             pruning info so the next call from a new process can skip the args-walk warm-up.</span>
+
+<span class="sd">          2. If ``fast_checksum`` is still None (which means either L1 was missing, or L1 hit but phase 2</span>
+<span class="sd">             of ``_try_load_fastcache`` saw a FIELD-related FastcacheSkip — in which case we keep ``None``</span>
+<span class="sd">             and the post-compile ``src_hasher.store`` is skipped), compute the narrow args hash *now*</span>
+<span class="sd">             using the just-populated pruning info and derive the L2 key. The post-launch ``src_hasher.store``</span>
+<span class="sd">             call uses ``self.fast_checksum`` as the L2 key.</span>
+
+<span class="sd">        Side-effect helper; split out from ``materialize`` to keep the compile loop readable.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">l1_key</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_l1_key&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">l1_key</span><span class="p">:</span>
+            <span class="k">return</span>  <span class="c1"># fastcache inactive for this kernel (not pure / no runtime.src_ll_cache)</span>
+        <span class="n">kernel_source_info</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_kernel_source_info_cached&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">kernel_source_info</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">used_params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">used_params</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_pruning_paths_from_l1&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">src_hasher</span><span class="o">.</span><span class="n">store_pruning_info</span><span class="p">(</span>
+                <span class="n">l1_key</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">visited_functions</span><span class="p">,</span>
+                <span class="n">used_params</span><span class="p">,</span>
+                <span class="n">graph_do_while_arg</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="c1"># If phase 2 didn&#39;t run (L1 cold) or returned None (FIELD encountered earlier — but in that case</span>
+        <span class="c1"># post-compile narrow hashing would also see the FIELD and produce None, which is fine: we want</span>
+        <span class="c1"># fast_checksum to stay None so no L2 entry is stored), compute the narrow args hash now.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">narrow_args_hash</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">compute_narrow_args_hash</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span>
+                <span class="n">kernel_source_info</span><span class="p">,</span>
+                <span class="n">py_args</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span>
+                <span class="n">used_params</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">narrow_args_hash</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">make_full_cache_key</span><span class="p">(</span><span class="n">l1_key</span><span class="p">,</span> <span class="n">narrow_args_hash</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
 
 <div class="viewcode-block" id="Kernel.launch_kernel">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.launch_kernel">[docs]</a>
@@ -900,7 +1041,9 @@
                     <span class="c1"># Data_oriented containers marked ``_qd_stable_members = True`` (or decorated</span>
                     <span class="c1"># with ``@qd.data_oriented(stable_members=True)``) promise their ndarray</span>
                     <span class="c1"># members are never reassigned, so we exclude them from the per-call</span>
-                    <span class="c1"># ``_resolve_struct_ndarray`` walk that builds ``args_hash``.</span>
+                    <span class="c1"># ``_resolve_struct_ndarray`` walk that builds ``args_hash``. This is a</span>
+                    <span class="c1"># *launch-time perf hint only* and has no fastcache role — fastcache derives</span>
+                    <span class="c1"># its key from kernel-pruning info regardless of this flag.</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span> <span class="o">=</span> <span class="p">[</span>
                         <span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">chain</span><span class="p">)</span>
                         <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span> <span class="ow">in</span> <span class="n">struct_nd_info</span>
