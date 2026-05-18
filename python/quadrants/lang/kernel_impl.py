@@ -310,10 +310,10 @@ def data_oriented(cls=None, *, stable_members: bool = False):
             as a class-level attribute ``_qd_stable_members = True`` (equivalent).
 
             Note: this flag is *purely* a launch-time perf hint. It no longer affects fastcache
-            argument hashing — the cache key is derived from pruning info (the set of flat names
-            the kernel actually reads), and unrecognised types at kernel-accessed paths fall back
-            to a deterministic ``type(v).__qualname__`` hash with a one-shot ``[UNKNOWN_TYPE]``
-            warning. See ``docs/source/user_guide/fastcache.md``.
+            argument hashing — the fastcache key is derived from pruning info (the set of flat
+            names the kernel actually reads), and unrecognised types at kernel-read paths fail
+            fastcache loudly with a one-shot ``[UNKNOWN_TYPE]`` + ``[INVALID_FUNC]`` diagnostic
+            (no qualname fallback). See ``docs/source/user_guide/fastcache.md``.
 
     Returns:
         The decorated class (or, when called with arguments, a decorator).
