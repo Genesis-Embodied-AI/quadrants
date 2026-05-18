@@ -481,13 +481,28 @@ uint32_t AdStackCache::register_adstack_sizing_info(const void *identity_key,
   // Idempotent re-registration: same `identity_key` yields the same id across re-compiles and updates the entry's
   // metadata + size_exprs in place. The key is just an opaque dedup token - the registry never dereferences it; all
   // data needed by the diagnose path is copied into the entry below.
+  //
+  // BUT `identity_key` is the address of an `AdStackSizingAttribs` / `OffloadedTask::ad_stack` held by a launcher's
+  // tasks vector or by a transient `current_task` during codegen. When the previous owner is freed and the allocator
+  // recycles the address for a brand-new task that belongs to a DIFFERENT logical kernel, the raw-pointer lookup
+  // succeeds against the stale entry. Returning the previous id would then cause the new task to inherit the old
+  // task's `registry_id`, and the per-spec `max_reducer_cache_` (keyed by `(registry_id, stack_id, mor_node_idx)`)
+  // would serve a stale result to the new kernel — observed as `assert dispatch_count > after_first` failing in
+  // `test_max_reducer_per_kernel_registry_id_isolation` whenever the allocator happens to recycle the same address
+  // across the two `qd.template()` instantiations. Guard the idempotent path on `(kernel_name, task_id_in_kernel)`
+  // matching so a recycled address falls through to the content-stable hash path below, which produces (or finds)
+  // the correct id for the new kernel.
   if (auto it = adstack_sizing_info_id_by_ptr_.find(identity_key); it != adstack_sizing_info_id_by_ptr_.end()) {
     auto &entry = adstack_sizing_info_registry_[it->second];
-    entry.kernel_name = kernel_name;
-    entry.task_id_in_kernel = task_id_in_kernel;
-    entry.allocated_max_sizes = std::move(allocated_max_sizes);
-    entry.size_exprs = std::move(size_exprs);
-    return it->second;
+    if (entry.kernel_name == kernel_name && entry.task_id_in_kernel == task_id_in_kernel) {
+      entry.allocated_max_sizes = std::move(allocated_max_sizes);
+      entry.size_exprs = std::move(size_exprs);
+      return it->second;
+    }
+    // Recycled pointer for a different kernel. Drop the stale reverse-lookup entry so the fall-through below treats
+    // this as a fresh registration (the registry entry itself stays alive because the previously-registered owner
+    // may still resolve its id through `lookup_adstack_sizing_info` on the overflow diagnose path).
+    adstack_sizing_info_id_by_ptr_.erase(it);
   }
   // Content-stable hash. Same (kernel_name, task_id_in_kernel) yields the same id across `Program` lifetimes,
   // re-compiles, and offline-cache reloads. The codegen-emitted overflow `cmpxchg(0, registry_id)` writes this same
