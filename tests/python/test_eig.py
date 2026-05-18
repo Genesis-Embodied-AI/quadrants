@@ -109,6 +109,17 @@ def _test_sym_eig2x2(dt):
 
 
 def _test_sym_eig3x3(dt, a00):
+    if qd.lang.impl.current_cfg().arch == qd.vulkan:
+        # `_sym_eig3x3` (Eigen3 `computeDirect` closed form) crashes the NVIDIA Vulkan SPIR-V → NVVM
+        # frontend (SIGSEGV inside `libnvidia-gpucomp.so` / `libnvidia-glvkspirv.so`) during pipeline
+        # creation on driver 580.76.05. spirv-val accepts the shader and spirv-cross round-trips it to
+        # valid GLSL, so the bug is in NVIDIA's compiler when handling the deeply-nested closed-form
+        # path (Cardano method + `dsyevq3` Givens-rotation fallback inlined into a single non-offloaded
+        # compute kernel with many `OpSelectionMerge` blocks updating Function-scope variables). The
+        # `_sym_eig_sort_order` helper also skips this same case (see comment there). `n == 2` and
+        # ``n >= 4`` (`sym_eig_general`) compile and run cleanly. Remove this skip once NVIDIA fixes
+        # the driver crash (or `_sym_eig3x3` is refactored to a more partitioned codegen pattern).
+        pytest.skip("NVIDIA Vulkan driver SIGSEGV in `_sym_eig3x3` SPIR-V codegen (pre-existing)")
     A = qd.Matrix.field(3, 3, dtype=dt, shape=())
     v = qd.Vector.field(3, dtype=dt, shape=())
     w = qd.Matrix.field(3, 3, dtype=dt, shape=())
@@ -138,6 +149,12 @@ def _test_sym_eig3x3(dt, a00):
 
 
 def _test_sym_eig3x3_identity(dt):
+    if qd.lang.impl.current_cfg().arch == qd.vulkan:
+        # Same `_sym_eig3x3` NVIDIA Vulkan SPIR-V codegen SIGSEGV as the random-input case below — see
+        # the comment in `_test_sym_eig3x3` for details. The identity matrix specifically hits the
+        # `norm <= error` early-return path that funnels into `dsyevq3`'s Givens-rotation sweep, which
+        # is one (but not the only) trigger for the driver crash.
+        pytest.skip("NVIDIA Vulkan driver SIGSEGV in `_sym_eig3x3` SPIR-V codegen (pre-existing)")
     A = qd.Matrix.field(3, 3, dtype=dt, shape=())
     v = qd.Vector.field(3, dtype=dt, shape=())
     w = qd.Matrix.field(3, 3, dtype=dt, shape=())

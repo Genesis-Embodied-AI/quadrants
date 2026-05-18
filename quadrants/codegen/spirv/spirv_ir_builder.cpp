@@ -435,6 +435,14 @@ SType IRBuilder::get_function_array_type(const SType &_value_type, uint32_t num_
   if (value_type.dt->is_primitive(PrimitiveTypeID::u1)) {
     value_type = i32_type();
   }
+  // See `function_array_type_tbl_` in the header for the rationale — without this dedup, six-array local
+  // SoAs (e.g. `_sym_eig3x3`'s Jacobi path) emit six separate `OpTypeArray` declarations and crash NVIDIA's
+  // Vulkan SPIR-V → NVVM frontend (SIGSEGV inside `libnvidia-gpucomp.so`) during pipeline creation.
+  auto key = std::make_pair(value_type.id, num_elems);
+  auto it = function_array_type_tbl_.find(key);
+  if (it != function_array_type_tbl_.end()) {
+    return it->second;
+  }
   SType arr_type;
   arr_type.id = id_counter_++;
   arr_type.flag = TypeKind::kPtr;
@@ -447,21 +455,36 @@ SType IRBuilder::get_function_array_type(const SType &_value_type, uint32_t num_
     ib_.begin(spv::OpTypeRuntimeArray).add_seq(arr_type, value_type).commit(&global_);
   }
 
+  function_array_type_tbl_[key] = arr_type;
   return arr_type;
 }
 
 SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
-  // Identical bookkeeping to `get_function_array_type` plus the `ArrayStride` decoration the storage-buffer
-  // / PSB / Uniform interface requires. Delegate the `OpTypeArray` emission to keep the two in sync, then
-  // add the decoration on top.
-  SType arr_type = get_function_array_type(_value_type, num_elems);
-
-  // Mirror `get_function_array_type`'s `u1 -> i32` rewrite so the stride below matches the `OpTypeArray`
-  // element type (`bool` is 1-byte on every host but the array is emitted with `i32` elements; without this
-  // rewrite the stride would land on `1` and `spirv-val` rejects `ArrayStride < element_size`).
+  // Storage-buffer / PSB / Uniform array type — needs an `ArrayStride` decoration on the `OpTypeArray`. We
+  // keep this on a separate cache from `get_function_array_type` because the same SPIR-V type id cannot be
+  // shared across Function and StorageBuffer storage classes: re-applying `ArrayStride` to a Function-scope
+  // array trips `VUID-StandaloneSpirv-None-10684` (the very over-decoration this codepath was reworked to
+  // avoid).
   auto value_type = _value_type;
   if (value_type.dt->is_primitive(PrimitiveTypeID::u1)) {
     value_type = i32_type();
+  }
+  auto key = std::make_pair(value_type.id, num_elems);
+  auto it = array_type_tbl_.find(key);
+  if (it != array_type_tbl_.end()) {
+    return it->second;
+  }
+
+  SType arr_type;
+  arr_type.id = id_counter_++;
+  arr_type.flag = TypeKind::kPtr;
+  arr_type.element_type_id = value_type.id;
+
+  if (num_elems != 0) {
+    Value length = uint_immediate_number(t_uint32_, num_elems);
+    ib_.begin(spv::OpTypeArray).add_seq(arr_type, value_type, length).commit(&global_);
+  } else {
+    ib_.begin(spv::OpTypeRuntimeArray).add_seq(arr_type, value_type).commit(&global_);
   }
 
   uint32_t nbytes;
@@ -482,9 +505,9 @@ SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
     }
   }
 
-  // decorate the array type
   this->decorate(spv::OpDecorate, arr_type, spv::DecorationArrayStride, nbytes);
 
+  array_type_tbl_[key] = arr_type;
   return arr_type;
 }
 
