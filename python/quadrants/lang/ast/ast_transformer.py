@@ -86,12 +86,19 @@ class ASTTransformer(Builder):
         pruning = ctx.global_context.pruning
         if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__qd_"):
             ctx.global_context.pruning.mark_used(ctx.func.func_id, node.id)
-        # Track chains rooted at non-flattened kernel args (``@qd.data_oriented`` / ``qd.template`` params, which
-        # appear in the AST with bare names like ``self``). ``build_Attribute`` propagates this annotation through
-        # ``state.dofs.x`` chains and ``mark_used``s the flat name, so the fastcache narrow walk can include them
-        # in pruning (dataclass args go through ``FlattenAttributeNameTransformer`` and reach this branch as
-        # already-flat ``__qd_…`` Names, handled by the block above).
-        if node.id in ctx.kernel_args and not node.id.startswith("__qd_"):
+        # Track chains rooted at non-flattened parameter names: top-level ``@qd.kernel`` args
+        # (``ctx.kernel_args``) and ``@qd.func`` params (``ctx.fn_param_names``). Both appear in the
+        # AST as bare names (``self`` for a data_oriented kernel arg; ``static_rigid_sim_config`` for
+        # a ``qd.template()`` func arg bound to a ``@qd.data_oriented`` instance).
+        # ``build_Attribute`` propagates this annotation through ``state.dofs.x`` chains and
+        # ``mark_kernel_arg_chain_used``-s the flat name. The kernel's pruning narrow walk picks them
+        # up directly (kernel case) or after ``record_after_call`` propagates the callee's func-arg
+        # chains back through the call boundary (func case): e.g. ``func(s=self._sub)`` where ``func``
+        # reads ``s.x`` ends up with ``__qd_self__qd__sub__qd_x`` recorded in the kernel's pruning,
+        # so the args-hasher hashes that primitive value into the fastcache key.
+        # Dataclass args go through ``FlattenAttributeNameTransformer`` and reach this branch as
+        # already-flat ``__qd_…`` Names, handled by the block above via ``mark_used``.
+        if not node.id.startswith("__qd_") and (node.id in ctx.kernel_args or node.id in ctx.fn_param_names):
             node._qd_arg_chain = node.id  # type: ignore[attr-defined]
         else:
             node._qd_arg_chain = None  # type: ignore[attr-defined]

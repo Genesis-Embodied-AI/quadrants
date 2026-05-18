@@ -341,6 +341,16 @@ class FunctionDefTransformer:
         argument_type: Any,
         data: Any,
     ) -> None:
+        # Record the bare (non-flattened) func param name so ``build_Name`` can seed ``_qd_arg_chain``
+        # for attribute accesses rooted at this param. Critical for ``qd.template()`` args bound to
+        # ``@qd.data_oriented`` instances (e.g. ``static_rigid_sim_config.para_level`` inside a
+        # ``@qd.func``): without this, the kernel's pruning set never learns about ``.para_level``,
+        # the args-hasher skips the value, and different ``para_level`` configurations collide in the
+        # fastcache key.  Flat names starting with ``__qd_`` arrive here too via the dataclass-flatten
+        # recursion below; they're harmless to add (``build_Name``'s chain branch gates on
+        # ``not node.id.startswith("__qd_")``) but the bare-name entries are what enables propagation.
+        ctx.fn_param_names.add(argument_name)
+
         # Template arguments are passed by reference.
         if isinstance(argument_type, annotations.template):
             ctx.create_variable(argument_name, data)
