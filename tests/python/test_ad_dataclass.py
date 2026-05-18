@@ -1,7 +1,7 @@
 """Differentiation through ``dataclasses.dataclass`` containers.
 
-These tests pin that gradients flow correctly when kernel arguments are wrapped in plain Python
-dataclasses, across the tensor types Quadrants exposes:
+These tests pin that gradients flow correctly when kernel arguments are wrapped in plain Python dataclasses, across the
+tensor types Quadrants exposes:
 
 * ``qd.ndarray`` — typed-dataclass annotation + ``qd.template()`` path; gradient via ``kernel.grad()``.
 * ``qd.field`` — ``qd.template()`` path; gradient via ``qd.ad.Tape``.
@@ -183,11 +183,10 @@ def test_ad_dataclass_tensor_ndarray_backend():
 def test_ad_dataclass_tensor_field_backend_tape():
     """dataclass holding qd.tensor(..., backend=FIELD) members; field-AD via qd.ad.Tape.
 
-    Note: members must be annotated as ``qd.Tensor`` (not ``object``) when the value is a
-    ``qd.tensor(...)`` wrapper. The typed-dataclass / template machinery uses the member
-    annotation to decide whether to unwrap the wrapper into its underlying impl before the
-    kernel sees ``s.x[i]``. With ``object`` annotation the wrapper survives into kernel scope
-    and its host-side ``__getitem__`` asserts.
+    Note: members must be annotated as ``qd.Tensor`` (not ``object``) when the value is a ``qd.tensor(...)`` wrapper.
+    The typed-dataclass / template machinery uses the member annotation to decide whether to unwrap the wrapper into
+    its underlying impl before the kernel sees ``s.x[i]``. With ``object`` annotation the wrapper survives into kernel
+    scope and its host-side ``__getitem__`` asserts.
     """
     N = 5
 
