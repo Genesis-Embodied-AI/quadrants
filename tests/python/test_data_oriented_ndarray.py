@@ -888,3 +888,95 @@ def test_data_oriented_field_only_no_speckey_change():
 
     # Run a second time on the same instance — should reuse the same compiled kernel.
     run(state)
+
+
+# ---------------------------------------------------------------------------
+# 22. Robustness: object graphs with Pydantic-style metaclass ``__getattr__`` recursion,
+#     and cyclic attribute references. Real-world container classes (notably Genesis's
+#     ``RigidOptions`` / ``SimOptions``) inherit from ``pydantic.BaseModel`` whose
+#     ``ModelMetaclass.__getattr__`` recurses infinitely on missing class attributes.
+#     Quadrants' walker must not blow the stack when it traverses a ``data_oriented`` arg
+#     that contains such an object, or that contains a back-reference to itself / its
+#     parent (e.g. ``solver.scene.solver``).
+# ---------------------------------------------------------------------------
+
+
+def test_is_data_oriented_safe_on_pydantic_like_metaclass():
+    """``is_data_oriented`` must not invoke ``__getattr__`` on the class (or metaclass),
+    so it stays safe in the presence of pathological metaclasses whose ``__getattr__``
+    blows the Python recursion limit on arbitrary attribute lookups (e.g. Pydantic's
+    ``ModelMetaclass`` when probed for a name not in its private-attrs cache)."""
+
+    from quadrants.lang.util import is_data_oriented
+
+    class RecursingMeta(type):
+        def __getattr__(cls, item):
+            return cls.__getattr__(item)
+
+    class Pathological(metaclass=RecursingMeta):
+        pass
+
+    # Pre-fix this raised RecursionError; with the MRO+__dict__ lookup it just returns False.
+    assert is_data_oriented(Pathological()) is False
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_with_pydantic_like_child():
+    """A ``@qd.data_oriented`` class holding a child whose metaclass has the recursing
+    ``__getattr__`` (Pydantic-style). Walker must classify the child as non-data-oriented
+    and continue without blowing the stack."""
+    N = 4
+
+    class RecursingMeta(type):
+        def __getattr__(cls, item):
+            return cls.__getattr__(item)
+
+    class Options(metaclass=RecursingMeta):
+        pass
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, x, opts):
+            self.x = x
+            self.opts = opts
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    state = State(x=x, opts=Options())
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.x[i] = i + 1
+
+    run(state)
+    np.testing.assert_array_equal(x.to_numpy(), np.arange(1, N + 1))
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_with_cyclic_attr_graph():
+    """A ``@qd.data_oriented`` class whose attribute graph contains a cycle
+    (``parent.child.parent is parent``). Walker must not re-enter the cycle."""
+    N = 4
+
+    @qd.data_oriented
+    class Child:
+        def __init__(self):
+            self.parent = None
+
+    @qd.data_oriented
+    class Parent:
+        def __init__(self, x):
+            self.x = x
+            self.child = Child()
+            self.child.parent = self  # cycle
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    p = Parent(x=x)
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.x[i] = i + 10
+
+    run(p)
+    np.testing.assert_array_equal(x.to_numpy(), np.arange(10, 10 + N))

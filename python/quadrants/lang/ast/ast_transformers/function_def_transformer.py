@@ -248,7 +248,11 @@ class FunctionDefTransformer:
         # fall back to registering every reachable ndarray.
         prune = pruning.enforcing and used_ids is not None and getattr(pruning, "pass_0_ran", False)
 
-        def _walk_obj(obj, arg_idx, path):
+        # Cycle-safe walker: Genesis object graphs have cross-references (e.g. solver <-> scene <-> sim) so we must
+        # avoid re-entering the same node. ``seen`` is shared across the whole arg's traversal — ``id(obj)`` is
+        # stable for the duration of this compile and we never need to revisit a node since the ndarray-set rooted at
+        # it doesn't depend on the path we took to reach it.
+        def _walk_obj(obj, arg_idx, path, seen):
             if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
                 for field in dataclasses.fields(obj):
                     child = getattr(obj, field.name)
@@ -257,7 +261,11 @@ class FunctionDefTransformer:
                     if isinstance(child, _ndarray.Ndarray):
                         _register_ndarray(child, arg_idx, (*path, field.name))
                     elif (dataclasses.is_dataclass(child) and not isinstance(child, type)) or is_data_oriented(child):
-                        _walk_obj(child, arg_idx, (*path, field.name))
+                        child_id = id(child)
+                        if child_id in seen:
+                            continue
+                        seen.add(child_id)
+                        _walk_obj(child, arg_idx, (*path, field.name), seen)
             else:
                 for attr_name, attr_val in vars(obj).items():
                     if isinstance(attr_val, _TensorClass):
@@ -267,7 +275,11 @@ class FunctionDefTransformer:
                     elif (dataclasses.is_dataclass(attr_val) and not isinstance(attr_val, type)) or is_data_oriented(
                         attr_val
                     ):
-                        _walk_obj(attr_val, arg_idx, (*path, attr_name))
+                        attr_id = id(attr_val)
+                        if attr_id in seen:
+                            continue
+                        seen.add(attr_id)
+                        _walk_obj(attr_val, arg_idx, (*path, attr_name), seen)
 
         def _register_ndarray(nd, arg_idx, attr_chain):
             key = id(nd)
@@ -309,9 +321,9 @@ class FunctionDefTransformer:
             if isinstance(val, _ndarray.Ndarray):
                 continue
             if dataclasses.is_dataclass(val) and not isinstance(val, type):
-                _walk_obj(val, i, ())
+                _walk_obj(val, i, (), {id(val)})
             elif hasattr(val, "__dict__"):
-                _walk_obj(val, i, ())
+                _walk_obj(val, i, (), {id(val)})
 
     @staticmethod
     def _unwrap_tensor(data: Any) -> Any:

@@ -82,7 +82,13 @@ _primitive_types = {int, float, bool}
 _struct_nd_paths_cache: dict[type, list[tuple]] = {}
 
 
-def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list) -> None:
+def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: "set[int] | None" = None) -> None:
+    # Cycle-safe walker. Genesis object graphs have cross-references (e.g. ``solver -> scene -> sim -> solver``) and
+    # Pydantic-options-style children. ``_seen`` tracks ``id(obj)`` for the current traversal to avoid re-entering a
+    # node we've already expanded. Cheap (one ``set`` op per frame, only allocated when we actually start recursing)
+    # and bounds the walk to a finite depth regardless of the graph shape.
+    if _seen is None:
+        _seen = {id(obj)}
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
     else:
@@ -102,7 +108,11 @@ def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list) -> None:
         if issubclass(v_type, Ndarray):
             out.append(chain)
         elif is_data_oriented(v) or (dataclasses.is_dataclass(v) and not isinstance(v, type)):
-            _build_struct_nd_paths(v, chain, out)
+            v_id = id(v)
+            if v_id in _seen:
+                continue
+            _seen.add(v_id)
+            _build_struct_nd_paths(v, chain, out, _seen)
 
 
 def _struct_nd_paths_for(arg: Any) -> list[tuple]:
