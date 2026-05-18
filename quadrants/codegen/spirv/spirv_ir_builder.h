@@ -604,6 +604,20 @@ class IRBuilder {
   // map from value to its pointer type
   std::map<std::pair<uint32_t, spv::StorageClass>, SType> pointer_type_tbl_;
 
+  // Deduplication tables for `OpTypeArray`. SPIR-V's "non-aggregate type uniqueness" rule actually exempts
+  // arrays — multiple `OpTypeArray` with the same element type / length are technically legal — but they're
+  // also wholly redundant and trip strict drivers. Concretely, emitting six independent `float[3]` /
+  // `float[9]` declarations for a six-array local SoA (e.g. the `_sym_eig3x3` Jacobi path with multiple
+  // per-thread vectors / matrices) caused NVIDIA's Vulkan SPIR-V → NVVM frontend to SIGSEGV during pipeline
+  // creation, with the crash signature inside `libnvidia-gpucomp.so` / `libnvidia-glvkspirv.so`. spirv-cross
+  // also generates one redundant `_arr_float_uint_3_0` / `_arr_float_uint_3_1` / ... alias per duplicate,
+  // which is observable in `QD_DUMP_IR` output and a useful tell for this class of bug. Caches are kept
+  // separate for the Function-scope vs. buffer (`ArrayStride`-decorated) variants — the two are NOT
+  // interchangeable: sharing the same `OpTypeArray` between them would re-apply the `ArrayStride`
+  // decoration to the Function-scope use and re-introduce `VUID-StandaloneSpirv-None-10684`.
+  std::map<std::pair<uint32_t, uint32_t>, SType> function_array_type_tbl_;
+  std::map<std::pair<uint32_t, uint32_t>, SType> array_type_tbl_;
+
   // map from constant int to its value
   std::map<std::pair<uint32_t, uint64_t>, Value> const_tbl_;
   // map from raw_name(string) to Value
