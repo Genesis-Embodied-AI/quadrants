@@ -41,6 +41,20 @@ FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 _DC_REPR_NONE = object()
 
 
+# Set by ``stringify_obj_type`` when it encounters a recognised-but-unsupported tensor-like type (``Field`` /
+# ``MatrixField``) anywhere in the traversal — including nested under a dataclass or another data_oriented object.
+# The ``stable_members=True`` data_oriented walker uses this to differentiate two reasons a child returned ``None``:
+# truly-opaque metadata (``RigidSolver._uid: UID``, etc.) which is inert and can be skipped, vs a tensor-like type
+# whose value affects kernel codegen and must invalidate fastcache for the whole call. Reset at the top of each
+# ``hash_args``; snapshotted/restored around each nested ``stringify_obj_type`` call inside the data_oriented walker.
+_hit_recognised_unsupported = False
+
+
+def _mark_hit_recognised_unsupported() -> None:
+    global _hit_recognised_unsupported  # pylint: disable=global-statement
+    _hit_recognised_unsupported = True
+
+
 class FastcacheSkip(enum.Enum):
     """Why fastcache does not apply to this call."""
 
@@ -167,6 +181,7 @@ def stringify_obj_type(
         # etc
         # TODO: think about whether there is a way to include fields
         _mark_warn_if_not_tensor_annotation(arg_meta)
+        _mark_hit_recognised_unsupported()
         return None
     if isinstance(obj, MatrixNdarray):
         return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
@@ -179,6 +194,7 @@ def stringify_obj_type(
         # etc
         # TODO: think about whether there is a way to include fields
         _mark_warn_if_not_tensor_annotation(arg_meta)
+        _mark_hit_recognised_unsupported()
         return None
     if dataclasses.is_dataclass(obj):
         return dataclass_to_repr(raise_on_templated_floats, path, obj)
@@ -211,11 +227,27 @@ def stringify_obj_type(
                 v_type = type(v)
                 if v_type is QuadrantsCallable or v_type is BoundQuadrantsCallable:
                     continue
+                # Snapshot the recognised-but-unsupported flag around the recursive call so we can tell whether
+                # *this child's* subtree hit a ``Field`` / ``MatrixField`` (in which case we must fail fastcache
+                # even under ``stable_members``).
+                global _hit_recognised_unsupported  # pylint: disable=global-statement
+                _hit_recognised_unsupported = False
                 _child_repr = stringify_obj_type(raise_on_templated_floats, (*path, k), v, ArgMetadata(Template, ""))
+                child_hit_field = _hit_recognised_unsupported
                 if _child_repr is None:
-                    if stable_members:
-                        # Member is opaque to fastcache; under the stable_members contract it's inert and skipping
-                        # is safe. Don't kill fastcache for the whole call.
+                    # Differentiate two reasons ``stringify_obj_type`` returns None:
+                    #
+                    #   (a) RECOGNISED-BUT-UNSUPPORTED: ``Field`` / ``MatrixField`` somewhere in this child's
+                    #       subtree. These are *known* tensor-like types whose values affect kernel codegen but
+                    #       which fastcache doesn't yet handle. Killing fastcache for the whole call is the
+                    #       intended contract — ``test_num_envs[False-...]`` pins this behaviour for the field
+                    #       backend.
+                    #   (b) TRULY-OPAQUE: anything that falls through to the ``[FASTCACHE][PARAM_INVALID]``
+                    #       warning at the bottom of ``stringify_obj_type`` (``RigidSolver._uid`` of type
+                    #       ``UID``, etc.). For ``stable_members=True`` containers, opaque metadata is inert by
+                    #       the user's contract and can be skipped without invalidating the hash for the rest
+                    #       of the members.
+                    if stable_members and not child_hit_field:
                         continue
                     if _should_warn:
                         _logging.warn(
@@ -265,8 +297,9 @@ def hash_args(
     raise_on_templated_floats: bool, args: Sequence[Any], arg_metas: Sequence[ArgMetadata | None]
 ) -> str | FastcacheSkip:
     """Return the args hash string, or a HashFailure explaining why hashing failed."""
-    global g_num_calls, g_num_args, g_hashing_time, g_repr_time, g_num_ignored_calls, _should_warn
+    global g_num_calls, g_num_args, g_hashing_time, g_repr_time, g_num_ignored_calls, _should_warn, _hit_recognised_unsupported  # pylint: disable=line-too-long
     _should_warn = False
+    _hit_recognised_unsupported = False
     g_num_calls += 1
     g_num_args += len(args)
     hash_l = []
