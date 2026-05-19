@@ -459,6 +459,7 @@ def test_src_ll_cache_needs_grad_distinguishes_args_hash(tmp_path: pathlib.Path)
     (so the per-call needs_grad is correctly part of the cache key).
     """
     import dataclasses
+
     import numpy as np
 
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
