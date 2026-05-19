@@ -1136,12 +1136,24 @@ def test_block_exclusive_add(dtype, sg_per_block):
             _assert_block_scan_close(actual, expected[j], dtype, tol_relative=True, ctx=f"block {b} thread {j}")
 
 
+_BLOCK_EXCLUSIVE_MINMAX_CASES = [
+    # (op_name, sentinel_fn, py_op, inf_sign)
+    pytest.param("min", _block_exclusive_min_sentinel, _PY_MIN, 1, id="min"),
+    pytest.param("max", _block_exclusive_max_sentinel, _PY_MAX, -1, id="max"),
+]
+
+
+@pytest.mark.parametrize("op_name,sentinel_fn,py_op,inf_sign", _BLOCK_EXCLUSIVE_MINMAX_CASES)
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
 @pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_exclusive_min(dtype, sg_per_block):
-    """Block exclusive prefix min; thread 0 holds the dtype-derived identity (``+inf`` / ``np.iinfo(dtype).max``)."""
+def test_block_exclusive_minmax(dtype, sg_per_block, op_name, sentinel_fn, py_op, inf_sign):
+    """Block exclusive prefix ``<op>`` for ``op in {min, max}``; thread 0 of each block holds the dtype-derived
+    identity (``+inf`` / ``iinfo(dtype).max`` for min, ``-inf`` / ``iinfo(dtype).min`` for max). The float ``inf`` /
+    ``-inf`` lane-0 identity gets a sign-only check because ``inf - inf`` (or ``(-inf) - (-inf)``) is ``NaN`` and the
+    standard ``abs(diff) < tol`` compare would fail spuriously."""
     _skip_if_f64_unsupported(dtype)
+    op_fn = getattr(block, f"exclusive_{op_name}")
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -1152,25 +1164,23 @@ def test_block_exclusive_min(dtype, sg_per_block):
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            dst[i] = block.exclusive_min(src[i], block_dim, dtype)
+            dst[i] = op_fn(src[i], block_dim, dtype)
 
-    for i in range(N):
-        v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
+    _init_block_reduce_src(src, N, dtype, permuted=True)
     foo()
 
-    sentinel = _block_exclusive_min_sentinel(dtype)
-    py_min = lambda a, b: a if a < b else b  # noqa: E731
+    sentinel = sentinel_fn(dtype)
     for b in range(NUM_BLOCKS):
         block_vals = [src[b * block_dim + j] for j in range(block_dim)]
-        expected = _ref_exclusive_scan_op(block_vals, py_min, sentinel)
+        expected = _ref_exclusive_scan_op(block_vals, py_op, sentinel)
         for j in range(block_dim):
             actual = dst[b * block_dim + j]
             if dtype in _BLOCK_REDUCE_INT_DTYPES:
                 assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
             elif math.isinf(expected[j]):
-                # Thread 0 of each block gets the +inf identity; ``inf - inf`` is NaN, so check by equality / sign.
-                assert math.isinf(actual) and actual > 0, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
+                assert math.isinf(actual) and (
+                    actual > 0 if inf_sign > 0 else actual < 0
+                ), f"block {b} thread {j}: got {actual}, expected {expected[j]}"
             else:
                 assert abs(actual - expected[j]) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
 
@@ -1302,45 +1312,6 @@ def test_block_radix_rank_match_atomic_or(key_pattern, bit_start, num_bits):
         range(_BLOCK_DIM_RR)
     ), f"ranks not a permutation of [0, {_BLOCK_DIM_RR}) for pattern={key_pattern}"
     assert actual_ranks == ref_ranks, f"ranks mismatch (pattern={key_pattern})"
-
-
-@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
-@test_utils.test(arch=qd.gpu)
-def test_block_exclusive_max(dtype, sg_per_block):
-    """Block exclusive prefix max; thread 0 holds the dtype-derived identity (``-inf`` / ``np.iinfo(dtype).min``)."""
-    _skip_if_f64_unsupported(dtype)
-    block_dim = sg_per_block * _arch_subgroup_size()
-    NUM_BLOCKS = 4
-    N = NUM_BLOCKS * block_dim
-    src = qd.field(dtype=dtype, shape=N)
-    dst = qd.field(dtype=dtype, shape=N)
-
-    @qd.kernel
-    def foo():
-        qd.loop_config(block_dim=block_dim)
-        for i in range(N):
-            dst[i] = block.exclusive_max(src[i], block_dim, dtype)
-
-    for i in range(N):
-        v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
-    foo()
-
-    sentinel = _block_exclusive_max_sentinel(dtype)
-    py_max = lambda a, b: a if a > b else b  # noqa: E731
-    for b in range(NUM_BLOCKS):
-        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
-        expected = _ref_exclusive_scan_op(block_vals, py_max, sentinel)
-        for j in range(block_dim):
-            actual = dst[b * block_dim + j]
-            if dtype in _BLOCK_REDUCE_INT_DTYPES:
-                assert actual == expected[j], f"block {b} thread {j}: got {actual}, expected {expected[j]}"
-            elif math.isinf(expected[j]):
-                # Thread 0 of each block gets the -inf identity; ``-inf - -inf`` is NaN, so check by equality / sign.
-                assert math.isinf(actual) and actual < 0, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
-            else:
-                assert abs(actual - expected[j]) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected[j]}"
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
