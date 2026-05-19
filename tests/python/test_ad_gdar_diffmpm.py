@@ -5,6 +5,7 @@ import quadrants as qd
 from tests import test_utils
 
 
+@pytest.mark.slow
 @test_utils.test(require=qd.extension.assertion, debug=True)
 def test_gdar_mpm():
     real = qd.f32

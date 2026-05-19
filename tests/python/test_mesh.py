@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+import pytest
 
 import quadrants as qd
 
@@ -92,6 +93,7 @@ def test_mesh_reordered_opt():
     _test_mesh_for(True, True, False)
 
 
+@pytest.mark.slow
 @test_utils.test(require=qd.extension.mesh, mesh_localize_to_end_mapping=False)
 def test_mesh_localize_mapping0():
     _test_mesh_for(False, False, False)

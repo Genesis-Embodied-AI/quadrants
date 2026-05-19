@@ -443,6 +443,7 @@ def test_field_with_dynamic_index():
     collide()
 
 
+@pytest.mark.slow
 @test_utils.test()
 def test_field_max_num_args() -> None:
     num_args = 512

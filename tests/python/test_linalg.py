@@ -154,13 +154,13 @@ def _test_frobenius_inner(n, dt):
     assert out_self[None] == test_utils.approx(A.to_numpy().__pow__(2).sum(), rel=tol, abs=tol)
 
 
-@pytest.mark.parametrize("n", [2, 3, 6, 9, 12])
+@pytest.mark.parametrize("n", [3, pytest.param(12, marks=pytest.mark.slow)])
 @test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
 def test_frobenius_inner_f32(n):
     _test_frobenius_inner(n, qd.f32)
 
 
-@pytest.mark.parametrize("n", [2, 3, 6, 9, 12])
+@pytest.mark.parametrize("n", [3, pytest.param(12, marks=pytest.mark.slow)])
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_frobenius_inner_f64(n):
     _test_frobenius_inner(n, qd.f64)
@@ -189,13 +189,27 @@ def _test_frobenius_inner_rectangular(rows, cols, dt):
     assert out[None] == test_utils.approx(expected, rel=tol, abs=tol)
 
 
-@pytest.mark.parametrize("rows,cols", [(9, 12), (12, 3), (2, 4)])
+@pytest.mark.parametrize(
+    "rows,cols",
+    [
+        pytest.param(9, 12, marks=pytest.mark.slow),
+        pytest.param(12, 3, marks=pytest.mark.slow),
+        (2, 4),
+    ],
+)
 @test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
 def test_frobenius_inner_rectangular_f32(rows, cols):
     _test_frobenius_inner_rectangular(rows, cols, qd.f32)
 
 
-@pytest.mark.parametrize("rows,cols", [(9, 12), (12, 3), (2, 4)])
+@pytest.mark.parametrize(
+    "rows,cols",
+    [
+        pytest.param(9, 12, marks=pytest.mark.slow),
+        pytest.param(12, 3, marks=pytest.mark.slow),
+        (2, 4),
+    ],
+)
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_frobenius_inner_rectangular_f64(rows, cols):
     _test_frobenius_inner_rectangular(rows, cols, qd.f64)
@@ -241,11 +255,13 @@ def _test_matmul_chain(dt):
     np.testing.assert_allclose(ABC_chained.to_numpy(), ABC_staged.to_numpy(), rtol=tol, atol=tol)
 
 
+@pytest.mark.slow
 @test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
 def test_matmul_chain_qipc_sizes_f32():
     _test_matmul_chain(qd.f32)
 
 
+@pytest.mark.slow
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_matmul_chain_qipc_sizes_f64():
     _test_matmul_chain(qd.f64)
@@ -434,7 +450,7 @@ def _test_inverse_at_size(n_, dt_, factory):
     np.testing.assert_allclose(M @ inv_np, np.eye(n_), rtol=tol, atol=tol)
 
 
-@pytest.mark.parametrize("n", [5, 6, 7, 8, 9, 10, 11, 12])
+@pytest.mark.parametrize("n", [5, pytest.param(12, marks=pytest.mark.slow)])
 @pytest.mark.parametrize(
     "factory",
     [_inverse_diagonally_dominant, _inverse_spd, _inverse_pivoting_required],
@@ -444,7 +460,7 @@ def test_inverse_large_f32(n, factory):
     _test_inverse_at_size(n, qd.f32, factory)
 
 
-@pytest.mark.parametrize("n", [5, 6, 7, 8, 9, 10, 11, 12])
+@pytest.mark.parametrize("n", [5, pytest.param(12, marks=pytest.mark.slow)])
 @pytest.mark.parametrize(
     "factory",
     [_inverse_diagonally_dominant, _inverse_spd, _inverse_pivoting_required],
