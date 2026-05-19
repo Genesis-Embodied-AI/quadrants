@@ -887,188 +887,91 @@ def _ref_reduce_max(values):
     return max(values)
 
 
-@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
-@test_utils.test(arch=qd.gpu)
-def test_block_reduce_add(dtype, sg_per_block):
-    """Block sum-reduce: thread 0 of each block holds `sum(src[block_base:block_base+block_dim])`."""
-    _skip_if_f64_unsupported(dtype)
-    block_dim = sg_per_block * _arch_subgroup_size()
-    NUM_BLOCKS = 4
-    N = NUM_BLOCKS * block_dim
-    src = qd.field(dtype=dtype, shape=N)
-    dst = qd.field(dtype=dtype, shape=NUM_BLOCKS)
+# The three single-output reduces (`test_block_reduce_{add,min,max}`) and their three broadcast siblings
+# (`test_block_reduce_all_{add,min,max}`) share the same kernel skeleton, parametrize axes, and verification loop;
+# they differ only in (a) which `block.reduce_*` function gets called, (b) the host-side reference oracle, (c) the
+# init pattern (sequential for `add` so the running sum has signal, permuted hash for `min` / `max` so the result
+# depends on lanes other than first / last), and (d) the float tolerance regime (`add` accumulates so it uses a
+# relative tol; `min` / `max` pick one element of the input and use an absolute tol).
+_BLOCK_REDUCE_OP_CASES = [
+    # (op_name, ref_fn, init_permuted, tol_relative)
+    pytest.param("add", _ref_reduce_add, False, True, id="add"),
+    pytest.param("min", _ref_reduce_min, True, False, id="min"),
+    pytest.param("max", _ref_reduce_max, True, False, id="max"),
+]
 
-    @qd.kernel
-    def foo():
-        qd.loop_config(block_dim=block_dim)
+
+def _init_block_reduce_src(src, N, dtype, *, permuted):
+    """Initialize ``src[0:N]`` for a block reduce test. ``permuted=False`` is the sequential ``1..N`` init from
+    ``_init_field`` (good for add); ``permuted=True`` is the stable hash ``((i * 1009) % 997) + 1`` so the per-block
+    min / max depends on lanes other than first / last."""
+    if permuted:
         for i in range(N):
-            tid = i % block_dim
-            agg = block.reduce_add(src[i], block_dim, dtype)
-            if tid == 0:
-                dst[i // block_dim] = agg
-
-    _init_field(src, N, dtype)
-    foo()
-
-    for b in range(NUM_BLOCKS):
-        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
-        expected = _ref_reduce_add(block_vals)
-        if dtype in _BLOCK_REDUCE_INT_DTYPES:
-            assert dst[b] == expected, f"block {b}: got {dst[b]}, expected {expected}"
-        else:
-            assert abs(dst[b] - expected) < 1e-4 * abs(expected), f"block {b}: got {dst[b]}, expected {expected}"
+            v = ((i * 1009) % 997) + 1
+            src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
+    else:
+        _init_field(src, N, dtype)
 
 
-@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
-@test_utils.test(arch=qd.gpu)
-def test_block_reduce_min(dtype, sg_per_block):
-    """Block min-reduce: thread 0 of each block holds `min(src[block_base:block_base+block_dim])`."""
-    _skip_if_f64_unsupported(dtype)
-    block_dim = sg_per_block * _arch_subgroup_size()
-    NUM_BLOCKS = 4
-    N = NUM_BLOCKS * block_dim
-    src = qd.field(dtype=dtype, shape=N)
-    dst = qd.field(dtype=dtype, shape=NUM_BLOCKS)
+def _assert_block_reduce_close(actual, expected, dtype, *, tol_relative, ctx):
+    """Assert ``actual ~= expected`` per the block-reduce tolerance regime.
 
-    @qd.kernel
-    def foo():
-        qd.loop_config(block_dim=block_dim)
-        for i in range(N):
-            tid = i % block_dim
-            agg = block.reduce_min(src[i], block_dim, dtype)
-            if tid == 0:
-                dst[i // block_dim] = agg
-
-    # Permuted (non-monotone) initialisation so the min depends on lanes other than the first / last.
-    for i in range(N):
-        v = ((i * 1009) % 997) + 1  # in [1, 997]; stable hash, no collisions w/ block_dim values up to 256
-        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
-    foo()
-
-    for b in range(NUM_BLOCKS):
-        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
-        expected = _ref_reduce_min(block_vals)
-        if dtype in _BLOCK_REDUCE_INT_DTYPES:
-            assert dst[b] == expected, f"block {b}: got {dst[b]}, expected {expected}"
-        else:
-            assert abs(dst[b] - expected) < 1e-5, f"block {b}: got {dst[b]}, expected {expected}"
-
-
-@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
-@test_utils.test(arch=qd.gpu)
-def test_block_reduce_max(dtype, sg_per_block):
-    """Block max-reduce: thread 0 of each block holds `max(src[block_base:block_base+block_dim])`."""
-    _skip_if_f64_unsupported(dtype)
-    block_dim = sg_per_block * _arch_subgroup_size()
-    NUM_BLOCKS = 4
-    N = NUM_BLOCKS * block_dim
-    src = qd.field(dtype=dtype, shape=N)
-    dst = qd.field(dtype=dtype, shape=NUM_BLOCKS)
-
-    @qd.kernel
-    def foo():
-        qd.loop_config(block_dim=block_dim)
-        for i in range(N):
-            tid = i % block_dim
-            agg = block.reduce_max(src[i], block_dim, dtype)
-            if tid == 0:
-                dst[i // block_dim] = agg
-
-    for i in range(N):
-        v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
-    foo()
-
-    for b in range(NUM_BLOCKS):
-        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
-        expected = _ref_reduce_max(block_vals)
-        if dtype in _BLOCK_REDUCE_INT_DTYPES:
-            assert dst[b] == expected, f"block {b}: got {dst[b]}, expected {expected}"
-        else:
-            assert abs(dst[b] - expected) < 1e-5, f"block {b}: got {dst[b]}, expected {expected}"
-
-
-@pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
-@pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
-@test_utils.test(arch=qd.gpu)
-def test_block_reduce_all_add(dtype, sg_per_block):
-    """Block sum-reduce broadcast: every thread of each block holds the block-wide sum.
-
-    Verifies the broadcast variant by writing the per-thread output to a flat field, then asserting every thread of a
-    given block reads the same aggregate.
+    Int dtypes compare exactly. Floats use relative tolerance ``1e-4 * |expected|`` for accumulating ops (sums grow
+    with block_dim, so a relative bound is the only thing that stays meaningful across the 32 / 128 / 256 / 64 / 256 /
+    512 block-size sweep), and absolute tolerance ``1e-5`` for picker ops (min / max pick one element so the
+    magnitude is whatever was in the input -- a small absolute bound suffices).
     """
-    _skip_if_f64_unsupported(dtype)
-    block_dim = sg_per_block * _arch_subgroup_size()
-    NUM_BLOCKS = 4
-    N = NUM_BLOCKS * block_dim
-    src = qd.field(dtype=dtype, shape=N)
-    dst = qd.field(dtype=dtype, shape=N)
-
-    @qd.kernel
-    def foo():
-        qd.loop_config(block_dim=block_dim)
-        for i in range(N):
-            dst[i] = block.reduce_all_add(src[i], block_dim, dtype)
-
-    _init_field(src, N, dtype)
-    foo()
-
-    for b in range(NUM_BLOCKS):
-        block_vals = [src[b * block_dim + j] for j in range(block_dim)]
-        expected = _ref_reduce_add(block_vals)
-        for j in range(block_dim):
-            actual = dst[b * block_dim + j]
-            if dtype in _BLOCK_REDUCE_INT_DTYPES:
-                assert actual == expected, f"block {b} thread {j}: got {actual}, expected {expected}"
-            else:
-                assert abs(actual - expected) < 1e-4 * abs(
-                    expected
-                ), f"block {b} thread {j}: got {actual}, expected {expected}"
+    if dtype in _BLOCK_REDUCE_INT_DTYPES:
+        assert actual == expected, f"{ctx}: got {actual}, expected {expected}"
+    elif tol_relative:
+        assert abs(actual - expected) < 1e-4 * abs(expected), f"{ctx}: got {actual}, expected {expected}"
+    else:
+        assert abs(actual - expected) < 1e-5, f"{ctx}: got {actual}, expected {expected}"
 
 
+@pytest.mark.parametrize("op_name,ref_fn,init_permuted,tol_relative", _BLOCK_REDUCE_OP_CASES)
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
 @pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_reduce_all_min(dtype, sg_per_block):
-    """Block min-reduce broadcast: every thread reads the block-wide min."""
+def test_block_reduce(dtype, sg_per_block, op_name, ref_fn, init_permuted, tol_relative):
+    """Block reduce: thread 0 of each block holds ``<op>(src[block_base:block_base+block_dim])``. Unified across
+    ``add`` / ``min`` / ``max`` -- op-name is closure-captured into ``@qd.kernel``."""
     _skip_if_f64_unsupported(dtype)
+    op_fn = getattr(block, f"reduce_{op_name}")
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
     src = qd.field(dtype=dtype, shape=N)
-    dst = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=NUM_BLOCKS)
 
     @qd.kernel
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            dst[i] = block.reduce_all_min(src[i], block_dim, dtype)
+            tid = i % block_dim
+            agg = op_fn(src[i], block_dim, dtype)
+            if tid == 0:
+                dst[i // block_dim] = agg
 
-    for i in range(N):
-        v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
+    _init_block_reduce_src(src, N, dtype, permuted=init_permuted)
     foo()
 
     for b in range(NUM_BLOCKS):
         block_vals = [src[b * block_dim + j] for j in range(block_dim)]
-        expected = _ref_reduce_min(block_vals)
-        for j in range(block_dim):
-            actual = dst[b * block_dim + j]
-            if dtype in _BLOCK_REDUCE_INT_DTYPES:
-                assert actual == expected, f"block {b} thread {j}: got {actual}, expected {expected}"
-            else:
-                assert abs(actual - expected) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected}"
+        expected = ref_fn(block_vals)
+        _assert_block_reduce_close(dst[b], expected, dtype, tol_relative=tol_relative, ctx=f"block {b}")
 
 
+@pytest.mark.parametrize("op_name,ref_fn,init_permuted,tol_relative", _BLOCK_REDUCE_OP_CASES)
 @pytest.mark.parametrize("dtype", _BLOCK_REDUCE_DTYPES)
 @pytest.mark.parametrize("sg_per_block", _BLOCK_REDUCE_SG_PER_BLOCK)
 @test_utils.test(arch=qd.gpu)
-def test_block_reduce_all_max(dtype, sg_per_block):
-    """Block max-reduce broadcast: every thread reads the block-wide max."""
+def test_block_reduce_all(dtype, sg_per_block, op_name, ref_fn, init_permuted, tol_relative):
+    """Block reduce broadcast: every thread of each block holds the block-wide ``<op>``. Verified by writing the
+    per-thread output to a flat field, then asserting every thread of a given block reads the same aggregate.
+    Unified across ``add`` / ``min`` / ``max``."""
     _skip_if_f64_unsupported(dtype)
+    op_fn = getattr(block, f"reduce_all_{op_name}")
     block_dim = sg_per_block * _arch_subgroup_size()
     NUM_BLOCKS = 4
     N = NUM_BLOCKS * block_dim
@@ -1079,22 +982,17 @@ def test_block_reduce_all_max(dtype, sg_per_block):
     def foo():
         qd.loop_config(block_dim=block_dim)
         for i in range(N):
-            dst[i] = block.reduce_all_max(src[i], block_dim, dtype)
+            dst[i] = op_fn(src[i], block_dim, dtype)
 
-    for i in range(N):
-        v = ((i * 1009) % 997) + 1
-        src[i] = v if dtype in _BLOCK_REDUCE_INT_DTYPES else 1.0 * v
+    _init_block_reduce_src(src, N, dtype, permuted=init_permuted)
     foo()
 
     for b in range(NUM_BLOCKS):
         block_vals = [src[b * block_dim + j] for j in range(block_dim)]
-        expected = _ref_reduce_max(block_vals)
+        expected = ref_fn(block_vals)
         for j in range(block_dim):
             actual = dst[b * block_dim + j]
-            if dtype in _BLOCK_REDUCE_INT_DTYPES:
-                assert actual == expected, f"block {b} thread {j}: got {actual}, expected {expected}"
-            else:
-                assert abs(actual - expected) < 1e-5, f"block {b} thread {j}: got {actual}, expected {expected}"
+            _assert_block_reduce_close(actual, expected, dtype, tol_relative=tol_relative, ctx=f"block {b} thread {j}")
 
 
 # --- Block scan tests ------------------------------------------------------------------
