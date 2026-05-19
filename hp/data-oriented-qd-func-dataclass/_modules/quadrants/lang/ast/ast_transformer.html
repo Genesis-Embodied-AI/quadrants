@@ -1243,14 +1243,13 @@
         <span class="c1"># data_oriented ``self``); each Attribute access in the chain extends it</span>
         <span class="c1"># (``self`` → ``__qd_self__qd_x`` → ``__qd_self__qd_x__qd_y``).</span>
         <span class="c1">#</span>
-        <span class="c1"># Why not ``mark_used``? On the enforcing pass, ``Kernel.materialize`` uses</span>
-        <span class="c1"># ``pruning.used_vars_by_func_id`` as ``struct_locals``, which drives</span>
-        <span class="c1"># ``FlattenAttributeNameTransformer`` — adding ``__qd_self__qd_x`` there would make the transformer</span>
-        <span class="c1"># rewrite ``self.x`` into ``Name(&#39;__qd_self__qd_x&#39;)``, and ``build_Name`` would then fail to find</span>
-        <span class="c1"># such a variable. ``mark_kernel_arg_chain_used`` puts the chain into a *separate* per-func set</span>
-        <span class="c1"># that&#39;s merged into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` only *after* both compile passes,</span>
-        <span class="c1"># by ``Kernel._fold_kernel_arg_chain_paths_into_pruning`` — so the fastcache args-hash narrow walk</span>
-        <span class="c1"># picks them up without breaking codegen.</span>
+        <span class="c1"># Why not ``mark_used``? On the enforcing pass, ``Kernel.materialize`` uses ``pruning.used_vars_by_func_id`` as</span>
+        <span class="c1"># ``struct_locals``, which drives ``FlattenAttributeNameTransformer`` — adding ``__qd_self__qd_x`` there would</span>
+        <span class="c1"># make the transformer rewrite ``self.x`` into ``Name(&#39;__qd_self__qd_x&#39;)``, and ``build_Name`` would then fail</span>
+        <span class="c1"># to find such a variable. ``mark_kernel_arg_chain_used`` puts the chain into a *separate* per-func set that&#39;s</span>
+        <span class="c1"># merged into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` only *after* both compile passes, by</span>
+        <span class="c1"># ``Pruning.fold_kernel_arg_chain_paths`` — so the fastcache args-hash narrow walk picks them up without</span>
+        <span class="c1"># breaking codegen.</span>
         <span class="n">parent_chain</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="s2">&quot;_qd_arg_chain&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">parent_chain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">flat</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">parent_chain</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">)</span>
