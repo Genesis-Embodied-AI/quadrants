@@ -1986,61 +1986,6 @@
 
 
 
-<div class="viewcode-block" id="volatile_load">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.volatile_load">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">volatile_load</span><span class="p">(</span><span class="n">target</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read `target` with volatile semantics: the compiler is forbidden from caching, hoisting, or merging the</span>
-<span class="sd">    load with prior reads of the same address.  Required for spin-wait patterns where another thread or block</span>
-<span class="sd">    writes the cell and the reader must observe the update on every iteration.</span>
-
-<span class="sd">    Without this primitive, a loop like ::</span>
-
-<span class="sd">        while flags[prev] == STATE_INVALID:</span>
-<span class="sd">            pass</span>
-
-<span class="sd">    is undefined: the compiler may hoist the `flags[prev]` load out of the loop and the spin becomes infinite.</span>
-<span class="sd">    The portable workarounds (`grid.mem_fence()` inside the loop, or `atomic_add(flags[prev], 0)`) are both</span>
-<span class="sd">    correct but pay an order-of-magnitude perf tax over a real volatile read.</span>
-
-<span class="sd">    Codegen on every backend:</span>
-
-<span class="sd">    * CUDA / AMDGPU: LLVM `load volatile`, lowered to `ld.volatile.global` (PTX) /  unhoistable `global_load_*`</span>
-<span class="sd">      (AMDGPU).</span>
-<span class="sd">    * Vulkan / Metal: SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to</span>
-<span class="sd">      a re-read on every use in the generated MSL / GLSL.</span>
-
-<span class="sd">    Args:</span>
-<span class="sd">        target: a global lvalue (field / ndarray subscript).  Function-scope local arrays are rejected -- a</span>
-<span class="sd">            local cannot be observed by another thread, so a volatile load there would be meaningless.</span>
-
-<span class="sd">    Returns:</span>
-<span class="sd">        The freshly-read value of `target`, with the same dtype an ordinary read would produce.</span>
-
-<span class="sd">    Example::</span>
-
-<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
-<span class="sd">        &gt;&gt;&gt; def lookback_scan(...):</span>
-<span class="sd">        &gt;&gt;&gt;     # block-level decoupled-look-back scan: spin until the predecessor publishes its aggregate</span>
-<span class="sd">        &gt;&gt;&gt;     while qd.volatile_load(flags[prev]) == STATE_INVALID:</span>
-<span class="sd">        &gt;&gt;&gt;         pass</span>
-<span class="sd">        &gt;&gt;&gt;     prev_agg = qd.volatile_load(aggregates[prev])</span>
-
-<span class="sd">    See also:</span>
-<span class="sd">        `qd.atomic_*` for the read-modify-write side; `qd.simt.grid.mem_fence` for the heavyweight</span>
-<span class="sd">        device-scope fence that was the only correct (but slow) workaround before this primitive existed.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="k">return</span> <span class="n">target</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="s2">&quot;item&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">target</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-            <span class="s2">&quot;cannot pass a Field directly to &#39;qd.volatile_load&#39;; index it first (e.g. `field[None]`)&quot;</span>
-        <span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">target</span><span class="p">)</span> <span class="ow">and</span> <span class="n">target</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_lvalue</span><span class="p">()):</span>
-        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.volatile_load requires an lvalue (field / ndarray subscript) as its argument&quot;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_volatile_load</span><span class="p">(</span><span class="n">target</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
-
-
-
 <span class="nd">@writeback_binary</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">assign</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
     <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">expr_assign</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">b</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
@@ -2131,7 +2076,6 @@
     <span class="s2">&quot;atomic_mul&quot;</span><span class="p">,</span>
     <span class="s2">&quot;atomic_exchange&quot;</span><span class="p">,</span>
     <span class="s2">&quot;atomic_cas&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;volatile_load&quot;</span><span class="p">,</span>
     <span class="s2">&quot;bit_cast&quot;</span><span class="p">,</span>
     <span class="s2">&quot;bit_shr&quot;</span><span class="p">,</span>
     <span class="s2">&quot;cast&quot;</span><span class="p">,</span>

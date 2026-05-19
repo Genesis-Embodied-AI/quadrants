@@ -316,6 +316,10 @@ Module Contents
 
 
 
+   .. py:attribute:: fn_param_names
+      :type:  set[str]
+
+
    .. py:attribute:: only_parse_function_def
       :type:  bool
       :value: False

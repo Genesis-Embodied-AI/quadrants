@@ -456,13 +456,10 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_cas" title="quadrants.lang.ops.atomic_cas"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_cas</span></code></a>(x, expected, desired)</p></td>
 <td><p>Atomically compare-and-swap: if the current value of <cite>x</cite> equals <cite>expected</cite>, write <cite>desired</cite> into <cite>x</cite>.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.volatile_load" title="quadrants.lang.ops.volatile_load"><code class="xref py py-obj docutils literal notranslate"><span class="pre">volatile_load</span></code></a>(target)</p></td>
-<td><p>Read <cite>target</cite> with volatile semantics: the compiler is forbidden from caching, hoisting, or merging the</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.max" title="quadrants.lang.ops.max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">max</span></code></a>(*args)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.max" title="quadrants.lang.ops.max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">max</span></code></a>(*args)</p></td>
 <td><p>Compute the maximum of the arguments, element-wise.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.min" title="quadrants.lang.ops.min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">min</span></code></a>(*args)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.min" title="quadrants.lang.ops.min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">min</span></code></a>(*args)</p></td>
 <td><p>Compute the minimum of the arguments, element-wise.</p></td>
 </tr>
 </tbody>
@@ -1417,52 +1414,6 @@ target; constant expressions or scalars are not allowed.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.ops.volatile_load">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">volatile_load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#volatile_load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.volatile_load" title="Link to this definition">#</a></dt>
-<dd><p>Read <cite>target</cite> with volatile semantics: the compiler is forbidden from caching, hoisting, or merging the
-load with prior reads of the same address.  Required for spin-wait patterns where another thread or block
-writes the cell and the reader must observe the update on every iteration.</p>
-<p>Without this primitive, a loop like</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">]</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
-    <span class="k">pass</span>
-</pre></div>
-</div>
-<p>is undefined: the compiler may hoist the <cite>flags[prev]</cite> load out of the loop and the spin becomes infinite.
-The portable workarounds (<cite>grid.mem_fence()</cite> inside the loop, or <cite>atomic_add(flags[prev], 0)</cite>) are both
-correct but pay an order-of-magnitude perf tax over a real volatile read.</p>
-<p>Codegen on every backend:</p>
-<ul class="simple">
-<li><p>CUDA / AMDGPU: LLVM <cite>load volatile</cite>, lowered to <cite>ld.volatile.global</cite> (PTX) /  unhoistable <cite>global_load_*</cite>
-(AMDGPU).</p></li>
-<li><p>Vulkan / Metal: SPIR-V <cite>OpLoad</cite> with the <cite>Volatile</cite> <cite>MemoryAccess</cite> mask, propagated through SPIRV-Cross to
-a re-read on every use in the generated MSL / GLSL.</p></li>
-</ul>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>target</strong> – a global lvalue (field / ndarray subscript).  Function-scope local arrays are rejected – a
-local cannot be observed by another thread, so a volatile load there would be meaningless.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The freshly-read value of <cite>target</cite>, with the same dtype an ordinary read would produce.</p>
-</dd>
-</dl>
-<p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">lookback_scan</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="c1"># block-level decoupled-look-back scan: spin until the predecessor publishes its aggregate</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">volatile_load</span><span class="p">(</span><span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">])</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
-<span class="gp">&gt;&gt;&gt; </span>        <span class="k">pass</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">prev_agg</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">volatile_load</span><span class="p">(</span><span class="n">aggregates</span><span class="p">[</span><span class="n">prev</span><span class="p">])</span>
-</pre></div>
-</div>
-<div class="admonition seealso">
-<p class="admonition-title">See also</p>
-<p><cite>qd.atomic_*</cite> for the read-modify-write side; <cite>qd.simt.grid.mem_fence</cite> for the heavyweight
-device-scope fence that was the only correct (but slow) workaround before this primitive existed.</p>
-</div>
-</dd></dl>
-
-<dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.ops.max">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.max" title="Link to this definition">#</a></dt>
 <dd><p>Compute the maximum of the arguments, element-wise.</p>
@@ -1600,7 +1551,6 @@ must have the same shape, and scalars will be broadcasted to the same shape as t
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_xor"><code class="docutils literal notranslate"><span class="pre">atomic_xor()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_exchange"><code class="docutils literal notranslate"><span class="pre">atomic_exchange()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_cas"><code class="docutils literal notranslate"><span class="pre">atomic_cas()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.volatile_load"><code class="docutils literal notranslate"><span class="pre">volatile_load()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.max"><code class="docutils literal notranslate"><span class="pre">max()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.min"><code class="docutils literal notranslate"><span class="pre">min()</span></code></a></li>
 </ul>

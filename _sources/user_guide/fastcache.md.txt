@@ -50,43 +50,13 @@ qd.init(arch=qd.gpu)
 # qd.init(arch=qd.gpu, print_non_pure=True)
 ```
 
-## Dataclass fields with cached values
-
-By default, for `dataclasses.dataclass` parameters, fastcache only includes the *types* of each field in the cache key, not their values. This is fine for fields like ndarrays, where the compiled kernel doesn't depend on the actual data, only the dtype and dimensionality.
-
-However, some dataclass fields hold configuration values that get baked into the compiled kernel — typically values used with `qd.static()`, such as loop bounds or feature flags:
-
-```python
-for i in qd.static(range(config.num_layers)):
-    ...
-```
-
-Here the value of `num_layers` is compiled into the kernel. Concretely the loop will be unrolled, at compile time. If `num_layers` changes, a different kernel must be compiled.
-
-Mark such fields with `add_value_to_cache_key` so their values are included in the cache key:
-
-```python
-import dataclasses
-from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE
-
-@dataclasses.dataclass
-class SimConfig:
-    num_envs: int = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
-    dt: float = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
-    use_gravity: bool = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
-```
-
-With this annotation, changing `num_envs` from 100 to 200 produces a different cache key so the correct compiled kernel is looked up (or compiled if not yet cached). Without it, the wrong kernel could be loaded.
-
-Note: `@qd.data_oriented` objects and `qd.Template` parameters already include primitive values in the cache key automatically — this annotation is only needed for `dataclasses.dataclass` fields.
-
 ## Constraints
 
 A kernel is eligible for fastcache only if all of the following hold:
 
 ### 1. All data flows through parameters
 
-The kernel must receive every piece of data it operates on as an explicit parameter. It must **not** capture variables from the enclosing Python scope (closures over fields, ndarrays, or mutable globals). This is the core "purity" constraint — the compiled kernel's behavior must be fully determined by its arguments.
+The kernel must receive every piece of data it operates on as an explicit parameter. It must **not** capture variables from the enclosing Python scope (closures over ndarrays, mutable globals, or any other external state). This is the core "purity" constraint — the compiled kernel's behavior must be fully determined by its arguments.
 
 ```python
 a = qd.ndarray(qd.f32, (10,))
@@ -125,14 +95,17 @@ Fastcache supports the following parameter types:
 | `qd.types.NDArray` (scalar, vector, matrix) | Yes | dtype, ndim, layout |
 | `torch.Tensor` | Yes | dtype, ndim |
 | `numpy.ndarray` | Yes | dtype, ndim |
-| `dataclasses.dataclass` | Yes | field types recursively; field values if annotated with `add_value_to_cache_key` (see [above](#dataclass-fields-with-cached-values)) |
-| `@qd.data_oriented` objects | Yes | member types and primitive member values recursively |
+| `dataclasses.dataclass` | Yes | member types recursively; member values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
+| `@qd.data_oriented` objects | Yes | member types recursively, narrowed by pruning (see [Pruning-driven argument hashing](#pruning-driven-argument-hashing)); primitive member types and values baked into kernel (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
-| `qd.field` / `ScalarField` / `MatrixField` | **No** | — |
+| `qd.field` / `ScalarField` / `MatrixField` at a kernel-read path | **No** | — |
+| Anything else at a kernel-read path | **No** | — |
 
-If any parameter is of an unsupported type, fastcache is disabled for that call and the kernel falls back to normal compilation. For `qd.field` / `ScalarField` / `MatrixField` arriving through a `qd.Tensor`-annotated parameter, this is silent — no warning is emitted. For other unsupported types, a warning is logged at the `warn` level identifying the offending parameter.
+If any kernel-used parameter is of an unsupported type, fastcache is disabled for that call and the kernel falls back to normal compilation. For `qd.field` / `ScalarField` / `MatrixField` arriving through a `qd.Tensor`-annotated parameter, this is silent — no warning is emitted. For other unsupported types, a warning is logged at the `warn` level identifying the offending parameter.
+
+Kernel-unused members of any type — including unrecognised ones — do **not** disable fastcache. The pruning narrowing in the args hasher skips them entirely, so opaque metadata (UUIDs, Pydantic configs, parent back-pointers) attached to a `@qd.data_oriented` instance is harmless as long as the kernel doesn't read it.
 
 ### 3. Source code must be available
 
@@ -149,6 +122,34 @@ Each compiled artifact is stored under a key derived from all of the following:
 - **Template parameter values** (since they are baked into the compiled kernel).
 
 When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk — multiple cached versions coexist. You do not need to manually clear the cache when making code changes — the hash mismatch causes a transparent recompilation.
+
+### Pruning-driven argument hashing
+
+Fastcache uses a **two-level cache**:
+
+- **L1** (source + config only): stores the set of *flat names* the kernel actually reads — e.g. `__qd_state__qd_x` for a kernel that reads `state.x`. This is the kernel's pruning info, computed at compile time by the AST builder.
+- **L2** (L1 + narrow argument hash): stores the compiled artifact under a key that only hashes the arg paths in the L1 pruning set.
+
+#### Two rules
+
+The args hasher enforces two strict invariants:
+
+1. **The cache key may only include contributions from kernel-pruned paths.** A path is "pruned" (in the pruning-info sense) if Quadrants's compiler recorded the kernel reading it. Pruning info covers:
+   - Dataclass-flattened param accesses (`__qd_some_dc__qd_field` Names produced by `FlattenAttributeNameTransformer`, marked via `build_Name`).
+   - Ndarray accesses on data_oriented / template args (`struct_ndarray_launch_info`, folded into the pruning set by `Kernel._fold_struct_nd_paths_into_pruning`).
+   - Any other attribute-chain access on a kernel arg (`self.dofs.x`, `cfg.n`, …) recorded by `ASTTransformer.build_Attribute`'s `_qd_arg_chain` tracking and folded by `Kernel._fold_kernel_arg_chain_paths_into_pruning`. This covers primitive members baked into the kernel, nested struct paths, and accesses through `@qd.func` callees (propagated by `Pruning.record_after_call`).
+
+   Paths *not* in the pruning set are skipped by the args hasher — they are guaranteed not to affect kernel codegen because the kernel cannot read them.
+
+2. **Unrecognised types at kernel-read paths must not be silently dropped or hashed by type-name.** If pruning says the kernel reads a path and the value at that path is a type the args hasher doesn't explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, …), fastcache is disabled for the call with a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning identifying the offending type plus an `[INVALID_FUNC]` log line confirming the cache is off. Capturing type identity without type parameters (dtype/shape on a hypothetical tensor type) would silently mask a value-affecting change.
+
+#### Practical implications
+
+- **Kernel-unused members do not affect the cache key.** If a `@qd.data_oriented` container has an opaque metadata member (UUID, Pydantic config, parent-solver back-pointer), and the kernel never reads it, the member is *not* hashed. Changes to `self._uid` or `self.cfg` don't disturb the cache key of a kernel that reads `self.dofs_state.x`.
+- **Kernel-unused members of unrecognised types are also fine.** Pruning narrowing skips them before the type-recognition check runs.
+- **Kernel-read members of unrecognised types fail fastcache loudly.** Either add explicit handling in `quadrants/lang/_fast_caching/args_hasher.py::stringify_obj_type` (for new tensor-like types whose dtype/shape matter), or move the access out of the kernel-read path (for opaque metadata that shouldn't be there in the first place).
+
+`qd.field` / `ScalarField` / `MatrixField` are *recognised-but-unsupported*: encountering one at a kernel-read path disables fastcache for the call (with a warn-level diagnostic).
 
 ## Advanced
 
@@ -172,3 +173,31 @@ print(obs.cache_stored)         # True if the compiled kernel was stored to cach
 ```
 
 On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the second run (after `qd.init`), `cache_loaded=True`.
+
+### Compound-type cache keying
+
+The args hasher walks compound-type kernel parameters recursively. For each leaf member it decides what (if anything) contributes to the cache key. The headline rules:
+
+**`@qd.data_oriented`:** the walker descends into `vars(obj)`, narrowed by pruning info. For each walked child:
+
+- `qd.ndarray` member — `(dtype, ndim, layout)` is included in the cache key. Element values are not.
+- Primitive (`int` / `float` / `bool` / `enum.Enum`) member — value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries.
+- Nested `@qd.data_oriented` member — recurses.
+- Nested `dataclasses.dataclass` member — recurses (with the dataclass rules below).
+- `qd.field` member — fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.
+
+**`dataclasses.dataclass`:** the walker descends into the declared members. For each member, only the *type* is included in the cache key by default — **not** the value. To include a member's value, annotate it:
+
+```python
+import dataclasses
+from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE
+
+@dataclasses.dataclass
+class SimConfig:
+    num_layers: int = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
+    dt: float = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
+```
+
+This is necessary whenever the compiled kernel depends on the member's *value* rather than just its type (for example, when the value is used as a loop bound that the compiler bakes into the generated code). Without the annotation, two `SimConfig` instances with different `num_layers` values would share a fastcache key, and the second instance would silently load a kernel compiled for the wrong value.
+
+Note the asymmetry: `@qd.data_oriented` primitive members are baked into the kernel automatically (same semantics as `qd.Template`); `dataclasses.dataclass` members contribute only their *type* to the cache key unless you opt in per-member.

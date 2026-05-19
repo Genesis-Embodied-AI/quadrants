@@ -498,28 +498,21 @@
     <span class="k">pass</span>
 </pre></div>
 </div>
-<p>is therefore unsafe: LLVM’s loop-invariant-code-motion will hoist the load out of the loop (the loop body has no aliasing writes), so once the first read sees <code class="docutils literal notranslate"><span class="pre">STATE_INVALID</span></code> the loop never observes the producer’s update — it spins forever. Three correct approaches, in order of preference:</p>
+<p>is therefore unsafe: LLVM’s loop-invariant-code-motion will hoist the load out of the loop (the loop body has no aliasing writes), so once the first read sees <code class="docutils literal notranslate"><span class="pre">STATE_INVALID</span></code> the loop never observes the producer’s update — it spins forever. Two correct spellings:</p>
 <ul>
-<li><p><strong>Volatile load</strong> (recommended; cross-backend, cheapest):</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">volatile_load</span><span class="p">(</span><span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">])</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
-    <span class="k">pass</span>
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> lowers to LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> on CUDA / AMDGPU and to <code class="docutils literal notranslate"><span class="pre">OpLoad</span></code> with the SPIR-V <code class="docutils literal notranslate"><span class="pre">Volatile</span></code> <code class="docutils literal notranslate"><span class="pre">MemoryAccess</span></code> mask on Vulkan / Metal — the optimiser is forbidden from hoisting / merging the load on every backend, with no per-iteration cache-flush or atomic-RMW overhead. See <a class="reference internal" href="atomics.html"><span class="std std-doc">atomics</span></a> for the full primitive description, including the producer-side pairing requirements (atomic store, or plain store + fence on non-Metal backends).</p>
-</li>
-<li><p><strong>Fence inside the loop body</strong> (used in the example above; legacy approach):</p>
+<li><p><strong>Fence inside the loop body</strong> (used in the example above):</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">]</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
     <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">grid</span><span class="o">.</span><span class="n">mem_fence</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>The fence has compiler-visible global side effects, which prevents LICM from hoisting the <code class="docutils literal notranslate"><span class="pre">flags[prev]</span></code> load across it; each iteration is forced to re-fetch from global memory. Cost: one fence per spin iteration (an order of magnitude more than a volatile load). Works on CUDA, AMDGPU, and native Vulkan; <strong>does not work on Metal / Vulkan-on-macOS</strong> (the producer’s plain store may never become visible — see the portability note above). Prefer <code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> for new code.</p>
+<p>The fence has compiler-visible global side effects, which prevents LICM from hoisting the <code class="docutils literal notranslate"><span class="pre">flags[prev]</span></code> load across it; each iteration is forced to re-fetch from global memory. Cost: one fence per spin iteration. Works on CUDA, AMDGPU, and native Vulkan; <strong>does not work on Metal / Vulkan-on-macOS</strong> (the producer’s plain store may never become visible — see the portability note above). Use the atomic-load idiom below for Metal-portable code.</p>
 </li>
-<li><p><strong>Atomic load via <code class="docutils literal notranslate"><span class="pre">atomic_or</span></code> with zero</strong> (legacy approach):</p>
+<li><p><strong>Atomic load via <code class="docutils literal notranslate"><span class="pre">atomic_or</span></code> with zero</strong>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_or</span><span class="p">(</span><span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
     <span class="k">pass</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">qd.atomic_or(x,</span> <span class="pre">0)</span></code> is an atomic op that returns the current value without modifying it, which forces a real memory access on every iteration and additionally pins down ordering. Cheaper than a per-iteration full grid fence but still pays the atomic-RMW hardware cost (and contention with concurrent stores on the same cell). Was previously the only Metal-portable approach; <code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> now covers Metal too and is preferred for new code. Useful as a paired idiom with an atomic <em>store</em> on the producer side (<code class="docutils literal notranslate"><span class="pre">qd.atomic_or(flags[bid],</span> <span class="pre">STATE_AGGREGATE)</span></code>) when the producer also wants atomic-store semantics.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.atomic_or(x,</span> <span class="pre">0)</span></code> is an atomic op that returns the current value without modifying it, which forces a real memory access on every iteration and additionally pins down ordering. Slightly cheaper than a per-iteration full grid fence on most hardware, arguably the cleaner expression of “atomically load this slot”, and the only Metal-portable spelling — pair it with an atomic <em>store</em> on the producer side (<code class="docutils literal notranslate"><span class="pre">qd.atomic_or(flags[bid],</span> <span class="pre">STATE_AGGREGATE)</span></code> instead of a plain store + fence) so that both ends of the handshake go through atomic ops.</p>
 </li>
 </ul>
 </section>
