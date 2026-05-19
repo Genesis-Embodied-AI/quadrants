@@ -113,6 +113,11 @@ def pytest_collection_modifyitems(config, items):
     if config.getoption("--no-sample"):
         return
     seed = config.getoption("--sample-seed")
+    sys.stderr.write(
+        f"[QD_SAMPLE_DEBUG] pid={os.getpid()} workerinput={hasattr(config, 'workerinput')} "
+        f"seed-opt={seed} argv={sys.argv} env-QD={os.environ.get('QD_SAMPLE_SEED')}\n"
+    )
+    sys.stderr.flush()
     if seed is None:
         # Defensive: pytest_configure didn't run (e.g. someone imported this module manually). Nothing to do.
         return
