@@ -82,25 +82,34 @@ while flags[prev] == STATE_INVALID:
     pass
 ```
 
-is therefore unsafe: LLVM's loop-invariant-code-motion will hoist the load out of the loop (the loop body has no aliasing writes), so once the first read sees `STATE_INVALID` the loop never observes the producer's update — it spins forever. Two correct spellings:
+is therefore unsafe: LLVM's loop-invariant-code-motion will hoist the load out of the loop (the loop body has no aliasing writes), so once the first read sees `STATE_INVALID` the loop never observes the producer's update — it spins forever. Three correct approaches, in order of preference:
 
-- **Fence inside the loop body** (used in the example above):
+- **Volatile load** (recommended; cross-backend, cheapest):
+
+  ```python
+  while qd.volatile_load(flags[prev]) == STATE_INVALID:
+      pass
+  ```
+
+  `qd.volatile_load` lowers to LLVM `load volatile` on CUDA / AMDGPU and to `OpLoad` with the SPIR-V `Volatile` `MemoryAccess` mask on Vulkan / Metal — the optimiser is forbidden from hoisting / merging the load on every backend, with no per-iteration cache-flush or atomic-RMW overhead. See [atomics](atomics.md) for the full primitive description, including the producer-side pairing requirements (atomic store, or plain store + fence on non-Metal backends).
+
+- **Fence inside the loop body** (used in the example above; legacy approach):
 
   ```python
   while flags[prev] == STATE_INVALID:
       qd.simt.grid.mem_fence()
   ```
 
-  The fence has compiler-visible global side effects, which prevents LICM from hoisting the `flags[prev]` load across it; each iteration is forced to re-fetch from global memory. Cost: one fence per spin iteration. Works on CUDA, AMDGPU, and native Vulkan; **does not work on Metal / Vulkan-on-macOS** (the producer's plain store may never become visible — see the portability note above). Use the atomic-load idiom below for Metal-portable code.
+  The fence has compiler-visible global side effects, which prevents LICM from hoisting the `flags[prev]` load across it; each iteration is forced to re-fetch from global memory. Cost: one fence per spin iteration (an order of magnitude more than a volatile load). Works on CUDA, AMDGPU, and native Vulkan; **does not work on Metal / Vulkan-on-macOS** (the producer's plain store may never become visible — see the portability note above). Prefer `qd.volatile_load` for new code.
 
-- **Atomic load via `atomic_or` with zero**:
+- **Atomic load via `atomic_or` with zero** (legacy approach):
 
   ```python
   while qd.atomic_or(flags[prev], 0) == STATE_INVALID:
       pass
   ```
 
-  `qd.atomic_or(x, 0)` is an atomic op that returns the current value without modifying it, which forces a real memory access on every iteration and additionally pins down ordering. Slightly cheaper than a per-iteration full grid fence on most hardware, arguably the cleaner expression of "atomically load this slot", and the only Metal-portable spelling — pair it with an atomic *store* on the producer side (`qd.atomic_or(flags[bid], STATE_AGGREGATE)` instead of a plain store + fence) so that both ends of the handshake go through atomic ops.
+  `qd.atomic_or(x, 0)` is an atomic op that returns the current value without modifying it, which forces a real memory access on every iteration and additionally pins down ordering. Cheaper than a per-iteration full grid fence but still pays the atomic-RMW hardware cost (and contention with concurrent stores on the same cell). Was previously the only Metal-portable approach; `qd.volatile_load` now covers Metal too and is preferred for new code. Useful as a paired idiom with an atomic *store* on the producer side (`qd.atomic_or(flags[bid], STATE_AGGREGATE)`) when the producer also wants atomic-store semantics.
 
 ## Performance and portability notes
 

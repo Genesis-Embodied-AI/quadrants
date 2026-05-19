@@ -772,20 +772,6 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.kernel_args">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">kernel_args</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span></div>
 
-        <span class="c1"># Names of the bare (non-flattened) parameters of a ``@qd.func`` being processed. Used by ``build_Name`` to</span>
-        <span class="c1"># seed ``_qd_arg_chain`` for attribute accesses rooted at a func param (e.g.</span>
-        <span class="c1"># ``static_rigid_sim_config.para_level`` where ``static_rigid_sim_config`` is a ``qd.template()`` arg bound to</span>
-        <span class="c1"># a ``@qd.data_oriented`` instance). Without this, chains rooted at func params would not be recorded in</span>
-        <span class="c1"># pruning, and the args-hasher would skip over kernel-read primitive members of nested data_oriented</span>
-        <span class="c1"># containers — leading to stale fastcache hits when those members change between calls.</span>
-        <span class="c1"># ``kernel_args`` only tracks top-level ``@qd.kernel`` args; ``_transform_func_arg`` for a ``@qd.func`` does</span>
-        <span class="c1"># not append to it (see function_def_transformer.py). This separate set avoids piggy-backing on</span>
-        <span class="c1"># ``kernel_args`` so the existing &quot;kernel arg is immutable&quot; diagnostic in ``build_assign_annotated`` doesn&#39;t</span>
-        <span class="c1"># start firing for func params.</span>
-<div class="viewcode-block" id="ASTTransformerFuncContext.fn_param_names">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.fn_param_names">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">fn_param_names</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span></div>
-
 <div class="viewcode-block" id="ASTTransformerFuncContext.only_parse_function_def">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.only_parse_function_def">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">only_parse_function_def</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>

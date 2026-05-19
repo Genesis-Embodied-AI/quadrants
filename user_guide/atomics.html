@@ -409,6 +409,7 @@
   <section class="tex2jax_ignore mathjax_ignore" id="atomics">
 <h1>Atomics<a class="headerlink" href="#atomics" title="Link to this heading">#</a></h1>
 <p>Atomic read-modify-write operations on a single memory location. They do not synchronize threads; the only ordering they provide is the per-location atomicity of the read-modify-write itself. For cooperative ops across threads see the <code class="docutils literal notranslate"><span class="pre">qd.simt.block.*</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.*</span></code>, and <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.*</span></code> namespaces. Bit-counting helpers on integer registers (<code class="docutils literal notranslate"><span class="pre">qd.math.popcnt</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code>) are documented in <a class="reference internal" href="math.html"><span class="std std-doc">math</span></a>.</p>
+<p>The companion read-side primitive <code class="docutils literal notranslate"><span class="pre">qd.volatile_load(target)</span></code> is documented at the end of this page (<code class="docutils literal notranslate"><span class="pre">###</span> <span class="pre">qd.volatile_load(target)</span></code>); it pairs with atomic stores in producer / consumer patterns where the reader must observe every update from another thread or block, and is the recommended approach for spin-wait loops.</p>
 <section id="what-s-available">
 <h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
 <p>All atomic ops follow the same shape: <code class="docutils literal notranslate"><span class="pre">qd.atomic_op(x,</span> <span class="pre">y)</span></code> performs <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">op(x,</span> <span class="pre">y)</span></code> atomically and returns the <strong>old</strong> value of <code class="docutils literal notranslate"><span class="pre">x</span></code>. <code class="docutils literal notranslate"><span class="pre">x</span></code> must be a writable memory target (a field element, ndarray element, or matrix slot); scalars and constant expressions are not allowed.</p>
@@ -585,6 +586,69 @@
 </pre></div>
 </div>
 <p>Currently restricted to integer dtypes (<code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code>); float CAS is rejected at compile time. The Metal <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> caveat in the support table footnote applies here too. There is no shared-memory CAS path yet.</p>
+</section>
+<section id="qd-volatile-load-target">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.volatile_load(target)</span></code><a class="headerlink" href="#qd-volatile-load-target" title="Link to this heading">#</a></h3>
+<p>Read <code class="docutils literal notranslate"><span class="pre">target</span></code> from memory with <strong>volatile</strong> semantics: the compiler is forbidden from caching, hoisting, or merging the load with prior reads of the same address. Strictly speaking this is not an atomic op (it does not modify the cell, and per-thread it is no more atomic than an ordinary load) — it lives on this page because it is the read-side counterpart to <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code> in producer / consumer patterns. Without it, a spin-wait loop reading the location written by another thread or block is undefined at the LLVM-IR / SPIR-V level.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">val</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">volatile_load</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+<span class="c1"># Effect:</span>
+<span class="c1">#   load(target) — but the load is guaranteed to actually go to memory on every call,</span>
+<span class="c1">#   not be reused from a register or hoisted out of an enclosing loop.</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">target</span></code> must be a global lvalue (a field or ndarray subscript); function-scope local arrays are rejected because a local cannot be observed by another thread. Bit-packed quant snodes are also rejected (per-field volatile semantics on a shared physical word are not meaningful).</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Backend</p></th>
+<th class="head"><p>Lowering</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CUDA</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> → PTX <code class="docutils literal notranslate"><span class="pre">ld.volatile.global</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>AMDGPU</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> → unhoistable <code class="docutils literal notranslate"><span class="pre">global_load_*</span></code> (the optimiser is inhibited from forwarding / merging).</p></td>
+</tr>
+<tr class="row-even"><td><p>Vulkan / Metal</p></td>
+<td><p>SPIR-V <code class="docutils literal notranslate"><span class="pre">OpLoad</span></code> with the <code class="docutils literal notranslate"><span class="pre">Volatile</span></code> <code class="docutils literal notranslate"><span class="pre">MemoryAccess</span></code> mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL.</p></td>
+</tr>
+<tr class="row-odd"><td><p>CPU (x86_64)</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> (the optimiser cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Quadrants additionally suppresses the optimisations that would otherwise let an aliased rewrite slip past codegen:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cache_loop_invariant_global_vars</span></code> does not hoist a volatile load out of an enclosing loop.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">simplify</span></code> does not replace a volatile load with the value of an earlier load of the same address.</p></li>
+<li><p>On CUDA, the <code class="docutils literal notranslate"><span class="pre">__ldg</span></code> / <code class="docutils literal notranslate"><span class="pre">!invariant.load</span></code> read-only-cache fast path is suppressed for volatile loads (the two attributes are contradictory).</p></li>
+</ul>
+<section id="spin-wait-pattern-the-canonical-use-case">
+<h4>Spin-wait pattern (the canonical use case)<a class="headerlink" href="#spin-wait-pattern-the-canonical-use-case" title="Link to this heading">#</a></h4>
+<p>The naive approach</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">]</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>is undefined: the compiler may hoist <code class="docutils literal notranslate"><span class="pre">flags[prev]</span></code> out of the loop, turning the spin into an infinite loop. <code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> is the cheapest correct approach on every backend:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">volatile_load</span><span class="p">(</span><span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">])</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>The two older workarounds remain correct but pay a perf tax over the volatile load:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> inside the loop body — drains the device-scope cache on every iteration. Order-of-magnitude more expensive than a volatile read on contemporary hardware. Also does <strong>not</strong> help on Metal / Vulkan-on-macOS (the Metal device-scope fence only orders atomic accesses; see <a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.atomic_or(flags[prev],</span> <span class="pre">0)</span></code> — forces a memory round-trip via an atomic RMW. Pays for the read-modify-write hardware path even though we only want to read; contention with concurrent stores is worse than a plain volatile load.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> works on every backend uniformly, has no contention overhead, and matches what CUDA / OpenCL programmers reach for in the same situation.</p>
+</section>
+<section id="pairing-with-the-producer">
+<h4>Pairing with the producer<a class="headerlink" href="#pairing-with-the-producer" title="Link to this heading">#</a></h4>
+<p>A volatile load only orders the location it reads. To make other writes from the producer visible to the reader after the volatile load observes the new value, the producer must publish through an ordering primitive — either an atomic store (the Metal-portable choice; see the per-store atomic ops above), or a plain store followed by <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> (CUDA / AMDGPU / native Vulkan only).</p>
+<p>The decoupled-look-back scan in <a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a> shows the full pattern.</p>
+</section>
 </section>
 </section>
 <section id="performance-and-portability-notes">
@@ -778,6 +842,11 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-sub-x-y-qd-atomic-mul-x-y"><code class="docutils literal notranslate"><span class="pre">qd.atomic_sub(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_mul(x,</span> <span class="pre">y)</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-exchange-x-y"><code class="docutils literal notranslate"><span class="pre">qd.atomic_exchange(x,</span> <span class="pre">y)</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-cas-x-expected-desired"><code class="docutils literal notranslate"><span class="pre">qd.atomic_cas(x,</span> <span class="pre">expected,</span> <span class="pre">desired)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-volatile-load-target"><code class="docutils literal notranslate"><span class="pre">qd.volatile_load(target)</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#spin-wait-pattern-the-canonical-use-case">Spin-wait pattern (the canonical use case)</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#pairing-with-the-producer">Pairing with the producer</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-and-portability-notes">Performance and portability notes</a><ul class="nav section-nav flex-column">

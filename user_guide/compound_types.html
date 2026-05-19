@@ -413,48 +413,54 @@
 <p>It can be useful to combine multiple ndarrays or fields together into a single struct-like object that can be passed into kernels, and into &#64;qd.func’s.</p>
 <p>The following compound types are available:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> — lightweight container of tensors and primitives; can contain ndarrays</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> — for creating objects with <code class="docutils literal notranslate"><span class="pre">self</span></code> that define <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> methods</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> — for structures that are embedded into the kernel, and don’t contain ndarrays</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> — <strong>recommended</strong></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> — for classes that define <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> methods, cannot contain ndarrays</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.struct</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> — legacy, field-only</p></li>
 </ul>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
-<tr class="row-odd"><th class="head"><p>property</p></th>
-<th class="head text-center"><p><code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code></p></th>
-<th class="head text-center"><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></p></th>
-<th class="head text-center"><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code></p></th>
+<tr class="row-odd"><th class="head"><p>type</p></th>
+<th class="head text-center"><p>can be passed to qd.kernel?</p></th>
+<th class="head text-center"><p>can be passed to qd.func?</p></th>
+<th class="head text-center"><p>can contain ndarray?</p></th>
+<th class="head text-center"><p>can contain field?</p></th>
+<th class="head text-center"><p>can be nested?</p></th>
+<th class="head text-center"><p>supports differentiation?</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>Kernel-side representation</p></td>
-<td class="text-center"><p>none (flattened away)</p></td>
-<td class="text-center"><p>none (flattened away)</p></td>
-<td class="text-center"><p>real type with fixed memory layout</p></td>
-</tr>
-<tr class="row-odd"><td><p>Can be tensor element type</p></td>
-<td class="text-center"><p>no</p></td>
-<td class="text-center"><p>no</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code></p></td>
 <td class="text-center"><p>yes</p></td>
+<td class="text-center"><p>yes</p></td>
+<td class="text-center"><p>yes</p></td>
+<td class="text-center"><p>yes</p></td>
+<td class="text-center"><p>yes</p></td>
+<td class="text-center"><p>no [*1]</p></td>
 </tr>
-<tr class="row-even"><td><p>Can hold ndarrays</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></p></td>
 <td class="text-center"><p>yes</p></td>
 <td class="text-center"><p>yes</p></td>
 <td class="text-center"><p>no</p></td>
+<td class="text-center"><p>yes</p></td>
+<td class="text-center"><p>yes</p></td>
+<td class="text-center"><p>yes</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> methods on <code class="docutils literal notranslate"><span class="pre">self</span></code></p></td>
-<td class="text-center"><p>no</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.struct</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code></p></td>
+<td class="text-center"><p>yes</p></td>
 <td class="text-center"><p>yes</p></td>
 <td class="text-center"><p>no</p></td>
-</tr>
-<tr class="row-even"><td><p>Member declaration</p></td>
-<td class="text-center"><p>type-annotated class fields</p></td>
-<td class="text-center"><p>live attributes (no annotations)</p></td>
-<td class="text-center"><p>type-annotated class fields</p></td>
+<td class="text-center"><p>yes</p></td>
+<td class="text-center"><p>yes</p></td>
+<td class="text-center"><p>yes</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>See <a class="reference internal" href="#nesting-compatibility">Nesting compatibility</a> below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.</p>
+</section>
+<section id="recommendation">
+<h2>Recommendation<a class="headerlink" href="#recommendation" title="Link to this heading">#</a></h2>
+<p><strong>Use <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> for new code.</strong> It supports both fields and ndarrays, can be nested, and uses standard Python — no Quadrants-specific decorator needed.</p>
+<p>The other compound types exist for historical reasons.</p>
 </section>
 <section id="dataclasses-dataclass">
 <h2>dataclasses.dataclass<a class="headerlink" href="#dataclasses-dataclass" title="Link to this heading">#</a></h2>
@@ -525,7 +531,7 @@ my_struct.b[37] 5
 </section>
 <section id="passing-nested-sub-structs-to-a-qd-func">
 <h3>Passing nested sub-structs to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code><a class="headerlink" href="#passing-nested-sub-structs-to-a-qd-func" title="Link to this heading">#</a></h3>
-<p>You can pass either a whole nested-dataclass argument or one of its sub-struct members to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code>. The callee declares the sub-struct’s type as the parameter annotation; the caller writes the attribute access at the call site:</p>
+<p>You can pass either a whole nested-dataclass argument or one of its sub-struct fields to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code>. The callee declares the sub-struct’s type as the parameter annotation; the caller writes the attribute access at the call site:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Inner</span><span class="p">:</span>
     <span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
@@ -555,13 +561,9 @@ my_struct.b[37] 5
 <li><p>arbitrary nesting depth (<code class="docutils literal notranslate"><span class="pre">f(s.a.b.c)</span></code> where each level is a dataclass)</p></li>
 <li><p>positional and keyword call sites (<code class="docutils literal notranslate"><span class="pre">f(s.inner)</span></code> and <code class="docutils literal notranslate"><span class="pre">f(inner=s.inner)</span></code>)</p></li>
 <li><p>call sites both directly inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> bodies and inside other <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> bodies</p></li>
-<li><p>pruning of the sub-struct’s leaf members that the callee never reads</p></li>
+<li><p>pruning of the sub-struct’s leaf fields that the callee never reads</p></li>
 </ul>
 <p>Note: assigning a sub-struct to a local variable and then passing it (<code class="docutils literal notranslate"><span class="pre">t</span> <span class="pre">=</span> <span class="pre">s.inner;</span> <span class="pre">touch_inner(t)</span></code>) is <strong>not</strong> supported. Pass the attribute access directly at the call site.</p>
-</section>
-<section id="under-the-hood">
-<h3>Under the hood<a class="headerlink" href="#under-the-hood" title="Link to this heading">#</a></h3>
-<p>A <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn’t exist on the kernel side. That’s why members are read-only: the values are captured at compile time and re-assigning them afterwards has no effect on running kernels.</p>
 </section>
 </section>
 <section id="qd-data-oriented">
@@ -582,198 +584,17 @@ my_struct.b[37] 5
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> objects can also be passed as <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> parameters to kernels defined outside the class, and they support nesting (one <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> struct containing another).</p>
-<section id="primitive-members">
-<h3>Primitive members<a class="headerlink" href="#primitive-members" title="Link to this heading">#</a></h3>
-<p>Primitive members on <code class="docutils literal notranslate"><span class="pre">self</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">int</span></code>, <code class="docutils literal notranslate"><span class="pre">float</span></code>, <code class="docutils literal notranslate"><span class="pre">bool</span></code>, <code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code>) are supported, but they are treated as <strong>template values</strong>: each distinct primitive value across instances triggers a new kernel compilation, with the value baked into the kernel IR.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
-<span class="k">class</span><span class="w"> </span><span class="nc">Simulation</span><span class="p">:</span>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">n</span> <span class="o">=</span> <span class="n">n</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">n</span><span class="p">,))</span>
-
-    <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">1.0</span>
-
-<span class="n">Simulation</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>   <span class="c1"># compiles kernel #1 with n=100 baked in</span>
-<span class="n">Simulation</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>   <span class="c1"># compiles kernel #2 with n=200 baked in</span>
-</pre></div>
-</div>
 </section>
-<section id="tensor-members">
-<h3>Tensor members<a class="headerlink" href="#tensor-members" title="Link to this heading">#</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> classes may hold tensor members of any backend: <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>, or <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code>.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
-<span class="k">class</span><span class="w"> </span><span class="nc">State</span><span class="p">:</span>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">n</span> <span class="o">=</span> <span class="n">n</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">n</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">n</span><span class="p">,))</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">n</span><span class="p">,))</span>
-
-    <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">1.0</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">1.0</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">c</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">1.0</span>
-
-<span class="n">state</span> <span class="o">=</span> <span class="n">State</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
-<span class="n">state</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
-</pre></div>
-</div>
-</section>
-<section id="fastcache">
-<h3>Fastcache<a class="headerlink" href="#fastcache" title="Link to this heading">#</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(fastcache=True)</span></code> is supported on methods of <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> classes. Cache keying is <em>pruning-driven</em>: only the members the kernel actually reads contribute to the cache key. Opaque metadata members (e.g. UUIDs, Pydantic config objects, back-pointers to parent solvers) are skipped by the args-hasher’s narrow walk as long as the kernel doesn’t read them — they cannot affect compiled code and cannot cause spurious cache misses. See <a class="reference internal" href="fastcache.html#pruning-driven-argument-hashing"><span class="std std-ref">Pruning-driven argument hashing</span></a> for the full keying rules.</p>
-<p>If the kernel <em>does</em> read a member of an unrecognised type, fastcache is disabled for the call with a <code class="docutils literal notranslate"><span class="pre">[FASTCACHE][UNKNOWN_TYPE]</span></code> diagnostic — there is no qualname-fallback. <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> / <code class="docutils literal notranslate"><span class="pre">MatrixField</span></code> members at a kernel-read path likewise disable fastcache (recognised-but-unsupported tensor-like types).</p>
-</section>
-<section id="id1">
-<h3>Under the hood<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
-<p>Like <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code>, a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> object is Python-only — the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> it needs no member annotations: the compiler reads the live instance’s attributes directly. Primitive members are baked into the kernel as constants, so each distinct primitive value compiles a new specialised kernel.</p>
-</section>
-</section>
-<section id="qd-dataclass-qd-types-struct">
-<h2>qd.dataclass / qd.types.struct<a class="headerlink" href="#qd-dataclass-qd-types-struct" title="Link to this heading">#</a></h2>
-<p>Unlike <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> creates a struct that is available within the kernels themselves. The former types are only used for structure on the python side, before compilation. <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> can be used as the element type of fields. One key downside of <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> is that they can only be used with fields and primitives, not with ndarray. This is because tensors are embedded in the struct by value, not as a reference pointer.</p>
+<section id="qd-struct-qd-dataclass">
+<h2>qd.struct / qd.dataclass<a class="headerlink" href="#qd-struct-qd-dataclass" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">&#64;qd.struct</span></code> (and its alias <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>) is a Quadrants-native struct type. It can only contain fields and primitive types, not ndarrays.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Particle</span><span class="p">:</span>
     <span class="n">pos</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
     <span class="n">vel</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
     <span class="n">mass</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span>
-
-<span class="c1"># AOS layout: each element of `particles` is a (pos, vel, mass) cell contiguous in memory.</span>
-<span class="c1"># Only possible because Particle is a StructType — `@qd.data_oriented` and</span>
-<span class="c1"># `dataclasses.dataclass` containers can&#39;t be the element type of a tensor.</span>
-<span class="n">particles</span> <span class="o">=</span> <span class="n">Particle</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,),</span> <span class="n">layout</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Methods can be added to a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> and may be decorated with <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> so they can be called from kernels via <code class="docutils literal notranslate"><span class="pre">instance.method(...)</span></code> syntax (the call is inlined at compile time, like any other <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>).</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">dataclass</span>
-<span class="k">class</span><span class="w"> </span><span class="nc">Particle</span><span class="p">:</span>
-    <span class="n">pos</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
-    <span class="n">vel</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
-    <span class="n">mass</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span>
-
-    <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">kinetic_energy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">mass</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">vel</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vel</span><span class="p">)</span>
-
-<span class="n">particles</span> <span class="o">=</span> <span class="n">Particle</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">total_ke</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">:</span>
-    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
-        <span class="n">total</span> <span class="o">+=</span> <span class="n">particles</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">kinetic_energy</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">total</span>
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">qd.types.struct(name1=type1,</span> <span class="pre">...)</span></code> is the function-form equivalent of <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>: it builds the same <code class="docutils literal notranslate"><span class="pre">StructType</span></code> without a class body.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">vec3</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
-<span class="n">Particle</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">struct</span><span class="p">(</span><span class="n">pos</span><span class="o">=</span><span class="n">vec3</span><span class="p">,</span> <span class="n">vel</span><span class="o">=</span><span class="n">vec3</span><span class="p">,</span> <span class="n">mass</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
-<span class="n">particles</span> <span class="o">=</span> <span class="n">Particle</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
-</pre></div>
-</div>
-<section id="id2">
-<h3>Under the hood<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
-<p>Unlike the other two compound types, <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> is a real kernel-side type with a fixed memory layout. Each instance is laid out contiguously in memory, members are stored by value, and a tensor of the struct can be allocated (<code class="docutils literal notranslate"><span class="pre">Particle.field(...)</span></code>). Storing by value is also why ndarrays can’t be members — ndarrays are heap-allocated buffers with dynamic shape and don’t fit into a fixed-size cell.</p>
-</section>
-</section>
-<section id="nesting-compatibility">
-<h2>Nesting compatibility<a class="headerlink" href="#nesting-compatibility" title="Link to this heading">#</a></h2>
-<p>This table summarises which member types are allowed inside which container type. “yes” means the member is walked correctly when the container is passed to a kernel; “no” means the member is ignored or the combination raises an error.</p>
-<div class="pst-scrollable-table-container"><table class="table">
-<thead>
-<tr class="row-odd"><th class="head"><p>Container ↓     /     Member →</p></th>
-<th class="head text-center"><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code></p></th>
-<th class="head text-center"><p><code class="docutils literal notranslate"><span class="pre">qd.field</span></code></p></th>
-<th class="head text-center"><p>primitive</p></th>
-<th class="head text-center"><p><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code></p></th>
-<th class="head text-center"><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></p></th>
-<th class="head text-center"><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code></p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code></p></td>
-<td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>yes [*1]</p></td>
-<td class="text-center"><p>yes</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></p></td>
-<td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>yes</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code></p></td>
-<td class="text-center"><p>no</p></td>
-<td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>no</p></td>
-<td class="text-center"><p>no</p></td>
-<td class="text-center"><p>yes</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<p>[*1] A <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> may <em>hold</em> a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member, but the <strong>outer kernel-arg annotation</strong> must be <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code>, not the dataclass type itself. Passing a typed-dataclass kernel arg (<code class="docutils literal notranslate"><span class="pre">def</span> <span class="pre">k(s:</span> <span class="pre">Outer)</span></code>) whose member type is a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class raises a clear <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time pointing you to <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code>. The reason: typed-dataclass kernel args are flattened from annotations, but <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> carries no per-member annotations — its members are walked from the live instance, which only happens on the template path.</p>
-<section id="outer-kernel-arg-annotation">
-<h3>Outer kernel-arg annotation<a class="headerlink" href="#outer-kernel-arg-annotation" title="Link to this heading">#</a></h3>
-<p>The outermost annotation you put on the kernel parameter determines how the container is walked:</p>
-<div class="pst-scrollable-table-container"><table class="table">
-<thead>
-<tr class="row-odd"><th class="head"><p>Annotation</p></th>
-<th class="head"><p>Kernel-arg walker</p></th>
-<th class="head"><p>Notes</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[...]</span></code></p></td>
-<td><p>ndarray slot</p></td>
-<td><p>leaf-level only</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MyDataclass</span></code> (dataclass type)</p></td>
-<td><p>per-member flatten using annotations</p></td>
-<td><p>needs every member to have a quadrants-typed annotation</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.template()</span></code></p></td>
-<td><p>value-driven walk of <code class="docutils literal notranslate"><span class="pre">vars(self)</span></code> / dataclass members</p></td>
-<td><p>supports the full nesting matrix above</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<p>Two practical consequences:</p>
-<ul class="simple">
-<li><p><strong>Containers with <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> anywhere in the tree</strong> must be passed via <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> (or be the <code class="docutils literal notranslate"><span class="pre">self</span></code> of a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> method on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class). Using a typed-dataclass annotation on the outermost arg errors.</p></li>
-<li><p><strong>A non-frozen <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code></strong> can be passed via the typed-dataclass annotation, but cannot be the outer <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> arg — <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> uses the instance as a dict key inside the template-mapper and a non-frozen dataclass has <code class="docutils literal notranslate"><span class="pre">__hash__</span> <span class="pre">=</span> <span class="pre">None</span></code>. Add <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code> if you need to pass it as <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> (for example, when it holds <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> children).</p></li>
-</ul>
-</section>
-<section id="reassigning-ndarray-members">
-<h3>Reassigning ndarray members<a class="headerlink" href="#reassigning-ndarray-members" title="Link to this heading">#</a></h3>
-<p>For both <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> containers passed via <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code>, reassigning an ndarray member between kernel launches is supported, including changes to <code class="docutils literal notranslate"><span class="pre">dtype</span></code>, <code class="docutils literal notranslate"><span class="pre">ndim</span></code>, or layout. A new specialised kernel is compiled and cached for the new shape; subsequent launches with the original shape continue to use the original cached kernel.</p>
-</section>
-<section id="restrictions">
-<h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
-<ul class="simple">
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> (the Quadrants <code class="docutils literal notranslate"><span class="pre">StructType</span></code> decorator) cannot contain ndarrays.</strong> This is a legacy field-only type. Use <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> or <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> instead. (The function-form factory <code class="docutils literal notranslate"><span class="pre">qd.types.struct(...)</span></code> produces the same <code class="docutils literal notranslate"><span class="pre">StructType</span></code> and has the same restrictions.)</p></li>
-<li><p><strong>A typed-dataclass kernel-arg annotation cannot have a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member type</strong> (see [*1] above) — errors clearly at compile time.</p></li>
-<li><p><strong>An outer <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> arg of dataclass type must be <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code></strong> — non-frozen dataclasses are unhashable and the template-mapper cannot use them as cache keys.</p></li>
-<li><p><strong>Declare all ndarray members on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class in <code class="docutils literal notranslate"><span class="pre">__init__</span></code>.</strong> The template-mapper caches the set of ndarray-attribute paths reachable from the first instance walked, per class. Adding <em>new</em> ndarray attributes on later instances of the same class is safe — the per-instance weakref in the spec key disambiguates them, and the compile-time walker registers all reachable ndarrays. But:</p>
-<ul>
-<li><p><strong>Deleting an ndarray attribute</strong> that was present on the first launch raises <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code> on the next launch (the cached path still tries to <code class="docutils literal notranslate"><span class="pre">getattr</span></code> the missing attribute).</p></li>
-<li><p><strong>Reassigning a post-first-walk ndarray attribute</strong> (one not present on the first instance walked, then added later and re-assigned) to one with a different <code class="docutils literal notranslate"><span class="pre">dtype</span></code> / <code class="docutils literal notranslate"><span class="pre">ndim</span></code> is <em>not</em> detected by the in-memory invalidation tracker. The stale compiled kernel is silently reused, leading to bit-reinterpretation of the new array’s storage.</p></li>
-</ul>
-</li>
-</ul>
-</section>
 </section>
 </section>
 
@@ -825,30 +646,15 @@ my_struct.b[37] 5
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#overview">Overview</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#recommendation">Recommendation</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dataclasses-dataclass">dataclasses.dataclass</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example">Example</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nesting">Nesting</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#passing-nested-sub-structs-to-a-qd-func">Passing nested sub-structs to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood">Under the hood</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-data-oriented">qd.data_oriented</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#primitive-members">Primitive members</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#tensor-members">Tensor members</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fastcache">Fastcache</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Under the hood</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-dataclass-qd-types-struct">qd.dataclass / qd.types.struct</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">Under the hood</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#nesting-compatibility">Nesting compatibility</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outer-kernel-arg-annotation">Outer kernel-arg annotation</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reassigning-ndarray-members">Reassigning ndarray members</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#restrictions">Restrictions</a></li>
-</ul>
-</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-data-oriented">qd.data_oriented</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-struct-qd-dataclass">qd.struct / qd.dataclass</a></li>
 </ul>
   </nav></div>
 

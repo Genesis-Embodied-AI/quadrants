@@ -487,23 +487,17 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_expand_Call_dataclass_args</span><span class="p">(</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
-        <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
-        <span class="n">called_needed</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">callee_arg_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">,</span> <span class="o">...</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        We require that each node has a .ptr attribute added to it, that contains the associated Python object.</span>
-
-<span class="sd">        ``called_needed`` and ``callee_arg_names`` are used only for the attribute-accessed-instance branch (Option A</span>
-<span class="sd">        for data_oriented @qd.func calls): the caller cannot construct a flat name from its own ``arg.id`` (the arg is</span>
-<span class="sd">        an ast.Attribute), so we look up pruning against the callee&#39;s parameter name at the same positional index.</span>
+<span class="sd">        We require that each node has a .ptr attribute added to it, that contains</span>
+<span class="sd">        the associated Python object</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">args_new</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">added_args</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
         <span class="n">func_id</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span>
-        <span class="k">for</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
             <span class="n">val</span> <span class="o">=</span> <span class="n">arg</span><span class="o">.</span><span class="n">ptr</span>
             <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
                 <span class="n">dataclass_type</span> <span class="o">=</span> <span class="n">val</span>
@@ -531,54 +525,6 @@
                     <span class="k">else</span><span class="p">:</span>
                         <span class="n">args_new</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">arg_node</span><span class="p">)</span>
                         <span class="n">added_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">arg_node</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
-                <span class="c1"># Dataclass *instance* passed positionally (e.g. ``self.state`` inside a @qd.data_oriented kernel</span>
-                <span class="c1"># method). Expand into per-leaf attribute accesses against the same AST node, mirroring the typed-arg</span>
-                <span class="c1"># (instance-of-type) path above but emitting ``ast.Attribute`` children rather than ``ast.Name``.</span>
-                <span class="c1"># ``added_args`` items must not carry ``.ptr`` (build_stmt populates it downstream); only the</span>
-                <span class="c1"># intermediate node used for recursion does.</span>
-                <span class="n">dataclass_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
-                <span class="c1"># For pruning, match the callee&#39;s flat name (it may have pruned unused fields). Use the callee&#39;s</span>
-                <span class="c1"># parameter name at this positional index.</span>
-                <span class="n">callee_param</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="n">callee_arg_names</span><span class="p">[</span><span class="n">arg_idx</span><span class="p">]</span>
-                    <span class="k">if</span> <span class="p">(</span><span class="n">called_needed</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">callee_arg_names</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">arg_idx</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">callee_arg_names</span><span class="p">))</span>
-                    <span class="k">else</span> <span class="kc">None</span>
-                <span class="p">)</span>
-                <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">dataclass_type</span><span class="p">):</span>
-                    <span class="k">if</span> <span class="n">called_needed</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">callee_param</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                        <span class="n">callee_flat_name</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">callee_param</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-                        <span class="k">if</span> <span class="n">callee_flat_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">called_needed</span><span class="p">:</span>
-                            <span class="k">continue</span>
-                    <span class="n">child_val</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-                    <span class="n">load_ctx</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">Load</span><span class="p">()</span>
-                    <span class="n">child_node</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">(</span>
-                        <span class="n">value</span><span class="o">=</span><span class="n">arg</span><span class="p">,</span>
-                        <span class="n">attr</span><span class="o">=</span><span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-                        <span class="n">ctx</span><span class="o">=</span><span class="n">load_ctx</span><span class="p">,</span>
-                        <span class="n">lineno</span><span class="o">=</span><span class="n">arg</span><span class="o">.</span><span class="n">lineno</span><span class="p">,</span>
-                        <span class="n">end_lineno</span><span class="o">=</span><span class="n">arg</span><span class="o">.</span><span class="n">end_lineno</span><span class="p">,</span>
-                        <span class="n">col_offset</span><span class="o">=</span><span class="n">arg</span><span class="o">.</span><span class="n">col_offset</span><span class="p">,</span>
-                        <span class="n">end_col_offset</span><span class="o">=</span><span class="n">arg</span><span class="o">.</span><span class="n">end_col_offset</span><span class="p">,</span>
-                    <span class="p">)</span>
-                    <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">child_val</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">child_val</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
-                        <span class="n">child_node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">child_val</span>
-                        <span class="c1"># Recurse, threading the renamed scope: the callee&#39;s expanded flat name (e.g.</span>
-                        <span class="c1"># ``__qd_state__inner``) is the synthetic param name for the nested level.</span>
-                        <span class="n">nested_callee_param</span> <span class="o">=</span> <span class="p">(</span>
-                            <span class="n">create_flat_name</span><span class="p">(</span><span class="n">callee_param</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">if</span> <span class="n">callee_param</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
-                        <span class="p">)</span>
-                        <span class="n">_added_args</span><span class="p">,</span> <span class="n">_args_new</span> <span class="o">=</span> <span class="n">CallTransformer</span><span class="o">.</span><span class="n">_expand_Call_dataclass_args</span><span class="p">(</span>
-                            <span class="n">ctx</span><span class="p">,</span>
-                            <span class="p">(</span><span class="n">child_node</span><span class="p">,),</span>
-                            <span class="n">called_needed</span><span class="o">=</span><span class="n">called_needed</span><span class="p">,</span>
-                            <span class="n">callee_arg_names</span><span class="o">=</span><span class="p">[</span><span class="n">nested_callee_param</span><span class="p">]</span> <span class="k">if</span> <span class="n">nested_callee_param</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
-                        <span class="p">)</span>
-                        <span class="n">args_new</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">_args_new</span><span class="p">)</span>
-                        <span class="n">added_args</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">_added_args</span><span class="p">)</span>
-                    <span class="k">else</span><span class="p">:</span>
-                        <span class="n">args_new</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">child_node</span><span class="p">)</span>
-                        <span class="n">added_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">child_node</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">args_new</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
         <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">added_args</span><span class="p">),</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">args_new</span><span class="p">)</span>
@@ -636,46 +582,6 @@
                     <span class="k">else</span><span class="p">:</span>
                         <span class="n">kwargs_new</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">kwarg_node</span><span class="p">)</span>
                         <span class="n">added_kwargs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">kwarg_node</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
-                <span class="c1"># Dataclass *instance* passed as a keyword arg (e.g. ``write(state=self.state)`` inside a</span>
-                <span class="c1"># @qd.data_oriented kernel method). Expand into per-leaf keyword args whose values are attribute</span>
-                <span class="c1"># accesses against the original value node (e.g. ``__qd_state__x=self.state.x``).</span>
-                <span class="n">dataclass_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
-                <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">dataclass_type</span><span class="p">):</span>
-                    <span class="n">child_name</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">kwarg</span><span class="o">.</span><span class="n">arg</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">used_args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">child_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">used_args</span><span class="p">:</span>
-                        <span class="k">continue</span>
-                    <span class="n">child_val</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-                    <span class="n">load_ctx</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">Load</span><span class="p">()</span>
-                    <span class="n">src_node</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">(</span>
-                        <span class="n">value</span><span class="o">=</span><span class="n">kwarg</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
-                        <span class="n">attr</span><span class="o">=</span><span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-                        <span class="n">ctx</span><span class="o">=</span><span class="n">load_ctx</span><span class="p">,</span>
-                        <span class="n">lineno</span><span class="o">=</span><span class="n">kwarg</span><span class="o">.</span><span class="n">lineno</span><span class="p">,</span>
-                        <span class="n">end_lineno</span><span class="o">=</span><span class="n">kwarg</span><span class="o">.</span><span class="n">end_lineno</span><span class="p">,</span>
-                        <span class="n">col_offset</span><span class="o">=</span><span class="n">kwarg</span><span class="o">.</span><span class="n">col_offset</span><span class="p">,</span>
-                        <span class="n">end_col_offset</span><span class="o">=</span><span class="n">kwarg</span><span class="o">.</span><span class="n">end_col_offset</span><span class="p">,</span>
-                    <span class="p">)</span>
-                    <span class="n">src_node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">child_val</span>
-                    <span class="n">kwarg_node</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">keyword</span><span class="p">(</span>
-                        <span class="n">arg</span><span class="o">=</span><span class="n">child_name</span><span class="p">,</span>
-                        <span class="n">value</span><span class="o">=</span><span class="n">src_node</span><span class="p">,</span>
-                        <span class="n">ctx</span><span class="o">=</span><span class="n">load_ctx</span><span class="p">,</span>
-                        <span class="n">lineno</span><span class="o">=</span><span class="n">kwarg</span><span class="o">.</span><span class="n">lineno</span><span class="p">,</span>
-                        <span class="n">end_lineno</span><span class="o">=</span><span class="n">kwarg</span><span class="o">.</span><span class="n">end_lineno</span><span class="p">,</span>
-                        <span class="n">col_offset</span><span class="o">=</span><span class="n">kwarg</span><span class="o">.</span><span class="n">col_offset</span><span class="p">,</span>
-                        <span class="n">end_col_offset</span><span class="o">=</span><span class="n">kwarg</span><span class="o">.</span><span class="n">end_col_offset</span><span class="p">,</span>
-                    <span class="p">)</span>
-                    <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">child_val</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">child_val</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
-                        <span class="n">kwarg_node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="p">{</span><span class="n">child_name</span><span class="p">:</span> <span class="n">child_val</span><span class="p">}</span>
-                        <span class="n">_added_kwargs</span><span class="p">,</span> <span class="n">_kwargs_new</span> <span class="o">=</span> <span class="n">CallTransformer</span><span class="o">.</span><span class="n">_expand_Call_dataclass_kwargs</span><span class="p">(</span>
-                            <span class="n">ctx</span><span class="p">,</span> <span class="p">[</span><span class="n">kwarg_node</span><span class="p">],</span> <span class="n">used_args</span>
-                        <span class="p">)</span>
-                        <span class="n">kwargs_new</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">_kwargs_new</span><span class="p">)</span>
-                        <span class="n">added_kwargs</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">_added_kwargs</span><span class="p">)</span>
-                    <span class="k">else</span><span class="p">:</span>
-                        <span class="n">kwargs_new</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">kwarg_node</span><span class="p">)</span>
-                        <span class="n">added_kwargs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">kwarg_node</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">kwargs_new</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">kwarg</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">added_kwargs</span><span class="p">,</span> <span class="n">kwargs_new</span>
@@ -703,21 +609,11 @@
         <span class="n">is_func_base_wrapper</span> <span class="o">=</span> <span class="n">func_type</span> <span class="ow">in</span> <span class="p">{</span><span class="n">QuadrantsCallable</span><span class="p">,</span> <span class="n">BoundQuadrantsCallable</span><span class="p">}</span>
         <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
         <span class="n">called_needed</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">callee_arg_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="n">is_func_base_wrapper</span><span class="p">:</span>
             <span class="n">called_func_id_</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">func_id</span>  <span class="c1"># type: ignore</span>
             <span class="n">called_needed</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">called_func_id_</span><span class="p">]</span>
-        <span class="k">if</span> <span class="n">is_func_base_wrapper</span><span class="p">:</span>
-            <span class="c1"># callee param names (used by the attribute-instance positional-expansion path so it can match the</span>
-            <span class="c1"># callee&#39;s already-pruned flat names).</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">callee_arg_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">func</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">]</span>  <span class="c1"># type: ignore[attr-defined]</span>
-            <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
-                <span class="n">callee_arg_names</span> <span class="o">=</span> <span class="kc">None</span>
 
-        <span class="n">added_args</span><span class="p">,</span> <span class="n">node_args</span> <span class="o">=</span> <span class="n">CallTransformer</span><span class="o">.</span><span class="n">_expand_Call_dataclass_args</span><span class="p">(</span>
-            <span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="n">called_needed</span><span class="o">=</span><span class="n">called_needed</span><span class="p">,</span> <span class="n">callee_arg_names</span><span class="o">=</span><span class="n">callee_arg_names</span>
-        <span class="p">)</span>
+        <span class="n">added_args</span><span class="p">,</span> <span class="n">node_args</span> <span class="o">=</span> <span class="n">CallTransformer</span><span class="o">.</span><span class="n">_expand_Call_dataclass_args</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
         <span class="n">added_keywords</span><span class="p">,</span> <span class="n">node_keywords</span> <span class="o">=</span> <span class="n">CallTransformer</span><span class="o">.</span><span class="n">_expand_Call_dataclass_kwargs</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">keywords</span><span class="p">,</span> <span class="n">called_needed</span><span class="p">)</span>
 
         <span class="c1"># Create variables for the now-expanded dataclass members.</span>
