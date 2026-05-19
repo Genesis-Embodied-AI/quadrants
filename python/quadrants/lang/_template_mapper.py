@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any, TypeAlias, cast
+from typing import Any, TypeAlias
 from weakref import ReferenceType
 
 from quadrants.lang import impl
@@ -15,31 +15,28 @@ from ._template_mapper_hotpath import (
     _struct_nd_paths_for,
 )
 
-# Per-``type(arg)`` precomputed dispatch for the args_hash ndarray-id walk in ``TemplateMapper.lookup``. Each entry is
-# either the cached attribute path list (when the class is data_oriented, opted into ndarray tracking, and actually
-# holds ndarrays) or ``None`` (when the per-call walk is a no-op — covers the common case of typed-dataclass args,
-# non-data_oriented composite args, primitives, AND data_oriented classes with ``_qd_stable_members = True`` or with
-# no ndarray members). One dict lookup per arg per call, ~30 ns, replacing the previous unconditional
-# ``is_data_oriented(arg)`` + ``type(arg).__dict__.get`` chain.
-_arg_nd_paths_or_none: dict[type, "list[tuple] | None"] = {}
-_UNCLASSIFIED = object()
+# Per-class disposition for the args_hash ndarray-id walk in ``TemplateMapper.lookup``: one of ``_SKIP`` (this class
+# never contributes — non-data_oriented, or ``@qd.data_oriented(stable_members=True)``) or ``_PER_INSTANCE`` (delegate
+# to ``_struct_nd_paths_for`` for a per-instance walk). The disposition depends only on type (data_oriented?
+# stable_members?), so caching by class is correct. The *actual* path list is per-instance because @qd.data_oriented
+# classes can have polymorphic attribute structure across instances (Genesis ``DataManager`` is the motivating case).
+_arg_disposition: dict[type, object] = {}
+_SKIP = object()
+_PER_INSTANCE = object()
 
 
-def _classify_for_args_hash(arg: Any) -> "list[tuple] | None":
-    """First-sighting classification for ``type(arg)`` in the args_hash walk. Returns the path list to walk (when the
-    arg is a data_oriented container without ``_qd_stable_members`` that actually contains ndarrays), or ``None`` to
-    skip subsequent per-call work for this type.
+def _classify_disposition(arg: Any) -> object:
+    """First-sighting per-class disposition for the args_hash walk. Returns ``_SKIP`` (no per-call walk for this
+    class) or ``_PER_INSTANCE`` (delegate to ``_struct_nd_paths_for`` for a per-instance walk).
 
     ``_qd_stable_members`` here is a *launch-time perf hint only* (see ``@qd.data_oriented(stable_members=...)``).
-    It does not affect fastcache key derivation."""
+    It promises that ndarray members are never reassigned, which lets us skip the per-call walk entirely. It does
+    not affect fastcache key derivation."""
     if not is_data_oriented(arg):
-        return None
+        return _SKIP
     if type(arg).__dict__.get("_qd_stable_members"):
-        return None
-    paths = _struct_nd_paths_for(arg)
-    if not paths:
-        return None
-    return paths
+        return _SKIP
+    return _PER_INSTANCE
 
 
 Key: TypeAlias = tuple[Any, ...]
@@ -114,21 +111,23 @@ class TemplateMapper:
         # iterate ``template_slot_locations`` instead of all args (Genesis main kernel_step_1: 4 template positions
         # of 16 args; Genesis branch step_1/step_2: 4 of 4).
         #
-        # For each candidate position, a per-class cache in ``_arg_nd_paths_or_none`` maps ``type(arg)`` to either the
-        # cached ndarray-path list to walk or ``None`` to skip (typical for primitive template-args, stable_members
-        # data_oriented, and data_oriented with zero ndarrays). One dict.get per candidate per call after warmup.
+        # For each candidate, ``_arg_disposition`` caches the per-class decision (skip vs walk-per-instance) and the
+        # actual paths come from ``_struct_nd_paths_for`` (per-instance, stashed on ``arg._qd_nd_paths``). Per-instance
+        # path caching is load-bearing for correctness — @qd.data_oriented classes can have polymorphic attribute
+        # structure across instances (Genesis ``DataManager`` only allocates adjoint-cache members when
+        # ``requires_grad=True``); a per-class cache populated from one instance can't safely be reused for another.
         nd_ids: list = []
         for i in self.template_slot_locations:
             arg = args[i]
             cls = type(arg)
-            cached = _arg_nd_paths_or_none.get(cls, _UNCLASSIFIED)
-            if cached is _UNCLASSIFIED:
-                paths = _classify_for_args_hash(arg)
-                _arg_nd_paths_or_none[cls] = paths
-            else:
-                # Narrow the ``object`` sentinel union back to the actual cached value type.
-                paths = cast("list[tuple] | None", cached)
-            if paths is None:
+            disposition = _arg_disposition.get(cls)
+            if disposition is None:
+                disposition = _classify_disposition(arg)
+                _arg_disposition[cls] = disposition
+            if disposition is _SKIP:
+                continue
+            paths = _struct_nd_paths_for(arg)
+            if not paths:
                 continue
             for chain in paths:
                 v = arg

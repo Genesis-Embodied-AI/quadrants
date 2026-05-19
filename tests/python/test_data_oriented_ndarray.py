@@ -940,13 +940,12 @@ def test_data_oriented_with_pydantic_like_child():
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_polymorphic_attr_across_instances():
-    """The path cache in ``_struct_nd_paths_cache`` is keyed on ``type(arg)`` and assumes the set of ndarray-
-    reachable attribute chains is stable across instances. Some real-world ``@qd.data_oriented`` containers (Genesis
-    FEMSolver / MPMSolver / SPHSolver, etc.) hold polymorphic children whose types differ between instances — e.g.
-    ``self.material.x`` is an ``Ndarray`` on instance A and a ``qd.field`` (``MatrixField``) on instance B.
-    ``_collect_struct_nd_descriptors`` walks cached paths verbatim and must not crash with ``'MatrixField' object has
-    no attribute 'element_type'`` when a path's leaf is no longer an ``Ndarray``; it should silently skip the stale
-    entry."""
+    """Some real-world ``@qd.data_oriented`` containers (Genesis FEMSolver / MPMSolver / SPHSolver, etc.) hold
+    polymorphic children whose types differ between instances — e.g. ``self.material.x`` is an ``Ndarray`` on
+    instance A and a ``qd.field`` (``MatrixField``) on instance B. The per-instance path cache walks each instance
+    fresh, but ``_collect_struct_nd_descriptors`` must additionally tolerate a path's leaf no longer being an
+    ``Ndarray`` *within a single instance's lifetime* (e.g. ``qd.Tensor`` impl swap), and silently skip the stale
+    entry rather than crash on ``v.element_type``."""
     N = 4
 
     @qd.data_oriented
@@ -978,6 +977,54 @@ def test_data_oriented_polymorphic_attr_across_instances():
             s.x[i] = [i, i + 1]
 
     run_field(state_b)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_polymorphic_attribute_set_across_instances():
+    """Models the Genesis ``DataManager`` failure mode: a ``@qd.data_oriented`` class whose ``__init__`` conditionally
+    allocates attributes based on a construction flag. Different instances of the same class then have different
+    attribute *sets* (not just different value types at the same paths).
+
+    With a per-class path cache populated from the first instance walked, this would either AttributeError when the
+    second instance lacks an attribute the first had (forward direction) or silently miss an ndarray the second
+    instance has but the first didn't (inverse direction). Per-instance caching walks each instance fresh so both
+    directions work."""
+    N = 4
+
+    @qd.data_oriented
+    class PolyState:
+        def __init__(self, with_extra: bool):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            if with_extra:
+                self.extra = qd.ndarray(qd.i32, shape=(N,))
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.x[i] = i + 1
+
+    # Forward direction: first instance has 'extra', second doesn't. Used to AttributeError on the cached
+    # ('extra',) path when running with state_lean.
+    state_full = PolyState(with_extra=True)
+    run(state_full)
+    state_lean = PolyState(with_extra=False)
+    run(state_lean)
+    np.testing.assert_array_equal(state_lean.x.to_numpy(), np.arange(1, N + 1))
+
+    # Inverse direction: a different class so per-class cache (if used by __slots__ fallback) starts fresh; first
+    # instance lacks 'extra', second has it. Verifies the second instance's 'extra' ndarray is correctly walked.
+    @qd.data_oriented
+    class PolyState2:
+        def __init__(self, with_extra: bool):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            if with_extra:
+                self.extra = qd.ndarray(qd.i32, shape=(N,))
+
+    state_lean2 = PolyState2(with_extra=False)
+    run(state_lean2)
+    state_full2 = PolyState2(with_extra=True)
+    run(state_full2)
+    np.testing.assert_array_equal(state_full2.x.to_numpy(), np.arange(1, N + 1))
 
 
 @test_utils.test(arch=qd.cpu)
