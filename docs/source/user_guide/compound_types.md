@@ -196,7 +196,9 @@ state.step()
 
 ### Fastcache
 
-`@qd.kernel(fastcache=True)` is supported on methods of `@qd.data_oriented` classes, but is disabled for fields; see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying) for more information.
+`@qd.kernel(fastcache=True)` is supported on methods of `@qd.data_oriented` classes. Cache keying is *pruning-driven*: only the members the kernel actually reads contribute to the cache key. Opaque metadata members (e.g. UUIDs, Pydantic config objects, back-pointers to parent solvers) are skipped by the args-hasher's narrow walk as long as the kernel doesn't read them — they cannot affect compiled code and cannot cause spurious cache misses. See [Pruning-driven argument hashing](fastcache.md#pruning-driven-argument-hashing) for the full keying rules.
+
+If the kernel *does* read a member of an unrecognised type, fastcache is disabled for the call with a `[FASTCACHE][UNKNOWN_TYPE]` diagnostic — there is no qualname-fallback. `qd.field` / `MatrixField` members at a kernel-read path likewise disable fastcache (recognised-but-unsupported tensor-like types).
 
 ### Under the hood
 

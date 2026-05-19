@@ -340,23 +340,60 @@ class Kernel(FuncBase):
         self.fe_ll_cache_observations = FeLlCacheObservations()
 
     def _try_load_fastcache(self, args: tuple[Any, ...], key: "CompiledKernelKeyType") -> set[str] | None:
-        frontend_cache_key: str | None = None
+        """Two-phase fastcache lookup.
+
+        Phase 1 — L1 lookup keyed by source+config only (no args). Returns the set of kernel-accessed flat
+        names (pruning info). Hit OR miss, this only determines whether we have pruning info for the narrow
+        args walk; it never on its own justifies skipping pass 0 — that requires the C++ artifact to load.
+
+        Phase 2 — narrow args walk + L2 lookup + artifact load. Only when *all three* succeed do we return
+        non-None and let ``materialize`` skip pass 0. The reason: pass 0 is what populates pruning info for
+        *every called ``@qd.func``* (not just the kernel itself). Skipping pass 0 is only safe when pass 1
+        runs in ``only_parse_function_def`` mode (i.e. the C++ artifact is already loaded so the AST walker
+        never enters any callee body); otherwise callee variables can't be found in their func's empty
+        ``used_vars_by_func_id`` set and the build fails with "Name __qd_… is not defined".
+
+        Side effects: populates ``self._l1_key`` (always when fastcache is active), ``self._pruning_paths_from_l1``
+        (the L1 pruning info, or None if L1 miss — used by ``materialize`` for L1-store skipping and for
+        post-compile narrow-hash construction), and ``self.fast_checksum`` (the L2 key, when phase 2 computed
+        the narrow args hash). All three are read by the post-compile path in ``_maybe_persist_l1_and_set_l2_key``.
+        """
+        self._l1_key = None  # type: ignore[attr-defined]
+        self._pruning_paths_from_l1 = None  # type: ignore[attr-defined]
+        self.fast_checksum = None
         if self.runtime.src_ll_cache and self.quadrants_callable and self.quadrants_callable.is_pure:
             kernel_source_info, _src = get_source_info_and_src(self.func)
-            self.fast_checksum = src_hasher.create_cache_key(
-                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas
+            self._kernel_source_info_cached = kernel_source_info  # reused by materialize / launch_kernel
+            self._l1_key = src_hasher.make_source_config_key(kernel_source_info)
+
+            # Phase 1: L1 lookup — pruning info only, no args walk yet.
+            pruning_paths, cached_graph_do_while_arg = src_hasher.load_pruning_info(self._l1_key)
+            if pruning_paths is None:
+                # Cold L1. ``materialize`` will compile pass 0 + pass 1 to populate pruning info, then we
+                # store L1 + L2 after compile. ``cache_key_generated`` is intentionally NOT flipped to True
+                # here: it tracks "fastcache produced a valid L2 args hash" (the pre-refactor semantic), and
+                # we don't know yet whether the narrow args walk will succeed.
+                return None
+            self._pruning_paths_from_l1 = pruning_paths
+
+            # Phase 2: narrow args hash + L2 lookup.
+            narrow_args_hash = src_hasher.compute_narrow_args_hash(
+                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, pruning_paths
             )
-            used_py_dataclass_parameters = None
-            cached_graph_do_while_arg: str | None = None
-            if self.fast_checksum:
-                self.src_ll_cache_observations.cache_key_generated = True
-                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_arg = src_hasher.load(  # type: ignore[reportAssignmentType]
-                    self.fast_checksum
-                )
+            if narrow_args_hash is None:
+                # Recognised-but-unsupported tensor-like (Field / MatrixField) — fastcache off for this call.
+                # ``self.fast_checksum`` stays None so no L2 entry is written; ``cache_key_generated`` stays
+                # False to match the pre-refactor "Field disables fastcache key generation" contract.
+                return None
+            self.fast_checksum = src_hasher.make_full_cache_key(self._l1_key, narrow_args_hash)
+            self.src_ll_cache_observations.cache_key_generated = True
+
+            used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_arg_l2 = src_hasher.load(
+                self.fast_checksum
+            )
             if used_py_dataclass_parameters is not None and frontend_cache_key is not None:
                 self.src_ll_cache_observations.cache_validated = True
                 prog = impl.get_runtime().prog
-                assert self.fast_checksum is not None
                 self.compiled_kernel_data_by_key[key] = prog.load_fast_cache(
                     frontend_cache_key,
                     self.func.__name__,
@@ -366,11 +403,15 @@ class Kernel(FuncBase):
                 if self.compiled_kernel_data_by_key[key]:
                     self.src_ll_cache_observations.cache_loaded = True
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = used_py_dataclass_parameters
-                    if cached_graph_do_while_arg is not None:
-                        self.graph_do_while_arg = cached_graph_do_while_arg
+                    self.graph_do_while_arg = cached_graph_do_while_arg_l2 or cached_graph_do_while_arg
                     return used_py_dataclass_parameters
+            # L2 miss or artifact load failed: report cold so ``materialize`` does pass 0 + pass 1 (needed
+            # to populate per-callee pruning info). ``self.fast_checksum`` is still set so the post-compile
+            # ``src_hasher.store`` will write a fresh L2 entry under the narrow-args key.
+            self.graph_do_while_arg = cached_graph_do_while_arg or self.graph_do_while_arg
+            return None
 
-        elif self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
+        if self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
             # The bit in caps should not be modified without updating corresponding test
             # freetext can be freely modified.
             # As for why we are using `print` rather than eg logger.info, it is because this is only printed when
@@ -381,7 +422,6 @@ class Kernel(FuncBase):
     def materialize(self, key: "CompiledKernelKeyType | None", py_args: tuple[Any, ...], arg_features=None):
         if key is None:
             key = (self.func, 0, self.autodiff_mode)
-        self.fast_checksum = None
         if key in self.materialized_kernels:
             return
 
@@ -403,6 +443,8 @@ class Kernel(FuncBase):
             range_begin = 0 if used_py_dataclass_parameters is None else 1
             runtime = impl.get_runtime()
             for _pass in range(range_begin, 2):
+                if _pass == 0:
+                    pruning.pass_0_ran = True
                 if _pass >= 1:
                     pruning.enforce()
                 tree, ctx = self.get_tree_and_ctx(
@@ -436,6 +478,23 @@ class Kernel(FuncBase):
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
                     )
+                    # Fold data_oriented ndarray attribute chains into the kernel's used-flat-names set so
+                    # ``args_hasher.hash_args`` can narrow data_oriented walks too. ``used_vars_by_func_id`` only
+                    # contains flat names from dataclass-arg expansion in ``extract_struct_locals_from_context``;
+                    # data_oriented args don't go through that expansion, so accesses like ``self.x`` on an ndarray
+                    # member are only tracked via ``struct_ndarray_launch_info``. Without this fold, narrow hashing
+                    # for data_oriented args walks nothing — every (arg_idx, attr_chain) pair gets the same hash
+                    # regardless of dtype, so changing ``state.x``'s dtype no longer invalidates the cache (the
+                    # ``test_data_oriented_ndarray_fastcache_dtype_key_distinct`` pin caught this).
+                    pruning.fold_struct_nd_paths(self._struct_ndarray_launch_info_by_key.get(key, []), self.arg_metas)
+                    # Fold non-ndarray kernel-arg-rooted chain paths (primitives, opaque members, nested struct
+                    # paths) collected by ``ASTTransformer.build_Attribute``'s ``_qd_arg_chain`` tracking. Kept
+                    # separate from ``used_vars_by_func_id`` during compile (would otherwise poison ``struct_locals``
+                    # and break codegen) — see the field-level docstring on
+                    # ``Pruning.kernel_arg_chain_paths_by_func_id``. This fold + the existing ``used_vars`` assignment
+                    # to ``used_py_dataclass_parameters_by_key_enforcing`` share the same set by reference, so the
+                    # final fastcache L1 entry sees all kernel-accessed paths.
+                    pruning.fold_kernel_arg_chain_paths()
                 else:
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
@@ -452,6 +511,57 @@ class Kernel(FuncBase):
                         Pruning.KERNEL_FUNC_ID
                     ]
                 runtime._current_global_context = None
+
+            # Post-compile fastcache bookkeeping. See ``_maybe_persist_l1_and_set_l2_key`` docstring.
+            self._maybe_persist_l1_and_set_l2_key(key, py_args)
+
+    def _maybe_persist_l1_and_set_l2_key(self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...]) -> None:
+        """After a successful materialize, persist L1 (if missing) and set ``fast_checksum`` to the L2 key.
+
+        Called at the end of ``materialize`` once both passes have completed (or once pass 1 has completed
+        with a loaded artifact). Two responsibilities:
+
+          1. If L1 was missing (``self._pruning_paths_from_l1 is None``), write the freshly-computed pruning info so
+             the next call from a new process can skip the args-walk warm-up.
+
+          2. If ``fast_checksum`` is still None (which means either L1 was missing, or L1 hit but phase 2 of
+             ``_try_load_fastcache`` saw a FIELD-related FastcacheSkip — in which case we keep ``None`` and the
+             post-compile ``src_hasher.store`` is skipped), compute the narrow args hash *now* using the just-
+             populated pruning info and derive the L2 key. The post-launch ``src_hasher.store`` call uses
+             ``self.fast_checksum`` as the L2 key.
+
+        Side-effect helper; split out from ``materialize`` to keep the compile loop readable.
+        """
+        l1_key = getattr(self, "_l1_key", None)
+        if not l1_key:
+            return  # fastcache inactive for this kernel (not pure / no runtime.src_ll_cache)
+        kernel_source_info = getattr(self, "_kernel_source_info_cached", None)
+        if kernel_source_info is None:
+            return
+        used_params = self.used_py_dataclass_parameters_by_key_enforcing.get(key)
+        if used_params is None:
+            return
+        if getattr(self, "_pruning_paths_from_l1", None) is None:
+            src_hasher.store_pruning_info(
+                l1_key,
+                self.visited_functions,
+                used_params,
+                graph_do_while_arg=self.graph_do_while_arg,
+            )
+        # If phase 2 didn't run (L1 cold) or returned None (FIELD encountered earlier — but in that case
+        # post-compile narrow hashing would also see the FIELD and produce None, which is fine: we want
+        # fast_checksum to stay None so no L2 entry is stored), compute the narrow args hash now.
+        if self.fast_checksum is None:
+            narrow_args_hash = src_hasher.compute_narrow_args_hash(
+                self.raise_on_templated_floats,
+                kernel_source_info,
+                py_args,
+                self.arg_metas,
+                used_params,
+            )
+            if narrow_args_hash is not None:
+                self.fast_checksum = src_hasher.make_full_cache_key(l1_key, narrow_args_hash)
+                self.src_ll_cache_observations.cache_key_generated = True
 
     def launch_kernel(
         self, key, t_kernel: KernelCxx, compiled_kernel_data: CompiledKernelData | None, *args, qd_stream=None
@@ -476,10 +586,16 @@ class Kernel(FuncBase):
             if self._struct_ndarray_launch_info_by_key:
                 struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
                 if struct_nd_info:
+                    # Data_oriented containers marked ``_qd_stable_members = True`` (or decorated with
+                    # ``@qd.data_oriented(stable_members=True)``) promise their ndarray members are never reassigned,
+                    # so we exclude them from the per-call ``_resolve_struct_ndarray`` walk that builds ``args_hash``.
+                    # This is a *launch-time perf hint only* and has no fastcache role — fastcache derives its key
+                    # from kernel-pruning info regardless of this flag.
                     self._mutable_nd_cached_val = [
                         (idx, chain)
                         for _, idx, chain in struct_nd_info
-                        if type(args[idx]).__hash__ is None or is_data_oriented(args[idx])
+                        if type(args[idx]).__hash__ is None
+                        or (is_data_oriented(args[idx]) and not type(args[idx]).__dict__.get("_qd_stable_members"))
                     ]
                 else:
                     self._mutable_nd_cached_val = []

@@ -46,7 +46,11 @@ from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.snode import SNode
-from quadrants.lang.util import is_data_oriented, to_quadrants_type
+from quadrants.lang.util import (
+    is_data_oriented,
+    is_dataclass_instance,
+    to_quadrants_type,
+)
 from quadrants.types import (
     buffer_view_type,
     ndarray_type,
@@ -82,8 +86,14 @@ _primitive_types = {int, float, bool}
 _struct_nd_paths_cache: dict[type, list[tuple]] = {}
 
 
-def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list) -> None:
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: "set[int] | None" = None) -> None:
+    # Cycle-safe walker. Genesis object graphs have cross-references (e.g. ``solver -> scene -> sim -> solver``) and
+    # Pydantic-options-style children. ``_seen`` tracks ``id(obj)`` for the current traversal to avoid re-entering a
+    # node we've already expanded. Cheap (one ``set`` op per frame, only allocated when we actually start recursing)
+    # and bounds the walk to a finite depth regardless of the graph shape.
+    if _seen is None:
+        _seen = {id(obj)}
+    if is_dataclass_instance(obj):
         children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
     else:
         # ``NamedTuple`` (decorated as ``@qd.data_oriented``) has no instance ``__dict__`` — fall back to ``_asdict()``
@@ -101,8 +111,12 @@ def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list) -> None:
         v_type = type(v)
         if issubclass(v_type, Ndarray):
             out.append(chain)
-        elif is_data_oriented(v) or (dataclasses.is_dataclass(v) and not isinstance(v, type)):
-            _build_struct_nd_paths(v, chain, out)
+        elif is_data_oriented(v) or is_dataclass_instance(v):
+            v_id = id(v)
+            if v_id in _seen:
+                continue
+            _seen.add(v_id)
+            _build_struct_nd_paths(v, chain, out, _seen)
 
 
 def _struct_nd_paths_for(arg: Any) -> list[tuple]:
@@ -130,15 +144,29 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
     reachable from ``arg``. Used by the template-mapper to refine the spec key for ``@qd.data_oriented`` args holding
     ndarrays — see the data_oriented branch in ``_extract_arg``.
     """
+    # The path cache is keyed on ``type(arg)`` and assumes the *set* of ndarray-reachable attribute chains is stable
+    # across instances of the same class. That holds for the typical ``@qd.data_oriented`` container, but Genesis
+    # ``FEMSolver`` / ``MPMSolver`` / ``SPHSolver`` and similar can hold polymorphic children (e.g. ``self.material``
+    # of a different concrete subclass) or swap a ``qd.Tensor``'s underlying impl between an ``Ndarray`` and a
+    # ``MatrixField``. When the leaf at a cached path is no longer an ``Ndarray`` we silently skip it:
+    # ``v.element_type`` / ``v.shape`` / ``v._qd_layout`` are Ndarray-only accessors. The per-instance ``weakref(arg)``
+    # part of the spec key still ensures correct cache discrimination across instances.
     for chain in _struct_nd_paths_for(arg):
         v = arg
         for a in chain:
             v = getattr(v, a)
         if type(v) in _TENSOR_WRAPPER_TYPES:
             v = v._unwrap()
+        if not isinstance(v, Ndarray):
+            continue
+        # ``Ndarray.shape`` can legitimately be ``None`` (uninitialised ``_physical_shape``); such an instance
+        # has no meaningful spec contribution, so skip it rather than crashing on ``len(None)``.
+        shape = v.shape
+        if shape is None:
+            continue
         type_id = id(v.element_type)
         element_type = type_id if type_id in primitive_types.type_ids else v.element_type
-        out.append((".".join(chain), element_type, len(v.shape), v.grad is not None, v._qd_layout))
+        out.append((".".join(chain), element_type, len(shape), v.grad is not None, v._qd_layout))
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
@@ -214,6 +242,11 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             #
             # Containers with no ndarrays keep the original short-path (one spec per instance via weakref) so this is
             # a no-op for the existing data_oriented + qd.field workloads (genesis field-backend).
+            #
+            # Opt-out: ``_qd_stable_members = True`` on the class (or ``@qd.data_oriented(stable_members=True)``)
+            # skips the per-call descriptor walk.
+            if type(arg).__dict__.get("_qd_stable_members"):
+                return weakref.ref(arg)
             nd_descriptors: list = []
             _collect_struct_nd_descriptors(arg, nd_descriptors)
             if nd_descriptors:
