@@ -11,14 +11,13 @@ from .kernel_arguments import ArgMetadata
 
 
 def _flatten_arg_node(node: expr) -> tuple[str, str] | None:
-    """Flatten an AST arg node into ``(flat_name, root_name_id)`` (or ``None`` if the node isn't a
-    recognisable name/attribute chain rooted at a plain Name).
+    """Flatten an AST arg node into ``(flat_name, root_name_id)`` (or ``None`` if the node isn't a recognisable
+    name/attribute chain rooted at a plain Name).
 
-    Returns both the full flat name (e.g. ``__qd_self__qd_dofs`` for ``self.dofs``) and the root
-    Name's id (``self``). Callers use the root id to distinguish kernel-arg-rooted chains
-    (``self.dofs`` → root ``self``) from already-flattened dataclass-arg references
-    (``__qd_self__qd_dofs`` → root ``__qd_self__qd_dofs``). The flat path alone is ambiguous because
-    ``__qd_self__qd_dofs`` could be either an attribute chain *or* a single flattened Name.
+    Returns both the full flat name (e.g. ``__qd_self__qd_dofs`` for ``self.dofs``) and the root Name's id (``self``).
+    Callers use the root id to distinguish kernel-arg-rooted chains (``self.dofs`` → root ``self``) from already-
+    flattened dataclass-arg references (``__qd_self__qd_dofs`` → root ``__qd_self__qd_dofs``). The flat path alone is
+    ambiguous because ``__qd_self__qd_dofs`` could be either an attribute chain *or* a single flattened Name.
 
     Mirrors ``FlattenAttributeNameTransformer._flatten_attribute_name`` but on the raw call-arg AST.
     Used by ``record_after_call`` to handle ``f(self.dofs)`` etc. — without this the callee's pruning
@@ -65,16 +64,16 @@ class Pruning:
             self.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID].update(kernel_used_parameters)
         # only needed for args, not kwargs
         self.callee_param_by_caller_arg_name_by_func_id: dict[int, dict[str, str]] = defaultdict(dict)
-        # id(ndarray) -> seen during the first compile pass via ``_promote_ndarray_if_declared``.
-        # Populated by the AST builder when a chain like ``self.x.y`` resolves to an ndarray
-        # that was pre-declared by ``_predeclare_struct_ndarrays``. On the second (enforcing)
-        # pass, ``_predeclare_struct_ndarrays`` only registers ndarrays whose id is in this set
-        # — dropping every reachable-but-unused ndarray from the kernel's parameter list.
+        # id(ndarray) -> seen during the first compile pass via ``_promote_ndarray_if_declared``. Populated by the AST
+        # builder when a chain like ``self.x.y`` resolves to an ndarray that was pre-declared by
+        # ``_predeclare_struct_ndarrays``. On the second (enforcing) pass, ``_predeclare_struct_ndarrays`` only
+        # registers ndarrays whose id is in this set — dropping every reachable-but-unused ndarray from the kernel's
+        # parameter list.
         self.used_struct_ndarray_ids: set[int] = set()
-        # Whether the non-enforcing first pass actually ran for this kernel materialize.
-        # When fastcache hits, we skip pass 0 entirely and ``used_struct_ndarray_ids`` is
-        # therefore unreliable — in that case ``_predeclare_struct_ndarrays`` falls back to
-        # registering every reachable ndarray (same as the historical behavior).
+        # Whether the non-enforcing first pass actually ran for this kernel materialize. When fastcache hits, we skip
+        # pass 0 entirely and ``used_struct_ndarray_ids`` is therefore unreliable — in that case
+        # ``_predeclare_struct_ndarrays`` falls back to registering every reachable ndarray (same as historical
+        # behavior).
         self.pass_0_ran: bool = False
         # Kernel-arg-rooted attribute chains used by each func, in flat-name form (``__qd_self__qd_dofs__qd_x``).
         # Populated by ``ASTTransformer.build_Attribute`` for non-flattened kernel args (data_oriented / qd.template).
@@ -262,8 +261,8 @@ class Pruning:
                 caller_flat, root_id = flat
                 if not root_id.startswith("__qd_"):
                     callee_param_name = kwarg.arg
-                    # ``kwarg.arg`` is ``None`` for double-star unpacking (``**kwargs``);
-                    # chain propagation requires a concrete parameter name so just skip.
+                    # ``kwarg.arg`` is ``None`` for double-star unpacking (``**kwargs``); chain propagation requires
+                    # a concrete parameter name so just skip.
                     if callee_param_name is not None:
                         self._propagate_chain_paths(
                             callee_chain_paths, callee_param_name, caller_flat, chain_paths_to_propagate

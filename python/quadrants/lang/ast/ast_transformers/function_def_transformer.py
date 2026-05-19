@@ -246,16 +246,15 @@ class FunctionDefTransformer:
         launch_info = ctx.global_context.struct_ndarray_launch_info
         pruning = ctx.global_context.pruning
         used_ids = getattr(pruning, "used_struct_ndarray_ids", None)
-        # Only prune on the enforcing pass when we actually ran pass 0 to populate the
-        # used-ndarray set. On a fastcache hit pass 0 is skipped and the set is empty.
+        # Only prune on the enforcing pass when we actually ran pass 0 to populate the used-ndarray set. On a
+        # fastcache hit pass 0 is skipped and the set is empty.
         prune = pruning.enforcing and used_ids is not None and getattr(pruning, "pass_0_ran", False)
-        # On a fastcache hit (enforcing without a pass-0 run), the `id(nd)` set is empty, but the
-        # *flat-name* set on ``used_vars_by_func_id[KERNEL_FUNC_ID]`` was loaded from cache and
-        # already contains every kernel-accessed leaf path (folded in by
-        # ``_fold_struct_nd_paths_into_pruning`` during the compile that produced the cache entry).
-        # Use that to prune the walk so we register the exact same ndarray set as the originating
-        # compile produced — without this, every reachable ndarray gets registered, the kernel's
-        # arg slots get rebound to the wrong ndarrays at launch, and physics silently breaks.
+        # On a fastcache hit (enforcing without a pass-0 run), the `id(nd)` set is empty, but the *flat-name* set on
+        # ``used_vars_by_func_id[KERNEL_FUNC_ID]`` was loaded from cache and already contains every kernel-accessed
+        # leaf path (folded in by ``Pruning.fold_struct_nd_paths`` during the compile that produced the cache entry).
+        # Use that to prune the walk so we register the exact same ndarray set as the originating compile produced —
+        # without this, every reachable ndarray gets registered, the kernel's arg slots get rebound to the wrong
+        # ndarrays at launch, and physics silently breaks.
         prune_from_flat_names = pruning.enforcing and not getattr(pruning, "pass_0_ran", False)
         kernel_used_flat_names = (
             pruning.used_vars_by_func_id.get(Pruning.KERNEL_FUNC_ID, set()) if prune_from_flat_names else None
@@ -325,9 +324,9 @@ class FunctionDefTransformer:
                 _qd_core.make_external_tensor_expr(element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE),
                 _qd_layout=layout,
             )
-            # Tag the AnyArray with the source ndarray id so ``_promote_ndarray_if_declared``
-            # can mark this ndarray as used even when the access reaches it via an already-
-            # promoted AnyArray (e.g. callee bodies bound to per-leaf args by Option A).
+            # Tag the AnyArray with the source ndarray id so ``_promote_ndarray_if_declared`` can mark this ndarray
+            # as used even when the access reaches it via an already-promoted AnyArray (e.g. callee bodies bound to
+            # per-leaf args by Option A).
             arr._qd_source_ndarray_id = key
             cache[key] = arr
             launch_info.append((arg_id_vec[0], arg_idx, attr_chain))

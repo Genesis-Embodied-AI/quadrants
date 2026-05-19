@@ -172,14 +172,11 @@ class CallTransformer:
         callee_arg_names: list[str] | None = None,
     ) -> tuple[tuple[ast.stmt, ...], tuple[ast.stmt, ...]]:
         """
-        We require that each node has a .ptr attribute added to it, that contains
-        the associated Python object.
+        We require that each node has a .ptr attribute added to it, that contains the associated Python object.
 
-        ``called_needed`` and ``callee_arg_names`` are used only for the
-        attribute-accessed-instance branch (Option A for data_oriented @qd.func calls):
-        the caller cannot construct a flat name from its own ``arg.id`` (the arg is
-        an ast.Attribute), so we look up pruning against the callee's parameter name
-        at the same positional index.
+        ``called_needed`` and ``callee_arg_names`` are used only for the attribute-accessed-instance branch (Option A
+        for data_oriented @qd.func calls): the caller cannot construct a flat name from its own ``arg.id`` (the arg is
+        an ast.Attribute), so we look up pruning against the callee's parameter name at the same positional index.
         """
         args_new = []
         added_args = []
@@ -214,15 +211,14 @@ class CallTransformer:
                         args_new.append(arg_node)
                         added_args.append(arg_node)
             elif dataclasses.is_dataclass(val) and not isinstance(val, type):
-                # Dataclass *instance* passed positionally (e.g. ``self.state`` inside a
-                # @qd.data_oriented kernel method). Expand into per-leaf attribute accesses
-                # against the same AST node, mirroring the typed-arg (instance-of-type) path
-                # above but emitting ``ast.Attribute`` children rather than ``ast.Name``.
-                # ``added_args`` items must not carry ``.ptr`` (build_stmt populates it
-                # downstream); only the intermediate node used for recursion does.
+                # Dataclass *instance* passed positionally (e.g. ``self.state`` inside a @qd.data_oriented kernel
+                # method). Expand into per-leaf attribute accesses against the same AST node, mirroring the typed-arg
+                # (instance-of-type) path above but emitting ``ast.Attribute`` children rather than ``ast.Name``.
+                # ``added_args`` items must not carry ``.ptr`` (build_stmt populates it downstream); only the
+                # intermediate node used for recursion does.
                 dataclass_type = type(val)
-                # For pruning, match the callee's flat name (it may have pruned unused
-                # fields). Use the callee's parameter name at this positional index.
+                # For pruning, match the callee's flat name (it may have pruned unused fields). Use the callee's
+                # parameter name at this positional index.
                 callee_param = (
                     callee_arg_names[arg_idx]
                     if (called_needed is not None and callee_arg_names is not None and arg_idx < len(callee_arg_names))
@@ -246,9 +242,8 @@ class CallTransformer:
                     )
                     if dataclasses.is_dataclass(child_val) and not isinstance(child_val, type):
                         child_node.ptr = child_val
-                        # Recurse, threading the renamed scope: the callee's expanded flat
-                        # name (e.g. ``__qd_state__inner``) is the synthetic param name for
-                        # the nested level.
+                        # Recurse, threading the renamed scope: the callee's expanded flat name (e.g.
+                        # ``__qd_state__inner``) is the synthetic param name for the nested level.
                         nested_callee_param = (
                             create_flat_name(callee_param, field.name) if callee_param is not None else None
                         )
@@ -321,10 +316,9 @@ class CallTransformer:
                         kwargs_new.append(kwarg_node)
                         added_kwargs.append(kwarg_node)
             elif dataclasses.is_dataclass(val) and not isinstance(val, type):
-                # Dataclass *instance* passed as a keyword arg (e.g.
-                # ``write(state=self.state)`` inside a @qd.data_oriented kernel method).
-                # Expand into per-leaf keyword args whose values are attribute accesses
-                # against the original value node (e.g. ``__qd_state__x=self.state.x``).
+                # Dataclass *instance* passed as a keyword arg (e.g. ``write(state=self.state)`` inside a
+                # @qd.data_oriented kernel method). Expand into per-leaf keyword args whose values are attribute
+                # accesses against the original value node (e.g. ``__qd_state__x=self.state.x``).
                 dataclass_type = type(val)
                 for field in dataclasses.fields(dataclass_type):
                     child_name = create_flat_name(kwarg.arg, field.name)
@@ -391,8 +385,8 @@ class CallTransformer:
             called_func_id_ = func.wrapper.func_id  # type: ignore
             called_needed = pruning.used_vars_by_func_id[called_func_id_]
         if is_func_base_wrapper:
-            # callee param names (used by the attribute-instance positional-expansion path
-            # so it can match the callee's already-pruned flat names).
+            # callee param names (used by the attribute-instance positional-expansion path so it can match the
+            # callee's already-pruned flat names).
             try:
                 callee_arg_names = [m.name for m in func.wrapper.arg_metas]  # type: ignore[attr-defined]
             except AttributeError:

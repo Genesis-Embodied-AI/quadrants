@@ -1,14 +1,12 @@
-"""Tests for calling @qd.func that takes a typed-dataclass arg, from a @qd.kernel
-method of a @qd.data_oriented class, passing ``self.dataclass_member`` as the arg.
+"""Tests for calling @qd.func that takes a typed-dataclass arg, from a @qd.kernel method of a @qd.data_oriented
+class, passing ``self.dataclass_member`` as the arg.
 
-Genesis's @qd.func helpers declare typed-dataclass parameters (e.g.
-``def func(links_state: LinksState, ...):``) and are designed to be called from kernels
-that also take typed-dataclass kernel args (so the dataclass is flattened into per-leaf
-kernel-locals on both sides of the call boundary).
+Genesis's @qd.func helpers declare typed-dataclass parameters (e.g. ``def func(links_state: LinksState, ...):``) and
+are designed to be called from kernels that also take typed-dataclass kernel args (so the dataclass is flattened into
+per-leaf kernel-locals on both sides of the call boundary).
 
-When migrating Genesis modules to @qd.data_oriented, we'd like to call the same @qd.func
-helpers from a data_oriented kernel method, passing ``self.links_state`` as the arg.
-Today this fails at AST resolution:
+When migrating Genesis modules to @qd.data_oriented, we'd like to call the same @qd.func helpers from a data_oriented
+kernel method, passing ``self.links_state`` as the arg. Today this fails at AST resolution:
 
     Missing argument '__qd_links_state__qd_cinr_inertial'.
     Unexpected argument 'links_state'.
@@ -185,8 +183,8 @@ def test_data_oriented_method_calls_qd_func_with_two_dataclass_members():
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_method_calls_qd_func_with_nested_dataclass_member():
-    """data_oriented holds an Outer{ Inner{ ndarray } } and passes ``self.outer`` to a
-    @qd.func that expands the nested dataclass into flat leaves on both sides."""
+    """data_oriented holds an Outer{ Inner{ ndarray } } and passes ``self.outer`` to a @qd.func that expands the
+    nested dataclass into flat leaves on both sides."""
     N = 4
 
     @dataclasses.dataclass
@@ -253,10 +251,9 @@ def test_data_oriented_method_calls_qd_func_with_nested_dataclass_kwarg():
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_method_qd_func_chain_with_dataclass_member():
-    """data_oriented kernel calls outer @qd.func, which in turn calls inner @qd.func,
-    threading the same dataclass arg through. Both qd.funcs have the typed-dataclass
-    parameter; only the outermost call site (data_oriented method body) uses self.X.
-    The two inner call sites use the typed-arg path that already worked."""
+    """data_oriented kernel calls outer @qd.func, which in turn calls inner @qd.func, threading the same dataclass
+    arg through. Both qd.funcs have the typed-dataclass parameter; only the outermost call site (data_oriented method
+    body) uses self.X. The two inner call sites use the typed-arg path that already worked."""
     N = 4
 
     @dataclasses.dataclass
@@ -288,8 +285,8 @@ def test_data_oriented_method_qd_func_chain_with_dataclass_member():
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_method_qd_func_chain_with_nested_dataclass_member():
-    """Combination: nested dataclass passed through a chain of two @qd.func calls
-    from a @qd.data_oriented self-method via self.outer."""
+    """Combination: nested dataclass passed through a chain of two @qd.func calls from a @qd.data_oriented
+    self-method via self.outer."""
     N = 4
 
     @dataclasses.dataclass

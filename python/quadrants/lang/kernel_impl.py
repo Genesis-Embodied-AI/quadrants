@@ -335,8 +335,8 @@ def data_oriented(cls=None, *, stable_members: bool = False):
                 raise type(e)("\n" + str(e)) from None
 
         ret = QuadrantsCallable(fun, _kernel_indirect)
-        # setattr-after-class doesn't trigger __set_name__; set the name explicitly so
-        # QuadrantsCallable.__get__ can cache the BoundQuadrantsCallable on instance.__dict__.
+        # setattr-after-class doesn't trigger __set_name__; set the name explicitly so QuadrantsCallable.__get__ can
+        # cache the BoundQuadrantsCallable on instance.__dict__.
         ret._attr_name = attr_name
         if is_property:
             ret = property(ret)

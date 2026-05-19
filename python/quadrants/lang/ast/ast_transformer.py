@@ -684,10 +684,9 @@ class ASTTransformer(Builder):
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
 
         pruning = ctx.global_context.pruning
-        # Mirror ``build_Name``'s mark_used gate: only mark on the non-enforcing first pass
-        # and not during synthetic per-leaf argument expansion for ``@qd.func`` calls. The
-        # callee body's own accesses (which run with ``expanding_dataclass_call_parameters
-        # = False``) are what we want to count.
+        # Mirror ``build_Name``'s mark_used gate: only mark on the non-enforcing first pass and not during synthetic
+        # per-leaf argument expansion for ``@qd.func`` calls. The callee body's own accesses (which run with
+        # ``expanding_dataclass_call_parameters = False``) are what we want to count.
         should_mark = not pruning.enforcing and not ctx.expanding_dataclass_call_parameters
         if isinstance(value, Ndarray):
             cache = ctx.global_context.ndarray_to_any_array
@@ -698,8 +697,8 @@ class ASTTransformer(Builder):
                     pruning.used_struct_ndarray_ids.add(key)
                 return arr
             return value
-        # Pre-promoted ``AnyArray`` flowing through an inlined ``@qd.func`` body. Mark the
-        # underlying ndarray as used so it survives the enforcing-pass pruning.
+        # Pre-promoted ``AnyArray`` flowing through an inlined ``@qd.func`` body. Mark the underlying ndarray as used
+        # so it survives the enforcing-pass pruning.
         if should_mark:
             src_id = getattr(value, "_qd_source_ndarray_id", None)
             if src_id is not None:

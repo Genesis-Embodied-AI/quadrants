@@ -148,9 +148,9 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
     # across instances of the same class. That holds for the typical ``@qd.data_oriented`` container, but Genesis
     # ``FEMSolver`` / ``MPMSolver`` / ``SPHSolver`` and similar can hold polymorphic children (e.g. ``self.material``
     # of a different concrete subclass) or swap a ``qd.Tensor``'s underlying impl between an ``Ndarray`` and a
-    # ``MatrixField``. When the leaf at a cached path is no longer an ``Ndarray`` we silently skip it: ``v.element_type``
-    # / ``v.shape`` / ``v._qd_layout`` are Ndarray-only accessors. The per-instance ``weakref(arg)`` part of the spec
-    # key still ensures correct cache discrimination across instances.
+    # ``MatrixField``. When the leaf at a cached path is no longer an ``Ndarray`` we silently skip it:
+    # ``v.element_type`` / ``v.shape`` / ``v._qd_layout`` are Ndarray-only accessors. The per-instance ``weakref(arg)``
+    # part of the spec key still ensures correct cache discrimination across instances.
     for chain in _struct_nd_paths_for(arg):
         v = arg
         for a in chain:

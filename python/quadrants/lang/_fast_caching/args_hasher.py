@@ -169,12 +169,12 @@ def dataclass_to_repr(
 ) -> str | _FailFastcache:
     """Hash a dataclass instance, optionally narrowed by pruning information.
 
-    Returns ``_FAIL_FASTCACHE`` if any field's subtree hits a recognised-but-unsupported tensor type
-    (``ScalarField`` / ``MatrixField``); otherwise a string.
+    Returns ``_FAIL_FASTCACHE`` if any field's subtree hits a recognised-but-unsupported tensor type (``ScalarField`` /
+    ``MatrixField``); otherwise a string.
 
     Pruning: if ``pruning_paths`` is non-None, only descend into fields whose flat name is in the set. Pruning's
-    prefix-expansion step ensures the set already contains all ancestors of used leaves, so checking the
-    immediate child's flat name is sufficient.
+    prefix-expansion step ensures the set already contains all ancestors of used leaves, so checking the immediate
+    child's flat name is sufficient.
     """
     # PERF: For frozen dataclasses the repr never changes. Cache it on the instance to avoid repeated
     # ``dataclasses.fields()`` calls (which are slow due to extra runtime checks — see _template_mapper_hotpath.py

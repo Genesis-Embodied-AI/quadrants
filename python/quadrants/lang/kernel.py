@@ -522,8 +522,8 @@ class Kernel(FuncBase):
         Called at the end of ``materialize`` once both passes have completed (or once pass 1 has completed
         with a loaded artifact). Two responsibilities:
 
-          1. If L1 was missing (``self._pruning_paths_from_l1 is None``), write the freshly-computed
-             pruning info so the next call from a new process can skip the args-walk warm-up.
+          1. If L1 was missing (``self._pruning_paths_from_l1 is None``), write the freshly-computed pruning info so
+             the next call from a new process can skip the args-walk warm-up.
 
           2. If ``fast_checksum`` is still None (which means either L1 was missing, or L1 hit but phase 2
              of ``_try_load_fastcache`` saw a FIELD-related FastcacheSkip — in which case we keep ``None``
@@ -587,12 +587,11 @@ class Kernel(FuncBase):
             if self._struct_ndarray_launch_info_by_key:
                 struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
                 if struct_nd_info:
-                    # Data_oriented containers marked ``_qd_stable_members = True`` (or decorated
-                    # with ``@qd.data_oriented(stable_members=True)``) promise their ndarray
-                    # members are never reassigned, so we exclude them from the per-call
-                    # ``_resolve_struct_ndarray`` walk that builds ``args_hash``. This is a
-                    # *launch-time perf hint only* and has no fastcache role — fastcache derives
-                    # its key from kernel-pruning info regardless of this flag.
+                    # Data_oriented containers marked ``_qd_stable_members = True`` (or decorated with
+                    # ``@qd.data_oriented(stable_members=True)``) promise their ndarray members are never reassigned,
+                    # so we exclude them from the per-call ``_resolve_struct_ndarray`` walk that builds ``args_hash``.
+                    # This is a *launch-time perf hint only* and has no fastcache role — fastcache derives its key
+                    # from kernel-pruning info regardless of this flag.
                     self._mutable_nd_cached_val = [
                         (idx, chain)
                         for _, idx, chain in struct_nd_info

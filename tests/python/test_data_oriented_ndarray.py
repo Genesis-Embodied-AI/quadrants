@@ -1,17 +1,16 @@
 """Tests for ``@qd.data_oriented`` classes whose members are raw ``qd.ndarray`` (not ``qd.field``, not
 ``qd.Tensor`` wrappers).
 
-The user-guide doc ``docs/source/user_guide/compound_types.md`` claims this pattern is not supported
-("can contain ndarray? no" for ``@qd.data_oriented``). But the in-tree error message in
-``python/quadrants/lang/impl.py`` lists ``@qd.data_oriented / frozen-dataclass template`` as a
-*supported* route, and the ndarray-in-struct infrastructure added by ``#561 [Type] Tensor 24``
-(2026-04-28) — specifically ``_predeclare_struct_ndarrays`` in
+The user-guide doc ``docs/source/user_guide/compound_types.md`` claims this pattern is not supported ("can contain
+ndarray? no" for ``@qd.data_oriented``). But the in-tree error message in ``python/quadrants/lang/impl.py`` lists
+``@qd.data_oriented / frozen-dataclass template`` as a *supported* route, and the ndarray-in-struct infrastructure
+added by ``#561 [Type] Tensor 24`` (2026-04-28) — specifically ``_predeclare_struct_ndarrays`` in
 ``python/quadrants/lang/ast/ast_transformers/function_def_transformer.py`` — explicitly walks both
-``dataclasses.is_dataclass(val)`` and ``hasattr(val, "__dict__")`` containers, the latter being the
-data_oriented case.
+``dataclasses.is_dataclass(val)`` and ``hasattr(val, "__dict__")`` containers, the latter being the data_oriented
+case.
 
-This file pins what actually works, and documents the gaps. See
-``perso_hugh/doc/data_oriented_ndarray.md`` for the design analysis.
+This file pins what actually works, and documents the gaps. See ``perso_hugh/doc/data_oriented_ndarray.md`` for the
+design analysis.
 """
 
 import dataclasses
@@ -285,10 +284,9 @@ def test_data_oriented_distinct_instances():
 
 # ---------------------------------------------------------------------------
 # 9b. Fastcache end-to-end with ``@qd.data_oriented`` holding ndarrays. Pattern adapted from
-#     ``test_cache.test_fastcache``: call ``qd_init_same_arch`` twice with the same cache directory
-#     to simulate two processes, monkeypatch ``launch_kernel`` to capture whether
-#     ``compiled_kernel_data`` was loaded from disk. On the second init the data_oriented + ndarray
-#     kernel should be served from the on-disk fastcache.
+#     ``test_cache.test_fastcache``: call ``qd_init_same_arch`` twice with the same cache directory to simulate two
+#     processes, monkeypatch ``launch_kernel`` to capture whether ``compiled_kernel_data`` was loaded from disk. On
+#     the second init the data_oriented + ndarray kernel should be served from the on-disk fastcache.
 # ---------------------------------------------------------------------------
 
 
@@ -300,10 +298,9 @@ def test_data_oriented_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
     captured_compiled_kernel_data = []
 
     def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
-        # Filter to the user kernel only; .to_numpy() launches an internal
-        # ``ndarray_to_ext_arr`` kernel that is not fastcache-eligible
-        # (is_pure=False) and would always make compiled_kernel_data=None,
-        # masking the actual fastcache behaviour of ``run``.
+        # Filter to the user kernel only; .to_numpy() launches an internal ``ndarray_to_ext_arr`` kernel that is not
+        # fastcache-eligible (is_pure=False) and would always make compiled_kernel_data=None, masking the actual
+        # fastcache behaviour of ``run``.
         if self.func.__name__ == "run":
             captured_compiled_kernel_data.append(compiled_kernel_data)
         return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
@@ -334,9 +331,8 @@ def test_data_oriented_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# 9c. Same as 9b but with a *nested* ``@qd.data_oriented`` holding an ndarray. Pins that the
-#     fastcache args_hasher recursion handles nested data_oriented containers correctly across
-#     processes.
+# 9c. Same as 9b but with a *nested* ``@qd.data_oriented`` holding an ndarray. Pins that the fastcache args_hasher
+#     recursion handles nested data_oriented containers correctly across processes.
 # ---------------------------------------------------------------------------
 
 
@@ -383,9 +379,8 @@ def test_data_oriented_nested_ndarray_fastcache_cross_init(tmp_path, monkeypatch
 
 
 # ---------------------------------------------------------------------------
-# 9d. Fastcache key is dtype-sensitive: same kernel source, different ndarray dtype in the
-#     data_oriented member -> two distinct disk cache entries. Pins the args_hasher's
-#     ``[nd-{dtype}-{ndim}{layout}]`` repr.
+# 9d. Fastcache key is dtype-sensitive: same kernel source, different ndarray dtype in the data_oriented member ->
+#     two distinct disk cache entries. Pins the args_hasher's ``[nd-{dtype}-{ndim}{layout}]`` repr.
 # ---------------------------------------------------------------------------
 
 
@@ -433,10 +428,10 @@ def test_data_oriented_ndarray_fastcache_dtype_key_distinct(tmp_path, monkeypatc
 
 
 # ---------------------------------------------------------------------------
-# 9e. Documented fallback: a @qd.data_oriented containing a qd.field disables fastcache for the
-#     whole call (args_hasher returns None for ScalarField). The kernel still runs correctly via
-#     non-fastcache compilation. This test pins the documented fallback so a future "support
-#     fields in fastcache" change explicitly chooses to update this test.
+# 9e. Documented fallback: a @qd.data_oriented containing a qd.field disables fastcache for the whole call
+#     (args_hasher returns None for ScalarField). The kernel still runs correctly via non-fastcache compilation.
+#     This test pins the documented fallback so a future "support fields in fastcache" change explicitly chooses to
+#     update this test.
 # ---------------------------------------------------------------------------
 
 
@@ -517,9 +512,8 @@ def test_data_oriented_ndarray_pure():
 
 
 # ---------------------------------------------------------------------------
-# 11. Counter-test: confirm a dataclass-of-NDArray works (sanity check that the existing supported
-#     route still works; if this fails, the test environment itself is broken, not the data_oriented
-#     path).
+# 11. Counter-test: confirm a dataclass-of-NDArray works (sanity check that the existing supported route still
+#     works; if this fails, the test environment itself is broken, not the data_oriented path).
 # ---------------------------------------------------------------------------
 
 
@@ -544,9 +538,8 @@ def test_dataclass_ndarray_sanity():
 
 
 # ---------------------------------------------------------------------------
-# 12. data_oriented holding a (frozen) dataclass that holds an ndarray.
-#     Exercises the ``else`` branch of ``_walk_obj`` recursing through a dataclass child — added by
-#     the Bug 1 fix.
+# 12. data_oriented holding a (frozen) dataclass that holds an ndarray. Exercises the ``else`` branch of
+#     ``_walk_obj`` recursing through a dataclass child — added by the Bug 1 fix.
 # ---------------------------------------------------------------------------
 
 
@@ -721,9 +714,9 @@ def test_data_oriented_two_kernels_same_instance():
 
 
 # ---------------------------------------------------------------------------
-# 17. data_oriented + ndarray + @qd.func sub-call. Pins that the AST-time attribute resolution in
-#     ``build_Attribute`` (which uses the predeclared AnyArray cache) works when the access happens
-#     inside a func, not just the top-level kernel.
+# 17. data_oriented + ndarray + @qd.func sub-call. Pins that the AST-time attribute resolution in ``build_Attribute``
+#     (which uses the predeclared AnyArray cache) works when the access happens inside a func, not just the top-level
+#     kernel.
 # ---------------------------------------------------------------------------
 
 
@@ -836,10 +829,9 @@ def test_data_oriented_nested_ndarray_reassign_different_dtype():
 
 
 # ---------------------------------------------------------------------------
-# 21. Typed-dataclass kernel arg with a ``@qd.data_oriented`` field type — should error clearly
-#     pointing the user to ``qd.template()``. The two patterns are incompatible at the kernel-arg
-#     layer: dataclass kernel args are flattened using annotations, data_oriented containers need a
-#     value-driven walk. Pins the helpful error message.
+# 21. Typed-dataclass kernel arg with a ``@qd.data_oriented`` field type — should error clearly pointing the user to
+#     ``qd.template()``. The two patterns are incompatible at the kernel-arg layer: dataclass kernel args are
+#     flattened using annotations, data_oriented containers need a value-driven walk. Pins the helpful error message.
 # ---------------------------------------------------------------------------
 
 
@@ -891,13 +883,11 @@ def test_data_oriented_field_only_no_speckey_change():
 
 
 # ---------------------------------------------------------------------------
-# 22. Robustness: object graphs with Pydantic-style metaclass ``__getattr__`` recursion,
-#     and cyclic attribute references. Real-world container classes (notably Genesis's
-#     ``RigidOptions`` / ``SimOptions``) inherit from ``pydantic.BaseModel`` whose
-#     ``ModelMetaclass.__getattr__`` recurses infinitely on missing class attributes.
-#     Quadrants' walker must not blow the stack when it traverses a ``data_oriented`` arg
-#     that contains such an object, or that contains a back-reference to itself / its
-#     parent (e.g. ``solver.scene.solver``).
+# 22. Robustness: object graphs with Pydantic-style metaclass ``__getattr__`` recursion, and cyclic attribute
+#     references. Real-world container classes (notably Genesis's ``RigidOptions`` / ``SimOptions``) inherit from
+#     ``pydantic.BaseModel`` whose ``ModelMetaclass.__getattr__`` recurses infinitely on missing class attributes.
+#     Quadrants' walker must not blow the stack when it traverses a ``data_oriented`` arg that contains such an
+#     object, or that contains a back-reference to itself / its parent (e.g. ``solver.scene.solver``).
 # ---------------------------------------------------------------------------
 
 
@@ -996,8 +986,8 @@ def test_data_oriented_polymorphic_attr_across_instances():
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_with_cyclic_attr_graph():
-    """A ``@qd.data_oriented`` class whose attribute graph contains a cycle
-    (``parent.child.parent is parent``). Walker must not re-enter the cycle."""
+    """A ``@qd.data_oriented`` class whose attribute graph contains a cycle (``parent.child.parent is parent``).
+    Walker must not re-enter the cycle."""
     N = 4
 
     @qd.data_oriented
@@ -1027,8 +1017,7 @@ def test_data_oriented_with_cyclic_attr_graph():
 # ---------------------------------------------------------------------------
 # Pruning-driven fastcache behaviour for @qd.data_oriented containers.
 #
-# These pin the three rules enforced by the args hasher (see fastcache.md
-# "Pruning-driven argument hashing"):
+# These pin the three rules enforced by the args hasher (see fastcache.md "Pruning-driven argument hashing"):
 #   1. The cache key may only include contributions from kernel-pruned paths.
 #   2. Unrecognised types at kernel-read paths must not be silently dropped.
 #   3. Fastcache works for @qd.data_oriented kernel args end-to-end.
@@ -1039,9 +1028,9 @@ def test_data_oriented_with_cyclic_attr_graph():
 def test_data_oriented_kernel_unused_opaque_member_does_not_affect_cache(tmp_path, monkeypatch):
     """Rule 1: kernel-unused opaque members do not affect the fastcache key.
 
-    Two ``State`` instances differ only in an opaque ``uuid`` member that the kernel never reads.
-    Both must hit the same compiled artifact on the second process — proof that the args hasher's
-    pruning narrow walk skips the opaque attribute (no qualname-fallback, no spurious miss)."""
+    Two ``State`` instances differ only in an opaque ``uuid`` member that the kernel never reads. Both must hit the
+    same compiled artifact on the second process — proof that the args hasher's pruning narrow walk skips the opaque
+    attribute (no qualname-fallback, no spurious miss)."""
     import uuid
 
     from quadrants._test_tools import qd_init_same_arch
@@ -1073,8 +1062,8 @@ def test_data_oriented_kernel_unused_opaque_member_does_not_affect_cache(tmp_pat
     run(a)
     run(b)
 
-    # Second process: cold-start, must load from disk. If the uuid had leaked into the cache key,
-    # different uuid → different L2 key → no artifact would load.
+    # Second process: cold-start, must load from disk. If the uuid had leaked into the cache key, different uuid →
+    # different L2 key → no artifact would load.
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     a = State(x=qd.ndarray(qd.i32, shape=(4,)))
     b = State(x=qd.ndarray(qd.i32, shape=(4,)))
@@ -1087,9 +1076,8 @@ def test_data_oriented_kernel_unused_opaque_member_does_not_affect_cache(tmp_pat
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_kernel_read_opaque_member_fails_fastcache(tmp_path, capfd) -> None:
-    """Rule 2: when the kernel actually reads an unrecognised-type member, fastcache fails loudly
-    with [UNKNOWN_TYPE] + [INVALID_FUNC] — no silent drop, no qualname fallback. The kernel still
-    runs via normal compilation."""
+    """Rule 2: when the kernel actually reads an unrecognised-type member, fastcache fails loudly with [UNKNOWN_TYPE]
+    + [INVALID_FUNC] — no silent drop, no qualname fallback. The kernel still runs via normal compilation."""
     from quadrants._test_tools import qd_init_same_arch
     from quadrants.lang._fast_caching.args_hasher import reset_unknown_type_warn_state
 
@@ -1128,10 +1116,9 @@ def test_data_oriented_kernel_read_opaque_member_fails_fastcache(tmp_path, capfd
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_kernel_read_primitive_distinguishes_cache_key(tmp_path, monkeypatch) -> None:
-    """Rule 3 (data_oriented works) + pruning correctness: when the kernel reads a primitive member,
-    its value is baked into the kernel and must drive a distinct cache entry per value. Two State
-    instances differing only in ``n`` (read by the kernel) cold-compile separately and both load
-    from disk on the second process."""
+    """Rule 3 (data_oriented works) + pruning correctness: when the kernel reads a primitive member, its value is
+    baked into the kernel and must drive a distinct cache entry per value. Two State instances differing only in
+    ``n`` (read by the kernel) cold-compile separately and both load from disk on the second process."""
     from quadrants._test_tools import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
@@ -1174,8 +1161,8 @@ def test_data_oriented_kernel_read_primitive_distinguishes_cache_key(tmp_path, m
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_kernel_unread_primitive_does_not_affect_cache(tmp_path, monkeypatch) -> None:
-    """Rule 1: kernel-unused primitive members do not affect the cache key. Mirror of the opaque
-    case for primitives. Two State instances differing only in ``unused_n`` must share the cache."""
+    """Rule 1: kernel-unused primitive members do not affect the cache key. Mirror of the opaque case for
+    primitives. Two State instances differing only in ``unused_n`` must share the cache."""
     from quadrants._test_tools import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
@@ -1216,10 +1203,10 @@ def test_data_oriented_kernel_unread_primitive_does_not_affect_cache(tmp_path, m
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_qd_func_chain_propagation_distinguishes_cache_key(tmp_path, monkeypatch) -> None:
-    """Pruning chain propagation through ``@qd.func`` calls (``record_after_call`` extension):
-    when the kernel calls ``f(self.dofs)`` and ``f`` reads ``s.x``, the kernel's pruning set
-    must include ``__qd_self__qd_dofs__qd_x`` so that changes to the inner ndarray's dtype
-    invalidate the cache. Two States differing in ``dofs.x``'s dtype must cold-compile separately."""
+    """Pruning chain propagation through ``@qd.func`` calls (``record_after_call`` extension): when the kernel calls
+    ``f(self.dofs)`` and ``f`` reads ``s.x``, the kernel's pruning set must include ``__qd_self__qd_dofs__qd_x`` so
+    that changes to the inner ndarray's dtype invalidate the cache. Two States differing in ``dofs.x``'s dtype must
+    cold-compile separately."""
     from quadrants._test_tools import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
@@ -1267,23 +1254,22 @@ def test_data_oriented_qd_func_chain_propagation_distinguishes_cache_key(tmp_pat
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_nested_primitive_via_qd_func_distinguishes_cache_key(tmp_path, monkeypatch) -> None:
-    """Pruning chain propagation through ``f(self.child)`` for *primitive* members of nested
-    data_oriented containers.
+    """Pruning chain propagation through ``f(self.child)`` for *primitive* members of nested data_oriented
+    containers.
 
-    Regression test for a bug where ``record_after_call`` skipped chain-path propagation whenever the
-    caller-side arg flattened to a ``__qd_*``-prefixed name (which Attribute chains always do —
-    ``self.cfg`` → ``__qd_self__qd_cfg``). When that happened, primitive members read inside the
-    callee (``cfg.n`` → ``__qd_cfg__qd_n`` in the callee's chain set) never made it into the kernel's
-    pruning set, so the args-hasher walked ``self.cfg`` as data_oriented and found no pruned children,
-    yielding an identical hash for *any* value of ``cfg.n``. Two configs that should produce
-    different kernels (different ``range(s.cfg.n)`` trip counts baked into codegen) would then share
-    a fastcache entry — leading to stale-kernel hits and silent miscompiles (e.g. Genesis'
-    ``test_ndarray_no_compile`` was failing with iter-N kernels reused for iter-N+1 scenes that have
-    a different ``RigidSimStaticConfig.para_level`` baked into their ``qd.static`` branches).
+    Regression test for a bug where ``record_after_call`` skipped chain-path propagation whenever the caller-side arg
+    flattened to a ``__qd_*``-prefixed name (which Attribute chains always do — ``self.cfg`` →
+    ``__qd_self__qd_cfg``). When that happened, primitive members read inside the callee (``cfg.n`` →
+    ``__qd_cfg__qd_n`` in the callee's chain set) never made it into the kernel's pruning set, so the args-hasher
+    walked ``self.cfg`` as data_oriented and found no pruned children, yielding an identical hash for *any* value of
+    ``cfg.n``. Two configs that should produce different kernels (different ``range(s.cfg.n)`` trip counts baked into
+    codegen) would then share a fastcache entry — leading to stale-kernel hits and silent miscompiles (e.g. Genesis'
+    ``test_ndarray_no_compile`` was failing with iter-N kernels reused for iter-N+1 scenes that have a different
+    ``RigidSimStaticConfig.para_level`` baked into their ``qd.static`` branches).
 
-    The fix in ``_pruning.py`` gates propagation on the *root Name* of the chain (``self``, not the
-    flat result), so both ``f(self)`` and ``f(self.cfg)`` propagate, while already-flattened
-    dataclass refs (``Name('__qd_state__qd_x')``) are still skipped."""
+    The fix in ``_pruning.py`` gates propagation on the *root Name* of the chain (``self``, not the flat result), so
+    both ``f(self)`` and ``f(self.cfg)`` propagate, while already-flattened dataclass refs
+    (``Name('__qd_state__qd_x')``) are still skipped."""
     from quadrants._test_tools import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
