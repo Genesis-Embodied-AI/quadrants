@@ -63,27 +63,25 @@ def pytest_configure(config):
         "`fraction` (0..1) or `n` (>= 1). Seed printed in report header; rerun the same sample with "
         "--sample-seed=<S>; rerun every case with --no-sample; rerun a single failing case by pasting its nodeid.",
     )
-    # IMPORTANT: pick the seed on the *controller* here, not inside pytest_collection_modifyitems. With pytest-xdist
-    # the latter runs on every worker, so workers would each pick different seeds and sample different subsets,
-    # breaking the contract that a single ``--sample-seed`` describes the entire run. The controller -> worker handoff
-    # uses xdist's ``workerinput`` dict (populated in ``pytest_configure_node`` below); workers read from there in
-    # ``pytest_configure``. Runtime-set ``config.option`` attributes are NOT auto-replicated to workers.
-    if hasattr(config, "workerinput"):
-        # xdist worker: read seed from controller via workerinput.
-        seed = config.workerinput.get("sample_seed")
-        if seed is not None:
-            config.option.sample_seed = seed
-    elif not config.getoption("--no-sample") and config.getoption("--sample-seed") is None:
-        # Controller (or non-xdist run): pick the run's seed once.
-        config.option.sample_seed = random.randrange(0, 2**31)
-
-
-def pytest_configure_node(node):
-    # xdist hook: runs on the controller for each worker about to be spawned. Stash the run-wide sample seed in the
-    # worker's ``workerinput`` dict so ``pytest_configure`` on the worker side picks up the same value.
-    seed = node.config.getoption("--sample-seed")
-    if seed is not None:
-        node.workerinput["sample_seed"] = seed
+    # IMPORTANT: pick the seed on the *controller* once, then propagate it to every xdist worker. ``pytest_configure``
+    # runs on the controller AND on every worker; without explicit propagation each worker would draw a fresh seed,
+    # sample a different subset, and xdist would abort collection with "Different tests were collected between gw0 and
+    # gwN". We use an environment variable (``QD_SAMPLE_SEED``) because xdist's popen gateway inherits ``os.environ``
+    # from the controller -- this works regardless of conftest depth, unlike the ``pytest_configure_node`` /
+    # ``workerinput`` hook which only fires for conftests at the rootdir level.
+    if config.getoption("--no-sample"):
+        pass  # Sampler disabled; no seed needed.
+    elif config.getoption("--sample-seed") is not None:
+        # Explicit ``--sample-seed=N`` is already on argv -> xdist forwards argv to workers, so every process sees it.
+        pass
+    elif "QD_SAMPLE_SEED" in os.environ:
+        # Worker (or re-entrant run): inherit the seed the controller picked.
+        config.option.sample_seed = int(os.environ["QD_SAMPLE_SEED"])
+    else:
+        # Controller (or non-xdist run): pick the seed once and publish it for workers.
+        seed = random.randrange(0, 2**31)
+        config.option.sample_seed = seed
+        os.environ["QD_SAMPLE_SEED"] = str(seed)
 
 
 def pytest_report_header(config):
