@@ -62,7 +62,6 @@ def test_linear_nested_aos():
         assert y[i] == i + 123
 
 
-@pytest.mark.slow
 @test_utils.test(exclude=[qd.vulkan])
 def test_2d_nested():
     x = qd.field(qd.i32)

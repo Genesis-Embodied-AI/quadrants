@@ -7,7 +7,6 @@ import quadrants as qd
 from tests import test_utils
 
 
-@pytest.mark.slow
 @pytest.mark.skipif(os.environ.get("QD_LITE_TEST") or "0", reason="Lite test")
 @pytest.mark.run_in_serial
 @test_utils.test()
@@ -109,7 +108,6 @@ def _is_appveyor():
     return os.getenv("APPVEYOR", "").lower() == "true"
 
 
-@pytest.mark.slow
 @pytest.mark.skipif(os.environ.get("QD_LITE_TEST") or "0", reason="Lite test")
 @pytest.mark.run_in_serial
 @test_utils.test()

@@ -393,7 +393,6 @@ def _make_spd(np_dtype=np.float32, seed: int = 42):
     return (B @ B.T + _TILE * np.eye(_TILE)).astype(np_dtype)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
@@ -643,7 +642,6 @@ def test_tile16_slice_3d_batch(tensor_type, qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
@@ -690,7 +688,6 @@ def test_tile16_slice_ger_sub_via_outer(tensor_type, qd_dtype):
     np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_proxy_ger_sub_2d(qd_dtype):
@@ -727,7 +724,6 @@ def test_tile16_vec_proxy_ger_sub_2d(qd_dtype):
     np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
 
 
-@pytest.mark.slow
 @test_utils.test(arch=qd.gpu)
 def test_tile16_outer_symmetric_same_variable():
     """t -= qd.outer(v, v) with the same variable for both args."""
@@ -761,7 +757,6 @@ def test_tile16_outer_symmetric_same_variable():
     np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
 
 
-@pytest.mark.slow
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_proxy_ger_sub_3d():
     """Column vector load from a 3D array: v = arr[batch, r0:r1, col]."""
@@ -1136,7 +1131,6 @@ def test_tile16_load_store_partial_rows(qd_dtype, nrows):
     np.testing.assert_allclose(result, expected)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
@@ -1200,7 +1194,6 @@ def test_tile16_potrf(tensor_type, qd_dtype):
     np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=atol)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
@@ -1244,7 +1237,6 @@ def test_tile16_potrf_then_trsm(tensor_type, qd_dtype):
 # -- SharedArray tests --
 
 
-@pytest.mark.slow
 @test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_roundtrip():
     """Load from field -> tile -> SharedArray -> tile -> field, verify data survives."""
@@ -1271,7 +1263,6 @@ def test_tile16_shared_array_roundtrip():
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("partial_store,partial_load", [(True, True), (True, False), (False, True)])
 @test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_partial_cols(partial_store, partial_load):
@@ -1318,7 +1309,6 @@ def test_tile16_shared_array_partial_cols(partial_store, partial_load):
         np.testing.assert_allclose(result[:, NCOLS:], -1.0)
 
 
-@pytest.mark.slow
 @test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_cholesky():
     """Cholesky via tiles, L stored in SharedArray, verify reconstruction."""
@@ -1444,7 +1434,6 @@ def test_tile16_vec_proxy_syr_sub_2d(tensor_type):
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_proxy_syr_sub_3d(tensor_type):
@@ -1481,7 +1470,6 @@ def test_tile16_vec_proxy_syr_sub_3d(tensor_type):
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
 
-@pytest.mark.slow
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_proxy_shared_array():
     """Symmetric rank-1 subtract via vec proxy from SharedArray at non-zero offset."""
@@ -1520,7 +1508,6 @@ def test_tile16_vec_proxy_shared_array():
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_proxy_partial_rows(tensor_type):
@@ -1557,7 +1544,6 @@ def test_tile16_vec_proxy_partial_rows(tensor_type):
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col_padded, col_padded), atol=1e-5)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_proxy_multi_column_accumulate(tensor_type):
@@ -1788,7 +1774,6 @@ def test_proxy_default_dtype_survives_reinit(tensor_type):
     assert result32.dtype == np.float32
 
 
-@pytest.mark.slow
 @test_utils.test(arch=[qd.cuda])
 def test_tile16_cholesky_blocked_demo():
     """Smoke-test that misc/demos/cholesky_blocked.py runs to completion."""

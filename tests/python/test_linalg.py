@@ -255,13 +255,11 @@ def _test_matmul_chain(dt):
     np.testing.assert_allclose(ABC_chained.to_numpy(), ABC_staged.to_numpy(), rtol=tol, atol=tol)
 
 
-@pytest.mark.slow
 @test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
 def test_matmul_chain_qipc_sizes_f32():
     _test_matmul_chain(qd.f32)
 
 
-@pytest.mark.slow
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_matmul_chain_qipc_sizes_f64():
     _test_matmul_chain(qd.f64)

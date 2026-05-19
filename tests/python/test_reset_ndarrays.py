@@ -8,7 +8,6 @@ import quadrants as qd
 from tests import test_utils
 
 
-@pytest.mark.slow
 @test_utils.test(arch=[qd.cpu])
 def test_ndarray_doesnt_crash_on_gc() -> None:
     if sys.platform != "darwin":

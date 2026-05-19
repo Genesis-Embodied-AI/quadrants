@@ -319,7 +319,6 @@ def src_ll_cache_has_return_child(args: list[str]) -> None:
     sys.exit(RET_SUCCESS)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("return_something", [False, True])
 @pytest.mark.parametrize("src_ll_cache", [False, True])
 @test_utils.test()
@@ -464,7 +463,6 @@ def src_ll_cache_modify_sub_func_child(args: list[str]) -> None:
     sys.exit(RET_SUCCESS)
 
 
-@pytest.mark.slow
 @test_utils.test()
 def test_src_ll_cache_modify_sub_func(tmp_path: pathlib.Path) -> None:
     assert qd.lang is not None
