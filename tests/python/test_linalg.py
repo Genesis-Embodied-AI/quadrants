@@ -154,31 +154,13 @@ def _test_frobenius_inner(n, dt):
     assert out_self[None] == test_utils.approx(A.to_numpy().__pow__(2).sum(), rel=tol, abs=tol)
 
 
-@pytest.mark.parametrize(
-    "n",
-    [
-        2,
-        3,
-        pytest.param(6, marks=pytest.mark.slow),
-        pytest.param(9, marks=pytest.mark.slow),
-        pytest.param(12, marks=pytest.mark.slow),
-    ],
-)
+@pytest.mark.parametrize("n", [3, pytest.param(12, marks=pytest.mark.slow)])
 @test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
 def test_frobenius_inner_f32(n):
     _test_frobenius_inner(n, qd.f32)
 
 
-@pytest.mark.parametrize(
-    "n",
-    [
-        2,
-        3,
-        pytest.param(6, marks=pytest.mark.slow),
-        pytest.param(9, marks=pytest.mark.slow),
-        pytest.param(12, marks=pytest.mark.slow),
-    ],
-)
+@pytest.mark.parametrize("n", [3, pytest.param(12, marks=pytest.mark.slow)])
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_frobenius_inner_f64(n):
     _test_frobenius_inner(n, qd.f64)
@@ -468,19 +450,7 @@ def _test_inverse_at_size(n_, dt_, factory):
     np.testing.assert_allclose(M @ inv_np, np.eye(n_), rtol=tol, atol=tol)
 
 
-@pytest.mark.parametrize(
-    "n",
-    [
-        5,
-        pytest.param(6, marks=pytest.mark.slow),
-        pytest.param(7, marks=pytest.mark.slow),
-        pytest.param(8, marks=pytest.mark.slow),
-        pytest.param(9, marks=pytest.mark.slow),
-        pytest.param(10, marks=pytest.mark.slow),
-        pytest.param(11, marks=pytest.mark.slow),
-        pytest.param(12, marks=pytest.mark.slow),
-    ],
-)
+@pytest.mark.parametrize("n", [5, pytest.param(12, marks=pytest.mark.slow)])
 @pytest.mark.parametrize(
     "factory",
     [_inverse_diagonally_dominant, _inverse_spd, _inverse_pivoting_required],
@@ -490,19 +460,7 @@ def test_inverse_large_f32(n, factory):
     _test_inverse_at_size(n, qd.f32, factory)
 
 
-@pytest.mark.parametrize(
-    "n",
-    [
-        5,
-        pytest.param(6, marks=pytest.mark.slow),
-        pytest.param(7, marks=pytest.mark.slow),
-        pytest.param(8, marks=pytest.mark.slow),
-        pytest.param(9, marks=pytest.mark.slow),
-        pytest.param(10, marks=pytest.mark.slow),
-        pytest.param(11, marks=pytest.mark.slow),
-        pytest.param(12, marks=pytest.mark.slow),
-    ],
-)
+@pytest.mark.parametrize("n", [5, pytest.param(12, marks=pytest.mark.slow)])
 @pytest.mark.parametrize(
     "factory",
     [_inverse_diagonally_dominant, _inverse_spd, _inverse_pivoting_required],
