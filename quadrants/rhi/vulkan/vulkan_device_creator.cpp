@@ -615,6 +615,13 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_KHR_SHADER_CLOCK_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
+    } else if (name == VK_KHR_SHADER_SUBGROUP_EXTENDED_TYPES_EXTENSION_NAME) {
+      // Promoted to Vulkan 1.2 core. Push the extension here so the pre-1.2 path below
+      // (`CHECK_VERSION(1, 2) || CHECK_EXTENSION(...)`) actually finds it via `CHECK_EXTENSION`; without
+      // this branch, a Vulkan 1.1 device that advertises the KHR extension would silently skip
+      // `shaderSubgroupExtendedTypes` enablement and still trip VUID-RuntimeSpirv-None-06275 on any
+      // 8/16/64-bit `OpGroupNonUniform*` op.
+      enabled_extensions.push_back(ext.extensionName);
     } else if (std::find(params_.additional_device_extensions.begin(), params_.additional_device_extensions.end(),
                          name) != params_.additional_device_extensions.end()) {
       enabled_extensions.push_back(ext.extensionName);
@@ -689,6 +696,14 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
   variable_ptr_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES_KHR;
   VkPhysicalDeviceShaderAtomicInt64Features shader_atomic_int64_feature{};
   shader_atomic_int64_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES;
+  // VK_KHR_shader_subgroup_extended_types (promoted to Vulkan 1.2 core). Enables OpGroupNonUniform*
+  // ops on 8/16/64-bit integer and 16-bit float types. Required by the `qd.simt.subgroup.*` and
+  // `qd.simt.block.*` reductions when invoked with `qd.i64` (and 8/16-bit types), otherwise SPIR-V
+  // validation rejects the shader with VUID-RuntimeSpirv-None-06275 and the dispatch returns
+  // uninitialised lanes.
+  VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures shader_subgroup_extended_types_feature{};
+  shader_subgroup_extended_types_feature.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES;
   VkPhysicalDeviceShaderAtomicFloatFeaturesEXT shader_atomic_float_feature{};
   shader_atomic_float_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
   VkPhysicalDeviceShaderAtomicFloat2FeaturesEXT shader_atomic_float_2_feature{};
@@ -739,6 +754,21 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       }
       *pNextEnd = &shader_atomic_int64_feature;
       pNextEnd = &shader_atomic_int64_feature.pNext;
+    }
+
+    // Subgroup extended types (promoted to Vulkan 1.2 core). Required for OpGroupNonUniform* ops on
+    // 8/16/64-bit integers and 16-bit floats — the `qd.simt.subgroup.*` and `qd.simt.block.*`
+    // reductions emit these when the lane dtype is `qd.i64` (etc.). The feature has no
+    // DeviceCapability bit because the SPIR-V codegen already gates wide-int dispatch on
+    // `spirv_has_int64` / `spirv_has_int{8,16}`; the device must merely accept the SPIR-V at
+    // pipeline creation time.
+    if (CHECK_VERSION(1, 2) || CHECK_EXTENSION(VK_KHR_SHADER_SUBGROUP_EXTENDED_TYPES_EXTENSION_NAME)) {
+      features2.pNext = &shader_subgroup_extended_types_feature;
+      vkGetPhysicalDeviceFeatures2KHR(physical_device_, &features2);
+      if (shader_subgroup_extended_types_feature.shaderSubgroupExtendedTypes) {
+        *pNextEnd = &shader_subgroup_extended_types_feature;
+        pNextEnd = &shader_subgroup_extended_types_feature.pNext;
+      }
     }
 
     // Atomic float
