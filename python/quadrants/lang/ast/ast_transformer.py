@@ -675,13 +675,11 @@ class ASTTransformer(Builder):
         """If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),
         return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.
 
-        Also records the source ndarray id in ``pruning.used_struct_ndarray_ids`` on the
-        non-enforcing first pass, so that the enforcing second-pass
-        ``_predeclare_struct_ndarrays`` can skip ndarrays that the kernel never actually
-        accesses. Both ``Ndarray`` instances and pre-existing ``AnyArray`` proxies (tagged
-        with ``_qd_source_ndarray_id``) are handled — the latter is the case for accesses
-        in inlined ``@qd.func`` bodies whose params were bound to already-promoted proxies
-        by Option A in ``call_transformer``.
+        Also records the source ndarray id in ``pruning.used_struct_ndarray_ids`` on the non-enforcing first pass, so
+        that the enforcing second-pass ``_predeclare_struct_ndarrays`` can skip ndarrays that the kernel never actually
+        accesses. Both ``Ndarray`` instances and pre-existing ``AnyArray`` proxies (tagged with
+        ``_qd_source_ndarray_id``) are handled — the latter is the case for accesses in inlined ``@qd.func`` bodies
+        whose params were bound to already-promoted proxies by Option A in ``call_transformer``.
         """
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
 

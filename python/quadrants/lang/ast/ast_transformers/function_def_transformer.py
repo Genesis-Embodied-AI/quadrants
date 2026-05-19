@@ -232,14 +232,12 @@ class FunctionDefTransformer:
         ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in the
         launch context.
 
-        Pruning: in the enforcing (second) compile pass, ``pruning.used_struct_ndarray_ids``
-        contains the set of ``id(ndarray)`` values that ``_promote_ndarray_if_declared``
-        observed being accessed during the first pass (directly in the kernel body, or
-        transitively through ``@qd.func`` inlining). We register only those, dropping every
-        unused ndarray from the kernel's parameter list. On the first pass the set is empty
-        / not yet populated, so we register everything as today (correctness: the first
-        pass needs every reachable ndarray in the cache for ``build_Attribute`` to resolve
-        the accesses that *will* populate the set).
+        Pruning: in the enforcing (second) compile pass, ``pruning.used_struct_ndarray_ids`` contains the set of
+        ``id(ndarray)`` values that ``_promote_ndarray_if_declared`` observed being accessed during the first pass
+        (directly in the kernel body, or transitively through ``@qd.func`` inlining). We register only those, dropping
+        every unused ndarray from the kernel's parameter list. On the first pass the set is empty / not yet populated,
+        so we register everything as today (correctness: the first pass needs every reachable ndarray in the cache for
+        ``build_Attribute`` to resolve the accesses that *will* populate the set).
         """
         from quadrants.lang._pruning import Pruning  # pylint: disable=C0415
         from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
