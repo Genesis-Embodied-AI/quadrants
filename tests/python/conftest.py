@@ -20,11 +20,11 @@ pytest_rerunfailures.works_with_current_xdist = lambda: True
 # @pytest.mark.sample(...)  --  per-test stochastic parametrize subsampling
 # ---------------------------------------------------------------------------
 #
-# Some tests parametrize so widely (test_tile16_load_store, test_tile16_cholesky, ...) that running every case on
-# every CI run is wasteful: the parametrize axes are intentionally varied to cover corner cases, but most runs would
-# get the same signal from a small random subset. ``@pytest.mark.sample(n=...)`` or ``@pytest.mark.sample(fraction=...)``
-# opts a *single* test into per-run random sub-selection. Over many runs, each parametrize case asymptotically gets
-# covered (Pr[hit after k runs] = 1 - (1 - keep/total)^k).
+# Some tests parametrize so widely (test_tile16_load_store, test_tile16_cholesky, ...) that running every case on every
+# CI run is wasteful: the parametrize axes are intentionally varied to cover corner cases, but most runs would get the
+# same signal from a small random subset. ``@pytest.mark.sample(n=...)`` or ``@pytest.mark.sample(fraction=...)`` opts a
+# *single* test into per-run random sub-selection. Over many runs, each parametrize case asymptotically gets covered
+# (Pr[hit after k runs] = 1 - (1 - keep/total)^k).
 #
 # Reproducibility hooks:
 #   - whole-suite: ``--sample-seed=<S>`` reproduces the exact same trimmed set (header prints the seed used).
@@ -133,10 +133,10 @@ def pytest_collection_modifyitems(config, items):
             continue
         keep_n = _sample_keep_count(mark, len(group), key)
         # Per-test RNG: keyed on (seed, key) so:
-        #   - Independence: adding / renaming / tweaking the @sample mark on test_A does NOT shift the sample of
-        #     test_B. Routine refactors don't cause failures to migrate file-wide.
-        #   - Locality: when debugging, you can reason about one test's sample without simulating all the others'
-        #     RNG advances.
+        #   - Independence: adding / renaming / tweaking the @sample mark on test_A does NOT shift the sample of test_B.
+        #     Routine refactors don't cause failures to migrate file-wide.
+        #   - Locality: when debugging, you can reason about one test's sample without simulating all the others' RNG
+        #     advances.
         rng = random.Random((seed, key))
         kept_ids = {id(it) for it in rng.sample(group, k=keep_n)}
         for it in group:
