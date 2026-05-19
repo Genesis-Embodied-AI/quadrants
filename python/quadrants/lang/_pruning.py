@@ -102,6 +102,68 @@ class Pruning:
         assert not self.enforcing
         self.kernel_arg_chain_paths_by_func_id[func_id].add(chain_flat_name)
 
+    def fold_struct_nd_paths(
+        self, struct_ndarray_launch_info: list[tuple[Any, int, tuple[str, ...]]], arg_metas: list[ArgMetadata]
+    ) -> None:
+        """Add data_oriented (and dataclass-nested) ndarray attribute chains to the kernel's pruning flat
+        name set so ``args_hasher.hash_args`` narrow-walks them correctly.
+
+        Background: ``used_vars_by_func_id[KERNEL_FUNC_ID]`` is populated by AST walking of flat names
+        produced by ``FlattenAttributeNameTransformer`` — but that transformer only flattens *dataclass*
+        args. ``@qd.data_oriented`` args (template-typed) stay as ``Attribute(value=Name(self), attr=…)``
+        in the AST and don't contribute to ``used_vars_by_func_id``. Their kernel-accessed ndarray paths
+        *are* recorded — in ``struct_ndarray_launch_info`` as ``(arg_id_vec[0], arg_idx, attr_chain)`` —
+        but only for ndarray members.
+
+        Convert each ``(arg_idx, attr_chain)`` to a flat name like ``__qd_<arg_name>__qd_<chain[0]>__qd_…``
+        and union all prefixes into the pruning set. After this fold, narrowing in args_hasher matches the
+        same convention used for dataclass args.
+
+        Limitation: non-ndarray data_oriented members (primitive ints/floats whose values are baked in at
+        compile, opaque Python objects) are *not* tracked anywhere as kernel-accessed. The narrow walk
+        cannot distinguish "kernel reads this primitive" from "kernel does not read this primitive". The
+        ``args_hasher.stringify_obj_type`` data_oriented branch handles this conservatively by walking
+        *all* attrs of a data_oriented container — narrowing only suppresses subtrees explicitly absent
+        from the pruning set. So for a data_oriented arg with mostly-ndarray members, the cache key
+        correctly depends on the ndarray paths it uses; for one with primitive members whose values
+        matter, those members are still folded into the hash (qualname-fallback / value paths).
+        """
+        if not struct_ndarray_launch_info:
+            return
+        kernel_used: set[str] = self.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID]
+        for _arg_id_cpp, arg_idx, attr_chain in struct_ndarray_launch_info:
+            if arg_idx < 0 or arg_idx >= len(arg_metas):
+                continue
+            arg_name = arg_metas[arg_idx].name
+            if not arg_name:
+                continue
+            flat = arg_name
+            for attr in attr_chain:
+                flat = create_flat_name(flat, attr)
+                kernel_used.add(flat)
+
+    def fold_kernel_arg_chain_paths(self) -> None:
+        """Merge the kernel's chain-paths set into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` *after* both
+        compile passes have completed.
+
+        Background: ``ASTTransformer.build_Attribute`` records every kernel-arg-rooted attribute chain
+        (e.g. ``__qd_self__qd_n``, ``__qd_self__qd_cfg``) into ``kernel_arg_chain_paths_by_func_id``
+        rather than ``used_vars_by_func_id``, because the latter is read on the enforcing pass to build
+        ``struct_locals`` for ``FlattenAttributeNameTransformer``. If chain names appeared there, the
+        transformer would rewrite ``self.n`` into ``Name('__qd_self__qd_n')`` and ``build_Name`` would
+        fail to find such a variable.
+
+        Doing the merge here — after pass 1, just like ``fold_struct_nd_paths`` — avoids that interaction
+        while still making the chain paths available to the fastcache args-hash narrow walk. The set on
+        ``used_py_dataclass_parameters_by_key_enforcing[key]`` is the *same* object as
+        ``used_vars_by_func_id[KERNEL_FUNC_ID]`` (assigned by reference at end of pass 0), so updating
+        one updates both.
+        """
+        kernel_chain_paths = self.kernel_arg_chain_paths_by_func_id.get(Pruning.KERNEL_FUNC_ID)
+        if not kernel_chain_paths:
+            return
+        self.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID].update(kernel_chain_paths)
+
     @staticmethod
     def _propagate_chain_paths(
         callee_chain_paths: set[str],
