@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Benchmark 92x92 blocked Cholesky factorization using Tile16x16.
+"""Benchmark NxN blocked Cholesky factorization using Tile16x16.
 
 Three kernels compared:
 
 1. Baseline: scalar Cholesky-Crout, 64 threads, shared memory, 2*N+1 sequential syncs. Thread 0 computes each
    diagonal, remaining threads parallelize off-diagonal updates.
 
-2. Blocked: 6x6 grid of 16x16 tiles, 16 threads, shared memory, scalar Crout for diagonal blocks. Same blocking
-   structure as Tile16x16 but all data lives in shared memory with block.sync() between every step.
+2. Blocked: ceil(N/16) x ceil(N/16) grid of 16x16 tiles, 16 threads, shared memory, scalar Crout for diagonal
+   blocks. Same blocking structure as Tile16x16 but all data lives in shared memory with block.sync() between
+   every step.
 
 3. Tile16x16: same blocked structure but fully register-resident via Tile16x16. No shared memory, zero syncs.
    Prior tiles read from global memory (L2).
@@ -20,22 +21,38 @@ Results on RTX PRO 6000 Blackwell, 4096 environments, N=92, f32:
     tile16   (Tile16x16, no shared memory)             16        533        5.19x
 
 Usage:
-    python misc/demos/cholesky_blocked.py
+    python misc/demos/cholesky_blocked.py [--n N] [--n-envs N_ENVS] \
+        [--num-warmup WARMUP] [--num-iters ITERS]
 """
 
+import argparse
 import time
 
 import numpy as np
 
 import quadrants as qd
 
-N = 92
+
+def _parse_args():
+    p = argparse.ArgumentParser(
+        description="Blocked Cholesky NxN benchmark (3 kernels: baseline / blocked / tile16).",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    p.add_argument("--n", type=int, default=92, help="Matrix dimension N (NxN SPD).")
+    p.add_argument("--n-envs", type=int, default=4096, help="Number of independent environments.")
+    p.add_argument("--num-warmup", type=int, default=50, help="Warmup iterations per kernel.")
+    p.add_argument("--num-iters", type=int, default=200, help="Timed iterations per kernel.")
+    return p.parse_args()
+
+
+_args = _parse_args()
+N = _args.n
 TILE = 16
-N_BLOCKS = (N + TILE - 1) // TILE  # 6
-N_PADDED = N_BLOCKS * TILE  # 96, rounded up for blocked kernel SharedArrays
-N_ENVS = 4096
-WARMUP = 50
-ITERS = 200
+N_BLOCKS = (N + TILE - 1) // TILE
+N_PADDED = N_BLOCKS * TILE  # rounded up for blocked kernel SharedArrays
+N_ENVS = _args.n_envs
+WARMUP = _args.num_warmup
+ITERS = _args.num_iters
 
 qd.init(arch=qd.gpu)
 
