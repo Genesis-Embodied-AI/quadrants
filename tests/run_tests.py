@@ -168,8 +168,7 @@ def test():
         default=None,
         dest="marks",
         type=str,
-        help="Only run tests with specific marks. `not slow` is appended automatically "
-        "unless --run-slow is passed.",
+        help="Only run tests with specific marks. `not slow` is appended automatically " "unless --run-slow is passed.",
     )
     parser.add_argument(
         "--run-slow",

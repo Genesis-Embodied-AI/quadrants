@@ -1785,11 +1785,16 @@ def test_tile16_cholesky_blocked_demo():
     """
     demo = Path(__file__).resolve().parents[2] / "misc" / "demos" / "cholesky_blocked.py"
     cmd = [
-        sys.executable, str(demo),
-        "--n", "32",
-        "--n-envs", "64",
-        "--num-warmup", "1",
-        "--num-iters", "1",
+        sys.executable,
+        str(demo),
+        "--n",
+        "32",
+        "--n-envs",
+        "64",
+        "--num-warmup",
+        "1",
+        "--num-iters",
+        "1",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if result.returncode != 0:
