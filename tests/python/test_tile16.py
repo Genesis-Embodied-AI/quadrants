@@ -1788,10 +1788,9 @@ def test_proxy_default_dtype_survives_reinit(tensor_type):
 def test_tile16_cholesky_blocked_demo():
     """Smoke-test that misc/demos/cholesky_blocked.py runs to completion.
 
-    Uses small CLI overrides (N=32, N_ENVS=64, 1 warmup + 1 timed iter) so the
-    JIT compile of the 3 unrolled kernels and the benchmark loop both stay
-    cheap. The demo's defaults (N=92, N_ENVS=4096, 50+200 iters) are exercised
-    by anyone running the script manually, not by CI.
+    Uses small CLI overrides (N=32, N_ENVS=64, 1 warmup + 1 timed iter) so the JIT compile of the 3 unrolled kernels
+    and the benchmark loop both stay cheap. The demo's defaults (N=92, N_ENVS=4096, 50+200 iters) are exercised by
+    anyone running the script manually, not by CI.
     """
     demo = Path(__file__).resolve().parents[2] / "misc" / "demos" / "cholesky_blocked.py"
     cmd = [

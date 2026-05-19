@@ -21,8 +21,7 @@ Results on RTX PRO 6000 Blackwell, 4096 environments, N=92, f32:
     tile16   (Tile16x16, no shared memory)             16        533        5.19x
 
 Usage:
-    python misc/demos/cholesky_blocked.py [--n N] [--n-envs N_ENVS] \
-        [--num-warmup WARMUP] [--num-iters ITERS]
+    python misc/demos/cholesky_blocked.py [--n N] [--n-envs N_ENVS] [--num-warmup WARMUP] [--num-iters ITERS]
 """
 
 import argparse

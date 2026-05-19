@@ -57,10 +57,9 @@ def _test_python(args, default_dir="python"):
             pytest_args += ["--cov-append"]
         if args.keys:
             pytest_args += ["-k", args.keys]
-        # By default we exclude tests marked `slow` (eig / make_spd at n>=6, inverse_large
-        # at n>=6, mpm88, etc. — see tests/pytest.ini for the marker). `--run-slow` opts
-        # back in. If the user passes their own `-m` expression we AND `not slow` onto it
-        # so the exclusion still applies, unless they explicitly opt out via `--run-slow`.
+        # By default we exclude tests marked `slow` (eig / make_spd at n>=6, inverse_large at n>=6, mpm88, etc. -- see
+        # tests/pytest.ini for the marker). `--run-slow` opts back in. If the user passes their own `-m` expression we
+        # AND `not slow` onto it so the exclusion still applies, unless they explicitly opt out via `--run-slow`.
         marks_expr = args.marks
         if not args.run_slow:
             marks_expr = f"({marks_expr}) and not slow" if marks_expr else "not slow"
