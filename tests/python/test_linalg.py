@@ -215,24 +215,26 @@ def test_frobenius_inner_rectangular_f64(rows, cols):
     _test_frobenius_inner_rectangular(rows, cols, qd.f64)
 
 
-def _test_matmul_chain(dt):
-    """3-way matmul chain at qipc IPC sizes: (9×12) · (12×12) · (12×9) → (9×9).
+def _test_matmul_chain(rows_a, cols_a, cols_b, cols_c, dt):
+    """3-way matmul chain: ``(rows_a × cols_a) · (cols_a × cols_b) · (cols_b × cols_c) → (rows_a × cols_c)``.
 
-    Verifies that ``Matrix.__matmul__`` compiles and is numerically correct at the largest size qipc needs. Quadrants
-    imposes no enforced size cap on matmul, but the unrolled `static(range)` triple loop produces ~1296 FMAs per
-    intermediate, so this test catches compile-time blow-up or back-end miscompiles at large sizes.
+    Verifies that ``Matrix.__matmul__`` compiles and is numerically correct at the requested size. Quadrants
+    imposes no enforced size cap on matmul, but the unrolled `static(range)` triple loop produces
+    ``rows_a * cols_a * cols_b + rows_a * cols_b * cols_c`` FMAs per kernel call, so this test catches compile-time
+    blow-up or back-end miscompiles at large sizes. The largest parametrize value is the chain qipc actually uses;
+    smaller values are cheap sanity checks that the same code path still works.
     """
     np_dt = np.float32 if dt == qd.f32 else np.float64
-    A_np = np.random.default_rng(0xCA70).standard_normal((9, 12)).astype(np_dt)
-    B_np = np.random.default_rng(0xCA71).standard_normal((12, 12)).astype(np_dt)
-    C_np = np.random.default_rng(0xCA72).standard_normal((12, 9)).astype(np_dt)
+    A_np = np.random.default_rng(0xCA70).standard_normal((rows_a, cols_a)).astype(np_dt)
+    B_np = np.random.default_rng(0xCA71).standard_normal((cols_a, cols_b)).astype(np_dt)
+    C_np = np.random.default_rng(0xCA72).standard_normal((cols_b, cols_c)).astype(np_dt)
 
-    A = qd.Matrix.field(9, 12, dtype=dt, shape=())
-    B = qd.Matrix.field(12, 12, dtype=dt, shape=())
-    C = qd.Matrix.field(12, 9, dtype=dt, shape=())
-    AB = qd.Matrix.field(9, 12, dtype=dt, shape=())
-    ABC_chained = qd.Matrix.field(9, 9, dtype=dt, shape=())
-    ABC_staged = qd.Matrix.field(9, 9, dtype=dt, shape=())
+    A = qd.Matrix.field(rows_a, cols_a, dtype=dt, shape=())
+    B = qd.Matrix.field(cols_a, cols_b, dtype=dt, shape=())
+    C = qd.Matrix.field(cols_b, cols_c, dtype=dt, shape=())
+    AB = qd.Matrix.field(rows_a, cols_b, dtype=dt, shape=())
+    ABC_chained = qd.Matrix.field(rows_a, cols_c, dtype=dt, shape=())
+    ABC_staged = qd.Matrix.field(rows_a, cols_c, dtype=dt, shape=())
 
     A.from_numpy(A_np)
     B.from_numpy(B_np)
@@ -255,16 +257,25 @@ def _test_matmul_chain(dt):
     np.testing.assert_allclose(ABC_chained.to_numpy(), ABC_staged.to_numpy(), rtol=tol, atol=tol)
 
 
-@pytest.mark.slow
+# qipc's actual size is (9,12,12,9) -- the largest chain it instantiates. We also keep a tiny (3,4,4,3) chain so
+# the default fast lane still exercises the same Matrix.__matmul__ codegen path without paying the ~90s/case
+# CUDA JIT cost of the qipc-sized chain.
+_MATMUL_CHAIN_SHAPES = [
+    (3, 4, 4, 3),
+    pytest.param(9, 12, 12, 9, marks=pytest.mark.slow),
+]
+
+
+@pytest.mark.parametrize("rows_a,cols_a,cols_b,cols_c", _MATMUL_CHAIN_SHAPES)
 @test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
-def test_matmul_chain_qipc_sizes_f32():
-    _test_matmul_chain(qd.f32)
+def test_matmul_chain_qipc_sizes_f32(rows_a, cols_a, cols_b, cols_c):
+    _test_matmul_chain(rows_a, cols_a, cols_b, cols_c, qd.f32)
 
 
-@pytest.mark.slow
+@pytest.mark.parametrize("rows_a,cols_a,cols_b,cols_c", _MATMUL_CHAIN_SHAPES)
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
-def test_matmul_chain_qipc_sizes_f64():
-    _test_matmul_chain(qd.f64)
+def test_matmul_chain_qipc_sizes_f64(rows_a, cols_a, cols_b, cols_c):
+    _test_matmul_chain(rows_a, cols_a, cols_b, cols_c, qd.f64)
 
 
 @test_utils.test()
