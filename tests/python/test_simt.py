@@ -3604,94 +3604,45 @@ def _init_full_bitwise(src, n):
         src[i] = 1 << (i % 7)
 
 
+# Each entry is a thin ``_check_full_matches_tiled(subgroup.X, subgroup.X_tiled, ...)`` wrapper. Collapsed into one
+# op-parametrized test to drop ~80 LOC of duplication. The pytest ids match the names of the original
+# ``test_subgroup_<op>`` functions so test reports / `-k` selectors stay stable.
+_FULL_VS_TILED_INT_CASES = [
+    pytest.param("reduce_add", None, id="reduce_add"),
+    pytest.param("reduce_all_add", None, id="reduce_all_add"),
+    pytest.param("reduce_min", None, id="reduce_min"),
+    pytest.param("reduce_max", None, id="reduce_max"),
+    pytest.param("reduce_all_min", None, id="reduce_all_min"),
+    pytest.param("reduce_all_max", None, id="reduce_all_max"),
+    pytest.param("inclusive_add", None, id="inclusive_add"),
+    pytest.param("inclusive_min", None, id="inclusive_min"),
+    pytest.param("inclusive_max", None, id="inclusive_max"),
+    # `mul` needs bounded inputs (2**N overflows i32 quickly); bitwise ops need a per-lane bit pattern that's
+    # non-zero on every lane so AND has signal and OR / XOR have varied bits.
+    pytest.param("inclusive_mul", _init_full_small_int, id="inclusive_mul"),
+    pytest.param("inclusive_and", _init_full_bitwise, id="inclusive_and"),
+    pytest.param("inclusive_or", _init_full_bitwise, id="inclusive_or"),
+    pytest.param("inclusive_xor", _init_full_bitwise, id="inclusive_xor"),
+    pytest.param("exclusive_add", None, id="exclusive_add"),
+    pytest.param("exclusive_mul", _init_full_small_int, id="exclusive_mul"),
+    pytest.param("exclusive_and", _init_full_bitwise, id="exclusive_and"),
+    pytest.param("exclusive_or", _init_full_bitwise, id="exclusive_or"),
+    pytest.param("exclusive_xor", _init_full_bitwise, id="exclusive_xor"),
+]
+
+
+@pytest.mark.parametrize("op_name,host_init", _FULL_VS_TILED_INT_CASES)
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_add():
-    _check_full_matches_tiled(subgroup.reduce_add, subgroup.reduce_add_tiled)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_all_add():
-    _check_full_matches_tiled(subgroup.reduce_all_add, subgroup.reduce_all_add_tiled)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_min():
-    _check_full_matches_tiled(subgroup.reduce_min, subgroup.reduce_min_tiled)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_max():
-    _check_full_matches_tiled(subgroup.reduce_max, subgroup.reduce_max_tiled)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_all_min():
-    _check_full_matches_tiled(subgroup.reduce_all_min, subgroup.reduce_all_min_tiled)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_all_max():
-    _check_full_matches_tiled(subgroup.reduce_all_max, subgroup.reduce_all_max_tiled)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_add():
-    _check_full_matches_tiled(subgroup.inclusive_add, subgroup.inclusive_add_tiled)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_min():
-    _check_full_matches_tiled(subgroup.inclusive_min, subgroup.inclusive_min_tiled)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_max():
-    _check_full_matches_tiled(subgroup.inclusive_max, subgroup.inclusive_max_tiled)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_mul():
-    _check_full_matches_tiled(subgroup.inclusive_mul, subgroup.inclusive_mul_tiled, host_init=_init_full_small_int)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_and():
-    _check_full_matches_tiled(subgroup.inclusive_and, subgroup.inclusive_and_tiled, host_init=_init_full_bitwise)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_or():
-    _check_full_matches_tiled(subgroup.inclusive_or, subgroup.inclusive_or_tiled, host_init=_init_full_bitwise)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_xor():
-    _check_full_matches_tiled(subgroup.inclusive_xor, subgroup.inclusive_xor_tiled, host_init=_init_full_bitwise)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_add():
-    _check_full_matches_tiled(subgroup.exclusive_add, subgroup.exclusive_add_tiled)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_mul():
-    _check_full_matches_tiled(subgroup.exclusive_mul, subgroup.exclusive_mul_tiled, host_init=_init_full_small_int)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_and():
-    _check_full_matches_tiled(subgroup.exclusive_and, subgroup.exclusive_and_tiled, host_init=_init_full_bitwise)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_or():
-    _check_full_matches_tiled(subgroup.exclusive_or, subgroup.exclusive_or_tiled, host_init=_init_full_bitwise)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_exclusive_xor():
-    _check_full_matches_tiled(subgroup.exclusive_xor, subgroup.exclusive_xor_tiled, host_init=_init_full_bitwise)
+def test_subgroup_full_matches_tiled(op_name, host_init):
+    """For each subgroup op ``X``, verify ``subgroup.X(v)`` matches ``subgroup.X_tiled(v, log2_group_size())``
+    lane-by-lane on ``qd.i32``. Covers reduce / inclusive / exclusive families; bitwise ops + ``mul`` use a custom
+    initializer that keeps the per-lane aggregate bounded."""
+    full_fn = getattr(subgroup, op_name)
+    tiled_fn = getattr(subgroup, f"{op_name}_tiled")
+    kwargs = {}
+    if host_init is not None:
+        kwargs["host_init"] = host_init
+    _check_full_matches_tiled(full_fn, tiled_fn, **kwargs)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -3836,16 +3787,15 @@ def test_subgroup_segmented_reduce_max():
 # accidentally cast through i32 inside a wrapper.
 
 
+@pytest.mark.parametrize("op_name", ["reduce_add", "inclusive_add"])
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_reduce_add_float(dtype):
-    _check_full_matches_tiled(subgroup.reduce_add, subgroup.reduce_add_tiled, dtype=dtype)
-
-
-@pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_inclusive_add_float(dtype):
-    _check_full_matches_tiled(subgroup.inclusive_add, subgroup.inclusive_add_tiled, dtype=dtype)
+def test_subgroup_full_matches_tiled_float(op_name, dtype):
+    """Float-dtype coverage of the dtype-agnostic ``full`` wrappers (``reduce_add``, ``inclusive_add``). One f32 + one
+    f64 case per family is enough to catch an i32-only regression in a wrapper."""
+    full_fn = getattr(subgroup, op_name)
+    tiled_fn = getattr(subgroup, f"{op_name}_tiled")
+    _check_full_matches_tiled(full_fn, tiled_fn, dtype=dtype)
 
 
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
