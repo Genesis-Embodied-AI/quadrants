@@ -102,7 +102,7 @@ Marks a single heavily-parametrized test as opting in to **per-run stochastic su
 Apply it like any other marker, above the existing parametrize stack:
 
 ```python
-@pytest.mark.sample(n=4)                     # keep 4 of N cases per run
+@pytest.mark.sample(n=6)                     # keep 6 of N cases per run
 # OR
 @pytest.mark.sample(fraction=0.25)           # keep 25% of cases per run, min 1
 @pytest.mark.parametrize("size", [...])
@@ -113,7 +113,7 @@ def test_thing(size, dtype, layout):
     ...
 ```
 
-**Convergence math.** With `keep_n / total = k / N`, the probability that a *specific* parametrize case has been hit after `r` runs is `1 - (1 - k/N)^r`. For `n=4` out of 32 (`test_tile16_load_store`): ~50% after 5 runs, ~93% after 20 runs. Combined with our CI cadence and the fact that any persistent bug surface lights up across multiple PRs, this gives effectively full coverage on a many-PR horizon at a fraction of the per-PR cost.
+**Convergence math.** With `keep_n / total = k / N`, the probability that a *specific* parametrize case has been hit after `r` runs is `1 - (1 - k/N)^r`. For `n=6` out of 32 (`test_tile16_load_store`): ~65% after 5 runs, ~88% after 10, ~98% after 20. Combined with our CI cadence and the fact that any persistent bug surface lights up across multiple PRs, this gives effectively full coverage on a many-PR horizon at a fraction of the per-PR cost.
 
 **How to reproduce.** Three levels of reproducibility:
 

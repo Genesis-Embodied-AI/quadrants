@@ -94,10 +94,10 @@ def test_tile16_eye(tensor_type, qd_dtype, inplace):
 
 # 8 geometries x 2 tensor_type x 2 qd_dtype = 32 parametrize cases. The geometries enumerate hand-picked corner
 # cases (origin, non-zero src/dst offsets, partial cols/rows, oversize backing array); coverage of any single
-# geometry is more valuable than running every combination every CI run. ``@pytest.mark.sample(n=4)`` keeps 4 of
-# the 32 cases per run; after k runs each specific case is hit with probability 1 - (28/32)^k = 1 - 0.875^k
-# (~50% after 5 runs, ~93% after 20). See docs/source/user_guide/unit_testing.md for the reproducibility recipes.
-@pytest.mark.sample(n=4)
+# geometry is more valuable than running every combination every CI run. ``@pytest.mark.sample(n=6)`` keeps 6 of
+# the 32 cases per run; after k runs each specific case is hit with probability 1 - (26/32)^k = 1 - 0.8125^k
+# (~65% after 5 runs, ~98% after 20). See docs/source/user_guide/unit_testing.md for the reproducibility recipes.
+@pytest.mark.sample(n=6)
 @pytest.mark.parametrize(
     "src_row, src_col, row_offset, col_offset, ncols, nrows",
     [
@@ -446,9 +446,9 @@ def test_tile16_ger_sub(tensor_type, qd_dtype):
 
 
 # 3 dst_delta x 3 src_offset x 2 tensor_type x 2 qd_dtype = 36 parametrize cases. Each case is an independent
-# offset/delta combo; running 4 random ones per CI run with full convergence over ~20 runs is the right tradeoff
+# offset/delta combo; running 6 random ones per CI run with ~97% convergence over 20 runs is the right tradeoff
 # given each case takes ~5s of cluster wall time. See unit_testing.md.
-@pytest.mark.sample(n=4)
+@pytest.mark.sample(n=6)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("dst_delta", [0, 3, 16])
 @pytest.mark.parametrize("src_offset", [0, 5, 32])
