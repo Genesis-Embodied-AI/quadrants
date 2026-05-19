@@ -5,11 +5,10 @@ import quadrants as qd
 from tests import test_utils
 
 
-# Defaults shrink particle / grid / steps counts so the JIT compile + AD-tape replay
-# stays cheap; the slow-marked entry keeps the original (N=30, n_grid=120, steps=32)
-# workload that runs on --run-slow. The point of the test is that the AD-validation
-# checker fires on the global-data-access violation in g2p (`v[f, p] = new_v`), which
-# happens on the first substep regardless of size.
+# Defaults shrink particle / grid / steps counts so the JIT compile + AD-tape replay stays cheap; the slow-marked
+# entry keeps the original (N=30, n_grid=120, steps=32) workload that runs on --run-slow. The point of the test is
+# that the AD-validation checker fires on the global-data-access violation in g2p (`v[f, p] = new_v`), which happens
+# on the first substep regardless of size.
 @pytest.mark.parametrize(
     "particles_side,n_grid_size,num_steps",
     [
