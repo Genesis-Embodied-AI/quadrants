@@ -2,44 +2,42 @@
 
 Background (pre-refactor)
 -------------------------
-Fastcache used a single cache key derived from source + config + a *wide* args hash that walked every member
-of every container argument. That walk was brittle:
+Fastcache used a single cache key derived from source + config + a *wide* args hash that walked every member of
+every container argument. That walk was brittle:
 
   - Encountering any unrecognised type silently disabled fastcache (``[FASTCACHE][PARAM_INVALID]`` warning +
     ``None`` return); a single Genesis ``RigidSolver._uid`` member killed the cache for the whole solver.
 
-  - Working around it via ``@qd.data_oriented(stable_members=True)`` opt-in only swapped one brittleness for
-    another: a new tensor-like type added later but missed in args_hasher's recognised set would be silently
-    skipped, serving stale cached results.
+  - Working around it via ``@qd.data_oriented(stable_members=True)`` opt-in only swapped one brittleness for another:
+    a new tensor-like type added later but missed in args_hasher's recognised set would be silently skipped, serving
+    stale cached results.
 
-Both fundamentally stem from the wide walk *blindly* visiting paths the kernel never reads. The pre-refactor
-design had no way to know which paths actually mattered before compile.
+Both fundamentally stem from the wide walk *blindly* visiting paths the kernel never reads. The pre-refactor design
+had no way to know which paths actually mattered before compile.
 
 Two-level cache
 ---------------
-The fastcache now exposes pruning information (already produced during compile) as a first-class lookup so
-the args hash can walk *only* paths the kernel reads:
+The fastcache now exposes pruning information (already produced during compile) as a first-class lookup so the args
+hash can walk *only* paths the kernel reads:
 
-  - L1 (this module's ``make_source_config_key`` + ``load_pruning_info`` / ``store_pruning_info``):
-    keyed by source+config only (no args). Stores ``PruningInfo`` — the set of kernel-accessed flat names
-    (e.g. ``__qd_state__qd_x``) plus the ``graph_do_while_arg`` (also a kernel-source property).
+  - L1 (this module's ``make_source_config_key`` + ``load_pruning_info`` / ``store_pruning_info``): keyed by
+    source+config only (no args). Stores ``PruningInfo`` — the set of kernel-accessed flat names (e.g.
+    ``__qd_state__qd_x``) plus the ``graph_do_while_arg`` (also a kernel-source property).
 
-  - L2 (``make_full_cache_key`` + ``load_full`` / ``store_full``): keyed by L1 key + the *narrow* args hash
-    computed with pruning info from L1. Stores the C++ ``frontend_cache_key`` that names the compiled
-    artifact.
+  - L2 (``make_full_cache_key`` + ``load_full`` / ``store_full``): keyed by L1 key + the *narrow* args hash computed
+    with pruning info from L1. Stores the C++ ``frontend_cache_key`` that names the compiled artifact.
 
 Lookup flow on a warm call: L1 lookup → narrow args hash (paths from L1) → L2 lookup → load artifact.
 
-Cold compile flow: L1 miss → cold compile (pass 0 + pass 1) → store L1 → compute narrow args hash → store
-L2.
+Cold compile flow: L1 miss → cold compile (pass 0 + pass 1) → store L1 → compute narrow args hash → store L2.
 
 Safety implication
 ------------------
-A kernel-unused path's contents (any type, including unrecognised tensor-likes) is *guaranteed* not to affect
-kernel codegen, so dropping it from the hash is correct by construction. Paths the kernel *does* read still go
-through ``args_hasher.stringify_obj_type`` which falls back to a ``type(v).__qualname__``-based string for
-unrecognised types and emits a one-shot ``[FASTCACHE][UNKNOWN_TYPE]`` warning, so a missed type registration
-is impossible to miss but doesn't silently disable fastcache.
+A kernel-unused path's contents (any type, including unrecognised tensor-likes) is *guaranteed* not to affect kernel
+codegen, so dropping it from the hash is correct by construction. Paths the kernel *does* read still go through
+``args_hasher.stringify_obj_type`` which falls back to a ``type(v).__qualname__``-based string for unrecognised types
+and emits a one-shot ``[FASTCACHE][UNKNOWN_TYPE]`` warning, so a missed type registration is impossible to miss but
+doesn't silently disable fastcache.
 """
 
 import json
@@ -61,10 +59,10 @@ from .fast_caching_types import HashedFunctionSourceInfo
 from .hash_utils import hash_iterable_strings
 from .python_side_cache import PythonSideCache
 
-# Prefix bytes mixed into L1 / L2 keys so they cannot collide even if the underlying inputs happen to hash to
-# the same string. The original single-level cache key (kept for backward-compat reads via ``load`` below) had
-# no such prefix; the new two-level scheme uses ``l1:`` and ``l2:`` markers so old single-level entries from
-# prior Quadrants installs are simply ignored rather than mis-served.
+# Prefix bytes mixed into L1 / L2 keys so they cannot collide even if the underlying inputs happen to hash to the
+# same string. The original single-level cache key (kept for backward-compat reads via ``load`` below) had no such
+# prefix; the new two-level scheme uses ``l1:`` and ``l2:`` markers so old single-level entries from prior Quadrants
+# installs are simply ignored rather than mis-served.
 _L1_MARKER = "l1"
 _L2_MARKER = "l2"
 
@@ -73,8 +71,8 @@ def make_source_config_key(kernel_source_info: FunctionSourceInfo) -> str:
     """Build the L1 cache key: source + config + version, with no dependence on args.
 
     Used by ``_try_load_fastcache`` before any args walking. The same key drives ``load_pruning_info`` /
-    ``store_pruning_info``; the matching ``make_full_cache_key`` derives the L2 key from this plus the narrow
-    args hash.
+    ``store_pruning_info``; the matching ``make_full_cache_key`` derives the L2 key from this plus the narrow args
+    hash.
     """
     kernel_hash = function_hasher.hash_kernel(kernel_source_info)
     config_hash = config_hasher.hash_compile_config()

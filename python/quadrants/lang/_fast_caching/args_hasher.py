@@ -46,8 +46,8 @@ _DC_REPR_NONE = object()
 #   - Recognised-but-unsupported tensor-like type (``ScalarField`` / ``MatrixField``).
 #   - Unrecognised type at a kernel-read path (no qualname fallback — see rules in fastcache.md).
 #
-# Containers (``dataclass_to_repr``, ``data_oriented`` branch, top-level ``hash_args`` loop) must propagate it
-# upward — fastcache is disabled for the whole call and the caller writes the appropriate diagnostic.
+# Containers (``dataclass_to_repr``, ``data_oriented`` branch, top-level ``hash_args`` loop) must propagate it upward
+# — fastcache is disabled for the whole call and the caller writes the appropriate diagnostic.
 class _FailFastcache:
     """Singleton sentinel; identity-compared."""
 
@@ -178,12 +178,11 @@ def dataclass_to_repr(
     """
     # PERF: For frozen dataclasses the repr never changes. Cache it on the instance to avoid repeated
     # ``dataclasses.fields()`` calls (which are slow due to extra runtime checks — see _template_mapper_hotpath.py
-    # module docstring). The cache is stored as ``_qd_dc_repr`` via ``object.__setattr__`` to bypass frozen guards.
-    # A cached ``_DC_REPR_NONE`` sentinel distinguishes "computed but not fast-cacheable" from "not yet computed".
+    # module docstring). The cache is stored as ``_qd_dc_repr`` via ``object.__setattr__`` to bypass frozen guards. A
+    # cached ``_DC_REPR_NONE`` sentinel distinguishes "computed but not fast-cacheable" from "not yet computed".
     #
-    # The cache is keyed by ``(is_frozen, pruning_paths is None)`` because a frozen dataclass's pruned repr
-    # depends on the pruning_paths set — we use separate cache slots for pruned vs unpruned to avoid serving
-    # the wrong narrowing.
+    # The cache is keyed by ``(is_frozen, pruning_paths is None)`` because a frozen dataclass's pruned repr depends on
+    # the pruning_paths set — we use separate cache slots for pruned vs unpruned to avoid serving the wrong narrowing.
     cache_attr = "_qd_dc_repr" if pruning_paths is None else "_qd_dc_repr_narrow"
     is_frozen = type(arg).__hash__ is not None
     if is_frozen:
@@ -253,39 +252,37 @@ def stringify_obj_type(
           * Recognised-but-unsupported tensor-like type (``ScalarField`` / ``MatrixField``).
           * Unrecognised type at this kernel-read path (see ``_fail_unknown_type``).
 
-    Two rules from ``docs/source/user_guide/fastcache.md`` "Pruning-driven argument hashing" govern this
-    function:
+    Two rules from ``docs/source/user_guide/fastcache.md`` "Pruning-driven argument hashing" govern this function:
 
       1. The cache key may *only* include contributions from paths that pruning has marked kernel-accessed
-         (``pruning_paths``). Container walkers (dataclass + data_oriented) check ``_is_path_used`` per
-         child and skip non-pruned subtrees — kernel-unread paths are *guaranteed* not to affect codegen so
-         this is safe by construction.
+         (``pruning_paths``). Container walkers (dataclass + data_oriented) check ``_is_path_used`` per child and
+         skip non-pruned subtrees — kernel-unread paths are *guaranteed* not to affect codegen so this is safe by
+         construction.
 
-      2. At paths the kernel *does* read, unrecognised types must not be silently dropped or hashed by
-         type-name — fastcache fails the call (loudly, with a one-shot warning) so the gap can be closed.
+      2. At paths the kernel *does* read, unrecognised types must not be silently dropped or hashed by type-name —
+         fastcache fails the call (loudly, with a one-shot warning) so the gap can be closed.
 
     Parameters:
-      - ``arg_meta``: non-``None`` only for top-level kernel args and for ``@qd.data_oriented`` members.
-        Determines whether primitive values are baked into the cache key (template-position primitives and
-        all primitive members of data-oriented containers).
+      - ``arg_meta``: non-``None`` only for top-level kernel args and for ``@qd.data_oriented`` members. Determines
+        whether primitive values are baked into the cache key (template-position primitives and all primitive members
+        of data-oriented containers).
       - ``pruning_paths``: optional set of kernel-accessed flat names from L1 cache. When provided,
-        ``dataclass_to_repr`` and the ``data_oriented`` branch below descend only into children whose flat
-        name is in the set. Pruning info is populated by ``ASTTransformer.build_Name`` /
-        ``build_Attribute`` (kernel-arg-rooted chains) plus ``Kernel._fold_struct_nd_paths_into_pruning``
-        (ndarray accesses through data_oriented containers).
-      - ``parent_flat``: the flat-name prefix for ``obj``'s children (e.g. ``__qd_self`` if ``obj`` is the
-        ``self`` arg of a data_oriented kernel). Used together with ``pruning_paths`` to compute each child's
-        flat name for the narrow-walk lookup.
+        ``dataclass_to_repr`` and the ``data_oriented`` branch below descend only into children whose flat name is in
+        the set. Pruning info is populated by ``ASTTransformer.build_Name`` / ``build_Attribute`` (kernel-arg-rooted
+        chains) plus ``Pruning.fold_struct_nd_paths`` (ndarray accesses through data_oriented containers).
+      - ``parent_flat``: the flat-name prefix for ``obj``'s children (e.g. ``__qd_self`` if ``obj`` is the ``self``
+        arg of a data_oriented kernel). Used together with ``pruning_paths`` to compute each child's flat name for
+        the narrow-walk lookup.
     """
     # ``qd.Tensor`` wrappers passed as struct fields. The top-level kernel-arg unwrap hook in ``Kernel.__call__``
     # strips wrappers off positional / keyword args before the fastcache hasher sees them, but the dataclass /
     # data-oriented walkers below do raw ``getattr`` to fetch struct fields, so a wrapper stored as a struct field
-    # arrives here un-stripped. Without this branch the hasher would hash the wrapper as an unknown type instead
-    # of unwrapping to the recognised impl. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
+    # arrives here un-stripped. Without this branch the hasher would hash the wrapper as an unknown type instead of
+    # unwrapping to the recognised impl. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
     #
-    # PERF-CRITICAL: the ``_any_tensor_constructed`` guard makes this check zero-cost when no ``qd.Tensor`` has
-    # been created. ``type(obj) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a
-    # pointer comparison (~10 ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
+    # PERF-CRITICAL: the ``_any_tensor_constructed`` guard makes this check zero-cost when no ``qd.Tensor`` has been
+    # created. ``type(obj) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer
+    # comparison (~10 ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
     if (
         _tensor_wrapper._any_tensor_constructed and type(obj) in _TENSOR_WRAPPER_TYPES
     ):  # pyright: ignore[reportOptionalMemberAccess]
@@ -298,8 +295,8 @@ def stringify_obj_type(
     if isinstance(obj, VectorNdarray):
         return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, ScalarField):
-        # Recognised-but-unsupported: shape/dtype affect kernel codegen but fastcache doesn't yet hash them.
-        # Disable fastcache for the whole call.
+        # Recognised-but-unsupported: shape/dtype affect kernel codegen but fastcache doesn't yet hash them. Disable
+        # fastcache for the whole call.
         # TODO: think about whether there is a way to include fields
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
@@ -319,13 +316,12 @@ def stringify_obj_type(
             raise_on_templated_floats, path, obj, pruning_paths=pruning_paths, parent_flat=parent_flat
         )
     if is_data_oriented(obj):
-        # Walk the data_oriented container's members, narrowed by pruning info — the kernel-compile path
-        # records every kernel-accessed attribute chain (ndarrays via ``_promote_ndarray_if_declared`` +
-        # ``_fold_struct_nd_paths_into_pruning``; primitives, opaque members, nested structs via
-        # ``ASTTransformer.build_Attribute``'s ``_qd_arg_chain`` propagation calling
-        # ``pruning.mark_used``). Members not in ``pruning_paths`` are *guaranteed* not to affect kernel
-        # codegen because the kernel cannot read them. Dropping them from the hash satisfies rule 1
-        # (cache only pruned paths).
+        # Walk the data_oriented container's members, narrowed by pruning info — the kernel-compile path records
+        # every kernel-accessed attribute chain (ndarrays via ``_promote_ndarray_if_declared`` +
+        # ``Pruning.fold_struct_nd_paths``; primitives, opaque members, nested structs via
+        # ``ASTTransformer.build_Attribute``'s ``_qd_arg_chain`` propagation calling ``pruning.mark_used``). Members
+        # not in ``pruning_paths`` are *guaranteed* not to affect kernel codegen because the kernel cannot read them.
+        # Dropping them from the hash satisfies rule 1 (cache only pruned paths).
         child_repr_l = ["da"]
         try:
             _asdict = getattr(obj, "_asdict")
@@ -333,10 +329,9 @@ def stringify_obj_type(
         except AttributeError:
             _dict = obj.__dict__
         for k, v in _dict.items():
-            # Skip Quadrants method-descriptor cache entries. ``QuadrantsCallable.__get__`` stashes the
-            # per-instance ``BoundQuadrantsCallable`` on ``instance.__dict__`` so subsequent ``instance.method``
-            # lookups skip the descriptor allocation; those entries are not data and must not invalidate the
-            # fastcache key.
+            # Skip Quadrants method-descriptor cache entries. ``QuadrantsCallable.__get__`` stashes the per-instance
+            # ``BoundQuadrantsCallable`` on ``instance.__dict__`` so subsequent ``instance.method`` lookups skip the
+            # descriptor allocation; those entries are not data and must not invalidate the fastcache key.
             v_type = type(v)
             if v_type is QuadrantsCallable or v_type is BoundQuadrantsCallable:
                 continue

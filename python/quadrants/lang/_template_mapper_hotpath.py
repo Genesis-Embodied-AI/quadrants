@@ -243,8 +243,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # Containers with no ndarrays keep the original short-path (one spec per instance via weakref) so this is
             # a no-op for the existing data_oriented + qd.field workloads (genesis field-backend).
             #
-            # Opt-out: ``_qd_stable_members = True`` on the class (or
-            # ``@qd.data_oriented(stable_members=True)``) skips the per-call descriptor walk.
+            # Opt-out: ``_qd_stable_members = True`` on the class (or ``@qd.data_oriented(stable_members=True)``)
+            # skips the per-call descriptor walk.
             if type(arg).__dict__.get("_qd_stable_members"):
                 return weakref.ref(arg)
             nd_descriptors: list = []

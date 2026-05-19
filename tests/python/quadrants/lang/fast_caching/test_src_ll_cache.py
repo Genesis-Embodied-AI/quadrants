@@ -142,12 +142,12 @@ def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
 
     k1(foo=RandomClass())
     _out, err = capfd.readouterr()
-    # Unrecognised types at a (top-level) kernel-read path now fail fastcache loudly: a one-shot
-    # ``[UNKNOWN_TYPE]`` warning identifies the offending type, and ``[INVALID_FUNC]`` then reports the
-    # disabled cache. The old silent ``[PARAM_INVALID]`` dead-end is gone — the two rules driving this
-    # are documented in ``args_hasher.py::_fail_unknown_type`` and ``fastcache.md`` "Pruning-driven
-    # argument hashing": (1) only pruned paths may contribute to the cache key (so no qualname fallback),
-    # (2) unrecognised types at pruned paths must not be silently dropped.
+    # Unrecognised types at a (top-level) kernel-read path now fail fastcache loudly: a one-shot ``[UNKNOWN_TYPE]``
+    # warning identifies the offending type, and ``[INVALID_FUNC]`` then reports the disabled cache. The old silent
+    # ``[PARAM_INVALID]`` dead-end is gone — the two rules driving this are documented in
+    # ``args_hasher.py::_fail_unknown_type`` and ``fastcache.md`` "Pruning-driven argument hashing": (1) only pruned
+    # paths may contribute to the cache key (so no qualname fallback), (2) unrecognised types at pruned paths must
+    # not be silently dropped.
     assert "[FASTCACHE][UNKNOWN_TYPE]" in err
     assert RandomClass.__name__ in err
     assert "[FASTCACHE][INVALID_FUNC]" in err

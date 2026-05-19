@@ -479,22 +479,21 @@ class Kernel(FuncBase):
                         ctx.global_context, "struct_ndarray_launch_info", []
                     )
                     # Fold data_oriented ndarray attribute chains into the kernel's used-flat-names set so
-                    # ``args_hasher.hash_args`` can narrow data_oriented walks too. ``used_vars_by_func_id``
-                    # only contains flat names from dataclass-arg expansion in
-                    # ``extract_struct_locals_from_context``; data_oriented args don't go through that
-                    # expansion, so accesses like ``self.x`` on an ndarray member are only tracked via
-                    # ``struct_ndarray_launch_info``. Without this fold, narrow hashing for data_oriented
-                    # args walks nothing — every (arg_idx, attr_chain) pair gets the same hash regardless
-                    # of dtype, so changing ``state.x``'s dtype no longer invalidates the cache (the
+                    # ``args_hasher.hash_args`` can narrow data_oriented walks too. ``used_vars_by_func_id`` only
+                    # contains flat names from dataclass-arg expansion in ``extract_struct_locals_from_context``;
+                    # data_oriented args don't go through that expansion, so accesses like ``self.x`` on an ndarray
+                    # member are only tracked via ``struct_ndarray_launch_info``. Without this fold, narrow hashing
+                    # for data_oriented args walks nothing — every (arg_idx, attr_chain) pair gets the same hash
+                    # regardless of dtype, so changing ``state.x``'s dtype no longer invalidates the cache (the
                     # ``test_data_oriented_ndarray_fastcache_dtype_key_distinct`` pin caught this).
                     pruning.fold_struct_nd_paths(self._struct_ndarray_launch_info_by_key.get(key, []), self.arg_metas)
-                    # Fold non-ndarray kernel-arg-rooted chain paths (primitives, opaque members, nested
-                    # struct paths) collected by ``ASTTransformer.build_Attribute``'s ``_qd_arg_chain``
-                    # tracking. Kept separate from ``used_vars_by_func_id`` during compile (would otherwise
-                    # poison ``struct_locals`` and break codegen) — see the field-level docstring on
-                    # ``Pruning.kernel_arg_chain_paths_by_func_id``. This fold + the existing ``used_vars``
-                    # assignment to ``used_py_dataclass_parameters_by_key_enforcing`` share the same set
-                    # by reference, so the final fastcache L1 entry sees all kernel-accessed paths.
+                    # Fold non-ndarray kernel-arg-rooted chain paths (primitives, opaque members, nested struct
+                    # paths) collected by ``ASTTransformer.build_Attribute``'s ``_qd_arg_chain`` tracking. Kept
+                    # separate from ``used_vars_by_func_id`` during compile (would otherwise poison ``struct_locals``
+                    # and break codegen) — see the field-level docstring on
+                    # ``Pruning.kernel_arg_chain_paths_by_func_id``. This fold + the existing ``used_vars`` assignment
+                    # to ``used_py_dataclass_parameters_by_key_enforcing`` share the same set by reference, so the
+                    # final fastcache L1 entry sees all kernel-accessed paths.
                     pruning.fold_kernel_arg_chain_paths()
                 else:
                     for used_parameters in pruning.used_vars_by_func_id.values():
@@ -525,11 +524,11 @@ class Kernel(FuncBase):
           1. If L1 was missing (``self._pruning_paths_from_l1 is None``), write the freshly-computed pruning info so
              the next call from a new process can skip the args-walk warm-up.
 
-          2. If ``fast_checksum`` is still None (which means either L1 was missing, or L1 hit but phase 2
-             of ``_try_load_fastcache`` saw a FIELD-related FastcacheSkip — in which case we keep ``None``
-             and the post-compile ``src_hasher.store`` is skipped), compute the narrow args hash *now*
-             using the just-populated pruning info and derive the L2 key. The post-launch ``src_hasher.store``
-             call uses ``self.fast_checksum`` as the L2 key.
+          2. If ``fast_checksum`` is still None (which means either L1 was missing, or L1 hit but phase 2 of
+             ``_try_load_fastcache`` saw a FIELD-related FastcacheSkip — in which case we keep ``None`` and the
+             post-compile ``src_hasher.store`` is skipped), compute the narrow args hash *now* using the just-
+             populated pruning info and derive the L2 key. The post-launch ``src_hasher.store`` call uses
+             ``self.fast_checksum`` as the L2 key.
 
         Side-effect helper; split out from ``materialize`` to keep the compile loop readable.
         """

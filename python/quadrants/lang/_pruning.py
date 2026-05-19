@@ -64,8 +64,8 @@ class Pruning:
             self.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID].update(kernel_used_parameters)
         # only needed for args, not kwargs
         self.callee_param_by_caller_arg_name_by_func_id: dict[int, dict[str, str]] = defaultdict(dict)
-        # id(ndarray) -> seen during the first compile pass via ``_promote_ndarray_if_declared``. Populated by the AST
-        # builder when a chain like ``self.x.y`` resolves to an ndarray that was pre-declared by
+        # id(ndarray) -> seen during the first compile pass via ``_promote_ndarray_if_declared``. Populated by the
+        # AST builder when a chain like ``self.x.y`` resolves to an ndarray that was pre-declared by
         # ``_predeclare_struct_ndarrays``. On the second (enforcing) pass, ``_predeclare_struct_ndarrays`` only
         # registers ndarrays whose id is in this set — dropping every reachable-but-unused ndarray from the kernel's
         # parameter list.
@@ -76,10 +76,10 @@ class Pruning:
         # behavior).
         self.pass_0_ran: bool = False
         # Kernel-arg-rooted attribute chains used by each func, in flat-name form (``__qd_self__qd_dofs__qd_x``).
-        # Populated by ``ASTTransformer.build_Attribute`` for non-flattened kernel args (data_oriented / qd.template).
-        # Kept *separate* from ``used_vars_by_func_id`` because the latter drives ``struct_locals`` on the enforcing
-        # pass (line ~230 of kernel.py), and ``FlattenAttributeNameTransformer`` would rewrite ``s.x`` →
-        # ``Name('__qd_s__qd_x')`` if these chain names appeared there — yielding a ``QuadrantsNameError: Name
+        # Populated by ``ASTTransformer.build_Attribute`` for non-flattened kernel args (data_oriented /
+        # qd.template). Kept *separate* from ``used_vars_by_func_id`` because the latter drives ``struct_locals`` on
+        # the enforcing pass (line ~230 of kernel.py), and ``FlattenAttributeNameTransformer`` would rewrite ``s.x``
+        # → ``Name('__qd_s__qd_x')`` if these chain names appeared there — yielding a ``QuadrantsNameError: Name
         # "__qd_s__qd_x" is not defined``. ``record_after_call`` propagates entries from callee to caller (so
         # ``f(self.dofs)`` where ``f`` reads ``s.x`` ends up with ``__qd_self__qd_dofs__qd_x`` in the kernel's set).
         # After both compile passes, ``Pruning.fold_kernel_arg_chain_paths`` merges the kernel's set into
@@ -102,28 +102,27 @@ class Pruning:
     def fold_struct_nd_paths(
         self, struct_ndarray_launch_info: list[tuple[Any, int, tuple[str, ...]]], arg_metas: list[ArgMetadata]
     ) -> None:
-        """Add data_oriented (and dataclass-nested) ndarray attribute chains to the kernel's pruning flat
-        name set so ``args_hasher.hash_args`` narrow-walks them correctly.
+        """Add data_oriented (and dataclass-nested) ndarray attribute chains to the kernel's pruning flat name set so
+        ``args_hasher.hash_args`` narrow-walks them correctly.
 
-        Background: ``used_vars_by_func_id[KERNEL_FUNC_ID]`` is populated by AST walking of flat names
-        produced by ``FlattenAttributeNameTransformer`` — but that transformer only flattens *dataclass*
-        args. ``@qd.data_oriented`` args (template-typed) stay as ``Attribute(value=Name(self), attr=…)``
-        in the AST and don't contribute to ``used_vars_by_func_id``. Their kernel-accessed ndarray paths
-        *are* recorded — in ``struct_ndarray_launch_info`` as ``(arg_id_vec[0], arg_idx, attr_chain)`` —
-        but only for ndarray members.
+        Background: ``used_vars_by_func_id[KERNEL_FUNC_ID]`` is populated by AST walking of flat names produced by
+        ``FlattenAttributeNameTransformer`` — but that transformer only flattens *dataclass* args.
+        ``@qd.data_oriented`` args (template-typed) stay as ``Attribute(value=Name(self), attr=…)`` in the AST and
+        don't contribute to ``used_vars_by_func_id``. Their kernel-accessed ndarray paths *are* recorded — in
+        ``struct_ndarray_launch_info`` as ``(arg_id_vec[0], arg_idx, attr_chain)`` — but only for ndarray members.
 
-        Convert each ``(arg_idx, attr_chain)`` to a flat name like ``__qd_<arg_name>__qd_<chain[0]>__qd_…``
-        and union all prefixes into the pruning set. After this fold, narrowing in args_hasher matches the
-        same convention used for dataclass args.
+        Convert each ``(arg_idx, attr_chain)`` to a flat name like ``__qd_<arg_name>__qd_<chain[0]>__qd_…`` and union
+        all prefixes into the pruning set. After this fold, narrowing in args_hasher matches the same convention used
+        for dataclass args.
 
-        Limitation: non-ndarray data_oriented members (primitive ints/floats whose values are baked in at
-        compile, opaque Python objects) are *not* tracked anywhere as kernel-accessed. The narrow walk
-        cannot distinguish "kernel reads this primitive" from "kernel does not read this primitive". The
-        ``args_hasher.stringify_obj_type`` data_oriented branch handles this conservatively by walking
-        *all* attrs of a data_oriented container — narrowing only suppresses subtrees explicitly absent
-        from the pruning set. So for a data_oriented arg with mostly-ndarray members, the cache key
-        correctly depends on the ndarray paths it uses; for one with primitive members whose values
-        matter, those members are still folded into the hash (qualname-fallback / value paths).
+        Limitation: non-ndarray data_oriented members (primitive ints/floats whose values are baked in at compile,
+        opaque Python objects) are *not* tracked anywhere as kernel-accessed. The narrow walk cannot distinguish
+        "kernel reads this primitive" from "kernel does not read this primitive". The
+        ``args_hasher.stringify_obj_type`` data_oriented branch handles this conservatively by walking *all* attrs of
+        a data_oriented container — narrowing only suppresses subtrees explicitly absent from the pruning set. So for
+        a data_oriented arg with mostly-ndarray members, the cache key correctly depends on the ndarray paths it
+        uses; for one with primitive members whose values matter, those members are still folded into the hash
+        (qualname-fallback / value paths).
         """
         if not struct_ndarray_launch_info:
             return
@@ -140,21 +139,20 @@ class Pruning:
                 kernel_used.add(flat)
 
     def fold_kernel_arg_chain_paths(self) -> None:
-        """Merge the kernel's chain-paths set into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` *after* both
-        compile passes have completed.
+        """Merge the kernel's chain-paths set into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` *after* both compile
+        passes have completed.
 
-        Background: ``ASTTransformer.build_Attribute`` records every kernel-arg-rooted attribute chain
-        (e.g. ``__qd_self__qd_n``, ``__qd_self__qd_cfg``) into ``kernel_arg_chain_paths_by_func_id``
-        rather than ``used_vars_by_func_id``, because the latter is read on the enforcing pass to build
-        ``struct_locals`` for ``FlattenAttributeNameTransformer``. If chain names appeared there, the
-        transformer would rewrite ``self.n`` into ``Name('__qd_self__qd_n')`` and ``build_Name`` would
-        fail to find such a variable.
+        Background: ``ASTTransformer.build_Attribute`` records every kernel-arg-rooted attribute chain (e.g.
+        ``__qd_self__qd_n``, ``__qd_self__qd_cfg``) into ``kernel_arg_chain_paths_by_func_id`` rather than
+        ``used_vars_by_func_id``, because the latter is read on the enforcing pass to build ``struct_locals`` for
+        ``FlattenAttributeNameTransformer``. If chain names appeared there, the transformer would rewrite ``self.n``
+        into ``Name('__qd_self__qd_n')`` and ``build_Name`` would fail to find such a variable.
 
-        Doing the merge here — after pass 1, just like ``fold_struct_nd_paths`` — avoids that interaction
-        while still making the chain paths available to the fastcache args-hash narrow walk. The set on
+        Doing the merge here — after pass 1, just like ``fold_struct_nd_paths`` — avoids that interaction while
+        still making the chain paths available to the fastcache args-hash narrow walk. The set on
         ``used_py_dataclass_parameters_by_key_enforcing[key]`` is the *same* object as
-        ``used_vars_by_func_id[KERNEL_FUNC_ID]`` (assigned by reference at end of pass 0), so updating
-        one updates both.
+        ``used_vars_by_func_id[KERNEL_FUNC_ID]`` (assigned by reference at end of pass 0), so updating one updates
+        both.
         """
         kernel_chain_paths = self.kernel_arg_chain_paths_by_func_id.get(Pruning.KERNEL_FUNC_ID)
         if not kernel_chain_paths:
@@ -229,12 +227,12 @@ class Pruning:
                 callee_param_name = callee_func.arg_metas_expanded[arg_id + self_offset].name  # type: ignore
                 if callee_param_name in callee_used_vars:
                     vars_to_unprune.add(caller_arg_name)
-            # Propagate kernel-arg-rooted chain paths through attribute-chain args (``f(self.dofs)``)
-            # AND through plain-Name args of non-flattened types (``f(self)``). Gate on the *root*
-            # Name id, not the resulting flat string: ``self.dofs`` flattens to ``__qd_self__qd_dofs``
-            # (which starts with ``__qd_``) but its root is the bare kernel arg ``self`` — we still
-            # need to propagate. Already-flattened dataclass refs like ``Name('__qd_self__qd_dofs')``
-            # have a ``__qd_*`` root and are handled by the ``vars_to_unprune`` path above.
+            # Propagate kernel-arg-rooted chain paths through attribute-chain args (``f(self.dofs)``) AND through
+            # plain-Name args of non-flattened types (``f(self)``). Gate on the *root* Name id, not the resulting
+            # flat string: ``self.dofs`` flattens to ``__qd_self__qd_dofs`` (which starts with ``__qd_``) but its
+            # root is the bare kernel arg ``self`` — we still need to propagate. Already-flattened dataclass refs
+            # like ``Name('__qd_self__qd_dofs')`` have a ``__qd_*`` root and are handled by the ``vars_to_unprune``
+            # path above.
             flat = _flatten_arg_node(arg)
             if flat is not None:
                 caller_flat, root_id = flat

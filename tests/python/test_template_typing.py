@@ -66,10 +66,10 @@ def test_template_raise_on_data_oriented_floats(raise_on_templated_floats: bool)
             self.a_float = 1.23
             self.scratch = qd.ndarray(qd.i32, shape=(1,))
 
-    # Read the primitive members so the fastcache narrow walk includes them in the hash. Pre-pruning
-    # the args_hasher walked every member of every container arg blindly; with pruning the kernel must
-    # actually access ``a.a_float`` for the raise-on-templated-floats guard to fire (the value being
-    # baked-in only matters when the kernel reads it).
+    # Read the primitive members so the fastcache narrow walk includes them in the hash. Pre-pruning the args_hasher
+    # walked every member of every container arg blindly; with pruning the kernel must actually access ``a.a_float``
+    # for the raise-on-templated-floats guard to fire (the value being baked-in only matters when the kernel reads
+    # it).
     @qd.kernel(fastcache=True)
     def k1f(a: qd.Template) -> None:
         a.scratch[0] = qd.cast(a.a_float, qd.i32)

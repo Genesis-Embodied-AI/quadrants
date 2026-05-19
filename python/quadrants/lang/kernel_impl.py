@@ -303,8 +303,8 @@ def data_oriented(cls=None, *, stable_members: bool = False):
         stable_members (bool): launch-context perf hint — if ``True``, declares that the class's ndarray-typed members
             are allocated once and never reassigned between kernel calls. Quadrants will skip the per-call ndarray-
             reference walk that ``Kernel.launch_kernel`` uses to detect ndarray reassignment on mutable containers
-            (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on a
-            ``stable_members`` class is undefined behaviour — the previously-compiled kernel will be reused even if
+            (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on
+            a ``stable_members`` class is undefined behaviour — the previously-compiled kernel will be reused even if
             the new ndarray has different dtype/ndim/layout. May also be set as a class-level attribute
             ``_qd_stable_members = True`` (equivalent).
 

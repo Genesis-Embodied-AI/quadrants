@@ -163,11 +163,10 @@ def test_fastcache_field_warnings_warn_struct_template_field(tmp_path, capfd):
     """Struct with qd.Template-annotated field containing a Field — warning should fire when the field is
     actually read by the kernel.
 
-    Pruning-driven narrowing of args hashing only walks members the kernel reads; an unused dataclass field
-    cannot affect kernel codegen so it's correctly omitted from the hash (and from the
-    Field-disables-fastcache check). For the warning path to fire, the kernel must reference the Field — that
-    matches the user-visible contract that fastcache fails iff a "live" Field argument prevents safe
-    parametrisation.
+    Pruning-driven narrowing of args hashing only walks members the kernel reads; an unused dataclass field cannot
+    affect kernel codegen so it's correctly omitted from the hash (and from the Field-disables-fastcache check). For
+    the warning path to fire, the kernel must reference the Field — that matches the user-visible contract that
+    fastcache fails iff a "live" Field argument prevents safe parametrisation.
     """
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 

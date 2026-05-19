@@ -156,8 +156,8 @@ class FunctionDefTransformer:
                 elif isinstance(field.type, type) and getattr(field.type, "_data_oriented", False):
                     # ``@qd.data_oriented`` field type inside a typed-dataclass kernel arg. The two patterns are
                     # semantically incompatible at this layer: dataclass kernel-arg recursion uses annotations to
-                    # flatten leaf fields into per-leaf kernel args at compile time, but data_oriented containers don't
-                    # carry per-attribute type annotations — they need a value-driven walk
+                    # flatten leaf fields into per-leaf kernel args at compile time, but data_oriented containers
+                    # don't carry per-attribute type annotations — they need a value-driven walk
                     # (``_predeclare_struct_ndarrays``), which only fires for ``qd.template()`` / ``qd.Tensor``
                     # annotations. Rather than silently miscompile, raise a clear error pointing users to the
                     # recommended pattern.
@@ -362,13 +362,12 @@ class FunctionDefTransformer:
         argument_type: Any,
         data: Any,
     ) -> None:
-        # Record the bare (non-flattened) func param name so ``build_Name`` can seed ``_qd_arg_chain``
-        # for attribute accesses rooted at this param. Critical for ``qd.template()`` args bound to
-        # ``@qd.data_oriented`` instances (e.g. ``static_rigid_sim_config.para_level`` inside a
-        # ``@qd.func``): without this, the kernel's pruning set never learns about ``.para_level``,
-        # the args-hasher skips the value, and different ``para_level`` configurations collide in the
-        # fastcache key.  Flat names starting with ``__qd_`` arrive here too via the dataclass-flatten
-        # recursion below; they're harmless to add (``build_Name``'s chain branch gates on
+        # Record the bare (non-flattened) func param name so ``build_Name`` can seed ``_qd_arg_chain`` for attribute
+        # accesses rooted at this param. Critical for ``qd.template()`` args bound to ``@qd.data_oriented`` instances
+        # (e.g. ``static_rigid_sim_config.para_level`` inside a ``@qd.func``): without this, the kernel's pruning set
+        # never learns about ``.para_level``, the args-hasher skips the value, and different ``para_level``
+        # configurations collide in the fastcache key.  Flat names starting with ``__qd_`` arrive here too via the
+        # dataclass-flatten recursion below; they're harmless to add (``build_Name``'s chain branch gates on
         # ``not node.id.startswith("__qd_")``) but the bare-name entries are what enables propagation.
         ctx.fn_param_names.add(argument_name)
 
