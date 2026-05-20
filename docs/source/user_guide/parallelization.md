@@ -48,6 +48,38 @@ def fill(a: qd.Template) -> None:
 
 `I` is a `qd.Vector` with one element per dimension.
 
+### Controlling iteration order with `layout=`
+
+By default, `qd.ndrange(d0, d1, ..., dN-1)` makes the **last argument the innermost (fastest-varying) axis** in the flat parallel loop: adjacent flat threads differ in the last index. This pairs naturally with a default-layout tensor.
+
+For a tensor allocated with a non-default `layout=` (see [`tensor`](tensor.md#controlling-physical-layout)), the matching iteration order is different — the inner physical axis is no longer the last canonical axis. The `layout=` keyword on `qd.ndrange` lets you align the iteration order with the tensor's physical layout, while keeping canonical indexing in the loop body:
+
+```python
+A = qd.tensor(qd.f32, shape=(M, N), layout=(1, 0))   # axis 1 outer, axis 0 inner
+
+@qd.kernel
+def fill():
+    # iterate with axis 1 outer, axis 0 inner — adjacent flat threads now step along axis 0
+    # in canonical space, which is the inner physical axis of A, so they touch physically
+    # adjacent memory in A.
+    for i, j in qd.ndrange(M, N, layout=(1, 0)):
+        A[i, j] = i + j
+```
+
+`layout` works exactly like `layout=` on `qd.tensor`: a tuple of `int` listing the **canonical axis index at each successive iteration-nesting level, outermost first**. It must be a permutation of `range(N)` where `N` is the number of arguments to `qd.ndrange`. The yielded loop variables (`i`, `j`, ...) are still bound to canonical axes 0, 1, ... — only the visit order changes. `layout=None` (the default) and the identity permutation `(0, 1, ..., N-1)` are equivalent and reproduce the default last-argument-innermost order.
+
+`layout=` is supported by both the plain and `qd.grouped` forms:
+
+```python
+for i, j in qd.ndrange(M, N, layout=(1, 0)):
+    ...
+for I in qd.grouped(qd.ndrange(M, N, layout=(1, 0))):
+    # I[0] is still the canonical axis-0 index, regardless of layout
+    ...
+```
+
+Mismatched length and non-permutation values are rejected up front with `qd.QuadrantsSyntaxError`.
+
 ## Does GPU kernel launch latency matter?
 
 Kernel launch can be done in parallel whilst the previously launched kernel is still running. This means that if the previously launched kernel takes longer to run than the launch time for the new kernel, then the kernel launch latency will be perfectly hidden.
