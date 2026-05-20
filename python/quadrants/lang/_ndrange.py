@@ -140,10 +140,14 @@ def ndrange(*args, layout=None) -> Iterable:
             nesting order, outermost (slowest-varying) first. For an N-argument ndrange, must be
             a permutation of ``range(N)``. ``None`` (default) and the identity permutation are
             equivalent and reproduce the default order in which the **last argument is the
-            innermost / fastest-varying axis**. The values yielded by the loop are unchanged;
-            only the visit order is. This is the matching iteration-order knob for the
-            ``layout=`` keyword on :func:`quadrants.tensor` — pair them with the same
-            permutation to align parallel iteration with the tensor's physical memory order.
+            innermost / fastest-varying axis**. The yielded loop variables stay bound to
+            canonical axes 0, 1, ..., N-1 regardless of layout — only the visit order changes.
+            ``layout=`` is independent of the loop body; it controls iteration order whether
+            the body touches a field, ndarray, tensor, vector/matrix variant, or no tensor at
+            all. The motivating use case is aligning iteration with a non-default physical
+            memory layout (e.g. ``qd.tensor(..., layout=...)`` or ``qd.field(..., order=...)``):
+            using the matching permutation makes adjacent flat threads step through physically
+            adjacent memory.
 
     Returns:
         An immutable iterator object.

@@ -50,23 +50,19 @@ def fill(a: qd.Template) -> None:
 
 ### Controlling iteration order with `layout=`
 
-By default, `qd.ndrange(d0, d1, ..., dN-1)` makes the **last argument the innermost (fastest-varying) axis** in the flat parallel loop: adjacent flat threads differ in the last index. This pairs naturally with a default-layout tensor.
-
-For a tensor allocated with a non-default `layout=` (see [`tensor`](tensor.md#controlling-physical-layout)), the matching iteration order is different — the inner physical axis is no longer the last canonical axis. The `layout=` keyword on `qd.ndrange` lets you align the iteration order with the tensor's physical layout, while keeping canonical indexing in the loop body:
+By default, `qd.ndrange(d0, d1, ..., dN-1)` makes the **last argument the innermost (fastest-varying) axis** in the flat parallel loop: adjacent flat threads differ in the last index. The `layout=` keyword lets you choose a different iteration-nesting order. It's a tuple of `int` listing the **canonical axis index at each successive iteration-nesting level, outermost first**, and must be a permutation of `range(N)` where `N` is the number of arguments to `qd.ndrange`:
 
 ```python
-A = qd.tensor(qd.f32, shape=(M, N), layout=(1, 0))   # axis 1 outer, axis 0 inner
-
 @qd.kernel
-def fill():
-    # iterate with axis 1 outer, axis 0 inner — adjacent flat threads now step along axis 0
-    # in canonical space, which is the inner physical axis of A, so they touch physically
-    # adjacent memory in A.
+def k():
+    # axis 1 is outermost (slowest-varying), axis 0 is innermost (fastest-varying)
     for i, j in qd.ndrange(M, N, layout=(1, 0)):
-        A[i, j] = i + j
+        ...
 ```
 
-`layout` works exactly like `layout=` on `qd.tensor`: a tuple of `int` listing the **canonical axis index at each successive iteration-nesting level, outermost first**. It must be a permutation of `range(N)` where `N` is the number of arguments to `qd.ndrange`. The yielded loop variables (`i`, `j`, ...) are still bound to canonical axes 0, 1, ... — only the visit order changes. `layout=None` (the default) and the identity permutation `(0, 1, ..., N-1)` are equivalent and reproduce the default last-argument-innermost order.
+The yielded loop variables (`i`, `j`, ...) are still bound to canonical axes 0, 1, ... — only the visit order changes. `layout=None` (the default) and the identity permutation `(0, 1, ..., N-1)` are equivalent and reproduce the default last-argument-innermost order. Mismatched length and non-permutation values are rejected up front with `qd.QuadrantsSyntaxError`.
+
+`layout=` is independent of what's in the loop body: it controls the iteration order regardless of whether the body touches a `qd.field`, a `qd.ndarray`, a `qd.tensor`, a `qd.Vector` / `qd.Matrix` variant, or no tensor at all.
 
 `layout=` is supported by both the plain and `qd.grouped` forms:
 
@@ -78,7 +74,22 @@ for I in qd.grouped(qd.ndrange(M, N, layout=(1, 0))):
     ...
 ```
 
-Mismatched length and non-permutation values are rejected up front with `qd.QuadrantsSyntaxError`.
+#### When is `layout=` useful?
+
+The motivating use case is aligning iteration with a non-default physical memory layout — most often a tensor allocated via `qd.tensor(..., layout=...)` or a field allocated via `qd.field(..., order=...)`. Using the matching permutation makes adjacent flat threads step through physically adjacent memory, which restores coalesced / cache-friendly access:
+
+```python
+A = qd.tensor(qd.f32, shape=(M, N), layout=(1, 0))   # axis 1 outer, axis 0 inner in memory
+
+@qd.kernel
+def fill():
+    # Same permutation on the ndrange: adjacent flat threads step along axis 0 in canonical
+    # space, which is the inner physical axis of A, so they touch physically adjacent memory.
+    for i, j in qd.ndrange(M, N, layout=(1, 0)):
+        A[i, j] = i + j
+```
+
+The same applies to bare `qd.field(..., order='ji')` or any other layout-tagged tensor — `qd.ndrange` doesn't inspect the body, so any data structure with a known memory order can be paired with a matching iteration order this way. See [`tensor`](tensor.md#controlling-physical-layout) for the tensor-side `layout=` keyword.
 
 ## Does GPU kernel launch latency matter?
 
