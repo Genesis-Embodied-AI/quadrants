@@ -80,9 +80,7 @@ class _Ndrange:
                         f"got {type(e).__name__} ({e!r})"
                     )
             if sorted(layout_t) != list(range(n)):
-                raise QuadrantsSyntaxError(
-                    f"qd.ndrange(layout={layout_t!r}) is not a permutation of range({n})"
-                )
+                raise QuadrantsSyntaxError(f"qd.ndrange(layout={layout_t!r}) is not a permutation of range({n})")
             if layout_t == tuple(range(n)):
                 self.layout = None
                 physical_to_canonical = list(range(n))
