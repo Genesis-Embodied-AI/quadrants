@@ -4,8 +4,6 @@
 only the visit order (which canonical axis is the outermost / innermost iteration nesting level) changes.
 ``layout=None`` and the identity permutation are equivalent and produce the default last-arg-innermost
 behaviour.
-
-See ``perso_hugh/doc/ndrange_layout.md`` for design notes.
 """
 
 import itertools
