@@ -76,7 +76,7 @@ for I in qd.grouped(qd.ndrange(M, N, layout=(1, 0))):
 
 #### When is `layout=` useful?
 
-The motivating use case is aligning iteration with a non-default physical memory layout — most often a tensor allocated via `qd.tensor(..., layout=...)` or a field allocated via `qd.field(..., order=...)`. Using the matching permutation makes adjacent flat threads step through physically adjacent memory, which restores coalesced / cache-friendly access:
+The motivating use case is aligning the iteration order with the physical memory layout of the data accessed in the loop body. Using the matching permutation makes adjacent flat threads step through physically adjacent memory, which gives coalesced / cache-friendly access:
 
 ```python
 A = qd.tensor(qd.f32, shape=(M, N), layout=(1, 0))   # axis 1 outer, axis 0 inner in memory
