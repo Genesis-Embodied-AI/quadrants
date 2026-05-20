@@ -31,7 +31,7 @@ else:
 
 
 class _Ndrange:
-    def __init__(self, *args):
+    def __init__(self, *args, layout=None):
         args = list(args)
         for i, arg in enumerate(args):
             if not isinstance(arg, collections.abc.Sequence):
@@ -49,33 +49,78 @@ class _Ndrange:
                     raise QuadrantsTypeError(
                         "Every argument of ndrange should be an integer scalar or a tuple/list of (int, int)"
                     )
-        self.bounds = args
 
-        self.dimensions = [None] * len(args)
-        for i, bound in enumerate(self.bounds):
-            self.dimensions[i] = bound[1] - bound[0]
+        n = len(args)
 
-        self.acc_dimensions = self.dimensions.copy()
-        for i in reversed(range(len(self.bounds) - 1)):
-            self.acc_dimensions[i] = self.acc_dimensions[i] * self.acc_dimensions[i + 1]
-        if len(self.acc_dimensions) == 0:  # for the empty case, e.g. qd.ndrange()
-            self.acc_dimensions = [1]
+        # Validate and normalize ``layout``. Stored as ``self.layout`` (``None`` for the identity
+        # permutation, else the user-supplied tuple) for introspection / tests, and as
+        # ``self._physical_to_canonical`` (a Python list of int of length ``n``) for the AST
+        # builder to use when remapping per-physical-level decomposed indices to canonical loop
+        # targets. The identity case is kept as ``None`` so the AST-builder fast-path matches
+        # the pre-layout codegen byte-for-byte.
+        if layout is None:
+            self.layout = None
+            physical_to_canonical = list(range(n))
+        else:
+            layout_t = tuple(layout)
+            if len(layout_t) != n:
+                raise QuadrantsSyntaxError(
+                    f"qd.ndrange(layout={layout_t!r}) has {len(layout_t)} entries "
+                    f"but ndrange was called with {n} dimension argument(s); they must match"
+                )
+            if sorted(layout_t) != list(range(n)):
+                raise QuadrantsSyntaxError(
+                    f"qd.ndrange(layout={layout_t!r}) is not a permutation of range({n})"
+                )
+            if layout_t == tuple(range(n)):
+                self.layout = None
+                physical_to_canonical = list(range(n))
+            else:
+                self.layout = layout_t
+                physical_to_canonical = list(layout_t)
+
+        self._physical_to_canonical = physical_to_canonical
+
+        canonical_bounds = args
+        canonical_dimensions = [bound[1] - bound[0] for bound in canonical_bounds]
+
+        physical_bounds = [canonical_bounds[c] for c in physical_to_canonical]
+        physical_dimensions = [canonical_dimensions[c] for c in physical_to_canonical]
+
+        acc_dimensions = physical_dimensions.copy()
+        for i in reversed(range(n - 1)):
+            acc_dimensions[i] = acc_dimensions[i] * acc_dimensions[i + 1]
+        if not acc_dimensions:  # for the empty case, e.g. qd.ndrange()
+            acc_dimensions = [1]
+
+        self._canonical_bounds = canonical_bounds
+        self._canonical_dimensions = canonical_dimensions
+        self.bounds = physical_bounds
+        self.dimensions = physical_dimensions
+        self.acc_dimensions = acc_dimensions
 
     def __iter__(self):
-        def gen(d, prefix):
-            if d == len(self.bounds):
-                yield prefix
-            else:
-                for t in range(self.bounds[d][0], self.bounds[d][1]):
-                    yield from gen(d + 1, prefix + (t,))
+        p2c = self._physical_to_canonical
+        cbounds = self._canonical_bounds
+        n = len(p2c)
 
-        yield from gen(0, ())
+        def gen(level, current):
+            if level == n:
+                yield tuple(current)
+                return
+            ax = p2c[level]
+            b, e = cbounds[ax]
+            for t in range(b, e):
+                current[ax] = t
+                yield from gen(level + 1, current)
+
+        yield from gen(0, [0] * n)
 
     def grouped(self):
         return GroupedNDRange(self)
 
 
-def ndrange(*args) -> Iterable:
+def ndrange(*args, layout=None) -> Iterable:
     """Return an immutable iterator object for looping over multi-dimensional indices.
 
     This returned set of multi-dimensional indices is the direct product (in the set-theory sense)
@@ -91,6 +136,14 @@ def ndrange(*args) -> Iterable:
 
     Args:
         entries: (int, tuple): Must be either an integer, or a tuple/list of two integers.
+        layout (tuple of int, optional): Permutation of canonical axes describing the iteration
+            nesting order, outermost (slowest-varying) first. For an N-argument ndrange, must be
+            a permutation of ``range(N)``. ``None`` (default) and the identity permutation are
+            equivalent and reproduce the default order in which the **last argument is the
+            innermost / fastest-varying axis**. The values yielded by the loop are unchanged;
+            only the visit order is. This is the matching iteration-order knob for the
+            ``layout=`` keyword on :func:`quadrants.tensor` — pair them with the same
+            permutation to align parallel iteration with the tensor's physical memory order.
 
     Returns:
         An immutable iterator object.
@@ -154,8 +207,18 @@ def ndrange(*args) -> Iterable:
             >>> def loop_tensor():
             >>>     for row, col, channel in qd.ndrange(image_height, image_width, channels):
             >>>         image[row, col, channel] = ...
+
+        Aligning iteration order with a non-default tensor layout via ``layout=``:
+
+            >>> A = qd.tensor(qd.f32, shape=(M, N), layout=(1, 0))    # axis 1 outer, axis 0 inner
+            >>> @qd.kernel
+            >>> def fill():
+            >>>     # adjacent flat threads now step along axis 0 (the inner physical axis of A),
+            >>>     # i.e. touch physically adjacent memory in A
+            >>>     for i, j in qd.ndrange(M, N, layout=(1, 0)):
+            >>>         A[i, j] = i + j
     """
-    return _Ndrange(*args)
+    return _Ndrange(*args, layout=layout)
 
 
 class GroupedNDRange:
