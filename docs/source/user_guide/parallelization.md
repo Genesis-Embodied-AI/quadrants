@@ -74,23 +74,6 @@ for I in qd.grouped(qd.ndrange(M, N, layout=(1, 0))):
     ...
 ```
 
-#### When is `layout=` useful?
-
-The motivating use case is aligning the iteration order with the physical memory layout of the data accessed in the loop body. Using the matching permutation makes adjacent flat threads step through physically adjacent memory, which gives coalesced / cache-friendly access:
-
-```python
-A = qd.tensor(qd.f32, shape=(M, N), layout=(1, 0))   # axis 1 outer, axis 0 inner in memory
-
-@qd.kernel
-def fill():
-    # Same permutation on the ndrange: adjacent flat threads step along axis 0 in canonical
-    # space, which is the inner physical axis of A, so they touch physically adjacent memory.
-    for i, j in qd.ndrange(M, N, layout=(1, 0)):
-        A[i, j] = i + j
-```
-
-The same applies to bare `qd.field(..., order='ji')` or any other layout-tagged tensor — `qd.ndrange` doesn't inspect the body, so any data structure with a known memory order can be paired with a matching iteration order this way. See [`tensor`](tensor.md#controlling-physical-layout) for the tensor-side `layout=` keyword.
-
 ## Does GPU kernel launch latency matter?
 
 Kernel launch can be done in parallel whilst the previously launched kernel is still running. This means that if the previously launched kernel takes longer to run than the launch time for the new kernel, then the kernel launch latency will be perfectly hidden.
