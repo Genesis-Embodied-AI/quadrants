@@ -283,12 +283,17 @@ def test_layout_python_iteration_identity_matches_default():
     assert list(qd.ndrange(M, N, layout=None)) == list(qd.ndrange(M, N))
 
 
-def test_layout_grouped_python_iteration_2d():
+def test_layout_grouped_python_iteration_via_method():
+    """``_Ndrange.grouped()`` (Python-scope method, not ``qd.grouped``) preserves the layout-induced
+    iteration order. ``qd.grouped`` itself is decorated ``@quadrants_scope`` and cannot be invoked
+    outside a kernel, so test the underlying method directly here.
+    """
     qd.init(arch=qd.cpu)
+    from quadrants.lang._ndrange import _Ndrange
+
     M, N = 3, 4
     got = []
-    for vec in qd.grouped(qd.ndrange(M, N, layout=(1, 0))):
-        # ``vec`` is a qd.Matrix; convert to a plain tuple via to_list() for comparison
+    for vec in _Ndrange(M, N, layout=(1, 0)).grouped():
         got.append(tuple(vec.to_list()))
     assert got == _expected_flat_to_canonical((M, N), (1, 0))
 
