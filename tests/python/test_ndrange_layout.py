@@ -378,3 +378,23 @@ def test_layout_out_of_range_raises():
     qd.init(arch=qd.cpu)
     with pytest.raises(qd.QuadrantsSyntaxError, match=r"qd\.ndrange\(layout=.*\) is not a permutation"):
         qd.ndrange(4, 5, layout=(0, 2))
+
+
+def test_layout_non_integer_entry_raises():
+    """Non-integer entries (string, float, mixed) surface a QuadrantsTypeError instead of the raw
+    Python ``TypeError`` ``sorted`` would emit on mixed-type sequences.
+    """
+    qd.init(arch=qd.cpu)
+    with pytest.raises(qd.QuadrantsTypeError, match=r"entries must be Python ints"):
+        qd.ndrange(4, 5, layout=(0, "1"))
+    with pytest.raises(qd.QuadrantsTypeError, match=r"entries must be Python ints"):
+        qd.ndrange(4, 5, layout=(0.0, 1.0))
+
+
+def test_layout_bool_entry_rejected():
+    """``bool`` is an ``int`` subclass but rejecting ``True`` / ``False`` as axis indices avoids a
+    foot-gun.
+    """
+    qd.init(arch=qd.cpu)
+    with pytest.raises(qd.QuadrantsTypeError, match=r"entries must be Python ints"):
+        qd.ndrange(4, 5, layout=(True, False))

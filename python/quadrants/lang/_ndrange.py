@@ -68,6 +68,17 @@ class _Ndrange:
                     f"qd.ndrange(layout={layout_t!r}) has {len(layout_t)} entries "
                     f"but ndrange was called with {n} dimension argument(s); they must match"
                 )
+            # Type-check each entry before sorting / permutation checks, so mixed-type or
+            # non-integer entries surface a Quadrants error instead of Python's raw
+            # ``TypeError`` from ``sorted``. ``bool`` is rejected explicitly even though it is
+            # an ``int`` subclass — accepting ``True`` / ``False`` as axis indices would be a
+            # foot-gun.
+            for e in layout_t:
+                if isinstance(e, bool) or not isinstance(e, (int, np.integer)):
+                    raise QuadrantsTypeError(
+                        f"qd.ndrange(layout={layout_t!r}) entries must be Python ints; "
+                        f"got {type(e).__name__} ({e!r})"
+                    )
             if sorted(layout_t) != list(range(n)):
                 raise QuadrantsSyntaxError(
                     f"qd.ndrange(layout={layout_t!r}) is not a permutation of range({n})"
