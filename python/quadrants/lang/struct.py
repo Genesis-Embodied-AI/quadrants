@@ -597,14 +597,120 @@ class StructField(Field):
         return Struct(entries)
 
 
+class FieldArray:
+    """Type wrapper for a group of N scalar fields exposed via indexed syntax on a ``@qd.dataclass``.
+
+    See :func:`field_array`. ``field_array(N, dtype)`` annotations on a dataclass cause the
+    StructType to be built with N synthetic scalar fields named ``_{group}0`` .. ``_{group}{N-1}``,
+    while the AST transformer rewrites ``obj.{group}[i]`` to a direct reference to
+    ``obj._{group}{i}`` for python-int / qd.static-resolved indices. PTX/LLVM IR is byte-identical
+    to the hand-rolled named-field equivalent.
+    """
+
+    def __init__(self, count, dtype):
+        if not isinstance(count, int) or count <= 0:
+            raise QuadrantsSyntaxError(f"field_array count must be a positive int, got {count!r}")
+        self.count = count
+        self.dtype = dtype
+
+    def __repr__(self):
+        return f"field_array(count={self.count}, dtype={self.dtype})"
+
+
+def field_array(count, dtype):
+    """Declare a group of ``count`` scalar fields of ``dtype`` on a ``@qd.dataclass``.
+
+    Example::
+
+        @qd.dataclass
+        class Tile:
+            r: qd.field_array(32, qd.f32)   # 32 scalar fields exposed as t.r[0..31]
+
+        t = Tile()
+        t.r[5] = 1.0       # lowers to direct write of synthetic field _r5
+        v = t.r[5]         # same as v = t._r5
+        for k in qd.static(range(32)):
+            t.r[k] = 0.0   # each iter is one AST node, not a 32-way cascade
+
+    For python-int / ``qd.static``-resolved indices, ``t.r[k]`` is rewritten by the AST
+    transformer to the named-field access ``t._r{k}``, producing identical LLVM IR / PTX to
+    a struct declared with 32 individually-named scalar fields. This avoids the SROA-bailout
+    that occurs with ``qd.types.vector(N, dtype)`` struct fields on runtime-indexed access.
+
+    Runtime-int indexing is currently unsupported; use an explicit cascade helper for that
+    case (same pattern as today's ``_get_col`` in ``_tile16.py``).
+    """
+    return FieldArray(count, dtype)
+
+
+def _expand_field_array_naming(group_name, index):
+    """Naming convention for synthetic scalar fields of a ``field_array`` group.
+
+    Public so the AST transformer can mirror this without a circular import.
+    """
+    return f"_{group_name}{index}"
+
+
+class _FieldArrayRef:
+    """Transient proxy returned by the AST transformer for ``obj.{group}`` where ``group``
+    is a registered ``field_array`` group on the struct type.
+
+    Only valid as the value of a Subscript node: ``obj.{group}[i]``. Resolved by
+    ``ASTTransformer.build_Subscript`` to a direct reference to the synthetic scalar field
+    ``_{group}{i}`` when ``i`` is a python-int / qd.static-resolved integer.
+
+    Used as a not-an-Expr marker; any attempt to use it as a value raises.
+    """
+
+    _qd_is_field_array_ref = True
+
+    def __init__(self, struct, group_name: str, count: int, dtype, naming_fn):
+        self._qd_struct = struct
+        self._qd_group_name = group_name
+        self._qd_count = count
+        self._qd_dtype = dtype
+        self._qd_naming_fn = naming_fn
+
+    def _qd_field_for(self, index: int):
+        if not isinstance(index, (int, np.integer)):
+            raise QuadrantsSyntaxError(
+                f"field_array {self._qd_group_name}[i] requires a python-int index "
+                f"(possibly via qd.static); got runtime index of type {type(index).__name__}"
+            )
+        i = int(index)
+        if i < 0 or i >= self._qd_count:
+            raise QuadrantsSyntaxError(
+                f"field_array index out of bounds: {self._qd_group_name}[{i}] "
+                f"(count={self._qd_count})"
+            )
+        field_name = self._qd_naming_fn(self._qd_group_name, i)
+        return getattr(self._qd_struct, field_name)
+
+    def __repr__(self) -> str:  # pragma: no cover - debug only
+        return (
+            f"<field_array_ref group={self._qd_group_name!r} count={self._qd_count} "
+            f"dtype={self._qd_dtype}>"
+        )
+
+
 class StructType(CompoundType):
     def __init__(self, **kwargs):
         self.members = {}
         self.methods = {}
+        # Maps group name -> (count, dtype, naming_fn). Populated when a member annotation
+        # is a ``FieldArray``; consumed by the AST transformer to rewrite ``obj.{group}[i]``.
+        self._field_groups: dict = {}
         elements = []
         for k, dtype in kwargs.items():
             if k == "__struct_methods":
                 self.methods = dtype
+            elif isinstance(dtype, FieldArray):
+                cooked = cook_dtype(dtype.dtype)
+                self._field_groups[k] = (dtype.count, cooked, _expand_field_array_naming)
+                for i in range(dtype.count):
+                    sub = _expand_field_array_naming(k, i)
+                    self.members[sub] = cooked
+                    elements.append([cooked, sub])
             elif isinstance(dtype, StructType):
                 self.members[k] = dtype
                 elements.append([dtype.dtype, k])
@@ -640,6 +746,10 @@ class StructType(CompoundType):
         entries._Struct__dtype = self.dtype
         struct = self.cast(entries)
         struct._Struct__dtype = self.dtype
+        # Propagate the field-array group metadata onto the Struct instance so the AST
+        # transformer can detect indexed-group access (``obj.r``) on the per-trace expression.
+        if self._field_groups:
+            struct._qd_field_groups = self._field_groups
         return struct
 
     def __instancecheck__(self, instance):
@@ -832,4 +942,4 @@ def dataclass(cls):
     return StructType(**fields)
 
 
-__all__ = ["Struct", "StructField", "dataclass"]
+__all__ = ["Struct", "StructField", "dataclass", "FieldArray", "field_array", "_FieldArrayRef"]

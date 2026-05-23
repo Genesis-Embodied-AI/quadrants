@@ -103,7 +103,13 @@ def expr_init(rhs):
     if isinstance(rhs, BufferView):
         return rhs
     if isinstance(rhs, Struct):
-        return Struct(rhs.to_dict(include_methods=True, include_ndim=True))
+        new_struct = Struct(rhs.to_dict(include_methods=True, include_ndim=True))
+        # Preserve ``field_array`` group metadata across the rewrap; required so the AST
+        # transformer can still resolve ``obj.{group}[k]`` on the re-emitted Struct.
+        groups = getattr(rhs, "_qd_field_groups", None)
+        if groups is not None:
+            new_struct._qd_field_groups = groups
+        return new_struct
     if isinstance(rhs, list):
         return [expr_init(e) for e in rhs]
     if isinstance(rhs, tuple):
