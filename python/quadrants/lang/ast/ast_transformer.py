@@ -39,7 +39,8 @@ from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
-from quadrants.lang.struct import Struct, StructType, _RegisterArrayRef
+from quadrants.lang.register_array import _RegisterArrayRef
+from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import (
     is_from_quadrants_module as _is_from_quadrants_module,
 )
