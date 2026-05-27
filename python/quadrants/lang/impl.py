@@ -104,11 +104,11 @@ def expr_init(rhs):
         return rhs
     if isinstance(rhs, Struct):
         new_struct = Struct(rhs.to_dict(include_methods=True, include_ndim=True))
-        # Preserve ``field_array`` group metadata across the rewrap; required so the AST
+        # Preserve ``register_array`` group metadata across the rewrap; required so the AST
         # transformer can still resolve ``obj.{group}[k]`` on the re-emitted Struct.
-        groups = getattr(rhs, "_qd_field_groups", None)
+        groups = getattr(rhs, "_qd_register_groups", None)
         if groups is not None:
-            new_struct._qd_field_groups = groups
+            new_struct._qd_register_groups = groups
         return new_struct
     if isinstance(rhs, list):
         return [expr_init(e) for e in rhs]

@@ -1,11 +1,10 @@
 # pyright: reportInvalidTypeForm=false
-"""Tests for ``qd.field_array(N, dtype)`` on ``@qd.dataclass``.
+"""Tests for ``qd.register_array(N, dtype)`` on ``@qd.dataclass``.
 
-The goal of ``field_array`` is to give users an ergonomic indexed-write
-syntax on a per-thread struct, while keeping the underlying storage as
-N separate named scalar fields (so SROA can register-promote each
-element). The static-index case must lower to a direct field reference;
-PTX must be byte-identical to the named-field equivalent.
+``register_array`` gives users an ergonomic indexed-write syntax on a per-thread struct, while
+keeping the underlying storage as N separate named scalar fields so SROA + ``mem2reg`` can
+register-promote each slot independently. The static-index case must lower to a direct field
+reference; PTX must be byte-identical to the named-field equivalent.
 """
 
 import numpy as np
@@ -28,19 +27,19 @@ def _qd_init_cuda():
 # ---------------------------------------------------------------------------
 
 
-def test_field_array_construction_python_scope():
-    """A dataclass with ``r: qd.field_array(N, dtype)`` annotation should
-    construct as if it had N named scalar fields ``_r0.._r{N-1}``."""
+def test_register_array_construction_python_scope():
+    """A dataclass with ``r: qd.register_array(N, dtype)`` should construct as if it had N
+    named scalar fields ``_r0.._r{N-1}``."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.field_array(4, qd.f32)
+        r: qd.register_array(4, qd.f32)
 
-    # The underlying struct type should report N synthetic scalar members
-    # plus expose ``r`` as a group name.
-    assert hasattr(Tile, "_field_groups")
-    groups = Tile._field_groups
+    # The underlying struct type should report N synthetic scalar members plus expose ``r`` as
+    # a group name.
+    assert hasattr(Tile, "_register_groups")
+    groups = Tile._register_groups
     assert "r" in groups
     count, dtype, _ = groups["r"]
     assert count == 4
@@ -49,7 +48,7 @@ def test_field_array_construction_python_scope():
     # The underlying scalar fields must exist.
     assert "_r0" in Tile.members
     assert "_r3" in Tile.members
-    assert "r" not in Tile.members  # `r` is a logical group, not a real member
+    assert "r" not in Tile.members  # ``r`` is a logical group, not a real member
 
 
 # ---------------------------------------------------------------------------
@@ -57,12 +56,13 @@ def test_field_array_construction_python_scope():
 # ---------------------------------------------------------------------------
 
 
-def test_field_array_static_index_write_then_read():
-    _qd_init_cuda()
+def test_register_array_static_index_write_then_read():
     """Write to ``t.r[0..3]`` with python-int indices, then read back."""
+    _qd_init_cuda()
+
     @qd.dataclass
     class Tile:
-        r: qd.field_array(4, qd.f32)
+        r: qd.register_array(4, qd.f32)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -83,14 +83,14 @@ def test_field_array_static_index_write_then_read():
     np.testing.assert_array_equal(out.to_numpy(), np.array([1, 2, 3, 4], dtype=np.float32))
 
 
-def test_field_array_qd_static_loop_index():
+def test_register_array_qd_static_loop_index():
+    """Index via a ``qd.static(range(N))`` loop variable. Each iter sees a python-int index,
+    so the lowering must be the same direct-field path as the explicit python-int case."""
     _qd_init_cuda()
-    """Index via a ``qd.static(range(N))`` loop variable. Each iter sees
-    a python-int index, so the lowering must be the same direct-field path
-    as the explicit python-int case."""
+
     @qd.dataclass
     class Tile:
-        r: qd.field_array(4, qd.f32)
+        r: qd.register_array(4, qd.f32)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -112,9 +112,9 @@ def test_field_array_qd_static_loop_index():
 # ---------------------------------------------------------------------------
 
 
-def _build_named_chol_kernel():
-    """Same as test_field_array_static_index_write_then_read but with 32
-    named ``r0..r31`` fields. Used for PTX byte-equality comparison."""
+def _build_named_kernel():
+    """Same as test_register_array_static_index_write_then_read but with 4 named ``r0..r3``
+    fields. Used for PTX byte-equality comparison against the ``register_array`` form."""
     @qd.dataclass
     class TileNamed:
         r0: qd.f32
@@ -140,17 +140,17 @@ def _build_named_chol_kernel():
     return k, out
 
 
-def _build_field_array_chol_kernel():
+def _build_register_array_kernel():
     @qd.dataclass
-    class TileFA:
-        r: qd.field_array(4, qd.f32)
+    class TileRA:
+        r: qd.register_array(4, qd.f32)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
     @qd.kernel(fastcache=False)
     def k(o: qd.template()):
         for _ in range(1):
-            t = TileFA()
+            t = TileRA()
             t.r[0] = qd.f32(1.0)
             t.r[1] = qd.f32(2.0)
             t.r[2] = qd.f32(3.0)
@@ -163,16 +163,16 @@ def _build_field_array_chol_kernel():
     return k, out
 
 
-def test_field_array_runtime_index_rejected():
-    """Indexing ``t.r[k]`` with a runtime ``k`` raises a clear error pointing the user
-    at the (current) python-int / ``qd.static`` requirement. Long term we will lower the
-    runtime case to an explicit cascade; for now we surface the limitation early so
-    callers don't get a confusing LLVM/SROA failure downstream."""
+def test_register_array_runtime_index_rejected():
+    """Indexing ``t.r[k]`` with a runtime ``k`` raises a clear error pointing at the
+    python-int / ``qd.static`` requirement. Long term the runtime case can lower to an
+    explicit cascade; for now the limitation is surfaced early so callers don't get a
+    confusing LLVM/SROA failure downstream."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.field_array(4, qd.f32)
+        r: qd.register_array(4, qd.f32)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -187,16 +187,16 @@ def test_field_array_runtime_index_rejected():
     with pytest.raises(Exception) as e:
         k(out)
     msg = str(e.value)
-    assert "field_array" in msg and "python-int" in msg, msg
+    assert "register_array" in msg and "python-int" in msg, msg
 
 
-def test_field_array_oob_static_index():
+def test_register_array_oob_static_index():
     """Static-int out-of-bounds index is caught at trace time with a clear message."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.field_array(4, qd.f32)
+        r: qd.register_array(4, qd.f32)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -213,14 +213,13 @@ def test_field_array_oob_static_index():
 
 
 if __name__ == "__main__":
-    # Quick run when invoked directly: drives implementation work.
-    test_field_array_construction_python_scope()
+    test_register_array_construction_python_scope()
     print("construction test passed")
-    test_field_array_static_index_write_then_read()
+    test_register_array_static_index_write_then_read()
     print("static-int subscript test passed")
-    test_field_array_qd_static_loop_index()
+    test_register_array_qd_static_loop_index()
     print("qd.static loop-var subscript test passed")
-    test_field_array_runtime_index_rejected()
+    test_register_array_runtime_index_rejected()
     print("runtime-index rejection test passed")
-    test_field_array_oob_static_index()
+    test_register_array_oob_static_index()
     print("static OOB rejection test passed")
