@@ -189,7 +189,7 @@ def test_unpacked_array_runtime_index_rejected():
 
 
 def test_unpacked_array_oob_static_index():
-    """Static-int out-of-bounds index is caught at trace time with a clear message."""
+    """Static-int out-of-bounds index is caught at compile time with a clear message."""
     _qd_init_cuda()
 
     @qd.dataclass

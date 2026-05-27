@@ -112,8 +112,8 @@ Prefer `qd.types.vector(N, dtype)` for small groups where register pressure is l
 
 ## Constraints and limitations
 
-- **Static indices only.** `t.r[k]` must resolve at AST-build time, i.e. `k` is a python-int literal or a `for k in qd.static(range(N)):` loop variable. A runtime-int index raises a `QuadrantsSyntaxError` at trace time with a message pointing at the `qd.static` requirement. If you need a runtime index over the group, spell out the cascade explicitly (`if k == 0: ...`).
-- **Static out-of-bounds is rejected at trace time.** `t.r[7]` on an `unpacked_array(4, ...)` group raises `QuadrantsSyntaxError: unpacked_array index out of bounds: r[7] (count=4)`.
+- **Static indices only.** `t.r[k]` must resolve at compile time, i.e. `k` is a python-int literal or a `for k in qd.static(range(N)):` loop variable. A runtime-int index raises a `QuadrantsSyntaxError` at compile time with a message pointing at the `qd.static` requirement. If you need a runtime index over the group, spell out the cascade explicitly (`if k == 0: ...`).
+- **Static out-of-bounds is rejected at compile time.** `t.r[7]` on an `unpacked_array(4, ...)` group raises `QuadrantsSyntaxError: unpacked_array index out of bounds: r[7] (count=4)`.
 - **Storage only.** An `unpacked_array` group has no vector arithmetic. There is no `t.r + other`, no `t.r.dot(...)`, no broadcast operations. If you want those, use `qd.types.vector(N, dtype)` instead.
 - **`count` is fixed at struct-definition time.** It must be a positive python-int literal.
 - **Naming.** The synthetic fields use the convention `_{group_name}{i}` (e.g. `_r0`, `_r1`, ..., `_r31`). Avoid declaring your own field with a name that collides with one of those, or `StructType` will report a duplicate member.
