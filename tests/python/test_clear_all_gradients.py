@@ -1,9 +1,12 @@
+import pytest
+
 import quadrants as qd
 from quadrants.lang import impl
 
 from tests import test_utils
 
 
+@pytest.mark.slow
 @test_utils.test(exclude=[qd.vulkan])
 def test_clear_all_gradients():
     x = qd.field(qd.f32)
