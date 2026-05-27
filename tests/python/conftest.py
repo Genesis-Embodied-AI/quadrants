@@ -1,5 +1,7 @@
 import gc
+import hashlib
 import os
+import random
 import sys
 import time
 
@@ -13,6 +15,159 @@ import pytest_rerunfailures
 import quadrants as qd
 
 pytest_rerunfailures.works_with_current_xdist = lambda: True
+
+
+# ---------------------------------------------------------------------------
+# @pytest.mark.sample(...)  --  per-test stochastic parametrize subsampling
+# ---------------------------------------------------------------------------
+#
+# Some tests parametrize so widely (test_tile16_load_store, test_tile16_cholesky, ...) that running every case on every
+# CI run is wasteful: the parametrize axes are intentionally varied to cover corner cases, but most runs would get the
+# same signal from a small random subset. ``@pytest.mark.sample(n=...)`` or ``@pytest.mark.sample(fraction=...)`` opts a
+# *single* test into per-run random sub-selection. Over many runs, each parametrize case asymptotically gets covered
+# (Pr[hit after k runs] = 1 - (1 - keep/total)^k).
+#
+# Reproducibility hooks:
+#   - whole-suite: ``--sample-seed=<S>`` reproduces the exact same trimmed set (header prints the seed used).
+#   - single failing case: paste the failing nodeid into ``pytest <nodeid>`` -- the sampler's ``len(group) <= 1``
+#     short-circuit keeps it; no flags needed.
+#   - exhaustive run (release gate / coverage audit): ``--no-sample`` skips the sampler entirely.
+#
+# Per-test RNG keyed on ``(seed, nodeid_prefix)``: adding / renaming a @sample-marked test does NOT shift any other
+# test's sample. Routine refactors don't migrate failures.
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--sample-seed",
+        type=int,
+        default=None,
+        help="Seed for @pytest.mark.sample subsampling. If absent, a fresh seed is picked and printed "
+        "in the report header so a failing run can be reproduced via --sample-seed=<S>.",
+    )
+    parser.addoption(
+        "--no-sample",
+        action="store_true",
+        default=False,
+        help="Disable @pytest.mark.sample subsampling -- run every parametrize case of every marked test. "
+        "Use for exhaustive CI release gates / coverage-debt audits.",
+    )
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_configure(config):
+    # The marker is registered here (rather than only in pytest.ini) so callers that use
+    # `--strict-markers` don't blow up if they happen to import this conftest in isolation.
+    config.addinivalue_line(
+        "markers",
+        "sample(fraction=None, n=None): per-test stochastic parametrize subsampling. Pass exactly one of "
+        "`fraction` (0..1) or `n` (>= 1). Seed printed in report header; rerun the same sample with "
+        "--sample-seed=<S>; rerun every case with --no-sample; rerun a single failing case by pasting its nodeid.",
+    )
+    # Seed propagation contract: the seed must reach the controller AND every xdist worker as the same value, or
+    # xdist's collection-consistency check fails with "Different tests were collected between gw0 and gwN". argv is
+    # forwarded by xdist to every worker, so we require the seed to live on argv as ``--sample-seed=N``. ``tests/
+    # run_tests.py`` picks a seed once per run and injects it; direct ``pytest`` invocations either pass
+    # ``--sample-seed`` explicitly (reproducibility) or fall back to a single-process seed picked below. We do NOT
+    # mutate ``os.environ`` here -- env-var inheritance into xdist worker subprocesses is not guaranteed for runtime
+    # mutations, only for vars present when pytest itself was launched.
+    if (
+        not config.getoption("--no-sample")
+        and config.getoption("--sample-seed") is None
+        and not hasattr(config, "workerinput")  # single-process / non-xdist controller only.
+    ):
+        config.option.sample_seed = random.randrange(0, 2**31)
+
+
+def pytest_report_header(config):
+    if config.getoption("--no-sample"):
+        return "sample: --no-sample (every @sample-marked test runs every parametrize case)"
+    seed = config.getoption("--sample-seed")
+    if seed is None:
+        return None
+    return (
+        f"sample-seed={seed}  (reproduce the same sample: --sample-seed={seed}; "
+        f"reproduce a single failure: paste its nodeid; run every case: --no-sample)"
+    )
+
+
+def _sample_keep_count(mark, group_size, group_key):
+    """Resolve ``@pytest.mark.sample(fraction=..., n=...)`` for a group of ``group_size`` parametrize cases.
+
+    Exactly one of ``fraction`` (0..1) or ``n`` (int >= 1) must be passed; ``UsageError`` otherwise. The result is
+    clamped to ``[1, group_size]`` so every @sample-marked test runs at least one case per run (no silent zero-case
+    runs even if e.g. ``fraction * group_size`` rounds to zero on a 1-case group).
+    """
+    fraction = mark.kwargs.get("fraction")
+    n = mark.kwargs.get("n")
+    if (fraction is None) == (n is None):
+        raise pytest.UsageError(
+            f"@pytest.mark.sample on {group_key!r}: pass exactly one of `fraction` or `n`, got "
+            f"fraction={fraction!r}, n={n!r}"
+        )
+    if fraction is not None:
+        return max(1, int(round(group_size * float(fraction))))
+    return max(1, min(int(n), group_size))
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--no-sample"):
+        return
+    seed = config.getoption("--sample-seed")
+    if seed is None:
+        # Defensive: pytest_configure didn't run (e.g. someone imported this module manually). Nothing to do.
+        return
+
+    # Group items by test function (strip the parametrize bracket suffix). Per-function stratification is what
+    # guarantees every @sample-marked test keeps at least one case per run -- uniform sampling across all items
+    # could otherwise drop a 2-case marked test entirely.
+    groups: dict[str, list] = {}
+    for item in items:
+        key = item.nodeid.split("[", 1)[0]
+        groups.setdefault(key, []).append(item)
+
+    keep, deselected = [], []
+    # ``sorted(groups)`` so the iteration order (and therefore any incidental RNG advance) is reproducible across
+    # Python versions / dict insertion orders. Per-test RNG is keyed below so this only matters for the (cheap)
+    # bookkeeping order.
+    for key in sorted(groups):
+        group = groups[key]
+        mark = group[0].get_closest_marker("sample")
+        if mark is None or len(group) <= 1:
+            # No sample mark -> every case runs. Also: a single-item group means either the test only had one
+            # parametrize case to begin with, or pytest narrowed collection to a specific nodeid -- both cases
+            # should run as-is. This is what makes "paste failing nodeid" work without --no-sample.
+            keep.extend(group)
+            continue
+        keep_n = _sample_keep_count(mark, len(group), key)
+        # Per-test RNG: keyed on (seed, key) so:
+        #   - Independence: adding / renaming / tweaking the @sample mark on test_A does NOT shift the sample of test_B.
+        #     Routine refactors don't cause failures to migrate file-wide.
+        #   - Locality: when debugging, you can reason about one test's sample without simulating all the others' RNG
+        #     advances.
+        # Seed mixing uses sha256 of a canonical ``f"{seed}|{key}"`` rather than ``random.Random((seed, key))``: tuple
+        # seeding goes through ``_sha512(repr(a).encode())`` in CPython 3.10+ which IS deterministic in principle but
+        # raises a ``DeprecationWarning: Seeding based on hashing is deprecated`` and is slated for removal. We pin to
+        # an explicit hash so the sample is reproducible across Python versions and not at the mercy of stdlib churn.
+        # CRITICAL: ``rng.sample(group_sorted, ...)`` rather than ``rng.sample(group, ...)``. xdist workers each run
+        # ``pytest_collection_modifyitems`` independently and pytest does NOT guarantee that ``items`` (and therefore
+        # ``group``) lands in the same in-memory order on every worker. With the same seed but a differently-ordered
+        # list, ``rng.sample`` would pick the same indices but those indices would resolve to different items, so
+        # workers would collect different subsets and xdist's collection-consistency check would abort the run with
+        # "Different tests were collected between gw0 and gwN". Sorting by ``nodeid`` (a content-derived total order)
+        # forces every worker to sample from an identical sequence.
+        group_sorted = sorted(group, key=lambda it: it.nodeid)
+        mixed = int.from_bytes(hashlib.sha256(f"{seed}|{key}".encode()).digest()[:8], "big")
+        rng = random.Random(mixed)
+        kept_nodeids = {it.nodeid for it in rng.sample(group_sorted, k=keep_n)}
+        for it in group:
+            (keep if it.nodeid in kept_nodeids else deselected).append(it)
+
+    if deselected:
+        # ``pytest_deselected`` is the supported way to report filtered-out items so pytest's summary shows them as
+        # deselected (not silently dropped). xdist also forwards this to the controller correctly.
+        config.hook.pytest_deselected(items=deselected)
+    items[:] = keep
 
 
 @pytest.fixture(scope="session", autouse=True)

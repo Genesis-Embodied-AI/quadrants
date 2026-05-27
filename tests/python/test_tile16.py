@@ -92,6 +92,12 @@ def test_tile16_eye(tensor_type, qd_dtype, inplace):
     np.testing.assert_allclose(dst.to_numpy(), np.eye(_TILE, dtype=np_dtype))
 
 
+# 8 geometries x 2 tensor_type x 2 qd_dtype = 32 parametrize cases. The geometries enumerate hand-picked corner cases
+# (origin, non-zero src/dst offsets, partial cols/rows, oversize backing array); coverage of any single geometry is
+# more valuable than running every combination every CI run. ``@pytest.mark.sample(n=6)`` keeps 6 of the 32 cases per
+# run; after k runs each specific case is hit with probability 1 - (26/32)^k = 1 - 0.8125^k (~65% after 5 runs, ~98%
+# after 20). See docs/source/user_guide/unit_testing.md for the reproducibility recipes.
+@pytest.mark.sample(n=6)
 @pytest.mark.parametrize(
     "src_row, src_col, row_offset, col_offset, ncols, nrows",
     [
@@ -439,6 +445,10 @@ def test_tile16_ger_sub(tensor_type, qd_dtype):
     np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
 
 
+# 3 dst_delta x 3 src_offset x 2 tensor_type x 2 qd_dtype = 36 parametrize cases. Each case is an independent offset /
+# delta combo; running 6 random ones per CI run with ~97% convergence over 20 runs is the right tradeoff given each
+# case takes ~5s of cluster wall time. See unit_testing.md.
+@pytest.mark.sample(n=6)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("dst_delta", [0, 3, 16])
 @pytest.mark.parametrize("src_offset", [0, 5, 32])
@@ -1776,8 +1786,25 @@ def test_proxy_default_dtype_survives_reinit(tensor_type):
 
 @test_utils.test(arch=[qd.cuda])
 def test_tile16_cholesky_blocked_demo():
-    """Smoke-test that misc/demos/cholesky_blocked.py runs to completion."""
+    """Smoke-test that misc/demos/cholesky_blocked.py runs to completion.
+
+    Uses small CLI overrides (N=32, N_ENVS=64, 1 warmup + 1 timed iter) so the JIT compile of the 3 unrolled kernels
+    and the benchmark loop both stay cheap. The demo's defaults (N=92, N_ENVS=4096, 50+200 iters) are exercised by
+    anyone running the script manually, not by CI.
+    """
     demo = Path(__file__).resolve().parents[2] / "misc" / "demos" / "cholesky_blocked.py"
-    result = subprocess.run([sys.executable, str(demo)], capture_output=True, text=True, timeout=300)
+    cmd = [
+        sys.executable,
+        str(demo),
+        "--n",
+        "32",
+        "--n-envs",
+        "64",
+        "--num-warmup",
+        "1",
+        "--num-iters",
+        "1",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if result.returncode != 0:
         pytest.fail(f"cholesky_blocked.py exited with code {result.returncode}\nstderr:\n{result.stderr}")
