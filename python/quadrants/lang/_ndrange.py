@@ -76,8 +76,7 @@ class _Ndrange:
             for e in axes_t:
                 if isinstance(e, bool) or not isinstance(e, (int, np.integer)):
                     raise QuadrantsTypeError(
-                        f"qd.ndrange(axes={axes_t!r}) entries must be Python ints; "
-                        f"got {type(e).__name__} ({e!r})"
+                        f"qd.ndrange(axes={axes_t!r}) entries must be Python ints; " f"got {type(e).__name__} ({e!r})"
                     )
             if sorted(axes_t) != list(range(n)):
                 raise QuadrantsSyntaxError(f"qd.ndrange(axes={axes_t!r}) is not a permutation of range({n})")
