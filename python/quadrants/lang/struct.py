@@ -656,8 +656,10 @@ class StructType(CompoundType):
         entries._Struct__dtype = self.dtype
         struct = self.cast(entries)
         struct._Struct__dtype = self.dtype
-        # Propagate the register-array group metadata onto the Struct instance so the AST transformer can detect
-        # indexed-group access (``obj.r``) on the per-trace expression.
+        # Tag the freshly-built Struct expression-object (representing this ``Tile()`` instantiation in the kernel's
+        # IR) with the unpacked-array group dictionary, so ``ASTTransformer.build_Attribute`` can recognise
+        # ``obj.r`` as a group name. The transformer inspects the instance, not the StructType, so the metadata has
+        # to live here.
         if self._unpacked_groups:
             struct._qd_unpacked_groups = self._unpacked_groups
         return struct
