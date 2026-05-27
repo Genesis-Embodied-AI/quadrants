@@ -1053,8 +1053,8 @@ class ASTTransformer(Builder):
                     "the number of the loop variables."
                 )
             # ``physical_to_canonical[p]`` is the canonical (user-visible) axis index that receives
-            # the decomposed index for physical nesting level ``p``. For the identity / ``layout=None``
-            # case this is ``[0, 1, ..., n-1]`` and the emitted IR matches the pre-layout codegen
+            # the decomposed index for physical nesting level ``p``. For the identity / ``axes=None``
+            # case this is ``[0, 1, ..., n-1]`` and the emitted IR matches the pre-``axes=`` codegen
             # byte-for-byte.
             physical_to_canonical = ndrange_var._physical_to_canonical
             n_levels = len(ndrange_var.dimensions)
@@ -1106,8 +1106,8 @@ class ASTTransformer(Builder):
 
             ctx.create_variable(target, target_var)
             I = impl.expr_init(ndrange_loop_var)
-            # See ``build_ndrange_for`` above for the layout semantics. The grouped target_var is a
-            # vector indexed by canonical axis, so element ``physical_to_canonical[p]`` (not ``p``)
+            # See ``build_ndrange_for`` above for the ``axes=`` semantics. The grouped target_var
+            # is a vector indexed by canonical axis, so element ``physical_to_canonical[p]`` (not ``p``)
             # receives the decomposition of physical level ``p``.
             physical_to_canonical = ndrange_var._physical_to_canonical
             n_levels = len(ndrange_var.dimensions)

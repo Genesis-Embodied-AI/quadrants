@@ -48,29 +48,29 @@ def fill(a: qd.Template) -> None:
 
 `I` is a `qd.Vector` with one element per dimension.
 
-### Controlling iteration order with `layout=`
+### Controlling iteration order with `axes=`
 
-By default, `qd.ndrange(d0, d1, ..., dN-1)` makes the **last argument the innermost (fastest-varying) axis** in the flat parallel loop: adjacent flat threads differ in the last index. The `layout=` keyword lets you choose a different iteration-nesting order. It's a tuple of `int` listing the **canonical axis index at each successive iteration-nesting level, outermost first**, and must be a permutation of `range(N)` where `N` is the number of arguments to `qd.ndrange`:
+By default, `qd.ndrange(d0, d1, ..., dN-1)` makes the **last argument the innermost (fastest-varying) axis** in the flat parallel loop: adjacent flat threads differ in the last index. The `axes=` keyword lets you choose a different iteration-nesting order. It's a tuple of `int` listing the **canonical axis index at each successive iteration-nesting level, outermost first**, and must be a permutation of `range(N)` where `N` is the number of arguments to `qd.ndrange`:
 
 ```python
 @qd.kernel
 def k():
     # axis 1 is outermost (slowest-varying), axis 0 is innermost (fastest-varying)
-    for i, j in qd.ndrange(M, N, layout=(1, 0)):
+    for i, j in qd.ndrange(M, N, axes=(1, 0)):
         ...
 ```
 
-The yielded loop variables (`i`, `j`, ...) are still bound to canonical axes 0, 1, ... — only the visit order changes. `layout=None` (the default) and the identity permutation `(0, 1, ..., N-1)` are equivalent and reproduce the default last-argument-innermost order. Mismatched length and non-permutation values are rejected up front with `qd.QuadrantsSyntaxError`.
+The yielded loop variables (`i`, `j`, ...) are still bound to canonical axes 0, 1, ... — only the visit order changes. `axes=None` (the default) and the identity permutation `(0, 1, ..., N-1)` are equivalent and reproduce the default last-argument-innermost order. Mismatched length and non-permutation values are rejected up front with `qd.QuadrantsSyntaxError`; non-integer entries with `qd.QuadrantsTypeError`.
 
-`layout=` is independent of what's in the loop body: it controls the iteration order regardless of whether the body touches a `qd.field`, a `qd.ndarray`, a `qd.tensor`, a `qd.Vector` / `qd.Matrix` variant, or no tensor at all.
+`axes=` is independent of what's in the loop body: it controls the iteration order regardless of whether the body touches a `qd.field`, a `qd.ndarray`, a `qd.tensor`, a `qd.Vector` / `qd.Matrix` variant, or no tensor at all.
 
-`layout=` is supported by both the plain and `qd.grouped` forms:
+`axes=` is supported by both the plain and `qd.grouped` forms:
 
 ```python
-for i, j in qd.ndrange(M, N, layout=(1, 0)):
+for i, j in qd.ndrange(M, N, axes=(1, 0)):
     ...
-for I in qd.grouped(qd.ndrange(M, N, layout=(1, 0))):
-    # I[0] is still the canonical axis-0 index, regardless of layout
+for I in qd.grouped(qd.ndrange(M, N, axes=(1, 0))):
+    # I[0] is still the canonical axis-0 index, regardless of axes
     ...
 ```
 

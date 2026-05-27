@@ -31,7 +31,7 @@ else:
 
 
 class _Ndrange:
-    def __init__(self, *args, layout=None):
+    def __init__(self, *args, axes=None):
         args = list(args)
         for i, arg in enumerate(args):
             if not isinstance(arg, collections.abc.Sequence):
@@ -52,20 +52,20 @@ class _Ndrange:
 
         n = len(args)
 
-        # Validate and normalize ``layout``. Stored as ``self.layout`` (``None`` for the identity
+        # Validate and normalize ``axes``. Stored as ``self.axes`` (``None`` for the identity
         # permutation, else the user-supplied tuple) for introspection / tests, and as
         # ``self._physical_to_canonical`` (a Python list of int of length ``n``) for the AST
         # builder to use when remapping per-physical-level decomposed indices to canonical loop
         # targets. The identity case is kept as ``None`` so the AST-builder fast-path matches
-        # the pre-layout codegen byte-for-byte.
-        if layout is None:
-            self.layout = None
+        # the pre-axes codegen byte-for-byte.
+        if axes is None:
+            self.axes = None
             physical_to_canonical = list(range(n))
         else:
-            layout_t = tuple(layout)
-            if len(layout_t) != n:
+            axes_t = tuple(axes)
+            if len(axes_t) != n:
                 raise QuadrantsSyntaxError(
-                    f"qd.ndrange(layout={layout_t!r}) has {len(layout_t)} entries "
+                    f"qd.ndrange(axes={axes_t!r}) has {len(axes_t)} entries "
                     f"but ndrange was called with {n} dimension argument(s); they must match"
                 )
             # Type-check each entry before sorting / permutation checks, so mixed-type or
@@ -73,20 +73,20 @@ class _Ndrange:
             # ``TypeError`` from ``sorted``. ``bool`` is rejected explicitly even though it is
             # an ``int`` subclass — accepting ``True`` / ``False`` as axis indices would be a
             # foot-gun.
-            for e in layout_t:
+            for e in axes_t:
                 if isinstance(e, bool) or not isinstance(e, (int, np.integer)):
                     raise QuadrantsTypeError(
-                        f"qd.ndrange(layout={layout_t!r}) entries must be Python ints; "
+                        f"qd.ndrange(axes={axes_t!r}) entries must be Python ints; "
                         f"got {type(e).__name__} ({e!r})"
                     )
-            if sorted(layout_t) != list(range(n)):
-                raise QuadrantsSyntaxError(f"qd.ndrange(layout={layout_t!r}) is not a permutation of range({n})")
-            if layout_t == tuple(range(n)):
-                self.layout = None
+            if sorted(axes_t) != list(range(n)):
+                raise QuadrantsSyntaxError(f"qd.ndrange(axes={axes_t!r}) is not a permutation of range({n})")
+            if axes_t == tuple(range(n)):
+                self.axes = None
                 physical_to_canonical = list(range(n))
             else:
-                self.layout = layout_t
-                physical_to_canonical = list(layout_t)
+                self.axes = axes_t
+                physical_to_canonical = list(axes_t)
 
         self._physical_to_canonical = physical_to_canonical
 
@@ -129,7 +129,7 @@ class _Ndrange:
         return GroupedNDRange(self)
 
 
-def ndrange(*args, layout=None) -> Iterable:
+def ndrange(*args, axes=None) -> Iterable:
     """Return an immutable iterator object for looping over multi-dimensional indices.
 
     This returned set of multi-dimensional indices is the direct product (in the set-theory sense)
@@ -145,17 +145,17 @@ def ndrange(*args, layout=None) -> Iterable:
 
     Args:
         entries: (int, tuple): Must be either an integer, or a tuple/list of two integers.
-        layout (tuple of int, optional): Permutation of canonical axes describing the iteration
+        axes (tuple of int, optional): Permutation of canonical axes describing the iteration
             nesting order, outermost (slowest-varying) first. For an N-argument ndrange, must be
             a permutation of ``range(N)``. ``None`` (default) and the identity permutation are
             equivalent and reproduce the default order in which the **last argument is the
             innermost / fastest-varying axis**. The yielded loop variables stay bound to
-            canonical axes 0, 1, ..., N-1 regardless of layout — only the visit order changes.
-            ``layout=`` is independent of the loop body; it controls iteration order whether
-            the body touches a field, ndarray, tensor, vector/matrix variant, or no tensor at
-            all. The motivating use case is aligning iteration with a non-default physical
-            memory layout (e.g. ``qd.tensor(..., layout=...)`` or ``qd.field(..., order=...)``):
-            using the matching permutation makes adjacent flat threads step through physically
+            canonical axes 0, 1, ..., N-1 regardless of ``axes`` — only the visit order changes.
+            ``axes=`` is independent of the loop body; it controls iteration order whether the
+            body touches a field, ndarray, tensor, vector/matrix variant, or no tensor at all.
+            The motivating use case is aligning iteration with a non-default physical memory
+            layout (e.g. ``qd.tensor(..., layout=...)`` or ``qd.field(..., order=...)``): using
+            the matching permutation makes adjacent flat threads step through physically
             adjacent memory.
 
     Returns:
@@ -221,17 +221,17 @@ def ndrange(*args, layout=None) -> Iterable:
             >>>     for row, col, channel in qd.ndrange(image_height, image_width, channels):
             >>>         image[row, col, channel] = ...
 
-        Aligning iteration order with a non-default tensor layout via ``layout=``:
+        Aligning iteration order with a non-default tensor layout via ``axes=``:
 
             >>> A = qd.tensor(qd.f32, shape=(M, N), layout=(1, 0))    # axis 1 outer, axis 0 inner
             >>> @qd.kernel
             >>> def fill():
             >>>     # adjacent flat threads now step along axis 0 (the inner physical axis of A),
             >>>     # i.e. touch physically adjacent memory in A
-            >>>     for i, j in qd.ndrange(M, N, layout=(1, 0)):
+            >>>     for i, j in qd.ndrange(M, N, axes=(1, 0)):
             >>>         A[i, j] = i + j
     """
-    return _Ndrange(*args, layout=layout)
+    return _Ndrange(*args, axes=axes)
 
 
 class GroupedNDRange:
