@@ -1,10 +1,9 @@
 # pyright: reportInvalidTypeForm=false
 """Tests for ``qd.register_array(N, dtype)`` on ``@qd.dataclass``.
 
-``register_array`` gives users an ergonomic indexed-write syntax on a per-thread struct, while
-keeping the underlying storage as N separate named scalar fields so SROA + ``mem2reg`` can
-register-promote each slot independently. The static-index case must lower to a direct field
-reference; PTX must be byte-identical to the named-field equivalent.
+``register_array`` gives users an ergonomic indexed-write syntax on a per-thread struct, while keeping the underlying
+storage as N separate named scalar fields so SROA + ``mem2reg`` can register-promote each slot independently. The
+static-index case must lower to a direct field reference; PTX must be byte-identical to the named-field equivalent.
 """
 
 import numpy as np
@@ -28,16 +27,15 @@ def _qd_init_cuda():
 
 
 def test_register_array_construction_python_scope():
-    """A dataclass with ``r: qd.register_array(N, dtype)`` should construct as if it had N
-    named scalar fields ``_r0.._r{N-1}``."""
+    """A dataclass with ``r: qd.register_array(N, dtype)`` should construct as if it had N named scalar fields named
+    ``_r0.._r{N-1}``."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
         r: qd.register_array(4, qd.f32)
 
-    # The underlying struct type should report N synthetic scalar members plus expose ``r`` as
-    # a group name.
+    # The underlying struct type should report N synthetic scalar members plus expose ``r`` as a group name.
     assert hasattr(Tile, "_register_groups")
     groups = Tile._register_groups
     assert "r" in groups
@@ -84,8 +82,8 @@ def test_register_array_static_index_write_then_read():
 
 
 def test_register_array_qd_static_loop_index():
-    """Index via a ``qd.static(range(N))`` loop variable. Each iter sees a python-int index,
-    so the lowering must be the same direct-field path as the explicit python-int case."""
+    """Index via a ``qd.static(range(N))`` loop variable. Each iter sees a python-int index, so the lowering must be the
+    same direct-field path as the explicit python-int case."""
     _qd_init_cuda()
 
     @qd.dataclass
@@ -113,8 +111,8 @@ def test_register_array_qd_static_loop_index():
 
 
 def _build_named_kernel():
-    """Same as test_register_array_static_index_write_then_read but with 4 named ``r0..r3``
-    fields. Used for PTX byte-equality comparison against the ``register_array`` form."""
+    """Same as test_register_array_static_index_write_then_read but with 4 named ``r0..r3`` fields. Used for PTX byte-
+    equality comparison against the ``register_array`` form."""
     @qd.dataclass
     class TileNamed:
         r0: qd.f32
@@ -164,10 +162,9 @@ def _build_register_array_kernel():
 
 
 def test_register_array_runtime_index_rejected():
-    """Indexing ``t.r[k]`` with a runtime ``k`` raises a clear error pointing at the
-    python-int / ``qd.static`` requirement. Long term the runtime case can lower to an
-    explicit cascade; for now the limitation is surfaced early so callers don't get a
-    confusing LLVM/SROA failure downstream."""
+    """Indexing ``t.r[k]`` with a runtime ``k`` raises a clear error pointing at the python-int / ``qd.static``
+    requirement. Long term the runtime case can lower to an explicit cascade; for now the limitation is surfaced
+    early so callers don't get a confusing LLVM/SROA failure downstream."""
     _qd_init_cuda()
 
     @qd.dataclass

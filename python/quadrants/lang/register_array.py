@@ -1,19 +1,16 @@
 # type: ignore
-"""``qd.register_array`` -- indexed groups of independently-allocated scalar fields on
-``@qd.dataclass``.
+"""``qd.register_array`` -- indexed groups of independently-allocated scalar fields on ``@qd.dataclass``.
 
-A ``register_array(N, dtype)`` annotation expands at struct-definition time into N
-individually-named synthetic scalar members (``_{group}0`` .. ``_{group}{N-1}``). The AST
-transformer rewrites ``obj.{group}[i]`` into a direct reference to ``obj._{group}{i}`` for
-python-int / ``qd.static``-resolved indices, so generated LLVM IR / PTX is byte-identical to
-a hand-rolled named-field struct.
+A ``register_array(N, dtype)`` annotation expands at struct-definition time into N individually-named synthetic scalar
+members (``_{group}0`` .. ``_{group}{N-1}``). The AST transformer rewrites ``obj.{group}[i]`` into a direct reference to
+``obj._{group}{i}`` for python-int / ``qd.static``-resolved indices, so generated LLVM IR / PTX is byte-identical to a
+hand-rolled named-field struct.
 
-The motivation is register residency under pressure. A packed ``qd.types.vector(N, dtype)``
-collapses into one ``alloca`` that LLVM SROA cannot decompose once register pressure crosses
-a threshold (e.g. two concurrent tiles in a Cholesky + TRSM kernel), causing spills to local
-memory. ``register_array`` pre-decomposes the storage so SROA + ``mem2reg`` can
-register-promote each slot independently, while keeping the ergonomic indexed-access syntax
-at the source level.
+The motivation is register residency under pressure. A packed ``qd.types.vector(N, dtype)`` collapses into one
+``alloca`` that LLVM SROA cannot decompose once register pressure crosses a threshold (e.g. two concurrent tiles in a
+Cholesky + TRSM kernel), causing spills to local memory. ``register_array`` pre-decomposes the storage so SROA +
+``mem2reg`` can register-promote each slot independently, while keeping the ergonomic indexed-access syntax at the
+source level.
 
 Public:
 - ``RegisterArray``         - type wrapper used as the annotation value
@@ -34,9 +31,9 @@ from quadrants.lang.exception import QuadrantsSyntaxError
 class RegisterArray:
     """Type wrapper for a group of N scalar fields exposed via indexed syntax on a ``@qd.dataclass``.
 
-    See :func:`register_array` for the user-facing constructor and the motivation writeup.
-    Holding only ``count`` and ``dtype``, this object is consumed at struct-definition time
-    by ``StructType.__init__`` to lay out the N synthetic scalar fields.
+    See :func:`register_array` for the user-facing constructor and the motivation writeup. Holding only ``count`` and
+    ``dtype``, this object is consumed at struct-definition time by ``StructType.__init__`` to lay out the N synthetic
+    scalar fields.
     """
 
     def __init__(self, count, dtype):
@@ -52,14 +49,12 @@ class RegisterArray:
 def register_array(count, dtype):
     """Declare a group of ``count`` independently-allocated fields of ``dtype`` on a ``@qd.dataclass``.
 
-    The annotation expands at struct-definition time into ``count`` individually-named scalar
-    members (``_{group}0`` .. ``_{group}{count-1}``). Each member gets its own LLVM
-    ``alloca``, which lets SROA + ``mem2reg`` promote each slot into its own SSA value
-    independently. The motivation is register residency under pressure:
-    ``qd.types.vector(N, dtype)`` collapses into one packed ``alloca`` that the optimiser
-    often spills as a unit when register pressure crosses a threshold; ``register_array``
-    decomposes the storage up-front so the compiler can keep individual slots in registers
-    and only spill the ones it has to.
+    The annotation expands at struct-definition time into ``count`` individually-named scalar members (``_{group}0`` ..
+    ``_{group}{count-1}``). Each member gets its own LLVM ``alloca``, which lets SROA + ``mem2reg`` promote each slot
+    into its own SSA value independently. The motivation is register residency under pressure:
+    ``qd.types.vector(N, dtype)`` collapses into one packed ``alloca`` that the optimiser often spills as a unit when
+    register pressure crosses a threshold; ``register_array`` decomposes the storage up-front so the compiler can keep
+    individual slots in registers and only spill the ones it has to.
 
     Example::
 
@@ -73,12 +68,10 @@ def register_array(count, dtype):
         for k in qd.static(range(32)):
             t.r[k] = 0.0   # each iter is one AST node, not a 32-way cascade
 
-    For python-int / ``qd.static``-resolved indices, ``t.r[k]`` is rewritten by the AST
-    transformer to the named-field access ``t._r{k}``, producing identical LLVM IR / PTX to
-    a struct declared with N individually-named scalar fields.
+    For python-int / ``qd.static``-resolved indices, ``t.r[k]`` is rewritten by the AST transformer to the named-field
+    access ``t._r{k}``, producing identical LLVM IR / PTX to a struct declared with N individually-named scalar fields.
 
-    Runtime-int indexing is currently unsupported; use an explicit cascade helper for that
-    case.
+    Runtime-int indexing is currently unsupported; use an explicit cascade helper for that case.
     """
     return RegisterArray(count, dtype)
 
@@ -92,12 +85,12 @@ def _expand_register_array_naming(group_name, index):
 
 
 class _RegisterArrayRef:
-    """Transient proxy returned by the AST transformer for ``obj.{group}`` where ``group`` is
-    a registered ``register_array`` group on the struct type.
+    """Transient proxy returned by the AST transformer for ``obj.{group}`` where ``group`` is a registered group on the
+    struct type.
 
-    Only valid as the value of a Subscript node: ``obj.{group}[i]``. Resolved by
-    ``ASTTransformer.build_Subscript`` to a direct reference to the synthetic scalar field
-    ``_{group}{i}`` when ``i`` is a python-int / ``qd.static``-resolved integer.
+    Only valid as the value of a Subscript node: ``obj.{group}[i]``. Resolved by ``ASTTransformer.build_Subscript``
+    to a direct reference to the synthetic scalar field ``_{group}{i}`` when ``i`` is a python-int /
+    ``qd.static``-resolved integer.
 
     Used as a not-an-Expr marker; any attempt to use it as a value raises.
     """

@@ -296,11 +296,10 @@ class ASTTransformer(Builder):
     def build_Subscript(ctx: ASTTransformerFuncContext, node: ast.Subscript):
         build_stmt(ctx, node.value)
         build_stmt(ctx, node.slice)
-        # ``register_array`` group subscript: rewrite ``obj.{group}[k]`` to a direct reference to the
-        # synthetic scalar field ``_{group}{k}`` when ``k`` is a python-int. The resolution lives
-        # entirely at AST-build time so the runtime IR/PTX is byte-identical to the named-field
-        # form. Runtime indices are not supported here -- the user must spell the cascade
-        # explicitly.
+        # ``register_array`` group subscript: rewrite ``obj.{group}[k]`` to a direct reference to the synthetic scalar
+        # field ``_{group}{k}`` when ``k`` is a python-int. The resolution lives entirely at AST-build time so the
+        # runtime IR/PTX is byte-identical to the named-field form. Runtime indices are not supported here -- the user
+        # must spell the cascade explicitly.
         if isinstance(node.value.ptr, _RegisterArrayRef):
             slice_val = node.slice.ptr
             node.ptr = node.value.ptr._qd_field_for(slice_val)
@@ -754,11 +753,11 @@ class ASTTransformer(Builder):
                 node.ptr = node.ptr._unwrap()
             node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         else:
-            # ``register_array`` group access on a ``@qd.dataclass`` Struct expression. Returns a
-            # transient ``_RegisterArrayRef`` that ``build_Subscript`` (or its assignment-LHS sibling)
-            # resolves to a direct field reference. The lookup is by-name on ``_qd_register_groups``,
-            # which ``StructType.__call__`` attaches to every Struct instance whose type declared at
-            # least one ``register_array`` annotation. Tested in ``test_register_array.py``.
+            # ``register_array`` group access on a ``@qd.dataclass`` Struct expression. Returns a transient
+            # ``_RegisterArrayRef`` that ``build_Subscript`` (or its assignment-LHS sibling) resolves to a direct field
+            # reference. The lookup is by-name on ``_qd_register_groups``, which ``StructType.__call__`` attaches to
+            # every Struct instance whose type declared at least one ``register_array`` annotation. Tested in
+            # ``test_register_array.py``.
             groups = getattr(node.value.ptr, "_qd_register_groups", None)
             if groups and node.attr in groups:
                 count, dtype, naming_fn = groups[node.attr]

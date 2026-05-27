@@ -607,8 +607,8 @@ class StructType(CompoundType):
     def __init__(self, **kwargs):
         self.members = {}
         self.methods = {}
-        # Maps group name -> (count, dtype, naming_fn). Populated when a member annotation is a
-        # ``RegisterArray``; consumed by the AST transformer to rewrite ``obj.{group}[i]``.
+        # Maps group name -> (count, dtype, naming_fn). Populated when a member annotation is a ``RegisterArray``;
+        # consumed by the AST transformer to rewrite ``obj.{group}[i]`` into a direct synthetic-field reference.
         self._register_groups: dict = {}
         elements = []
         for k, dtype in kwargs.items():
@@ -656,8 +656,8 @@ class StructType(CompoundType):
         entries._Struct__dtype = self.dtype
         struct = self.cast(entries)
         struct._Struct__dtype = self.dtype
-        # Propagate the register-array group metadata onto the Struct instance so the AST
-        # transformer can detect indexed-group access (``obj.r``) on the per-trace expression.
+        # Propagate the register-array group metadata onto the Struct instance so the AST transformer can detect
+        # indexed-group access (``obj.r``) on the per-trace expression.
         if self._register_groups:
             struct._qd_register_groups = self._register_groups
         return struct
