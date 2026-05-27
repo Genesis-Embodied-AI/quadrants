@@ -82,18 +82,17 @@ CUDA shortcut: `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF,
 
 Every op above has a paired `_tiled` form that takes an extra `log2_size` template parameter and operates on independent `2**log2_size`-aligned tiles within the subgroup - see [Tiled variants](#tiled-variants).
 
+The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add_tiled(value)` with no `log2_size`) have been removed in favour of the portable sized API. For reductions other than the ones listed above, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern as `reduce_add_tiled` / `reduce_all_add_tiled`.
+
 ### Sorting
 
 In-register key/value sort across the subgroup, one `(key, value)` pair per lane.  Pure `shuffle` -- no shared memory, no barriers -- fully unrolled at compile time.
 
-| Op                                                | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                                                          |
-|---------------------------------------------------|------|--------|-------------------------|-----------------------------------------------------------------|
-| `subgroup.bitonic_sort_kv(key, value)`            | yes  | yes    | yes                     | key & value: i32, u32, f32, f64, i64, u64 (independently typed) |
-| `subgroup.bitonic_sort_kv_tiled(k, v, log2_size)` | yes  | yes    | yes                     | same                                                            |
+| Op                                     | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                                                          |
+|----------------------------------------|------|--------|-------------------------|-----------------------------------------------------------------|
+| `subgroup.bitonic_sort_kv(key, value)` | yes  | yes    | yes                     | key & value: i32, u32, f32, f64, i64, u64 (independently typed) |
 
-Returns `(key, value)` -- assign with `key, value = subgroup.bitonic_sort_kv(key, value)`.  Sorts ascending on `key`; ties on `key` break on ascending `value` (stable).  See [`bitonic_sort_kv`](#bitonic_sort_kvkey-value) for the short-input pattern (sentinel padding) and float NaN caveat.
-
-The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add_tiled(value)` with no `log2_size`) have been removed in favour of the portable sized API. For reductions other than the ones listed above, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern as `reduce_add_tiled` / `reduce_all_add_tiled`.
+Returns `(key, value)` -- assign with `key, value = subgroup.bitonic_sort_kv(key, value)`.  Sorts ascending on `key`; ties on `key` break on ascending `value` (stable).  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).  See [`bitonic_sort_kv`](#bitonic_sort_kvkey-value) for the short-input pattern (sentinel padding) and float NaN caveat.
 
 ## Semantics
 
