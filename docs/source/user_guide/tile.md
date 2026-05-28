@@ -197,8 +197,6 @@ def my_blocked_op(A, row0, col0, eps):
 | 16x16 | 16                | 16                   | Small problems where occupancy from many narrow blocks matters; very small N (e.g. N≤16 or N≈48) where the 32-tile would waste lanes |
 | 32x32 | 32                | 32                   | Larger problems (N ≳ 32) where bigger tiles cut the number of blocked passes and the FMA chain inside `cholesky_` amortizes the larger register file |
 
-Empirically (rigid-body constraint Cholesky on RTX PRO 6000): 32x32 is faster for `n_dofs` ≥ ~32, 16x16 wins for tiny `n_dofs`. Profile before committing to one over the other — the right pick is workload-dependent.
-
 ## Method reference
 
 The table below shows the 16x16 API; the `Tile32x32` API is identical, swap the class name and use `SIZE == 32`.
