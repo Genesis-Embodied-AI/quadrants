@@ -54,7 +54,7 @@ block
 grid
 math
 subgroup
-tile16
+tile
 ```
 
 ```{toctree}
