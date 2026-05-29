@@ -107,11 +107,11 @@ Prefer `qd.types.vector(N, dtype)` for small groups where register pressure is l
 
 ## Relationship to other annotations
 
-| annotation                          | storage layout                  | runtime indexing | best for                              |
-|-------------------------------------|---------------------------------|:----------------:|---------------------------------------|
-| `qd.f32` (per-field)                | one `alloca` per field          | n/a              | individually-named scalars            |
-| `qd.types.vector(N, dtype)`         | one packed `alloca`             | yes              | small groups with vector arithmetic   |
-| `qd.types.UnpackedVector[dtype, N]`       | `N` independent `alloca`s       | no               | groups that need to stay register-resident under pressure |
+| annotation                          | storage layout                          | runtime indexing | best for                              |
+|-------------------------------------|-----------------------------------------|:----------------:|---------------------------------------|
+| `qd.f32` (per-field)                | one independent slot per field          | n/a              | individually-named scalars            |
+| `qd.types.vector(N, dtype)`         | one slot holding `N` packed scalars     | yes              | small groups with vector arithmetic   |
+| `qd.types.UnpackedVector[dtype, N]` | `N` independent slots                   | no               | groups that need to stay register-resident under pressure |
 
 Under low register pressure the three options generate similar code. Under high register pressure `UnpackedVector` is the one most likely to stay in registers because the optimiser can promote each slot independently.
 
