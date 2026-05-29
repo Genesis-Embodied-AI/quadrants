@@ -83,6 +83,7 @@ init_options
 :maxdepth: 1
 :titlesonly:
 
+unit_testing
 kernel_coverage
 ```
 
