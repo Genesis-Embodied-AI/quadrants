@@ -56,8 +56,14 @@ def _test_python(args, default_dir="python"):
             pytest_args += ["--cov-append"]
         if args.keys:
             pytest_args += ["-k", args.keys]
-        if args.marks:
-            pytest_args += ["-m", args.marks]
+        # By default we exclude tests marked `slow` (eig / make_spd at n>=6, inverse_large at n>=6, mpm88, etc. -- see
+        # tests/pytest.ini for the marker). `--run-slow` opts back in. If the user passes their own `-m` expression we
+        # AND `not slow` onto it so the exclusion still applies, unless they explicitly opt out via `--run-slow`.
+        marks_expr = args.marks
+        if not args.run_slow:
+            marks_expr = f"({marks_expr}) and not slow" if marks_expr else "not slow"
+        if marks_expr:
+            pytest_args += ["-m", marks_expr]
         if args.failed_first:
             pytest_args += ["--failed-first"]
         if args.fail_fast:
@@ -161,7 +167,16 @@ def test():
         default=None,
         dest="marks",
         type=str,
-        help="Only run tests with specific marks",
+        help="Only run tests with specific marks. `not slow` is appended automatically " "unless --run-slow is passed.",
+    )
+    parser.add_argument(
+        "--run-slow",
+        required=False,
+        default=False,
+        dest="run_slow",
+        action="store_true",
+        help="Include tests marked `slow` (excluded by default). Has no effect if -m is "
+        "given an explicit expression that already mentions `slow`.",
     )
     parser.add_argument(
         "-f",
