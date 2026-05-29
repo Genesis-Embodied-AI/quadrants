@@ -437,7 +437,7 @@
         <span class="k">return</span> <span class="n">rhs</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">Struct</span><span class="p">):</span>
         <span class="n">new_struct</span> <span class="o">=</span> <span class="n">Struct</span><span class="p">(</span><span class="n">rhs</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="n">include_methods</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">include_ndim</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-        <span class="c1"># Preserve ``unpacked_array`` group metadata across the rewrap so the AST transformer can still resolve</span>
+        <span class="c1"># Preserve ``unpacked_vector`` group metadata across the rewrap so the AST transformer can still resolve</span>
         <span class="c1"># ``obj.{group}[k]`` on the re-emitted Struct.</span>
         <span class="n">groups</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="s2">&quot;_qd_unpacked_groups&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">groups</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>

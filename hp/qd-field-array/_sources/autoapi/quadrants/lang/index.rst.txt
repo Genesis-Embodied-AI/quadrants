@@ -36,7 +36,7 @@ Submodules
    /autoapi/quadrants/lang/source_builder/index
    /autoapi/quadrants/lang/stream/index
    /autoapi/quadrants/lang/struct/index
-   /autoapi/quadrants/lang/unpacked_array/index
+   /autoapi/quadrants/lang/unpacked_vector/index
    /autoapi/quadrants/lang/util/index
 
 

@@ -1,0 +1,62 @@
+quadrants.lang.unpacked_vector
+==============================
+
+.. py:module:: quadrants.lang.unpacked_vector
+
+.. autoapi-nested-parse::
+
+   ``UnpackedVector[dtype, count]`` -- indexed groups of independently-allocated scalar fields on ``@qd.dataclass``.
+
+   An ``UnpackedVector[dtype, N]`` annotation expands at struct-definition time into N individually-named synthetic scalar
+   members (``_{group}0`` .. ``_{group}{N-1}``). The AST transformer rewrites ``obj.{group}[i]`` into a direct reference to
+   ``obj._{group}{i}`` for python-int / ``qd.static``-resolved indices, so generated LLVM IR / PTX is byte-identical to a
+   hand-rolled named-field struct.
+
+   Compare to ``qd.types.vector(N, dtype)`` which is the *packed* layout: one ``alloca`` covers all N slots. Packed storage
+   is fine until register pressure rises -- once LLVM SROA fails to decompose the packed ``alloca`` (e.g. two concurrent
+   tiles in a Cholesky + TRSM kernel), the whole group spills to local memory as a unit. ``UnpackedVector`` lays each slot
+   out in its own ``alloca`` up front, so SROA + ``mem2reg`` can promote slots independently and the optimiser can spill
+   only the ones it has to. The ergonomic indexed-access syntax is preserved at the source level.
+
+   Public:
+   - ``UnpackedVector``        - subscriptable type: ``r: UnpackedVector[qd.f32, 32]``
+
+   Internal (used by ``StructType`` and the AST transformer):
+   - ``_expand_unpacked_vector_naming(group, i)`` - synthetic-field naming convention
+   - ``_UnpackedVectorRef``                       - transient proxy yielded by attribute access
+
+   This module has no dependency on ``struct.py``; ``struct.py`` imports from here.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.unpacked_vector.UnpackedVector
+
+
+Module Contents
+---------------
+
+.. py:class:: UnpackedVector(count, dtype)
+
+   Subscriptable type for a group of N scalar fields exposed via indexed syntax on a ``@qd.dataclass``.
+
+   Use as ``r: UnpackedVector[dtype, count]`` -- the subscript expression returns the layout marker that
+   ``StructType.__init__`` consumes at struct-definition time to lay out the N synthetic scalar fields. The marker
+   itself stores only ``count`` and ``dtype``.
+
+   The subscript form (vs. a function-call factory) is chosen so the spelling at a use site visually reads as a type
+   annotation, not a value-construction. Subscripting / calling a marker instance directly raises
+   ``QuadrantsSyntaxError`` -- those operations only make sense on the parameterised ``Struct`` field, not on the
+   annotation marker.
+
+
+   .. py:attribute:: count
+
+
+   .. py:attribute:: dtype
+
+
