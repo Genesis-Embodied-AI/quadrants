@@ -214,7 +214,7 @@ state.step()
 
 ### Fastcache
 
-`@qd.kernel(fastcache=True)` is supported on methods of `@qd.data_oriented` classes, but is disabled for fields; see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying) for more information.
+`@qd.kernel(fastcache=True)` is supported on methods of `@qd.data_oriented` classes, but is disabled for fields; see [Appendix — compound-type cache keying](fastcache.md#compound-type-cache-keying) for more information.
 
 ### Under the hood
 
