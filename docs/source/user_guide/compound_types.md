@@ -134,7 +134,7 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 ### Frozen vs non-frozen
 
-A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). For passing to a kernel via the recommended typed-dataclass annotation (`def k(s: MyStruct)`), both work — `frozen=True` is not required by Quadrants and is purely a Python-level immutability choice.
+A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments, but **kernel launch is faster with `frozen=True`** — Quadrants takes a fast path on the launch hot path when the dataclass is hashable, which Python only sets when the dataclass is frozen (or declares `unsafe_hash=True`). Recommend `frozen=True` unless you specifically need to rebind members after construction.
 
 ### Under the hood
 
