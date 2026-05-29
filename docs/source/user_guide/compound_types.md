@@ -236,7 +236,7 @@ It cannot contain `qd.field` or `qd.ndarray` members — those are dynamically-s
 
 A `@qd.dataclass` can be turned into a tensor of structs (e.g. `MyStruct.field(shape=(N,))`) with two possible memory layouts:
 
-- **Struct-of-arrays (SoA)** (`qd.Layout.SOA`): each member of the struct becomes its own tensor of length `N`.
+- **Struct-of-arrays (SoA)** (`qd.Layout.SOA`): extrudes each member of the struct into its own tensor of length `N`.
 - **Array-of-structs (AoS)** (`qd.Layout.AOS`): the storage is an array of `N` struct cells laid out contiguously in memory. AoS is only available with `qd.field` backing.
 
 ```python
