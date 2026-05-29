@@ -6,7 +6,7 @@ It can be useful to combine multiple ndarrays or fields together into a single s
 
 The following compound types are available:
 - `@dataclasses.dataclass` — lightweight container of tensors and primitives; can contain ndarrays
-- `@qd.data_oriented` — for creating objects with `self` that define `@qd.kernel` methods
+- `@qd.data_oriented` — enables object-oriented programming with Quadrants: `@qd.kernel` can decorate instance methods, with tensors stored on `self` instead of being passed in as kernel arguments or held as global fields
 - `@qd.dataclass` — for structures that are embedded into the kernel, and don't contain ndarrays
 
 | property                            | `@dataclasses.dataclass`     | `@qd.data_oriented`              | `@qd.dataclass`                     |
