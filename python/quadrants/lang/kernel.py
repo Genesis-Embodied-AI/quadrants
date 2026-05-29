@@ -472,6 +472,12 @@ class Kernel(FuncBase):
         # check is False for them — we need a separate arm. Without this arm, ``state.x = other_ndarray`` on the same
         # data_oriented instance would not invalidate the launch-context cache and the kernel would re-launch against
         # the stale binding.
+        #
+        # Mutability must be checked across the *entire* attr-chain, not just the top-level arg. With a frozen outer
+        # container wrapping a mutable inner container that holds the ndarray (e.g. ``frozen dataclass -> @qd.data_-
+        # oriented -> qd.ndarray``), id(outer) alone does not capture leaf rebinding because the inner container can
+        # still reassign ``.x``. So we OR-fold the mutability check across every parent along ``chain`` from the root
+        # down to (but excluding) the leaf attribute.
         if key != self._mutable_nd_cached_key:
             if self._struct_ndarray_launch_info_by_key:
                 struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
@@ -479,7 +485,7 @@ class Kernel(FuncBase):
                     self._mutable_nd_cached_val = [
                         (idx, chain)
                         for _, idx, chain in struct_nd_info
-                        if type(args[idx]).__hash__ is None or is_data_oriented(args[idx])
+                        if self._chain_has_mutable_container(args, idx, chain)
                     ]
                 else:
                     self._mutable_nd_cached_val = []
@@ -634,6 +640,30 @@ class Kernel(FuncBase):
         if type(obj) in _TENSOR_WRAPPER_TYPES:
             obj = obj._unwrap()
         return obj
+
+    @staticmethod
+    def _chain_has_mutable_container(args, template_arg_idx, attr_chain) -> bool:
+        """Return True if any container along ``attr_chain`` from ``args[template_arg_idx]`` down to (but excluding)
+        the leaf ndarray attribute is mutable in a way that lets it rebind its child attribute. Such a parent makes
+        ``id(args[template_arg_idx])`` alone insufficient to uniquely identify the leaf, so the leaf id must be
+        folded into the launch-context cache key.
+
+        A container is "mutable" here iff:
+        - its type has ``__hash__ is None`` (Python sets this for non-frozen ``@dataclass(eq=True)`` types), or
+        - it is a ``@qd.data_oriented`` instance (these inherit ``object.__hash__`` so the ``__hash__ is None``
+          check misses them; they support normal attribute assignment).
+
+        Walks all parents from the root down to ``attr_chain[:-1]`` — the final entry is the leaf itself, whose
+        own mutability does not affect rebinding by its parent. Returns on the first mutable parent.
+        """
+        cur = args[template_arg_idx]
+        if type(cur).__hash__ is None or is_data_oriented(cur):
+            return True
+        for attr_name in attr_chain[:-1]:
+            cur = getattr(cur, attr_name)
+            if type(cur).__hash__ is None or is_data_oriented(cur):
+                return True
+        return False
 
     @staticmethod
     def _set_struct_ndarray_args(

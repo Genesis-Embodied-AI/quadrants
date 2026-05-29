@@ -684,6 +684,54 @@ def test_data_oriented_nested_ndarray_reassign():
 
 
 # ---------------------------------------------------------------------------
+# 15b. Reassignment through a FROZEN outer container that wraps a MUTABLE inner container holding
+#      the ndarray. Reproducer for Codex review #1 on PR #704
+#      (https://github.com/Genesis-Embodied-AI/quadrants/pull/704#discussion_r3253017477):
+#      the launch-time mutable-nd cache guard only classified mutability of the *top-level* kernel
+#      arg. With a frozen dataclass at the root, the predicate returned False and no per-call walk
+#      was inserted, so reassigning ``outer.inner.x`` between launches left the launch-context
+#      cache bound to the *original* ndarray.
+#
+#      Fixed by widening the predicate to OR-fold mutability across every intermediate container
+#      along the recorded attr-chain (not just the root). See ``launch_kernel`` in
+#      ``python/quadrants/lang/kernel.py``.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_frozen_outer_mutable_inner_ndarray_reassign():
+    N = 4
+
+    @qd.data_oriented
+    class Inner:
+        def __init__(self, x):
+            self.x = x
+
+    @dataclasses.dataclass(frozen=True)
+    class Outer:
+        inner: Inner
+
+    x1 = qd.ndarray(qd.i32, shape=(N,))
+    x2 = qd.ndarray(qd.i32, shape=(N,))
+    outer = Outer(inner=Inner(x=x1))
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.inner.x[i] = i + 300
+
+    run(outer)
+    np.testing.assert_array_equal(x1.to_numpy(), np.arange(300, 300 + N))
+
+    # Reassign the leaf ndarray on the (mutable) inner container while the (frozen) outer
+    # container is unchanged at the top level. id(outer) does NOT change. The launch-context
+    # cache must still invalidate so the second launch binds against x2, not the cached x1.
+    outer.inner.x = x2
+    run(outer)
+    np.testing.assert_array_equal(x2.to_numpy(), np.arange(300, 300 + N))
+
+
+# ---------------------------------------------------------------------------
 # 16. Same data_oriented instance, two kernels sharing it. Verifies the launch-info per-kernel
 #     bookkeeping is independent (each kernel's compile sets up its own pre-declared ndarray args).
 # ---------------------------------------------------------------------------
