@@ -103,13 +103,19 @@ def expr_init(rhs):
     if isinstance(rhs, BufferView):
         return rhs
     if isinstance(rhs, Struct):
-        new_struct = Struct(rhs.to_dict(include_methods=True, include_ndim=True))
-        # Preserve ``unpacked_vector`` group metadata across the rewrap so the AST transformer can still resolve
-        # ``obj.{group}[k]`` on the re-emitted Struct.
+        # Build the rewrap dict from ``__entries`` directly rather than via ``to_dict()``: ``to_dict()`` recursively
+        # flattens nested Structs to plain dicts, which then rebuild without their ``_qd_unpacked_groups`` tag. By
+        # keeping nested Struct instances intact, ``Struct.__init__`` calls ``expr_init`` on each entry, recursing here
+        # and preserving the tag on every nested level.
+        d = dict(rhs._Struct__entries)  # type: ignore[attr-defined]  # name-mangled access
+        if rhs._Struct__methods:  # type: ignore[attr-defined]
+            d["__struct_methods"] = rhs._Struct__methods  # type: ignore[attr-defined]
+        new_struct = Struct(d)
+        # Preserve ``unpacked_vector`` group metadata on this level (nested levels are handled by the recursion above).
+        # ``setattr`` (rather than attribute assignment) sidesteps pyright's ``reportAttributeAccessIssue``; ``Struct``
+        # doesn't statically declare this attribute -- it's a per-instance metadata tag.
         groups = getattr(rhs, "_qd_unpacked_groups", None)
         if groups is not None:
-            # setattr (rather than attribute assignment) sidesteps pyright's reportAttributeAccessIssue;
-            # ``Struct`` doesn't statically declare this attribute -- it's a per-instance metadata tag.
             setattr(new_struct, "_qd_unpacked_groups", groups)
         return new_struct
     if isinstance(rhs, list):

@@ -233,6 +233,37 @@ def test_unpacked_vector_marker_call_rejected():
     assert "@qd.dataclass" in str(e.value), str(e.value)
 
 
+def test_unpacked_vector_nested_in_outer_dataclass():
+    """An ``UnpackedVector`` on an *inner* ``@qd.dataclass`` should keep working when that dataclass is itself nested
+    inside an outer ``@qd.dataclass``. Regression test for the metadata-stripping path in ``expr_init`` /
+    ``StructType.cast``: the ``_qd_unpacked_groups`` tag must propagate through nested-struct rewrap so the AST
+    transformer can still recognise ``o.inner.r[i]`` as a group access."""
+    _qd_init_cuda()
+
+    @qd.dataclass
+    class Inner:
+        r: qd.types.UnpackedVector[qd.f32, 4]
+
+    @qd.dataclass
+    class Outer:
+        inner: Inner
+        scale: qd.f32
+
+    out = qd.field(dtype=qd.f32, shape=(1,))
+
+    @qd.kernel(fastcache=False)
+    def k(o: qd.template()):
+        for _ in range(1):
+            t = Outer()
+            for i in qd.static(range(4)):
+                t.inner.r[i] = qd.cast(10 + i, qd.f32)
+            t.scale = qd.f32(2.0)
+            o[0] = t.inner.r[2] * t.scale
+
+    k(out)
+    assert out.to_numpy()[0] == 24.0
+
+
 def test_unpacked_vector_collision_with_earlier_field():
     """A user-declared field whose name matches a future synthetic field of an UnpackedVector group should raise
     rather than silently overwriting."""
@@ -287,6 +318,8 @@ if __name__ == "__main__":
     print("marker subscript rejection test passed")
     test_unpacked_vector_marker_call_rejected()
     print("marker call rejection test passed")
+    test_unpacked_vector_nested_in_outer_dataclass()
+    print("nested-in-outer-dataclass test passed")
     test_unpacked_vector_collision_with_earlier_field()
     print("collision-with-earlier-field test passed")
     test_unpacked_vector_collision_with_later_field()

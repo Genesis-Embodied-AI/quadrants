@@ -677,14 +677,10 @@ class StructType(CompoundType):
 
         entries = Struct(d)
         entries._Struct__dtype = self.dtype
+        # ``cast`` is the single tagging point for ``_qd_unpacked_groups``; it propagates through nested struct casts
+        # too, so ``Outer().inner.r[i]`` lowers correctly when ``Outer`` contains an ``Inner`` with an UnpackedVector.
         struct = self.cast(entries)
         struct._Struct__dtype = self.dtype
-        # Tag the freshly-built Struct expression-object (representing this ``Tile()`` instantiation in the kernel's
-        # IR) with the unpacked-vector group dictionary, so ``ASTTransformer.build_Attribute`` can recognise
-        # ``obj.r`` as a group name. The transformer inspects the instance, not the StructType, so the metadata has
-        # to live here.
-        if self._unpacked_groups:
-            struct._qd_unpacked_groups = self._unpacked_groups
         return struct
 
     def __instancecheck__(self, instance):
@@ -804,6 +800,7 @@ class StructType(CompoundType):
         entries["__struct_methods"] = self.methods
         struct = Struct(entries)
         struct._Struct__dtype = self.dtype
+        self._attach_unpacked_groups(struct)
         return struct
 
     def filled_with_scalar(self, value):
@@ -818,7 +815,19 @@ class StructType(CompoundType):
         entries["__struct_methods"] = self.methods
         struct = Struct(entries)
         struct._Struct__dtype = self.dtype
+        self._attach_unpacked_groups(struct)
         return struct
+
+    def _attach_unpacked_groups(self, struct):
+        """Tag a freshly-built ``Struct`` expression-object with this type's ``UnpackedVector`` group metadata so the AST
+        transformer can rewrite ``obj.{group}[i]`` into a direct synthetic-field reference. The transformer inspects the
+        instance (not the ``StructType``), so the metadata has to ride on every struct that this type produces --
+        including ones rehydrated through nested ``cast()`` calls and ``filled_with_scalar()``. ``setattr`` (rather than
+        attribute assignment) sidesteps pyright's ``reportAttributeAccessIssue`` -- ``Struct`` doesn't statically declare
+        this attribute.
+        """
+        if self._unpacked_groups:
+            setattr(struct, "_qd_unpacked_groups", self._unpacked_groups)
 
     def field(self, **kwargs):
         return Struct.field(self.members, self.methods, **kwargs)
