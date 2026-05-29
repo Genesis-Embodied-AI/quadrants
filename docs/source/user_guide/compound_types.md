@@ -9,13 +9,13 @@ The following compound types are available:
 - `@qd.data_oriented` — enables object-oriented programming with Quadrants: `@qd.kernel` can decorate instance methods, with tensors stored on `self` instead of being passed in as kernel arguments or held as global fields
 - `@qd.dataclass` — for structures that are embedded into the kernel, and don't contain ndarrays
 
-| property                            | `@dataclasses.dataclass`     | `@qd.data_oriented`              | `@qd.dataclass`                     |
-|-------------------------------------|:----------------------------:|:--------------------------------:|:-----------------------------------:|
-| Kernel-side representation          | none (flattened away)        | none (flattened away)            | real type with fixed memory layout  |
-| Can be used as tensor element type  | no                           | no                               | yes                                 |
-| Can hold ndarrays                   | yes                          | yes                              | no                                  |
-| `@qd.kernel` methods on `self`      | no                           | yes                              | no                                  |
-| Member declaration                  | type-annotated class fields  | live attributes (no annotations) | type-annotated class fields         |
+| property                            | `@dataclasses.dataclass`              | `@qd.data_oriented`                   | `@qd.dataclass`                     |
+|-------------------------------------|:-------------------------------------:|:-------------------------------------:|:-----------------------------------:|
+| Exists as a struct in the kernel    | no (members flattened to args)        | no (members flattened to args)        | yes (fixed memory layout)           |
+| Can be used as tensor element type  | no                                    | no                                    | yes                                 |
+| Can hold ndarrays                   | yes                                   | yes                                   | no                                  |
+| `@qd.kernel` methods on `self`      | no                                    | yes                                   | no                                  |
+| Member declaration                  | type-annotated class fields           | live attributes (no annotations)      | type-annotated class fields         |
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
 
