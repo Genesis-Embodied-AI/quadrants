@@ -233,6 +233,34 @@ def test_unpacked_vector_marker_call_rejected():
     assert "@qd.dataclass" in str(e.value), str(e.value)
 
 
+def test_unpacked_vector_collision_with_earlier_field():
+    """A user-declared field whose name matches a future synthetic field of an UnpackedVector group should raise
+    rather than silently overwriting."""
+    with pytest.raises(qd.QuadrantsSyntaxError) as e:
+
+        @qd.dataclass
+        class Bad1:
+            _r0: qd.f32
+            r: qd.types.UnpackedVector[qd.f32, 4]
+
+    msg = str(e.value)
+    assert "UnpackedVector" in msg and "_r0" in msg, msg
+
+
+def test_unpacked_vector_collision_with_later_field():
+    """A user-declared field whose name matches an already-expanded synthetic field of an earlier UnpackedVector group
+    should also raise."""
+    with pytest.raises(qd.QuadrantsSyntaxError) as e:
+
+        @qd.dataclass
+        class Bad2:
+            r: qd.types.UnpackedVector[qd.f32, 4]
+            _r2: qd.f32
+
+    msg = str(e.value)
+    assert "UnpackedVector" in msg and "_r2" in msg, msg
+
+
 def test_unpacked_vector_bad_subscript_arity():
     """Wrong subscript shape raises a clear error pointing at the expected ``[dtype, count]`` spelling."""
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
@@ -259,5 +287,9 @@ if __name__ == "__main__":
     print("marker subscript rejection test passed")
     test_unpacked_vector_marker_call_rejected()
     print("marker call rejection test passed")
+    test_unpacked_vector_collision_with_earlier_field()
+    print("collision-with-earlier-field test passed")
+    test_unpacked_vector_collision_with_later_field()
+    print("collision-with-later-field test passed")
     test_unpacked_vector_bad_subscript_arity()
     print("bad subscript arity test passed")
