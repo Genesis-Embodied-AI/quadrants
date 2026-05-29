@@ -853,4 +853,4 @@ def dataclass(cls):
     return StructType(**fields)
 
 
-__all__ = ["Struct", "StructField", "dataclass", "UnpackedVector", "_UnpackedVectorRef"]
+__all__ = ["Struct", "StructField", "dataclass", "_UnpackedVectorRef"]

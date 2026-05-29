@@ -1,5 +1,5 @@
 # pyright: reportInvalidTypeForm=false
-"""Tests for ``qd.UnpackedVector[dtype, count]`` on ``@qd.dataclass``.
+"""Tests for ``qd.types.UnpackedVector[dtype, count]`` on ``@qd.dataclass``.
 
 ``UnpackedVector`` gives users an ergonomic indexed-write syntax on a per-thread struct, while keeping the underlying
 storage as N separate named scalar fields so SROA + ``mem2reg`` can register-promote each slot independently. The
@@ -27,13 +27,13 @@ def _qd_init_cuda():
 
 
 def test_unpacked_vector_construction_python_scope():
-    """A dataclass with ``r: qd.UnpackedVector[dtype, N]`` should construct as if it had N named scalar fields named
+    """A dataclass with ``r: qd.types.UnpackedVector[dtype, N]`` should construct as if it had N named scalar fields named
     ``_r0.._r{N-1}``."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.UnpackedVector[qd.f32, 4]
+        r: qd.types.UnpackedVector[qd.f32, 4]
 
     # The underlying struct type should report N synthetic scalar members plus expose ``r`` as a group name.
     assert hasattr(Tile, "_unpacked_groups")
@@ -60,7 +60,7 @@ def test_unpacked_vector_static_index_write_then_read():
 
     @qd.dataclass
     class Tile:
-        r: qd.UnpackedVector[qd.f32, 4]
+        r: qd.types.UnpackedVector[qd.f32, 4]
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -88,7 +88,7 @@ def test_unpacked_vector_qd_static_loop_index():
 
     @qd.dataclass
     class Tile:
-        r: qd.UnpackedVector[qd.f32, 4]
+        r: qd.types.UnpackedVector[qd.f32, 4]
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -142,7 +142,7 @@ def _build_named_kernel():
 def _build_unpacked_vector_kernel():
     @qd.dataclass
     class TileRA:
-        r: qd.UnpackedVector[qd.f32, 4]
+        r: qd.types.UnpackedVector[qd.f32, 4]
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -170,7 +170,7 @@ def test_unpacked_vector_runtime_index_rejected():
 
     @qd.dataclass
     class Tile:
-        r: qd.UnpackedVector[qd.f32, 4]
+        r: qd.types.UnpackedVector[qd.f32, 4]
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -194,7 +194,7 @@ def test_unpacked_vector_oob_static_index():
 
     @qd.dataclass
     class Tile:
-        r: qd.UnpackedVector[qd.f32, 4]
+        r: qd.types.UnpackedVector[qd.f32, 4]
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -219,7 +219,7 @@ def test_unpacked_vector_marker_subscript_rejected():
     """Subscripting an already-parameterised marker raises a clear error pointing at the @qd.dataclass requirement.
     Catches the common mistake of decorating with @dataclasses.dataclass and trying to read ``obj.r[i]`` outside a
     kernel."""
-    marker = qd.UnpackedVector[qd.f32, 4]
+    marker = qd.types.UnpackedVector[qd.f32, 4]
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
         _ = marker[0]
     assert "@qd.dataclass" in str(e.value), str(e.value)
@@ -227,7 +227,7 @@ def test_unpacked_vector_marker_subscript_rejected():
 
 def test_unpacked_vector_marker_call_rejected():
     """Calling an already-parameterised marker (mistaking it for a constructor) raises a clear error."""
-    marker = qd.UnpackedVector[qd.f32, 4]
+    marker = qd.types.UnpackedVector[qd.f32, 4]
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
         marker()
     assert "@qd.dataclass" in str(e.value), str(e.value)
@@ -236,11 +236,11 @@ def test_unpacked_vector_marker_call_rejected():
 def test_unpacked_vector_bad_subscript_arity():
     """Wrong subscript shape raises a clear error pointing at the expected ``[dtype, count]`` spelling."""
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
-        _ = qd.UnpackedVector[qd.f32]  # missing count
+        _ = qd.types.UnpackedVector[qd.f32]  # missing count
     assert "UnpackedVector[dtype, count]" in str(e.value), str(e.value)
 
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
-        _ = qd.UnpackedVector[4, qd.f32]  # wrong order: count first instead of dtype first
+        _ = qd.types.UnpackedVector[4, qd.f32]  # wrong order: count first instead of dtype first
     assert "python int" in str(e.value), str(e.value)
 
 

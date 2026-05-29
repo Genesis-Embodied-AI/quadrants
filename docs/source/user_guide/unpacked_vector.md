@@ -1,6 +1,6 @@
 # Unpacked vector
 
-`qd.UnpackedVector[dtype, N]` is a `@qd.dataclass` field annotation that declares a group of `N` independently-allocated scalar fields exposed under a single name via indexed syntax.
+`qd.types.UnpackedVector[dtype, N]` is a `@qd.dataclass` field annotation that declares a group of `N` independently-allocated scalar fields exposed under a single name via indexed syntax.
 
 It is a *layout hint*, not a new container. At source level you write `t.r[i]`; the compiler lowers that to a direct reference to a synthetic scalar field `t._r{i}`. The generated LLVM IR / PTX is byte-identical to a struct that was declared with `N` individually-named scalar fields.
 
@@ -40,12 +40,12 @@ def get_r(t, k):
 
 …which is duplicated at every call site that wants to read or write the group.
 
-`qd.UnpackedVector` is the named-field layout with the ergonomic indexed syntax restored:
+`qd.types.UnpackedVector` is the named-field layout with the ergonomic indexed syntax restored:
 
 ```python
 @qd.dataclass
 class Tile:
-    r: qd.UnpackedVector[qd.f32, 32]
+    r: qd.types.UnpackedVector[qd.f32, 32]
 ```
 
 The annotation expands at struct-definition time into the `N` synthetic scalar fields. The AST transformer rewrites `obj.r[i]` (for any python-int / `qd.static`-resolved `i`) into a direct reference to the synthetic field `obj._r{i}`. The IR / PTX matches the hand-rolled named-field version exactly.
@@ -64,7 +64,7 @@ qd.init(arch=qd.gpu)
 
 @qd.dataclass
 class Tile:
-    r: qd.UnpackedVector[qd.f32, 32]
+    r: qd.types.UnpackedVector[qd.f32, 32]
 
 
 @qd.kernel
@@ -91,8 +91,8 @@ You can mix `UnpackedVector` groups with regular scalar / vector fields on the s
 ```python
 @qd.dataclass
 class TwoTiles:
-    a: qd.UnpackedVector[qd.f32, 32]
-    b: qd.UnpackedVector[qd.f32, 32]
+    a: qd.types.UnpackedVector[qd.f32, 32]
+    b: qd.types.UnpackedVector[qd.f32, 32]
     scale: qd.f32
 ```
 
@@ -113,7 +113,7 @@ Prefer `qd.types.vector(N, dtype)` for small groups where register pressure is l
 ## Common pitfalls
 
 - **Use `@qd.dataclass`, not `@dataclasses.dataclass`.** The `UnpackedVector[dtype, count]` annotation is only expanded by `@qd.dataclass`; on a stdlib dataclass the annotation is inert metadata and the indexed-access syntax will not work. Subscripting or calling the marker outside that context raises a `QuadrantsSyntaxError` with a pointer at the `@qd.dataclass` requirement.
-- **Subscript syntax, not a function call.** Write `r: qd.UnpackedVector[qd.f32, 32]` (subscript). There is no `qd.UnpackedVector(qd.f32, 32)` call form. The subscript spelling makes the marker visually read as a type annotation, not a runtime value.
+- **Subscript syntax, not a function call.** Write `r: qd.types.UnpackedVector[qd.f32, 32]` (subscript). There is no `qd.types.UnpackedVector(qd.f32, 32)` call form. The subscript spelling makes the marker visually read as a type annotation, not a runtime value.
 
 ## Constraints and limitations
 
@@ -129,7 +129,7 @@ Prefer `qd.types.vector(N, dtype)` for small groups where register pressure is l
 |-------------------------------------|---------------------------------|:----------------:|---------------------------------------|
 | `qd.f32` (per-field)                | one `alloca` per field          | n/a              | individually-named scalars            |
 | `qd.types.vector(N, dtype)`         | one packed `alloca`             | yes              | small groups with vector arithmetic   |
-| `qd.UnpackedVector[dtype, N]`       | `N` independent `alloca`s       | no               | groups that need to stay register-resident under pressure |
+| `qd.types.UnpackedVector[dtype, N]`       | `N` independent `alloca`s       | no               | groups that need to stay register-resident under pressure |
 
 Under low register pressure the three options generate similar code. Under high register pressure `UnpackedVector` is the one most likely to stay in registers because the optimiser can promote each slot independently.
 

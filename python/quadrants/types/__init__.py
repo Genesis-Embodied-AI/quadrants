@@ -16,4 +16,9 @@ from quadrants.types.ndarray_type import *  # type: ignore
 from quadrants.types.primitive_types import *  # type: ignore
 from quadrants.types.utils import *  # type: ignore
 
-__all__ = ["quant"]
+# Bottom of the file -- importing ``quadrants.lang.unpacked_vector`` indirectly pulls in ``quadrants.lang.util``, which
+# imports ``Template`` from this module. Doing the import after the rest of the module has loaded ensures ``Template`` is
+# already defined when that re-entry happens.
+from quadrants.lang.unpacked_vector import UnpackedVector  # type: ignore  # noqa: E402
+
+__all__ = ["quant", "UnpackedVector"]
