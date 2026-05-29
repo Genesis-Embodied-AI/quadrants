@@ -1,8 +1,10 @@
 import ast
+import dataclasses
 import json
 import os
 import pathlib
 import time
+import warnings
 from collections import defaultdict
 from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
@@ -384,6 +386,33 @@ class Kernel(FuncBase):
         self.fast_checksum = None
         if key in self.materialized_kernels:
             return
+
+        # Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.template()``-annotated
+        # kernel parameter was never an intentional Quadrants pattern. It works inadvertently because the template
+        # walker happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.
+        # dataclass`` is the dataclass type itself (flat-by-fields path). We fire the warning here, after the
+        # ``materialized_kernels`` cache-hit early return above, so it only runs on the first compile for each
+        # unique spec-key — zero cost on the steady-state launch hot path. Doubly-decorated objects (``@qd.data_
+        # oriented`` over ``@dataclasses.dataclass``) are excluded because that combination is a legitimate
+        # pattern routed through the data-oriented path.
+        for arg_meta, val in zip(self.arg_metas, py_args):
+            ann = arg_meta.annotation
+            if ann is not template and type(ann) is not template:
+                continue
+            if (
+                dataclasses.is_dataclass(val)
+                and not isinstance(val, type)
+                and not is_data_oriented(val)
+            ):
+                warnings.warn(
+                    f"Kernel {self.func.__qualname__!r} parameter {arg_meta.name!r}: passing a "
+                    "@dataclasses.dataclass instance into a qd.template()-annotated kernel parameter was "
+                    "never intended to be supported, and only works inadvertently. Use the dataclass type "
+                    f"itself as the annotation instead (e.g. `def {self.func.__name__}({arg_meta.name}: "
+                    f"{type(val).__name__}, ...)`). In a future release this will become an error.",
+                    DeprecationWarning,
+                    stacklevel=4,
+                )
 
         if _kernel_coverage_enabled():
             from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
