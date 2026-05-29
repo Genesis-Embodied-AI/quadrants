@@ -136,8 +136,6 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). For passing to a kernel via the recommended typed-dataclass annotation (`def k(s: MyStruct)`), both work — `frozen=True` is not required by Quadrants and is purely a Python-level immutability choice.
 
-(Historically, `frozen=True` was needed when passing a dataclass through `qd.Template`, because the template-mapper used the instance as a hash key and non-frozen dataclasses have `__hash__ = None`. That combination is now deprecated — see the [deprecation notice above](#overview).)
-
 ### Under the hood
 
 A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. Inside a kernel, tensor members are read-write through indexing (`s.x[i] = ...`) since their contents live on the device, but the member *binding* itself (`s.x = other_tensor`) cannot be reassigned from inside a kernel.
