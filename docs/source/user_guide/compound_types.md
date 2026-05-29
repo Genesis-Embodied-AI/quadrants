@@ -125,6 +125,24 @@ Sub-struct passing supports:
 
 Note: assigning a sub-struct to a local variable and then passing it (`t = s.inner; touch_inner(t)`) is **not** supported. Pass the attribute access directly at the call site.
 
+### Frozen vs non-frozen
+
+A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). For most cases you don't need `frozen=True`: a regular dataclass can be passed to a kernel through a typed-dataclass annotation (`def k(s: MyStruct)`) without any restriction.
+
+`frozen=True` becomes necessary when you want to pass the dataclass through `qd.template()`. `qd.template()` uses the instance as a dict key inside the template-mapper, and a non-frozen dataclass has `__hash__ = None`, so the template-mapper can't use it as a cache key. The typical case where you need this is when the dataclass holds a `@qd.data_oriented` child — those must reach the kernel via `qd.template()` (see [Nesting compatibility](#nesting-compatibility)).
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Bundle:
+    sim: MySimulation   # @qd.data_oriented
+
+@qd.kernel
+def step(bundle: qd.template()):
+    bundle.sim.step_once()
+```
+
 ### Under the hood
 
 A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. Inside a kernel, tensor members are read-write through indexing (`s.x[i] = ...`) since their contents live on the device, but the member *binding* itself (`s.x = other_tensor`) cannot be reassigned from inside a kernel.
@@ -292,7 +310,7 @@ The outermost annotation you put on the kernel parameter determines how the cont
 Two practical consequences:
 
 - **Containers with `@qd.data_oriented` anywhere in the tree** must be passed via `qd.template()` (or be the `self` of a `@qd.kernel` method on a `@qd.data_oriented` class). Using a typed-dataclass annotation on the outermost arg errors.
-- **A non-frozen `dataclasses.dataclass`** can be passed via the typed-dataclass annotation, but cannot be the outer `qd.template()` arg — `qd.template()` uses the instance as a dict key inside the template-mapper and a non-frozen dataclass has `__hash__ = None`. Add `frozen=True` if you need to pass it as `qd.template()` (for example, when it holds `@qd.data_oriented` children).
+- **Passing a `dataclasses.dataclass` via `qd.template()` requires `frozen=True`** — see [Frozen vs non-frozen](#frozen-vs-non-frozen) above.
 
 ### Reassigning ndarray members
 
