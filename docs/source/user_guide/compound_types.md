@@ -17,12 +17,12 @@ The following compound types are available:
 | `@qd.kernel` instance methods       | no                                    | yes                                   | no                                  |
 | `@qd.func` instance methods         | no (typed annotation flattens the dataclass into per-member kernel args, dropping the instance binding) | yes | yes |
 | Member declaration                  | type-annotated class fields           | live attributes (no annotations)      | type-annotated class fields         |
-| Kernel-arg annotation               | `MyStruct` (the dataclass type)       | `qd.template()`                       | `MyStruct` (the struct type)        |
+| Kernel-arg annotation               | `MyStruct` (the dataclass type)       | `qd.Template`                       | `MyStruct` (the struct type)        |
 
 Note on the "Members can be tensors" row for `@qd.dataclass`: a `@qd.dataclass`'s members must be primitives, fixed vectors, or fixed matrices — not `qd.field` / `qd.ndarray`. However, *allocating* a `@qd.dataclass` as a tensor of structs in SoA layout (`MyStruct.field(shape=(N,), layout=qd.Layout.SOA)`) extrudes each member into its own length-`N` tensor — so the resulting *collection* effectively behaves like a struct of parallel tensors, even though the `@qd.dataclass` type itself doesn't have tensor-typed members. See the [`@qd.dataclass` section](#qddataclass) below.
 
-> ⚠️ **Deprecation: `@dataclasses.dataclass` instance passed via `qd.template()`.**
-> Passing a `@dataclasses.dataclass` instance into a `qd.template()`-annotated kernel parameter was never intended to be supported, and only works inadvertently. As of this release the combination emits a `DeprecationWarning` at compile time; in a future release it will become an error. The recommended annotation for a `@dataclasses.dataclass` is the dataclass type itself (`def k(s: MyStruct)`), which has a fast flatten-to-args path. For `@qd.data_oriented` containers continue to use `qd.template()` as before.
+> ⚠️ **Deprecation: `@dataclasses.dataclass` instance passed via `qd.Template`.**
+> Passing a `@dataclasses.dataclass` instance into a `qd.Template`-annotated kernel parameter was never intended to be supported, and only works inadvertently. As of this release the combination emits a `DeprecationWarning` at compile time; in a future release it will become an error. The recommended annotation for a `@dataclasses.dataclass` is the dataclass type itself (`def k(s: MyStruct)`), which has a fast flatten-to-args path. For `@qd.data_oriented` containers continue to use `qd.Template` as before.
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
 
@@ -136,7 +136,7 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). For passing to a kernel via the recommended typed-dataclass annotation (`def k(s: MyStruct)`), both work — `frozen=True` is not required by Quadrants and is purely a Python-level immutability choice.
 
-(Historically, `frozen=True` was needed when passing a dataclass through `qd.template()`, because the template-mapper used the instance as a hash key and non-frozen dataclasses have `__hash__ = None`. That combination is now deprecated — see the [deprecation notice above](#overview).)
+(Historically, `frozen=True` was needed when passing a dataclass through `qd.Template`, because the template-mapper used the instance as a hash key and non-frozen dataclasses have `__hash__ = None`. That combination is now deprecated — see the [deprecation notice above](#overview).)
 
 ### Under the hood
 
@@ -290,7 +290,7 @@ This table summarises which member types are allowed inside which container type
 | `@qd.data_oriented`             | yes | yes | yes | yes | yes      | yes |
 | `@qd.dataclass`                 | no  | yes | yes | no  | no       | yes |
 
-[\*1] A `dataclasses.dataclass` whose member type is `@qd.data_oriented` is currently deprecated. It only ever worked through the `qd.template()` outer-arg path (typed-dataclass annotations error out because `@qd.data_oriented` carries no per-member annotations to flatten), and that path is itself deprecated — see the [deprecation notice in Overview](#overview). To hold a `@qd.data_oriented` instance, make the outer container `@qd.data_oriented` too, rather than a `@dataclasses.dataclass`.
+[\*1] A `dataclasses.dataclass` whose member type is `@qd.data_oriented` is currently deprecated. It only ever worked through the `qd.Template` outer-arg path (typed-dataclass annotations error out because `@qd.data_oriented` carries no per-member annotations to flatten), and that path is itself deprecated — see the [deprecation notice in Overview](#overview). To hold a `@qd.data_oriented` instance, make the outer container `@qd.data_oriented` too, rather than a `@dataclasses.dataclass`.
 
 ### Outer kernel-arg annotation
 
@@ -300,15 +300,15 @@ The outermost annotation you put on the kernel parameter determines how the cont
 |---|---|---|
 | `qd.types.NDArray[...]`           | ndarray slot                                       | leaf-level only |
 | `MyDataclass` (dataclass type)    | per-member flatten using annotations               | recommended for `@dataclasses.dataclass`; needs every member to have a quadrants-typed annotation |
-| `qd.template()`                   | value-driven walk of `vars(self)`                  | for `@qd.data_oriented` containers (and primitives). **Not** supported for `@dataclasses.dataclass` — see the [deprecation notice in Overview](#overview). |
+| `qd.Template`                   | value-driven walk of `vars(self)`                  | for `@qd.data_oriented` containers (and primitives). **Not** supported for `@dataclasses.dataclass` — see the [deprecation notice in Overview](#overview). |
 
 Practical consequence:
 
-- **`@qd.data_oriented` containers** must be passed via `qd.template()` (or be the `self` of a `@qd.kernel` method on a `@qd.data_oriented` class). Using a typed-dataclass annotation on the outermost arg errors.
+- **`@qd.data_oriented` containers** must be passed via `qd.Template` (or be the `self` of a `@qd.kernel` method on a `@qd.data_oriented` class). Using a typed-dataclass annotation on the outermost arg errors.
 
 ### Reassigning ndarray members
 
-For `@qd.data_oriented` containers passed via `qd.template()`, reassigning an ndarray member between kernel launches is supported, including changes to `dtype`, `ndim`, or layout. A new specialised kernel is compiled and cached for the new shape; subsequent launches with the original shape continue to use the original cached kernel. (For `@dataclasses.dataclass` containers — passed via the dataclass-type annotation — the member binding follows the standard dataclass mutability rules: frozen dataclasses can't rebind, non-frozen ones can, and a rebind triggers a fresh kernel arg setup on the next launch.)
+For `@qd.data_oriented` containers passed via `qd.Template`, reassigning an ndarray member between kernel launches is supported, including changes to `dtype`, `ndim`, or layout. A new specialised kernel is compiled and cached for the new shape; subsequent launches with the original shape continue to use the original cached kernel. (For `@dataclasses.dataclass` containers — passed via the dataclass-type annotation — the member binding follows the standard dataclass mutability rules: frozen dataclasses can't rebind, non-frozen ones can, and a rebind triggers a fresh kernel arg setup on the next launch.)
 
 ### Restrictions
 

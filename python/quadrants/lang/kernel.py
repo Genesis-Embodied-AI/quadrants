@@ -387,7 +387,7 @@ class Kernel(FuncBase):
         if key in self.materialized_kernels:
             return
 
-        # Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.template()``-annotated
+        # Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.Template``-annotated
         # kernel parameter was never an intentional Quadrants pattern. It works inadvertently because the template
         # walker happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.
         # dataclass`` is the dataclass type itself (flat-by-fields path). We fire the warning here, after the
@@ -406,7 +406,7 @@ class Kernel(FuncBase):
             ):
                 warnings.warn(
                     f"Kernel {self.func.__qualname__!r} parameter {arg_meta.name!r}: passing a "
-                    "@dataclasses.dataclass instance into a qd.template()-annotated kernel parameter was "
+                    "@dataclasses.dataclass instance into a qd.Template-annotated kernel parameter was "
                     "never intended to be supported, and only works inadvertently. Use the dataclass type "
                     f"itself as the annotation instead (e.g. `def {self.func.__name__}({arg_meta.name}: "
                     f"{type(val).__name__}, ...)`). In a future release this will become an error.",
@@ -763,7 +763,7 @@ class Kernel(FuncBase):
         # signature and are stored in ``self.mapper.arguments``). Whether a given position receives a Tensor wrapper
         # or a bare impl is determined by the caller's annotation pattern, which is stable across calls — a user who
         # passes ``qd.Tensor(impl)`` at position *i* will do so on every call, because the annotation (``qd.Tensor``,
-        # ``qd.template()``, ``qd.types.ndarray()``, or a dataclass type) doesn't change. The template mapper
+        # ``qd.Template``, ``qd.types.ndarray()``, or a dataclass type) doesn't change. The template mapper
         # enforces a fixed arg count (``len(args) == self.num_args``), so cached indices cannot go out of bounds.
         if _tensor_wrapper._any_tensor_constructed:  # pyright: ignore[reportOptionalMemberAccess]
             _indices = self._tensor_unwrap_indices
