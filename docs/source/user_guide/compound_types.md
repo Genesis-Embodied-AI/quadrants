@@ -204,7 +204,20 @@ Like `dataclasses.dataclass`, a `@qd.data_oriented` object is Python-only — th
 
 ## qd.dataclass / qd.types.struct
 
-Unlike `@qd.data_oriented` and `@dataclasses.dataclass`, `@qd.dataclass` creates a struct that is available within the kernels themselves. The former types are only used for structure on the python side, before compilation. `@qd.dataclass` can be used as the element type of fields. One key downside of `@qd.dataclass` is that they can only be used with fields and primitives, not with ndarray. This is because tensors are embedded in the struct by value, not as a reference pointer.
+Unlike `@qd.data_oriented` and `@dataclasses.dataclass`, `@qd.dataclass` creates a struct type that is available *inside* the kernels themselves. The other two compound types only exist on the Python side, before compilation, and don't appear in compiled kernel code at all.
+
+`@qd.dataclass` members can only be:
+
+- primitives (`qd.f32`, `qd.i32`, `qd.bool`, etc.)
+- fixed-size vectors (`qd.types.vector(N, dtype)`)
+- fixed-size matrices (`qd.types.matrix(M, N, dtype)`)
+
+It cannot contain `qd.field` or `qd.ndarray` members — those are dynamically-sized tensor types and don't fit into a fixed-size struct cell.
+
+A `@qd.dataclass` can be turned into a tensor of structs (e.g. `MyStruct.field(shape=(N,))`) with two possible memory layouts:
+
+- **Struct-of-arrays (SoA)** (`qd.Layout.SOA`): each member of the struct becomes its own tensor of length `N`.
+- **Array-of-structs (AoS)** (`qd.Layout.AOS`): the storage is an array of `N` struct cells laid out contiguously in memory. AoS is only available with `qd.field` backing.
 
 ```python
 @qd.dataclass
