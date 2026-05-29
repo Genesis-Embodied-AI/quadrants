@@ -15,10 +15,10 @@ from quadrants.lang.exception import (
 from quadrants.lang.expr import Expr
 from quadrants.lang.field import Field, ScalarField, SNodeHostAccess
 from quadrants.lang.matrix import Matrix, MatrixType
-from quadrants.lang.unpacked_array import (
-    UnpackedArray,
-    _expand_unpacked_array_naming,
-    _UnpackedArrayRef,
+from quadrants.lang.unpacked_vector import (
+    UnpackedVector,
+    _expand_unpacked_vector_naming,
+    _UnpackedVectorRef,
     unpacked_array,
 )
 from quadrants.lang.util import (
@@ -607,18 +607,18 @@ class StructType(CompoundType):
     def __init__(self, **kwargs):
         self.members = {}
         self.methods = {}
-        # Maps group name -> (count, dtype, naming_fn). Populated when a member annotation is an ``UnpackedArray``;
+        # Maps group name -> (count, dtype, naming_fn). Populated when a member annotation is an ``UnpackedVector``;
         # consumed by the AST transformer to rewrite ``obj.{group}[i]`` into a direct synthetic-field reference.
         self._unpacked_groups: dict = {}
         elements = []
         for k, dtype in kwargs.items():
             if k == "__struct_methods":
                 self.methods = dtype
-            elif isinstance(dtype, UnpackedArray):
+            elif isinstance(dtype, UnpackedVector):
                 cooked = cook_dtype(dtype.dtype)
-                self._unpacked_groups[k] = (dtype.count, cooked, _expand_unpacked_array_naming)
+                self._unpacked_groups[k] = (dtype.count, cooked, _expand_unpacked_vector_naming)
                 for i in range(dtype.count):
-                    sub = _expand_unpacked_array_naming(k, i)
+                    sub = _expand_unpacked_vector_naming(k, i)
                     self.members[sub] = cooked
                     elements.append([cooked, sub])
             elif isinstance(dtype, StructType):
@@ -657,7 +657,7 @@ class StructType(CompoundType):
         struct = self.cast(entries)
         struct._Struct__dtype = self.dtype
         # Tag the freshly-built Struct expression-object (representing this ``Tile()`` instantiation in the kernel's
-        # IR) with the unpacked-array group dictionary, so ``ASTTransformer.build_Attribute`` can recognise
+        # IR) with the unpacked-vector group dictionary, so ``ASTTransformer.build_Attribute`` can recognise
         # ``obj.r`` as a group name. The transformer inspects the instance, not the StructType, so the metadata has
         # to live here.
         if self._unpacked_groups:
@@ -854,4 +854,4 @@ def dataclass(cls):
     return StructType(**fields)
 
 
-__all__ = ["Struct", "StructField", "dataclass", "UnpackedArray", "unpacked_array", "_UnpackedArrayRef"]
+__all__ = ["Struct", "StructField", "dataclass", "UnpackedVector", "unpacked_array", "_UnpackedVectorRef"]

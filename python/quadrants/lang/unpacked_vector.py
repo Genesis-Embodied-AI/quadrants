@@ -13,12 +13,12 @@ out in its own ``alloca`` up front, so SROA + ``mem2reg`` can promote slots inde
 only the ones it has to. The ergonomic indexed-access syntax is preserved at the source level.
 
 Public:
-- ``UnpackedArray``         - type wrapper used as the annotation value
+- ``UnpackedVector``        - type wrapper used as the annotation value
 - ``unpacked_array``        - factory: ``r: qd.unpacked_array(N, dtype)``
 
 Internal (used by ``StructType`` and the AST transformer):
-- ``_expand_unpacked_array_naming(group, i)`` - synthetic-field naming convention
-- ``_UnpackedArrayRef``                       - transient proxy yielded by attribute access
+- ``_expand_unpacked_vector_naming(group, i)`` - synthetic-field naming convention
+- ``_UnpackedVectorRef``                       - transient proxy yielded by attribute access
 
 This module has no dependency on ``struct.py``; ``struct.py`` imports from here.
 """
@@ -28,7 +28,7 @@ import numpy as np
 from quadrants.lang.exception import QuadrantsSyntaxError
 
 
-class UnpackedArray:
+class UnpackedVector:
     """Type wrapper for a group of N scalar fields exposed via indexed syntax on a ``@qd.dataclass``.
 
     See :func:`unpacked_array` for the user-facing constructor and the motivation writeup. Holding only ``count`` and
@@ -73,10 +73,10 @@ def unpacked_array(count, dtype):
 
     Runtime-int indexing is currently unsupported; use an explicit cascade helper for that case.
     """
-    return UnpackedArray(count, dtype)
+    return UnpackedVector(count, dtype)
 
 
-def _expand_unpacked_array_naming(group_name, index):
+def _expand_unpacked_vector_naming(group_name, index):
     """Naming convention for the synthetic scalar fields of an ``unpacked_array`` group.
 
     Public-ish so the AST transformer can mirror this without a circular import on ``struct``.
@@ -84,8 +84,8 @@ def _expand_unpacked_array_naming(group_name, index):
     return f"_{group_name}{index}"
 
 
-class _UnpackedArrayRef:
-    """Transient proxy returned by the AST transformer for ``obj.{group}`` where ``group`` is an unpacked-array group
+class _UnpackedVectorRef:
+    """Transient proxy returned by the AST transformer for ``obj.{group}`` where ``group`` is an unpacked-vector group
     declared on the struct type.
 
     Only valid as the value of a Subscript node: ``obj.{group}[i]``. Resolved by ``ASTTransformer.build_Subscript``
@@ -95,7 +95,7 @@ class _UnpackedArrayRef:
     Used as a not-an-Expr marker; any attempt to use it as a value raises.
     """
 
-    _qd_is_unpacked_array_ref = True
+    _qd_is_unpacked_vector_ref = True
 
     def __init__(self, struct, group_name: str, count: int, dtype, naming_fn):
         self._qd_struct = struct
@@ -122,4 +122,4 @@ class _UnpackedArrayRef:
         return f"<unpacked_array_ref group={self._qd_group_name!r} count={self._qd_count} " f"dtype={self._qd_dtype}>"
 
 
-__all__ = ["UnpackedArray", "unpacked_array"]
+__all__ = ["UnpackedVector", "unpacked_array"]

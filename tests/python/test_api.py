@@ -82,7 +82,7 @@ user_api[qd] = [
     "Struct",
     "StructField",
     "TRACE",
-    "UnpackedArray",
+    "UnpackedVector",
     "QuadrantsAssertionError",
     "QuadrantsCompilationError",
     "QuadrantsNameError",

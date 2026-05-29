@@ -104,7 +104,7 @@ def expr_init(rhs):
         return rhs
     if isinstance(rhs, Struct):
         new_struct = Struct(rhs.to_dict(include_methods=True, include_ndim=True))
-        # Preserve ``unpacked_array`` group metadata across the rewrap so the AST transformer can still resolve
+        # Preserve ``unpacked_vector`` group metadata across the rewrap so the AST transformer can still resolve
         # ``obj.{group}[k]`` on the re-emitted Struct.
         groups = getattr(rhs, "_qd_unpacked_groups", None)
         if groups is not None:

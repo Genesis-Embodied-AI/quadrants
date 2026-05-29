@@ -40,7 +40,7 @@ from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
-from quadrants.lang.unpacked_array import _UnpackedArrayRef
+from quadrants.lang.unpacked_vector import _UnpackedVectorRef
 from quadrants.lang.util import (
     is_from_quadrants_module as _is_from_quadrants_module,
 )
@@ -296,11 +296,11 @@ class ASTTransformer(Builder):
     def build_Subscript(ctx: ASTTransformerFuncContext, node: ast.Subscript):
         build_stmt(ctx, node.value)
         build_stmt(ctx, node.slice)
-        # ``unpacked_array`` group subscript: rewrite ``obj.{group}[k]`` to a direct reference to the synthetic scalar
+        # ``unpacked_vector`` group subscript: rewrite ``obj.{group}[k]`` to a direct reference to the synthetic scalar
         # field ``_{group}{k}`` when ``k`` is a python-int. The resolution lives entirely at AST-build time so the
         # runtime IR/PTX is byte-identical to the named-field form. Runtime indices are not supported here -- the user
         # must spell the cascade explicitly.
-        if isinstance(node.value.ptr, _UnpackedArrayRef):
+        if isinstance(node.value.ptr, _UnpackedVectorRef):
             slice_val = node.slice.ptr
             node.ptr = node.value.ptr._qd_field_for(slice_val)
             node.violates_pure = node.value.violates_pure
@@ -753,15 +753,15 @@ class ASTTransformer(Builder):
                 node.ptr = node.ptr._unwrap()
             node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         else:
-            # ``unpacked_array`` group access on a ``@qd.dataclass`` Struct expression. Returns a transient
-            # ``_UnpackedArrayRef`` that ``build_Subscript`` (or its assignment-LHS sibling) resolves to a direct field
+            # ``unpacked_vector`` group access on a ``@qd.dataclass`` Struct expression. Returns a transient
+            # ``_UnpackedVectorRef`` that ``build_Subscript`` (or its assignment-LHS sibling) resolves to a direct field
             # reference. The lookup is by-name on ``_qd_unpacked_groups``, which ``StructType.__call__`` attaches to
-            # every Struct instance whose type declared at least one ``unpacked_array`` annotation. Tested in
-            # ``test_unpacked_array.py``.
+            # every Struct instance whose type declared at least one ``unpacked_vector`` annotation. Tested in
+            # ``test_unpacked_vector.py``.
             groups = getattr(node.value.ptr, "_qd_unpacked_groups", None)
             if groups and node.attr in groups:
                 count, dtype, naming_fn = groups[node.attr]
-                node.ptr = _UnpackedArrayRef(node.value.ptr, node.attr, count, dtype, naming_fn)
+                node.ptr = _UnpackedVectorRef(node.value.ptr, node.attr, count, dtype, naming_fn)
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
             # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build
