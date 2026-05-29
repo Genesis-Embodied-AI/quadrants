@@ -50,8 +50,7 @@ class UnpackedVector:
         # ``UnpackedVector[dtype, count]`` -> marker instance. ``params`` is a 2-tuple from python's subscript protocol.
         if not isinstance(params, tuple) or len(params) != 2:
             raise QuadrantsSyntaxError(
-                "UnpackedVector must be parameterised as UnpackedVector[dtype, count] "
-                f"(got {params!r})"
+                "UnpackedVector must be parameterised as UnpackedVector[dtype, count] " f"(got {params!r})"
             )
         dtype, count = params
         if not isinstance(count, int):
@@ -129,10 +128,7 @@ class _UnpackedVectorRef:
         return getattr(self._qd_struct, field_name)
 
     def __repr__(self) -> str:  # pragma: no cover - debug only
-        return (
-            f"<UnpackedVector_ref group={self._qd_group_name!r} "
-            f"count={self._qd_count} dtype={self._qd_dtype}>"
-        )
+        return f"<UnpackedVector_ref group={self._qd_group_name!r} " f"count={self._qd_count} dtype={self._qd_dtype}>"
 
 
 __all__ = ["UnpackedVector"]
