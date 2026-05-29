@@ -15,7 +15,7 @@ The following compound types are available:
 | Can be used as tensor element type  | no                                    | no                                    | yes                                 |
 | Members can be tensors (field, ndarray) | yes                               | yes                                   | no                                  |
 | `@qd.kernel` instance methods       | no                                    | yes                                   | no                                  |
-| `@qd.func` instance methods         | no (typed annotation flattens the dataclass into per-member kernel args, dropping the instance binding) | yes | yes |
+| `@qd.func` instance methods         | no                                    | yes                                   | yes                                 |
 | Member declaration                  | type-annotated class fields           | live attributes (no annotations)      | type-annotated class fields         |
 | Kernel-arg annotation               | `MyStruct` (the dataclass type)       | `qd.Template`                       | `MyStruct` (the struct type)        |
 
