@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>BufferView &#8212; Quadrants 1.0.1 documentation</title>
+    <title>Unit testing &#8212; Quadrants 1.0.1 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/buffer_view';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/unit_testing';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="qd.static" href="static.html" />
-    <link rel="prev" title="Compound types" href="compound_types.html" />
+    <link rel="next" title="Kernel code coverage" href="kernel_coverage.html" />
+    <link rel="prev" title="qd.init options" href="init_options.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.0.1" />
@@ -298,7 +298,7 @@
 <li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
-<ul class="current nav bd-sidenav">
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
@@ -306,7 +306,7 @@
 <li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">BufferView</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
@@ -342,8 +342,8 @@
 <li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
-<ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -404,7 +404,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">BufferView</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Unit testing</span></li>
   </ul>
 </nav>
 </div>
@@ -421,104 +421,114 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="bufferview">
-<h1>BufferView<a class="headerlink" href="#bufferview" title="Link to this heading">#</a></h1>
-<p><code class="docutils literal notranslate"><span class="pre">BufferView</span></code> allows passing a sub-range of an ndarray to a kernel, with optional bounds checking in debug mode.</p>
-<section id="creating-a-view">
-<h2>Creating a view<a class="headerlink" href="#creating-a-view" title="Link to this heading">#</a></h2>
-<p>Use Python slice notation on any 1D <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-
-<span class="n">N</span> <span class="o">=</span> <span class="mi">64</span>
-<span class="n">data</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
-<span class="n">data</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
-
-<span class="n">first_half</span> <span class="o">=</span> <span class="n">data</span><span class="p">[:</span><span class="mi">32</span><span class="p">]</span>     <span class="c1"># offset=0,  size=32</span>
-<span class="n">second_half</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">32</span><span class="p">:]</span>    <span class="c1"># offset=32, size=32</span>
-<span class="n">middle</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">16</span><span class="p">:</span><span class="mi">48</span><span class="p">]</span>       <span class="c1"># offset=16, size=32</span>
-<span class="n">last_eight</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="o">-</span><span class="mi">8</span><span class="p">:]</span>     <span class="c1"># offset=56, size=8</span>
+  <section class="tex2jax_ignore mathjax_ignore" id="unit-testing">
+<h1>Unit testing<a class="headerlink" href="#unit-testing" title="Link to this heading">#</a></h1>
+<p>This page documents how to run, write, and tune the Quadrants Python unit test suite. For setup of the build / dev environment, see <a class="reference internal" href="contributing.html"><span class="std std-doc">contributing.md</span></a>.</p>
+<section id="running-the-tests">
+<h2>Running the tests<a class="headerlink" href="#running-the-tests" title="Link to this heading">#</a></h2>
+<p>The test suite is run via the project’s launcher, <strong>not</strong> by invoking <code class="docutils literal notranslate"><span class="pre">pytest</span></code> directly:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span>
 </pre></div>
 </div>
-<p>Only 1D ndarrays are supported. Slices with a step other than 1 raise <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p>
-<p>For programmatically computed offsets, use the constructor directly:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">view</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">BufferView</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
+<p>The launcher sets up the test-only env vars (kernel offline cache, watchdog, xdist worker count, etc.) and forwards any unrecognised flags to pytest. Calling <code class="docutils literal notranslate"><span class="pre">pytest</span></code> directly skips that setup and behaves differently.</p>
+<p>Common one-liners:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># run one file</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="n">test_tile16</span>
+
+<span class="c1"># run one test (any pytest -k expression)</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">k</span> <span class="n">test_tile16_cholesky</span>
+
+<span class="c1"># run on a specific backend (or comma-separated list)</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">cuda</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">metal</span> <span class="o">-</span><span class="n">k</span> <span class="n">tile16</span>
+
+<span class="c1"># same, via env var (handy for CI)</span>
+<span class="n">QD_WANTED_ARCHS</span><span class="o">=</span><span class="n">metal</span><span class="p">,</span><span class="n">vulkan</span> <span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span>
+
+<span class="c1"># rerun the last failing tests first</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">f</span>
+
+<span class="c1"># stop at the first failure</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">x</span>
 </pre></div>
 </div>
+<p>The target architecture can also be set via <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS</span></code> (comma-separated; supports <code class="docutils literal notranslate"><span class="pre">^arch</span></code> to exclude rather than include).</p>
 </section>
-<section id="slicing-a-view-subview">
-<h2>Slicing a view (subview)<a class="headerlink" href="#slicing-a-view-subview" title="Link to this heading">#</a></h2>
-<p>A <code class="docutils literal notranslate"><span class="pre">BufferView</span></code> can be sliced again to create a narrower subview. All views share the same backing ndarray — offsets accumulate automatically:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">8</span><span class="p">:</span><span class="mi">24</span><span class="p">]</span>      <span class="c1"># BufferView: offset=8,  size=16</span>
-<span class="n">b</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">4</span><span class="p">:</span><span class="mi">12</span><span class="p">]</span>         <span class="c1"># BufferView: offset=12, size=8</span>
-<span class="n">c</span> <span class="o">=</span> <span class="n">b</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span>           <span class="c1"># BufferView: offset=12, size=4</span>
+<section id="markers">
+<h2>Markers<a class="headerlink" href="#markers" title="Link to this heading">#</a></h2>
+<section id="pytest-mark-slow">
+<h3><code class="docutils literal notranslate"><span class="pre">&#64;pytest.mark.slow</span></code><a class="headerlink" href="#pytest-mark-slow" title="Link to this heading">#</a></h3>
+<p>Marks a test as <strong>slow</strong>. <code class="docutils literal notranslate"><span class="pre">tests/run_tests.py</span></code> adds <code class="docutils literal notranslate"><span class="pre">-m</span> <span class="pre">&quot;not</span> <span class="pre">slow&quot;</span></code> to the pytest invocation by default; pass <code class="docutils literal notranslate"><span class="pre">--run-slow</span></code> to opt back in:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># default: skip slow</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span>
+
+<span class="c1"># include slow</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">run</span><span class="o">-</span><span class="n">slow</span>
+
+<span class="c1"># slow ONLY (e.g. nightly job)</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">m</span> <span class="n">slow</span> <span class="o">--</span><span class="n">run</span><span class="o">-</span><span class="n">slow</span>
 </pre></div>
 </div>
-<p>This forms a closed slicing chain: <code class="docutils literal notranslate"><span class="pre">ndarray</span></code> → slice → <code class="docutils literal notranslate"><span class="pre">BufferView</span></code> → slice → <code class="docutils literal notranslate"><span class="pre">BufferView</span></code>. Each step validates bounds against the parent’s size. The <code class="docutils literal notranslate"><span class="pre">subview()</span></code> method provides the same functionality with explicit offset and size:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">b</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">subview</span><span class="p">(</span><span class="n">offset</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>   <span class="c1"># equivalent to a[4:12]</span>
+<p>The marker is used in two patterns:</p>
+<ol class="arabic">
+<li><p><strong>Whole-test slow</strong>: the whole test takes a long time.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">slow</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">test_thing_that_is_always_slow</span><span class="p">():</span>
+    <span class="o">...</span>
 </pre></div>
 </div>
+</li>
+<li><p><strong>Slow-marked parametrize case</strong>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">parametrize</span><span class="p">(</span><span class="s2">&quot;n&quot;</span><span class="p">,</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="n">pytest</span><span class="o">.</span><span class="n">param</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="n">marks</span><span class="o">=</span><span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">slow</span><span class="p">)])</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">test_sym_eig_general</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>In this specific example the default suite still exercises the code path; the slow lane just adds the larger-size variant for full coverage.</p>
+</li>
+</ol>
 </section>
-<section id="kernel-type-annotation">
-<h2>Kernel type annotation<a class="headerlink" href="#kernel-type-annotation" title="Link to this heading">#</a></h2>
-<p>Use <code class="docutils literal notranslate"><span class="pre">BufferView</span></code> as a parameter annotation on <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>. The element dtype can be specified explicitly or omitted:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="kn">import</span> <span class="n">BufferView</span>
-
-<span class="c1"># Explicit dtype — the annotation declares the expected element type:</span>
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">scale</span><span class="p">(</span><span class="n">v</span><span class="p">:</span> <span class="n">BufferView</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">],</span> <span class="n">factor</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">size</span><span class="p">):</span>
-        <span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">factor</span>
-
-<span class="c1"># No dtype — Quadrants infers it from the ndarray passed at call time:</span>
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">scale_any</span><span class="p">(</span><span class="n">v</span><span class="p">:</span> <span class="n">BufferView</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">size</span><span class="p">):</span>
-        <span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mf">2.0</span>
-
-<span class="n">scale</span><span class="p">(</span><span class="n">data</span><span class="p">[:</span><span class="mi">32</span><span class="p">],</span> <span class="mf">2.0</span><span class="p">)</span>
-<span class="n">scale_any</span><span class="p">(</span><span class="n">data</span><span class="p">[:</span><span class="mi">32</span><span class="p">])</span>  <span class="c1"># dtype inferred as qd.f32 from data</span>
-</pre></div>
-</div>
-<p>Both forms are equivalent at runtime. Use <code class="docutils literal notranslate"><span class="pre">BufferView[dtype]</span></code> when you want the annotation to document the expected type; use plain <code class="docutils literal notranslate"><span class="pre">BufferView</span></code> when the dtype varies or is determined at initialization time.</p>
-<p><code class="docutils literal notranslate"><span class="pre">v.size</span></code> gives the number of elements in the view; <code class="docutils literal notranslate"><span class="pre">v.shape</span></code> gives the equivalent tuple <code class="docutils literal notranslate"><span class="pre">(size,)</span></code>. Subscript <code class="docutils literal notranslate"><span class="pre">v[i]</span></code> transparently accesses <code class="docutils literal notranslate"><span class="pre">data[offset</span> <span class="pre">+</span> <span class="pre">i]</span></code>.</p>
 </section>
-<section id="debug-mode-bounds-checking-and-callstack-diagnostics">
-<h2>Debug mode: bounds checking and callstack diagnostics<a class="headerlink" href="#debug-mode-bounds-checking-and-callstack-diagnostics" title="Link to this heading">#</a></h2>
-<p>With <code class="docutils literal notranslate"><span class="pre">debug=True</span></code>, every subscript on a <code class="docutils literal notranslate"><span class="pre">BufferView</span></code> is bounds-checked against <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">size)</span></code>. An out-of-bounds access raises <code class="docutils literal notranslate"><span class="pre">QuadrantsAssertionError</span></code> with a message that includes the kernel name, thread ID, the index, the view’s offset and size, and the full compilation-time callstack:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cpu</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<section id="writing-new-tests">
+<h2>Writing new tests<a class="headerlink" href="#writing-new-tests" title="Link to this heading">#</a></h2>
+<p>The standard recipe combines <code class="docutils literal notranslate"><span class="pre">&#64;test_utils.test(...)</span></code> (arch / option matrix) with <code class="docutils literal notranslate"><span class="pre">&#64;pytest.mark.parametrize</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tests</span><span class="w"> </span><span class="kn">import</span> <span class="n">test_utils</span>
 
-<span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">writer</span><span class="p">(</span><span class="n">v</span><span class="p">:</span> <span class="n">BufferView</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">],</span> <span class="n">idx</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">):</span>
-    <span class="n">v</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="mf">99.0</span>                  <span class="c1"># OOB when idx &gt;= size</span>
 
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span><span class="n">v</span><span class="p">:</span> <span class="n">BufferView</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">]):</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">size</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">writer</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>      <span class="c1"># passes out-of-range index</span>
-
-<span class="n">N</span> <span class="o">=</span> <span class="mi">32</span>
-<span class="n">data</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
-<span class="n">kernel</span><span class="p">(</span><span class="n">data</span><span class="p">[:</span><span class="mi">16</span><span class="p">])</span>
+<span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">parametrize</span><span class="p">(</span><span class="s2">&quot;n&quot;</span><span class="p">,</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="n">pytest</span><span class="o">.</span><span class="n">param</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="n">marks</span><span class="o">=</span><span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">slow</span><span class="p">)])</span>
+<span class="nd">@test_utils</span><span class="o">.</span><span class="n">test</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">,</span> <span class="n">default_fp</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">test_my_thing</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+    <span class="o">...</span>
 </pre></div>
 </div>
-<p>Output:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">exception</span><span class="o">.</span><span class="n">QuadrantsAssertionError</span><span class="p">:</span>
-<span class="n">BufferView</span> <span class="n">Out</span> <span class="n">Of</span> <span class="n">Range</span><span class="p">:</span> <span class="n">kernel</span><span class="p">[</span><span class="n">kernel</span><span class="p">]</span> <span class="n">tid</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">got</span> <span class="n">index</span> <span class="mi">16</span> <span class="p">(</span><span class="n">offset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span><span class="o">.</span>
-<span class="n">Callstack</span><span class="p">:</span>
-<span class="n">kernel</span> <span class="p">(</span><span class="n">script</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">11</span><span class="p">)</span>
-  <span class="n">writer</span> <span class="p">(</span><span class="n">script</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">7</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>The callstack shows every function frame from the kernel down to the leaf function where the access occurred. Bounds checking has no cost when <code class="docutils literal notranslate"><span class="pre">debug=False</span></code> (the default).</p>
-</section>
-<section id="limitations">
-<h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">&#64;test_utils.test</span></code> is what wires the test into the per-backend matrix and applies platform exclusions (<code class="docutils literal notranslate"><span class="pre">exclude=</span></code>), extension requirements (<code class="docutils literal notranslate"><span class="pre">require=</span></code>, e.g. <code class="docutils literal notranslate"><span class="pre">qd.extension.data64</span></code> for f64 tests), and per-test options (<code class="docutils literal notranslate"><span class="pre">default_fp</span></code>, <code class="docutils literal notranslate"><span class="pre">fast_math</span></code>, etc.). See <code class="docutils literal notranslate"><span class="pre">tests/test_utils.py</span></code> for the full surface.</p>
+<p>Common helpers in <code class="docutils literal notranslate"><span class="pre">tests/test_utils.py</span></code>:</p>
 <ul class="simple">
-<li><p>Only <strong>1D</strong> ndarrays are supported as the backing buffer.</p></li>
-<li><p>Ndarrays with <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> are not supported. BufferView will raise <code class="docutils literal notranslate"><span class="pre">TypeError</span></code> on construction.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_utils.skip_if_f64_unsupported(dtype)</span></code> — skip the current test at runtime if <code class="docutils literal notranslate"><span class="pre">dtype</span> <span class="pre">==</span> <span class="pre">qd.f64</span></code> and the active backend can’t carry f64 through buffer I/O (Metal, MoltenVK on Darwin). Use inside a parametrized test that sweeps both f32 and f64.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_utils.expected_archs()</span></code> — list of archs that the current <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS</span></code> allows. Used to skip tests with no satisfiable arch.</p></li>
 </ul>
+</section>
+<section id="advanced">
+<h2>Advanced<a class="headerlink" href="#advanced" title="Link to this heading">#</a></h2>
+<p>Optional knobs and runtime details. The defaults work for most contributors.</p>
+<section id="per-test-timeout">
+<h3>Per-test timeout<a class="headerlink" href="#per-test-timeout" title="Link to this heading">#</a></h3>
+<p>Per-test timeouts default to 600 s and are enforced by <code class="docutils literal notranslate"><span class="pre">pytest_hardtle</span></code>, a CFFI-compiled C watchdog that can kill tests hung in native GPU calls even when the GIL is held.</p>
+</section>
+<section id="kernel-compilation-cache">
+<h3>Kernel compilation cache<a class="headerlink" href="#kernel-compilation-cache" title="Link to this heading">#</a></h3>
+<p>During each test session the kernel compilation cache lives in a fresh, empty temp directory created by pytest’s <a class="reference external" href="https://docs.pytest.org/en/stable/how-to/tmp_path.html"><code class="docutils literal notranslate"><span class="pre">tmp_path_factory</span></code></a> — typically <code class="docutils literal notranslate"><span class="pre">/tmp/pytest-of-&lt;user&gt;/pytest-&lt;N&gt;/qdcache0/</span></code>. Old session directories are cleaned up automatically by pytest’s retention policy. This cache is separate from the user-facing <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/</span></code> cache, and avoids recompiling identical kernels after each <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> cycle within a session.</p>
+</section>
+<section id="per-file-timing-breakdown">
+<h3>Per-file timing breakdown<a class="headerlink" href="#per-file-timing-breakdown" title="Link to this heading">#</a></h3>
+<p>Set <code class="docutils literal notranslate"><span class="pre">QD_FILE_TIMING=1</span></code> to print a per-file duration summary at the end of the session:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">QD_FILE_TIMING</span><span class="o">=</span><span class="mi">1</span> <span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+<p>This is enabled by default in the Mac CI job; the results appear in the GitHub Actions job summary and are the primary tool for identifying slow test files.</p>
+</section>
 </section>
 </section>
 
@@ -533,20 +543,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="compound_types.html"
+       href="init_options.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Compound types</p>
+        <p class="prev-next-title">qd.init options</p>
       </div>
     </a>
     <a class="right-next"
-       href="static.html"
+       href="kernel_coverage.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">qd.static</p>
+        <p class="prev-next-title">Kernel code coverage</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -569,18 +579,25 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-a-view">Creating a view</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#slicing-a-view-subview">Slicing a view (subview)</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#kernel-type-annotation">Kernel type annotation</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debug-mode-bounds-checking-and-callstack-diagnostics">Debug mode: bounds checking and callstack diagnostics</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#running-the-tests">Running the tests</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#markers">Markers</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pytest-mark-slow"><code class="docutils literal notranslate"><span class="pre">@pytest.mark.slow</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#writing-new-tests">Writing new tests</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced">Advanced</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-test-timeout">Per-test timeout</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#kernel-compilation-cache">Kernel compilation cache</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-file-timing-breakdown">Per-file timing breakdown</a></li>
+</ul>
+</li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/user_guide/buffer_view.md.txt">
+    <a href="../_sources/user_guide/unit_testing.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
