@@ -115,6 +115,14 @@ def _struct_nd_paths_for(arg: Any) -> list[tuple]:
     members are declared in ``__init__`` and not added later. If you need to add an ndarray attribute after the first
     kernel launch on an instance of a given class, the new attribute won't be tracked. Call ``invalidate_struct_nd_
     paths_for`` (below) or restart the program.
+
+    FIXME (Codex #3 on PR #704, https://github.com/Genesis-Embodied-AI/quadrants/pull/704#discussion_r3253281957):
+    the cache is keyed by ``type(arg)`` only. If two instances of the same class have *polymorphic attribute
+    structure* — e.g. instance A has ``.x`` as a ``qd.ndarray``-backed ``qd.Tensor`` while instance B has the same
+    ``.x`` as a field-backed ``qd.Tensor`` — the paths discovered from the first-walked instance are reused for the
+    second. ``_collect_struct_nd_descriptors`` then unconditionally reads ndarray-only attrs (``element_type``,
+    ``grad``, ``_qd_layout``) on what is now a ``ScalarField``, raising before the kernel can run. The fix is the
+    per-instance walk implemented on top of this branch in PR #705; this branch ships the class-level cache as-is.
     """
     cls = type(arg)
     paths = _struct_nd_paths_cache.get(cls)
@@ -129,6 +137,11 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
     """Emit per-ndarray shape descriptors ``(joined-path, element_type, ndim, needs_grad, layout)`` for every ndarray
     reachable from ``arg``. Used by the template-mapper to refine the spec key for ``@qd.data_oriented`` args holding
     ndarrays — see the data_oriented branch in ``_extract_arg``.
+
+    FIXME (Codex #3 on PR #704): when a polymorphic instance reuses a cached path that pointed to an ``Ndarray`` on
+    the first-walked instance, ``v`` here can be a ``ScalarField`` and the ``v.element_type`` / ``v.grad`` /
+    ``v._qd_layout`` reads will raise. See ``_struct_nd_paths_for`` above for details. Fixed in PR #705 via the
+    per-instance walk redesign.
     """
     for chain in _struct_nd_paths_for(arg):
         v = arg
