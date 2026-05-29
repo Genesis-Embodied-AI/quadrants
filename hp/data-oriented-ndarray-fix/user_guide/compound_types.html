@@ -456,20 +456,34 @@
 <td class="text-center"><p>yes</p></td>
 <td class="text-center"><p>no</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> methods on <code class="docutils literal notranslate"><span class="pre">self</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> instance methods</p></td>
 <td class="text-center"><p>no</p></td>
 <td class="text-center"><p>yes</p></td>
 <td class="text-center"><p>no</p></td>
 </tr>
-<tr class="row-even"><td><p>Member declaration</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> instance methods</p></td>
+<td class="text-center"><p>no</p></td>
+<td class="text-center"><p>yes</p></td>
+<td class="text-center"><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p>Member declaration</p></td>
 <td class="text-center"><p>type-annotated class fields</p></td>
 <td class="text-center"><p>live attributes (no annotations)</p></td>
 <td class="text-center"><p>type-annotated class fields</p></td>
+</tr>
+<tr class="row-even"><td><p>Kernel-arg annotation</p></td>
+<td class="text-center"><p><code class="docutils literal notranslate"><span class="pre">MyStruct</span></code> (the dataclass type)</p></td>
+<td class="text-center"><p><code class="docutils literal notranslate"><span class="pre">qd.Template</span></code></p></td>
+<td class="text-center"><p><code class="docutils literal notranslate"><span class="pre">MyStruct</span></code> (the struct type)</p></td>
 </tr>
 </tbody>
 </table>
 </div>
 <p>Note on the “Members can be tensors” row for <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>: a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>’s members must be primitives, fixed vectors, or fixed matrices — not <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>. However, <em>allocating</em> a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> as a tensor of structs in SoA layout (<code class="docutils literal notranslate"><span class="pre">MyStruct.field(shape=(N,),</span> <span class="pre">layout=qd.Layout.SOA)</span></code>) extrudes each member into its own length-<code class="docutils literal notranslate"><span class="pre">N</span></code> tensor — so the resulting <em>collection</em> effectively behaves like a struct of parallel tensors, even though the <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> type itself doesn’t have tensor-typed members. See the <a class="reference internal" href="#qddataclass"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> section</span></a> below.</p>
+<blockquote>
+<div><p>⚠️ <strong>Deprecation: <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> instance passed via <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>.</strong>
+Passing a <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> instance into a <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>-annotated kernel parameter was never intended to be supported, and only works inadvertently. As of this release the combination emits a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> at compile time; in a future release it will become an error. The recommended annotation for a <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> is the dataclass type itself (<code class="docutils literal notranslate"><span class="pre">def</span> <span class="pre">k(s:</span> <span class="pre">MyStruct)</span></code>), which has a fast flatten-to-args path. For <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> containers continue to use <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> as before.</p>
+</div></blockquote>
 <p>See <a class="reference internal" href="#nesting-compatibility">Nesting compatibility</a> below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.</p>
 </section>
 <section id="dataclasses-dataclass">
@@ -577,19 +591,7 @@ my_struct.b[37] 5
 </section>
 <section id="frozen-vs-non-frozen">
 <h3>Frozen vs non-frozen<a class="headerlink" href="#frozen-vs-non-frozen" title="Link to this heading">#</a></h3>
-<p>A <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> may be either non-frozen (the default) or frozen (<code class="docutils literal notranslate"><span class="pre">&#64;dataclass(frozen=True)</span></code>). For most cases you don’t need <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code>: a regular dataclass can be passed to a kernel through a typed-dataclass annotation (<code class="docutils literal notranslate"><span class="pre">def</span> <span class="pre">k(s:</span> <span class="pre">MyStruct)</span></code>) without any restriction.</p>
-<p><code class="docutils literal notranslate"><span class="pre">frozen=True</span></code> becomes necessary when you want to pass the dataclass through <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code>. <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> uses the instance as a dict key inside the template-mapper, and a non-frozen dataclass has <code class="docutils literal notranslate"><span class="pre">__hash__</span> <span class="pre">=</span> <span class="pre">None</span></code>, so the template-mapper can’t use it as a cache key. The typical case where you need this is when the dataclass holds a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> child — those must reach the kernel via <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> (see <a class="reference internal" href="#nesting-compatibility">Nesting compatibility</a>).</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
-
-<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="k">class</span><span class="w"> </span><span class="nc">Bundle</span><span class="p">:</span>
-    <span class="n">sim</span><span class="p">:</span> <span class="n">MySimulation</span>   <span class="c1"># @qd.data_oriented</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="n">bundle</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">()):</span>
-    <span class="n">bundle</span><span class="o">.</span><span class="n">sim</span><span class="o">.</span><span class="n">step_once</span><span class="p">()</span>
-</pre></div>
-</div>
+<p>A <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> may be either non-frozen (the default) or frozen (<code class="docutils literal notranslate"><span class="pre">&#64;dataclass(frozen=True)</span></code>). Both work as kernel arguments, but <strong>kernel launch is faster with <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code></strong> (because it enables some optimizations that would otherwise not be possible). Recommend <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code> unless you specifically need to rebind members after construction.</p>
 </section>
 <section id="under-the-hood">
 <h3>Under the hood<a class="headerlink" href="#under-the-hood" title="Link to this heading">#</a></h3>
@@ -744,7 +746,7 @@ my_struct.b[37] 5
 <td class="text-center"><p>yes</p></td>
 <td class="text-center"><p>yes</p></td>
 <td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>yes [*1]</p></td>
+<td class="text-center"><p>deprecated [*1]</p></td>
 <td class="text-center"><p>yes</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></p></td>
@@ -766,7 +768,7 @@ my_struct.b[37] 5
 </tbody>
 </table>
 </div>
-<p>[*1] A <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> may <em>hold</em> a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member, but the <strong>outer kernel-arg annotation</strong> must be <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code>, not the dataclass type itself. Passing a typed-dataclass kernel arg (<code class="docutils literal notranslate"><span class="pre">def</span> <span class="pre">k(s:</span> <span class="pre">Outer)</span></code>) whose member type is a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class raises a clear <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time pointing you to <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code>. The reason: typed-dataclass kernel args are flattened from annotations, but <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> carries no per-member annotations — its members are walked from the live instance, which only happens on the template path.</p>
+<p>[*1] A <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> whose member type is <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> is currently deprecated. It only ever worked through the <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> outer-arg path (typed-dataclass annotations error out because <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> carries no per-member annotations to flatten), and that path is itself deprecated — see the <a class="reference internal" href="#overview">deprecation notice in Overview</a>. To hold a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> instance, make the outer container <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> too, rather than a <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code>.</p>
 <section id="outer-kernel-arg-annotation">
 <h3>Outer kernel-arg annotation<a class="headerlink" href="#outer-kernel-arg-annotation" title="Link to this heading">#</a></h3>
 <p>The outermost annotation you put on the kernel parameter determines how the container is walked:</p>
@@ -784,24 +786,23 @@ my_struct.b[37] 5
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MyDataclass</span></code> (dataclass type)</p></td>
 <td><p>per-member flatten using annotations</p></td>
-<td><p>needs every member to have a quadrants-typed annotation</p></td>
+<td><p>recommended for <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code>; needs every member to have a quadrants-typed annotation</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.template()</span></code></p></td>
-<td><p>value-driven walk of <code class="docutils literal notranslate"><span class="pre">vars(self)</span></code> / dataclass members</p></td>
-<td><p>supports the full nesting matrix above</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.Template</span></code></p></td>
+<td><p>value-driven walk of <code class="docutils literal notranslate"><span class="pre">vars(self)</span></code></p></td>
+<td><p>for <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> containers (and primitives). <strong>Not</strong> supported for <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> — see the <a class="reference internal" href="#overview">deprecation notice in Overview</a>.</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Two practical consequences:</p>
+<p>Practical consequence:</p>
 <ul class="simple">
-<li><p><strong>Containers with <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> anywhere in the tree</strong> must be passed via <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> (or be the <code class="docutils literal notranslate"><span class="pre">self</span></code> of a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> method on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class). Using a typed-dataclass annotation on the outermost arg errors.</p></li>
-<li><p><strong>Passing a <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> via <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> requires <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code></strong> — see <a class="reference internal" href="#frozen-vs-non-frozen">Frozen vs non-frozen</a> above.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> containers</strong> must be passed via <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> (or be the <code class="docutils literal notranslate"><span class="pre">self</span></code> of a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> method on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class). Using a typed-dataclass annotation on the outermost arg errors.</p></li>
 </ul>
 </section>
 <section id="reassigning-ndarray-members">
 <h3>Reassigning ndarray members<a class="headerlink" href="#reassigning-ndarray-members" title="Link to this heading">#</a></h3>
-<p>For both <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> containers passed via <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code>, reassigning an ndarray member between kernel launches is supported, including changes to <code class="docutils literal notranslate"><span class="pre">dtype</span></code>, <code class="docutils literal notranslate"><span class="pre">ndim</span></code>, or layout. A new specialised kernel is compiled and cached for the new shape; subsequent launches with the original shape continue to use the original cached kernel.</p>
+<p>For <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> containers passed via <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>, reassigning an ndarray member between kernel launches is supported, including changes to <code class="docutils literal notranslate"><span class="pre">dtype</span></code>, <code class="docutils literal notranslate"><span class="pre">ndim</span></code>, or layout. A new specialised kernel is compiled and cached for the new shape; subsequent launches with the original shape continue to use the original cached kernel. (For <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> containers — passed via the dataclass-type annotation — the member binding follows the standard dataclass mutability rules: frozen dataclasses can’t rebind, non-frozen ones can, and a rebind triggers a fresh kernel arg setup on the next launch.)</p>
 </section>
 <section id="restrictions">
 <h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
