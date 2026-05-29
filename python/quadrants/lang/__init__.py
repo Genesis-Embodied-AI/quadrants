@@ -50,6 +50,7 @@ __all__ = [
         "source_builder",
         "stream",
         "struct",
+        "unpacked_vector",
         "util",
     ]
 ]
