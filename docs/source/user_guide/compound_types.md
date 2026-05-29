@@ -13,9 +13,11 @@ The following compound types are available:
 |-------------------------------------|:-------------------------------------:|:-------------------------------------:|:-----------------------------------:|
 | Exists as a struct in the kernel    | no (members flattened to args)        | no (members flattened to args)        | yes (fixed memory layout)           |
 | Can be used as tensor element type  | no                                    | no                                    | yes                                 |
-| Can hold ndarrays                   | yes                                   | yes                                   | no                                  |
+| Members can be tensors (field, ndarray) | yes                               | yes                                   | no                                  |
 | `@qd.kernel` methods on `self`      | no                                    | yes                                   | no                                  |
 | Member declaration                  | type-annotated class fields           | live attributes (no annotations)      | type-annotated class fields         |
+
+Note on the "Members can be tensors" row for `@qd.dataclass`: a `@qd.dataclass`'s members must be primitives, fixed vectors, or fixed matrices — not `qd.field` / `qd.ndarray`. However, *allocating* a `@qd.dataclass` as a tensor of structs in SoA layout (`MyStruct.field(shape=(N,), layout=qd.Layout.SOA)`) splits each member into its own length-`N` tensor — so the resulting *collection* effectively behaves like a struct of parallel tensors, even though the `@qd.dataclass` type itself doesn't have tensor-typed members. See the [`@qd.dataclass` section](#qddataclass) below.
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
 
