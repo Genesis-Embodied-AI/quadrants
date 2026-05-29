@@ -12,7 +12,7 @@ The following compound types are available:
 | property                            | `@dataclasses.dataclass`     | `@qd.data_oriented`              | `@qd.dataclass`                     |
 |-------------------------------------|:----------------------------:|:--------------------------------:|:-----------------------------------:|
 | Kernel-side representation          | none (flattened away)        | none (flattened away)            | real type with fixed memory layout  |
-| Can be tensor element type          | no                           | no                               | yes                                 |
+| Can be used as tensor element type  | no                           | no                               | yes                                 |
 | Can hold ndarrays                   | yes                          | yes                              | no                                  |
 | `@qd.kernel` methods on `self`      | no                           | yes                              | no                                  |
 | Member declaration                  | type-annotated class fields  | live attributes (no annotations) | type-annotated class fields         |
