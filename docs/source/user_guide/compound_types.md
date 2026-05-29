@@ -14,8 +14,8 @@ The following compound types are available:
 | Exists as a struct in the kernel    | no (members flattened to args)        | no (members flattened to args)        | yes (fixed memory layout)           |
 | Can be used as tensor element type  | no                                    | no                                    | yes                                 |
 | Members can be tensors (field, ndarray) | yes                               | yes                                   | no                                  |
-| `@qd.kernel` methods on `self`      | no                                    | yes                                   | no                                  |
-| `@qd.func` methods on `self`        | no (typed annotation flattens away `self`) | yes                              | yes                                 |
+| `@qd.kernel` instance methods       | no                                    | yes                                   | no                                  |
+| `@qd.func` instance methods         | no (typed annotation flattens the dataclass into per-member kernel args, dropping the instance binding) | yes | yes |
 | Member declaration                  | type-annotated class fields           | live attributes (no annotations)      | type-annotated class fields         |
 | Kernel-arg annotation               | `MyStruct` (the dataclass type)       | `qd.template()`                       | `MyStruct` (the struct type)        |
 
