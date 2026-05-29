@@ -264,6 +264,60 @@ def test_unpacked_vector_nested_in_outer_dataclass():
     assert out.to_numpy()[0] == 24.0
 
 
+def test_unpacked_vector_struct_field_subscript():
+    """``Tile.field(shape=...)`` should preserve ``UnpackedVector`` semantics: ``f[i].r[k]`` must lower to the synthetic
+    ``f[i]._r{k}`` field, not fall through to a plain attribute lookup. Regression test for the ``impl.subscript`` /
+    ``_IntermediateStruct`` codepath: the ``_qd_unpacked_groups`` tag must propagate from ``StructType.field``'s
+    ``StructField`` onto every per-index intermediate struct it produces."""
+    _qd_init_cuda()
+
+    @qd.dataclass
+    class Tile:
+        r: qd.types.UnpackedVector[qd.f32, 4]
+
+    tile_field = Tile.field(shape=(2,))
+    out = qd.field(dtype=qd.f32, shape=(1,))
+
+    @qd.kernel(fastcache=False)
+    def k(o: qd.template()):
+        for n in range(2):
+            for i in qd.static(range(4)):
+                tile_field[n].r[i] = qd.cast(n * 10 + i, qd.f32)
+        o[0] = tile_field[0].r[1] + tile_field[1].r[3]
+
+    k(out)
+    assert out.to_numpy()[0] == 14.0  # 1 + 13
+
+
+def test_unpacked_vector_struct_field_subscript_nested():
+    """Same as above, but with ``Outer.field(shape=...)`` where ``Outer`` contains an ``Inner`` with an
+    ``UnpackedVector``. The nested ``StructField`` for ``inner`` must also carry the group tag, so
+    ``outer_field[i].inner.r[k]`` resolves."""
+    _qd_init_cuda()
+
+    @qd.dataclass
+    class Inner:
+        r: qd.types.UnpackedVector[qd.f32, 4]
+
+    @qd.dataclass
+    class Outer:
+        inner: Inner
+        scale: qd.f32
+
+    outer_field = Outer.field(shape=(1,))
+    out = qd.field(dtype=qd.f32, shape=(1,))
+
+    @qd.kernel(fastcache=False)
+    def k(o: qd.template()):
+        for i in qd.static(range(4)):
+            outer_field[0].inner.r[i] = qd.cast(i + 5, qd.f32)
+        outer_field[0].scale = qd.f32(3.0)
+        o[0] = outer_field[0].inner.r[2] * outer_field[0].scale
+
+    k(out)
+    assert out.to_numpy()[0] == 21.0  # 7 * 3
+
+
 def test_unpacked_vector_collision_with_earlier_field():
     """A user-declared field whose name matches a future synthetic field of an UnpackedVector group should raise
     rather than silently overwriting."""
@@ -320,6 +374,10 @@ if __name__ == "__main__":
     print("marker call rejection test passed")
     test_unpacked_vector_nested_in_outer_dataclass()
     print("nested-in-outer-dataclass test passed")
+    test_unpacked_vector_struct_field_subscript()
+    print("struct_field subscript test passed")
+    test_unpacked_vector_struct_field_subscript_nested()
+    print("struct_field nested subscript test passed")
     test_unpacked_vector_collision_with_earlier_field()
     print("collision-with-earlier-field test passed")
     test_unpacked_vector_collision_with_later_field()

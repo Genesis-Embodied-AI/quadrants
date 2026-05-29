@@ -830,7 +830,15 @@ class StructType(CompoundType):
             setattr(struct, "_qd_unpacked_groups", self._unpacked_groups)
 
     def field(self, **kwargs):
-        return Struct.field(self.members, self.methods, **kwargs)
+        # Tag the returned ``StructField`` with this type's ``_unpacked_groups`` so ``impl.subscript`` can transfer the
+        # metadata onto the ``_IntermediateStruct`` it builds for ``f[i]`` -- without that, ``f[i].r[k]`` on a struct
+        # field whose type declared ``r: UnpackedVector[...]`` would fall through to a plain attribute lookup and fail.
+        # Nested cases work transparently because ``Struct.field`` calls ``dtype.field(...)`` for any ``StructType``
+        # member, recursing into this method.
+        field = Struct.field(self.members, self.methods, **kwargs)
+        if self._unpacked_groups:
+            setattr(field, "_qd_unpacked_groups", self._unpacked_groups)
+        return field
 
     def __str__(self):
         """Python scope struct type print support."""

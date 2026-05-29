@@ -338,7 +338,15 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
         if isinstance(value, StructField):
             entries = {k: subscript(ast_builder, v, *indices) for k, v in value._items}
             entries["__struct_methods"] = value.struct_methods
-            return _IntermediateStruct(entries)
+            struct = _IntermediateStruct(entries)
+            # Carry ``_qd_unpacked_groups`` from the originating ``StructType`` (attached to the ``StructField`` in
+            # ``StructType.field``) onto the per-index intermediate struct so the AST transformer recognises
+            # ``f[i].r[k]`` as an UnpackedVector group access. Nested StructFields contribute their own tags via the
+            # recursive ``subscript`` call above, so ``outer_field[i].inner.r[k]`` also works.
+            groups = getattr(value, "_qd_unpacked_groups", None)
+            if groups is not None:
+                setattr(struct, "_qd_unpacked_groups", groups)
+            return struct
         return Expr(ast_builder.expr_subscript(_var, indices_expr_group, dbg_info))
     if isinstance(value, AnyArray):
         assert indices_expr_group is not None
