@@ -127,7 +127,7 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 ### Under the hood
 
-A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. That's why members are read-only: the values are captured at compile time and re-assigning them afterwards has no effect on running kernels.
+A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. Inside a kernel, tensor members are read-write through indexing (`s.x[i] = ...`) since their contents live on the device, but the member *binding* itself (`s.x = other_tensor`) cannot be reassigned from inside a kernel.
 
 ## qd.data_oriented
 
