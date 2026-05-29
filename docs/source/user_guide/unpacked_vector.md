@@ -106,7 +106,7 @@ Use `UnpackedVector` when:
 - the kernel body accesses it with python-int / `qd.static`-resolved indices (typically unrolled inner loops), and
 - you have measured (or strongly suspect) that an equivalent `qd.types.vector(N, dtype)` is leaving slots in local memory under register pressure.
 
-A good signal is `ptxas` reporting non-zero "bytes spill stores / loads" for the kernel, or `ld.local` / `st.local` instructions in the generated PTX that don't correspond to a deliberate shared-memory access.
+A good signal is `ptxas` reporting non-zero "bytes spill stores / loads" for the kernel, or `ld.local` / `st.local` instructions in the generated PTX that don't correspond to a deliberate shared-memory access. See [How to check for spills](#how-to-check-for-spills) below for the concrete workflow.
 
 Prefer `qd.types.vector(N, dtype)` for small groups where register pressure is low and runtime indexing is needed — vectors keep all the usual arithmetic conveniences (element-wise ops, dot products, etc.) that `UnpackedVector` does not.
 
@@ -132,6 +132,70 @@ Prefer `qd.types.vector(N, dtype)` for small groups where register pressure is l
 | `qd.types.UnpackedVector[dtype, N]`       | `N` independent `alloca`s       | no               | groups that need to stay register-resident under pressure |
 
 Under low register pressure the three options generate similar code. Under high register pressure `UnpackedVector` is the one most likely to stay in registers because the optimiser can promote each slot independently.
+
+# Advanced
+
+## How to check for spills
+
+Quadrants compiles LLVM → PTX directly via the LLVM NVPTX target — it does not invoke `nvcc` / `ptxas` at compile time, so the familiar `ptxas --verbose` "X bytes spill stores" output is not produced inline. To get that diagnostic you dump the PTX from Quadrants and run `ptxas -v` on it yourself. Three workflows, in order of usefulness:
+
+### 1. Dump PTX, run `ptxas -v` offline
+
+```python
+qd.init(
+    arch=qd.cuda,
+    print_kernel_asm=True,    # dump PTX to CWD as quadrants_kernel_nvptx_NNNN.ptx
+    offline_cache=False,      # bypass the kernel cache so the dump fires every time
+)
+```
+
+Run your kernel once. For each `quadrants_kernel_nvptx_NNNN.ptx` file in the working directory:
+
+```bash
+ptxas --verbose -arch=sm_86 quadrants_kernel_nvptx_0007.ptx -o /dev/null 2>&1 | grep -E "spill|stack"
+```
+
+Sample output:
+
+```
+ptxas info    : Used 64 registers, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 96 registers, 384 bytes stack frame, 256 bytes spill stores, 128 bytes spill loads
+```
+
+`spill stores` + `spill loads` > 0 means the register allocator gave up on something. `stack frame` > 0 indicates local memory in use (which is usually, but not always, spills — `qd.simt.shared_array` and explicitly addressed locals also count).
+
+Adjust `-arch=sm_XX` to match your GPU (`sm_86` = Ampere consumer / RTX 30, `sm_89` = Ada / RTX 40, `sm_90` = Hopper).
+
+### 2. Inspect the PTX directly for `ld.local` / `st.local`
+
+```bash
+grep -nE "ld\.local|st\.local" quadrants_kernel_nvptx_0007.ptx | head -20
+```
+
+Any matches that aren't from deliberate `qd.simt.shared_array` accesses (which show up as `ld.shared` / `st.shared`, not `.local`) are spill traffic.
+
+### 3. Runtime spill counters via Nsight Compute (most authoritative)
+
+```bash
+ncu --set full --section MemoryWorkloadAnalysis ./your_program
+```
+
+Look at the "Memory Workload Analysis → Local Memory" section. This reports *actually executed* local-memory loads / stores, which catches issues `ptxas` doesn't (e.g. driver-stage JIT spills on a different GPU, hot-path-only spills that static analysis misses).
+
+### Also useful: post-optimisation LLVM IR
+
+```python
+qd.init(arch=qd.cuda, print_kernel_llvm_ir_optimized=True)
+```
+
+Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. Look for `alloca` instructions that survived `mem2reg` — those will become PTX local memory.
+
+### Gotcha: the offline cache
+
+`print_kernel_asm` and `print_kernel_llvm_ir*` only fire on the first compile per kernel-key. If your kernel is already in the offline cache, the dump won't be regenerated. Either:
+
+- pass `offline_cache=False` to `qd.init` (cleanest), or
+- delete the cache (path is printed at `qd.init` time; typically under `~/.cache/quadrants/`).
 
 ## See also
 
