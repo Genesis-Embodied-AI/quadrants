@@ -19,7 +19,6 @@ from quadrants.lang.unpacked_vector import (
     UnpackedVector,
     _expand_unpacked_vector_naming,
     _UnpackedVectorRef,
-    unpacked_array,
 )
 from quadrants.lang.util import (
     cook_dtype,
@@ -854,4 +853,4 @@ def dataclass(cls):
     return StructType(**fields)
 
 
-__all__ = ["Struct", "StructField", "dataclass", "UnpackedVector", "unpacked_array", "_UnpackedVectorRef"]
+__all__ = ["Struct", "StructField", "dataclass", "UnpackedVector", "_UnpackedVectorRef"]

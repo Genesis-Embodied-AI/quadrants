@@ -160,4 +160,4 @@ class Particle:
     mass: qd.f32
 ```
 
-For larger statically-indexed groups (e.g. a row or tile of scalars that you want SROA to register-promote independently), see {doc}`unpacked_array`.
+For larger statically-indexed groups (e.g. a row or tile of scalars that you want SROA to register-promote independently), see {doc}`unpacked_vector`.

@@ -1,20 +1,19 @@
 # type: ignore
-"""``qd.unpacked_array`` -- indexed groups of independently-allocated scalar fields on ``@qd.dataclass``.
+"""``UnpackedVector[dtype, count]`` -- indexed groups of independently-allocated scalar fields on ``@qd.dataclass``.
 
-An ``unpacked_array(N, dtype)`` annotation expands at struct-definition time into N individually-named synthetic scalar
+An ``UnpackedVector[dtype, N]`` annotation expands at struct-definition time into N individually-named synthetic scalar
 members (``_{group}0`` .. ``_{group}{N-1}``). The AST transformer rewrites ``obj.{group}[i]`` into a direct reference to
 ``obj._{group}{i}`` for python-int / ``qd.static``-resolved indices, so generated LLVM IR / PTX is byte-identical to a
 hand-rolled named-field struct.
 
 Compare to ``qd.types.vector(N, dtype)`` which is the *packed* layout: one ``alloca`` covers all N slots. Packed storage
 is fine until register pressure rises -- once LLVM SROA fails to decompose the packed ``alloca`` (e.g. two concurrent
-tiles in a Cholesky + TRSM kernel), the whole group spills to local memory as a unit. ``unpacked_array`` lays each slot
+tiles in a Cholesky + TRSM kernel), the whole group spills to local memory as a unit. ``UnpackedVector`` lays each slot
 out in its own ``alloca`` up front, so SROA + ``mem2reg`` can promote slots independently and the optimiser can spill
 only the ones it has to. The ergonomic indexed-access syntax is preserved at the source level.
 
 Public:
-- ``UnpackedVector``        - type wrapper used as the annotation value
-- ``unpacked_array``        - factory: ``r: qd.unpacked_array(N, dtype)``
+- ``UnpackedVector``        - subscriptable type: ``r: UnpackedVector[qd.f32, 32]``
 
 Internal (used by ``StructType`` and the AST transformer):
 - ``_expand_unpacked_vector_naming(group, i)`` - synthetic-field naming convention
@@ -29,55 +28,66 @@ from quadrants.lang.exception import QuadrantsSyntaxError
 
 
 class UnpackedVector:
-    """Type wrapper for a group of N scalar fields exposed via indexed syntax on a ``@qd.dataclass``.
+    """Subscriptable type for a group of N scalar fields exposed via indexed syntax on a ``@qd.dataclass``.
 
-    See :func:`unpacked_array` for the user-facing constructor and the motivation writeup. Holding only ``count`` and
-    ``dtype``, this object is consumed at struct-definition time by ``StructType.__init__`` to lay out the N synthetic
-    scalar fields.
+    Use as ``r: UnpackedVector[dtype, count]`` -- the subscript expression returns the layout marker that
+    ``StructType.__init__`` consumes at struct-definition time to lay out the N synthetic scalar fields. The marker
+    itself stores only ``count`` and ``dtype``.
+
+    The subscript form (vs. a function-call factory) is chosen so the spelling at a use site visually reads as a type
+    annotation, not a value-construction. Subscripting / calling a marker instance directly raises
+    ``QuadrantsSyntaxError`` -- those operations only make sense on the parameterised ``Struct`` field, not on the
+    annotation marker.
     """
 
     def __init__(self, count, dtype):
         if not isinstance(count, int) or count <= 0:
-            raise QuadrantsSyntaxError(f"unpacked_array count must be a positive int, got {count!r}")
+            raise QuadrantsSyntaxError(f"UnpackedVector count must be a positive int, got {count!r}")
         self.count = count
         self.dtype = dtype
 
+    def __class_getitem__(cls, params):
+        # ``UnpackedVector[dtype, count]`` -> marker instance. ``params`` is a 2-tuple from python's subscript protocol.
+        if not isinstance(params, tuple) or len(params) != 2:
+            raise QuadrantsSyntaxError(
+                "UnpackedVector must be parameterised as UnpackedVector[dtype, count] "
+                f"(got {params!r})"
+            )
+        dtype, count = params
+        if not isinstance(count, int):
+            raise QuadrantsSyntaxError(
+                "UnpackedVector[dtype, count] requires count to be a python int "
+                f"(got count={count!r}, type {type(count).__name__}); "
+                "did you mean UnpackedVector[dtype, N] with the dtype first?"
+            )
+        return cls(count, dtype)
+
     def __repr__(self):
-        return f"unpacked_array(count={self.count}, dtype={self.dtype})"
+        return f"UnpackedVector[{self.dtype}, {self.count}]"
 
+    # ----- misuse guards ----------------------------------------------------------------------------------------------
+    # An ``UnpackedVector`` marker instance is consumed by ``@qd.dataclass`` (which only reads ``.count`` / ``.dtype``).
+    # Any other operation on the instance is misuse -- typically the caller forgot to put the type in a ``@qd.dataclass``
+    # annotation, or expects the marker to be a runtime container. Catch the most likely follow-ups with a clear error.
 
-def unpacked_array(count, dtype):
-    """Declare a group of ``count`` independently-allocated fields of ``dtype`` on a ``@qd.dataclass``.
+    def __getitem__(self, _index):
+        raise QuadrantsSyntaxError(
+            "UnpackedVector[dtype, count] is a @qd.dataclass field annotation, not a runtime container -- "
+            "an already-parameterised marker has no values to subscript. If obj.r[i] raised this, "
+            "the class declaring `r` was probably decorated with @dataclasses.dataclass (or nothing) instead of "
+            "@qd.dataclass."
+        )
 
-    The annotation expands at struct-definition time into ``count`` individually-named scalar members (``_{group}0`` ..
-    ``_{group}{count-1}``). Each member gets its own LLVM ``alloca``, which lets SROA + ``mem2reg`` promote each slot
-    into its own SSA value independently. The contrast is with ``qd.types.vector(N, dtype)``, which lays all N slots
-    out in a single packed ``alloca``: when register pressure makes SROA fail to decompose the packed ``alloca``, the
-    whole group spills to local memory as a unit. With ``unpacked_array`` the storage is already unpacked, so the
-    optimiser can keep individual slots in registers and only spill the ones it has to.
-
-    Example::
-
-        @qd.dataclass
-        class Tile:
-            r: qd.unpacked_array(32, qd.f32)   # 32 scalar fields exposed as t.r[0..31]
-
-        t = Tile()
-        t.r[5] = 1.0       # lowers to direct write of synthetic field _r5
-        v = t.r[5]         # same as v = t._r5
-        for k in qd.static(range(32)):
-            t.r[k] = 0.0   # each iter is one AST node, not a 32-way cascade
-
-    For python-int / ``qd.static``-resolved indices, ``t.r[k]`` is rewritten by the AST transformer to the named-field
-    access ``t._r{k}``, producing identical LLVM IR / PTX to a struct declared with N individually-named scalar fields.
-
-    Runtime-int indexing is currently unsupported; use an explicit cascade helper for that case.
-    """
-    return UnpackedVector(count, dtype)
+    def __call__(self, *_args, **_kwargs):
+        raise QuadrantsSyntaxError(
+            "UnpackedVector[dtype, count] is a @qd.dataclass field annotation, not a constructor. "
+            "Use it as `r: UnpackedVector[dtype, count]` inside a class decorated with @qd.dataclass; "
+            "do not call the parameterised marker."
+        )
 
 
 def _expand_unpacked_vector_naming(group_name, index):
-    """Naming convention for the synthetic scalar fields of an ``unpacked_array`` group.
+    """Naming convention for the synthetic scalar fields of an ``UnpackedVector`` group.
 
     Public-ish so the AST transformer can mirror this without a circular import on ``struct``.
     """
@@ -107,19 +117,22 @@ class _UnpackedVectorRef:
     def _qd_field_for(self, index: int):
         if not isinstance(index, (int, np.integer)):
             raise QuadrantsSyntaxError(
-                f"unpacked_array {self._qd_group_name}[i] requires a python-int index "
+                f"UnpackedVector {self._qd_group_name}[i] requires a python-int index "
                 f"(possibly via qd.static); got runtime index of type {type(index).__name__}"
             )
         i = int(index)
         if i < 0 or i >= self._qd_count:
             raise QuadrantsSyntaxError(
-                f"unpacked_array index out of bounds: {self._qd_group_name}[{i}] " f"(count={self._qd_count})"
+                f"UnpackedVector index out of bounds: {self._qd_group_name}[{i}] (count={self._qd_count})"
             )
         field_name = self._qd_naming_fn(self._qd_group_name, i)
         return getattr(self._qd_struct, field_name)
 
     def __repr__(self) -> str:  # pragma: no cover - debug only
-        return f"<unpacked_array_ref group={self._qd_group_name!r} count={self._qd_count} " f"dtype={self._qd_dtype}>"
+        return (
+            f"<UnpackedVector_ref group={self._qd_group_name!r} "
+            f"count={self._qd_count} dtype={self._qd_dtype}>"
+        )
 
 
-__all__ = ["UnpackedVector", "unpacked_array"]
+__all__ = ["UnpackedVector"]
