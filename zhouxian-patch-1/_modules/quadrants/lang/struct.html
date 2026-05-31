@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.struct &#8212; Quadrants 4.6.1 documentation</title>
+    <title>quadrants.lang.struct &#8212; Quadrants 1.0.1 documentation</title>
   
   
   
@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,12 +37,12 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script src="../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
 
-    <script src="../../../_static/documentation_options.js?v=68f2c66a"></script>
+    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -50,30 +50,37 @@
     <script>let toggleHintShow = 'Click to show';</script>
     <script>let toggleHintHide = 'Click to hide';</script>
     <script>let toggleOpenOnPrint = 'true';</script>
-    <script src="../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script src="../../../_static/togglebutton.js?v=b8b12719"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/struct';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="4.6.1" />
+  <meta name="docsearch:version" content="1.0.1" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
   </head>
-  
-  
-  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
-
+  <body data-default-mode="">
   
   
   <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
   
   <div id="pst-scroll-pixel-helper"></div>
   
   <button type="button" class="btn rounded-pill" id="pst-back-to-top">
     <i class="fa-solid fa-arrow-up"></i>Back to top</button>
-
+  
+  
+  
   
   <dialog id="pst-search-dialog">
     
@@ -99,7 +106,7 @@
 </div>
 
   
-    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
 <div class="bd-header__inner bd-page-width">
   <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
     <span class="fa-solid fa-bars"></span>
@@ -121,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 4.6.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
   
 </a></div>
     
@@ -169,11 +176,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -244,11 +258,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -317,7 +338,7 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">expr</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">QuadrantsRuntimeTypeError</span><span class="p">,</span>
@@ -359,12 +380,12 @@
 
 <span class="sd">    Example::</span>
 <span class="sd">_</span>
-<span class="sd">        &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)</span>
-<span class="sd">        &gt;&gt;&gt; a = ti.Struct(v=vec3([0, 0, 0]), t=1.0)</span>
+<span class="sd">        &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt; a = qd.Struct(v=vec3([0, 0, 0]), t=1.0)</span>
 <span class="sd">        &gt;&gt;&gt; print(a.items)</span>
 <span class="sd">        dict_items([(&#39;v&#39;, [0. 0. 0.]), (&#39;t&#39;, 1.0)])</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt; B = ti.Struct(v=vec3([0., 0., 0.]), t=1.0, A=a)</span>
+<span class="sd">        &gt;&gt;&gt; B = qd.Struct(v=vec3([0., 0., 0.]), t=1.0, A=a)</span>
 <span class="sd">        &gt;&gt;&gt; print(B.items)</span>
 <span class="sd">        dict_items([(&#39;v&#39;, [0. 0. 0.]), (&#39;t&#39;, 1.0), (&#39;A&#39;, {&#39;v&#39;: [[0.], [0.], [0.]], &#39;t&#39;: 1.0})])</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -403,8 +424,8 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">           &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)</span>
-<span class="sd">           &gt;&gt;&gt; sphere = ti.Struct(center=vec3([0, 0, 0]), radius=1.0)</span>
+<span class="sd">           &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
+<span class="sd">           &gt;&gt;&gt; sphere = qd.Struct(center=vec3([0, 0, 0]), radius=1.0)</span>
 <span class="sd">           &gt;&gt;&gt; a.keys</span>
 <span class="sd">           [&#39;center&#39;, &#39;radius&#39;]</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -437,8 +458,8 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)</span>
-<span class="sd">            &gt;&gt;&gt; sphere = ti.Struct(center=vec3([0, 0, 0]), radius=1.0)</span>
+<span class="sd">            &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
+<span class="sd">            &gt;&gt;&gt; sphere = qd.Struct(center=vec3([0, 0, 0]), radius=1.0)</span>
 <span class="sd">            &gt;&gt;&gt; sphere.items</span>
 <span class="sd">            dict_items([(&#39;center&#39;, 2), (&#39;radius&#39;, 1.0)])</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -527,7 +548,7 @@
         <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">():</span>
             <span class="n">item_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">])</span>
             <span class="n">item_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, struct_methods=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">__methods</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;ti.Struct </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;qd.Struct </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_dict</span><span class="p">())</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -596,9 +617,9 @@
 
 <span class="sd">        Example:</span>
 
-<span class="sd">            &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)</span>
+<span class="sd">            &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
 <span class="sd">            &gt;&gt;&gt; sphere = {&quot;center&quot;: vec3, &quot;radius&quot;: float}</span>
-<span class="sd">            &gt;&gt;&gt; F = ti.Struct.field(sphere, shape=(3, 3))</span>
+<span class="sd">            &gt;&gt;&gt; F = qd.Struct.field(sphere, shape=(3, 3))</span>
 <span class="sd">            &gt;&gt;&gt; F</span>
 <span class="sd">            {&#39;center&#39;: array([[[0., 0., 0.],</span>
 <span class="sd">                [0., 0., 0.],</span>
@@ -618,7 +639,18 @@
         <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;shape cannot be None when offset is being set&quot;</span><span class="p">)</span>
 
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
+
         <span class="n">field_dict</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">StructType</span><span class="p">):</span>
+                    <span class="n">field_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;.&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">field_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span> <span class="ow">or</span> <span class="p">())</span>
+            <span class="k">return</span> <span class="n">StructField</span><span class="p">(</span><span class="n">field_dict</span><span class="p">,</span> <span class="n">methods</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">is_primal</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="n">field_name</span> <span class="o">=</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;.&quot;</span> <span class="o">+</span> <span class="n">key</span>
@@ -651,8 +683,6 @@
                 <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
-                <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">offset</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
                 <span class="n">offset</span> <span class="o">=</span> <span class="p">(</span><span class="n">offset</span><span class="p">,)</span>
 
@@ -752,7 +782,8 @@
             <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                 <span class="n">dual_field_dict</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">dual</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">dual</span> <span class="o">=</span> <span class="n">StructField</span><span class="p">(</span><span class="n">dual_field_dict</span><span class="p">,</span> <span class="n">struct_methods</span><span class="p">,</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;.dual&quot;</span><span class="p">,</span> <span class="n">is_primal</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_register_fields</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">Field</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">field_dict</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_register_fields</span><span class="p">()</span>
 
     <span class="nd">@property</span>
 <div class="viewcode-block" id="StructField.keys">
@@ -762,9 +793,9 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; f1 = ti.Vector.field(3, ti.f32, shape=(3, 3))</span>
-<span class="sd">            &gt;&gt;&gt; f2 = ti.field(ti.f32, shape=(3, 3))</span>
-<span class="sd">            &gt;&gt;&gt; F = ti.StructField({&quot;center&quot;: f1, &quot;radius&quot;: f2})</span>
+<span class="sd">            &gt;&gt;&gt; f1 = qd.Vector.field(3, qd.f32, shape=(3, 3))</span>
+<span class="sd">            &gt;&gt;&gt; f2 = qd.field(qd.f32, shape=(3, 3))</span>
+<span class="sd">            &gt;&gt;&gt; F = qd.StructField({&quot;center&quot;: f1, &quot;radius&quot;: f2})</span>
 <span class="sd">            &gt;&gt;&gt; F.keys</span>
 <span class="sd">            [&#39;center&#39;, &#39;radius&#39;]</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -859,6 +890,8 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_initialize_host_accessors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
+            <span class="k">return</span>
         <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_members</span><span class="p">:</span>
             <span class="n">v</span><span class="o">.</span><span class="n">_initialize_host_accessors</span><span class="p">()</span>
 
@@ -907,34 +940,39 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="StructField.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.to_numpy">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the Struct field instance to a dictionary of NumPy arrays.</span>
 
 <span class="sd">        The dictionary may be nested when converting nested structs.</span>
 
+<span class="sd">        Args:</span>
+<span class="sd">            copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises,</span>
+<span class="sd">                ``None`` uses zero-copy when available and falls back to a copy otherwise (per member).</span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            Dict[str, Union[numpy.ndarray, Dict]]: The result NumPy array.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
+        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
 
 
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="StructField.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.to_torch">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the Struct field instance to a dictionary of PyTorch tensors.</span>
 
 <span class="sd">        The dictionary may be nested when converting nested structs.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            device (torch.device, optional): The</span>
-<span class="sd">                desired device of returned tensor.</span>
+<span class="sd">            device (torch.device, optional): The desired device of returned tensor.</span>
+<span class="sd">            copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises,</span>
+<span class="sd">                ``None`` uses zero-copy when available and falls back to a copy otherwise (per member).</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Dict[str, Union[torch.Tensor, Dict]]: The result</span>
 <span class="sd">                PyTorch tensor.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
+        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
 
 
     <span class="nd">@python_scope</span>
@@ -973,7 +1011,7 @@
                 <span class="n">dtype</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">dtype</span>
                 <span class="n">elements</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">dtype</span><span class="p">,</span> <span class="n">k</span><span class="p">])</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">get_type_factory_instance</span><span class="p">()</span><span class="o">.</span><span class="n">get_struct_type</span><span class="p">(</span><span class="n">elements</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">get_type_factory_instance</span><span class="p">()</span><span class="o">.</span><span class="n">get_struct_type</span><span class="p">(</span><span class="n">elements</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Create an instance of this struct type.&quot;&quot;&quot;</span>
@@ -1045,10 +1083,10 @@
                 <span class="n">d</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">from_quadrants_object</span><span class="p">(</span><span class="n">func_ret</span><span class="p">,</span> <span class="n">ret_index</span> <span class="o">+</span> <span class="p">(</span><span class="n">index</span><span class="p">,))</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">d</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span>
-                    <span class="n">_ti_core</span><span class="o">.</span><span class="n">make_get_element_expr</span><span class="p">(</span>
+                    <span class="n">_qd_core</span><span class="o">.</span><span class="n">make_get_element_expr</span><span class="p">(</span>
                         <span class="n">func_ret</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span>
                         <span class="n">ret_index</span> <span class="o">+</span> <span class="p">(</span><span class="n">index</span><span class="p">,),</span>
-                        <span class="n">_ti_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()),</span>
+                        <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()),</span>
                     <span class="p">)</span>
                 <span class="p">)</span>
         <span class="n">d</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">methods</span>
@@ -1140,7 +1178,7 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Python scope struct type print support.&quot;&quot;&quot;</span>
         <span class="n">item_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">()])</span>
         <span class="n">item_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, struct_methods=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">methods</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;ti.StructType </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;qd.StructType </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
 
 
 <div class="viewcode-block" id="dataclass">
@@ -1158,12 +1196,12 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.dataclass</span>
+<span class="sd">        &gt;&gt;&gt; @qd.dataclass</span>
 <span class="sd">        &gt;&gt;&gt; class Sphere:</span>
 <span class="sd">        &gt;&gt;&gt;     center: vec3</span>
-<span class="sd">        &gt;&gt;&gt;     radius: ti.f32</span>
+<span class="sd">        &gt;&gt;&gt;     radius: qd.f32</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     @ti.func</span>
+<span class="sd">        &gt;&gt;&gt;     @qd.func</span>
 <span class="sd">        &gt;&gt;&gt;     def area(self):</span>
 <span class="sd">        &gt;&gt;&gt;         return 4 * 3.14 * self.radius * self.radius</span>
 <span class="sd">        &gt;&gt;&gt;</span>
@@ -1223,8 +1261,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -1258,7 +1296,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
 </p></div>
       
     </div>

@@ -60,6 +60,19 @@ Module Contents
 
 
 
+   .. py:property:: layout
+
+      Canonical-axis-permutation tuple, or ``None`` for identity.
+
+      Mirrors :attr:`Ndarray.layout`: returns the same value the caller passed to ``qd.tensor(..., layout=...)``
+      (or ``None`` if that kwarg was omitted / was the identity permutation). Lets downstream code introspect the
+      physical layout without having to know which backend produced the tensor.
+
+      Fields constructed directly via ``qd.field(..., order=...)`` also report their layout here — the ``order=``
+      axis-string is translated into an integer permutation and stashed on the same ``_qd_layout`` attribute that
+      layout-tagged ndarrays use.
+
+
    .. py:property:: dtype
       :type: quadrants._lib.core.quadrants_python.DataTypeCxx
 
@@ -71,23 +84,45 @@ Module Contents
 
 
 
+   .. py:method:: has_grad() -> bool
+
+      Whether this field's adjoint (reverse-mode gradient) SNode is allocated.
+
+      ``self.grad`` is non-``None`` for every real-dtype field (the wrapper is allocated up-front so
+      ``qd.root.lazy_grad()`` can populate it later); the actual placed-or-not signal is whether the underlying
+      SNode has been placed via ``needs_grad=True``, ``qd.root.lazy_grad()``, or an explicit
+      ``qd.root.dense(...).place(field.grad)``. Mirrors ``self.snode.ptr.has_adjoint()``.
+
+
+
+   .. py:method:: has_dual() -> bool
+
+      Whether this field's dual (forward-mode gradient) SNode is allocated.
+
+      Same semantics as :meth:`has_grad` for the dual companion. Mirrors ``self.snode.ptr.has_dual()``.
+
+
+
    .. py:method:: fill(val: int | float) -> None
       :abstractmethod:
 
 
 
-   .. py:method:: to_numpy(dtype: quadrants._lib.core.quadrants_python.DataTypeCxx | None = None)
+   .. py:method:: to_numpy(dtype: quadrants._lib.core.quadrants_python.DataTypeCxx | None = None, *, copy=True)
       :abstractmethod:
 
 
       Converts `self` to a numpy array.
+
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       :returns: The result numpy array.
       :rtype: numpy.ndarray
 
 
 
-   .. py:method:: to_torch(device=None)
+   .. py:method:: to_torch(device=None, *, copy=True)
       :abstractmethod:
 
 
@@ -95,6 +130,8 @@ Module Contents
 
       :param device: The desired device of returned tensor.
       :type device: torch.device, optional
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       :returns: The result torch tensor.
       :rtype: torch.tensor
@@ -133,6 +170,11 @@ Module Contents
 
 
 
+   .. py:method:: to_dlpack(versioned=False)
+      :abstractmethod:
+
+
+
 .. py:class:: ScalarField(var)
 
    Bases: :py:obj:`Field`
@@ -144,10 +186,16 @@ Module Contents
    :type var: Expr
 
 
-   .. py:method:: to_dlpack()
+   .. py:method:: to_dlpack(versioned=False)
 
-      Note: caller is responsible for calling ti.sync() between modifying the field, and
-      reading it.
+      Export this field as a DLPack capsule.
+
+      :param versioned: If True, emit a DLPack v1 ``DLManagedTensorVersioned`` capsule (``"dltensor_versioned"``,
+                        ``flags=0``). NumPy >= 2.1 can consume v1 capsules and returns writable arrays; NumPy 2.0 marks v0
+                        capsules read-only; NumPy < 2.1 cannot consume v1 capsules at all. If False (default), emit a v0
+                        ``DLManagedTensor`` (``"dltensor"``), required by ``torch.utils.dlpack.from_dlpack``.
+
+      Note: caller is responsible for calling qd.sync() between modifying the field and reading it.
 
 
 
@@ -157,15 +205,23 @@ Module Contents
 
 
 
-   .. py:method:: to_numpy(dtype=None)
+   .. py:method:: to_numpy(dtype=None, *, copy=True)
 
-      Converts this field to a `numpy.ndarray`.
+      Converts this field to a ``numpy.ndarray``.
+
+      :param dtype: Optional target numpy dtype.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
 
 
-   .. py:method:: to_torch(device=None)
+   .. py:method:: to_torch(device=None, *, copy=True)
 
-      Converts this field to a `torch.tensor`.
+      Converts this field to a ``torch.Tensor``.
+
+      :param device: Optional torch device for the returned tensor.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
 
 

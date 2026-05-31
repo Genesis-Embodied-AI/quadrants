@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.math.mathimpl &#8212; Quadrants 4.6.1 documentation</title>
+    <title>quadrants.math.mathimpl &#8212; Quadrants 1.0.1 documentation</title>
   
   
   
@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,12 +37,12 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script src="../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
 
-    <script src="../../../_static/documentation_options.js?v=68f2c66a"></script>
+    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -50,30 +50,37 @@
     <script>let toggleHintShow = 'Click to show';</script>
     <script>let toggleHintHide = 'Click to hide';</script>
     <script>let toggleOpenOnPrint = 'true';</script>
-    <script src="../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script src="../../../_static/togglebutton.js?v=b8b12719"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/math/mathimpl';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="4.6.1" />
+  <meta name="docsearch:version" content="1.0.1" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
   </head>
-  
-  
-  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
-
+  <body data-default-mode="">
   
   
   <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
   
   <div id="pst-scroll-pixel-helper"></div>
   
   <button type="button" class="btn rounded-pill" id="pst-back-to-top">
     <i class="fa-solid fa-arrow-up"></i>Back to top</button>
-
+  
+  
+  
   
   <dialog id="pst-search-dialog">
     
@@ -99,7 +106,7 @@
 </div>
 
   
-    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
 <div class="bd-header__inner bd-page-width">
   <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
     <span class="fa-solid fa-bars"></span>
@@ -121,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 4.6.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
   
 </a></div>
     
@@ -169,11 +176,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -244,11 +258,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -318,6 +339,7 @@
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">static</span><span class="p">,</span> <span class="n">zero</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span>
@@ -341,7 +363,7 @@
     <span class="n">tanh</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix</span><span class="p">,</span> <span class="n">template</span><span class="p">,</span> <span class="n">vector</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">f64</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u64</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">f64</span><span class="p">,</span> <span class="n">i32</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u64</span>
 
 <span class="n">cfg</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">default_cfg</span>
 
@@ -489,15 +511,15 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1, 1, 1])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Vector([2, 2, 2])</span>
-<span class="sd">        &gt;&gt;&gt; a = ti.Vector([1, 0, 0])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.mix(x, y, a)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1, 1, 1])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Vector([2, 2, 2])</span>
+<span class="sd">        &gt;&gt;&gt; a = qd.Vector([1, 0, 0])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.mix(x, y, a)</span>
 <span class="sd">        [2.000000, 1.000000, 1.000000]</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([[1, 2], [2, 3]], ti.f32)</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Matrix([[3, 5], [4, 5]], ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([[1, 2], [2, 3]], qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Matrix([[3, 5], [4, 5]], qd.f32)</span>
 <span class="sd">        &gt;&gt;&gt; a = 0.5</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.mix(x, y, a)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.mix(x, y, a)</span>
 <span class="sd">        [[2.000000, 3.500000], [3.000000, 4.000000]]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">a</span></div>
@@ -527,12 +549,12 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; v = ti.Vector([0, 0.5, 1.0, 1.5])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.clamp(v, 0.5, 1.0)</span>
+<span class="sd">        &gt;&gt;&gt; v = qd.Vector([0, 0.5, 1.0, 1.5])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.clamp(v, 0.5, 1.0)</span>
 <span class="sd">        [0.500000, 0.500000, 1.000000, 1.000000]</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([[0, 1], [-2, 2]], ti.f32)</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Matrix([[1, 2], [1, 2]], ti.f32)</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.clamp(x, 0.5, y)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([[0, 1], [-2, 2]], qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Matrix([[1, 2], [1, 2]], qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.clamp(x, 0.5, y)</span>
 <span class="sd">        [[0.500000, 1.000000], [0.500000, 2.000000]]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">xmax</span><span class="p">,</span> <span class="n">ops</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">xmin</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span></div>
@@ -563,9 +585,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([[0, 1], [2, 3]], ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([[0, 1], [2, 3]], qd.f32)</span>
 <span class="sd">        &gt;&gt;&gt; y = 1</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.step(x, y)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.step(x, y)</span>
 <span class="sd">        [[1.000000, 1.000000], [0.000000, 0.000000]]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="n">edge</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span></div>
@@ -577,7 +599,7 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.fract">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">fract</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the fractional part of the argument, element-wise.</span>
-<span class="sd">    It&#39;s equivalent to `x - ti.floor(x)`.</span>
+<span class="sd">    It&#39;s equivalent to `x - qd.floor(x)`.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): The</span>
@@ -588,8 +610,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-1.2, -0.7, 0.3, 1.2])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.fract(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([-1.2, -0.7, 0.3, 1.2])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.fract(x)</span>
 <span class="sd">        [0.800000, 0.300000, 0.300000, 0.200000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">-</span> <span class="n">ops</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
@@ -621,10 +643,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; edge0 = ti.Vector([0, 1, 2])</span>
+<span class="sd">        &gt;&gt;&gt; edge0 = qd.Vector([0, 1, 2])</span>
 <span class="sd">        &gt;&gt;&gt; edge1 = 1</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([0.5, 1.5, 2.5])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.smoothstep(edge0, edge1, x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([0.5, 1.5, 2.5])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.smoothstep(edge0, edge1, x)</span>
 <span class="sd">        [0.500000, 1.000000, 0.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">t</span> <span class="o">=</span> <span class="n">clamp</span><span class="p">((</span><span class="n">x</span> <span class="o">-</span> <span class="n">edge0</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">edge1</span> <span class="o">-</span> <span class="n">edge0</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
@@ -648,8 +670,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-1.0, 0.0, 1.0])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.sign(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([-1.0, 0.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.sign(x)</span>
 <span class="sd">        [-1.000000, 0.000000, 1.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">((</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="mf">0.0</span><span class="p">),</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">((</span><span class="n">x</span> <span class="o">&lt;=</span> <span class="mf">0.0</span><span class="p">),</span> <span class="nb">float</span><span class="p">)</span></div>
@@ -673,8 +695,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; v = ti.Vector([1, 2, 3])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.normalize(v)</span>
+<span class="sd">        &gt;&gt;&gt; v = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.normalize(v)</span>
 <span class="sd">        [0.267261, 0.534522, 0.801784]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">v</span> <span class="o">/</span> <span class="n">v</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span></div>
@@ -698,8 +720,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 2., 3.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.log2(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1., 2., 3.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.log2(x)</span>
 <span class="sd">        [0.000000, 1.000000, 1.584962]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">/</span> <span class="n">static</span><span class="p">(</span><span class="n">ops</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">2.0</span><span class="p">))</span></div>
@@ -729,9 +751,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 2., 3.])</span>
-<span class="sd">        &gt;&gt;&gt; n = ti.Vector([0., 1., 0.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.reflect(x, n)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1., 2., 3.])</span>
+<span class="sd">        &gt;&gt;&gt; n = qd.Vector([0., 1., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.reflect(x, n)</span>
 <span class="sd">        [1.000000, -2.000000, 3.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">k</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
@@ -753,8 +775,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-pi/2, pi/2])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.degrees(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([-pi/2, pi/2])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.degrees(x)</span>
 <span class="sd">        [-90.000000, 90.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">static</span><span class="p">(</span><span class="mf">180.0</span> <span class="o">/</span> <span class="n">pi</span><span class="p">)</span></div>
@@ -775,8 +797,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-90., 45., 90.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.radians(x) / pi</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([-90., 45., 90.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.radians(x) / pi</span>
 <span class="sd">        [-0.500000, 0.250000, 0.500000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">static</span><span class="p">(</span><span class="n">pi</span> <span class="o">/</span> <span class="mf">180.0</span><span class="p">)</span></div>
@@ -800,9 +822,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([0, 0, 0])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Vector([1, 1, 1])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.distance(x, y)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([0, 0, 0])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Vector([1, 1, 1])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.distance(x, y)</span>
 <span class="sd">        1.732051</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span></div>
@@ -827,9 +849,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 1., 1.])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Vector([0, 1., 0])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.refract(x, y, 2.0)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1., 1., 1.])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Vector([0, 1., 0])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.refract(x, y, 2.0)</span>
 <span class="sd">        [2.000000, -1.000000, 2.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">dxn</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
@@ -856,9 +878,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 1., 0.])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Vector([0., 1., 1.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.dot(x, y)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1., 1., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Vector([0., 1., 1.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.dot(x, y)</span>
 <span class="sd">        1.000000</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></div>
@@ -884,9 +906,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 0., 0.])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Vector([0., 1., 0.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.cross(x, y)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1., 0., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Vector([0., 1., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.cross(x, y)</span>
 <span class="sd">        [0.000000, 0.000000, 1.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></div>
@@ -908,9 +930,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-0.5, 0.5, 1.])</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([-0.5, 0.5, 1.])</span>
 <span class="sd">        &gt;&gt;&gt; y = 1.0</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.mod(x, y)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.mod(x, y)</span>
 <span class="sd">        [0.500000, 0.500000, 0.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">-</span> <span class="n">y</span> <span class="o">*</span> <span class="n">ops</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">x</span> <span class="o">/</span> <span class="n">y</span><span class="p">)</span></div>
@@ -933,7 +955,7 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.math.translate(1, 2, 3)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.translate(1, 2, 3)</span>
 <span class="sd">        [[ 1. 0. 0. 1.]</span>
 <span class="sd">         [ 0. 1. 0. 2.]</span>
 <span class="sd">         [ 0. 0. 1. 3.]</span>
@@ -966,7 +988,7 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.math.scale(1, 2, 3)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.scale(1, 2, 3)</span>
 <span class="sd">        [[ 1. 0. 0. 0.]</span>
 <span class="sd">         [ 0. 2. 0. 0.]</span>
 <span class="sd">         [ 0. 0. 3. 0.]</span>
@@ -1074,7 +1096,7 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt;ti.math.rotation2d(ti.math.radians(30))</span>
+<span class="sd">        &gt;&gt;&gt;qd.math.rotation2d(qd.math.radians(30))</span>
 <span class="sd">        [[0.866025, -0.500000], [0.500000, 0.866025]]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ca</span><span class="p">,</span> <span class="n">sa</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">ang</span><span class="p">),</span> <span class="n">ops</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">ang</span><span class="p">)</span>
@@ -1096,7 +1118,7 @@
 <span class="sd">        :class:`~quadrants.math.mat4`: rotation matrix</span>
 <span class="sd">    Example:</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.math.rotation3d(0.52, -0.785, 1.046)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.rotation3d(0.52, -0.785, 1.046)</span>
 <span class="sd">        [[ 0.05048351 -0.61339645 -0.78816002  0.        ]</span>
 <span class="sd">        [ 0.65833154  0.61388511 -0.4355969   0.        ]</span>
 <span class="sd">        [ 0.75103329 -0.49688014  0.4348093   0.        ]</span>
@@ -1133,8 +1155,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1, 1, 1])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.length(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1, 1, 1])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.length(x)</span>
 <span class="sd">        1.732051</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span></div>
@@ -1167,8 +1189,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; m = ti.math.mat3([(1, 1, 0), (0, 1, 1), (0, 0, 1)])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.inverse(m)</span>
+<span class="sd">        &gt;&gt;&gt; m = qd.math.mat3([(1, 1, 0), (0, 1, 1), (0, 0, 1)])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.inverse(m)</span>
 <span class="sd">        [[1.000000, -1.000000, 1.000000],</span>
 <span class="sd">         [0.000000, 1.000000, -1.000000],</span>
 <span class="sd">         [0.000000, 0.000000, 1.000000]]</span>
@@ -1188,13 +1210,15 @@
 
 <span class="sd">    Example:</span>
 
-<span class="sd">       &gt;&gt;&gt; x = ti.math.vec4(inf, -inf, nan, 1)</span>
-<span class="sd">       &gt;&gt;&gt; ti.math.isinf(x)</span>
+<span class="sd">       &gt;&gt;&gt; x = qd.math.vec4(inf, -inf, nan, 1)</span>
+<span class="sd">       &gt;&gt;&gt; qd.math.isinf(x)</span>
 <span class="sd">       [1, 1, 0, 0]</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        For each element i of the result, returns 1 if x[i] is posititve or negative floating point infinity and 0 otherwise.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">static</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">()):</span>
+        <span class="k">return</span> <span class="n">math</span><span class="o">.</span><span class="n">isinf</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
     <span class="n">ftype</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span>
     <span class="n">fx</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">ftype</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">static</span><span class="p">(</span><span class="n">ftype</span> <span class="o">==</span> <span class="n">f64</span><span class="p">):</span>
@@ -1217,13 +1241,15 @@
 
 <span class="sd">    Example:</span>
 
-<span class="sd">       &gt;&gt;&gt; x = ti.math.vec4(nan, -nan, inf, 1)</span>
-<span class="sd">       &gt;&gt;&gt; ti.math.isnan(x)</span>
+<span class="sd">       &gt;&gt;&gt; x = qd.math.vec4(nan, -nan, inf, 1)</span>
+<span class="sd">       &gt;&gt;&gt; qd.math.isnan(x)</span>
 <span class="sd">       [1, 1, 0, 0]</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        For each element i of the result, returns 1 if x[i] is posititve or negative floating point NaN (Not a Number) and 0 otherwise.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">static</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">()):</span>
+        <span class="k">return</span> <span class="n">math</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
     <span class="n">ftype</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span>
     <span class="n">fx</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">ftype</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">static</span><span class="p">(</span><span class="n">ftype</span> <span class="o">==</span> <span class="n">f64</span><span class="p">):</span>
@@ -1246,7 +1272,7 @@
 <span class="sd">    Example:</span>
 
 <span class="sd">        &gt;&gt;&gt; x = pi / 2</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.vdir(x)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.vdir(x)</span>
 <span class="sd">        [0, 1]</span>
 
 <span class="sd">    Returns:</span>
@@ -1272,6 +1298,73 @@
 
 
 
+<span class="nd">@func</span>
+<div class="viewcode-block" id="ffs">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.ffs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">ffs</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">ffs</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># Portable fallback for fns(): scans a 32-bit `mask` from `base` in the direction implied by the sign of `offset` and</span>
+<span class="c1"># returns the bit position of the |offset|-th set bit, or 0xFFFFFFFF if there are fewer than |offset| set bits in the</span>
+<span class="c1"># requested half-open range. The CUDA fast path lowers to a single PTX `fns.b32` instruction via inline asm (the slim</span>
+<span class="c1"># libdevice we ship does not include `__nv_fns`) and bypasses this @qd.func entirely; see fns() below.</span>
+<span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_fns_portable</span><span class="p">(</span><span class="n">mask</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span> <span class="n">base</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="n">i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">u32</span><span class="p">:</span>
+    <span class="n">NOT_FOUND</span> <span class="o">=</span> <span class="n">u32</span><span class="p">(</span><span class="mh">0xFFFFFFFF</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">NOT_FOUND</span>
+    <span class="k">if</span> <span class="n">offset</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">base</span> <span class="o">&lt;</span> <span class="n">u32</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">mask</span> <span class="o">&gt;&gt;</span> <span class="n">base</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">!=</span> <span class="n">u32</span><span class="p">(</span><span class="mi">0</span><span class="p">):</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">base</span>
+    <span class="k">elif</span> <span class="n">offset</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="n">offset</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
+            <span class="n">pos</span> <span class="o">=</span> <span class="n">u32</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">pos</span> <span class="o">&gt;=</span> <span class="n">base</span><span class="p">:</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">mask</span> <span class="o">&gt;&gt;</span> <span class="n">pos</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">!=</span> <span class="n">u32</span><span class="p">(</span><span class="mi">0</span><span class="p">):</span>
+                    <span class="n">n</span> <span class="o">-=</span> <span class="mi">1</span>
+                    <span class="k">if</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">result</span> <span class="o">==</span> <span class="n">NOT_FOUND</span><span class="p">:</span>
+                            <span class="n">result</span> <span class="o">=</span> <span class="n">pos</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="o">-</span><span class="n">offset</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
+            <span class="n">pos</span> <span class="o">=</span> <span class="n">u32</span><span class="p">(</span><span class="mi">31</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">pos</span> <span class="o">&lt;=</span> <span class="n">base</span><span class="p">:</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">mask</span> <span class="o">&gt;&gt;</span> <span class="n">pos</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">!=</span> <span class="n">u32</span><span class="p">(</span><span class="mi">0</span><span class="p">):</span>
+                    <span class="n">n</span> <span class="o">-=</span> <span class="mi">1</span>
+                    <span class="k">if</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">result</span> <span class="o">==</span> <span class="n">NOT_FOUND</span><span class="p">:</span>
+                            <span class="n">result</span> <span class="o">=</span> <span class="n">pos</span>
+    <span class="k">return</span> <span class="n">result</span>
+
+
+<div class="viewcode-block" id="fns">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.fns">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fns</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Find the n-th set bit in a 32-bit mask, with CUDA fast-path dispatch.</span>
+
+<span class="sd">    Mirrors CUDA&#39;s ``__nv_fns(mask, base, offset)``: scans ``mask`` starting from bit ``base`` and returns the bit</span>
+<span class="sd">    position of the ``|offset|``-th set bit found. The sign of ``offset`` selects the search direction:</span>
+
+<span class="sd">    * ``offset &gt; 0``: scan upward (towards higher bit indices) starting at ``base`` (inclusive).</span>
+<span class="sd">    * ``offset &lt; 0``: scan downward (towards lower bit indices) starting at ``base`` (inclusive).</span>
+<span class="sd">    * ``offset == 0``: returns ``base`` if ``mask &amp; (1 &lt;&lt; base)`` is non-zero, else ``0xFFFFFFFF``.</span>
+
+<span class="sd">    Returns ``0xFFFFFFFF`` if the requested set bit does not exist.</span>
+
+<span class="sd">    On CUDA the call lowers to a single PTX ``fns.b32`` instruction via inline asm (``__nv_fns`` is not in the slim</span>
+<span class="sd">    libdevice we ship). On every other backend (x64 / AMDGPU / SPIR-V) a portable Python @qd.func fallback is emitted;</span>
+<span class="sd">    the body is a 32-iteration loop over bit positions and is fully unrolled by the lowering pipeline on each backend.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_fns_u32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_fns_portable</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">offset</span><span class="p">)</span></div>
+
+
+
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
     <span class="s2">&quot;acos&quot;</span><span class="p">,</span>
     <span class="s2">&quot;asin&quot;</span><span class="p">,</span>
@@ -1288,7 +1381,9 @@
     <span class="s2">&quot;e&quot;</span><span class="p">,</span>
     <span class="s2">&quot;exp&quot;</span><span class="p">,</span>
     <span class="s2">&quot;eye&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ffs&quot;</span><span class="p">,</span>
     <span class="s2">&quot;floor&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;fns&quot;</span><span class="p">,</span>
     <span class="s2">&quot;fract&quot;</span><span class="p">,</span>
     <span class="s2">&quot;inf&quot;</span><span class="p">,</span>
     <span class="s2">&quot;inverse&quot;</span><span class="p">,</span>
@@ -1366,8 +1461,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -1401,7 +1496,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
 </p></div>
       
     </div>

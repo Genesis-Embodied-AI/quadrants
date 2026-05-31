@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.matrix_ops &#8212; Quadrants 4.6.1 documentation</title>
+    <title>quadrants.lang.matrix_ops &#8212; Quadrants 1.0.1 documentation</title>
   
   
   
@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,12 +37,12 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script src="../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
 
-    <script src="../../../_static/documentation_options.js?v=68f2c66a"></script>
+    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -50,30 +50,37 @@
     <script>let toggleHintShow = 'Click to show';</script>
     <script>let toggleHintHide = 'Click to hide';</script>
     <script>let toggleOpenOnPrint = 'true';</script>
-    <script src="../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script src="../../../_static/togglebutton.js?v=b8b12719"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/matrix_ops';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="4.6.1" />
+  <meta name="docsearch:version" content="1.0.1" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
   </head>
-  
-  
-  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
-
+  <body data-default-mode="">
   
   
   <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
   
   <div id="pst-scroll-pixel-helper"></div>
   
   <button type="button" class="btn rounded-pill" id="pst-back-to-top">
     <i class="fa-solid fa-arrow-up"></i>Back to top</button>
-
+  
+  
+  
   
   <dialog id="pst-search-dialog">
     
@@ -99,7 +106,7 @@
 </div>
 
   
-    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
 <div class="bd-header__inner bd-page-width">
   <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
     <span class="fa-solid fa-bars"></span>
@@ -121,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 4.6.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
   
 </a></div>
     
@@ -169,11 +176,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -244,11 +258,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -439,7 +460,67 @@
 
 
 
-<span class="nd">@preconditions</span><span class="p">(</span><span class="n">square_matrix</span><span class="p">,</span> <span class="n">dim_lt</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+<span class="nd">@pyfunc</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_inverse_lu</span><span class="p">(</span><span class="n">mat</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inverse of an N×N matrix via Gauss elimination with partial pivoting.</span>
+
+<span class="sd">    Generic over N (up to the precondition cap). Loops are all ``static(range)`` so the kernel is fully unrolled at</span>
+<span class="sd">    compile time; pivot row indices are runtime integers. Used by :func:`inverse` for ``N &gt;= 5`` (sizes 1–4 keep the</span>
+<span class="sd">    existing closed-form cofactor expansions).</span>
+
+<span class="sd">    Algorithm: maintain a working copy ``a`` (in-place LU with partial pivoting, row index ``pivot`` chosen by</span>
+<span class="sd">    largest |column entry|) and a parallel matrix ``b`` initialised to identity. Apply the same row swaps + row</span>
+<span class="sd">    reductions to both ``a`` and ``b``; at the end ``a`` holds U (on / above diag) and L (strictly below, with</span>
+<span class="sd">    implicit unit diagonal), and ``b`` holds ``L⁻¹ P`` where ``P`` is the permutation matrix. The inverse is then</span>
+<span class="sd">    read off column-by-column by back-solving ``U x = b[:, c]``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">shape</span> <span class="o">=</span> <span class="n">static</span><span class="p">(</span><span class="n">mat</span><span class="o">.</span><span class="n">get_shape</span><span class="p">())</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">static</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">zero_elem</span> <span class="o">=</span> <span class="n">mat</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">0</span>
+    <span class="n">one_elem</span> <span class="o">=</span> <span class="n">zero_elem</span> <span class="o">+</span> <span class="mi">1</span>
+
+    <span class="n">a</span> <span class="o">=</span> <span class="n">_filled_matrix</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">zero_elem</span><span class="p">)</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">_filled_matrix</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">zero_elem</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)):</span>
+            <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">mat</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+        <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">one_elem</span>
+
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)):</span>
+        <span class="n">pivot</span> <span class="o">=</span> <span class="n">k</span>
+        <span class="n">pivot_abs</span> <span class="o">=</span> <span class="n">ops_mod</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="n">k</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n</span><span class="p">)):</span>
+            <span class="n">cur_abs</span> <span class="o">=</span> <span class="n">ops_mod</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">p</span><span class="p">,</span> <span class="n">k</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">cur_abs</span> <span class="o">&gt;</span> <span class="n">pivot_abs</span><span class="p">:</span>
+                <span class="n">pivot_abs</span> <span class="o">=</span> <span class="n">cur_abs</span>
+                <span class="n">pivot</span> <span class="o">=</span> <span class="n">p</span>
+        <span class="k">if</span> <span class="n">pivot</span> <span class="o">!=</span> <span class="n">k</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)):</span>
+                <span class="n">ta</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+                <span class="n">a</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">pivot</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+                <span class="n">a</span><span class="p">[</span><span class="n">pivot</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">ta</span>
+                <span class="n">tb</span> <span class="o">=</span> <span class="n">b</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+                <span class="n">b</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">b</span><span class="p">[</span><span class="n">pivot</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+                <span class="n">b</span><span class="p">[</span><span class="n">pivot</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">tb</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n</span><span class="p">)):</span>
+            <span class="n">m</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span> <span class="o">/</span> <span class="n">a</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span>
+            <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">m</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n</span><span class="p">)):</span>
+                <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">-</span> <span class="n">m</span> <span class="o">*</span> <span class="n">a</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)):</span>
+                <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">-</span> <span class="n">m</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+
+    <span class="n">inv</span> <span class="o">=</span> <span class="n">_filled_matrix</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">zero_elem</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)):</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)):</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n</span><span class="p">)):</span>
+                <span class="n">s</span> <span class="o">=</span> <span class="n">s</span> <span class="o">-</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="n">inv</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span>
+            <span class="n">inv</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span> <span class="o">/</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">inv</span>
+
+
+<span class="nd">@preconditions</span><span class="p">(</span><span class="n">square_matrix</span><span class="p">,</span> <span class="n">dim_lt</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">13</span><span class="p">))</span>
 <span class="nd">@pyfunc</span>
 <div class="viewcode-block" id="inverse">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix_ops/index.html#quadrants.lang.matrix_ops.inverse">[docs]</a>
@@ -447,10 +528,11 @@
     <span class="n">shape</span> <span class="o">=</span> <span class="n">static</span><span class="p">(</span><span class="n">mat</span><span class="o">.</span><span class="n">get_shape</span><span class="p">())</span>
     <span class="k">if</span> <span class="n">static</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">Matrix</span><span class="p">([[</span><span class="mf">1.0</span> <span class="o">/</span> <span class="n">mat</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]]])</span>
-    <span class="n">inv_determinant</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">determinant</span><span class="p">(</span><span class="n">mat</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">static</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">):</span>
+        <span class="n">inv_determinant</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">determinant</span><span class="p">(</span><span class="n">mat</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">inv_determinant</span> <span class="o">*</span> <span class="n">Matrix</span><span class="p">([[</span><span class="n">mat</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="o">-</span><span class="n">mat</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span> <span class="p">[</span><span class="o">-</span><span class="n">mat</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">mat</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]]])</span>
     <span class="k">if</span> <span class="n">static</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">3</span><span class="p">):</span>
+        <span class="n">inv_determinant</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">determinant</span><span class="p">(</span><span class="n">mat</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">inv_determinant</span> <span class="o">*</span> <span class="n">Matrix</span><span class="p">(</span>
             <span class="p">[</span>
                 <span class="p">[</span>
@@ -462,6 +544,7 @@
             <span class="p">]</span>
         <span class="p">)</span>
     <span class="k">if</span> <span class="n">static</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">4</span><span class="p">):</span>
+        <span class="n">inv_determinant</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">determinant</span><span class="p">(</span><span class="n">mat</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">inv_determinant</span> <span class="o">*</span> <span class="n">Matrix</span><span class="p">(</span>
             <span class="p">[</span>
                 <span class="p">[</span>
@@ -490,8 +573,7 @@
                 <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span>
             <span class="p">]</span>
         <span class="p">)</span>
-    <span class="c1"># unreachable</span>
-    <span class="k">return</span> <span class="kc">None</span></div>
+    <span class="k">return</span> <span class="n">_inverse_lu</span><span class="p">(</span><span class="n">mat</span><span class="p">)</span></div>
 
 
 
@@ -529,6 +611,19 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix_ops/index.html#quadrants.lang.matrix_ops.norm_sqr">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">norm_sqr</span><span class="p">(</span><span class="n">mat</span><span class="p">):</span>
     <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">mat</span> <span class="o">*</span> <span class="n">mat</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@preconditions</span><span class="p">(</span>
+    <span class="n">arg_at</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">assert_tensor</span><span class="p">),</span>
+    <span class="n">arg_at</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">assert_tensor</span><span class="p">),</span>
+    <span class="n">same_shapes</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nd">@pyfunc</span>
+<div class="viewcode-block" id="frobenius_inner">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix_ops/index.html#quadrants.lang.matrix_ops.frobenius_inner">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">frobenius_inner</span><span class="p">(</span><span class="n">mat_x</span><span class="p">,</span> <span class="n">mat_y</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">mat_x</span> <span class="o">*</span> <span class="n">mat_y</span><span class="p">)</span></div>
 
 
 
@@ -620,6 +715,8 @@
     <span class="k">if</span> <span class="n">static</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
             <span class="n">mat</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span>
+    <span class="k">elif</span> <span class="n">static</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
+        <span class="n">mat</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">val</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
             <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])):</span>
@@ -749,8 +846,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -784,7 +881,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
 </p></div>
       
     </div>

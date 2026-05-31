@@ -22,6 +22,7 @@ Submodules
    :maxdepth: 1
 
    /autoapi/quadrants/types/annotations/index
+   /autoapi/quadrants/types/buffer_view_type/index
    /autoapi/quadrants/types/compound_types/index
    /autoapi/quadrants/types/enums/index
    /autoapi/quadrants/types/ndarray_type/index

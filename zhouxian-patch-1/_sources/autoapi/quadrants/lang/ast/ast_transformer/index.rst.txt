@@ -63,9 +63,8 @@ Module Contents
 
       :param ctx: The builder context.
       :type ctx: ast_builder_utils.BuilderContext
-      :param target: A variable name. `target.id` holds the name as
+      :param target: A variable name. `target.id` holds the name as a string.
       :type target: ast.Name
-      :param a string.:
       :param annotation: A type we hope to assign to the target
       :param value: A node representing the value.
       :param is_static_assign: A boolean value indicating whether this is a static assignment
@@ -349,7 +348,7 @@ Module Contents
 
 
 
-   .. py:method:: ti_format_list_to_assert_msg(raw) -> tuple[str, list]
+   .. py:method:: qd_format_list_to_assert_msg(raw) -> tuple[str, list]
       :staticmethod:
 
 
@@ -365,6 +364,11 @@ Module Contents
 
 
    .. py:method:: build_Continue(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Continue) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_With(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With) -> None
       :staticmethod:
 
 

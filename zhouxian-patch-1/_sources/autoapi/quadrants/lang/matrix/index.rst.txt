@@ -26,9 +26,8 @@ Module Contents
 
    The matrix class.
 
-   A matrix is a 2-D rectangular array with scalar entries, it's row-majored, and is
-   aligned continuously. We recommend only use matrix with no more than 32 elements for
-   efficiency considerations.
+   A matrix is a 2-D rectangular array with scalar entries, it's row-majored, and is aligned continuously. We
+   recommend only use matrix with no more than 32 elements for efficiency considerations.
 
    Note: in quadrants a matrix is strictly two-dimensional and only stores scalars.
 
@@ -43,15 +42,15 @@ Module Contents
 
        use a 2d list to initialize a matrix
 
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def test():
        >>>     n = 5
-       >>>     M = ti.Matrix([[0] * n for _ in range(n)], ti.i32)
+       >>>     M = qd.Matrix([[0] * n for _ in range(n)], qd.i32)
        >>>     print(M)  # a 5x5 matrix with integer elements
 
        get the number of rows and columns via the `n`, `m` property:
 
-       >>> M = ti.Matrix([[0, 1], [2, 3], [4, 5]], ti.i32)
+       >>> M = qd.Matrix([[0, 1], [2, 3], [4, 5]], qd.i32)
        >>> M.n  # number of rows
        3
        >>> M.m  # number of cols
@@ -59,7 +58,7 @@ Module Contents
 
        you can even initialize a matrix with an empty list:
 
-       >>> M = ti.Matrix([[], []], ti.i32)
+       >>> M = qd.Matrix([[], []], qd.i32)
        >>> M.n
        2
        >>> M.m
@@ -91,8 +90,8 @@ Module Contents
 
       Example::
 
-          >>> A = ti.Matrix([0, 1, 2], ti.i32)
-          >>> B = A.cast(ti.f32)
+          >>> A = qd.Matrix([0, 1, 2], qd.i32)
+          >>> B = A.cast(qd.f32)
           >>> B
           [0.0, 1.0, 2.0]
 
@@ -108,7 +107,7 @@ Module Contents
 
       Example::
 
-          >>> m = ti.Matrix([[1, 2], [3, 4]])
+          >>> m = qd.Matrix([[1, 2], [3, 4]])
           >>> m.trace()
           5
 
@@ -140,7 +139,7 @@ Module Contents
 
       Example::
 
-          >>> a = ti.Vector([3, 4], ti.f32)
+          >>> a = qd.Vector([3, 4], qd.f32)
           >>> a.normalized()
           [0.6, 0.8]
 
@@ -155,7 +154,7 @@ Module Contents
 
       Example::
 
-          >>> A = ti.Matrix([[0, 1], [2, 3]])
+          >>> A = qd.Matrix([[0, 1], [2, 3]])
           >>> A.transpose()
           [[0, 2], [1, 3]]
 
@@ -178,8 +177,7 @@ Module Contents
       :staticmethod:
 
 
-      Returns a diagonal square matrix with the diagonals filled
-      with `val`.
+      Returns a diagonal square matrix with the diagonals filled with `val`.
 
       :param dim: the dimension of the wanted square matrix.
       :type dim: int
@@ -191,7 +189,7 @@ Module Contents
 
       Example::
 
-          >>> m = ti.Matrix.diag(3, 1)
+          >>> m = qd.Matrix.diag(3, 1)
           [[1, 0, 0],
            [0, 1, 0],
            [0, 0, 1]]
@@ -204,7 +202,7 @@ Module Contents
 
       Example::
 
-          >>> m = ti.Matrix([[1, 2], [3, 4]])
+          >>> m = qd.Matrix([[1, 2], [3, 4]])
           >>> m.sum()
           10
 
@@ -220,7 +218,7 @@ Module Contents
 
       Example::
 
-          >>> a = ti.Vector([3, 4])
+          >>> a = qd.Vector([3, 4])
           >>> a.norm()
           5
 
@@ -245,6 +243,28 @@ Module Contents
 
 
 
+   .. py:method:: frobenius_inner(other)
+
+      Returns the Frobenius inner product :math:`\langle A, B \rangle = \sum_{ij} A_{ij} B_{ij}`.
+
+      Both operands must have the same shape. Defined for any tensor shape (vector or matrix); for matrices this
+      is the standard Frobenius inner product, and :meth:`norm_sqr` is the special case ``A.frobenius_inner(A)``.
+
+      :param other: The other operand. Must have the same shape as ``self``.
+      :type other: :class:`~quadrants.Matrix`
+
+      :returns: The scalar Frobenius inner product.
+      :rtype: DataType
+
+      Example::
+
+          >>> A = qd.Matrix([[1.0, 2.0], [3.0, 4.0]])
+          >>> B = qd.Matrix([[5.0, 6.0], [7.0, 8.0]])
+          >>> A.frobenius_inner(B)
+          70.0
+
+
+
    .. py:method:: max()
 
       Returns the maximum element value.
@@ -266,7 +286,7 @@ Module Contents
 
       Example::
 
-          >>> v = ti.Vector([0, 0, 1])
+          >>> v = qd.Vector([0, 0, 1])
           >>> v.any()
           True
 
@@ -281,7 +301,7 @@ Module Contents
 
       Example::
 
-          >>> v = ti.Vector([0, 0, 1])
+          >>> v = qd.Vector([0, 0, 1])
           >>> v.all()
           False
 
@@ -296,7 +316,7 @@ Module Contents
 
       Example::
 
-          >>> A = ti.Matrix([0, 1, 2, 3])
+          >>> A = qd.Matrix([0, 1, 2, 3])
           >>> A.fill(-1)
           >>> A
           [-1, -1, -1, -1]
@@ -312,7 +332,7 @@ Module Contents
 
       Example::
 
-          >>> A = ti.Matrix([[0], [1], [2], [3]])
+          >>> A = qd.Matrix([[0], [1], [2], [3]])
           >>> A.to_numpy()
           >>> A
           array([[0], [1], [2], [3]])
@@ -374,7 +394,7 @@ Module Contents
 
       Example::
 
-          >>> A = ti.Matrix.unit(3, 1)
+          >>> A = qd.Matrix.unit(3, 1)
           >>> A
           [0, 1, 0]
 
@@ -414,15 +434,13 @@ Module Contents
       :type order: str, optional
       :param name: The custom name of the field.
       :type name: string, optional
-      :param offset: The coordinate offset
-                     of all elements in a field.
+      :param offset: The coordinate offset of all elements in a field.
       :type offset: Union[int, tuple of int], optional
       :param needs_grad: Whether the Matrix need grad field (reverse mode autodiff).
       :type needs_grad: bool, optional
       :param needs_dual: Whether the Matrix need dual field (forward mode autodiff).
       :type needs_dual: bool, optional
-      :param layout: The field layout, either Array Of
-                     Structure (AOS) or Structure Of Array (SOA).
+      :param layout: The field layout, either Array Of Structure (AOS) or Structure Of Array (SOA).
       :type layout: Layout, optional
 
       :returns: A matrix.
@@ -430,12 +448,12 @@ Module Contents
 
 
 
-   .. py:method:: ndarray(n, m, dtype, shape)
+   .. py:method:: ndarray(n, m, dtype, shape, needs_grad=False)
       :classmethod:
 
 
       Defines a Quadrants ndarray with matrix elements.
-      This function must be called in Python scope, and after `ti.init` is called.
+      This function must be called in Python scope, and after `qd.init` is called.
 
       :param n: Number of rows of the matrix.
       :type n: int
@@ -445,12 +463,42 @@ Module Contents
       :type dtype: DataType
       :param shape: Shape of the ndarray.
       :type shape: Union[int, tuple[int]]
+      :param needs_grad: If True, allocate a companion grad ndarray of the same shape and dtype,
+                         accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
+                         Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
+      :type needs_grad: bool, optional
 
       Example::
 
-          The code below shows how a Quadrants ndarray with matrix elements             can be declared and defined::
+          The code below shows how a Quadrants ndarray with matrix elements can be declared and defined::
 
-              >>> x = ti.Matrix.ndarray(4, 5, ti.f32, shape=(16, 8))
+              >>> x = qd.Matrix.ndarray(4, 5, qd.f32, shape=(16, 8))
+
+
+
+   .. py:method:: tensor(n, m, dtype, shape, **kwargs)
+      :classmethod:
+
+
+      Allocate a tensor whose elements are ``n``-by-``m`` matrices.
+
+      Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for matrix-valued elements. Selects
+      between ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.
+
+      :param n: Number of rows of each matrix element.
+      :type n: int
+      :param m: Number of columns of each matrix element.
+      :type m: int
+      :param dtype: Element data type (e.g. ``qd.f32``).
+      :param shape: Shape of the tensor (excluding the matrix dimensions) as an ``int`` or tuple of ``int``.
+      :param backend: Storage backend. Defaults to ``qd.Backend.NDARRAY``.
+      :type backend: qd.Backend, optional
+      :param \*\*kwargs: Forwarded verbatim to the underlying ``qd.Matrix.field`` / ``qd.Matrix.ndarray`` call.
+
+      Example::
+
+          >>> a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))
+          >>> b = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 
 
 
@@ -458,8 +506,7 @@ Module Contents
       :staticmethod:
 
 
-      Constructs a matrix by concatenating a list of
-      vectors/lists row by row. Must be called in Quadrants scope.
+      Constructs a matrix by concatenating a list of vectors/lists row by row. Must be called in Quadrants scope.
 
       :param rows: A list of Vector (1-D Matrix) or a list of list.
       :type rows: List
@@ -469,11 +516,11 @@ Module Contents
 
       Example::
 
-          >>> @ti.kernel
+          >>> @qd.kernel
           >>> def test():
-          >>>     v1 = ti.Vector([1, 2, 3])
-          >>>     v2 = ti.Vector([4, 5, 6])
-          >>>     m = ti.Matrix.rows([v1, v2])
+          >>>     v1 = qd.Vector([1, 2, 3])
+          >>>     v2 = qd.Vector([4, 5, 6])
+          >>>     m = qd.Matrix.rows([v1, v2])
           >>>     print(m)
           >>>
           >>> test()
@@ -495,11 +542,11 @@ Module Contents
 
       Example::
 
-          >>> @ti.kernel
+          >>> @qd.kernel
           >>> def test():
-          >>>     v1 = ti.Vector([1, 2, 3])
-          >>>     v2 = ti.Vector([4, 5, 6])
-          >>>     m = ti.Matrix.cols([v1, v2])
+          >>>     v1 = qd.Vector([1, 2, 3])
+          >>>     v2 = qd.Vector([4, 5, 6])
+          >>>     m = qd.Matrix.cols([v1, v2])
           >>>     print(m)
           >>>
           >>> test()
@@ -521,8 +568,8 @@ Module Contents
 
       Example::
 
-          >>> v1 = ti.Vector([1, 2, 3])
-          >>> v2 = ti.Vector([3, 4, 5])
+          >>> v1 = qd.Vector([1, 2, 3])
+          >>> v2 = qd.Vector([3, 4, 5])
           >>> v1.dot(v2)
           26
 
@@ -534,11 +581,9 @@ Module Contents
 
       Both two vectors must have the same dimension <= 3.
 
-      For two 2d vectors (x1, y1) and (x2, y2), the return value is the
-      scalar `x1*y2 - x2*y1`.
+      For two 2d vectors (x1, y1) and (x2, y2), the return value is the scalar `x1*y2 - x2*y1`.
 
-      For two 3d vectors `v` and `w`, the return value is the 3d vector
-      `v x w`.
+      For two 3d vectors `v` and `w`, the return value is the 3d vector `v x w`.
 
       :param other: The input Vector.
       :type other: :class:`~quadrants.Matrix`
@@ -571,9 +616,8 @@ Module Contents
 
    The matrix class.
 
-   A matrix is a 2-D rectangular array with scalar entries, it's row-majored, and is
-   aligned continuously. We recommend only use matrix with no more than 32 elements for
-   efficiency considerations.
+   A matrix is a 2-D rectangular array with scalar entries, it's row-majored, and is aligned continuously. We
+   recommend only use matrix with no more than 32 elements for efficiency considerations.
 
    Note: in quadrants a matrix is strictly two-dimensional and only stores scalars.
 
@@ -588,15 +632,15 @@ Module Contents
 
        use a 2d list to initialize a matrix
 
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def test():
        >>>     n = 5
-       >>>     M = ti.Matrix([[0] * n for _ in range(n)], ti.i32)
+       >>>     M = qd.Matrix([[0] * n for _ in range(n)], qd.i32)
        >>>     print(M)  # a 5x5 matrix with integer elements
 
        get the number of rows and columns via the `n`, `m` property:
 
-       >>> M = ti.Matrix([[0, 1], [2, 3], [4, 5]], ti.i32)
+       >>> M = qd.Matrix([[0, 1], [2, 3], [4, 5]], qd.i32)
        >>> M.n  # number of rows
        3
        >>> M.m  # number of cols
@@ -604,7 +648,7 @@ Module Contents
 
        you can even initialize a matrix with an empty list:
 
-       >>> M = ti.Matrix([[], []], ti.i32)
+       >>> M = qd.Matrix([[], []], qd.i32)
        >>> M.n
        2
        >>> M.m
@@ -618,11 +662,11 @@ Module Contents
       :classmethod:
 
 
-      ti.Vector.field
+      qd.Vector.field
 
 
 
-   .. py:method:: ndarray(n, dtype, shape)
+   .. py:method:: ndarray(n, dtype, shape, needs_grad=False)
       :classmethod:
 
 
@@ -634,12 +678,40 @@ Module Contents
       :type dtype: DataType
       :param shape: Shape of the ndarray.
       :type shape: Union[int, tuple[int]]
+      :param needs_grad: If True, allocate a companion grad ndarray of the same shape and dtype,
+                         accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
+                         Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
+      :type needs_grad: bool, optional
 
       .. rubric:: Example
 
       The code below shows how a Quadrants ndarray with vector elements can be declared and defined::
 
-          >>> x = ti.Vector.ndarray(3, ti.f32, shape=(16, 8))
+          >>> x = qd.Vector.ndarray(3, qd.f32, shape=(16, 8))
+
+
+
+   .. py:method:: tensor(n, dtype, shape, **kwargs)
+      :classmethod:
+
+
+      Allocate a tensor whose elements are length-``n`` vectors.
+
+      Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for vector-valued elements. Selects
+      between ``qd.Vector.field`` and ``qd.Vector.ndarray`` based on the ``backend=`` keyword.
+
+      :param n: Length of each vector element.
+      :type n: int
+      :param dtype: Element data type (e.g. ``qd.f32``).
+      :param shape: Shape of the tensor (excluding the vector dimension) as an ``int`` or tuple of ``int``.
+      :param backend: Storage backend. Defaults to ``qd.Backend.NDARRAY``.
+      :type backend: qd.Backend, optional
+      :param \*\*kwargs: Forwarded verbatim to the underlying ``qd.Vector.field`` / ``qd.Vector.ndarray`` call.
+
+      Example::
+
+          >>> v = qd.Vector.tensor(3, qd.f32, shape=(4,))
+          >>> u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 
 
 
@@ -674,10 +746,14 @@ Module Contents
    .. py:attribute:: ptr
 
 
-   .. py:method:: to_dlpack()
+   .. py:method:: to_dlpack(versioned=False)
 
-      Note: caller is responsible for calling ti.sync() between modifying the field, and
-      reading it.
+      Export this matrix field as a DLPack capsule.
+
+      :param versioned: If True, emit a DLPack v1 capsule (writable numpy arrays). If False (default), emit v0
+                        (required by ``torch.utils.dlpack.from_dlpack``). See :meth:`ScalarField.to_dlpack`.
+
+      Note: caller is responsible for calling qd.sync() between modifying the field and reading it.
 
 
 
@@ -703,24 +779,26 @@ Module Contents
 
 
 
-   .. py:method:: to_numpy(keep_dims=False, dtype=None)
+   .. py:method:: to_numpy(keep_dims=False, dtype=None, *, copy=True)
 
       Converts the field instance to a NumPy array.
 
-      :param keep_dims: Whether to keep the dimension after conversion.
-                        When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields.
-                        When keep_dims=False, the resulting numpy array should skip the matrix dims with size 1.
-                        For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
+      :param keep_dims: Whether to keep the dimension after conversion. When keep_dims=True, on an n-D
+                        matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields. When
+                        keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a 4x1
+                        or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
       :type keep_dims: bool, optional
       :param dtype: The desired data type of returned numpy array.
       :type dtype: DataType, optional
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       :returns: The result NumPy array.
       :rtype: numpy.ndarray
 
 
 
-   .. py:method:: to_torch(device=None, keep_dims=False)
+   .. py:method:: to_torch(device=None, keep_dims=False, *, copy=True)
 
       Converts the field instance to a PyTorch tensor.
 
@@ -729,6 +807,8 @@ Module Contents
       :param keep_dims: Whether to keep the dimension after conversion.
                         See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
       :type keep_dims: bool, optional
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       :returns: The result torch tensor.
       :rtype: torch.tensor
@@ -741,7 +821,7 @@ Module Contents
 
       Example::
 
-          >>> m = ti.Matrix.field(2, 2, ti.f32, shape=(3, 3))
+          >>> m = qd.Matrix.field(2, 2, qd.f32, shape=(3, 3))
           >>> arr = numpy.ones((3, 3, 2, 2))
           >>> m.from_numpy(arr)
 
@@ -765,7 +845,7 @@ Module Contents
 
    Example::
 
-       >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(3, 3))
+       >>> arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(3, 3))
 
 
    .. py:attribute:: n
@@ -775,12 +855,6 @@ Module Contents
 
 
    .. py:attribute:: dtype
-
-
-   .. py:attribute:: layout
-
-
-   .. py:attribute:: shape
 
 
    .. py:attribute:: element_type
@@ -795,18 +869,21 @@ Module Contents
 
       Example::
 
-          >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(3, 3))
+          >>> arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(3, 3))
           >>> arr.element_shape
           (2, 2)
 
 
-   .. py:method:: to_numpy()
+   .. py:method:: to_numpy(dtype=None, *, copy=True)
 
-      Converts this ndarray to a `numpy.ndarray`.
+      Converts this ndarray to a ``numpy.ndarray``.
+
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       Example::
 
-          >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(2, 1))
+          >>> arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(2, 1))
           >>> arr.to_numpy()
           [[[[0. 0.]
              [0. 0.]]]
@@ -822,9 +899,27 @@ Module Contents
 
       Example::
 
-          >>> m = ti.MatrixNdarray(2, 2, ti.f32, shape=(2, 1), layout=0)
+          >>> m = qd.MatrixNdarray(2, 2, qd.f32, shape=(2, 1), layout=0)
           >>> arr = np.ones((2, 1, 2, 2))
           >>> m.from_numpy(arr)
+
+
+
+   .. py:method:: to_torch(device=None, *, copy=True)
+
+      Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``.
+
+      Mirrors :meth:`MatrixField.to_torch`.
+
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
+
+
+
+   .. py:method:: from_torch(arr)
+
+      Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
+      :meth:`MatrixField.from_torch`.
 
 
 
@@ -844,19 +939,13 @@ Module Contents
 
    Example::
 
-       >>> a = ti.VectorNdarray(3, ti.f32, (3, 3))
+       >>> a = qd.VectorNdarray(3, qd.f32, (3, 3))
 
 
    .. py:attribute:: n
 
 
    .. py:attribute:: dtype
-
-
-   .. py:attribute:: layout
-
-
-   .. py:attribute:: shape
 
 
    .. py:attribute:: element_type
@@ -871,18 +960,21 @@ Module Contents
 
       Example::
 
-          >>> a = ti.VectorNdarray(3, ti.f32, (3, 3))
+          >>> a = qd.VectorNdarray(3, qd.f32, (3, 3))
           >>> a.element_shape
           (3,)
 
 
-   .. py:method:: to_numpy()
+   .. py:method:: to_numpy(dtype=None, *, copy=True)
 
-      Converts this vector ndarray to a `numpy.ndarray`.
+      Converts this vector ndarray to a ``numpy.ndarray``.
+
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       Example::
 
-          >>> a = ti.VectorNdarray(3, ti.f32, (2, 2))
+          >>> a = qd.VectorNdarray(3, qd.f32, (2, 2))
           >>> a.to_numpy()
           array([[[0., 0., 0.],
                   [0., 0., 0.]],
@@ -901,9 +993,26 @@ Module Contents
       Example::
 
           >>> import numpy as np
-          >>> a = ti.VectorNdarray(3, ti.f32, (2, 2), 0)
+          >>> a = qd.VectorNdarray(3, qd.f32, (2, 2), 0)
           >>> b = np.ones((2, 2, 3), dtype=np.float32)
           >>> a.from_numpy(b)
+
+
+
+   .. py:method:: to_torch(device=None, *, copy=True)
+
+      Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``.
+
+      Mirrors :meth:`MatrixField.to_torch` on the vector code path.
+
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
+
+
+
+   .. py:method:: from_torch(arr)
+
+      Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n,)``.
 
 
 

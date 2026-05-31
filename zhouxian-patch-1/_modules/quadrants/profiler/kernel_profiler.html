@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.profiler.kernel_profiler &#8212; Quadrants 4.6.1 documentation</title>
+    <title>quadrants.profiler.kernel_profiler &#8212; Quadrants 1.0.1 documentation</title>
   
   
   
@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,12 +37,12 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script src="../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
 
-    <script src="../../../_static/documentation_options.js?v=68f2c66a"></script>
+    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -50,30 +50,37 @@
     <script>let toggleHintShow = 'Click to show';</script>
     <script>let toggleHintHide = 'Click to hide';</script>
     <script>let toggleOpenOnPrint = 'true';</script>
-    <script src="../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script src="../../../_static/togglebutton.js?v=b8b12719"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/profiler/kernel_profiler';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="4.6.1" />
+  <meta name="docsearch:version" content="1.0.1" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
   </head>
-  
-  
-  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
-
+  <body data-default-mode="">
   
   
   <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
   
   <div id="pst-scroll-pixel-helper"></div>
   
   <button type="button" class="btn rounded-pill" id="pst-back-to-top">
     <i class="fa-solid fa-arrow-up"></i>Back to top</button>
-
+  
+  
+  
   
   <dialog id="pst-search-dialog">
     
@@ -99,7 +106,7 @@
 </div>
 
   
-    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
 <div class="bd-header__inner bd-page-width">
   <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
     <span class="fa-solid fa-bars"></span>
@@ -121,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 4.6.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
   
 </a></div>
     
@@ -169,11 +176,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -244,11 +258,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -314,7 +335,7 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">contextmanager</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.profiler.kernel_metrics</span><span class="w"> </span><span class="kn">import</span> <span class="n">default_cupti_metrics</span>
 
@@ -358,7 +379,7 @@
 <span class="sd">    and prints the results to the console by :func:`~quadrants.profiler.kernel_profiler.KernelProfiler.print_info`.</span>
 
 <span class="sd">    ``KernelProfiler`` now support detailed low-level performance metrics (such as memory bandwidth consumption) in its advanced mode.</span>
-<span class="sd">    This mode is only available for the CUDA backend with CUPTI toolkit, i.e. you need ``ti.init(kernel_profiler=True, arch=ti.cuda)``.</span>
+<span class="sd">    This mode is only available for the CUDA backend with CUPTI toolkit, i.e. you need ``qd.init(kernel_profiler=True, arch=qd.cuda)``.</span>
 
 <span class="sd">    Note:</span>
 <span class="sd">        For details about using CUPTI in Quadrants, please visit https://docs.taichi-lang.org/docs/profiler#advanced-mode.</span>
@@ -392,7 +413,7 @@
         <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_profiling_toolkit</span> <span class="o">=</span> <span class="n">toolkit_name</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;Failed to set kernel profiler toolkit (</span><span class="si">{</span><span class="n">toolkit_name</span><span class="si">}</span><span class="s2">) , keep using (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_profiling_toolkit</span><span class="si">}</span><span class="s2">).&quot;</span>
             <span class="p">)</span>
         <span class="k">return</span> <span class="n">status</span>
@@ -490,7 +511,7 @@
     <span class="c1"># private methods</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_check_not_turned_on_with_warning_message</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_profiling_mode</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;use &#39;ti.init(kernel_profiler = True)&#39; to turn on KernelProfiler.&quot;</span><span class="p">)</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;use &#39;qd.init(kernel_profiler = True)&#39; to turn on KernelProfiler.&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">return</span> <span class="kc">False</span>
 
@@ -532,7 +553,7 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_make_table_header</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mode</span><span class="p">):</span>
         <span class="n">header_str</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Kernel Profiler(</span><span class="si">{</span><span class="n">mode</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_profiling_toolkit</span><span class="si">}</span><span class="s2">)&quot;</span>
-        <span class="n">arch_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot; @ </span><span class="si">{</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">arch_name</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">arch_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot; @ </span><span class="si">{</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">arch_name</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="n">device_name</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">get_kernel_profiler_device_name</span><span class="p">()</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">device_name</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>  <span class="c1"># default device_name = &#39; &#39;</span>
             <span class="n">device_name</span> <span class="o">=</span> <span class="s2">&quot; on &quot;</span> <span class="o">+</span> <span class="n">device_name</span>
@@ -648,11 +669,11 @@
         <span class="nb">print</span><span class="p">(</span><span class="n">outer_partition_line</span><span class="p">)</span>
 
 
-<span class="n">_ti_kernel_profiler</span> <span class="o">=</span> <span class="n">KernelProfiler</span><span class="p">()</span>
+<span class="n">_qd_kernel_profiler</span> <span class="o">=</span> <span class="n">KernelProfiler</span><span class="p">()</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">get_default_kernel_profiler</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;We have only one :class:`~quadrants.profiler.kernelprofiler.KernelProfiler` instance(i.e. ``_ti_kernel_profiler``) now.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;We have only one :class:`~quadrants.profiler.kernelprofiler.KernelProfiler` instance(i.e. ``_qd_kernel_profiler``) now.</span>
 
 <span class="sd">    For ``KernelProfiler`` using ``CuptiToolkit``, GPU devices can only work in a certain configuration.</span>
 <span class="sd">    Profiling mode and metrics are configured by the host(CPU) via CUPTI APIs, and device(GPU) will use</span>
@@ -661,7 +682,7 @@
 <span class="sd">    the profiling configuration of other instances will be changed as a result.</span>
 <span class="sd">    For data retention purposes, multiple instances will be considered in the future.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_ti_kernel_profiler</span>
+    <span class="k">return</span> <span class="n">_qd_kernel_profiler</span>
 
 
 <div class="viewcode-block" id="print_kernel_profiler_info">
@@ -669,7 +690,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">print_kernel_profiler_info</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;count&quot;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Print the profiling results of Quadrants kernels.</span>
 
-<span class="sd">    To enable this profiler, set ``kernel_profiler=True`` in ``ti.init()``.</span>
+<span class="sd">    To enable this profiler, set ``kernel_profiler=True`` in ``qd.init()``.</span>
 <span class="sd">    ``&#39;count&#39;`` mode: print the statistics (min,max,avg time) of launched kernels,</span>
 <span class="sd">    ``&#39;trace&#39;`` mode: print the records of launched kernels with specific profiling metrics (time, memory load/store and core utilization etc.),</span>
 <span class="sd">    and defaults to ``&#39;count&#39;``.</span>
@@ -679,21 +700,21 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; import quadrants as ti</span>
+<span class="sd">        &gt;&gt;&gt; import quadrants as qd</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.init(ti.cpu, kernel_profiler=True)</span>
-<span class="sd">        &gt;&gt;&gt; var = ti.field(ti.f32, shape=1)</span>
+<span class="sd">        &gt;&gt;&gt; qd.init(qd.cpu, kernel_profiler=True)</span>
+<span class="sd">        &gt;&gt;&gt; var = qd.field(qd.f32, shape=1)</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def compute():</span>
 <span class="sd">        &gt;&gt;&gt;     var[0] = 1.0</span>
 
 <span class="sd">        &gt;&gt;&gt; compute()</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.print_kernel_profiler_info()</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info()</span>
 <span class="sd">        &gt;&gt;&gt; # equivalent calls :</span>
-<span class="sd">        &gt;&gt;&gt; # ti.profiler.print_kernel_profiler_info(&#39;count&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; # qd.profiler.print_kernel_profiler_info(&#39;count&#39;)</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
 
 <span class="sd">    Note:</span>
 <span class="sd">        For advanced mode of `KernelProfiler`, please visit https://docs.taichi-lang.org/docs/profiler#advanced-mode.</span>
@@ -707,7 +728,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">query_kernel_profiler_info</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Query kernel elapsed time(min,avg,max) on devices using the kernel name.</span>
 
-<span class="sd">    To enable this profiler, set `kernel_profiler=True` in `ti.init`.</span>
+<span class="sd">    To enable this profiler, set `kernel_profiler=True` in `qd.init`.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        name (str): kernel name.</span>
@@ -717,22 +738,22 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; import quadrants as ti</span>
+<span class="sd">        &gt;&gt;&gt; import quadrants as qd</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.init(ti.cpu, kernel_profiler=True)</span>
+<span class="sd">        &gt;&gt;&gt; qd.init(qd.cpu, kernel_profiler=True)</span>
 <span class="sd">        &gt;&gt;&gt; n = 1024*1024</span>
-<span class="sd">        &gt;&gt;&gt; var = ti.field(ti.f32, shape=n)</span>
+<span class="sd">        &gt;&gt;&gt; var = qd.field(qd.f32, shape=n)</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def fill():</span>
 <span class="sd">        &gt;&gt;&gt;     for i in range(n):</span>
 <span class="sd">        &gt;&gt;&gt;         var[i] = 0.1</span>
 
 <span class="sd">        &gt;&gt;&gt; fill()</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.clear_kernel_profiler_info() #[1]</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.clear_kernel_profiler_info() #[1]</span>
 <span class="sd">        &gt;&gt;&gt; for i in range(100):</span>
 <span class="sd">        &gt;&gt;&gt;     fill()</span>
-<span class="sd">        &gt;&gt;&gt; query_result = ti.profiler.query_kernel_profiler_info(fill.__name__) #[2]</span>
+<span class="sd">        &gt;&gt;&gt; query_result = qd.profiler.query_kernel_profiler_info(fill.__name__) #[2]</span>
 <span class="sd">        &gt;&gt;&gt; print(&quot;kernel executed times =&quot;,query_result.counter)</span>
 <span class="sd">        &gt;&gt;&gt; print(&quot;kernel elapsed time(min_in_ms) =&quot;,query_result.min)</span>
 <span class="sd">        &gt;&gt;&gt; print(&quot;kernel elapsed time(max_in_ms) =&quot;,query_result.max)</span>
@@ -781,25 +802,25 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; import quadrants as ti</span>
+<span class="sd">        &gt;&gt;&gt; import quadrants as qd</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.init(arch=ti.cuda, kernel_profiler=True)</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.field(ti.f32, shape=1024*1024)</span>
+<span class="sd">        &gt;&gt;&gt; qd.init(arch=qd.cuda, kernel_profiler=True)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.field(qd.f32, shape=1024*1024)</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def fill():</span>
 <span class="sd">        &gt;&gt;&gt;     for i in x:</span>
 <span class="sd">        &gt;&gt;&gt;         x[i] = i</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
 <span class="sd">        &gt;&gt;&gt; for i in range(100):</span>
 <span class="sd">        &gt;&gt;&gt;     fill()</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.print_kernel_profiler_info()</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info()</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.profiler.set_kernel_profiler_toolkit(&#39;default&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profiler_toolkit(&#39;default&#39;)</span>
 <span class="sd">        &gt;&gt;&gt; for i in range(100):</span>
 <span class="sd">        &gt;&gt;&gt;     fill()</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.print_kernel_profiler_info()</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info()</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">get_default_kernel_profiler</span><span class="p">()</span><span class="o">.</span><span class="n">set_toolkit</span><span class="p">(</span><span class="n">toolkit_name</span><span class="p">)</span></div>
 
@@ -815,27 +836,27 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; import quadrants as ti</span>
+<span class="sd">        &gt;&gt;&gt; import quadrants as qd</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.init(kernel_profiler=True, arch=ti.cuda)</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.init(kernel_profiler=True, arch=qd.cuda)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
 <span class="sd">        &gt;&gt;&gt; num_elements = 128*1024*1024</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.field(ti.f32, shape=num_elements)</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.field(ti.f32, shape=())</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.field(qd.f32, shape=num_elements)</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.field(qd.f32, shape=())</span>
 <span class="sd">        &gt;&gt;&gt; y[None] = 0</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def reduction():</span>
 <span class="sd">        &gt;&gt;&gt;     for i in x:</span>
 <span class="sd">        &gt;&gt;&gt;         y[None] += x[i]</span>
 
 <span class="sd">        &gt;&gt;&gt; # In the case of not parameter, Quadrants will print its pre-defined metrics list</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.get_predefined_cupti_metrics()</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.get_predefined_cupti_metrics()</span>
 <span class="sd">        &gt;&gt;&gt; # get Quadrants pre-defined metrics</span>
-<span class="sd">        &gt;&gt;&gt; profiling_metrics = ti.profiler.get_predefined_cupti_metrics(&#39;shared_access&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; profiling_metrics = qd.profiler.get_predefined_cupti_metrics(&#39;shared_access&#39;)</span>
 
-<span class="sd">        &gt;&gt;&gt; global_op_atom = ti.profiler.CuptiMetric(</span>
+<span class="sd">        &gt;&gt;&gt; global_op_atom = qd.profiler.CuptiMetric(</span>
 <span class="sd">        &gt;&gt;&gt;     name=&#39;l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum&#39;,</span>
 <span class="sd">        &gt;&gt;&gt;     header=&#39; global.atom &#39;,</span>
 <span class="sd">        &gt;&gt;&gt;     format=&#39;    {:8.0f} &#39;)</span>
@@ -843,10 +864,10 @@
 <span class="sd">        &gt;&gt;&gt; profiling_metrics += [global_op_atom]</span>
 
 <span class="sd">        &gt;&gt;&gt; # metrics setting will be retained until the next configuration</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.set_kernel_profiler_metrics(profiling_metrics)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profiler_metrics(profiling_metrics)</span>
 <span class="sd">        &gt;&gt;&gt; for i in range(16):</span>
 <span class="sd">        &gt;&gt;&gt;     reduction()</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
 
 <span class="sd">    Note:</span>
 <span class="sd">        Metrics setting will be retained until the next configuration.</span>
@@ -866,27 +887,27 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; import quadrants as ti</span>
+<span class="sd">        &gt;&gt;&gt; import quadrants as qd</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.init(kernel_profiler=True, arch=ti.cuda)</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.init(kernel_profiler=True, arch=qd.cuda)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
 <span class="sd">        &gt;&gt;&gt; num_elements = 128*1024*1024</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.field(ti.f32, shape=num_elements)</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.field(ti.f32, shape=())</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.field(qd.f32, shape=num_elements)</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.field(qd.f32, shape=())</span>
 <span class="sd">        &gt;&gt;&gt; y[None] = 0</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def reduction():</span>
 <span class="sd">        &gt;&gt;&gt;     for i in x:</span>
 <span class="sd">        &gt;&gt;&gt;         y[None] += x[i]</span>
 
 <span class="sd">        &gt;&gt;&gt; # In the case of not parameter, Quadrants will print its pre-defined metrics list</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.get_predefined_cupti_metrics()</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.get_predefined_cupti_metrics()</span>
 <span class="sd">        &gt;&gt;&gt; # get Quadrants pre-defined metrics</span>
-<span class="sd">        &gt;&gt;&gt; profiling_metrics = ti.profiler.get_predefined_cupti_metrics(&#39;device_utilization&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; profiling_metrics = qd.profiler.get_predefined_cupti_metrics(&#39;device_utilization&#39;)</span>
 
-<span class="sd">        &gt;&gt;&gt; global_op_atom = ti.profiler.CuptiMetric(</span>
+<span class="sd">        &gt;&gt;&gt; global_op_atom = qd.profiler.CuptiMetric(</span>
 <span class="sd">        &gt;&gt;&gt;     name=&#39;l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum&#39;,</span>
 <span class="sd">        &gt;&gt;&gt;     header=&#39; global.atom &#39;,</span>
 <span class="sd">        &gt;&gt;&gt;     format=&#39;    {:8.0f} &#39;)</span>
@@ -894,10 +915,10 @@
 <span class="sd">        &gt;&gt;&gt; profiling_metrics += [global_op_atom]</span>
 
 <span class="sd">        &gt;&gt;&gt; # metrics setting is temporary, and will be clear when exit from this context.</span>
-<span class="sd">        &gt;&gt;&gt; with ti.profiler.collect_kernel_profiler_metrics(profiling_metrics):</span>
+<span class="sd">        &gt;&gt;&gt; with qd.profiler.collect_kernel_profiler_metrics(profiling_metrics):</span>
 <span class="sd">        &gt;&gt;&gt;     for i in range(16):</span>
 <span class="sd">        &gt;&gt;&gt;         reduction()</span>
-<span class="sd">        &gt;&gt;&gt;     ti.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
+<span class="sd">        &gt;&gt;&gt;     qd.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
 
 <span class="sd">    Note:</span>
 <span class="sd">        The configuration of the ``metric_list`` will be clear when exit from this context.</span>
@@ -946,8 +967,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -981,7 +1002,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
 </p></div>
       
     </div>

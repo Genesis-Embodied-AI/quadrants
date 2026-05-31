@@ -36,11 +36,11 @@ Module Contents
 
    Example::
 
-       >>> @ti.func
+       >>> @qd.func
        >>> def foo(x):
        >>>     return x + 2
        >>>
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def run():
        >>>     print(foo(40))  # 42
 
@@ -64,8 +64,8 @@ Module Contents
    :rtype: Callable
 
 
-.. py:function:: kernel(_fn: None = None, *, pure: bool = False) -> Callable[[Any], Any]
-                 kernel(_fn: Any, *, pure: bool = False) -> Any
+.. py:function:: kernel(_fn: None = None, *, pure: bool = False, graph: bool = False) -> Callable[[Any], Any]
+                 kernel(_fn: Any, *, pure: bool = False, graph: bool = False) -> Any
 
    Marks a function as a Quadrants kernel.
 
@@ -76,11 +76,16 @@ Module Contents
 
    Kernel's gradient kernel would be generated automatically by the AutoDiff system.
 
+   :param graph: If True, kernels with 2+ top-level for loops are captured
+                 into a CUDA graph on first launch and replayed on subsequent
+                 launches, reducing per-kernel launch overhead. Non-CUDA backends
+                 are not supported currently.
+
    Example::
 
-       >>> x = ti.field(ti.i32, shape=(4, 8))
+       >>> x = qd.field(qd.i32, shape=(4, 8))
        >>>
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def run():
        >>>     # Assigns all the elements of `x` in parallel.
        >>>     for i in x:
@@ -98,12 +103,12 @@ Module Contents
 
    Example::
 
-       >>> @ti.data_oriented
+       >>> @qd.data_oriented
        >>> class TiArray:
        >>>     def __init__(self, n):
-       >>>         self.x = ti.field(ti.f32, shape=n)
+       >>>         self.x = qd.field(qd.f32, shape=n)
        >>>
-       >>>     @ti.kernel
+       >>>     @qd.kernel
        >>>     def inc(self):
        >>>         for i in self.x:
        >>>             self.x[i] += 1.0

@@ -80,7 +80,7 @@ Module Contents
 
 .. py:function:: decl_sparse_matrix(dtype, name)
 
-.. py:function:: decl_ndarray_arg(element_type: quadrants._lib.core.quadrants_python.DataTypeCxx, ndim: int, name: str, needs_grad: bool, boundary: quadrants._lib.core.quadrants_python.BoundaryMode) -> quadrants.lang.any_array.AnyArray
+.. py:function:: decl_ndarray_arg(element_type: quadrants._lib.core.quadrants_python.DataTypeCxx, ndim: int, name: str, needs_grad: bool, boundary: quadrants._lib.core.quadrants_python.BoundaryMode, layout=None) -> quadrants.lang.any_array.AnyArray
 
 .. py:function:: decl_ret(dtype)
 

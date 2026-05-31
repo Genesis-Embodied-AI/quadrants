@@ -51,19 +51,19 @@ Module Contents
       Build the sparse matrix from a ndarray.
 
       :param ndarray: the ndarray to build the sparse matrix from.
-      :type ndarray: Union[ti.ndarray, ti.Vector.ndarray, ti.Matrix.ndarray]
+      :type ndarray: Union[qd.ndarray, qd.Vector.ndarray, qd.Matrix.ndarray]
 
       :raises QuadrantsRuntimeError: If the input is not a ndarray or the length is not divisible by 3.
 
       Example::
           >>> N = 5
-          >>> triplets = ti.Vector.ndarray(n=3, dtype=ti.f32, shape=10, layout=ti.Layout.AOS)
-          >>> @ti.kernel
-          >>> def fill(triplets: ti.types.ndarray()):
+          >>> triplets = qd.Vector.ndarray(n=3, dtype=qd.f32, shape=10, layout=qd.Layout.AOS)
+          >>> @qd.kernel
+          >>> def fill(triplets: qd.types.ndarray()):
           >>>     for i in range(N):
-          >>>        triplets[i] = ti.Vector([i, (i + 1) % N, i+1], dt=ti.f32)
+          >>>        triplets[i] = qd.Vector([i, (i + 1) % N, i+1], dt=qd.f32)
           >>> fill(triplets)
-          >>> A = ti.linalg.SparseMatrix(n=N, m=N, dtype=ti.f32)
+          >>> A = qd.linalg.SparseMatrix(n=N, m=N, dtype=qd.f32)
           >>> A.build_from_ndarray(triplets)
           >>> print(A)
           [0, 1, 0, 0, 0]
@@ -96,7 +96,7 @@ Module Contents
    :param max_num_triplets: the maximum number of triplets.
    :type max_num_triplets: int
    :param dtype: the data type of the sparse matrix.
-   :type dtype: ti.dtype
+   :type dtype: qd.dtype
    :param storage_format: the storage format of the sparse matrix.
    :type storage_format: str
 

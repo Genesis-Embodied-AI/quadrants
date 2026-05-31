@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.field &#8212; Quadrants 4.6.1 documentation</title>
+    <title>quadrants.lang.field &#8212; Quadrants 1.0.1 documentation</title>
   
   
   
@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,12 +37,12 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script src="../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
 
-    <script src="../../../_static/documentation_options.js?v=68f2c66a"></script>
+    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -50,30 +50,37 @@
     <script>let toggleHintShow = 'Click to show';</script>
     <script>let toggleHintHide = 'Click to hide';</script>
     <script>let toggleOpenOnPrint = 'true';</script>
-    <script src="../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script src="../../../_static/togglebutton.js?v=b8b12719"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/field';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="4.6.1" />
+  <meta name="docsearch:version" content="1.0.1" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
   </head>
-  
-  
-  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
-
+  <body data-default-mode="">
   
   
   <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
   
   <div id="pst-scroll-pixel-helper"></div>
   
   <button type="button" class="btn rounded-pill" id="pst-back-to-top">
     <i class="fa-solid fa-arrow-up"></i>Back to top</button>
-
+  
+  
+  
   
   <dialog id="pst-search-dialog">
     
@@ -99,7 +106,7 @@
 </div>
 
   
-    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
 <div class="bd-header__inner bd-page-width">
   <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
     <span class="fa-solid fa-bars"></span>
@@ -121,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 4.6.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
   
 </a></div>
     
@@ -169,11 +176,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -244,11 +258,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -310,23 +331,306 @@
                 <article class="bd-article">
                   
   <h1>Source code for quadrants.lang.field</h1><div class="highlight"><pre>
-<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">cast</span>
+<span></span><span class="c1"># pyright: reportPrivateImportUsage=false</span>
+<span class="c1"># Reason: torch.zeros is public torch API, but pyright 1.1.409+ flags it as</span>
+<span class="c1"># private because torch&#39;s stubs don&#39;t re-export it via __all__.</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">ctypes</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">cast</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">quadrants.lang</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataTypeCxx</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">warn</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsSyntaxError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._metal_interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">metal_needs_interop_sync</span><span class="p">,</span> <span class="n">mps_sync_if_metal</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsRuntimeError</span><span class="p">,</span> <span class="n">QuadrantsSyntaxError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">in_python_scope</span><span class="p">,</span>
     <span class="n">python_scope</span><span class="p">,</span>
     <span class="n">to_numpy_type</span><span class="p">,</span>
     <span class="n">to_pytorch_type</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">f32</span><span class="p">,</span>
+    <span class="n">f64</span><span class="p">,</span>
+    <span class="n">i32</span><span class="p">,</span>
+    <span class="n">i64</span><span class="p">,</span>
+    <span class="n">u1</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># DLPack canonical-view patch for layout-tagged fields.</span>
+<span class="c1">#</span>
+<span class="c1"># The C++ ``field_to_dlpack`` derives the physical-memory axis order from the SNode chain. For layout-tagged fields</span>
+<span class="c1"># built via the new flat-rank-N allocation path (see ``lang/impl.py::_field``), the SNode chain is in natural order and</span>
+<span class="c1"># C++ reports the *permuted physical* shape with identity strides. We patch the returned DLManagedTensor in place here</span>
+<span class="c1"># so consumers (``torch.utils.dlpack.from_dlpack`` et al.) observe the canonical shape and matching permuted strides —</span>
+<span class="c1"># byte-identical to the view layout-tagged ndarrays produce via the ``ndarray_to_dlpack`` ``layout=`` parameter.</span>
+<span class="c1">#</span>
+<span class="c1"># The struct layouts below match the DLPack v1 ABI exactly. Only the fields we need to read (``ndim``) and mutate</span>
+<span class="c1"># (``shape``, ``strides``) are referenced, so additions to DLTensor / DLManagedTensor that land after this writes in</span>
+<span class="c1"># newer DLPack versions won&#39;t affect correctness.</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_DLDevice</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">Structure</span><span class="p">):</span>
+    <span class="n">_fields_</span> <span class="o">=</span> <span class="p">[(</span><span class="s2">&quot;device_type&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int32</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;device_id&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int32</span><span class="p">)]</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_DLDataType</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">Structure</span><span class="p">):</span>
+    <span class="n">_fields_</span> <span class="o">=</span> <span class="p">[(</span><span class="s2">&quot;code&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_uint8</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;bits&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_uint8</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;lanes&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_uint16</span><span class="p">)]</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_DLTensor</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">Structure</span><span class="p">):</span>
+    <span class="n">_fields_</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&quot;data&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;device&quot;</span><span class="p">,</span> <span class="n">_DLDevice</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;ndim&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int32</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;dtype&quot;</span><span class="p">,</span> <span class="n">_DLDataType</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;shape&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">POINTER</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_int64</span><span class="p">)),</span>
+        <span class="p">(</span><span class="s2">&quot;strides&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">POINTER</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_int64</span><span class="p">)),</span>
+        <span class="p">(</span><span class="s2">&quot;byte_offset&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_uint64</span><span class="p">),</span>
+    <span class="p">]</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_DLManagedTensor</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">Structure</span><span class="p">):</span>
+    <span class="n">_fields_</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&quot;dl_tensor&quot;</span><span class="p">,</span> <span class="n">_DLTensor</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;manager_ctx&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;deleter&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span><span class="p">),</span>
+    <span class="p">]</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_DLPackVersion</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">Structure</span><span class="p">):</span>
+    <span class="n">_fields_</span> <span class="o">=</span> <span class="p">[(</span><span class="s2">&quot;major&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_uint32</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;minor&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_uint32</span><span class="p">)]</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_DLManagedTensorVersioned</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">Structure</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Matches the C ``DLManagedTensorVersioned`` layout: version, manager_ctx, deleter, flags, then dl_tensor.&quot;&quot;&quot;</span>
+
+    <span class="n">_fields_</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&quot;version&quot;</span><span class="p">,</span> <span class="n">_DLPackVersion</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;manager_ctx&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;deleter&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;flags&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_uint64</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;dl_tensor&quot;</span><span class="p">,</span> <span class="n">_DLTensor</span><span class="p">),</span>
+    <span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_patch_field_dlpack_canonical</span><span class="p">(</span><span class="n">capsule</span><span class="p">,</span> <span class="n">layout</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Mutate the DLManagedTensor inside *capsule* so its shape/strides expose a canonical view of the</span>
+<span class="sd">    permuted-physical field buffer.</span>
+
+<span class="sd">    Supports both v0 (``&quot;dltensor&quot;``) and v1 (``&quot;dltensor_versioned&quot;``) capsules.</span>
+
+<span class="sd">    Invariants (input):</span>
+<span class="sd">      * ``shape[i]`` = physical shape along axis ``i`` of the SNode (which is the *permuted* shape the field was</span>
+<span class="sd">        allocated at).</span>
+<span class="sd">      * ``strides[i]`` = physical stride along axis ``i`` (row-major over the permuted shape).</span>
+
+<span class="sd">    Invariants (output):</span>
+<span class="sd">      * ``shape[a]`` = canonical-axis-``a`` extent = input ``shape[invperm[a]]``.</span>
+<span class="sd">      * ``strides[a]`` = canonical-axis-``a`` stride = input ``strides[invperm[a]]``.</span>
+
+<span class="sd">    ``invperm`` inverts the ``_qd_layout`` permutation by the convention that ``layout[p]`` is the canonical axis at</span>
+<span class="sd">    physical nesting position ``p``, so ``invperm[canonical_axis] = physical_axis``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">ndim</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="k">if</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="o">==</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">ndim</span><span class="p">)):</span>
+        <span class="k">return</span>  <span class="c1"># identity layout — nothing to do</span>
+    <span class="n">_PyCapsule_IsValid</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">pythonapi</span><span class="o">.</span><span class="n">PyCapsule_IsValid</span>
+    <span class="n">_PyCapsule_IsValid</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span>
+    <span class="n">_PyCapsule_IsValid</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span><span class="n">ctypes</span><span class="o">.</span><span class="n">py_object</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_char_p</span><span class="p">]</span>
+    <span class="n">_PyCapsule_GetPointer</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">pythonapi</span><span class="o">.</span><span class="n">PyCapsule_GetPointer</span>
+    <span class="n">_PyCapsule_GetPointer</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span>
+    <span class="n">_PyCapsule_GetPointer</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span><span class="n">ctypes</span><span class="o">.</span><span class="n">py_object</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_char_p</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">_PyCapsule_IsValid</span><span class="p">(</span><span class="n">capsule</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;dltensor&quot;</span><span class="p">):</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="n">_PyCapsule_GetPointer</span><span class="p">(</span><span class="n">capsule</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;dltensor&quot;</span><span class="p">)</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">POINTER</span><span class="p">(</span><span class="n">_DLManagedTensor</span><span class="p">))</span><span class="o">.</span><span class="n">contents</span><span class="o">.</span><span class="n">dl_tensor</span>
+    <span class="k">elif</span> <span class="n">_PyCapsule_IsValid</span><span class="p">(</span><span class="n">capsule</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;dltensor_versioned&quot;</span><span class="p">):</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="n">_PyCapsule_GetPointer</span><span class="p">(</span><span class="n">capsule</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;dltensor_versioned&quot;</span><span class="p">)</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">POINTER</span><span class="p">(</span><span class="n">_DLManagedTensorVersioned</span><span class="p">))</span><span class="o">.</span><span class="n">contents</span><span class="o">.</span><span class="n">dl_tensor</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;field_to_dlpack returned a capsule with an unrecognised name&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&lt;</span> <span class="n">ndim</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;field_to_dlpack returned ndim=</span><span class="si">{</span><span class="n">t</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2"> but layout has rank </span><span class="si">{</span><span class="n">ndim</span><span class="si">}</span><span class="s2">; cannot patch&quot;</span><span class="p">)</span>
+    <span class="c1"># Only the first ``ndim`` axes carry the canonical permutation; any trailing axes (element dims for VectorField /</span>
+    <span class="c1"># MatrixField) are already in innermost identity position and must not be permuted.</span>
+    <span class="n">shape_phys</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ndim</span><span class="p">)]</span>
+    <span class="n">strides_phys</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">strides</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ndim</span><span class="p">)]</span>
+    <span class="n">invperm</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">ndim</span>
+    <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layout</span><span class="p">):</span>
+        <span class="n">invperm</span><span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ndim</span><span class="p">):</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="o">=</span> <span class="n">shape_phys</span><span class="p">[</span><span class="n">invperm</span><span class="p">[</span><span class="n">a</span><span class="p">]]</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">strides</span><span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="o">=</span> <span class="n">strides_phys</span><span class="p">[</span><span class="n">invperm</span><span class="p">[</span><span class="n">a</span><span class="p">]]</span>
+
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span>
+
+<span class="n">_ARCH_METAL</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">metal</span>
+<span class="n">_ARCH_VULKAN</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">vulkan</span>
+<span class="n">_ARCH_CPU</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">x64</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">arm64</span><span class="p">})</span>
+
+<span class="n">_DLPACK_SUPPORTED_DTYPES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">f32</span><span class="p">,</span> <span class="n">f64</span><span class="p">,</span> <span class="n">i32</span><span class="p">,</span> <span class="n">i64</span><span class="p">,</span> <span class="n">u1</span><span class="p">})</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_compute_torch_mps_supports_dlpack_bytes_offset</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">parts</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">__version__</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;+&quot;</span><span class="p">,</span> <span class="s2">&quot;.&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[:</span><span class="mi">3</span><span class="p">]</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">parts</span><span class="p">))</span> <span class="o">&gt;</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+
+<span class="n">_TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET</span> <span class="o">=</span> <span class="n">_compute_torch_mps_supports_dlpack_bytes_offset</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_aos_struct_member</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="s2">&quot;Field&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;True when *field* is a member of a multi-member StructField with AOS layout.</span>
+
+<span class="sd">    AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous</span>
+<span class="sd">    strides at the member dtype size, so a zero-copy view would silently read neighbouring members&#39; bytes as garbage.</span>
+
+<span class="sd">    SNode.place flattens vec/mat field components directly under the struct cell (no intermediate matrix SNode), so both</span>
+<span class="sd">    ScalarField and MatrixField members sit as direct children of the struct cell dense SNode. For a ScalarField, num_ch</span>
+<span class="sd">    != 1 means it&#39;s not a standalone field. For a MatrixField with n*m components, num_ch != n*m means either SOA layout</span>
+<span class="sd">    (num_ch == 1, each component in its own subtree -- DLPack strides are wrong) or AOS struct member (num_ch &gt; n*m,</span>
+<span class="sd">    interleaved with other struct members). Only num_ch == n*m (standalone AOS) is safe for zero-copy.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">MatrixField</span>  <span class="c1"># pylint: disable=C0415</span>
+
+        <span class="n">parent_snode</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">MatrixField</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">parent_snode</span><span class="o">.</span><span class="n">get_num_ch</span><span class="p">()</span> <span class="o">!=</span> <span class="n">field</span><span class="o">.</span><span class="n">n</span> <span class="o">*</span> <span class="n">field</span><span class="o">.</span><span class="n">m</span>
+        <span class="k">return</span> <span class="n">parent_snode</span><span class="o">.</span><span class="n">get_num_ch</span><span class="p">()</span> <span class="o">!=</span> <span class="mi">1</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_can_zerocopy_field</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="s2">&quot;Field&quot;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_scalar</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">is_ndarray</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Check whether zero-copy DLPack export is available for this field on the current backend.&quot;&quot;&quot;</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">dtype</span>
+    <span class="k">if</span> <span class="n">dtype</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_DLPACK_SUPPORTED_DTYPES</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_ARCH_VULKAN</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_ndarray</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_ARCH_METAL</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">_TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="n">is_scalar</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">field</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">if</span> <span class="n">_is_aos_struct_member</span><span class="p">(</span><span class="n">field</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_try_zerocopy_torch</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="s2">&quot;Field&quot;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_scalar</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">is_ndarray</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Try to return a zero-copy torch tensor via DLPack.</span>
+
+<span class="sd">    Returns the tensor on success. When ``copy is False``, raises ``ValueError`` if zero-copy is not available. When</span>
+<span class="sd">    ``copy is None``, returns ``None`` if zero-copy is not available (allowing the caller to fall back to a copy). Does</span>
+<span class="sd">    NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the copy=True (kernel-copy)</span>
+<span class="sd">    path instead.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_can_zerocopy_field</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="n">is_scalar</span><span class="p">,</span> <span class="n">is_ndarray</span><span class="o">=</span><span class="n">is_ndarray</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Zero-copy not available for arch=</span><span class="si">{</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, dtype=</span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">torch.utils.dlpack</span>  <span class="c1"># pylint: disable=C0415</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">tc</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">dlpack</span><span class="o">.</span><span class="n">from_dlpack</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">to_dlpack</span><span class="p">())</span>
+    <span class="k">except</span> <span class="ne">RuntimeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Zero-copy not available: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">metal_needs_interop_sync</span><span class="p">():</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">device</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">requested</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">type_mismatch</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">requested</span><span class="o">.</span><span class="n">type</span>
+        <span class="n">index_mismatch</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">requested</span><span class="o">.</span><span class="n">index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">tc</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">tc</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">index</span> <span class="o">!=</span> <span class="n">requested</span><span class="o">.</span><span class="n">index</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">type_mismatch</span> <span class="ow">or</span> <span class="n">index_mismatch</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;copy=False is incompatible with device transfer (data on </span><span class="si">{</span><span class="n">tc</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, requested </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">)&quot;</span>
+                <span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">return</span> <span class="n">tc</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_DLPackV1Adapter</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wraps a DLPack PyCapsule into a v1-compatible object for ``np.from_dlpack``.</span>
+
+<span class="sd">    NumPy &gt;= 1.23 requires the v1 protocol -- an object exposing ``__dlpack__`` and ``__dlpack_device__``. The capsule</span>
+<span class="sd">    itself can be either v0 (``&quot;dltensor&quot;``) or v1 (``&quot;dltensor_versioned&quot;``); this adapter just satisfies the protocol</span>
+<span class="sd">    so ``np.from_dlpack`` can call ``__dlpack__()`` to retrieve it.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;_capsule&quot;</span><span class="p">,)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">capsule</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_capsule</span> <span class="o">=</span> <span class="n">capsule</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__dlpack__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stream</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_capsule</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__dlpack_device__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># kDLCPU = 1</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_try_zerocopy_numpy</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="s2">&quot;Field&quot;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="p">,</span> <span class="n">is_scalar</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">is_ndarray</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Try to return a zero-copy numpy array via DLPack.</span>
+
+<span class="sd">    Returns the array on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``. Raises</span>
+<span class="sd">    ``ValueError`` when ``copy=False`` but zero-copy is not available.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_ARCH_CPU</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy numpy requires a CPU backend (numpy arrays cannot reference GPU memory)&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_can_zerocopy_field</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="n">is_scalar</span><span class="p">,</span> <span class="n">is_ndarray</span><span class="o">=</span><span class="n">is_ndarray</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Zero-copy not available for dtype=</span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>  <span class="c1"># pylint: disable=C0415</span>
+
+    <span class="n">_np_ver</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">__version__</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[:</span><span class="mi">2</span><span class="p">])</span>
+    <span class="n">use_versioned</span> <span class="o">=</span> <span class="n">_np_ver</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">from_dlpack</span><span class="p">(</span><span class="n">_DLPackV1Adapter</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">to_dlpack</span><span class="p">(</span><span class="n">versioned</span><span class="o">=</span><span class="n">use_versioned</span><span class="p">)))</span>
+    <span class="k">except</span> <span class="ne">ModuleNotFoundError</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Zero-copy numpy for fields requires torch (the C++ DLPack export checks torch version). &quot;</span>
+                <span class="s2">&quot;Install torch or use copy=True.&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">except</span> <span class="ne">RuntimeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Zero-copy not available: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">arr</span>
 
 
 <div class="viewcode-block" id="Field">
@@ -391,8 +695,44 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.shape">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_shape</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_shape</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+            <span class="n">phys</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+            <span class="c1"># For layout-tagged fields the SNode is allocated at the permuted *physical* shape; surface the</span>
+            <span class="c1"># caller-facing *canonical* shape (inverse permutation) to match the ``Tensor`` / ``Ndarray`` contract</span>
+            <span class="c1"># where ``.shape`` is always what was passed into the factory.</span>
+            <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">layout_t</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">layout_t</span> <span class="o">!=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout_t</span><span class="p">)))</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">phys</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout_t</span><span class="p">):</span>
+                    <span class="c1"># ``phys[p] = canonical[layout[p]]`` ⇒ ``canonical[a] = phys[inv_layout[a]]``.</span>
+                    <span class="n">inv</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout_t</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layout_t</span><span class="p">):</span>
+                        <span class="n">inv</span><span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span>
+                    <span class="n">phys</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">phys</span><span class="p">[</span><span class="n">inv</span><span class="p">[</span><span class="n">a</span><span class="p">]]</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout_t</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_shape</span> <span class="o">=</span> <span class="n">phys</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_shape</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="Field.layout">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.layout">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">layout</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Canonical-axis-permutation tuple, or ``None`` for identity.</span>
+
+<span class="sd">        Mirrors :attr:`Ndarray.layout`: returns the same value the caller passed to ``qd.tensor(..., layout=...)``</span>
+<span class="sd">        (or ``None`` if that kwarg was omitted / was the identity permutation). Lets downstream code introspect the</span>
+<span class="sd">        physical layout without having to know which backend produced the tensor.</span>
+
+<span class="sd">        Fields constructed directly via ``qd.field(..., order=...)`` also report their layout here — the ``order=``</span>
+<span class="sd">        axis-string is translated into an integer permutation and stashed on the same ``_qd_layout`` attribute that</span>
+<span class="sd">        layout-tagged ndarrays use.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">layout</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="o">==</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">))):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">layout</span></div>
 
 
     <span class="nd">@property</span>
@@ -438,6 +778,48 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Sets corresponding dual field (forward mode).&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">dual</span> <span class="o">=</span> <span class="n">dual</span>
 
+<div class="viewcode-block" id="Field.has_grad">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.has_grad">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_grad</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Whether this field&#39;s adjoint (reverse-mode gradient) SNode is allocated.</span>
+
+<span class="sd">        ``self.grad`` is non-``None`` for every real-dtype field (the wrapper is allocated up-front so</span>
+<span class="sd">        ``qd.root.lazy_grad()`` can populate it later); the actual placed-or-not signal is whether the underlying</span>
+<span class="sd">        SNode has been placed via ``needs_grad=True``, ``qd.root.lazy_grad()``, or an explicit</span>
+<span class="sd">        ``qd.root.dense(...).place(field.grad)``. Mirrors ``self.snode.ptr.has_adjoint()``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad</span><span class="o">.</span><span class="n">_loop_range</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="Field.has_dual">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.has_dual">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_dual</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Whether this field&#39;s dual (forward-mode gradient) SNode is allocated.</span>
+
+<span class="sd">        Same semantics as :meth:`has_grad` for the dual companion. Mirrors ``self.snode.ptr.has_dual()``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dual</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">dual</span><span class="o">.</span><span class="n">_loop_range</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_require_placed</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Raise ``QuadrantsRuntimeError`` if this field&#39;s underlying SNode has never been placed.</span>
+
+<span class="sd">        ``create_field_member`` allocates an adjoint / dual ``FieldExpression`` for every real-dtype field so that</span>
+<span class="sd">        ``qd.root.lazy_grad()`` / ``qd.root.lazy_dual()`` can place it on demand, but ``_field()`` only calls</span>
+<span class="sd">        ``place_child`` when ``needs_grad`` / ``needs_dual`` is set. Reaching the wrapper directly and writing or</span>
+<span class="sd">        reading it (e.g. ``field.grad.fill(0.0)``) before the SNode is placed used to crash deep inside ``fill_field``</span>
+<span class="sd">        AST compilation with ``AttributeError: &#39;NoneType&#39; object has no attribute &#39;data_type&#39;``. Surface the same</span>
+<span class="sd">        situation as a clear ``QuadrantsRuntimeError`` so callers see the actual problem instead of a stack frame in</span>
+<span class="sd">        kernel template instantiation.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_loop_range</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span>
+            <span class="s2">&quot;Field has no allocation. Allocate via `qd.field(..., needs_grad=True)` / `needs_dual=True`, &quot;</span>
+            <span class="s2">&quot;`qd.root.lazy_grad()` / `qd.root.lazy_dual()`, or `qd.root.dense(...).place(field)` &quot;</span>
+            <span class="s2">&quot;before calling `fill` / read / write.&quot;</span>
+        <span class="p">)</span>
+
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="Field.fill">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.fill">[docs]</a>
@@ -448,8 +830,12 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="Field.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.to_numpy">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">DataTypeCxx</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">DataTypeCxx</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts `self` to a numpy array.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,</span>
+<span class="sd">                ``None`` uses zero-copy when available and falls back to a copy otherwise.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            numpy.ndarray: The result numpy array.</span>
@@ -460,11 +846,13 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="Field.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.to_torch">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts `self` to a torch tensor.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            device (torch.device, optional): The desired device of returned tensor.</span>
+<span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,</span>
+<span class="sd">                ``None`` uses zero-copy when available and falls back to a copy otherwise.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            torch.tensor: The result torch tensor.</span>
@@ -515,7 +903,7 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Cannot copy from a non-field object&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ti.field shape </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> does not match&quot;</span> <span class="sa">f</span><span class="s2">&quot; the source field shape </span><span class="si">{</span><span class="n">other</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.field shape </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> does not match&quot;</span> <span class="sa">f</span><span class="s2">&quot; the source field shape </span><span class="si">{</span><span class="n">other</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">tensor_to_tensor</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">tensor_to_tensor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span></div>
@@ -543,9 +931,19 @@
             <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">key</span><span class="p">,)</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;Slicing is not supported on ti.field&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;Slicing is not supported on qd.field&quot;</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">key</span> <span class="o">+</span> <span class="p">((</span><span class="mi">0</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">get_max_num_indices</span><span class="p">()</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)))</span>  <span class="c1"># type: ignore</span>
+        <span class="c1"># For layout-tagged fields (``_qd_layout = (a0, a1, ..., a_{N-1})`` canonical-axis permutation), the user writes</span>
+        <span class="c1"># indices in canonical order but the underlying flat rank-N SNode is allocated at the permuted physical shape</span>
+        <span class="c1"># and expects physical-order indices. Mirrors ``Tensor._permute_key`` in ``_tensor_wrapper.py``. Uses the same</span>
+        <span class="c1"># convention as :func:`build_Subscript`: physical index at nesting level ``p`` is ``canonical[layout[p]]``.</span>
+        <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">layout_t</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">layout_t</span> <span class="o">!=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout_t</span><span class="p">))):</span>
+                <span class="n">key</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">key</span><span class="p">[</span><span class="n">layout_t</span><span class="p">[</span><span class="n">p</span><span class="p">]]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout_t</span><span class="p">)))</span>
+
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="mi">0</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">get_max_num_indices</span><span class="p">()</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)))</span>  <span class="c1"># type: ignore</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_initialize_host_accessors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">host_accessors</span><span class="p">:</span>
@@ -555,6 +953,12 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_host_access</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">SNodeHostAccess</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">host_accessors</span><span class="p">]</span>  <span class="c1"># type: ignore</span>
+
+<div class="viewcode-block" id="Field.to_dlpack">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.to_dlpack">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">versioned</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Struct for is only available in Quadrants scope.&quot;</span><span class="p">)</span></div>
@@ -575,19 +979,44 @@
 
 <div class="viewcode-block" id="ScalarField.to_dlpack">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_dlpack">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Note: caller is responsible for calling ti.sync() between modifying the field, and</span>
-<span class="sd">        reading it.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">versioned</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Export this field as a DLPack capsule.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            versioned: If True, emit a DLPack v1 ``DLManagedTensorVersioned`` capsule (``&quot;dltensor_versioned&quot;``,</span>
+<span class="sd">                ``flags=0``). NumPy &gt;= 2.1 can consume v1 capsules and returns writable arrays; NumPy 2.0 marks v0</span>
+<span class="sd">                capsules read-only; NumPy &lt; 2.1 cannot consume v1 capsules at all. If False (default), emit a v0</span>
+<span class="sd">                ``DLManagedTensor`` (``&quot;dltensor&quot;``), required by ``torch.utils.dlpack.from_dlpack``.</span>
+
+<span class="sd">        Note: caller is responsible for calling qd.sync() between modifying the field and reading it.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">materialize</span><span class="p">()</span>
-        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">field_to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span></div>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">capsule</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">field_to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">versioned</span><span class="o">=</span><span class="n">versioned</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ModuleNotFoundError</span><span class="p">:</span>
+            <span class="c1"># The C++ ``field_to_dlpack`` calls ``torch_supports_byte_offset`` which unconditionally does ``import</span>
+            <span class="c1"># torch``. Guard here so callers that don&#39;t need torch (e.g. raw DLPack consumers) get a clear error</span>
+            <span class="c1"># instead of a worker crash.</span>
+            <span class="k">raise</span> <span class="ne">ModuleNotFoundError</span><span class="p">(</span>
+                <span class="s2">&quot;field.to_dlpack() requires torch to be installed &quot;</span>
+                <span class="s2">&quot;(the C++ layer checks torch version for DLPack byte_offset support)&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+        <span class="c1"># For layout-tagged fields the underlying dense SNode is allocated at the *permuted physical* shape; the C++</span>
+        <span class="c1"># ``field_to_dlpack`` reports that physical shape because the SNode hierarchy no longer encodes the</span>
+        <span class="c1"># canonical-axis permutation (which now lives on the Python-side ``_qd_layout`` attribute instead of nested</span>
+        <span class="c1"># rank-1 SNodes). Patch the DLManagedTensor in place so consumers see the canonical shape with permuted</span>
+        <span class="c1"># strides — the same view contract that layout-tagged ndarrays produce.</span>
+        <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">_patch_field_dlpack_canonical</span><span class="p">(</span><span class="n">capsule</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">capsule</span></div>
 
 
 <div class="viewcode-block" id="ScalarField.fill">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.fill">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Fills this scalar field with a specified value.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">in_python_scope</span><span class="p">():</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">fill_field</span>  <span class="c1"># pylint: disable=C0415</span>
 
@@ -603,9 +1032,25 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="ScalarField.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_numpy">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a `numpy.ndarray`.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">SNodeType</span><span class="o">.</span><span class="n">dynamic</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a ``numpy.ndarray``.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            dtype: Optional target numpy dtype.</span>
+<span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,</span>
+<span class="sd">                ``None`` uses zero-copy when available and falls back to a copy otherwise.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">arr</span> <span class="o">=</span> <span class="n">_try_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">arr</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">dtype</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;copy=False is incompatible with dtype conversion (</span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">arr</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">SNodeType</span><span class="o">.</span><span class="n">dynamic</span><span class="p">:</span>
             <span class="n">warn</span><span class="p">(</span>
                 <span class="s2">&quot;You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the snode will be converted to zeros in the resulting array.&quot;</span>
             <span class="p">)</span>
@@ -617,35 +1062,45 @@
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">tensor_to_ext_arr</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">tensor_to_ext_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">)</span>
-        <span class="c1"># TODO: can we remove .runtime_ops here?</span>
-        <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>  <span class="c1"># type: ignore</span>
+        <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>  <span class="c1"># type: ignore  # TODO: can we remove .runtime_ops here?</span>
         <span class="k">return</span> <span class="n">arr</span></div>
 
 
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="ScalarField.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_torch">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a `torch.tensor`.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a ``torch.Tensor``.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            device: Optional torch device for the returned tensor.</span>
+<span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,</span>
+<span class="sd">                ``None`` uses zero-copy when available and falls back to a copy otherwise.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">_try_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">is_scalar</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">result</span>
+
         <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
 
-        <span class="c1"># pylint: disable=E1101</span>
         <span class="n">arr</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">to_pytorch_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">tensor_to_ext_arr</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">tensor_to_ext_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">)</span>
-        <span class="c1"># TODO: can we remove .runtime_ops here?</span>
-        <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>  <span class="c1"># type: ignore</span>
+        <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>  <span class="c1"># type: ignore  # TODO: can we remove .runtime_ops here?</span>
+        <span class="n">mps_sync_if_metal</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">arr</span></div>
 
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_from_external_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ti.field shape </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> does not match&quot;</span> <span class="sa">f</span><span class="s2">&quot; the numpy array shape </span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.field shape </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> does not match&quot;</span> <span class="sa">f</span><span class="s2">&quot; the numpy array shape </span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ti.field shape </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> does not match&quot;</span> <span class="sa">f</span><span class="s2">&quot; the numpy array shape </span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.field shape </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> does not match&quot;</span> <span class="sa">f</span><span class="s2">&quot; the numpy array shape </span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">ext_arr_to_tensor</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">ext_arr_to_tensor</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
@@ -657,6 +1112,7 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.from_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies the data from a `numpy.ndarray` into this field.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">arr</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">c_contiguous</span><span class="p">:</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>  <span class="c1"># pylint: disable=C0415</span>
 
@@ -666,11 +1122,13 @@
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_initialize_host_accessors</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">host_accessors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">setter</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_pad_key</span><span class="p">(</span><span class="n">key</span><span class="p">))</span>  <span class="c1"># type: ignore</span>
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_require_placed</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_initialize_host_accessors</span><span class="p">()</span>
         <span class="c1"># Check for potential slicing behaviour</span>
         <span class="c1"># for instance: x[0, :]</span>
@@ -681,19 +1139,19 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">integer</span><span class="p">)):</span>
                 <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
                     <span class="sa">f</span><span class="s2">&quot;Detected illegal element of type: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2">. &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;Please be aware that slicing a ti.field is not supported so far.&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;Please be aware that slicing a qd.field is not supported so far.&quot;</span>
                 <span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">host_accessors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">getter</span><span class="p">(</span><span class="o">*</span><span class="n">padded_key</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># make interactive shell happy, prevent materialization</span>
-        <span class="k">return</span> <span class="s2">&quot;&lt;ti.field&gt;&quot;</span></div>
+        <span class="k">return</span> <span class="s2">&quot;&lt;qd.field&gt;&quot;</span></div>
 
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">SNodeHostAccessor</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snode</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">is_real</span><span class="p">(</span><span class="n">snode</span><span class="o">.</span><span class="n">data_type</span><span class="p">()):</span>
+        <span class="k">if</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_real</span><span class="p">(</span><span class="n">snode</span><span class="o">.</span><span class="n">data_type</span><span class="p">()):</span>
             <span class="n">write_func</span> <span class="o">=</span> <span class="n">snode</span><span class="o">.</span><span class="n">write_float</span>
             <span class="n">read_func</span> <span class="o">=</span> <span class="n">snode</span><span class="o">.</span><span class="n">read_float</span>
         <span class="k">else</span><span class="p">:</span>
@@ -704,17 +1162,17 @@
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">snode</span><span class="o">.</span><span class="n">write_int</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
 
-            <span class="k">if</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">is_signed</span><span class="p">(</span><span class="n">snode</span><span class="o">.</span><span class="n">data_type</span><span class="p">()):</span>
+            <span class="k">if</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_signed</span><span class="p">(</span><span class="n">snode</span><span class="o">.</span><span class="n">data_type</span><span class="p">()):</span>
                 <span class="n">read_func</span> <span class="o">=</span> <span class="n">snode</span><span class="o">.</span><span class="n">read_int</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">read_func</span> <span class="o">=</span> <span class="n">snode</span><span class="o">.</span><span class="n">read_uint</span>
 
         <span class="k">def</span><span class="w"> </span><span class="nf">getter</span><span class="p">(</span><span class="o">*</span><span class="n">key</span><span class="p">):</span>
-            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">get_max_num_indices</span><span class="p">()</span>
+            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">get_max_num_indices</span><span class="p">()</span>
             <span class="k">return</span> <span class="n">read_func</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
 
         <span class="k">def</span><span class="w"> </span><span class="nf">setter</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">*</span><span class="n">key</span><span class="p">):</span>
-            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">get_max_num_indices</span><span class="p">()</span>
+            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">get_max_num_indices</span><span class="p">()</span>
             <span class="n">write_func</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
             <span class="c1"># same as above</span>
             <span class="k">if</span> <span class="p">(</span>
@@ -752,7 +1210,7 @@
 
 <div class="viewcode-block" id="BitpackedFields.bit_struct_type_builder">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.BitpackedFields.bit_struct_type_builder">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">bit_struct_type_builder</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">BitStructTypeBuilder</span><span class="p">(</span><span class="n">max_num_bits</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bit_struct_type_builder</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">BitStructTypeBuilder</span><span class="p">(</span><span class="n">max_num_bits</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="BitpackedFields.place">
@@ -810,8 +1268,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -845,7 +1303,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
 </p></div>
       
     </div>

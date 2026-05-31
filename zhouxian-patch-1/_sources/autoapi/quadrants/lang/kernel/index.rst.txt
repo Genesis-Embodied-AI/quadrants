@@ -90,6 +90,18 @@ Module Contents
 
 
 
+   .. py:attribute:: use_graph
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: graph_do_while_arg
+      :type:  str | None
+      :value: None
+
+
+
    .. py:attribute:: quadrants_callable
       :type:  quadrants.lang._quadrants_callable.QuadrantsCallable | None
       :value: None
@@ -137,7 +149,7 @@ Module Contents
    .. py:method:: materialize(key: CompiledKernelKeyType | None, py_args: tuple[Any, Ellipsis], arg_features=None)
 
 
-   .. py:method:: launch_kernel(key, t_kernel: quadrants._lib.core.quadrants_python.KernelCxx, compiled_kernel_data: quadrants._lib.core.quadrants_python.CompiledKernelData | None, *args) -> Any
+   .. py:method:: launch_kernel(key, t_kernel: quadrants._lib.core.quadrants_python.KernelCxx, compiled_kernel_data: quadrants._lib.core.quadrants_python.CompiledKernelData | None, *args, qd_stream=None) -> Any
 
 
    .. py:method:: construct_kernel_ret(launch_ctx: quadrants._lib.core.quadrants_python.KernelLaunchContext, ret_type: Any, indices: tuple[int, Ellipsis])
