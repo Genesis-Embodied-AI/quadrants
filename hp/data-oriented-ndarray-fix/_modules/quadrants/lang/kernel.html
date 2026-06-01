@@ -370,6 +370,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">_TENSOR_WRAPPER_TYPES</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">_kernel_impl_dataclass</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">src_hasher</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._template_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="n">chain_has_mutable_container</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._wrap_inspect</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionSourceInfo</span><span class="p">,</span> <span class="n">get_source_info_and_src</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">KernelSimplicityASTChecker</span><span class="p">,</span>
@@ -817,23 +818,18 @@
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">:</span>
             <span class="k">return</span>
 
-        <span class="c1"># Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.Template``-annotated</span>
-        <span class="c1"># kernel parameter was never an intentional Quadrants pattern. It works inadvertently because the template</span>
-        <span class="c1"># walker happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.</span>
-        <span class="c1"># dataclass`` is the dataclass type itself (flat-by-fields path). We fire the warning here, after the</span>
-        <span class="c1"># ``materialized_kernels`` cache-hit early return above, so it only runs on the first compile for each</span>
-        <span class="c1"># unique spec-key — zero cost on the steady-state launch hot path. Doubly-decorated objects (``@qd.data_</span>
-        <span class="c1"># oriented`` over ``@dataclasses.dataclass``) are excluded because that combination is a legitimate</span>
-        <span class="c1"># pattern routed through the data-oriented path.</span>
+        <span class="c1"># Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.Template``-annotated kernel</span>
+        <span class="c1"># parameter was never an intentional Quadrants pattern. It works inadvertently because the template walker</span>
+        <span class="c1"># happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.dataclass`` is</span>
+        <span class="c1"># the dataclass type itself (flat-by-fields path). We fire the warning here, after the ``materialized_kernels``</span>
+        <span class="c1"># cache-hit early return above, so it only runs on the first compile for each unique spec-key — zero cost on the</span>
+        <span class="c1"># steady-state launch hot path. Doubly-decorated objects (``@qd.data_oriented`` over ``@dataclasses.dataclass``)</span>
+        <span class="c1"># are excluded because that combination is a legitimate pattern routed through the data-oriented path.</span>
         <span class="k">for</span> <span class="n">arg_meta</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span> <span class="n">py_args</span><span class="p">):</span>
             <span class="n">ann</span> <span class="o">=</span> <span class="n">arg_meta</span><span class="o">.</span><span class="n">annotation</span>
             <span class="k">if</span> <span class="n">ann</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">template</span> <span class="ow">and</span> <span class="nb">type</span><span class="p">(</span><span class="n">ann</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">template</span><span class="p">:</span>
                 <span class="k">continue</span>
-            <span class="k">if</span> <span class="p">(</span>
-                <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
-                <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span>
-                <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
-            <span class="p">):</span>
+            <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
                 <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
                     <span class="sa">f</span><span class="s2">&quot;Kernel </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__qualname__</span><span class="si">!r}</span><span class="s2"> parameter </span><span class="si">{</span><span class="n">arg_meta</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2">: passing a &quot;</span>
                     <span class="s2">&quot;@dataclasses.dataclass instance into a qd.Template-annotated kernel parameter was &quot;</span>
@@ -928,18 +924,18 @@
         <span class="c1"># id(struct) in args_hash is already sufficient. For mutable structs, ndarray attributes can change between</span>
         <span class="c1"># calls while the struct id stays the same, so we fold the live ndarray id(s) into the hash.</span>
         <span class="c1">#</span>
-        <span class="c1"># The predicate must catch any &quot;host container in which ndarray member references can be reassigned at runtime&quot;</span>
-        <span class="c1"># case. Non-frozen dataclasses have ``__hash__ is None`` (Python sets it when ``eq=True, frozen=False``), so</span>
-        <span class="c1"># they hit the first arm. ``@qd.data_oriented`` classes inherit ``object.__hash__`` so the ``__hash__ is None``</span>
-        <span class="c1"># check is False for them — we need a separate arm. Without this arm, ``state.x = other_ndarray`` on the same</span>
-        <span class="c1"># data_oriented instance would not invalidate the launch-context cache and the kernel would re-launch against</span>
-        <span class="c1"># the stale binding.</span>
+        <span class="c1"># The predicate must catch any &quot;host container in which ndarray member references can be reassigned at</span>
+        <span class="c1"># runtime&quot; case. Non-frozen dataclasses have ``__hash__ is None`` (Python sets it when ``eq=True,</span>
+        <span class="c1"># frozen=False``), so they hit the first arm. ``@qd.data_oriented`` classes inherit ``object.__hash__`` so the</span>
+        <span class="c1"># ``__hash__ is None`` check is False for them — we need a separate arm. Without it, ``state.x = other_nd`` on</span>
+        <span class="c1"># the same data_oriented instance would not invalidate the launch-context cache and the kernel would re-launch</span>
+        <span class="c1"># against the stale binding.</span>
         <span class="c1">#</span>
         <span class="c1"># Mutability must be checked across the *entire* attr-chain, not just the top-level arg. With a frozen outer</span>
-        <span class="c1"># container wrapping a mutable inner container that holds the ndarray (e.g. ``frozen dataclass -&gt; @qd.data_-</span>
-        <span class="c1"># oriented -&gt; qd.ndarray``), id(outer) alone does not capture leaf rebinding because the inner container can</span>
-        <span class="c1"># still reassign ``.x``. So we OR-fold the mutability check across every parent along ``chain`` from the root</span>
-        <span class="c1"># down to (but excluding) the leaf attribute.</span>
+        <span class="c1"># container wrapping a mutable inner container that holds the ndarray (e.g. frozen dataclass -&gt; data_oriented</span>
+        <span class="c1"># -&gt; ndarray), id(outer) alone does not capture leaf rebinding because the inner container can still reassign</span>
+        <span class="c1"># ``.x``. So we OR-fold the mutability check across every parent along ``chain`` from the root down to (but</span>
+        <span class="c1"># excluding) the leaf attribute.</span>
         <span class="k">if</span> <span class="n">key</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_key</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">:</span>
                 <span class="n">struct_nd_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
@@ -947,7 +943,7 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span> <span class="o">=</span> <span class="p">[</span>
                         <span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">chain</span><span class="p">)</span>
                         <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span> <span class="ow">in</span> <span class="n">struct_nd_info</span>
-                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_chain_has_mutable_container</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">chain_has_mutable_container</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span><span class="p">)</span>
                     <span class="p">]</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span> <span class="o">=</span> <span class="p">[]</span>
@@ -1106,30 +1102,6 @@
         <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">:</span>
             <span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">obj</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_chain_has_mutable_container</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True if any container along ``attr_chain`` from ``args[template_arg_idx]`` down to (but excluding)</span>
-<span class="sd">        the leaf ndarray attribute is mutable in a way that lets it rebind its child attribute. Such a parent makes</span>
-<span class="sd">        ``id(args[template_arg_idx])`` alone insufficient to uniquely identify the leaf, so the leaf id must be</span>
-<span class="sd">        folded into the launch-context cache key.</span>
-
-<span class="sd">        A container is &quot;mutable&quot; here iff:</span>
-<span class="sd">        - its type has ``__hash__ is None`` (Python sets this for non-frozen ``@dataclass(eq=True)`` types), or</span>
-<span class="sd">        - it is a ``@qd.data_oriented`` instance (these inherit ``object.__hash__`` so the ``__hash__ is None``</span>
-<span class="sd">          check misses them; they support normal attribute assignment).</span>
-
-<span class="sd">        Walks all parents from the root down to ``attr_chain[:-1]`` — the final entry is the leaf itself, whose</span>
-<span class="sd">        own mutability does not affect rebinding by its parent. Returns on the first mutable parent.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">cur</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">template_arg_idx</span><span class="p">]</span>
-        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="o">.</span><span class="fm">__hash__</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">cur</span><span class="p">):</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">for</span> <span class="n">attr_name</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
-            <span class="n">cur</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
-            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span><span class="o">.</span><span class="fm">__hash__</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">cur</span><span class="p">):</span>
-                <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">return</span> <span class="kc">False</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_set_struct_ndarray_args</span><span class="p">(</span>
