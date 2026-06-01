@@ -167,7 +167,7 @@ def pytest_runtest_logreport(report):
     if not os.environ.get("PYTEST_XDIST_WORKER"):
         return
 
-    if report.outcome not in ("rerun", "error", "failed"):
+    if report.outcome not in ("error", "failed"):
         return
 
     d = _exit_marker_dir()
