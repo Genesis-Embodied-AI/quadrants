@@ -126,6 +126,7 @@ class Offloader {
           offloaded->body->insert(std::move(s->body->statements[j]));
         }
         offloaded->range_hint = s->range_hint;
+        offloaded->stream_parallel_group_id = s->stream_parallel_group_id;
         offloaded->loop_name = s->loop_name;
         root_block->insert(std::move(offloaded));
       } else if (auto st = stmt->cast<StructForStmt>()) {
@@ -237,6 +238,7 @@ class Offloader {
     offloaded_struct_for->is_bit_vectorized = for_stmt->is_bit_vectorized;
     offloaded_struct_for->num_cpu_threads = std::min(for_stmt->num_cpu_threads, config.cpu_max_num_threads);
     offloaded_struct_for->mem_access_opt = mem_access_opt;
+    offloaded_struct_for->stream_parallel_group_id = for_stmt->stream_parallel_group_id;
     offloaded_struct_for->loop_name = for_stmt->loop_name;
 
     root_block->insert(std::move(offloaded_struct_for));

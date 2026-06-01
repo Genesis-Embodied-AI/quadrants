@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
 #
-# Hard-kill timeout plugin (drop-in replacement for pytest-timeout).
-# Uses CFFI to compile a native C watchdog that calls _exit(1) on timeout.
-# Unlike stock pytest-timeout (which uses Python-level SIGALRM handlers),
-# this can kill tests that hang inside native CUDA/HIP kernel calls or
-# C extensions that don't release the GIL.
+# Hard-kill timeout plugin (drop-in replacement for pytest-timeout).  Uses CFFI to compile a native C watchdog that
+# calls _exit(1) on timeout.  Unlike stock pytest-timeout (which uses Python-level SIGALRM handlers), this can kill
+# tests that hang inside native CUDA/HIP kernel calls or C extensions that don't release the GIL.
 #
-# Stock pytest-timeout must be suppressed (`-p no:timeout`) when this
-# plugin is loaded, because both register the same hook specs and pytest
-# will raise a ValueError on the duplicate.
+# Stock pytest-timeout must be suppressed (`-p no:timeout`) when this plugin is loaded, because both register the same
+# hook specs and pytest will raise a ValueError on the duplicate.
 
 # -- stdlib --
 import importlib

@@ -127,9 +127,9 @@ def rewrite_ast(tree: ast.Module, filepath: str, start_lineno: int) -> ast.Modul
 def _detect_arc_mode() -> bool:
     """Detect whether pytest-cov is running in branch (arc) mode.
 
-    Checks _QD_KCOV_ARC env var first (set by the pytest plugin), then falls back to reading .coverage.
-    Defaults to False (line mode) when nothing is known, since ``pytest --cov`` without ``--cov-branch``
-    is the more common invocation.
+    Checks _QD_KCOV_ARC env var first (set by the pytest plugin), then falls back to reading .coverage. Defaults to
+    False (line mode) when nothing is known, since ``pytest --cov`` without ``--cov-branch`` is the more common
+    invocation.
     """
     arc_env = os.environ.get("_QD_KCOV_ARC")
     if arc_env is not None:

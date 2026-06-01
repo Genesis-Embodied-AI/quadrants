@@ -36,6 +36,10 @@ x[3] = 10.0   # AssertionError in debug mode, silent corruption otherwise
 a = x[-1]     # AssertionError in debug mode
 ```
 
+#### Adstack overflow
+
+The adstack overflow check on reverse-mode autodiff runs always, on every backend, regardless of `debug`. A push past the per-stack capacity raises `QuadrantsAssertionError("[Aa]dstack overflow")` at the next Quadrants Python entry that polls the overflow flag after the offending kernel has executed - kernel launch, host-side field / ndarray read, or `qd.sync()`. On CPU this is the entry of the offending launch itself; on GPU it can be one or more entries later, since the GPU may not have run the offending push by the time the poll at end-of-launch fires. The error message describes the cause (untracked tensor mutation between launches, or sizer under-estimate caused by a bug in Quadrants) and the recovery flow; see [Autodiff -> What can go wrong](autodiff.md) for the full description.
+
 ### Assertions in kernels
 
 The `assert` statement works inside kernels when debug mode is enabled:
@@ -60,6 +64,8 @@ Debug mode adds runtime checks to every field access and assertion, which can si
 A typical workflow:
 1. Develop with `debug=True` to catch bounds errors and logic bugs
 2. Switch to `debug=False` (the default) for benchmarking and production runs
+
+`debug=True` always implies `check_out_of_bound=True`. For bounds safety in a release build without the rest of debug mode, set [`check_out_of_bound=True`](./init_options.md#check_out_of_bound) instead.
 
 ## Other debugging tools
 
@@ -90,7 +96,19 @@ def debug_kernel(a: qd.Template) -> None:
         print("i =", i, "val =", a[i])
 ```
 
-Note that print output from GPU kernels may appear out of order due to parallel execution.
+Per-backend support:
+
+| Backend | Kernel `print()` |
+|---------|------------------|
+| CPU | yes |
+| CUDA | yes |
+| AMDGPU | no (silently dropped) |
+| Metal | no (silently dropped) |
+| Vulkan | yes (via debug-printf SPIR-V extension) |
+
+**Note.** Output from GPU kernels appears in order despite parallel execution because all kernels are queued in the same compute stream.
+
+**Important.** Avoid kernel `print()` calls in production code where you can. Quadrants synchronizes the compute queue after every dispatch of a kernel that contains a `print()` so the output appears as close as possible to the call site. The synchronization happens unconditionally on every launch of that kernel, even when the surrounding control flow leaves the `print()` unreached at runtime; the cost is the full per-launch sync overhead, not just the cost of the `print()` itself.
 
 ### Dumping compiled IR
 
@@ -101,3 +119,11 @@ QD_DUMP_IR=1 QD_OFFLINE_CACHE=0 python my_script.py
 ```
 
 Compiled kernels will be written to `/tmp/ir` by default. Use `QD_DEBUG_DUMP_PATH=` to redirect to a custom directory.
+
+### Tracing adstack heap allocations
+
+```bash
+QD_DEBUG_ADSTACK=1 python my_script.py
+```
+
+Prints one line per task per kernel launch describing each adstack heap binding: task name, heap kind (float or int), sizing source (per-task reducer count or dispatched-threads worst case), per-thread stride, and resulting allocation in bytes. Useful for pinning which task drives the peak when an adstack-bearing kernel hits an OOM and the remedies in [Avoiding OOM on GPU](./autodiff.md#avoiding-oom-on-gpu) do not point at an obvious culprit.

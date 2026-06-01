@@ -132,37 +132,78 @@ class _AnnotatedRenderer(_TerminalRenderer):
                 print(f"{color} {marker} {lineno:4d}{RESET} {color}{text}{RESET}")
 
 
+_COMMIT_HASH_OVERRIDE = None
+
+
+def _get_commit_hash():
+    if _COMMIT_HASH_OVERRIDE:
+        return _COMMIT_HASH_OVERRIDE
+    return subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    ).stdout.strip()
+
+
 class _MarkdownRenderer(_Renderer):
+    """Full annotated markdown report (for GitHub Check body)."""
+
     _STATUS_MARKER = {"hit": "🟢", "miss": "🔴", "no_data": "  "}
 
+    def __init__(self):
+        self._buf = []
+
+    def _print(self, text=""):
+        self._buf.append(text)
+
     def begin(self, total_hit, total_miss, total_pct):
-        commit = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=REPO_ROOT,
-        ).stdout.strip()
+        commit = _get_commit_hash()
         heading = f"## Coverage Report (`{commit}`)\n" if commit else "## Coverage Report\n"
-        print(heading)
-        print("| Metric | Value |")
-        print("|--------|-------|")
-        print(f"| **Diff coverage** (changed lines only) | **{total_pct:.0f}%** |")
+        self._print(heading)
+        self._print("| Metric | Value |")
+        self._print("|--------|-------|")
+        self._print(f"| **Diff coverage** (changed lines only) | **{total_pct:.0f}%** |")
         overall = _get_overall_coverage()
         if overall:
-            print(f"| Overall project coverage | {overall} |")
-        print()
-        print(f"**Total**: {total_hit + total_miss} lines, {total_miss} missing, {total_pct:.0f}% covered\n")
+            self._print(f"| Overall project coverage | {overall} |")
+        self._print()
+        self._print(f"**Total**: {total_hit + total_miss} lines, {total_miss} missing, {total_pct:.0f}% covered\n")
 
     def begin_file(self, filename, pct, missing):
         icon = "🟢" if pct >= 80 else "🔴"
-        print(f"<details><summary>{icon} <code>{filename}</code> ({pct:.0f}%)</summary>\n")
-        print("```")
+        self._print(f"<details><summary>{icon} <code>{filename}</code> ({pct:.0f}%)</summary>\n")
+        self._print("```")
 
     def write_line(self, lineno, text, status):
-        print(f"{self._STATUS_MARKER[status]} {lineno:4d}  {text}")
+        self._print(f"{self._STATUS_MARKER[status]} {lineno:4d}  {text}")
 
     def end_file(self):
-        print("```\n</details>\n")
+        self._print("```\n</details>\n")
+
+    def output(self):
+        return "\n".join(self._buf)
+
+
+class _MarkdownSummaryRenderer(_Renderer):
+    """One-line summary for the PR comment (turned into a link by the workflow)."""
+
+    def __init__(self):
+        self._total_hit = self._total_miss = 0
+        self._total_pct = 0.0
+
+    def begin(self, total_hit, total_miss, total_pct):
+        self._total_hit, self._total_miss, self._total_pct = total_hit, total_miss, total_pct
+
+    def begin_file(self, filename, pct, missing):
+        pass
+
+    def finish(self):
+        pass
+
+    def output(self):
+        total = self._total_hit + self._total_miss
+        return f"Diff coverage: {self._total_pct:.0f}% · {total} lines, {self._total_miss} missing"
 
 
 _HTML_CSS = """\
@@ -246,6 +287,7 @@ _RENDERERS = {
     "terminal": _TerminalRenderer,
     "annotated": _AnnotatedRenderer,
     "markdown": _MarkdownRenderer,
+    "markdown-summary": _MarkdownSummaryRenderer,
     "html": _HtmlRenderer,
 }
 
@@ -363,6 +405,10 @@ def generate_report(compare_branch, coverage_xmls, output_format="terminal", out
         renderer.end_file()
     renderer.finish()
 
+    rendered = renderer.output()
+    if rendered is not None:
+        print(rendered)
+
     return total_pct
 
 
@@ -427,7 +473,7 @@ def main():
         "--format",
         dest="output_format",
         default="html",
-        choices=["html", "terminal", "annotated", "markdown"],
+        choices=["html", "terminal", "annotated", "markdown", "markdown-summary"],
         help="Output format (default: html)",
     )
     parser.add_argument(
@@ -436,8 +482,16 @@ def main():
         default=None,
         help="Output file path for HTML format (default: coverage-report.html in repo root)",
     )
+    parser.add_argument(
+        "--commit-hash",
+        default=None,
+        help="Override the commit hash shown in the report heading (default: git rev-parse HEAD)",
+    )
 
     args = parser.parse_args()
+
+    global _COMMIT_HASH_OVERRIDE
+    _COMMIT_HASH_OVERRIDE = args.commit_hash
 
     if not args.report_only:
         combine_coverage()

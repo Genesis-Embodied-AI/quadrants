@@ -168,6 +168,11 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
     emit(expr->high);
   }
 
+  void visit(VolatileLoadExpression *expr) override {
+    emit(ExprOpCode::VolatileLoadExpression);
+    emit(expr->src);
+  }
+
   void visit(LoopUniqueExpression *expr) override {
     emit(ExprOpCode::LoopUniqueExpression);
     emit(expr->input);
@@ -377,6 +382,7 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
     emit(stmt->strictly_serialized);
     emit(stmt->mem_access_opt);
     emit(stmt->block_dim);
+    emit(stmt->stream_parallel_group_id);
     emit(stmt->body.get());
   }
 

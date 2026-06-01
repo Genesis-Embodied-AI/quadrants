@@ -5,6 +5,7 @@
 #include "quadrants/rhi/metal/metal_api.h"
 #include <memory>
 #include <regex>
+#include <unordered_set>
 
 // clang-format off
 #if defined(__APPLE__) && defined(__OBJC__)
@@ -415,15 +416,34 @@ class MetalCommandList final : public CommandList {
   // For renderpass resuming, track whether a renderpass has been started
   // Used to override LoadAction, to prevent uninteded clearing when resuming
   bool is_renderpass_active_{false};
+
+  // Persistent compute command encoder reused across consecutive `dispatch()` calls so the GPU sees one
+  // MTLComputeCommandEncoder per dispatch chain instead of one per dispatch. Each encoder begin / end pair on Apple
+  // Silicon's M-series GPUs costs ~700 us of inter-dispatch gap (encoder teardown plus re-bind state), and Metal's
+  // `dispatchType=Serial` already gives the same per-dispatch ordering inside a single encoder, so coalescing into one
+  // encoder is semantics-preserving and shaves the gap to driver-scheduling overhead. The encoder is opened lazily on
+  // the first `dispatch()` call and torn down via `flush_pending_encoder` before any encoder-incompatible op
+  // (`buffer_copy`, `buffer_fill`, `begin_renderpass`) and before `finalize()` returns the cmdbuf to the stream for
+  // commit. Set of physical buffers already passed through `useResource:` in this encoder lifetime is tracked alongside
+  // so we don't issue redundant `useResource:` calls inside one encoder. Initialised to `nullptr` (the C++ form of
+  // Metal's `nil`) so this header compiles in both ObjC++ (.mm) and plain C++ contexts. `DEFINE_METAL_ID_TYPE` above
+  // maps the type to `id<MTLComputeCommandEncoder>` in ObjC++ and to `struct MTLComputeCommandEncoder_t *` in C++;
+  // `nullptr` is a valid initialiser for both.
+  MTLComputeCommandEncoder_id current_compute_encoder_{nullptr};
+  std::unordered_set<uint64_t> compute_encoder_resident_alloc_ids_;
+  void flush_pending_encoder();
 };
 
 class MetalStream final : public Stream {
  public:
-  // `mtl_command_queue` should be already retained.
-  explicit MetalStream(const MetalDevice &device, MTLCommandQueue_id mtl_command_queue);
+  // When `owns_queue` is true (the default), `mtl_command_queue` should be already retained; the stream will
+  // release it on destruction.  When false, the queue is borrowed — the stream will NOT retain or release it,
+  // and the caller must keep it alive for the stream's lifetime.
+  explicit MetalStream(const MetalDevice &device, MTLCommandQueue_id mtl_command_queue, bool owns_queue = true);
   ~MetalStream() override;
 
   static MetalStream *create(const MetalDevice &device);
+  static MetalStream *create_with_external_queue(const MetalDevice &device, MTLCommandQueue_id external_queue);
   void destroy();
 
   MTLCommandQueue_id mtl_command_queue() const {
@@ -440,6 +460,7 @@ class MetalStream final : public Stream {
   const MetalDevice *device_;
   MTLCommandQueue_id mtl_command_queue_;
   std::vector<MTLCommandBuffer_id> pending_cmdbufs_;
+  bool owns_queue_{true};
   bool is_destroyed_{false};
 };
 
@@ -487,7 +508,9 @@ constexpr auto kMetalVertFunctionName = "vert_function";
 class MetalDevice final : public GraphicsDevice {
  public:
   // `mtl_device` should be already retained.
-  explicit MetalDevice(MTLDevice_id mtl_device);
+  // If `external_command_queue` is non-null, it is used instead of creating a new one.  The queue is borrowed
+  // (not retained) — the caller must keep it alive for the device's lifetime.
+  explicit MetalDevice(MTLDevice_id mtl_device, MTLCommandQueue_id external_command_queue = nullptr);
   ~MetalDevice() override;
 
   Arch arch() const override {
@@ -498,6 +521,7 @@ class MetalDevice final : public GraphicsDevice {
   }
 
   static MetalDevice *create();
+  static MetalDevice *create_with_external_queue(uint64_t external_queue_ptr);
   void destroy();
 
   std::unique_ptr<Surface> create_surface(const SurfaceConfig &config) override;

@@ -6,6 +6,7 @@
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/visitors.h"
 #include "quadrants/ir/transforms.h"
+#include "quadrants/program/compile_config.h"
 #include "quadrants/system/profiler.h"
 
 namespace quadrants::lang {
@@ -138,6 +139,13 @@ void verify(IRNode *root) {
   } else {
     IRVerifier::run(root);
   }
+}
+
+void verify_if_debug(IRNode *root, const CompileConfig &config) {
+  if (!config.debug) {
+    return;
+  }
+  verify(root);
 }
 }  // namespace irpass::analysis
 

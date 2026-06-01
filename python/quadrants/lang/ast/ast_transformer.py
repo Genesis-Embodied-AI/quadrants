@@ -86,6 +86,10 @@ class ASTTransformer(Builder):
         if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__qd_"):
             ctx.global_context.pruning.mark_used(ctx.func.func_id, node.id)
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
+        # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
+        # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
+        # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
+        node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node.ptr, Expr):
             node.ptr.dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
@@ -115,14 +119,17 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_assign_annotated(
-        ctx: ASTTransformerFuncContext, target: ast.Name, value, is_static_assign: bool, annotation: Type
+        ctx: ASTTransformerFuncContext,
+        target: ast.Name,
+        value,
+        is_static_assign: bool,
+        annotation: Type,
     ):
         """Build an annotated assignment like this: target: annotation = value.
 
         Args:
            ctx (ast_builder_utils.BuilderContext): The builder context.
-           target (ast.Name): A variable name. `target.id` holds the name as
-           a string.
+           target (ast.Name): A variable name. `target.id` holds the name as a string.
            annotation: A type we hope to assign to the target
            value: A node representing the value.
            is_static_assign: A boolean value indicating whether this is a static assignment
@@ -152,9 +159,8 @@ class ASTTransformer(Builder):
         build_stmt(ctx, node.value)
         is_static_assign = isinstance(node.value, ast.Call) and node.value.func.ptr is impl.static
 
-        # Keep all generated assign statements and compose single one at last.
-        # The variable is introduced to support chained assignments.
-        # Ref https://github.com/taichi-dev/taichi/issues/2659.
+        # Keep all generated assign statements and compose single one at last. The variable is introduced to support
+        # chained assignments. Ref https://github.com/taichi-dev/taichi/issues/2659.
         values = node.value.ptr if is_static_assign else impl.expr_init(node.value.ptr)
 
         for node_target in node.targets:
@@ -163,7 +169,10 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_assign_unpack(
-        ctx: ASTTransformerFuncContext, node_target: list | ast.Tuple, values, is_static_assign: bool
+        ctx: ASTTransformerFuncContext,
+        node_target: list | ast.Tuple,
+        values,
+        is_static_assign: bool,
     ):
         """Build the unpack assignments like this: (target1, target2) = (value1, value2).
         The function should be called only if the node target is a tuple.
@@ -262,11 +271,55 @@ class ASTTransformer(Builder):
         return False
 
     @staticmethod
+    def _unpack_layout_vector_index(ast_builder, index, layout_len):
+        """If ``index`` is a rank-1 Vector of length ``layout_len``, return its component list so the layout permutation
+        can be applied per-axis. Otherwise return ``[index]`` unchanged.
+
+        Handles both forms a single subscript can take inside a kernel:
+
+        - ``Matrix`` (Python class) — produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``
+          returning a ``[Matrix([i, j])]`` list.
+        - ``Expr`` with tensor shape ``(N,)`` — produced by ``matrix.make_matrix(loop_indices, ...)`` in
+          :func:`build_struct_for` / :func:`build_grouped_ndrange_for`, which is what real kernels see for
+          ``for I in qd.grouped(...)``.
+        """
+        if isinstance(index, Matrix) and index.n == layout_len and index.m == 1:
+            return index.to_list()
+        if isinstance(index, expr.Expr) and index.is_tensor():
+            shape = index.get_shape()
+            if len(shape) == 1 and shape[0] == layout_len:
+                return [impl.subscript(ast_builder, index, k) for k in range(layout_len)]
+        return [index]
+
+    @staticmethod
     def build_Subscript(ctx: ASTTransformerFuncContext, node: ast.Subscript):
         build_stmt(ctx, node.value)
         build_stmt(ctx, node.slice)
         if not ASTTransformer.is_tuple(node.slice):
             node.slice.ptr = [node.slice.ptr]
+        # Tensors layout: a layout-tagged Ndarray or Field with a non-identity ``_qd_layout`` has its canonical indices
+        # permuted into physical-storage order before forwarding. ``None`` and identity layouts are handled
+        # transparently (no rewrite => byte-identical IR for legacy code).
+        #
+        # Both backends use the same attribute name (``_qd_layout``) and the same storage contract: the underlying
+        # buffer is allocated at the permuted physical shape (``[shape[a] for a in layout]``) with natural axis order,
+        # and the rewrite here translates each user-supplied canonical index tuple ``(i0, ..., i_{N-1})`` into
+        # ``(i_{layout[0]}, ..., i_{layout[N-1]})`` — the physical index tuple that the flat rank-N SNode / Ndarray
+        # expects.
+        #
+        # Two indexing forms must be permuted:
+        # 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is already a list of N scalars; permute by axis.
+        # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack into N
+        #    scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller physical
+        #    buffer — silently OOB on permuted layouts.
+        layout = getattr(node.value.ptr, "_qd_layout", None)
+        if layout is not None:
+            if len(node.slice.ptr) == 1:
+                node.slice.ptr = ASTTransformer._unpack_layout_vector_index(
+                    ctx.ast_builder, node.slice.ptr[0], len(layout)
+                )
+            if len(node.slice.ptr) == len(layout):
+                node.slice.ptr = [node.slice.ptr[axis] for axis in layout]
         node.ptr = impl.subscript(ctx.ast_builder, node.value.ptr, *node.slice.ptr)
         node.violates_pure = node.value.violates_pure
         if node.violates_pure:
@@ -545,7 +598,8 @@ class ASTTransformer(Builder):
                 else:
                     raise QuadrantsSyntaxError("The return type is not supported now!")
             ctx.ast_builder.create_kernel_exprgroup_return(
-                expr.make_expr_group(return_exprs), _qd_core.DebugInfo(ctx.get_pos_info(node))
+                expr.make_expr_group(return_exprs),
+                _qd_core.DebugInfo(ctx.get_pos_info(node)),
             )
         else:
             ctx.return_data = node.value.ptr
@@ -598,6 +652,18 @@ class ASTTransformer(Builder):
         else:
             node.ptr = lambda: length(x.parent(), indices)
         return True
+
+    @staticmethod
+    def _promote_ndarray_if_declared(ctx: ASTTransformerFuncContext, value: Any) -> Any:
+        """If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),
+        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged."""
+        from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
+
+        if not isinstance(value, Ndarray):
+            return value
+        cache = ctx.global_context.ndarray_to_any_array
+        arr = cache.get(id(value))
+        return arr if arr is not None else value
 
     @staticmethod
     def build_Attribute(ctx: ASTTransformerFuncContext, node: ast.Attribute):
@@ -666,9 +732,28 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
-            node.ptr = next(field.type for field in dataclasses.fields(node.value.ptr))
+            node.ptr = getattr(node.value.ptr, node.attr)
+            from quadrants._tensor_wrapper import (  # pylint: disable=C0415
+                Tensor as _TensorClass,
+            )
+
+            if isinstance(node.ptr, _TensorClass):
+                node.ptr = node.ptr._unwrap()
+            node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         else:
             node.ptr = getattr(node.value.ptr, node.attr)
+            # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build
+            # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /
+            # ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a kernel body
+            # resolves to the bare impl. Top-level wrapper args (``def k(x: qd.Tensor)``) are unwrapped earlier in
+            # ``Kernel.__call__``; this handles the in-struct case. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
+            from quadrants._tensor_wrapper import (  # pylint: disable=C0415
+                Tensor as _TensorClass,
+            )
+
+            if isinstance(node.ptr, _TensorClass):
+                node.ptr = node.ptr._unwrap()
+            node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
             node.violates_pure = node.value.violates_pure
             if node.violates_pure:
                 node.violates_pure_reason = node.value.violates_pure_reason
@@ -967,24 +1052,32 @@ class ASTTransformer(Builder):
                     "Please check if the number of arguments of qd.ndrange() is equal to "
                     "the number of the loop variables."
                 )
-            for i, target in enumerate(targets):
-                if i + 1 < len(targets):
-                    target_tmp = impl.expr_init(I // ndrange_var.acc_dimensions[i + 1])
+            # ``physical_to_canonical[p]`` is the canonical (user-visible) axis index that receives
+            # the decomposed index for physical nesting level ``p``. For the identity / ``axes=None``
+            # case this is ``[0, 1, ..., n-1]`` and the emitted IR matches the pre-``axes=`` codegen
+            # byte-for-byte.
+            physical_to_canonical = ndrange_var._physical_to_canonical
+            n_levels = len(ndrange_var.dimensions)
+            for p in range(n_levels):
+                if p + 1 < n_levels:
+                    target_tmp = impl.expr_init(I // ndrange_var.acc_dimensions[p + 1])
                 else:
                     target_tmp = impl.expr_init(I)
+                canonical_idx = physical_to_canonical[p]
+                target = targets[canonical_idx]
                 ctx.create_variable(
                     target,
                     impl.expr_init(
                         target_tmp
                         + impl.subscript(
                             ctx.ast_builder,
-                            impl.subscript(ctx.ast_builder, ndrange_var.bounds, i),
+                            impl.subscript(ctx.ast_builder, ndrange_var.bounds, p),
                             0,
                         )
                     ),
                 )
-                if i + 1 < len(targets):
-                    I._assign(I - target_tmp * ndrange_var.acc_dimensions[i + 1])
+                if p + 1 < n_levels:
+                    I._assign(I - target_tmp * ndrange_var.acc_dimensions[p + 1])
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
             ctx.loop_depth -= 1
@@ -1013,14 +1106,22 @@ class ASTTransformer(Builder):
 
             ctx.create_variable(target, target_var)
             I = impl.expr_init(ndrange_loop_var)
-            for i in range(len(ndrange_var.dimensions)):
-                if i + 1 < len(ndrange_var.dimensions):
-                    target_tmp = I // ndrange_var.acc_dimensions[i + 1]
+            # See ``build_ndrange_for`` above for the ``axes=`` semantics. The grouped target_var
+            # is a vector indexed by canonical axis, so element ``physical_to_canonical[p]`` (not ``p``)
+            # receives the decomposition of physical level ``p``.
+            physical_to_canonical = ndrange_var._physical_to_canonical
+            n_levels = len(ndrange_var.dimensions)
+            for p in range(n_levels):
+                if p + 1 < n_levels:
+                    target_tmp = I // ndrange_var.acc_dimensions[p + 1]
                 else:
                     target_tmp = I
-                impl.subscript(ctx.ast_builder, target_var, i)._assign(target_tmp + ndrange_var.bounds[i][0])
-                if i + 1 < len(ndrange_var.dimensions):
-                    I._assign(I - target_tmp * ndrange_var.acc_dimensions[i + 1])
+                canonical_idx = physical_to_canonical[p]
+                impl.subscript(ctx.ast_builder, target_var, canonical_idx)._assign(
+                    target_tmp + ndrange_var.bounds[p][0]
+                )
+                if p + 1 < n_levels:
+                    I._assign(I - target_tmp * ndrange_var.acc_dimensions[p + 1])
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
             ctx.loop_depth -= 1
@@ -1045,17 +1146,43 @@ class ASTTransformer(Builder):
                 loop_indices = expr.make_var_list(size=len(loop_var.shape), ast_builder=ctx.ast_builder)
                 expr_group = expr.make_expr_group(loop_indices)
                 impl.begin_frontend_struct_for(ctx.ast_builder, expr_group, loop_var)
-                ctx.create_variable(target, matrix.make_matrix(loop_indices, dt=primitive_types.i32))
+                # Layout-tagged tensors (both ndarray and field): the runtime delivers *physical* loop indices (one
+                # per axis of the underlying buffer), but the user-visible ``I`` must be canonical so that ``x[I]``
+                # round-trips correctly through the canonical->physical AST rewrite in :func:`build_Subscript`.
+                # Reorder the indices so position ``m`` carries the canonical-axis-``m`` value.
+                layout = getattr(loop_var, "_qd_layout", None)
+                if layout is not None and len(layout) == len(loop_indices):
+                    invperm = [0] * len(layout)
+                    for k, axis in enumerate(layout):
+                        invperm[axis] = k
+                    user_indices = [loop_indices[invperm[m]] for m in range(len(layout))]
+                else:
+                    user_indices = loop_indices
+                ctx.create_variable(target, matrix.make_matrix(user_indices, dt=primitive_types.i32))
                 build_stmts(ctx, node.body)
                 ctx.ast_builder.end_frontend_struct_for()
             else:
-                _vars = []
-                for name in targets:
-                    var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-                    _vars.append(var)
-                    ctx.create_variable(name, var)
                 loop_var = node.iter.ptr
-                expr_group = expr.make_expr_group(*_vars)
+                # Layout-tagged tensors (both ndarray and field): the runtime fills the loop-target slots with
+                # *physical* indices but the user spelled them with canonical names (``for i, j in x`` where ``i``
+                # is canonical axis 0). Allocate hidden physical slots and rebind each user name to the physical slot
+                # whose runtime value is the canonical-axis value the user expects.
+                layout = getattr(loop_var, "_qd_layout", None)
+                if layout is not None and len(layout) == len(targets):
+                    phys_vars = [expr.Expr(ctx.ast_builder.make_id_expr("")) for _ in targets]
+                    invperm = [0] * len(layout)
+                    for k, axis in enumerate(layout):
+                        invperm[axis] = k
+                    for canon_idx, name in enumerate(targets):
+                        ctx.create_variable(name, phys_vars[invperm[canon_idx]])
+                    expr_group = expr.make_expr_group(*phys_vars)
+                else:
+                    _vars = []
+                    for name in targets:
+                        var = expr.Expr(ctx.ast_builder.make_id_expr(""))
+                        _vars.append(var)
+                        ctx.create_variable(name, var)
+                    expr_group = expr.make_expr_group(*_vars)
                 impl.begin_frontend_struct_for(ctx.ast_builder, expr_group, loop_var)
                 ctx.loop_depth += 1
                 build_stmts(ctx, node.body)
@@ -1415,6 +1542,24 @@ class ASTTransformer(Builder):
             ctx.set_loop_status(LoopStatus.Continue)
         else:
             ctx.ast_builder.insert_continue_stmt(_qd_core.DebugInfo(ctx.get_pos_info(node)))
+        return None
+
+    @staticmethod
+    def build_With(ctx: ASTTransformerFuncContext, node: ast.With) -> None:
+        if len(node.items) != 1:
+            raise QuadrantsSyntaxError("'with' in Quadrants kernels only supports a single context manager")
+        item = node.items[0]
+        if item.optional_vars is not None:
+            raise QuadrantsSyntaxError("'with ... as ...' is not supported in Quadrants kernels")
+        if not isinstance(item.context_expr, ast.Call):
+            raise QuadrantsSyntaxError("'with' in Quadrants kernels requires a call expression")
+        if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
+            raise QuadrantsSyntaxError("'with' in Quadrants kernels only supports qd.stream_parallel()")
+        if not ctx.is_kernel:
+            raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")
+        ctx.ast_builder.begin_stream_parallel()
+        build_stmts(ctx, node.body)
+        ctx.ast_builder.end_stream_parallel()
         return None
 
     @staticmethod

@@ -1,5 +1,6 @@
 #include <numeric>
 
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/ndarray.h"
 #include "quadrants/program/program.h"
 #include "fp16.h"
@@ -97,6 +98,10 @@ Ndarray::Ndarray(DeviceAllocation &devalloc,
 
 Ndarray::~Ndarray() {
   if (prog_) {
+    // Drop any cached `ndarray_data_gen` entry keyed by `&ndarray_alloc_` before the holder address can be reused
+    // by a future Ndarray allocation. Without this, a new Ndarray that happens to occupy the same heap address
+    // would pick up the destroyed ndarray's last generation counter and could falsely match a cache snapshot.
+    prog_->adstack_cache().erase_ndarray_data_gen(const_cast<DeviceAllocation *>(&ndarray_alloc_));
     ndarray_alloc_.device->dealloc_memory(ndarray_alloc_);
   }
 }
@@ -132,6 +137,10 @@ std::size_t Ndarray::get_nelement() const {
 }
 
 TypedConstant Ndarray::read(const std::vector<int> &I) const {
+  // Surface any pending adstack overflow at this Quadrants Python entry. The internal `synchronize()`
+  // below drains the queue but does NOT raise; the explicit poll catches DLPack-bypass overflows from a
+  // previous launch within one entry of the offending kernel even when the user never calls `qd.sync()`.
+  prog_->check_adstack_overflow_and_assert();
   prog_->synchronize();
   size_t index = flatten_index(total_shape_, I);
   size_t size = data_type_size(get_element_data_type());
@@ -185,6 +194,10 @@ void Ndarray::write(const std::vector<int> &I, TypedConstant val) const {
   staging_buf_->device->memcpy_internal(this->ndarray_alloc_.get_ptr(index * size_), staging_buf_->get_ptr(), size_);
 
   prog_->synchronize();
+  // Host-side mutation of the ndarray contents: bump the per-DeviceAllocation generation so any cached
+  // adstack-sizer metadata that depended on `ExternalTensorRead` of this ndarray is evicted on next launch.
+  // Keyed by the same `&ndarray_alloc_` the kernel launchers use in `bump_writes_for_kernel_*`.
+  prog_->adstack_cache().bump_ndarray_data_gen(const_cast<DeviceAllocation *>(&ndarray_alloc_));
 }
 
 int64 Ndarray::read_int(const std::vector<int> &i) {

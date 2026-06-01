@@ -1,5 +1,8 @@
 #include "dlpack_funcs.h"
 
+#include <algorithm>
+#include <vector>
+
 #include "dlpack/dlpack.h"
 
 #include "quadrants/program/ndarray.h"
@@ -142,14 +145,16 @@ std::pair<uint8_t, uint8_t> get_type_info(Arch arch, DataType dt) {
   return std::make_pair(data_type_code, element_bits);
 }
 
-void validate_axis_ordering(SNode *snode, int ndim) {
+// Walk the SNode chain root -> place and return the memory-layout permutation as a list of canonical-axis indices in
+// the order they appear in physical memory (outermost first). For a 2-D field allocated with ``order='ji'`` this
+// returns ``{1, 0}``; for ``order='ij'`` (or no ``order=``) it returns ``{0, 1}``.
+//
+// The returned vector is exactly the ``layout`` permutation accepted by ``ndarray_to_dlpack``, so the canonicalising
+// shape/stride code path can be shared between the two backends.
+std::vector<int> extract_memory_layout_order(SNode *snode) {
   std::vector<int> memory_layout_order;
-  const SNode *current = snode;
-  while (current->parent != nullptr) {
-    current = current->parent;
-  }
   std::vector<const SNode *> path;
-  current = snode;
+  const SNode *current = snode;
   while (current != nullptr) {
     path.push_back(current);
     current = current->parent;
@@ -171,21 +176,7 @@ void validate_axis_ordering(SNode *snode, int ndim) {
       }
     }
   }
-
-  bool has_non_ijk_ordering = false;
-  if (memory_layout_order.size() != ndim) {
-    has_non_ijk_ordering = true;
-  } else {
-    for (size_t i = 0; i < memory_layout_order.size(); i++) {
-      if (memory_layout_order[i] != static_cast<int>(i)) {
-        has_non_ijk_ordering = true;
-        break;
-      }
-    }
-  }
-  if (has_non_ijk_ordering) {
-    QD_ERROR("SNode must have axes in order i, j, k, ... in order to use to_dlpack")
-  }
+  return memory_layout_order;
 }
 
 int64_t *calc_strides(int64_t *shape, int full_ndim) {
@@ -200,7 +191,7 @@ int64_t *calc_strides(int64_t *shape, int full_ndim) {
   return strides;
 }
 
-pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_ndim, int n, int m) {
+pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_ndim, int n, int m, bool versioned) {
   if (!snode->is_path_all_dense) {
     QD_ERROR("Only dense fields are supported for dlpack conversion");
   }
@@ -252,28 +243,80 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
 
   int ndim = snode->num_active_indices;
 
-  validate_axis_ordering(snode, ndim);
-
-  int full_ndim = ndim + element_ndim;
-  int64_t *shape = nullptr;
-  if (full_ndim > 0) {
-    shape = new int64_t[full_ndim];
+  // Derive the field's physical-memory axis order from the SNode chain. For a 2-D field with ``order='ji'`` this
+  // yields ``{1, 0}``; for the default (no ``order=``) it yields ``{0, 1, ..., ndim-1}``.
+  //
+  // The element axes (``n``, ``m`` for VectorField/MatrixField) always sit innermost and are never permuted, so we
+  // extend ``layout`` with identity entries to cover them.
+  std::vector<int> mem_layout = extract_memory_layout_order(snode);
+  if (static_cast<int>(mem_layout.size()) != ndim) {
+    QD_ERROR("field_to_dlpack: SNode chain produced %d memory axes for a %d-D field",
+             static_cast<int>(mem_layout.size()), ndim);
+  }
+  // mem_layout must be a permutation of {0, 1, ..., ndim-1}. Fields built with non-contiguous axis identifiers (e.g.
+  // qd.i + qd.l, skipping qd.j and qd.k) are rejected — the canonical view is undefined.
+  {
+    std::vector<int> sorted_layout = mem_layout;
+    std::sort(sorted_layout.begin(), sorted_layout.end());
     for (int i = 0; i < ndim; i++) {
-      shape[i] = snode->shape_along_axis(i);
-    }
-    if (element_ndim >= 1) {
-      shape[ndim] = n;
-    }
-    if (element_ndim == 2) {
-      shape[ndim + 1] = m;
+      if (sorted_layout[i] != i) {
+        QD_ERROR("field_to_dlpack: SNode axes must be a contiguous permutation of {0, ..., ndim-1}");
+      }
     }
   }
 
-  int64_t *strides = calc_strides(shape, full_ndim);
+  int full_ndim = ndim + element_ndim;
+  int64_t *shape = nullptr;
+  int64_t *strides = nullptr;
+  if (full_ndim > 0) {
+    // Build the *physical* shape and strides first (memory order).
+    int64_t *phys_shape = new int64_t[full_ndim];
+    for (int i = 0; i < ndim; i++) {
+      phys_shape[i] = snode->shape_along_axis(mem_layout[i]);
+    }
+    if (element_ndim >= 1) {
+      phys_shape[ndim] = n;
+    }
+    if (element_ndim == 2) {
+      phys_shape[ndim + 1] = m;
+    }
+    int64_t *phys_strides = calc_strides(phys_shape, full_ndim);
 
-  DLManagedTensor *managed_tensor = new DLManagedTensor();
+    // Now apply the inverse permutation to expose a *canonical* view to the DLPack consumer: ``shape[j]`` is the
+    // canonical-axis-j extent, ``strides[j]`` is its physical-memory stride. Element axes (last ``element_ndim``
+    // entries) are identity, never permuted.
+    bool is_identity = true;
+    for (int i = 0; i < ndim; i++) {
+      if (mem_layout[i] != i) {
+        is_identity = false;
+        break;
+      }
+    }
+    if (is_identity) {
+      shape = phys_shape;
+      strides = phys_strides;
+    } else {
+      shape = new int64_t[full_ndim];
+      strides = new int64_t[full_ndim];
+      // invperm[canonical_axis] = physical_axis
+      std::vector<int> invperm(ndim, 0);
+      for (int i = 0; i < ndim; i++) {
+        invperm[mem_layout[i]] = i;
+      }
+      for (int j = 0; j < ndim; j++) {
+        shape[j] = phys_shape[invperm[j]];
+        strides[j] = phys_strides[invperm[j]];
+      }
+      for (int k = 0; k < element_ndim; k++) {
+        shape[ndim + k] = phys_shape[ndim + k];
+        strides[ndim + k] = phys_strides[ndim + k];
+      }
+      delete[] phys_shape;
+      delete[] phys_strides;
+    }
+  }
 
-  DLTensor &dl_tensor = managed_tensor->dl_tensor;
+  DLTensor dl_tensor;
   dl_tensor.data = raw_ptr;
   dl_tensor.device.device_type = device_type;
   dl_tensor.device.device_id = 0;
@@ -283,20 +326,54 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
   dl_tensor.strides = strides;
   dl_tensor.byte_offset = byte_offset;
 
-  managed_tensor->deleter = [](DLManagedTensor *self) {
+  if (versioned) {
+    auto *vt = new DLManagedTensorVersioned();
+    vt->version = {DLPACK_MAJOR_VERSION, DLPACK_MINOR_VERSION};
+    vt->manager_ctx = nullptr;
+    vt->flags = 0;
+    vt->dl_tensor = dl_tensor;
+    vt->deleter = [](DLManagedTensorVersioned *self) {
+      if (self->dl_tensor.shape != nullptr) {
+        delete[] self->dl_tensor.shape;
+        delete[] self->dl_tensor.strides;
+      }
+      delete self;
+    };
+    auto capsule_deleter = [](PyObject *capsule) {
+      if (PyCapsule_IsValid(capsule, "dltensor_versioned")) {
+        auto *vt = reinterpret_cast<DLManagedTensorVersioned *>(PyCapsule_GetPointer(capsule, "dltensor_versioned"));
+        if (vt && vt->deleter)
+          vt->deleter(vt);
+      }
+    };
+    return pybind11::capsule(vt, "dltensor_versioned", capsule_deleter);
+  }
+
+  auto *mt = new DLManagedTensor();
+  mt->dl_tensor = dl_tensor;
+  mt->manager_ctx = nullptr;
+  mt->deleter = [](DLManagedTensor *self) {
     if (self->dl_tensor.shape != nullptr) {
       delete[] self->dl_tensor.shape;
       delete[] self->dl_tensor.strides;
     }
     delete self;
   };
-  auto capsule_deleter = [](PyObject *capsule) {};
-
-  pybind11::capsule capsule = pybind11::capsule(managed_tensor, "dltensor", capsule_deleter);
-  return capsule;
+  auto capsule_deleter = [](PyObject *capsule) {
+    if (PyCapsule_IsValid(capsule, "dltensor")) {
+      auto *mt = reinterpret_cast<DLManagedTensor *>(PyCapsule_GetPointer(capsule, "dltensor"));
+      if (mt && mt->deleter)
+        mt->deleter(mt);
+    }
+  };
+  return pybind11::capsule(mt, "dltensor", capsule_deleter);
 }
 
-pybind11::capsule ndarray_to_dlpack(Program *program, pybind11::object owner, Ndarray *ndarray) {
+pybind11::capsule ndarray_to_dlpack(Program *program,
+                                    pybind11::object owner,
+                                    Ndarray *ndarray,
+                                    const std::vector<int> &layout,
+                                    bool versioned) {
   Arch arch = program->compile_config().arch;
   validate_arch(arch);
 
@@ -315,25 +392,55 @@ pybind11::capsule ndarray_to_dlpack(Program *program, pybind11::object owner, Nd
   void *raw_ptr = nullptr;
   std::tie(raw_ptr, device_type) = get_raw_ptr(arch, program, devalloc);
 
+  // ``ndarray_shape`` is the *physical* (storage) shape of the buffer. When ``layout`` is non-empty it lists the
+  // canonical-axis index at each successive physical-memory axis (outermost first). We expose a *canonical* view to
+  // DLPack consumers by permuting both the shape and the strides via the inverse permutation, leaving the raw pointer
+  // and byte offset untouched (no data movement).
   std::vector<int> ndarray_shape = ndarray->total_shape();
   int ndim = ndarray_shape.size();
 
-  int64_t *shape = nullptr;
-  if (ndim > 0) {
-    shape = new int64_t[ndim];
-    std::copy(ndarray_shape.begin(), ndarray_shape.end(), shape);
+  if (!layout.empty() && static_cast<int>(layout.size()) != ndim) {
+    QD_ERROR("ndarray_to_dlpack: layout has wrong size for this ndarray");
   }
 
-  int64_t *strides = calc_strides(shape, ndim);
+  int64_t *shape = nullptr;
+  int64_t *strides = nullptr;
+  if (ndim > 0) {
+    int64_t *phys_shape = new int64_t[ndim];
+    std::copy(ndarray_shape.begin(), ndarray_shape.end(), phys_shape);
+    int64_t *phys_strides = calc_strides(phys_shape, ndim);
+
+    if (layout.empty()) {
+      shape = phys_shape;
+      strides = phys_strides;
+    } else {
+      // Build the inverse permutation: invperm[layout[i]] = i.
+      std::vector<int> invperm(ndim, 0);
+      for (int i = 0; i < ndim; i++) {
+        if (layout[i] < 0 || layout[i] >= ndim) {
+          delete[] phys_shape;
+          delete[] phys_strides;
+          QD_ERROR("ndarray_to_dlpack: layout entry out of range");
+        }
+        invperm[layout[i]] = i;
+      }
+      shape = new int64_t[ndim];
+      strides = new int64_t[ndim];
+      for (int j = 0; j < ndim; j++) {
+        shape[j] = phys_shape[invperm[j]];
+        strides[j] = phys_strides[invperm[j]];
+      }
+      delete[] phys_shape;
+      delete[] phys_strides;
+    }
+  }
 
   DataType ndarray_data_type = ndarray->get_element_data_type();
   uint8_t data_type_code = kDLInt;
   uint8_t element_bits = 0;
   std::tie(data_type_code, element_bits) = get_type_info(arch, ndarray_data_type);
 
-  DLManagedTensor *managed_tensor = new DLManagedTensor();
-
-  DLTensor &dl_tensor = managed_tensor->dl_tensor;
+  DLTensor dl_tensor;
   dl_tensor.data = raw_ptr;
   dl_tensor.device.device_type = device_type;
   dl_tensor.device.device_id = 0;
@@ -343,8 +450,36 @@ pybind11::capsule ndarray_to_dlpack(Program *program, pybind11::object owner, Nd
   dl_tensor.strides = strides;
   dl_tensor.byte_offset = 0;
 
-  managed_tensor->manager_ctx = owner_holder;
-  managed_tensor->deleter = [](DLManagedTensor *self) {
+  if (versioned) {
+    auto *vt = new DLManagedTensorVersioned();
+    vt->version = {DLPACK_MAJOR_VERSION, DLPACK_MINOR_VERSION};
+    vt->manager_ctx = owner_holder;
+    vt->flags = 0;
+    vt->dl_tensor = dl_tensor;
+    vt->deleter = [](DLManagedTensorVersioned *self) {
+      auto *owner = reinterpret_cast<pybind11::object *>(self->manager_ctx);
+      pybind11::gil_scoped_acquire gil;
+      delete owner;  // DECREFs the Python object
+      if (self->dl_tensor.shape != nullptr) {
+        delete[] self->dl_tensor.shape;
+        delete[] self->dl_tensor.strides;
+      }
+      delete self;
+    };
+    auto capsule_deleter = [](PyObject *capsule) {
+      if (PyCapsule_IsValid(capsule, "dltensor_versioned")) {
+        auto *vt = reinterpret_cast<DLManagedTensorVersioned *>(PyCapsule_GetPointer(capsule, "dltensor_versioned"));
+        if (vt && vt->deleter)
+          vt->deleter(vt);
+      }
+    };
+    return pybind11::capsule(vt, "dltensor_versioned", capsule_deleter);
+  }
+
+  auto *mt = new DLManagedTensor();
+  mt->dl_tensor = dl_tensor;
+  mt->manager_ctx = owner_holder;
+  mt->deleter = [](DLManagedTensor *self) {
     auto *owner = reinterpret_cast<pybind11::object *>(self->manager_ctx);
     pybind11::gil_scoped_acquire gil;
     delete owner;  // DECREFs the Python object
@@ -354,10 +489,14 @@ pybind11::capsule ndarray_to_dlpack(Program *program, pybind11::object owner, Nd
     }
     delete self;
   };
-  auto capsule_deleter = [](PyObject *capsule) {};
-
-  pybind11::capsule capsule = pybind11::capsule(managed_tensor, "dltensor", capsule_deleter);
-  return capsule;
+  auto capsule_deleter = [](PyObject *capsule) {
+    if (PyCapsule_IsValid(capsule, "dltensor")) {
+      auto *mt = reinterpret_cast<DLManagedTensor *>(PyCapsule_GetPointer(capsule, "dltensor"));
+      if (mt && mt->deleter)
+        mt->deleter(mt);
+    }
+  };
+  return pybind11::capsule(mt, "dltensor", capsule_deleter);
 }
 }  // namespace lang
 }  // namespace quadrants

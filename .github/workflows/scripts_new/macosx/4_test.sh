@@ -2,6 +2,9 @@
 
 set -ex
 
+export QD_FILE_TIMING=1
+export QD_FILE_TIMING_OUTPUT="${RUNNER_TEMP}/file_timing.md"
+
 pip install --prefer-binary --group test
 find . -name '*.bc'
 ls -lh build/
@@ -16,3 +19,7 @@ python tests/run_tests.py -v -r 1 --arch metal,vulkan,cpu -m "not needs_torch"
 # TODO: revert to stable torch after 2.9.2 release
 pip install --pre --upgrade torch --index-url https://download.pytorch.org/whl/nightly/cpu
 python tests/run_tests.py -v -r 1 --arch metal,vulkan,cpu -m needs_torch
+
+if [ -f "$QD_FILE_TIMING_OUTPUT" ]; then
+  cat "$QD_FILE_TIMING_OUTPUT" >> "$GITHUB_STEP_SUMMARY"
+fi

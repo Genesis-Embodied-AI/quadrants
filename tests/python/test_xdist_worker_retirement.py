@@ -2,11 +2,9 @@
 
 Verifies that when a worker is killed via os._exit(1) after a test failure:
 1. Failures are not double-counted (no synthetic "worker crashed" report)
-2. The session completes even with many failures (--max-worker-restart cap
-   does not trigger premature shutdown)
+2. The session completes even with many failures (--max-worker-restart cap does not trigger premature shutdown)
 
-These tests use pytester to run pytest-xdist in a subprocess, so they do
-not require GPU hardware.
+These tests use pytester to run pytest-xdist in a subprocess, so they do not require GPU hardware.
 """
 
 import pytest
@@ -51,22 +49,21 @@ def xdist_project(pytester, monkeypatch):
             os.makedirs(d, exist_ok=True)
             os.environ["_QD_XDIST_EXIT_MARKER_DIR"] = d
 
-        @pytest.hookimpl(wrapper=True, tryfirst=True)
+        @pytest.hookimpl(trylast=True)
         def pytest_runtest_logreport(report):
-            if getattr(report, "_qd_suppress", False):
-                return None
-            result = yield
-            if os.environ.get("PYTEST_XDIST_WORKER") and report.outcome in ("error", "failed"):
-                d = _exit_marker_dir()
-                if d:
-                    worker_id = os.environ["PYTEST_XDIST_WORKER"]
-                    try:
-                        with open(os.path.join(d, worker_id), "w") as f:
-                            f.write(report.nodeid)
-                    except OSError:
-                        pass
-                os._exit(1)
-            return result
+            if not os.environ.get("PYTEST_XDIST_WORKER"):
+                return
+            if report.outcome not in ("error", "failed"):
+                return
+            d = _exit_marker_dir()
+            if d:
+                worker_id = os.environ["PYTEST_XDIST_WORKER"]
+                try:
+                    with open(os.path.join(d, worker_id), "w") as f:
+                        f.write(report.nodeid)
+                except OSError:
+                    pass
+            os._exit(1)
 
         def pytest_handlecrashitem(crashitem, report, sched):
             d = _exit_marker_dir()
@@ -83,7 +80,9 @@ def xdist_project(pytester, monkeypatch):
                 os.unlink(marker)
             except OSError:
                 pass
-            report._qd_suppress = True
+            report.outcome = "passed"
+            report.when = "teardown"
+            report.longrepr = None
             return True
         """
     )

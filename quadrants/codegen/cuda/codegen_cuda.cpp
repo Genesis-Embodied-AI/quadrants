@@ -4,6 +4,8 @@
 #include <set>
 #include <functional>
 
+#include "llvm/IR/InlineAsm.h"
+
 #include "quadrants/common/core.h"
 #include "quadrants/util/io.h"
 #include "quadrants/ir/ir.h"
@@ -267,9 +269,10 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       builder->CreateStore(output, frac_ptr);
       llvm_val[stmt] = res;
     } else if (op == UnaryOpType::popcnt) {
+      // stmt->ret_type is already normalised to i32 by type_check.cpp; libdevice's __nv_popc / __nv_popcll both return
+      // `int` natively so the LLVM call value matches that contract without an extra Trunc.
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::u64) ||
           input_quadrants_type->is_primitive(PrimitiveTypeID::i64)) {
-        stmt->ret_type = PrimitiveType::i32;
         llvm_val[stmt] = call("__nv_popcll", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
                  input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
@@ -278,11 +281,28 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         QD_NOT_IMPLEMENTED
       }
     } else if (op == UnaryOpType::clz) {
-      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
-        stmt->ret_type = PrimitiveType::i32;
+      // clz operates on the unsigned bit pattern, so u32 and u64 are valid inputs and route to the same libdevice
+      // intrinsics as their signed counterparts. LLVM IR is signless for integers, so passing a `qd.u32` operand to
+      // `__nv_clz` (which has signature `int(int)`) requires no explicit bitcast.
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
         llvm_val[stmt] = call("__nv_clz", input);
-      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64)) {
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
         llvm_val[stmt] = call("__nv_clzll", input);
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
+    } else if (op == UnaryOpType::ffs) {
+      // ffs(x): 1-indexed position of the lowest set bit, with `ffs(0) == 0` (CUDA __ffs convention). libdevice's
+      // `__nv_ffs` / `__nv_ffsll` already produce exactly that contract. As with clz, LLVM IR is signless for integers,
+      // so u32 / u64 lower to the same intrinsic as their signed counterparts.
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
+        llvm_val[stmt] = call("__nv_ffs", input);
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        llvm_val[stmt] = call("__nv_ffsll", input);
       } else {
         QD_NOT_IMPLEMENTED
       }
@@ -577,8 +597,12 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 
   void visit(GlobalLoadStmt *stmt) override {
     if (auto get_ch = stmt->src->cast<GetChStmt>()) {
-      bool should_cache_as_read_only =
-          current_offload->mem_access_opt.has_flag(get_ch->output_snode, SNodeAccessFlag::read_only);
+      // A volatile load explicitly opts out of caching: the read-only-cache path goes through `create_intrinsic_load`
+      // which on CUDA lowers to `__ldg` / attaches `!invariant.load`, both of which let the optimiser hoist or reuse
+      // the value -- the exact behaviour `qd.volatile_load` exists to suppress.  Keep the per-snode `read_only` flag
+      // for non-volatile loads so existing kernels keep their fast path.
+      bool should_cache_as_read_only = !stmt->is_volatile && current_offload->mem_access_opt.has_flag(
+                                                                 get_ch->output_snode, SNodeAccessFlag::read_only);
       create_global_load(stmt, should_cache_as_read_only);
     } else {
       create_global_load(stmt, false);
@@ -638,6 +662,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       }
       current_task->block_dim = stmt->block_dim;
       current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
+      current_task->stream_parallel_group_id = stmt->stream_parallel_group_id;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
       // Host-side adstack sizing. For non-range_for and for const-bound range_for the launcher uses
@@ -738,8 +763,45 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type,
           /* offset=*/llvm_val[stmt->args[1]]);
+    } else if (stmt->func_name == "subgroupShuffleUp") {
+      llvm_val[stmt] = emit_cuda_shuffle_up(
+          /* value=*/llvm_val[stmt->args[0]],
+          /* dt=*/stmt->args[0]->ret_type,
+          /* offset=*/llvm_val[stmt->args[1]]);
+    } else if (stmt->func_name == "subgroupBallotU32") {
+      llvm_val[stmt] = call("cuda_ballot_i32", llvm_val[stmt->args[0]]);
+    } else if (stmt->func_name == "subgroupBallotU64") {
+      // CUDA warps are always 32 lanes; there is no native 64-bit ballot.  Zero-extend the i32 result to i64 so the
+      // u64 form has well-defined high 32 bits (always zero) and the public ``ballot`` API can return a
+      // uniform u64 across backends.
+      auto ballot32 = call("cuda_ballot_i32", llvm_val[stmt->args[0]]);
+      llvm_val[stmt] = builder->CreateZExt(ballot32, llvm::Type::getInt64Ty(*llvm_context));
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("cuda_lane_id");
+    } else if (stmt->func_name == "subgroupBarrier") {
+      // Subgroup-scope thread reconvergence barrier.  Maps to `__syncwarp(0xFFFFFFFF)` via the existing `warp_barrier`
+      // runtime helper, which is patched to `nvvm_bar_warp_sync`.  Caller contract is uniform-CF + all lanes active
+      // (see subgroup.md), hence the full active mask.  Reconverges lanes that may have ended up at different PCs
+      // under independent thread scheduling on Volta+.
+      call("warp_barrier", tlctx->get_constant((uint32)0xFFFFFFFF));
+      llvm_val[stmt] = tlctx->get_constant(0);
+    } else if (stmt->func_name == "subgroupMemoryBarrier") {
+      // Subgroup-scope memory fence.  CUDA has no warp-scope memory fence intrinsic, so we emit `__threadfence_block()`
+      // (CTA-scope, via the existing `block_mem_fence` patched to `nvvm_membar_cta`).  This is over-strict but correct:
+      // a CTA-scope fence orders memory as observed by the whole CTA, of which the subgroup is a subset.
+      call("block_mem_fence");
+      llvm_val[stmt] = tlctx->get_constant(0);
+    } else if (stmt->func_name == "cuda_fns_u32") {
+      // Emit PTX inline asm directly: `fns.b32 dst, mask, base, offset`. The hardware op is available since SM 5.0, and
+      // __nv_fns is *not* in the slim_libdevice.10.bc we ship (only popc / clz / ffs are kept), so we cannot route
+      // through libdevice the way popcnt / clz / ffs do. Inline asm produces a single PTX instruction; LLVM's NVPTX
+      // backend rewrites $0..$3 to PTX-style %r register operands.
+      auto i32_ty = llvm::Type::getInt32Ty(*llvm_context);
+      auto func_ty = llvm::FunctionType::get(i32_ty, {i32_ty, i32_ty, i32_ty}, false);
+      auto inline_asm = llvm::InlineAsm::get(func_ty, "fns.b32 $0, $1, $2, $3;", "=r,r,r,r",
+                                             /*hasSideEffects=*/false);
+      llvm_val[stmt] =
+          builder->CreateCall(inline_asm, {llvm_val[stmt->args[0]], llvm_val[stmt->args[1]], llvm_val[stmt->args[2]]});
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }
@@ -769,6 +831,19 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
       return call("cuda_shuffle_down_i64", offset, value);
     QD_ERROR("subgroup shuffle_down: unsupported type {}", data_type_name(dt));
+    return nullptr;
+  }
+
+  llvm::Value *emit_cuda_shuffle_up(llvm::Value *value, DataType dt, llvm::Value *offset) {
+    if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::u32))
+      return call("cuda_shuffle_up_i32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f32))
+      return call("cuda_shuffle_up_f32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f64))
+      return call("cuda_shuffle_up_f64", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
+      return call("cuda_shuffle_up_i64", offset, value);
+    QD_ERROR("subgroup shuffle_up: unsupported type {}", data_type_name(dt));
     return nullptr;
   }
 

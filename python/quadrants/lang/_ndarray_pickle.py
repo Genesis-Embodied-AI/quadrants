@@ -5,7 +5,6 @@ from typing import Any
 from quadrants import types
 from quadrants.lang import impl
 from quadrants.types import primitive_types
-from quadrants.types.enums import Layout
 
 _DTYPE_NAMES = ["f16", "f32", "f64", "i8", "i16", "i32", "i64", "u1", "u8", "u16", "u32", "u64"]
 _NAME_TO_DTYPE: dict[str, Any] = {name: getattr(primitive_types, name) for name in _DTYPE_NAMES}
@@ -22,14 +21,15 @@ def serialize(ndarray: Any) -> dict[str, Any]:
     large arrays. This is necessary because the device memory backing
     the ndarray could change before the pickled bytes are written.
     """
-    if ndarray.layout == Layout.SOA:
-        raise TypeError("Cannot pickle ndarray with SOA layout")
     dtype_name = _DTYPE_TO_NAME.get(ndarray.dtype)
     if dtype_name is None:
         raise TypeError(f"Cannot pickle ndarray with dtype {ndarray.dtype!r}")
+    # Use the canonical shape so it matches the canonical view returned by ``to_numpy()``. Layout tags are
+    # intentionally dropped on pickle (a separate ``_qd_layout`` round-trip is tracked as a follow-up): the
+    # restored ndarray is always layout-free, but its element values at every canonical index match the original.
     return {
         "version": _PICKLE_VERSION,
-        "shape": ndarray.shape,
+        "shape": tuple(ndarray.shape),
         "element_type": dtype_name,
         "element_shape": ndarray.element_shape,
         "data": ndarray.to_numpy(),

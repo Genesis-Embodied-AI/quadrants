@@ -191,11 +191,43 @@ def _svd3d(A, dt, iters=None):
         U = Matrix.zero(dt, 3, 3)
         V = Matrix.zero(dt, 3, 3)
         sigma = Matrix.zero(dt, 3, 3)
+        sig_v = Vector.zero(dt, 3)
         for i in static(range(3)):
             for j in static(range(3)):
                 U[i, j] = U_entries[i * 3 + j]
                 V[i, j] = V_entries[i * 3 + j]
-            sigma[i, i] = sig_entries[i]
+            sig_v[i] = sig_entries[i]
+        # Sort sig_v descending via selection sort, swapping matching columns of U and V together so
+        # A = U · diag(sig_v) · Vᵀ is preserved across each swap. Sifakis already gives det(U) = det(V) = +1 (the sign
+        # of det(A) is absorbed into σ); each pairwise column swap flips both determinants, so an odd total number of
+        # swaps requires negating column 0 of U and V at the end to restore det(U) = det(V) = +1. That fix-up preserves
+        # A because the two negations of column 0 cancel out in U_j0 · σ_0 · V_k0.
+        swap_parity = 0
+        for i in static(range(3)):
+            max_idx = i
+            max_val = sig_v[i]
+            for j in static(range(3)):
+                if static(j > i):
+                    if sig_v[j] > max_val:
+                        max_val = sig_v[j]
+                        max_idx = j
+            if max_idx != i:
+                sig_v[max_idx] = sig_v[i]
+                sig_v[i] = max_val
+                for r in static(range(3)):
+                    tmp_u = U[r, i]
+                    U[r, i] = U[r, max_idx]
+                    U[r, max_idx] = tmp_u
+                    tmp_v = V[r, i]
+                    V[r, i] = V[r, max_idx]
+                    V[r, max_idx] = tmp_v
+                swap_parity = 1 - swap_parity
+        if swap_parity == 1:
+            for r in static(range(3)):
+                U[r, 0] = -U[r, 0]
+                V[r, 0] = -V[r, 0]
+        for i in static(range(3)):
+            sigma[i, i] = sig_v[i]
         return U, sigma, V
 
     return get_result()
@@ -266,21 +298,23 @@ def _sym_eig2x2(A, dt):
     tr = A.trace()
     det = A.determinant()
     gap = tr**2 - 4 * det
-    lambda1 = (tr + ops.sqrt(gap)) * 0.5
-    lambda2 = (tr - ops.sqrt(gap)) * 0.5
-    eigenvalues = Vector([lambda1, lambda2], dt=dt)
+    # `gap >= 0` for symmetric A, so `lambda_hi >= lambda_lo`. Emit them as `(lambda_lo, lambda_hi)` so the result is
+    # sorted ascending — matches the >=3x3 paths and NumPy / LAPACK convention for symmetric EVD.
+    lambda_hi = (tr + ops.sqrt(gap)) * 0.5
+    lambda_lo = (tr - ops.sqrt(gap)) * 0.5
+    eigenvalues = Vector([lambda_lo, lambda_hi], dt=dt)
 
-    A1 = A - lambda1 * Matrix.identity(dt, 2)
-    A2 = A - lambda2 * Matrix.identity(dt, 2)
-    v1 = Vector.zero(dt, 2)
-    v2 = Vector.zero(dt, 2)
-    if all(A1 == Matrix.zero(dt, 2, 2)) and all(A1 == Matrix.zero(dt, 2, 2)):
-        v1 = Vector([0.0, 1.0]).cast(dt)
-        v2 = Vector([1.0, 0.0]).cast(dt)
+    A_hi = A - lambda_hi * Matrix.identity(dt, 2)
+    A_lo = A - lambda_lo * Matrix.identity(dt, 2)
+    v_hi = Vector.zero(dt, 2)
+    v_lo = Vector.zero(dt, 2)
+    if all(A_hi == Matrix.zero(dt, 2, 2)) and all(A_hi == Matrix.zero(dt, 2, 2)):
+        v_hi = Vector([0.0, 1.0]).cast(dt)
+        v_lo = Vector([1.0, 0.0]).cast(dt)
     else:
-        v1 = Vector([A2[0, 0], A2[1, 0]], dt=dt).normalized()
-        v2 = Vector([A1[0, 0], A1[1, 0]], dt=dt).normalized()
-    eigenvectors = Matrix.cols([v1, v2])
+        v_hi = Vector([A_lo[0, 0], A_lo[1, 0]], dt=dt).normalized()
+        v_lo = Vector([A_hi[0, 0], A_hi[1, 0]], dt=dt).normalized()
+    eigenvectors = Matrix.cols([v_lo, v_hi])
     return eigenvalues, eigenvectors
 
 
@@ -542,7 +576,7 @@ def polar_decompose(A, dt=None):
         return _polar_decompose2d(A, dt)
     if A.n == 3:
         return _polar_decompose3d(A, dt)
-    raise Exception("Polar decomposition only supports 2D and 3D matrices.")
+    raise Exception("Polar decomposition only supports 2×2 and 3×3 matrices.")
 
 
 def svd(A, dt=None):
@@ -563,7 +597,7 @@ def svd(A, dt=None):
         return _svd2d(A, dt)
     if A.n == 3:
         return _svd3d(A, dt)
-    raise Exception("SVD only supports 2D and 3D matrices.")
+    raise Exception("SVD only supports 2×2 and 3×3 matrices.")
 
 
 def eig(A, dt=None):
@@ -583,13 +617,16 @@ def eig(A, dt=None):
         dt = impl.get_runtime().default_fp
     if A.n == 2:
         return _eig2x2(A, dt)
-    raise Exception("Eigen solver only supports 2D matrices.")
+    raise Exception("Eigen solver only supports 2×2 matrices.")
 
 
 def sym_eig(A, dt=None):
     """Compute the eigenvalues and right eigenvectors of a real symmetric matrix.
 
     Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
+
+    Sizes ``A.n == 2`` and ``A.n == 3`` use the existing closed-form (Eigen3 ``computeDirect``) paths.
+    Sizes ``4 ≤ A.n ≤ 12`` use cyclic Jacobi (:func:`quadrants._funcs_sym_eig_general.sym_eig_general`).
 
     Args:
         A (qd.Matrix(n, n)): Symmetric Matrix for which the eigenvalues and right eigenvectors will be computed.
@@ -605,7 +642,34 @@ def sym_eig(A, dt=None):
         return _sym_eig2x2(A, dt)
     if A.n == 3:
         return _sym_eig3x3(A, dt)
-    raise Exception("Symmetric eigen solver only supports 2D and 3D matrices.")
+    # pylint: disable=C0415
+    from quadrants._funcs_sym_eig_general import sym_eig_general
+
+    if A.n <= 12:
+        return sym_eig_general(A, dt)
+    raise Exception("Symmetric eigen solver currently supports sizes up to 12×12.")
+
+
+def make_spd(A, dt=None):
+    """Project a symmetric matrix ``A`` to the nearest positive semi-definite matrix in the Frobenius norm sense,
+    by clamping its eigenvalues to ``≥ 0``.
+
+    Implemented as ``Q · diag(max(λ, 0)) · Qᵀ`` where ``A = Q diag(λ) Qᵀ`` is the symmetric eigendecomposition
+    computed by :func:`sym_eig`.
+
+    Args:
+        A (qd.Matrix(n, n)): Symmetric matrix.
+        dt (DataType): Element dtype.
+
+    Returns:
+        qd.Matrix(n, n): the SPD projection of ``A``.
+    """
+    if dt is None:
+        dt = impl.get_runtime().default_fp
+    # pylint: disable=C0415
+    from quadrants._funcs_sym_eig_general import make_spd as _make_spd
+
+    return _make_spd(A, dt)
 
 
 @func
@@ -683,7 +747,7 @@ def solve(A, b, dt=None):
         x (qd.Vector(n, 1)): the solution of Ax=b.
     """
     assert A.n == A.m, "Only square matrix is supported"
-    assert A.n >= 2 and A.n <= 3, "Only 2D and 3D matrices are supported"
+    assert A.n >= 2 and A.n <= 3, "Only 2×2 and 3×3 matrices are supported"
     assert A.m == b.n, "Matrix and Vector dimension dismatch"
     if dt is None:
         dt = impl.get_runtime().default_fp
@@ -692,7 +756,7 @@ def solve(A, b, dt=None):
         return _gauss_elimination_2x2(Ab, dt)
     if A.n == 3:
         return _gauss_elimination_3x3(Ab, dt)
-    raise Exception("Solver only supports 2D and 3D matrices.")
+    raise Exception("Solver only supports 2×2 and 3×3 matrices.")
 
 
 @func
@@ -701,4 +765,4 @@ def field_fill_quadrants_scope(F: template(), val: template()):
         F[I] = val
 
 
-__all__ = ["randn", "polar_decompose", "eig", "sym_eig", "svd", "solve"]
+__all__ = ["randn", "polar_decompose", "eig", "sym_eig", "make_spd", "svd", "solve"]

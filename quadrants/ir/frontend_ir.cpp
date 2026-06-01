@@ -110,6 +110,7 @@ FrontendForStmt::FrontendForStmt(const FrontendForStmt &o)
       strictly_serialized(o.strictly_serialized),
       mem_access_opt(o.mem_access_opt),
       block_dim(o.block_dim),
+      stream_parallel_group_id(o.stream_parallel_group_id),
       loop_name(o.loop_name) {
 }
 
@@ -118,6 +119,7 @@ void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
   strictly_serialized = config.strictly_serialized;
   mem_access_opt = config.mem_access_opt;
   block_dim = config.block_dim;
+  stream_parallel_group_id = config.stream_parallel_group_id;
   loop_name = config.loop_name;
   if (arch == Arch::cuda || arch == Arch::amdgpu) {
     num_cpu_threads = 1;
@@ -236,7 +238,7 @@ void UnaryOpExpression::type_check(const CompileConfig *config) {
     return;
   }
 
-  if (type == UnaryOpType::popcnt && is_real(operand_primitive_type)) {
+  if ((type == UnaryOpType::popcnt || type == UnaryOpType::ffs) && is_real(operand_primitive_type)) {
     ErrorEmitter(QuadrantsTypeError(), this,
                  fmt::format("'{}' takes integral inputs only, however '{}' is provided", unary_op_type_name(type),
                              operand_primitive_type->to_string()));
@@ -877,6 +879,31 @@ void IndexExpression::flatten(FlattenContext *ctx) {
   stmt->dbg_info = dbg_info;
 }
 
+void VolatileLoadExpression::type_check(const CompileConfig *) {
+  // The result type is whatever an ordinary rvalue load of `src` would produce; we only override how the load
+  // is *emitted*, not what it produces.  Errors here mirror what `flatten_rvalue` would surface for the same
+  // `src` -- if the source isn't an lvalue at all, `flatten` below will fail the lvalue assertion.
+  ret_type = src.get_rvalue_type();
+}
+
+void VolatileLoadExpression::flatten(FlattenContext *ctx) {
+  // Reuse the lvalue-flattening helper to materialise the pointer Stmt for `src` (e.g. an `IndexExpression`
+  // resolves to a `GlobalPtrStmt` / `ExternalPtrStmt`).  Then push a `GlobalLoadStmt` with `is_volatile=true`
+  // -- mirroring `flatten_global_load` but with the volatile bit set.  Local-array sources are rejected: a
+  // function-scope alloca cannot be observed by another thread, so a volatile load there would be meaningless.
+  Stmt *ptr_stmt = flatten_lvalue(src, ctx);
+  if (ptr_stmt->is<AllocaStmt>()) {
+    ErrorEmitter(QuadrantsTypeError(), this,
+                 "qd.volatile_load() requires a global lvalue (field / ndarray subscript); "
+                 "function-scope local arrays are not visible to other threads.");
+  }
+  auto load_stmt = std::make_unique<GlobalLoadStmt>(ptr_stmt, /*is_volatile=*/true, dbg_info);
+  auto pointee_type = load_stmt->src->ret_type.ptr_removed();
+  load_stmt->ret_type = pointee_type->get_compute_type();
+  ctx->push_back(std::move(load_stmt));
+  stmt = ctx->back_stmt();
+}
+
 void RangeAssumptionExpression::type_check(const CompileConfig *) {
   QD_ASSERT_TYPE_CHECKED(input);
   QD_ASSERT_TYPE_CHECKED(base);
@@ -960,6 +987,56 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
   }
 
   auto const &ret_element_type = ret_type.get_element_type();
+  if (op_type == AtomicOpType::bit_and || op_type == AtomicOpType::bit_or || op_type == AtomicOpType::bit_xor) {
+    if (!is_integral(ret_element_type) || !is_integral(val_dtype)) {
+      ErrorEmitter(QuadrantsTypeError(), this,
+                   fmt::format("'atomic_{}' requires integer operands, got '{}' and '{}'", atomic_op_type_name(op_type),
+                               dest->ret_type->to_string(), val->ret_type->to_string()));
+    }
+  }
+  if (op_type == AtomicOpType::cas) {
+    // First-pass CAS: integer dtypes only. f32 / f64 CAS would need the same uint-bitcast trick xchg uses
+    // in the SPIR-V codegen path; deferred until that lands here too.
+    if (!is_integral(ret_element_type) || !is_integral(val_dtype)) {
+      ErrorEmitter(QuadrantsTypeError(), this,
+                   fmt::format("'atomic_cas' requires integer operands, got dest '{}' and val '{}'",
+                               dest->ret_type->to_string(), val->ret_type->to_string()));
+    }
+    // Reject tensor (vector / matrix) destinations explicitly. The other atomic ops fan out to per-component
+    // scalar AtomicOpStmts via scalarize / lower_matrix_ptr, but those passes use the 3-arg AtomicOpStmt
+    // constructor and would silently drop `expected`, tripping QD_ASSERT(stmt->expected) in codegen. Until the
+    // scalarizers grow a 4-arg path that threads `expected_i` through, refuse tensor CAS at compile time.
+    if (dest_dtype->is<TensorType>()) {
+      ErrorEmitter(QuadrantsTypeError(), this,
+                   fmt::format("'atomic_cas' on tensor (vector / matrix) destinations is not supported; got "
+                               "dest '{}'. Use a scalar field element instead.",
+                               dest->ret_type->to_string()));
+    }
+    QD_ASSERT(expected.expr != nullptr);
+    QD_ASSERT_TYPE_CHECKED(expected);
+    auto expected_dtype = expected.get_rvalue_type();
+    if (expected_dtype->is<TensorType>()) {
+      ErrorEmitter(QuadrantsTypeError(), this,
+                   fmt::format("'atomic_cas' 'expected' operand must be scalar, got tensor type '{}'",
+                               expected->ret_type->to_string()));
+      return;
+    }
+    if (!is_integral(expected_dtype)) {
+      ErrorEmitter(
+          QuadrantsTypeError(), this,
+          fmt::format("'atomic_cas' requires integer 'expected' operand, got '{}'", expected->ret_type->to_string()));
+    }
+    // Cast `expected` to the destination element type so it matches what the codegen will load from memory.
+    // LLVM `CreateAtomicCmpXchg` and SPIR-V `OpAtomicCompareExchange` both require the comparator to have the
+    // same width as the in-memory value; without this, a common call like `qd.atomic_cas(i64_field[None], 0, 1)`
+    // would leave `expected` at the i32 default and produce invalid IR. Mirrors how `val` gets widened later in
+    // `irpass::type_check::type_check_store`, which doesn't see `expected`.
+    if (expected_dtype != ret_element_type) {
+      expected.set(
+          Expr::make<UnaryOpExpression>(UnaryOpType::cast_value, expected, ret_element_type, expected->dbg_info));
+      expected.type_check(config);
+    }
+  }
   if (ret_element_type != val_dtype) {
     auto promoted = promoted_type(ret_element_type, val_dtype);
     if (ret_element_type != promoted) {
@@ -984,7 +1061,13 @@ void AtomicOpExpression::flatten(FlattenContext *ctx) {
   // expand rhs
   auto val_stmt = flatten_rvalue(val, ctx);
   auto dest_stmt = flatten_lvalue(dest, ctx);
-  stmt = ctx->push_back<AtomicOpStmt>(op_type, dest_stmt, val_stmt, dbg_info);
+  if (op_type == AtomicOpType::cas) {
+    QD_ASSERT(expected.expr != nullptr);
+    auto expected_stmt = flatten_rvalue(expected, ctx);
+    stmt = ctx->push_back<AtomicOpStmt>(op_type, dest_stmt, expected_stmt, val_stmt, dbg_info);
+  } else {
+    stmt = ctx->push_back<AtomicOpStmt>(op_type, dest_stmt, val_stmt, dbg_info);
+  }
   stmt->ret_type = stmt->as<AtomicOpStmt>()->dest->ret_type;
 }
 
@@ -1390,6 +1473,7 @@ void ASTBuilder::create_assert_stmt(const Expr &cond,
 }
 
 void ASTBuilder::begin_frontend_range_for(const Expr &i, const Expr &s, const Expr &e, const DebugInfo &dbg_info) {
+  for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(i, s, e, arch_, for_loop_dec_.config, dbg_info);
   auto stmt = stmt_unique.get();
   this->insert(std::move(stmt_unique));
@@ -1403,6 +1487,7 @@ void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
              "ti.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
+  for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(loop_vars, snode, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();
   auto stmt = stmt_unique.get();
@@ -1416,6 +1501,7 @@ void ASTBuilder::begin_frontend_struct_for_on_external_tensor(const ExprGroup &l
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
              "ti.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
+  for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   auto stmt_unique =
       std::make_unique<FrontendForStmt>(loop_vars, external_tensor, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();
@@ -1431,6 +1517,7 @@ void ASTBuilder::begin_frontend_mesh_for(const Expr &i,
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
              "ti.loop_config(serialize=True) does not have effect on the mesh for. "
              "The execution order is not guaranteed.");
+  for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   auto stmt_unique =
       std::make_unique<FrontendForStmt>(ExprGroup(i), mesh_ptr, element_type, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();

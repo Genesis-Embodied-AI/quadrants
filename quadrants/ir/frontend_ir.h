@@ -23,6 +23,7 @@ struct ForLoopConfig {
   MemoryAccessOptions mem_access_opt;
   int block_dim{0};
   bool uniform{false};
+  int stream_parallel_group_id{0};
   std::string loop_name{""};
 };
 
@@ -198,6 +199,7 @@ class FrontendForStmt : public Stmt {
   bool strictly_serialized;
   MemoryAccessOptions mem_access_opt;
   int block_dim;
+  int stream_parallel_group_id{0};
   std::string loop_name;
 
   FrontendForStmt(const ExprGroup &loop_vars,
@@ -607,6 +609,26 @@ class IndexExpression : public Expression {
   bool is_tensor() const;
 };
 
+// `qd.volatile_load(target)` -- frontend wrapper that forces the load of `target` (an lvalue subscript into a
+// global field / ndarray) to lower to a `GlobalLoadStmt` with `is_volatile=true`.  The pointer flatten path is
+// reused unchanged; only the load itself differs from the implicit rvalue conversion `flatten_rvalue` performs
+// when the same expression appears in a regular read context.  Required for spin-wait correctness on every
+// backend (LLVM `load volatile` / SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask) -- see #648.
+class VolatileLoadExpression : public Expression {
+ public:
+  Expr src;
+
+  explicit VolatileLoadExpression(const Expr &src, const DebugInfo &dbg_info = DebugInfo())
+      : Expression(dbg_info), src(src) {
+  }
+
+  void type_check(const CompileConfig *config) override;
+
+  void flatten(FlattenContext *ctx) override;
+
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
+};
+
 class RangeAssumptionExpression : public Expression {
  public:
   Expr input, base;
@@ -670,9 +692,18 @@ class IdExpression : public Expression {
 class AtomicOpExpression : public Expression {
  public:
   AtomicOpType op_type;
-  Expr dest, val;
+  Expr dest;
+  // Only meaningful when `op_type == AtomicOpType::cas`. Empty Expr otherwise. CAS is the only atomic op
+  // with three operands -- (dest, expected, val) -- and is the only place this slot is populated.
+  // Declared between dest and val so member-init order matches the 4-arg constructor's parameter order.
+  Expr expected;
+  Expr val;
 
   AtomicOpExpression(AtomicOpType op_type, const Expr &dest, const Expr &val) : op_type(op_type), dest(dest), val(val) {
+  }
+
+  AtomicOpExpression(AtomicOpType op_type, const Expr &dest, const Expr &expected, const Expr &val)
+      : op_type(op_type), dest(dest), expected(expected), val(val) {
   }
 
   void type_check(const CompileConfig *config) override;
@@ -887,6 +918,7 @@ class ASTBuilder {
       config.mem_access_opt.clear();
       config.block_dim = 0;
       config.strictly_serialized = false;
+      config.stream_parallel_group_id = 0;
       config.loop_name.clear();
     }
   };
@@ -897,6 +929,8 @@ class ASTBuilder {
   Arch arch_;
   ForLoopDecoratorRecorder for_loop_dec_;
   int id_counter_{0};
+  int stream_parallel_group_counter_{0};
+  int current_stream_parallel_group_id_{0};
 
  public:
   ASTBuilder(Block *initial, Arch arch, bool is_kernel) : is_kernel_(is_kernel), arch_(arch) {
@@ -1020,6 +1054,15 @@ class ASTBuilder {
 
   void reset_snode_access_flag() {
     for_loop_dec_.reset();
+  }
+
+  void begin_stream_parallel() {
+    QD_ERROR_IF(current_stream_parallel_group_id_ != 0, "Nested stream_parallel blocks are not supported");
+    current_stream_parallel_group_id_ = ++stream_parallel_group_counter_;
+  }
+
+  void end_stream_parallel() {
+    current_stream_parallel_group_id_ = 0;
   }
 
   Identifier get_next_id(const std::string &name = "") {

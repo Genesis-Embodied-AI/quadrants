@@ -81,7 +81,11 @@ struct AMDGPUConvertAllocaInstAddressSpacePass : public FunctionPass {
   }
   bool runOnFunction(llvm::Function &f) override {
     f.addFnAttr("target-cpu", "gfx" + AMDGPUContext::get_instance().get_mcpu().substr(3, 4));
-    f.addFnAttr("target-features", "");
+    // Force wave64 codegen on every AMDGPU target. RDNA (gfx10+) defaults to wave32 in the AMDGPU backend; explicitly
+    // enabling +wavefrontsize64 / disabling -wavefrontsize32 makes RDNA emit wave64 instructions matching CDNA, so we
+    // only have to maintain one wave size in the runtime and codegen. Mirrors the libdevice variant pinned in
+    // llvm_context.cpp and the TargetMachine features in jit_amdgpu.cpp.
+    f.addFnAttr("target-features", "+wavefrontsize64,-wavefrontsize32");
     for (auto &bb : f) {
       std::vector<AllocaInst *> alloca_inst_vec;
       for (Instruction &inst : bb) {

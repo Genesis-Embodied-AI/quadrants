@@ -549,31 +549,36 @@ class StructField(Field):
             v.from_torch(array_dict[k])
 
     @python_scope
-    def to_numpy(self):
+    def to_numpy(self, *, copy=True):
         """Converts the Struct field instance to a dictionary of NumPy arrays.
 
         The dictionary may be nested when converting nested structs.
 
+        Args:
+            copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise (per member).
+
         Returns:
             Dict[str, Union[numpy.ndarray, Dict]]: The result NumPy array.
         """
-        return {k: v.to_numpy() for k, v in self._items}
+        return {k: v.to_numpy(copy=copy) for k, v in self._items}
 
     @python_scope
-    def to_torch(self, device=None):
+    def to_torch(self, device=None, *, copy=True):
         """Converts the Struct field instance to a dictionary of PyTorch tensors.
 
         The dictionary may be nested when converting nested structs.
 
         Args:
-            device (torch.device, optional): The
-                desired device of returned tensor.
+            device (torch.device, optional): The desired device of returned tensor.
+            copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise (per member).
 
         Returns:
             Dict[str, Union[torch.Tensor, Dict]]: The result
                 PyTorch tensor.
         """
-        return {k: v.to_torch(device=device) for k, v in self._items}
+        return {k: v.to_torch(device=device, copy=copy) for k, v in self._items}
 
     @python_scope
     def __setitem__(self, indices, element):

@@ -1,0 +1,254 @@
+name: PR change report
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+jobs:
+  pr-change-report:
+    name: PR change report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait using dead-reckoning for builds to finish, before running, to save AI cost, if someone pushes many commits in a row
+        run: sleep 1800
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Build agent inputs (per-file totals, diffs, base contents)
+        id: inputs
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          SHORT_SHA=$(echo "${HEAD_SHA:-$(git rev-parse HEAD)}" | cut -c1-9)
+          python .github/workflows/scripts_new/pr_change_report/build_inputs.py \
+            --base-ref "$BASE_REF" \
+            --output-dir /tmp/pr_change_report \
+            --commit-hash "$SHORT_SHA"
+
+          # Primary skip gate: any source-file change at all (modifications, additions, OR
+          # deletions). summary.json is the full set; file_list.txt is the agent-input subset
+          # that excludes deletions, so gating on file_list.txt would silently drop
+          # deletion-only PRs.
+          NUM_FILES=$(jq 'length' /tmp/pr_change_report/summary.json)
+          if [ "$NUM_FILES" -eq 0 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No source files changed."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+            echo "Files in summary.json: $NUM_FILES"
+            echo
+            echo "Pre-computed file headers:"
+            cat /tmp/pr_change_report/report_header.md
+
+            # Secondary skip gate: per-function attribution requires at least one non-deleted
+            # file (the agent reads HEAD content). For deletion-only PRs there is nothing for
+            # the agent to do, so skip the Cursor CLI install and agent invocation.
+            if [ -s /tmp/pr_change_report/file_list.txt ]; then
+              echo "skip_agent=false" >> "$GITHUB_OUTPUT"
+              echo
+              echo "Files for agent attribution:"
+              cat /tmp/pr_change_report/file_list.txt
+            else
+              echo "skip_agent=true" >> "$GITHUB_OUTPUT"
+              echo
+              echo "All changed source files are deletions; skipping per-function agent step."
+            fi
+          fi
+
+      - name: Install Cursor CLI
+        if: steps.inputs.outputs.skip != 'true' && steps.inputs.outputs.skip_agent != 'true'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+
+      - name: Identify changed function ranges with Cursor agent
+        if: steps.inputs.outputs.skip != 'true' && steps.inputs.outputs.skip_agent != 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_KEY_HUGH }}
+        run: |
+          agent -p "$(cat <<'PROMPT'
+          You are identifying which functions were touched by a PR. Line counts and +/-
+          attribution are computed deterministically AFTER your output, so do NOT count
+          lines yourself.
+
+          Inputs under /tmp/pr_change_report/ :
+            - file_list.txt        changed source paths (.py / .c / .cc / .cpp / .h / .hpp /
+                                   .cu), one per line.
+            - touched_ranges.txt   per-file, the line-number ranges in HEAD and base that the
+                                   diff hunks cover. This tells you exactly where to look --
+                                   you should only need to inspect lines inside (or close to)
+                                   these ranges, not the whole file.
+            - diffs/<path>.diff    per-file unified diff vs merge-base.
+            - head/<path>          full HEAD content of that file (also reachable from the
+                                   workspace at the same path).
+            - base/<path>          full base content (missing if the file is newly added).
+
+          For each file in file_list.txt, identify every function or method whose body
+          contains at least one ``+`` or ``-`` line in the diff. Emit ONE JSON object per
+          such function on its own line, with these keys:
+            path : the file path, exactly as it appears in file_list.txt.
+            name : the function or method name. C++ class methods MUST be
+                   "ClassName::method"; free functions are just "func". Use the synthetic
+                   name "<module>" ONLY for top-level non-function code (imports,
+                   module-level constants, type-alias / dataclass declarations, free
+                   ``static`` C/C++ definitions, etc.) -- and ONLY when at least one ``+``
+                   or ``-`` line lands OUTSIDE every function/method body. Do NOT use
+                   "<module>" as a catch-all for an entire file.
+            head : [start_line, end_line] in HEAD, both 1-indexed and inclusive (signature
+                   line through closing brace / dedent), or null if the function was
+                   DELETED by this PR.
+            base : [start_line, end_line] in the base version, or null if the function was
+                   NEWLY added by this PR.
+
+          Rules:
+            - Only emit functions that overlap a hunk in touched_ranges.txt. Skip every
+              other function in the file.
+            - For functions modified by this PR, both head and base are filled (their line
+              ranges may differ).
+            - Anonymous lambdas inside another function are NOT separate functions; their
+              touched lines belong to the enclosing function.
+            - The end_line of a function is the line of the closing brace (C/C++) or the
+              last indented body line (Python), inclusive.
+            - Use the touched_ranges.txt hints to narrow your reading -- you should not need
+              to read whole large files. Read only enough HEAD and base context to bracket
+              each touched function with confidence.
+            - Function ranges within a single file should NOT overlap each other. A
+              "<module>" range (when present) must NOT overlap any function/method range
+              you also emit for that file.
+
+          Output: JSON Lines. ONE JSON object per line. Nothing else. NO code fences, NO
+          preamble, NO closing remarks, NO commentary, NO blank lines between objects.
+          PROMPT
+          )" --model composer-2.5 --mode ask --output-format text --trust \
+            > /tmp/pr_change_report/function_ranges.jsonl
+
+          echo "----- function_ranges.jsonl -----"
+          cat /tmp/pr_change_report/function_ranges.jsonl
+          echo "---------------------------------"
+
+      - name: Render report.txt deterministically
+        if: steps.inputs.outputs.skip != 'true'
+        run: |
+          python .github/workflows/scripts_new/pr_change_report/render_report.py \
+            --output-dir /tmp/pr_change_report \
+            --function-ranges /tmp/pr_change_report/function_ranges.jsonl \
+            --output /tmp/pr_change_report/report.txt
+
+          echo "----- report.txt -----"
+          cat /tmp/pr_change_report/report.txt
+          echo "----------------------"
+
+      - name: Assemble Check-page markdown
+        if: steps.inputs.outputs.skip != 'true'
+        env:
+          SHORT_SHA: ${{ steps.inputs.outputs.short_sha }}
+        run: |
+          {
+            echo "## PR change report (\`${SHORT_SHA}\`)"
+            echo
+            echo "Per-file totals + per-function breakdown of code-line additions and removals."
+            echo "Code lines exclude blank lines, comment-only lines, and Python multi-line strings."
+            echo
+            # Reuse the table from report_comment.md (skip its leading heading + intro lines).
+            sed -n '/^| File /,/^\*\*Total\*\*/p' /tmp/pr_change_report/report_comment.md
+            echo
+            echo "### Per-function breakdown"
+            echo
+            echo '```text'
+            cat /tmp/pr_change_report/report.txt
+            echo '```'
+          } > /tmp/pr_change_report/report_check.md
+
+          echo "----- report_check.md (head) -----"
+          head -40 /tmp/pr_change_report/report_check.md
+          echo "..."
+          echo "size: $(wc -c < /tmp/pr_change_report/report_check.md) bytes"
+
+      - name: Upload report artifacts
+        if: steps.inputs.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-change-report
+          path: |
+            /tmp/pr_change_report/report.txt
+            /tmp/pr_change_report/report_check.md
+            /tmp/pr_change_report/report_comment.md
+            /tmp/pr_change_report/summary.json
+            /tmp/pr_change_report/report_header.md
+            /tmp/pr_change_report/touched_ranges.txt
+            /tmp/pr_change_report/function_ranges.jsonl
+
+      - name: Publish PR change report Check
+        if: steps.inputs.outputs.skip != 'true' && github.event_name == 'pull_request'
+        id: publish_check
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            let body = fs.readFileSync('/tmp/pr_change_report/report_check.md', 'utf8');
+            const MAX_TEXT = 65000;
+            let truncated = false;
+            if (body.length > MAX_TEXT) {
+              body = body.substring(0, MAX_TEXT) +
+                '\n\n---\n*Report truncated. Download the full report from the workflow artifacts.*';
+              truncated = true;
+            }
+            const summary = truncated
+              ? 'Per-file totals + per-function breakdown (truncated — see artifacts for full report).'
+              : 'Per-file totals + per-function breakdown of code-line additions and removals.';
+            const check = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head_sha: context.payload.pull_request.head.sha,
+              name: 'PR change report',
+              status: 'completed',
+              conclusion: 'success',
+              output: {
+                title: 'PR change report',
+                summary: summary,
+                text: body,
+              },
+            });
+            core.setOutput('check-url', check.data.html_url);
+
+      - name: Post PR comment
+        if: steps.inputs.outputs.skip != 'true' && github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        env:
+          REPORT_URL: ${{ steps.publish_check.outputs.check-url }}
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = JSON.parse(
+              fs.readFileSync('/tmp/pr_change_report/summary.json', 'utf8'));
+            const numFiles = summary.length;
+            const totalAdded = summary.reduce((acc, s) => acc + s.added, 0);
+            const totalRemoved = summary.reduce((acc, s) => acc + s.removed, 0);
+            const text = `Total: ${numFiles} file(s) changed, ` +
+              `+${totalAdded} -${totalRemoved} code lines.`;
+            const url = process.env.REPORT_URL;
+            const body = url ? `[${text}](${url})` : text;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: body,
+            });

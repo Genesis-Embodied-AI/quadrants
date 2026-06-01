@@ -272,10 +272,10 @@ bool GraphManager::try_launch(int launch_id,
   // autograd entry points that would hit it. Fail loudly instead of silently running with a nullptr
   // `runtime->adstack_heap_buffer`.
   for (const auto &task : offloaded_tasks) {
-    QD_ERROR_IF(task.ad_stack.per_thread_stride > 0,
+    QD_ERROR_IF(!task.ad_stack.allocas.empty(),
                 "graph=True is not supported for kernels that use the reverse-mode autodiff stack "
-                "(task '{}' has per_thread_stride={}). Launch without graph=True.",
-                task.name, task.ad_stack.per_thread_stride);
+                "(task '{}' has {} adstack allocas). Launch without graph=True.",
+                task.name, task.ad_stack.allocas.size());
   }
 
   resolve_ctx_ndarray_ptrs(ctx, parameters, executor);

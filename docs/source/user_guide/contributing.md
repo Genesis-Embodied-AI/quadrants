@@ -2,9 +2,25 @@
 
 ## Good practice reminder
 
-* *testing*: Any new features or modified code should be tested. You have to run the test suite using `python tests/run_tests.py` which sets up the right test environment for `pytest`. CLI arguments are forwarded to `pytest`. Do not use `pytest` directly as it behaves differently.
+* *testing*: Any new features or modified code should be tested. see [unit_testing.md](unit_testing.md)
 * *format/linter*: Before pushing any commits, ensure you set up `pre-commit` and run it using `pre-commit run -a`
 * No need to force push to keep a clean history as the merging is eventually done by squashing commits.
+
+## Running tests
+
+Run the test suite with `python tests/run_tests.py`. CLI arguments are forwarded to pytest. For example, to run only Metal tests matching a keyword:
+
+```
+python tests/run_tests.py --arch metal -k "test_tile16_cholesky"
+```
+
+The target architecture can also be set via the `QD_WANTED_ARCHS` environment variable (comma-separated, e.g. `QD_WANTED_ARCHS=metal,vulkan`).
+
+### Kernel compilation cache
+
+During test runs, compiled kernels are cached to disk so that the same kernel is not recompiled after each `qd.reset()`/`qd.init()` cycle.
+
+A fresh, empty cache directory is created for each test session by pytest's [`tmp_path_factory`](https://docs.pytest.org/en/stable/how-to/tmp_path.html) (typically under `/tmp/pytest-of-<user>/pytest-<N>/qdcache0/`). Old session directories are cleaned up automatically by pytest's retention policy. This cache is separate from the user-facing `~/.cache/quadrants/` cache.
 
 ## Creating your build/dev environment
 
@@ -126,6 +142,7 @@ You can run these locally with `pre-commit run -a` after `pip install pre-commit
 - **check-markup-links** (`check_markup_links.yml`) — validates links in documentation
 - **linux / macosx / win** — build and test on each platform
 - **test-gpu** — GPU-specific tests
+- **coverage report** — a one-line diff coverage summary is posted as a PR comment on each push, linking to the full annotated report. This includes kernel-level branch coverage. See [Kernel code coverage](kernel_coverage.md) for details.
 
 ### Line wrapping check (`check_wrapping.yml`)
 
@@ -139,3 +156,46 @@ The check runs only on lines changed in the PR and reports up to 3 violations. T
 ### Deleted comments check (`check_deleted_comments.yml`)
 
 Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted. Reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
+### Test coverage check (`check_test_coverage.yml`)
+
+Uses an AI agent to verify that new or modified source code in a PR has corresponding test coverage. The agent examines the diff of non-test source files and cross-references them against test files in the repo (existing or added in the PR). It flags up to 5 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
+### Feature factorization check (`check_feature_factorization.yml`)
+
+Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the "wrong" place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.
+
+The agent reports up to 5 violations, each annotated with the host file's hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
+### PR change report (`pr_change_report.yml`)
+
+Posts a fresh PR comment on every push. The comment is a single line: the totals (file count, code lines added, code lines removed) formatted as a markdown link to a GitHub Check whose page contains the full per-file / per-function breakdown. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of multi-line strings). C/C++ `/* … */` block comments are stripped before counting.
+
+The number columns on the Check page (without a `+` or `-` sign) are code-line counts in the BASE (pre-PR) version: file size before this PR (0 for newly-added files), function body size before this PR (0 for new functions; original body size for deleted functions). `+<n>` / `-<n>` are code lines added / removed by this PR.
+
+Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR), an `Existing:` group (modified by this PR), and a `Deleted:` group (removed by this PR), and within each group sorted by added lines descending, then removed lines descending. Files that are deleted in their entirety appear as a single per-file row (so the totals stay accurate) but skip the per-function breakdown. Sample shape:
+
+```
+quadrants/program/program_stream.cpp 0 +151
+    New:
+      StreamManager::create_event()             0     +18
+      StreamManager::create_stream()            0     +18
+      StreamManager::record_event()             0     +15
+      StreamManager::destroy_event()            0     +13
+      StreamManager::destroy_stream()           0     +13
+
+python/quadrants/lang/stream.py 0 +111
+    New:
+      Event.destroy()             0      +9
+      Stream.destroy()            0      +9
+      Event._destroy_prog()       0      +8
+      Stream._destroy_prog()      0      +8
+      Event.__del__()             0      +7
+
+quadrants/program/legacy_stream.cpp 42 -42
+    # entire file deleted (per-function breakdown skipped)
+```
+
+The `0` in the LoC column for the two new files reflects that both files did not exist before this PR (their pre-PR code-line count is 0). The `42 -42` row for `legacy_stream.cpp` is a fully-deleted file: 42 code lines existed before this PR and all 42 were removed.
+
+This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.

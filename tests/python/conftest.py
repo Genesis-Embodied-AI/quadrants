@@ -8,6 +8,20 @@ import pytest
 import quadrants as qd
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _offline_cache_dir(tmp_path_factory):
+    """Enable the kernel compilation disk cache for the test session.
+
+    Uses pytest's tmp_path_factory so the cache directory is managed by pytest's retention policy
+    (tmp_path_retention_count / tmp_path_retention_policy) and cleaned up automatically. This avoids recompiling
+    identical kernels after each qd.reset()/qd.init() cycle within a session.
+    """
+    cache_dir = tmp_path_factory.mktemp("qdcache")
+    os.environ["QD_OFFLINE_CACHE"] = "1"
+    os.environ["QD_OFFLINE_CACHE_FILE_PATH"] = str(cache_dir)
+    os.environ.setdefault("QD_OFFLINE_CACHE_CLEANING_POLICY", "never")
+
+
 @pytest.fixture(autouse=True)
 def run_gc_after_test():
     """
@@ -84,17 +98,15 @@ def _vulkan_debug_warmup():
 @pytest.fixture(autouse=True)
 def wanted_arch(request, req_arch, req_options):
     if req_arch is not None:
-        if req_arch == qd.cuda:
+        if req_arch in (qd.cuda, qd.amdgpu):
             if not request.node.get_closest_marker("run_in_serial"):
                 # Optimization only apply to non-serial tests, since serial tests
                 # are picked out exactly because of extensive resource consumption.
                 # Separation of serial/non-serial tests is done by the test runner
                 # through `-m run_in_serial` / `-m not run_in_serial`.
-                req_options = {
-                    "device_memory_GB": 0.3,
-                    "cuda_stack_limit": 1024,
-                    **req_options,
-                }
+                req_options = {"device_memory_GB": 0.3, **req_options}
+                if req_arch == qd.cuda:
+                    req_options = {"cuda_stack_limit": 1024, **req_options}
             else:
                 # Serial tests run without aggressive resource optimization
                 req_options = {"device_memory_GB": 1, **req_options}
@@ -141,45 +153,41 @@ def pytest_unconfigure(config):
         import shutil
 
         shutil.rmtree(d, ignore_errors=True)
+    os.environ.pop("_QD_XDIST_EXIT_MARKER_DIR", None)
 
 
-@pytest.hookimpl(wrapper=True, tryfirst=True)
+@pytest.hookimpl(trylast=True)
 def pytest_runtest_logreport(report):
-    """Handle xdist worker retirement and crash-report suppression.
+    """Kill the xdist worker process after a test failure so it restarts with clean GPU state.
 
-    On the controller: swallow synthetic crash reports that were already marked for suppression by
-    pytest_handlecrashitem.
-
-    On workers: after a test failure, write an intentional-exit marker and kill the process so it
-    restarts with clean GPU state.  The real test report is sent by inner hooks (including xdist's
-    report-forwarding hook) during ``yield`` before we exit.
+    Runs trylast so xdist's own hook sends the real test report over the channel first.  Before
+    exiting, we write a marker file so the controller's pytest_handlecrashitem can distinguish this
+    intentional exit from a genuine crash (segfault, OOM, etc.).
     """
-    if getattr(report, "_qd_suppress", False):
-        return None
+    if not os.environ.get("PYTEST_XDIST_WORKER"):
+        return
 
-    result = yield
+    if report.outcome not in ("rerun", "error", "failed"):
+        return
 
-    if os.environ.get("PYTEST_XDIST_WORKER") and report.outcome in ("rerun", "error", "failed"):
-        d = _exit_marker_dir()
-        if d:
-            worker_id = os.environ["PYTEST_XDIST_WORKER"]
-            try:
-                with open(os.path.join(d, worker_id), "w") as f:
-                    f.write(report.nodeid)
-            except OSError:
-                pass
-        os._exit(1)
-
-    return result
+    d = _exit_marker_dir()
+    if d:
+        worker_id = os.environ["PYTEST_XDIST_WORKER"]
+        try:
+            with open(os.path.join(d, worker_id), "w") as f:
+                f.write(report.nodeid)
+        except OSError:
+            pass
+    os._exit(1)
 
 
 def pytest_handlecrashitem(crashitem, report, sched):
     """Suppress the synthetic crash report only for intentional ``os._exit(1)`` exits.
 
     When a worker is killed intentionally (to reset GPU state after a failure), it writes a marker
-    file before exiting.  If the marker exists, we flag the synthetic report for suppression and
-    return a truthy value to stop the firstresult hook chain.  Genuine crashes (segfaults, OOM,
-    etc.) have no marker, so their reports pass through unmodified.
+    file before exiting.  If the marker exists, we mutate the synthetic report so the terminal
+    reporter drops it into the empty-string stats bucket (invisible in the summary).  Genuine
+    crashes (segfaults, OOM, etc.) have no marker, so their reports pass through as failures.
     """
     d = _exit_marker_dir()
     if not d:
@@ -195,7 +203,9 @@ def pytest_handlecrashitem(crashitem, report, sched):
         os.unlink(marker)
     except OSError:
         pass
-    report._qd_suppress = True
+    report.outcome = "passed"
+    report.when = "teardown"
+    report.longrepr = None
     return True
 
 

@@ -1,3 +1,6 @@
+#include <chrono>
+#include <random>
+
 #include "quadrants/runtime/cuda/jit_cuda.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/codegen/ir_dump.h"
@@ -348,11 +351,31 @@ std::string JITSessionCUDA::compile_module_to_ptx(std::unique_ptr<llvm::Module> 
   }
 
   std::string buffer(outstr.begin(), outstr.end());
+  append_compute_cache_bypass_nonce_if_disabled(buffer, this->config_);
 
   // Null-terminate the ptx source
   buffer.push_back(0);
   ptx_cache_->store_ptx(ptx_cache_key, buffer);
   return buffer;
+}
+
+void append_compute_cache_bypass_nonce_if_disabled(std::string &ptx, const CompileConfig &compile_config) {
+  // CUDA_CACHE_DISABLE is captured at libcuda init time so it cannot be toggled mid-process; appending a per-session
+  // comment shifts the PTX hash that the driver compute cache uses, forcing ptxas to re-run cold. The nonce is
+  // `static` so that within one process every call sees the same value: two kernels in the same run that produce
+  // identical PTX still hit the driver cache and skip a second ptxas invocation, while only cross-process reuse is
+  // broken - the property needed for clean cold-cache measurements when offline_cache=false. We mix a high-resolution
+  // timestamp with a random_device draw so back-to-back processes (CI matrix runs, `for i in {1..N}; do ./bench`)
+  // cannot collide on the same wall-clock second the way std::time(nullptr) would.
+  if (compile_config.offline_cache) {
+    return;
+  }
+  static const std::string session_nonce = []() {
+    auto now = std::chrono::system_clock::now().time_since_epoch().count();
+    auto entropy = std::random_device{}();
+    return fmt::format("\n// quadrants-session-nonce: {}-{:08x}\n", static_cast<int64_t>(now), entropy);
+  }();
+  ptx.append(session_nonce);
 }
 
 std::unique_ptr<JITSession> create_llvm_jit_session_cuda(QuadrantsLLVMContext *tlctx,

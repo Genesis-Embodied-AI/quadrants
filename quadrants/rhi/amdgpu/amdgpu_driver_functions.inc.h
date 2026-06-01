@@ -15,8 +15,12 @@ PER_AMDGPU_FUNCTION(context_create, hipCtxCreate, void *, int, void *);
 PER_AMDGPU_FUNCTION(context_set_current, hipCtxSetCurrent, void *);
 PER_AMDGPU_FUNCTION(context_get_current, hipCtxGetCurrent, void **);
 
+// Device synchronization
+PER_AMDGPU_FUNCTION(device_synchronize, hipDeviceSynchronize);
+
 // Stream management
-PER_AMDGPU_FUNCTION(stream_create, hipStreamCreate, void **, uint32);
+PER_AMDGPU_FUNCTION(stream_create, hipStreamCreateWithFlags, void **, uint32);
+PER_AMDGPU_FUNCTION(stream_destroy, hipStreamDestroy, void *);
 
 // Memory management
 PER_AMDGPU_FUNCTION(memcpy_host_to_device, hipMemcpyHtoD, void *, void *, std::size_t);
@@ -27,13 +31,18 @@ PER_AMDGPU_FUNCTION(memcpy_async, hipMemcpyAsync, void *, void *, std::size_t, u
 PER_AMDGPU_FUNCTION(memcpy_host_to_device_async, hipMemcpyHtoDAsync, void *, void *, std::size_t, void *);
 PER_AMDGPU_FUNCTION(memcpy_device_to_host_async, hipMemcpyDtoHAsync, void *, void *, std::size_t, void *);
 PER_AMDGPU_FUNCTION(malloc, hipMalloc, void **, std::size_t);
+// hipMallocAsync/hipFreeAsync require ROCm >= 5.4; the AMDGPUDriver wrappers fall back to the synchronous variants
+// on devices without memory-pool support.
 PER_AMDGPU_FUNCTION(malloc_async_impl, hipMallocAsync, void **, std::size_t, void *);
 PER_AMDGPU_FUNCTION(malloc_managed, hipMallocManaged, void **, std::size_t, uint32);
 PER_AMDGPU_FUNCTION(memset, hipMemset, void *, uint8, std::size_t);
 PER_AMDGPU_FUNCTION(mem_free, hipFree, void *);
 PER_AMDGPU_FUNCTION(mem_free_async_impl, hipFreeAsync, void *, void *);
+PER_AMDGPU_FUNCTION(mem_alloc_host, hipHostMalloc, void **, std::size_t, uint32);
+PER_AMDGPU_FUNCTION(mem_free_host, hipHostFree, void *);
 PER_AMDGPU_FUNCTION(device_get_default_mem_pool, hipDeviceGetDefaultMemPool, void **, int);
 PER_AMDGPU_FUNCTION(mem_pool_set_attribute, hipMemPoolSetAttribute, void *, uint32, void *);
+PER_AMDGPU_FUNCTION(mem_pool_trim_to, hipMemPoolTrimTo, void *, std::size_t);
 PER_AMDGPU_FUNCTION(mem_get_info, hipMemGetInfo, std::size_t *, std::size_t *);
 PER_AMDGPU_FUNCTION(mem_get_attribute, hipPointerGetAttribute, void *, uint32, void *);
 PER_AMDGPU_FUNCTION(mem_get_attributes, hipPointerGetAttributes, void *, void *);
@@ -41,6 +50,7 @@ PER_AMDGPU_FUNCTION(mem_get_attributes, hipPointerGetAttributes, void *, void *)
 // Module and kernels
 PER_AMDGPU_FUNCTION(module_get_function, hipModuleGetFunction, void **, void *, const char *);
 PER_AMDGPU_FUNCTION(module_load_data, hipModuleLoadData, void **, const void *);
+PER_AMDGPU_FUNCTION(module_unload, hipModuleUnload, void *);
 PER_AMDGPU_FUNCTION(launch_kernel,
                     hipModuleLaunchKernel,
                     void *,
@@ -56,9 +66,27 @@ PER_AMDGPU_FUNCTION(launch_kernel,
                     void **);
 PER_AMDGPU_FUNCTION(kernel_get_attribute, hipFuncGetAttribute, int *, uint32, void *);
 PER_AMDGPU_FUNCTION(kernel_get_occupancy, hipOccupancyMaxActiveBlocksPerMultiprocessor, int *, void *, int, size_t);
+PER_AMDGPU_FUNCTION(kernel_set_attribute, hipFuncSetAttribute, const void *, uint32, int);
+
+// Graph management. HIP exposes the kernel-launch / instantiate / launch / destroy subset that we need for
+// `@qd.kernel(graph=True)`. Conditional / while nodes are not yet available in HIP, so device-side
+// `graph_do_while` falls back to the host-side loop in `KernelLauncher::launch_offloaded_tasks_with_do_while`.
+PER_AMDGPU_FUNCTION(graph_create, hipGraphCreate, void **, uint32);
+PER_AMDGPU_FUNCTION(graph_add_kernel_node,
+                    hipGraphAddKernelNode,
+                    void **,
+                    void *,
+                    const void *,
+                    std::size_t,
+                    const void *);
+PER_AMDGPU_FUNCTION(graph_instantiate, hipGraphInstantiate, void **, void *, void *, char *, std::size_t);
+PER_AMDGPU_FUNCTION(graph_launch, hipGraphLaunch, void *, void *);
+PER_AMDGPU_FUNCTION(graph_destroy, hipGraphDestroy, void *);
+PER_AMDGPU_FUNCTION(graph_exec_destroy, hipGraphExecDestroy, void *);
 
 // Stream management
 PER_AMDGPU_FUNCTION(stream_synchronize, hipStreamSynchronize, void *);
+PER_AMDGPU_FUNCTION(stream_wait_event, hipStreamWaitEvent, void *, void *, uint32);
 
 // Event management
 PER_AMDGPU_FUNCTION(event_create, hipEventCreateWithFlags, void **, uint32);

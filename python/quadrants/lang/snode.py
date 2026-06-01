@@ -469,6 +469,15 @@ def get_addr(f, indices):
     Returns:
         qd.u64: The memory address of `f[indices]`.
     """
+    # Layout-tagged fields: permute canonical user-supplied indices into physical storage order before passing to
+    # the SNode layer, matching the canonical->physical rewrite applied to regular subscripts in
+    # ``build_Subscript``. Without this, ``get_addr(f, [i, j, k])`` would be the only access path that treats
+    # its arguments as already-physical and would return addresses inconsistent with ``f[i, j, k]``.
+    layout = getattr(f, "_qd_layout", None)
+    if layout is not None:
+        layout_t = tuple(layout)
+        if layout_t != tuple(range(len(layout_t))) and len(indices) == len(layout_t):
+            indices = [indices[layout_t[p]] for p in range(len(layout_t))]
     return expr.Expr(
         impl.get_runtime()
         .compiling_callable.ast_builder()

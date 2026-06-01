@@ -19,12 +19,12 @@ namespace {
 // produces an unusually deep or wide tree; the host-side encoder hard-errors rather than let the shader
 // silently truncate (see `encode_adstack_size_expr_device_bytecode_for_spirv`), so exceeding a cap surfaces
 // as a clear compile-time diagnostic rather than a mysterious overflow at the next `stack_push`.
-// Per-stack node-count cap for the eval state. Each invocation gets its own private `values_arr` of this
-// size indexed by the *local* offset within the stack's subtree (not the global bytecode-wide node index),
-// so this cap applies only per-stack, not per-kernel. Observed reverse-mode kernels have a handful of stacks
-// with ~1k-node symbolic trees (`MaxOverRange` over ndarray reads with a nested `Max` of per-substep trip
-// counts), so the cap needs to comfortably exceed that. 4096 * 8 B = 32 KiB of i64 private memory per
-// invocation; the sizer runs as a single-thread dispatch so this is not multiplied by workgroup size.
+// Per-stack node-count cap for the eval state. The shader hosts its `values_arr` slice in the i64 scratch
+// SSBO (binding 3) sized at `kAdStackSizerScratchI64Elems`; the slice is indexed by the *local* offset
+// within the stack's subtree (not the global bytecode-wide node index), so this cap applies only per-stack,
+// not per-kernel. Observed reverse-mode kernels have a handful of stacks with ~1k-node symbolic trees
+// (`MaxOverRange` over ndarray reads with a nested `Max` of per-substep trip counts); 65536 * 8 B = 512 KiB
+// of device memory per `GfxRuntime` (allocated once, reused across every sizer dispatch).
 constexpr int kMaxNodes = kAdStackSizerMaxNodesPerStack;
 // `kMaxVars` sizes the per-invocation `scope_arr` indexed by dense bound-var id; must match
 // `kAdStackSizeExprDeviceMaxBoundVars` so every id the host-side dense-remap hands out lands in bounds. `kMaxPending`
@@ -114,15 +114,21 @@ void store_buf_u32(IRBuilder &ir, Value buffer, Value word_idx, Value value) {
   ir.store_variable(ptr, value);
 }
 
-// Access an i64 slot inside a local alloca'd i64 array. `array_ptr` is the alloca result.
-Value array_i64_access_ptr(IRBuilder &ir, Value array_ptr, Value index) {
-  SType ptr_ty = ir.get_pointer_type(ir.i64_type(), spv::StorageClassFunction);
-  return ir.make_value(spv::OpAccessChain, ptr_ty, array_ptr, index);
+// Access an i64 / i32 slot inside the per-invocation interpreter scratch state. The state is hosted in two
+// `StorageBuffer` SSBOs (binding 3 = i64 scratch, binding 4 = i32 scratch) rather than `Function`-storage arrays
+// because Blackwell-class NVIDIA Vulkan drivers cap per-thread private memory at a budget the cumulative
+// `i64[kMaxNodes] + i64[kMaxVars] + 8x array[kMaxPending]` (~34 KiB) blows through, failing `vkCreateComputePipelines`
+// with `VK_ERROR_UNKNOWN`. Each per-array slice within a scratch SSBO has a fixed compile-time base index
+// (`base_in_elems`); element access is `base_in_elems + index` then `OpAccessChain` through the SSBO's runtime array.
+// The sizer dispatches `1x1x1` so cross-thread aliasing is impossible.
+Value array_i64_access_ptr(IRBuilder &ir, Value scratch_i64_buf, uint32_t base_in_elems, Value index) {
+  Value abs_idx = ir.add(ir.uint_immediate_number(ir.u32_type(), base_in_elems), ir.cast(ir.u32_type(), index));
+  return ir.struct_array_access(ir.i64_type(), scratch_i64_buf, abs_idx);
 }
 
-Value array_i32_access_ptr(IRBuilder &ir, Value array_ptr, Value index) {
-  SType ptr_ty = ir.get_pointer_type(ir.i32_type(), spv::StorageClassFunction);
-  return ir.make_value(spv::OpAccessChain, ptr_ty, array_ptr, index);
+Value array_i32_access_ptr(IRBuilder &ir, Value scratch_i32_buf, uint32_t base_in_elems, Value index) {
+  Value abs_idx = ir.add(ir.uint_immediate_number(ir.u32_type(), base_in_elems), ir.cast(ir.u32_type(), index));
+  return ir.struct_array_access(ir.i32_type(), scratch_i32_buf, abs_idx);
 }
 
 // PSB load of one scalar from a physical-storage-buffer-addressed pointer. `base_u64` is the pointer value
@@ -170,26 +176,50 @@ Value psb_load_scalar(IRBuilder &ir,
 // Takes all the state variables so it can read/write them directly. Returns `std::nullopt`-equivalent by
 // always branching to `after_dispatch_label` (the kind-switch merge point). The caller sets up the switch
 // surround.
+// Compile-time element offsets into the i64 scratch SSBO. Layout: values_arr | scope_arr | pending_cur_i |
+// pending_end | pending_max_accum. Total element count is published as `kAdStackSizerScratchI64Elems` in
+// `adstack_sizer_shader.h` for the host launcher to size the binding-3 buffer.
+constexpr uint32_t kI64BaseValuesArr = 0;
+constexpr uint32_t kI64BaseScopeArr = kMaxNodes;
+constexpr uint32_t kI64BasePendingCurI = kMaxNodes + kMaxVars;
+constexpr uint32_t kI64BasePendingEnd = kMaxNodes + kMaxVars + kMaxPending;
+constexpr uint32_t kI64BasePendingMaxAccum = kMaxNodes + kMaxVars + 2 * kMaxPending;
+
+// Compile-time element offsets into the i32 scratch SSBO. Layout: pending_mor_idx | pending_body_start |
+// pending_body_end | pending_var_id | pending_saved_max_k. Total element count is published as
+// `kAdStackSizerScratchI32Elems` in `adstack_sizer_shader.h`.
+constexpr uint32_t kI32BasePendingMorIdx = 0;
+constexpr uint32_t kI32BasePendingBodyStart = kMaxPending;
+constexpr uint32_t kI32BasePendingBodyEnd = 2 * kMaxPending;
+constexpr uint32_t kI32BasePendingVarId = 3 * kMaxPending;
+constexpr uint32_t kI32BasePendingSavedMaxK = 4 * kMaxPending;
+static_assert(kI64BasePendingMaxAccum + kMaxPending == static_cast<uint32_t>(kAdStackSizerScratchI64Elems),
+              "i64 scratch layout drifted from header element count");
+static_assert(kI32BasePendingSavedMaxK + kMaxPending == static_cast<uint32_t>(kAdStackSizerScratchI32Elems),
+              "i32 scratch layout drifted from header element count");
+
 struct ShaderState {
-  Value values_arr;           // alloca i64[kMaxNodes]
-  Value scope_arr;            // alloca i64[kMaxVars]
-  Value pending_mor_idx_arr;  // alloca i32[kMaxPending]
-  Value pending_body_start_arr;
-  Value pending_body_end_arr;
-  Value pending_cur_i_arr;        // alloca i64[kMaxPending]
-  Value pending_end_arr;          // alloca i64[kMaxPending]
-  Value pending_var_id_arr;       // alloca i32[kMaxPending]
-  Value pending_max_accum_arr;    // alloca i64[kMaxPending]
-  Value pending_saved_max_k_arr;  // alloca i32[kMaxPending]
-  Value current_var;              // alloca i32
-  Value max_k_var;                // alloca i32
-  Value sp_var;                   // alloca i32
-  Value nodes_base_word_var;      // alloca u32 (base word offset of nodes array)
-  Value indices_base_word_var;    // alloca u32
-  Value tree_start_var;           // alloca i32, global node index of the current stack's tree root-walk origin
+  // Scratch SSBOs hosting the interpreter state. The per-array slices below live at compile-time element
+  // offsets into these buffers; see `kI64Base*` / `kI32Base*` above.
+  Value scratch_i64_buf;
+  Value scratch_i32_buf;
+  // Per-thread scalar variables. These are tiny (a handful of u32 / i32) so Function storage is fine -
+  // Blackwell's per-thread-private cap only kicked in for the cumulative ~34 KiB of array storage that now
+  // lives in the scratch SSBOs.
+  Value current_var;            // alloca i32
+  Value max_k_var;              // alloca i32
+  Value sp_var;                 // alloca i32
+  Value nodes_base_word_var;    // alloca u32 (base word offset of nodes array)
+  Value indices_base_word_var;  // alloca u32
+  Value tree_start_var;         // alloca i32, global node index of the current stack's tree root-walk origin
   Value bytecode_buf;
   Value metadata_buf;
   Value args_buf;
+  // Word index inside `metadata_buf` of the trailing overflow-flag slot. Computed once per dispatch in `main` (`2 + 2 *
+  // n_stacks`); the per-stack walker writes 1 here when it observes a `MaxOverRange` whose iteration count exceeds the
+  // `1<<24` cap. The host launcher's post-readback path raises a `QuadrantsAssertionError` when the slot is non-zero,
+  // so the cap-hit surfaces as a clean error rather than an under-bounded heap.
+  Value overflow_flag_word_var;
 };
 
 // `values_arr` is a private, function-local i64 array of size `kMaxNodes` used to memoise the value of every
@@ -207,22 +237,22 @@ Value local_values_idx(IRBuilder &ir, const ShaderState &st, Value global_index_
 }
 
 Value load_values_at(IRBuilder &ir, const ShaderState &st, Value index_i32) {
-  Value ptr = array_i64_access_ptr(ir, st.values_arr, local_values_idx(ir, st, index_i32));
+  Value ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseValuesArr, local_values_idx(ir, st, index_i32));
   return ir.load_variable(ptr, ir.i64_type());
 }
 
 void store_values_at(IRBuilder &ir, const ShaderState &st, Value index_i32, Value v_i64) {
-  Value ptr = array_i64_access_ptr(ir, st.values_arr, local_values_idx(ir, st, index_i32));
+  Value ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseValuesArr, local_values_idx(ir, st, index_i32));
   ir.store_variable(ptr, v_i64);
 }
 
 Value load_scope_at(IRBuilder &ir, const ShaderState &st, Value var_id_i32) {
-  Value ptr = array_i64_access_ptr(ir, st.scope_arr, var_id_i32);
+  Value ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseScopeArr, var_id_i32);
   return ir.load_variable(ptr, ir.i64_type());
 }
 
 void store_scope_at(IRBuilder &ir, const ShaderState &st, Value var_id_i32, Value v_i64) {
-  Value ptr = array_i64_access_ptr(ir, st.scope_arr, var_id_i32);
+  Value ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseScopeArr, var_id_i32);
   ir.store_variable(ptr, v_i64);
 }
 
@@ -448,21 +478,21 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   // top_idx = sp - 1
   Value top_idx = ir.sub(sp_now, ir.int_immediate_number(ir.i32_type(), 1));
   // body_result = values[pending_body_end[top_idx]]
-  Value body_end_ptr = array_i32_access_ptr(ir, st.pending_body_end_arr, top_idx);
+  Value body_end_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingBodyEnd, top_idx);
   Value body_end_node = ir.load_variable(body_end_ptr, ir.i32_type());
   Value body_result = load_values_at(ir, st, body_end_node);
   // top_max = max(pending_max_accum[top_idx], body_result)
-  Value max_accum_ptr = array_i64_access_ptr(ir, st.pending_max_accum_arr, top_idx);
+  Value max_accum_ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingMaxAccum, top_idx);
   Value cur_max_accum = ir.load_variable(max_accum_ptr, ir.i64_type());
   Value body_gt_accum = ir.gt(body_result, cur_max_accum);
   Value new_max_accum = ir.select(body_gt_accum, body_result, cur_max_accum);
   ir.store_variable(max_accum_ptr, new_max_accum);
   // top_cur_i = pending_cur_i[top_idx] + 1
-  Value cur_i_ptr = array_i64_access_ptr(ir, st.pending_cur_i_arr, top_idx);
+  Value cur_i_ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingCurI, top_idx);
   Value cur_i = ir.load_variable(cur_i_ptr, ir.i64_type());
   Value next_i = ir.add(cur_i, ir.int_immediate_number(ir.i64_type(), 1));
   // if next_i < pending_end[top_idx]: update cur_i, jump to body_start
-  Value end_ptr = array_i64_access_ptr(ir, st.pending_end_arr, top_idx);
+  Value end_ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingEnd, top_idx);
   Value end_val = ir.load_variable(end_ptr, ir.i64_type());
   Value more = ir.lt(next_i, end_val);
   Label more_lbl = ir.new_label();
@@ -474,11 +504,11 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   ir.start_label(more_lbl);
   ir.store_variable(cur_i_ptr, next_i);
   // scope[pending_var_id[top_idx]] = next_i
-  Value var_id_ptr = array_i32_access_ptr(ir, st.pending_var_id_arr, top_idx);
+  Value var_id_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingVarId, top_idx);
   Value var_id = ir.load_variable(var_id_ptr, ir.i32_type());
   store_scope_at(ir, st, var_id, next_i);
   // current = pending_body_start[top_idx]
-  Value body_start_ptr = array_i32_access_ptr(ir, st.pending_body_start_arr, top_idx);
+  Value body_start_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingBodyStart, top_idx);
   Value body_start_val = ir.load_variable(body_start_ptr, ir.i32_type());
   ir.store_variable(st.current_var, body_start_val);
   // max_k stays (we're still iterating the same MOR body)
@@ -494,13 +524,13 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   // OOB PSB load (Metal: hung command buffer; Vulkan with robustBufferAccess: silent zero feeding a later
   // `Adstack overflow`). Zeroing here preserves the "scope[var_id] == 0 is a safe spurious-read target
   // because index 0 is always valid for any non-empty ndarray" invariant the outer walk relies on.
-  Value pop_var_id_ptr = array_i32_access_ptr(ir, st.pending_var_id_arr, top_idx);
+  Value pop_var_id_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingVarId, top_idx);
   Value pop_var_id = ir.load_variable(pop_var_id_ptr, ir.i32_type());
-  Value pop_scope_ptr = array_i64_access_ptr(ir, st.scope_arr, pop_var_id);
+  Value pop_scope_ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseScopeArr, pop_var_id);
   ir.store_variable(pop_scope_ptr, ir.int_immediate_number(ir.i64_type(), 0));
 
   // values[pending_mor_idx[top_idx]] = new_max_accum
-  Value mor_idx_ptr = array_i32_access_ptr(ir, st.pending_mor_idx_arr, top_idx);
+  Value mor_idx_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingMorIdx, top_idx);
   Value mor_idx = ir.load_variable(mor_idx_ptr, ir.i32_type());
   store_values_at(ir, st, mor_idx, new_max_accum);
   // current = pending_mor_idx[top_idx] + 1. The encoder emits `MaxOverRange` in post-order, i.e. body nodes
@@ -511,7 +541,7 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   Value cur_next = ir.add(mor_idx, ir.int_immediate_number(ir.i32_type(), 1));
   ir.store_variable(st.current_var, cur_next);
   // max_k = pending_saved_max_k[top_idx]
-  Value saved_max_k_ptr = array_i32_access_ptr(ir, st.pending_saved_max_k_arr, top_idx);
+  Value saved_max_k_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingSavedMaxK, top_idx);
   Value saved_max_k = ir.load_variable(saved_max_k_ptr, ir.i32_type());
   ir.store_variable(st.max_k_var, saved_max_k);
   // sp -= 1
@@ -729,28 +759,51 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
     {
       // scope[var_id] = begin
       store_scope_at(ir, st, var_id_i32, begin_i64);
-      // Push pending frame: pending[sp] = {...}; sp += 1.
-      // `pending_end_arr` is clamped to `min(end, begin + kMaxOverRangeIterations)` so the advance loop
-      // silently stops after the cap instead of running on-device until the driver's TDR fires. Matches
-      // the LLVM interpreter's `break` at the same `1 << 24` threshold and the host evaluator's hard
-      // QD_ERROR; on a single-thread `1x1x1` dispatch, unbounded iteration is the only one of the three
-      // paths that could hang the kernel rather than surface as a clean error at `qd.sync()`.
+      // Push pending frame: pending[sp] = {...}; sp += 1. `pending_end_arr` is clamped to `begin` when the iteration
+      // count exceeds the cap, so the advance loop walks zero iterations and the dispatch returns within bounded time
+      // even on the worst-case shape; the cap-hit also writes 1 into the trailing overflow-flag slot of `metadata_buf`,
+      // and the host post-readback raises a `QuadrantsAssertionError` when the slot is non-zero. Matches the host
+      // evaluator's `QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node` and the LLVM device sizer's
+      // `scope.overflow_observed` path. Recognized `MaxOverRange` shapes are dispatched in parallel by the max-reducer
+      // and substituted to a `Const` before the sizer walks the tree, so this path is reachable only for out-of-grammar
+      // shapes whose iteration count exceeds the cap.
       constexpr int64_t kMaxOverRangeIterations = int64_t{1} << 24;
       Value cap_delta = ir.int_immediate_number(ir.i64_type(), kMaxOverRangeIterations);
       Value cap_end = ir.add(begin_i64, cap_delta);
       Value end_gt_cap = ir.gt(end_i64, cap_end);
-      Value effective_end = ir.select(end_gt_cap, cap_end, end_i64);
+      // Cap-hit collapses the walk: `effective_end = begin` so no iterations run. The overflow flag below is the signal
+      // the host actually consumes; the cached `max_size` value falls through to its `max(_, 1)` floor and the heap is
+      // never used because the host raises before the main kernel launches.
+      Value effective_end = ir.select(end_gt_cap, begin_i64, end_i64);
+
+      // Cap-hit overflow signal. Single-threaded dispatch, so a plain store rather than an atomic suffices. The slot is
+      // initialised to 0 by the host before dispatch; the value sticks at 1 for the remainder of the dispatch once any
+      // `MaxOverRange` walk in this task lands here, and the host post-readback path picks it up.
+      Label cap_then = ir.new_label();
+      Label cap_skip = ir.new_label();
+      Label cap_merge = ir.new_label();
+      ir.make_inst(spv::OpSelectionMerge, cap_merge, spv::SelectionControlMaskNone);
+      ir.make_inst(spv::OpBranchConditional, end_gt_cap, cap_then, cap_skip);
+      ir.start_label(cap_then);
+      {
+        Value overflow_word = ir.load_variable(st.overflow_flag_word_var, ir.u32_type());
+        store_buf_u32(ir, st.metadata_buf, overflow_word, ir.uint_immediate_number(ir.u32_type(), 1u));
+        ir.make_inst(spv::OpBranch, cap_merge);
+      }
+      ir.start_label(cap_skip);
+      ir.make_inst(spv::OpBranch, cap_merge);
+      ir.start_label(cap_merge);
       Value sp_val = ir.load_variable(st.sp_var, ir.i32_type());
-      ir.store_variable(array_i32_access_ptr(ir, st.pending_mor_idx_arr, sp_val), current_now);
+      ir.store_variable(array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingMorIdx, sp_val), current_now);
       Value body_start = ir.add(op_b_i32, ir.int_immediate_number(ir.i32_type(), 1));
-      ir.store_variable(array_i32_access_ptr(ir, st.pending_body_start_arr, sp_val), body_start);
-      ir.store_variable(array_i32_access_ptr(ir, st.pending_body_end_arr, sp_val), body_node_i32);
-      ir.store_variable(array_i64_access_ptr(ir, st.pending_cur_i_arr, sp_val), begin_i64);
-      ir.store_variable(array_i64_access_ptr(ir, st.pending_end_arr, sp_val), effective_end);
-      ir.store_variable(array_i32_access_ptr(ir, st.pending_var_id_arr, sp_val), var_id_i32);
-      ir.store_variable(array_i64_access_ptr(ir, st.pending_max_accum_arr, sp_val),
+      ir.store_variable(array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingBodyStart, sp_val), body_start);
+      ir.store_variable(array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingBodyEnd, sp_val), body_node_i32);
+      ir.store_variable(array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingCurI, sp_val), begin_i64);
+      ir.store_variable(array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingEnd, sp_val), effective_end);
+      ir.store_variable(array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingVarId, sp_val), var_id_i32);
+      ir.store_variable(array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingMaxAccum, sp_val),
                         ir.int_immediate_number(ir.i64_type(), 0));
-      ir.store_variable(array_i32_access_ptr(ir, st.pending_saved_max_k_arr, sp_val), max_k_now);
+      ir.store_variable(array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingSavedMaxK, sp_val), max_k_now);
 
       Value new_sp = ir.add(sp_val, ir.int_immediate_number(ir.i32_type(), 1));
       ir.store_variable(st.sp_var, new_sp);
@@ -816,37 +869,29 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   ir.init_header();
 
   // Storage-buffer bindings (set 0): bytecode in, metadata out, args in. Using `buffer_argument` because
-  // all three are plain uint32[] arrays.
+  // all three are plain uint32[] arrays. The two scratch buffers (binding 3 = i64 scratch, binding 4 = i32
+  // scratch) host the per-invocation interpreter state. Hosting that state in `StorageBuffer` SSBOs rather
+  // than `Function`-storage `OpVariable`s sidesteps Blackwell-class NVIDIA driver per-thread private memory
+  // caps that fail `vkCreateComputePipelines` with `VK_ERROR_UNKNOWN` once the cumulative stack-frame
+  // exceeds ~32 KiB. The sizer dispatches `1x1x1` so cross-thread aliasing through the scratch SSBOs is
+  // impossible; the host launcher allocates the scratch buffers fresh per `GfxRuntime` and binds them on
+  // every dispatch.
   Value bytecode_buf = ir.buffer_argument(ir.u32_type(), 0, 0, "adstack_sizer_bytecode");
   Value metadata_buf = ir.buffer_argument(ir.u32_type(), 0, 1, "adstack_sizer_metadata");
   Value args_buf = ir.buffer_argument(ir.u32_type(), 0, 2, "adstack_sizer_args");
+  Value scratch_i64_buf = ir.buffer_argument(ir.i64_type(), 0, 3, "adstack_sizer_scratch_i64");
+  Value scratch_i32_buf = ir.buffer_argument(ir.i32_type(), 0, 4, "adstack_sizer_scratch_i32");
 
   Value main_func = ir.new_function();
   ir.start_function(main_func);
   ir.set_work_group_size({1, 1, 1});
 
-  // Allocate local arrays. `alloca_variable` on an array type gives us a Function-storage pointer; the
-  // array elements are accessed via `OpAccessChain` with a scalar index (see `array_i64_access_ptr` /
-  // `array_i32_access_ptr`).
   ShaderState st;
   st.bytecode_buf = bytecode_buf;
   st.metadata_buf = metadata_buf;
   st.args_buf = args_buf;
-
-  SType values_arr_ty = ir.get_array_type(ir.i64_type(), kMaxNodes);
-  st.values_arr = ir.alloca_variable(values_arr_ty);
-  SType scope_arr_ty = ir.get_array_type(ir.i64_type(), kMaxVars);
-  st.scope_arr = ir.alloca_variable(scope_arr_ty);
-  SType pending_i32_ty = ir.get_array_type(ir.i32_type(), kMaxPending);
-  SType pending_i64_ty = ir.get_array_type(ir.i64_type(), kMaxPending);
-  st.pending_mor_idx_arr = ir.alloca_variable(pending_i32_ty);
-  st.pending_body_start_arr = ir.alloca_variable(pending_i32_ty);
-  st.pending_body_end_arr = ir.alloca_variable(pending_i32_ty);
-  st.pending_cur_i_arr = ir.alloca_variable(pending_i64_ty);
-  st.pending_end_arr = ir.alloca_variable(pending_i64_ty);
-  st.pending_var_id_arr = ir.alloca_variable(pending_i32_ty);
-  st.pending_max_accum_arr = ir.alloca_variable(pending_i64_ty);
-  st.pending_saved_max_k_arr = ir.alloca_variable(pending_i32_ty);
+  st.scratch_i64_buf = scratch_i64_buf;
+  st.scratch_i32_buf = scratch_i32_buf;
 
   st.current_var = ir.alloca_variable(ir.i32_type());
   st.max_k_var = ir.alloca_variable(ir.i32_type());
@@ -867,12 +912,21 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   Value zero_i64_for_scope_init = ir.int_immediate_number(ir.i64_type(), 0);
   for (int vi = 0; vi < kMaxVars; ++vi) {
     Value idx = ir.int_immediate_number(ir.i32_type(), vi);
-    ir.store_variable(array_i64_access_ptr(ir, st.scope_arr, idx), zero_i64_for_scope_init);
+    ir.store_variable(array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseScopeArr, idx), zero_i64_for_scope_init);
   }
 
   // Read header: n_stacks, total_nodes.
   Value n_stacks_u32 = load_buf_u32(ir, bytecode_buf, ir.uint_immediate_number(ir.u32_type(), kHeaderOffNStacks));
   Value total_nodes_u32 = load_buf_u32(ir, bytecode_buf, ir.uint_immediate_number(ir.u32_type(), kHeaderOffTotalNodes));
+
+  // Cache the trailing overflow-flag slot's word index. The metadata layout is `[stride_float, stride_int, off0, max0,
+  // off1, max1, ..., overflow_flag]` so the slot lives at index `2 + 2 * n_stacks`. The walker writes 1 here on a
+  // cap-hit (see `kMaxOverRangeIterations` branch in the per-stack tree-eval loop); the host post-readback in
+  // `adstack_sizer_launch.cpp` checks the slot and raises if non-zero.
+  st.overflow_flag_word_var = ir.alloca_variable(ir.u32_type());
+  Value overflow_word_idx = ir.add(ir.uint_immediate_number(ir.u32_type(), 2u),
+                                   ir.mul(n_stacks_u32, ir.uint_immediate_number(ir.u32_type(), 2u)));
+  ir.store_variable(st.overflow_flag_word_var, overflow_word_idx);
 
   // Word-offsets inside the bytecode buffer for the nodes and indices arrays.
   Value header_words_u32 = ir.uint_immediate_number(ir.u32_type(), kHeaderWords);
@@ -1034,7 +1088,7 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   ir.make_inst(spv::OpReturn);
   ir.make_inst(spv::OpFunctionEnd);
 
-  std::vector<Value> entry_args = {bytecode_buf, metadata_buf, args_buf};
+  std::vector<Value> entry_args = {bytecode_buf, metadata_buf, args_buf, scratch_i64_buf, scratch_i32_buf};
   // Entry point name MUST be "main" to match the rest of the Quadrants SPIR-V codegen
   // (see `spirv_codegen.cpp:commit_kernel_function(..., "main", ...)`). The Metal RHI renames
   // the SPIR-V `main` to `main0` during MSL cross-compilation and then looks up the compute

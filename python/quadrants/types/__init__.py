@@ -10,6 +10,7 @@ This module defines data types in Quadrants:
 
 from quadrants.types import quant
 from quadrants.types.annotations import *  # type: ignore
+from quadrants.types.buffer_view_type import *  # type: ignore
 from quadrants.types.compound_types import *  # type: ignore
 from quadrants.types.ndarray_type import *  # type: ignore
 from quadrants.types.primitive_types import *  # type: ignore

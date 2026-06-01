@@ -26,6 +26,7 @@ TEST(PtxCache, TestBasic) {
 
   CompileConfig compile_config;
   compile_config.arch = Arch::cuda;
+  compile_config.offline_cache = true;  // Exercises the disk-persistence path; mem-only path is covered separately.
 
   // Use a test compute capability value
   int compute_capability = 80;  // SM 8.0 for testing
@@ -92,6 +93,7 @@ TEST(PtxCache, TestSmVersionPartitioning) {
 
   CompileConfig compile_config;
   compile_config.arch = Arch::cuda;
+  compile_config.offline_cache = true;  // Exercises the disk-persistence path; mem-only path is covered separately.
 
   // Test with SM 8.0
   int compute_capability_80 = 80;
@@ -135,6 +137,44 @@ TEST(PtxCache, TestSmVersionPartitioning) {
 
   ASSERT_EQ(ptx_code_80, ptx_cache_80->load_ptx(key_80));
   ASSERT_EQ(ptx_code_75, ptx_cache_75->load_ptx(key_75));
+}
+
+TEST(PtxCache, OfflineCacheDisabledSkipsDisk) {
+  auto temp_dir = std::filesystem::temp_directory_path() / "PtxCache.OfflineCacheDisabledSkipsDisk";
+  std::filesystem::remove_all(temp_dir);
+  ASSERT_TRUE(std::filesystem::create_directory(temp_dir));
+  struct DirCleaner {
+    std::filesystem::path path;
+    ~DirCleaner() {
+      std::filesystem::remove_all(path);
+    }
+  } dir_cleaner{temp_dir};
+
+  PtxCache::Config config;
+  config.offline_cache_path = temp_dir.string();
+
+  CompileConfig compile_config;
+  compile_config.arch = Arch::cuda;
+  compile_config.offline_cache = false;
+
+  int compute_capability = 80;
+  auto sm_dir = temp_dir / ("ptx_cache_sm_" + std::to_string(compute_capability));
+
+  auto ptx_cache = std::make_unique<PtxCache>(config, compile_config, compute_capability);
+  std::string key = ptx_cache->make_cache_key("ir", false);
+
+  // In-memory caching still works within a single instance.
+  ptx_cache->store_ptx(key, "ptx-payload");
+  ASSERT_EQ("ptx-payload", ptx_cache->load_ptx(key));
+
+  // dump() must not write anything to disk when the offline cache is disabled.
+  ptx_cache->dump();
+  EXPECT_FALSE(std::filesystem::exists(sm_dir))
+      << "ptx_cache_sm_* directory must not be created when offline_cache=false";
+
+  // A fresh instance pointed at the same temp dir must not observe the previous payload.
+  ptx_cache = std::make_unique<PtxCache>(config, compile_config, compute_capability);
+  EXPECT_EQ(std::nullopt, ptx_cache->load_ptx(key));
 }
 
 }  // namespace quadrants::lang

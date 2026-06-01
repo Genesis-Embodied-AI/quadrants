@@ -557,8 +557,16 @@ def bit_not(a):
 
 
 def popcnt(a):
-    def _popcnt(x):
-        return bin(x).count("1")
+    def _popcnt(_):
+        # No Python fallback: popcnt is bitwidth-dependent (a u64 with the top bit set should return 64, not 1), but
+        # once the value reaches here it's a plain Python int with no width attached. Worse, `bin(x).count("1")`
+        # quietly drops the sign and reports `popcnt(-1) == 1` instead of 32 / 64. The path is only hit on the
+        # `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR / codegen.
+        raise NotImplementedError(
+            "qd.math.popcnt has no Python fallback: the result depends on the operand's bitwidth "
+            "(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend "
+            "(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal)."
+        )
 
     return _unary_operation(_qd_core.expr_popcnt, _popcnt, a)
 
@@ -1140,15 +1148,50 @@ def ifte(cond, x1, x2):
 
 
 def clz(a):
-    """Count the number of leading zeros for a 32bit integer"""
+    """Count the number of leading zero bits in ``a``.
 
-    def _clz(x):
-        for i in range(32):
-            if 2**i > x:
-                return 32 - i
-        return 0
+    Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the result is always returned as an
+    ``i32`` in ``[0, bitwidth(a)]`` (``clz(0) == bitwidth(a)``). The count is over the unsigned bit pattern, so
+    ``clz(-1) == 0`` regardless of input signedness.
+    """
+
+    def _clz(_):
+        # No Python fallback: clz is bitwidth-dependent (`clz(0) == 32` for i32 but `64` for i64, and `clz(-1) == 0`
+        # requires interpreting -1 as the unsigned all-bits-set pattern at a known width). Once the value reaches here
+        # it's a plain Python int with no width attached, so no single answer is correct. The old hard-coded 32-bit
+        # implementation silently returned wrong values for negatives and 64-bit inputs. This path is only hit on the
+        # `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR / codegen and
+        # never see it.
+        raise NotImplementedError(
+            "qd.math.clz has no Python fallback: the result depends on the operand's bitwidth "
+            "(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend "
+            "(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal)."
+        )
 
     return _unary_operation(_qd_core.expr_clz, _clz, a)
+
+
+def ffs(a):
+    """Find first (lowest) set bit in ``a``.
+
+    Returns the 1-indexed position of the lowest set bit in ``a`` as an ``i32``, with ``ffs(0) == 0`` (the CUDA
+    ``__ffs`` convention). Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the count is over
+    the unsigned bit pattern, so ``ffs(-1) == 1`` regardless of input signedness.
+    """
+
+    def _ffs(_):
+        # No Python fallback: ffs is bitwidth-dependent (an i32 that wraps around to 0 should return 0, but the same
+        # numeric value in Python's arbitrary-precision int would return its real bit position). Once the value reaches
+        # here it's a plain Python int with no width attached, so there's no single answer that matches native backends.
+        # This path is only hit on the `qd.python` backend or from ad-hoc module-level calls; native backends route
+        # through the IR / codegen and never see it. Same treatment as popcnt / clz for consistency.
+        raise NotImplementedError(
+            "qd.math.ffs has no Python fallback: the result depends on the operand's bitwidth "
+            "(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend "
+            "(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal)."
+        )
+
+    return _unary_operation(_qd_core.expr_ffs, _ffs, a)
 
 
 @writeback_binary
@@ -1431,6 +1474,150 @@ def atomic_xor(x, y):
 
 
 @writeback_binary
+def atomic_exchange(x, y):
+    """Atomically swap the value of `x` with `y`, and return the old value of `x`.
+
+    Unlike the other `qd.atomic_*` ops, the new value of `x` does not depend on its old value: `x` is unconditionally
+    overwritten with `y`. Useful for lock-free hand-off / claim-a-slot patterns where you want to atomically grab
+    whatever was at a location while leaving a fresh value behind.
+
+    `x` must be a writable target, constant expressions or scalars are not allowed.
+
+    Args:
+        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \
+            The input. When both are matrices they must have the same shape.
+
+    Returns:
+        The old value of `x`.
+
+    Example::
+
+        >>> @qd.kernel
+        >>> def test():
+        >>>     x = 7
+        >>>     z = qd.atomic_exchange(x, 42)
+        >>>     print(x)  # 42, the new value of x
+        >>>     print(z)  # 7,  the old value of x
+        >>>
+        >>>     qd.atomic_exchange(1, x)  # will raise QuadrantsSyntaxError
+    """
+    if impl.is_python_backend():
+        old = x.item()
+        x[()] = y
+        return old
+
+    return impl.expr_init(expr.Expr(_qd_core.expr_atomic_xchg(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
+
+
+def atomic_cas(x, expected, desired):
+    """Atomically compare-and-swap: if the current value of `x` equals `expected`, write `desired` into `x`.
+    Returns the value originally at `x` (regardless of whether the swap happened).
+
+    The user determines whether the swap actually fired by comparing the returned value against `expected`::
+
+        old = qd.atomic_cas(x, expected, desired)
+        success = (old == expected)
+
+    This matches the shape of CUDA's `atomicCAS` and SPIR-V's `OpAtomicCompareExchange`. CAS is the basic
+    primitive on top of which arbitrary atomic read-modify-write operations can be built with a retry loop.
+
+    Currently integer dtypes only -- f32 / f64 will raise a trace-time type error. `x` must be a writable
+    target; constant expressions or scalars are not allowed.
+
+    Args:
+        x: the destination memory location (lvalue: field element, ndarray element, matrix slot).
+        expected: the value `x` is required to currently hold for the swap to fire.
+        desired: the value to write into `x` if `*x == expected`.
+
+    Returns:
+        The value originally at `x`.
+
+    Example::
+
+        >>> @qd.kernel
+        >>> def take_slot():
+        >>>     # Try to claim the slot only if it is currently empty (== 0).
+        >>>     old = qd.atomic_cas(slot[None], 0, my_id)
+        >>>     if old == 0:
+        >>>         # we won the race; the slot is ours
+        >>>         ...
+    """
+    if impl.is_python_backend():
+        old = x.item()
+        if old == expected:
+            x[()] = desired
+        return old
+    # Mirror @writeback_binary's Field guard: passing a raw Field (rather than `field[None]`) would otherwise
+    # blow up later with a confusing AttributeError on `x.ptr`. Surface a clear QuadrantsSyntaxError instead.
+    if isinstance(x, Field):
+        raise QuadrantsSyntaxError(
+            "cannot use a Field directly as the first operand of 'atomic_cas'; index it first (e.g. `field[None]`)"
+        )
+    if not (is_quadrants_expr(x) and x.ptr.is_lvalue()):
+        raise QuadrantsSyntaxError("cannot use a non-writable target as the first operand of 'atomic_cas'")
+    expected_e = wrap_if_not_expr(expected)
+    desired_e = wrap_if_not_expr(desired)
+    return impl.expr_init(
+        expr.Expr(
+            _qd_core.expr_atomic_cas(x.ptr, expected_e.ptr, desired_e.ptr),
+            dbg_info=_qd_core.DebugInfo(stack_info()),
+        )
+    )
+
+
+def volatile_load(target):
+    """Read `target` with volatile semantics: the compiler is forbidden from caching, hoisting, or merging the
+    load with prior reads of the same address.  Required for spin-wait patterns where another thread or block
+    writes the cell and the reader must observe the update on every iteration.
+
+    Without this primitive, a loop like ::
+
+        while flags[prev] == STATE_INVALID:
+            pass
+
+    is undefined: the compiler may hoist the `flags[prev]` load out of the loop and the spin becomes infinite.
+    The portable workarounds (`grid.mem_fence()` inside the loop, or `atomic_add(flags[prev], 0)`) are both
+    correct but pay an order-of-magnitude perf tax over a real volatile read.
+
+    Codegen on every backend:
+
+    * CUDA / AMDGPU: LLVM `load volatile`, lowered to `ld.volatile.global` (PTX) /  unhoistable `global_load_*`
+      (AMDGPU).
+    * Vulkan / Metal: SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to
+      a re-read on every use in the generated MSL / GLSL.
+
+    Args:
+        target: a global lvalue (field / ndarray subscript).  Function-scope local arrays are rejected -- a
+            local cannot be observed by another thread, so a volatile load there would be meaningless.
+
+    Returns:
+        The freshly-read value of `target`, with the same dtype an ordinary read would produce.
+
+    Example::
+
+        >>> @qd.kernel
+        >>> def lookback_scan(...):
+        >>>     # block-level decoupled-look-back scan: spin until the predecessor publishes its aggregate
+        >>>     while qd.volatile_load(flags[prev]) == STATE_INVALID:
+        >>>         pass
+        >>>     prev_agg = qd.volatile_load(aggregates[prev])
+
+    See also:
+        `qd.atomic_*` for the read-modify-write side; `qd.simt.grid.mem_fence` for the heavyweight
+        device-scope fence that was the only correct (but slow) workaround before this primitive existed.
+    """
+    if impl.is_python_backend():
+        return target.item() if hasattr(target, "item") else target
+    if isinstance(target, Field):
+        raise QuadrantsSyntaxError(
+            "cannot pass a Field directly to 'qd.volatile_load'; index it first (e.g. `field[None]`)"
+        )
+    if not (is_quadrants_expr(target) and target.ptr.is_lvalue()):
+        raise QuadrantsSyntaxError("qd.volatile_load requires an lvalue (field / ndarray subscript) as its argument")
+    return impl.expr_init(expr.Expr(_qd_core.expr_volatile_load(target.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
+
+
+@writeback_binary
 def assign(a, b):
     impl.get_runtime().compiling_callable.ast_builder().expr_assign(a.ptr, b.ptr, _qd_core.DebugInfo(stack_info()))
     return a
@@ -1512,6 +1699,9 @@ __all__ = [
     "atomic_min",
     "atomic_add",
     "atomic_mul",
+    "atomic_exchange",
+    "atomic_cas",
+    "volatile_load",
     "bit_cast",
     "bit_shr",
     "cast",

@@ -9,6 +9,7 @@
 #include "quadrants/ir/type.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/rhi/device.h"
+#include "quadrants/transforms/static_adstack_analysis.h"
 
 namespace quadrants::lang {
 
@@ -39,6 +40,35 @@ struct TaskAttributes {
     // layout tightens to the actual field state at each launch. Zero-sized and unbound when a
     // task declares no adstacks.
     AdStackMetadata,
+    // Per-dispatch StorageBuffer holding a single u32 atomic counter used to lazily claim per-thread heap rows. Threads
+    // that reach an AdStackPushStmt (or LoadTop / LoadTopAdj) atomicAdd this counter and use the returned index as
+    // their row id; threads that never enter a push site never increment the counter and consume zero heap rows. Host
+    // clears the slot to 0 before each dispatch and reads it back after to drive the grow-and-retry path on the float /
+    // int heap allocations. Zero-sized and unbound when the task declares no adstacks or when the codegen falls back to
+    // the eager invoc-id-based row layout (e.g. when the LCA-of-pushes pre-pass cannot place a single dominator claim
+    // site).
+    AdStackRowCounter,
+    // Per-kernel StorageBuffer holding the static-IR-bound row capacity per task (`uint[num_tasks_in_kernel]`).
+    // Populated by the host after the bound-reducer dispatch (see `runtime/gfx/adstack_bound_reducer_launch.cpp`): for
+    // each task with a captured `bound_expr`, slot `task_id_in_kernel` carries the exact count of threads the reducer
+    // observed passing the gate; for every other task the host writes UINT32_MAX so the bounds check below is inert.
+    // The main-task SPIR-V loads this slot at the Lowest Common Ancestor (LCA) block claim site immediately after the
+    // OpAtomicIAdd that produces `claimed_row` and OpAtomicUMax-signals UINT32_MAX into AdStackOverflow when
+    // `claimed_row >= capacity`. The expected behaviour is "this signal never fires on legitimate workloads" because
+    // the reducer count is exact by construction; if it does fire, it indicates a reducer / main divergence (an
+    // internal bug, not user-recoverable), and `synchronize()` surfaces it as a clear actionable error rather than
+    // letting it silently corrupt gradients via OOB writes.
+    AdStackBoundRowCapacity,
+    // Per-kernel StorageBuffer holding the `Program::adstack_sizing_info_registry_` id per task
+    // (`uint[num_tasks_in_kernel]`). Populated by the SPIR-V launcher in
+    // `GfxRuntime::publish_adstack_metadata_spirv` immediately after registering each adstack-bearing
+    // task with the Program-side identity registry; slot `task_id_in_kernel` carries the registry id
+    // for that task (0 for tasks without adstacks). The codegen task-end emit reads slot
+    // `task_id_in_kernel` and `OpAtomicCompareExchange`'s it into `AdStackOverflow[1]` on overflow,
+    // recording the FIRST overflowing task's registry id for the host raise site to look up
+    // kernel name + offload task index in its diagnostic message. Allocated and grown on demand
+    // following the same pattern as `AdStackBoundRowCapacity`.
+    AdStackTaskRegistryId,
   };
 
   struct BufferInfo {
@@ -168,19 +198,56 @@ struct TaskAttributes {
     SerializedSizeExpr size_expr{};
     QD_IO_DEF(heap_kind, offset_in_elems_compile_time, max_size_compile_time, size_expr);
   };
+  // Captured upper bound on the per-task LCA-block-reaching thread count, derived at codegen time by walking the LCA
+  // dominator chain and pattern-matching the gating condition. When set, the runtime dispatches a generic reducer
+  // kernel before the main task to evaluate the captured predicate over the bound iteration range; the resulting count
+  // is then used to size the AdStackHeapFloat / AdStackHeapInt allocations exactly. When `nullopt` (the gate did not
+  // match a recognized grammar, or the LCA pre-pass placed the LCA at the task body root with no gate above it), the
+  // runtime falls back to the dispatched-threads worst-case sizing - no behavior change versus a kernel without this
+  // metadata. Aliased to the shared cross-backend struct in `quadrants/transforms/static_adstack_analysis.h`; the
+  // SPIR-V codegen and the LLVM codegen consume the same captured representation through that header.
+  using StaticBoundExpr = ::quadrants::lang::StaticAdStackBoundExpr;
+  using MaxReducerSpec = ::quadrants::lang::StaticAdStackMaxReducerSpec;
+
   struct AdStackSizingAttribs {
-    // Compile-time-derived per-thread strides in elements of each heap's element type. The runtime
-    // recomputes these when any alloca's `size_expr` evaluates dynamically; the compile-time values
-    // serve both as the offline-cache-serialised fallback (empty `size_expr` on every alloca) and as
-    // the upper bound for heap-buffer growth when no adstacks are declared (kept at zero). Writing
-    // the final per-launch strides into the metadata buffer slots (0 and 1) is done by the host
-    // launcher regardless of whether any alloca's bound was dynamic.
+    // Compile-time-derived per-thread strides in elements of each heap's element type. The runtime recomputes these
+    // when any alloca's `size_expr` evaluates dynamically; the compile-time values serve both as the
+    // offline-cache-serialised fallback (empty `size_expr` on every alloca) and as the upper bound for heap-buffer
+    // growth when no adstacks are declared (kept at zero). Writing the final per-launch strides into the metadata
+    // buffer slots (0 and 1) is done by the host launcher regardless of whether any alloca's bound was dynamic.
     uint32_t per_thread_stride_float_compile_time{0};
     uint32_t per_thread_stride_int_compile_time{0};
     std::vector<AdStackAllocaAttribs> allocas;
-    QD_IO_DEF(per_thread_stride_float_compile_time, per_thread_stride_int_compile_time, allocas);
+    std::optional<StaticBoundExpr> bound_expr;
+    // Identity in `Program::adstack_sizing_info_registry_`. Assigned at SPIR-V codegen time after the
+    // Program registry idempotently maps `&this` to a u32 id. Baked as an immediate into the codegen-
+    // emitted task-end overflow path's `cmpxchg(0, registry_id)` against slot 1 of the AdStackOverflow
+    // buffer so the host raise site can name the offending kernel + task in its diagnostic message. `0`
+    // means "not registered" - the codegen short-circuits the cmpxchg in that case. NOT serialised to the
+    // offline cache: ids are assigned per `Program` lifetime; a deserialised task re-registers itself at
+    // the next launch.
+    uint32_t registry_id{0};
+    // per-task list of `MaxOverRange` nodes the runtime reduces in parallel via a dedicated max-reducer dispatch
+    // instead of letting the per-thread sizer enumerate. Empty when no captured `size_expr` contains a recognized
+    // shape; in that case every `MaxOverRange` falls through to the existing capped path (host: `QD_DEBUG_ADSTACK`
+    // tripwire; device: silent truncation).
+    std::vector<MaxReducerSpec> max_reducer_specs;
+    QD_IO_DEF(per_thread_stride_float_compile_time,
+              per_thread_stride_int_compile_time,
+              allocas,
+              bound_expr,
+              max_reducer_specs);
   };
   AdStackSizingAttribs ad_stack;
+
+  // Snode IDs this task writes to (read-modify-write counts as a write). Computed at SPIR-V codegen time
+  // by walking the offloaded IR with `gather_snode_read_writes`. Consumed by the SPIR-V launcher on every
+  // `launch_kernel` call: each id here bumps `Program::snode_write_gen_[id]` so the per-task adstack
+  // metadata cache invalidates whenever a kernel that ran since the cache was recorded mutated a SNode
+  // a downstream `size_expr::FieldLoad` may read. Stored as raw IDs (not `SNode *`) so the field
+  // survives offline-cache load-store; the runtime resolves the pointer on demand via
+  // `Program::get_snode_by_id` only if it ever needs to call into snode-specific APIs.
+  std::vector<int> snode_writes;
 
   static std::string buffers_name(BufferInfo b);
 
@@ -192,7 +259,8 @@ struct TaskAttributes {
             task_type,
             buffer_binds,
             range_for_attribs,
-            ad_stack);
+            ad_stack,
+            snode_writes);
 };
 
 /**

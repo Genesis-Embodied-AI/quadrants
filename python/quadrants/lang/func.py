@@ -58,7 +58,7 @@ class Func(FuncBase):
         global_context = runtime._current_global_context
         current_kernel = global_context.current_kernel if global_context is not None else None
         py_args = self.fuse_args(
-            is_func=True, is_pyfunc=self.pyfunc, py_args=py_args, kwargs=kwargs, global_context=global_context
+            is_func=True, is_pyfunc=self.pyfunc, py_args=py_args, kwargs=kwargs, global_context=global_context  # type: ignore[arg-type]
         )
 
         if not impl.inside_kernel():

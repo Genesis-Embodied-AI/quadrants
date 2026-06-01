@@ -91,6 +91,48 @@ void IRBuilder::init_header() {
     ib_.begin(spv::OpCapability).add(spv::CapabilityShaderClockKHR).commit(&header_);
   }
 
+  // Subgroup / GroupNonUniform capabilities. Required by every SPIR-V module that lowers any
+  // `qd.simt.subgroup.*` or `qd.simt.block.*` op (the new QIPC subgroup/block work in #676/#684 has
+  // significantly broadened how often these are emitted). Strict Vulkan validation rejects
+  // `OpGroupNonUniform*` and the `SubgroupLocalInvocationId` BuiltIn unless these caps are declared
+  // — and drivers that tolerated their absence at i32 width still silently produce wrong results
+  // for i64 ops without them. Emit unconditionally whenever the device exposes the corresponding
+  // subgroup feature; the underlying caps are gated by Vulkan's
+  // `VkPhysicalDeviceSubgroupProperties::supportedOperations` query in `vulkan_device_creator.cpp`.
+  if (caps_->get(cap::spirv_has_subgroup_basic)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniform).commit(&header_);
+    // `Broadcast` / `Shuffle` and the relative variants used by `_exclusive_scan_tiled` / shuffle
+    // intrinsics. The two are separate SPIR-V caps but every desktop/mobile Vulkan implementation
+    // that advertises basic GroupNonUniform also advertises both shuffle variants in practice
+    // (and the SPIR-V spec marks both as required for any `OpGroupNonUniformShuffle{,Up,Down}` /
+    // `OpGroupNonUniformBroadcast` emission), so we tie them to `spirv_has_subgroup_basic` rather
+    // than introducing a separate device cap.
+    //
+    // FIXME: Vulkan's `VkPhysicalDeviceSubgroupProperties::supportedOperations` exposes
+    // `VK_SUBGROUP_FEATURE_SHUFFLE_BIT` / `VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT` as bits separate
+    // from `VK_SUBGROUP_FEATURE_BASIC_BIT`, and the spec permits a conformant device to advertise
+    // BASIC without SHUFFLE. A strict validator on such a device would reject every Quadrants
+    // SPIR-V module here — even kernels that do not actually use shuffle — because the declared
+    // capability is unsupported. No such device has been observed in the wild (the codepath this
+    // change broadens was already exposed pre-PR for any kernel emitting
+    // `OpGroupNonUniformShuffle*`), so this PR does not make it worse, but it does extend the
+    // surface. Fix: introduce `spirv_has_subgroup_shuffle{,_relative}` device caps in
+    // `rhi/rhi_constants.inc.h`, populate them from the two Vulkan bits in
+    // `vulkan_device_creator.cpp::populate_subgroup_caps`, and gate the two
+    // `CapabilityGroupNonUniformShuffle{,Relative}` emissions on those caps individually.
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformShuffle).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformShuffleRelative).commit(&header_);
+  }
+  if (caps_->get(cap::spirv_has_subgroup_vote)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformVote).commit(&header_);
+  }
+  if (caps_->get(cap::spirv_has_subgroup_arithmetic)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformArithmetic).commit(&header_);
+  }
+  if (caps_->get(cap::spirv_has_subgroup_ballot)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformBallot).commit(&header_);
+  }
+
   ib_.begin(spv::OpExtension).add("SPV_KHR_storage_buffer_storage_class").commit(&header_);
 
   // `SPV_KHR_{8,16}bit_storage` is paired with `CapabilityStorageBuffer{8,16}BitAccess` above.
@@ -206,6 +248,9 @@ void IRBuilder::init_pre_defs() {
 
   t_v3_uint_.id = id_counter_++;
   ib_.begin(spv::OpTypeVector).add(t_v3_uint_).add_seq(t_uint32_, 3).commit(&global_);
+
+  t_v4_uint_.id = id_counter_++;
+  ib_.begin(spv::OpTypeVector).add(t_v4_uint_).add_seq(t_uint32_, 4).commit(&global_);
 
   t_v4_fp32_.id = id_counter_++;
   ib_.begin(spv::OpTypeVector).add(t_v4_fp32_).add_seq(t_fp32_, 4).commit(&global_);
@@ -427,7 +472,7 @@ SType IRBuilder::get_storage_pointer_type(const SType &value_type) {
   return get_pointer_type(value_type, storage_class);
 }
 
-SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
+SType IRBuilder::get_function_array_type(const SType &_value_type, uint32_t num_elems) {
   auto value_type = _value_type;
   if (value_type.dt->is_primitive(PrimitiveTypeID::u1)) {
     value_type = i32_type();
@@ -442,6 +487,23 @@ SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
     ib_.begin(spv::OpTypeArray).add_seq(arr_type, value_type, length).commit(&global_);
   } else {
     ib_.begin(spv::OpTypeRuntimeArray).add_seq(arr_type, value_type).commit(&global_);
+  }
+
+  return arr_type;
+}
+
+SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
+  // Identical bookkeeping to `get_function_array_type` plus the `ArrayStride` decoration the storage-buffer
+  // / PSB / Uniform interface requires. Delegate the `OpTypeArray` emission to keep the two in sync, then
+  // add the decoration on top.
+  SType arr_type = get_function_array_type(_value_type, num_elems);
+
+  // Mirror `get_function_array_type`'s `u1 -> i32` rewrite so the stride below matches the `OpTypeArray`
+  // element type (`bool` is 1-byte on every host but the array is emitted with `i32` elements; without this
+  // rewrite the stride would land on `1` and `spirv-val` rejects `ArrayStride < element_size`).
+  auto value_type = _value_type;
+  if (value_type.dt->is_primitive(PrimitiveTypeID::u1)) {
+    value_type = i32_type();
   }
 
   uint32_t nbytes;
@@ -701,18 +763,6 @@ Value IRBuilder::get_subgroup_invocation_id() {
   return this->make_value(spv::OpLoad, t_uint32_, subgroup_local_invocation_id_);
 }
 
-Value IRBuilder::get_subgroup_size() {
-  if (subgroup_size_.id == 0) {
-    SType ptr_type = this->get_pointer_type(t_uint32_, spv::StorageClassInput);
-    subgroup_size_ = new_value(ptr_type, ValueKind::kVariablePtr);
-    ib_.begin(spv::OpVariable).add_seq(ptr_type, subgroup_size_, spv::StorageClassInput).commit(&global_);
-    this->decorate(spv::OpDecorate, subgroup_size_, spv::DecorationBuiltIn, spv::BuiltInSubgroupSize);
-    global_values.push_back(subgroup_size_);
-  }
-
-  return this->make_value(spv::OpLoad, t_uint32_, subgroup_size_);
-}
-
 Value IRBuilder::popcnt(Value x) {
   QD_ASSERT(is_integral(x.stype.dt));
   return make_value(spv::OpBitCount, x.stype, x);
@@ -958,6 +1008,29 @@ Value IRBuilder::load_variable(Value pointer, const SType &res_type) {
         .commit(&function_);
   } else {
     ib_.begin(spv::OpLoad).add_seq(res_type, ret, pointer).commit(&function_);
+  }
+  return ret;
+}
+
+Value IRBuilder::load_variable_volatile(Value pointer, const SType &res_type) {
+  // Like `load_variable`, but always emits the `Volatile` `MemoryAccess` mask -- including for the buffer-backed
+  // `kStructArrayPtr` path that the default helper does not decorate.  This is the SPIR-V analogue of LLVM's
+  // `LoadInst::setVolatile(true)`: SPIRV-Cross propagates `Volatile` into the generated MSL / GLSL as a re-read on
+  // every use, and the SPIR-V optimiser is forbidden from forwarding or merging the load with prior reads of the
+  // same address.  Required for `qd.volatile_load` spin-wait correctness on Vulkan / Metal.
+  QD_ASSERT(pointer.flag == ValueKind::kVariablePtr || pointer.flag == ValueKind::kStructArrayPtr ||
+            pointer.flag == ValueKind::kPhysicalPtr);
+  Value ret = new_value(res_type, ValueKind::kNormal);
+  if (pointer.flag == ValueKind::kPhysicalPtr) {
+    // Physical pointers already require the Aligned mask; OR Volatile in alongside it.  Same encoding as the
+    // default `load_variable` physical-pointer path.
+    uint32_t alignment = uint32_t(get_primitive_type_size(res_type.dt));
+    ib_.begin(spv::OpLoad)
+        .add_seq(res_type, ret, pointer, spv::MemoryAccessAlignedMask | spv::MemoryAccessVolatileMask, alignment)
+        .commit(&function_);
+  } else {
+    // Logical pointers (variable / struct-array) accept a bare `MemoryAccess` mask without alignment.
+    ib_.begin(spv::OpLoad).add_seq(res_type, ret, pointer, spv::MemoryAccessVolatileMask).commit(&function_);
   }
   return ret;
 }

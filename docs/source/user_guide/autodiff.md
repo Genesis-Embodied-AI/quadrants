@@ -4,7 +4,9 @@ Automatic differentiation (autodiff) computes the exact gradient of a kernel's o
 
 **Note.** Throughout this page, the *primal* is the value a kernel computes in its normal forward pass (the field value, the loss, whatever the kernel writes); the *adjoint* (or *gradient*) is the derivative of the final scalar output (typically a loss) with respect to that primal value, stored in the `.grad` field next to the primal.
 
-Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan. Reverse-mode AD through dynamic loops (described further down) is currently behind an opt-in `ad_stack_experimental_enabled=True` flag.
+Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan.
+
+**Recommendation.** Reverse-mode AD through dynamic loops (described further down) is currently gated behind an opt-in `ad_stack_experimental_enabled=True` flag at `qd.init`. If you are using autodiff at all, we recommend enabling this flag as it is required for any reverse-mode kernel with a dynamic loop carrying a non-linear primal, and free for every other kernel. See [the cost breakdown](./init_options.md#ad_stack_experimental_enabled) for details.
 
 Three mechanisms are supported:
 
@@ -287,15 +289,16 @@ The evaluation happens in different places depending on the backend, but the res
 
 Either way, the per-thread stride and each adstack's offset / max-size land in a small buffer the main kernel reads on every push. The backing heap grows on demand to match the largest size any launch has needed so far, and is reused across subsequent launches - you do not need to reserve memory up front.
 
+The sized result is cached per task and reused while the loop bounds are unchanged. Although changing loop bounds at runtime is possible, it comes with some limitations for performance reasons. See [What can go wrong](#what-can-go-wrong) for details.
+
 The on-device sizer relies on two common hardware features (64-bit integer arithmetic and raw-pointer storage-buffer access). Every mainstream GPU from late 2018 onward supports both.
 
 #### Manual override
 
-`qd.init()` exposes a single escape hatch:
+`qd.init()` exposes two escape hatches:
 
-- `ad_stack_size=N` (default `0`, meaning "let the sizer decide"): forces every adstack in the program to exactly `N` slots and bypasses the sizer entirely.
-
-Leave it at `0` in day-to-day use. Setting it to a positive `N` is meant for stress tests or for working around a suspected sizer bug; it defeats the per-launch-exact sizing, so every dispatch allocates the full `N` slots whether the kernel actually needs them or not.
+- `ad_stack_size=N` (default `0`): forces every adstack to exactly `N` slots and bypasses the sizer. Leave at `0` in day-to-day use; positive `N` is for stress tests or working around a suspected sizer bug.
+- `ad_stack_sparse_threshold_bytes=B` (default `100 MiB`): cutoff below which the gate-passing-count sizing of [Memory footprint](#memory-footprint) is skipped in favour of the eager `dispatched_threads * stride` heap. The sparse path saves memory but pays a per-launch reducer dispatch; below `B` of conservative heap, that overhead outweighs the savings. Set to `0` to always use the sparse path; lower it if the default still skips kernels you want shrunk.
 
 #### Memory footprint
 
@@ -311,10 +314,12 @@ where each quantity means:
 
 | Quantity | What it is |
 | --- | --- |
-| `num_threads` | Threads the kernel actually dispatches. On CPU: the thread-pool size, typically tens. On GPU: the full ndrange. |
+| `num_threads` | Concurrent thread slots, regardless of logical ndrange. CPU: thread-pool size (~tens). GPU adstack-bearing kernels: capped at 65536 on all backends (131072 on SPIR-V range-for, i.e. `for i in range(N):`), tightened to the actual flat product when the iteration bound is compile-time known. Forward-only kernels keep the full ndrange. |
 | `stack_size` | Per-launch capacity resolved by the sizer. Varies between launches - if an ndarray-bounded loop iterates 16 times at one dispatch and 1024 at another, `stack_size` tracks each. |
 | `bytes_per_slot` | Depends on `T` and on the backend (see table below). |
 | `num_buffers` | Number of adstacks the kernel allocates - one per loop-carried variable plus one per dependent branch flag (see [One adstack per variable](#one-adstack-per-variable)). |
+
+The float heap is by far the main reverse-mode memory bottleneck because a typical kernel allocates many float-typed adstacks - one per floating-point loop-carried scalar, each storing both primal and adjoint. The total scales as `num_threads * stack_size * num_float_buffers * 8` bytes, dominating the integer / boolean heap. Advanced static IR analysis is used to further shrink the float adstack in some common gated-kernel shapes. When a runtime gate sits directly above the adstack-using body and compares a single field entry to a constant, the compiler counts the gate-passing iterations at launch time and sizes the float adstack to that count. So a workload whose gate matches 5% of iterations pays 5% of the float-adstack cost. See [Appendix B: gate-index shapes that capture vs fall back to the worst-case heap](#appendix-b-gate-index-shapes-that-capture-vs-fall-back-to-the-worst-case-heap) for the authoritative list of supported shapes.
 
 Every adstack slot always stores a *primal* value - the forward-pass value the reverse pass pops to recover the chain-rule step. Floating-point adstacks additionally store an *adjoint* slot where the reverse pass accumulates chain-rule contributions. Integer / boolean adstacks do not need an adjoint slot.
 
@@ -344,13 +349,28 @@ A large `ndrange` combined with several loop-carried variables multiplies quickl
 
 ## What can go wrong
 
-- **Adstack overflow at `qd.sync()` (sizer under-estimated the bound).** Surfaces asynchronously at the next `qd.sync()` as `QuadrantsAssertionError: Adstack overflow ...`. On unusually intricate nested loops - typically deeply nested `for i in range(arr[...])` with cumulative-index arithmetic - the sizer can compute a bound that is mathematically tighter than the actual push count. This is a bug; please file it with `QD_DUMP_IR=1` set so the kernel IR ships with the report. Workarounds, in order of convenience:
-  - shorten the innermost dynamic loop;
-  - precompute its worst-case trip into a scalar field the kernel only reads;
-  - split the inner section into its own `@qd.kernel`;
-  - pass `ad_stack_size=N` to `qd.init()` with `N` large enough to cover the real push count (bypasses the sizer).
-- **Out-of-memory before the kernel even runs.** A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer's number is correct. Surfaces as an allocator OOM at launch time. Remedies are the ones listed under *Avoiding OOM on GPU* above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.
-- **Loop bounds backed by a mutated ndarray.** A reverse-mode kernel with `for i in range(n[j])` requires `n[j]` to hold the same value at the forward call and at `.grad()`. If anything writes to `n[j]` between those two points - the differentiable kernel itself, or any other kernel call - the computed gradient may come out wrong, sometimes as an `Adstack overflow` exception at `qd.sync()`, sometimes silently. The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until `.grad()` returns. The reason for that is Quadrants' adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like [PyTorch's autograd](https://pytorch.org/docs/stable/notes/autograd.html) is not affected, since the trip count is recorded as the forward runs and reused at backward time.
+### Adstack overflow
+
+Surfaces as `QuadrantsAssertionError: Adstack overflow ...` at the next Quadrants Python entry. The message names the offending kernel + offload task and the most likely cause.
+
+The two cases the runtime distinguishes:
+
+- *Untracked tensor mutation between launches.* A tensor backing a data-dependent loop bound was written to outside Quadrants's tracking - typically a DLPack zero-copy mutation through a torch tensor sharing storage with a Quadrants ndarray, or a raw pointer write through a non-torch consumer. The cached adstack capacity was sized against the value before the mutation; if the mutation grew the bound, the next launch overflows. Workaround: route the write through a Quadrants API (`Ndarray.write` / `Ndarray.fill` / a kernel that writes the value). Alternatively, catch the exception and re-launch - Quadrants invalidates the cached bound on raise, so the retry runs against the live state. Kernel state may be inconsistent after an overflow; do not retry the same step without restarting from a clean state.
+- *Sizer under-estimated the bound (Quadrants bug).* On unusually intricate nested loops - typically deeply nested `for i in range(arr[...])` with cumulative-index arithmetic - the sizer can compute a bound that is mathematically tighter than the actual push count. To file a bug: clear `/tmp/ir/`, rerun your script with `QD_DUMP_IR=1` set in the environment so Quadrants dumps the kernel IR there, then open an issue on the Quadrants repo with the contents of `/tmp/ir/` attached as a zip. Workaround: pass a generous `ad_stack_size=N` to `qd.init()` with `N` large enough to cover the real push count (bypasses the sizer).
+
+### Out-of-memory before the kernel even runs
+
+A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer's number is correct. Surfaces as an allocator OOM at launch time. Remedies are the ones listed under *Avoiding OOM on GPU* above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.
+
+### Loop bounds backed by a mutated ndarray
+
+A reverse-mode kernel with `for i in range(n[j])` requires `n[j]` to hold the same value at the forward call and at `.grad()`. If anything writes to `n[j]` between those two points - the differentiable kernel itself, or any other kernel call - the backward call will trigger an `Adstack overflow` exception or the computed gradient would come out silently wrong.
+
+The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until `.grad()` returns. The reason for that is Quadrants' adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like [PyTorch's autograd](https://pytorch.org/docs/stable/notes/autograd.html) is not affected, since the trip count is recorded as the forward runs and reused at backward time.
+
+### Inner reverse-mode loop with a complex bound at very large extent
+
+A reverse-mode kernel with two nested loops is in some cases limited to an outer-loop extent of at most `1 << 24`. In particular when the enclosed loop's trip count is an uncommon expression of the outer-loop variable, e.g. `for i in range(arr.shape[0]): ... for j in range(arr[i // 2]):`. See [Appendix C](#appendix-c-evaluation-of-the-enclosed-loops-bound-expression) for a complete walkthrough of the enclosed loop's bound expression and workarounds. When the limit applies and the outer extent exceeds it, the kernel raises `RuntimeError: ... iteration count ... exceeds the 16777216 guard` at launch.
 
 ## Performance characteristics
 
@@ -391,4 +411,77 @@ def k_data_dependent(a):
     for i in range(a.shape[0]):
         while a[i] < 10:              # bound that can only be known by running the loop body
             a[i] = a[i] + 1
+
+@qd.kernel
+def k_inner_struct_for(a, field):
+    for i in range(a.shape[0]):
+        for j in field:               # struct-for as the enclosed loop with reverse-mode pushes
+            ...
 ```
+
+## Appendix B: gate-index shapes that capture vs fall back to the worst-case heap
+
+The compiler accepts the gate index shapes below as bijective and falls back to the worst-case heap `num_threads * stack_size` for the rest. Only the float adstack heap shrinks; integer / boolean adstacks stay at `num_threads * stack_size` because their pushes fire unconditionally for control-flow replay. The float heap grows on demand if a later launch's gate matches more iterations.
+
+Patterns that capture:
+  - **Linear range loop**: `for i in range(n): if field[i] > eps: ...`
+  - **Multi-axis StructFor**: `for I, J, K in field3d: if field3d[I, J, K] > eps: ...`
+  - **Multi-axis ndrange**: `for ii, jj, kk in qd.ndrange(*shape): if grid[ii, jj, kk] > eps: ...`
+  - **Multi-axis split of a flat loop**: a gate whose axes are two or more sub-expressions of the loop variable that hold pairwise distinct values, e.g. `field2d[i // K, i % K]`, `field2d[i // K, i]`, `field3d[i // (K * L), (i // L) % K, i % L]`.
+  - **Iterating axes plus a slice**: a kernel argument or constant on an extra axis, e.g. `grid[i, 0]`, `grid[arg, ii, jj, kk]`.
+
+Patterns that fall back to the worst-case heap:
+  - **Single-axis arithmetic on the loop variable**: `field[i % K]`, `field[i / 2]`, `field[i + 5]`, `field[2 * i]`, and similar.
+  - **Multi-axis index with axes holding the same value**: `field[i % K, i % K]`, or any multi-axis gate where two or more axes evaluate to the same value; the joint mapping is many-to-one and would alias iterations onto a few cells.
+  - **Multi-axis index folding onto a smaller subspace**: `field[i % K0, (i // K0) % K1]` with the loop trip count above `K0 * K1`; the joint axis space is smaller than the loop and iterations wrap around it.
+  - **Constant-index gate**: `field[42]`, or any axis that is a literal constant.
+  - **Kernel-argument index, no iterating axis**: `field[arg]` where every axis is launch-constant.
+  - **Indirect index via runtime load**: `field[other_field[i]]`; the compiler cannot prove `other_field` is injective.
+
+## Appendix C: evaluation of the enclosed loop's bound expression
+
+This appendix details how the runtime computes the worst-case trip count of an enclosed reverse-mode loop and which expression shapes each evaluation path accepts. It backs the *Inner reverse-mode loop with a complex bound at very large extent* entry under [What can go wrong](#what-can-go-wrong).
+
+Consider a reverse-mode kernel with two nested loops where the enclosed loop's iteration count depends on the outer loop variable through an arithmetic expression on an ndarray index:
+
+```python
+for i in range(arr.shape[0]):       # outer loop
+    for j in range(arr[i // 2]):    # enclosed loop: for <var> in range(<bound expression>)
+        ...
+```
+
+The enclosed loop's iteration count `arr[i // 2]` is what we call the enclosed loop's *bound expression*. It is a function of the outer-loop variable `i`: as `i` ranges over `[0, arr.shape[0])`, the bound expression evaluates to a different integer at each iteration. Reverse-mode autodiff needs the adstack sized for the worst case - the largest inner-loop trip count that will ever occur across the outer loop's full range, i.e. `max(arr[i // 2] for i in range(arr.shape[0]))`. For example, if `arr = [3, 5, 1]` and the outer loop runs `i` over `[0, 6)`:
+
+| `i` | `i // 2` | bound expression `arr[i // 2]` |
+| --- | --- | --- |
+| 0 | 0 | 3 |
+| 1 | 0 | 3 |
+| 2 | 1 | 5 |
+| 3 | 1 | 5 |
+| 4 | 2 | 1 |
+| 5 | 2 | 1 |
+
+Quadrants computes that worst case at launch time - in this example, the max of the column above, 5 - and sizes the adstack accordingly: each outer iteration accommodates up to 5 pushes and the adstack never overflows. With deeper loop nests each enclosed loop's bound expression is reduced separately and the adstack is sized as the product of those maxes.
+
+### Evaluation paths
+
+The compiler picks one of two evaluation paths to compute the maximum based on the backend and the bound expression's structure:
+
+- **Parallel (GPU only):** the maximum is computed with a tiny parallel reduction kernel for efficiency. The reducer accepts a common subset of bound expressions:
+  - **Integer ndarray or field read** up to 32 bits wide, indexed by literal constants or outer-loop variables: `arr[i, j]`, `field[i]`.
+  - **Shape term**: `arr.shape[k]`.
+  - **Literal integer constant**: `42`.
+  - **Arithmetic combinator**: any `+`, `-`, `*`, `max` of the above.
+- **Sequential:** the fallback path, used whenever the parallel path doesn't support the bound expression. Quadrants walks the bound expression one outer-loop iteration at a time on a single thread (host-side on CPU, single-thread on-device kernel on GPU); the adstack is sized identically, only the upfront cost differs. This path accepts everything the parallel path does, plus:
+  - **Arithmetic-indexed read**: `arr[i // 2]`, `arr[i % 4]`.
+  - **Indirect / nested read**: `arr1[arr2[i]]`, `my_field[arr[i]]`.
+
+### Nested loops
+
+Quadrants supports arbitrarily nested loops. When the bound expression itself contains another enclosed loop whose own bound expression must be reduced first, the enclosing bound expression takes the parallel path only if every nested bound expression is also supported by the parallel path; otherwise it falls back to the sequential walk. This keeps the runtime from mixing parallel and sequential evaluators inside a single bound expression, which would otherwise force per-iteration kernel launches.
+
+### Sequential walk cap
+
+The sequential walk's outer loop is artificially capped at 2^24 = 16 777 216 iterations on GPU backends to keep the walk time bounded; past that the kernel raises `RuntimeError: ... iteration count ... exceeds the 16777216 guard`. In the example above, the iteration count of the enclosed loop takes the sequential path because of the `i // 2` index, so it would raise at launch on GPU backends if `arr.shape[0] > (1 << 24)`.
+
+To circumvent this limitation, rewrite the bound expression to unlock the parallel path (e.g. precompute `bounds[i] = arr[i // 2]` into a persistent separate buffer, pass `bounds` in as an input, and use `for j in range(bounds[i]):`), or keep the outer loop count below 2^24.

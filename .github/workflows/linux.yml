@@ -102,6 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      checks: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -122,7 +123,7 @@ jobs:
         with:
           name: coverage-cuda
           path: coverage-cuda
-      - name: Generate coverage report
+      - name: Generate coverage reports
         continue-on-error: true
         run: |
           COV_XMLS=""
@@ -137,12 +138,72 @@ jobs:
             exit 0
           fi
 
+          HEAD_SHA=$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-9)
+
           python tests/coverage_report.py --report-only \
             --compare-branch=origin/${{ github.base_ref }} \
             --coverage-xml $COV_XMLS \
-            --format markdown > coverage-comment.md
+            --commit-hash "$HEAD_SHA" \
+            --format markdown > coverage-check.md || true
+
+          python tests/coverage_report.py --report-only \
+            --compare-branch=origin/${{ github.base_ref }} \
+            --coverage-xml $COV_XMLS \
+            --commit-hash "$HEAD_SHA" \
+            --format markdown-summary > coverage-comment.md || true
+      - name: Upload full coverage report
+        if: always() && hashFiles('coverage-check.md') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-check.md
+      - name: Publish coverage check
+        if: always() && hashFiles('coverage-check.md') != ''
+        id: publish_check
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            let body = fs.readFileSync('coverage-check.md', 'utf8');
+            const MAX_TEXT = 65000;
+            let truncated = false;
+            if (body.length > MAX_TEXT) {
+              body = body.substring(0, MAX_TEXT) + '\n\n---\n*Report truncated. Download the full report from the workflow artifacts.*';
+              truncated = true;
+            }
+            const summary = truncated
+              ? 'Per-line coverage annotations (truncated — see artifacts for full report).'
+              : 'See details below for per-line coverage annotations.';
+            const check = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head_sha: context.payload.pull_request.head.sha,
+              name: 'Coverage Report',
+              status: 'completed',
+              conclusion: 'success',
+              output: {
+                title: 'Diff Coverage Report',
+                summary: summary,
+                text: body
+              }
+            });
+            core.setOutput('check-url', check.data.html_url);
       - name: Post coverage comment
         if: always() && hashFiles('coverage-comment.md') != ''
-        run: gh pr comment ${{ github.event.pull_request.number }} --body-file coverage-comment.md
+        uses: actions/github-script@v8
         env:
-          GH_TOKEN: ${{ github.token }}
+          REPORT_URL: ${{ steps.publish_check.outputs.check-url }}
+        with:
+          script: |
+            const fs = require('fs');
+            let body = fs.readFileSync('coverage-comment.md', 'utf8').trim();
+            const url = process.env.REPORT_URL;
+            if (url) {
+              body = `[${body}](${url})`;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: body
+            });

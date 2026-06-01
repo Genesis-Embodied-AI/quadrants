@@ -8,7 +8,7 @@ from quadrants.lang.field import ScalarField
 from quadrants.lang.impl import grouped, static, static_assert
 from quadrants.lang.kernel_impl import func, kernel
 from quadrants.lang.misc import loop_config
-from quadrants.lang.simt import block, warp
+from quadrants.lang.simt import block, subgroup, warp
 from quadrants.lang.snode import deactivate
 from quadrants.types import ndarray_type
 from quadrants.types.annotations import template
@@ -46,7 +46,10 @@ def tensor_to_ext_arr(tensor: template(), arr: ndarray_type.ndarray()):
 
 @kernel
 def ndarray_to_ext_arr(ndarray: ndarray_type.ndarray(), arr: ndarray_type.ndarray()):
-    for I in grouped(ndarray):
+    # Iterate via ``arr`` (always untagged, canonical-shaped) so that subscripting ``ndarray[I]`` on a layout-tagged
+    # source applies the canonical->physical permutation correctly and writes land at the canonical positions in
+    # ``arr``. For untagged sources both sides share a shape so behaviour is identical to ``grouped(ndarray)``.
+    for I in grouped(arr):
         arr[I] = ndarray[I]
 
 
@@ -99,7 +102,9 @@ def ndarray_to_ndarray(ndarray: ndarray_type.ndarray(), other: ndarray_type.ndar
 
 @kernel
 def ext_arr_to_ndarray(arr: ndarray_type.ndarray(), ndarray: ndarray_type.ndarray()):
-    for I in grouped(ndarray):
+    # Symmetric to ``ndarray_to_ext_arr``: iterate via the untagged, canonical-shaped ``arr``. ``ndarray[I]`` then
+    # permutes I from canonical to physical on layout-tagged destinations.
+    for I in grouped(arr):
         ndarray[I] = arr[I]
 
 
@@ -278,13 +283,25 @@ def warp_shfl_up_i32(val: template()):
     return val
 
 
+@func
+def subgroup_inclusive_add_warp_i32(val: template()):
+    """Single-arg adapter around ``subgroup.inclusive_add_tiled(val, 5)``.
+
+    The prefix-sum kernel ``scan_add_inclusive`` takes its scan primitive as a ``template()`` callable invoked with
+    one argument ``fn(val)``.  The portable ``subgroup.inclusive_add_tiled`` takes ``(value, log2_size)`` — this
+    adapter pre-binds ``log2_size=5`` to scan a full 32-lane warp/wave, matching ``WARP_SZ`` in
+    ``scan_add_inclusive``.
+    """
+    return subgroup.inclusive_add_tiled(val, 5)
+
+
 @kernel
 def scan_add_inclusive(
     arr_in: template(),
     in_beg: i32,
     in_end: i32,
     single_block: template(),
-    inclusive_add: template(),
+    inclusive_add_tiled: template(),
 ):
     WARP_SZ = 32
     BLOCK_SZ = 64
@@ -299,7 +316,7 @@ def scan_add_inclusive(
 
         pad_shared = block.SharedArray((65,), i32)
 
-        val = inclusive_add(val)
+        val = inclusive_add_tiled(val)
         block.sync()
 
         # Put warp scan results to smem

@@ -3,6 +3,8 @@
 add_library(spirv_codegen)
 target_sources(spirv_codegen
   PRIVATE
+    adstack_bound_reducer_shader.cpp
+    adstack_max_reducer_shader.cpp
     adstack_sizer_shader.cpp
     kernel_utils.cpp
     snode_struct_compiler.cpp

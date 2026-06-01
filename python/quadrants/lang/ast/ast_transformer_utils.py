@@ -181,6 +181,15 @@ class ASTTransformerGlobalContext:
         self.pruning: "Pruning" = pruning
         self.currently_compiling_materialize_key = currently_compiling_materialize_key
         self.pass_idx: int = pass_idx
+        self.ndarray_to_any_array: dict[int, Any] = {}
+        self.struct_ndarray_launch_info: list[tuple] = []
+        # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
+        # `ASTTransformerFuncContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
+        # inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-
+        # range diagnostic, silently emitting a wrong adjoint. `CallTransformer.build_Call` writes the caller
+        # `ctx.loop_depth` here before invoking the func and restores the previous value after, so the new func ctx
+        # can seed its `loop_depth` from this field via `_func_base.py`.
+        self.caller_loop_depth: int = 0
 
 
 class ASTTransformerFuncContext:

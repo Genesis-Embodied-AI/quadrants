@@ -16,6 +16,7 @@
 #include "quadrants/ir/expression_ops.h"
 #include "quadrants/ir/frontend_ir.h"
 #include "quadrants/ir/statements.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/extension.h"
 #include "quadrants/program/ndarray.h"
 #include "quadrants/rhi/device_capability.h"
@@ -199,6 +200,7 @@ void export_lang(py::module &m) {
       .def_readwrite("advanced_optimization", &CompileConfig::advanced_optimization)
       .def_readwrite("ad_stack_experimental_enabled", &CompileConfig::ad_stack_experimental_enabled)
       .def_readwrite("ad_stack_size", &CompileConfig::ad_stack_size)
+      .def_readwrite("ad_stack_sparse_threshold_bytes", &CompileConfig::ad_stack_sparse_threshold_bytes)
       .def_readwrite("flatten_if", &CompileConfig::flatten_if)
       .def_readwrite("make_thread_local", &CompileConfig::make_thread_local)
       .def_readwrite("make_block_local", &CompileConfig::make_block_local)
@@ -224,7 +226,10 @@ void export_lang(py::module &m) {
       .def_readwrite("offline_cache_cleaning_factor", &CompileConfig::offline_cache_cleaning_factor)
       .def_readwrite("num_compile_threads", &CompileConfig::num_compile_threads)
       .def_readwrite("vk_api_version", &CompileConfig::vk_api_version)
-      .def_readwrite("cuda_stack_limit", &CompileConfig::cuda_stack_limit);
+      .def_readwrite("cuda_stack_limit", &CompileConfig::cuda_stack_limit)
+      .def_readwrite("external_metal_command_queue", &CompileConfig::external_metal_command_queue)
+      .def_readwrite("external_metal_command_queue_is_torch_queue",
+                     &CompileConfig::external_metal_command_queue_is_torch_queue);
 
   m.def("reset_default_compile_config", [&]() { default_compile_config = CompileConfig(); });
 
@@ -305,7 +310,9 @@ void export_lang(py::module &m) {
       .def("strictly_serialize", &ASTBuilder::strictly_serialize)
       .def("block_dim", &ASTBuilder::block_dim)
       .def("insert_snode_access_flag", &ASTBuilder::insert_snode_access_flag)
-      .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag);
+      .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag)
+      .def("begin_stream_parallel", &ASTBuilder::begin_stream_parallel)
+      .def("end_stream_parallel", &ASTBuilder::end_stream_parallel);
 
   auto device_capability_config =
       py::class_<DeviceCapabilityConfig>(m, "DeviceCapabilityConfig").def("get", &DeviceCapabilityConfig::get);
@@ -313,12 +320,19 @@ void export_lang(py::module &m) {
   auto compiled_kernel_data = py::class_<CompiledKernelData>(m, "CompiledKernelData")
                                   .def("_debug_dump_to_string", &CompiledKernelData::debug_dump_to_string);
 
-  py::class_<Program>(m, "Program")
-      .def(py::init<>())
-      .def("ndarray_to_dlpack", [](Program *program, pybind11::object owner,
-                                   Ndarray *ndarray) { return ndarray_to_dlpack(program, owner, ndarray); })
-      .def("field_to_dlpack", [](Program *program, SNode *snode, int element_ndim, int n,
-                                 int m) { return field_to_dlpack(program, snode, element_ndim, n, m); })
+  auto program_class = py::class_<Program>(m, "Program");
+  program_class.def(py::init<>())
+      .def(
+          "ndarray_to_dlpack",
+          [](Program *program, pybind11::object owner, Ndarray *ndarray, const std::vector<int> &layout,
+             bool versioned) { return ndarray_to_dlpack(program, owner, ndarray, layout, versioned); },
+          py::arg("owner"), py::arg("ndarray"), py::arg("layout") = std::vector<int>{}, py::arg("versioned") = false)
+      .def(
+          "field_to_dlpack",
+          [](Program *program, SNode *snode, int element_ndim, int n, int m, bool versioned) {
+            return field_to_dlpack(program, snode, element_ndim, n, m, versioned);
+          },
+          py::arg("snode"), py::arg("element_ndim"), py::arg("n"), py::arg("m"), py::arg("versioned") = false)
       .def("_get_num_ndarrays", &Program::get_num_ndarrays)
       .def("config", &Program::compile_config, py::return_value_policy::reference)
       .def("sync_kernel_profiler", [](Program *program) { program->profiler->sync(); })
@@ -343,7 +357,7 @@ void export_lang(py::module &m) {
       .def("finalize", &Program::finalize)
       .def("get_total_compilation_time", &Program::get_total_compilation_time)
       .def("get_snode_num_dynamically_allocated", &Program::get_snode_num_dynamically_allocated)
-      .def("synchronize", &Program::synchronize)
+      .def("synchronize", &Program::synchronize_and_assert)
       .def("materialize_runtime", &Program::materialize_runtime)
       .def("get_snode_tree_size", &Program::get_snode_tree_size)
       .def("get_snode_root", &Program::get_snode_root, py::return_value_policy::reference)
@@ -398,11 +412,20 @@ void export_lang(py::module &m) {
       .def("compile_kernel", &Program::compile_kernel, py::return_value_policy::reference)
       .def("launch_kernel", &Program::launch_kernel)
       .def("get_device_caps", &Program::get_device_caps)
+      .def("subgroup_size", &Program::subgroup_size)
       .def("get_graph_cache_size", &Program::get_graph_cache_size)
       .def("get_graph_cache_used_on_last_call", &Program::get_graph_cache_used_on_last_call)
       .def("get_num_offloaded_tasks_on_last_call", &Program::get_num_offloaded_tasks_on_last_call)
       .def("get_graph_num_nodes_on_last_call", &Program::get_graph_num_nodes_on_last_call)
-      .def("get_graph_total_builds", &Program::get_graph_total_builds);
+      .def("get_graph_total_builds", &Program::get_graph_total_builds)
+      // Test-only introspection on the max-reducer dispatch counter. Leading underscore signals "internal, not part of
+      // the public Python API"; quadrants tests reach these via `impl.get_runtime().prog`. They are intentionally not
+      // surfaced on the user-facing `qd.*` namespace and not documented under `docs/`.
+      .def("_get_max_reducer_dispatch_count",
+           [](Program *program) { return program->adstack_cache().max_reducer_dispatch_count(); })
+      .def("_reset_max_reducer_dispatch_count",
+           [](Program *program) { program->adstack_cache().reset_max_reducer_dispatch_count(); });
+  export_stream(m, program_class);
 
   py::class_<CompileResult>(m, "CompileResult")
       .def_property_readonly(
@@ -653,6 +676,15 @@ void export_lang(py::module &m) {
   m.def("expr_atomic_mul",
         [&](const Expr &a, const Expr &b) { return Expr::make<AtomicOpExpression>(AtomicOpType::mul, a, b); });
 
+  m.def("expr_atomic_xchg",
+        [&](const Expr &a, const Expr &b) { return Expr::make<AtomicOpExpression>(AtomicOpType::xchg, a, b); });
+
+  m.def("expr_atomic_cas", [&](const Expr &dest, const Expr &expected, const Expr &desired) {
+    return Expr::make<AtomicOpExpression>(AtomicOpType::cas, dest, expected, desired);
+  });
+
+  m.def("expr_volatile_load", [&](const Expr &target) { return Expr::make<VolatileLoadExpression>(target); });
+
   m.def("expr_assume_in_range", assume_range);
 
   m.def("expr_loop_unique", loop_unique);
@@ -683,6 +715,7 @@ void export_lang(py::module &m) {
   DEFINE_EXPRESSION_OP(log)
   DEFINE_EXPRESSION_OP(popcnt)
   DEFINE_EXPRESSION_OP(clz)
+  DEFINE_EXPRESSION_OP(ffs)
 
   DEFINE_EXPRESSION_OP(select)
   DEFINE_EXPRESSION_OP(ifte)

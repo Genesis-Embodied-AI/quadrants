@@ -194,6 +194,13 @@ std::unordered_set<Stmt *> constexpr_prop(Block *block, std::function<bool(Stmt 
 
 void verify(IRNode *root);
 
+// Same as verify(root) but gated on `config.debug` so release builds skip the per-pass walk. The bare verifier
+// remained the dominant secondary cost (~21s) in profiles of cold GPU compile of adstack-heavy reverse-mode kernels:
+// 28+ call sites between IR passes scale O(N * avg_operands) per call, and adstack push/pop chains over unrolled
+// iterations blow N up. Verification catches pass-internal SSA-visibility / parent-block bugs - it is a developer
+// debug aid, not a user-error check - so users who run with `qd.init(debug=False)` (the default) pay nothing.
+void verify_if_debug(IRNode *root, const CompileConfig &config);
+
 // Mesh Related.
 void gather_meshfor_relation_types(IRNode *node);
 std::pair</* owned= */ std::unordered_set<mesh::MeshElementType>,

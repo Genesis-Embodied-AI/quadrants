@@ -3,6 +3,8 @@
 add_library(amdgpu_runtime)
 target_sources(amdgpu_runtime
   PRIVATE
+    amdgpu_utils.cpp
+    graph_manager.cpp
     jit_amdgpu.cpp
     kernel_launcher.cpp
   )

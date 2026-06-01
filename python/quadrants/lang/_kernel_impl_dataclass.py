@@ -2,6 +2,7 @@ import ast
 import dataclasses
 from typing import Any
 
+from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import util
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._signature import get_func_signature
@@ -48,14 +49,22 @@ def _populate_struct_locals_from_params_dict(basename: str, struct_locals, struc
     And the members of struct_locals should be:
     - __qd_struct_ab__qd_a
     - __qd_struct_ab__qd_b
+    - __qd_struct_ab__qd_struct_cd
     - __qd_struct_ab__qd_struct_cd__qd_c
     - __qd_struct_ab__qd_struct_cd__qd_d
+    - __qd_struct_ab__qd_struct_cd__qd_struct_ef
     - __qd_struct_ab__qd_struct_cd__qd_struct_ef__qd_e
     - __qd_struct_ab__qd_struct_cd__qd_struct_ef__qd_f
+
+    Intermediate (non-leaf) dataclass nodes are included in struct_locals so that expressions like
+    ``struct_ab.struct_cd`` get rewritten to a single ``Name("__qd_struct_ab__qd_struct_cd")`` by
+    FlattenAttributeNameTransformer. This is needed to support passing sub-structs to ``qd.func``,
+    e.g. ``f(struct_ab.struct_cd)`` where ``f`` is typed ``(c: StructCD)``.
     """
     for field in dataclasses.fields(struct_type):
         child_name = create_flat_name(basename, field.name)
         if dataclasses.is_dataclass(field.type):
+            struct_locals.add(child_name)
             _populate_struct_locals_from_params_dict(child_name, struct_locals, field.type)
         else:
             struct_locals.add(child_name)
@@ -76,10 +85,17 @@ def extract_struct_locals_from_context(ctx: ASTTransformerFuncContext) -> set[st
     sig = get_func_signature(ctx.func.func)
     parameters = sig.parameters
     for param_name, parameter in parameters.items():
+        dc_type = None
         if dataclasses.is_dataclass(parameter.annotation):
-            for field in dataclasses.fields(parameter.annotation):
+            dc_type = parameter.annotation
+        elif param_name in ctx.template_vars and dataclasses.is_dataclass(ctx.template_vars[param_name]):
+            dc_type = type(ctx.template_vars[param_name])
+        if dc_type is not None:
+            for field in dataclasses.fields(dc_type):
                 child_name = create_flat_name(param_name, field.name)
                 if dataclasses.is_dataclass(field.type):
+                    # Intermediate node — see _populate_struct_locals_from_params_dict docstring.
+                    struct_locals.add(child_name)
                     _populate_struct_locals_from_params_dict(child_name, struct_locals, field.type)
                     continue
                 struct_locals.add(child_name)
@@ -208,6 +224,7 @@ def populate_global_vars_from_dataclass(
     param_type: Any,
     py_arg: Any,
     global_vars: dict[str, Any],
+    populate_all_fields: bool = False,
 ):
     for field in dataclasses.fields(param_type):
         child_value = getattr(py_arg, field.name)
@@ -218,6 +235,10 @@ def populate_global_vars_from_dataclass(
                 param_type=field.type,
                 py_arg=child_value,
                 global_vars=global_vars,
+                populate_all_fields=populate_all_fields,
             )
-        elif util.is_qd_template(field.type):
+        elif field.type is _TensorClass or util.is_qd_template(field.type):
+            child_value = child_value._unwrap() if isinstance(child_value, _TensorClass) else child_value
+            global_vars[flat_name] = child_value
+        elif populate_all_fields:
             global_vars[flat_name] = child_value

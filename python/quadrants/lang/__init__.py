@@ -4,6 +4,7 @@ from quadrants.lang import impl, simt  # noqa: F401
 from quadrants.lang._fast_caching.function_hasher import pure  # noqa: F401
 from quadrants.lang._ndarray import *
 from quadrants.lang._ndrange import ndrange  # noqa: F401
+from quadrants.lang.buffer_view import *
 from quadrants.lang.exception import *
 from quadrants.lang.field import *
 from quadrants.lang.impl import *
@@ -15,6 +16,7 @@ from quadrants.lang.ops import *  # pylint: disable=W0622
 from quadrants.lang.runtime_ops import *
 from quadrants.lang.snode import *
 from quadrants.lang.source_builder import *
+from quadrants.lang.stream import *
 from quadrants.lang.struct import *
 from quadrants.types.enums import DeviceCapability, Format, Layout  # noqa: F401
 
@@ -28,6 +30,7 @@ __all__ = [
     not in [
         "any_array",
         "ast",
+        "buffer_view",
         "common_ops",
         "enums",
         "exception",
@@ -45,6 +48,7 @@ __all__ = [
         "shell",
         "snode",
         "source_builder",
+        "stream",
         "struct",
         "util",
     ]

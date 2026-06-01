@@ -1,52 +1,62 @@
 # pyright: reportAttributeAccessIssue=false
 
 """
-This function '_extract_arg' is called so often during physics simulation with Genesis that
-it becomes a major bottleneck for simple scenes running faster than 10M FPS. In practice, it
-adds about 100% overhead when running 20M FPS, and things get worst as FPS increases. At this
-scale, it is necessary to chase not just us (microseconds) but also ns (nanoseconds). This
-requires special optimization technics, to name a few:
-* Avoid attribute lookup as much as possible, indirectly for submodules, instance methods and
-  class attributes.
-* Do not define local-scope function, because the definition itself is costly, and called
-  methods that are not in global scope is slowe
+This function '_extract_arg' is called so often during physics simulation with Genesis that it becomes a major
+bottleneck for simple scenes running faster than 10M FPS. In practice, it adds about 100% overhead when running 20M
+FPS, and things get worst as FPS increases. At this scale, it is necessary to chase not just us (microseconds) but
+also ns (nanoseconds). This requires special optimization technics, to name a few:
+* Avoid attribute lookup as much as possible, indirectly for submodules, instance methods and class attributes.
+* Do not define local-scope function, because the definition itself is costly, and called methods that are not in
+  global scope is slowe
 * Avoid function indirection as much as possible, especially for very short method
 * Prefer list comprehension over tuple + generator
 * Prefer using 'in' operator of set if possible, otherwise tuple, instead of list
-* Avoid redundant operations by inlining complementary methods, i.e. 'dataclasses.is_dataclass'
-  in conjunction with 'dataclasses.fields'.
-* Prefer using 'arg_type = type(arg)' plus 'issubclass' over 'isinstance' when doing many checks
-  successively
+* Avoid redundant operations by inlining complementary methods, i.e. 'dataclasses.is_dataclass' in conjunction with
+  'dataclasses.fields'.
+* Prefer using 'arg_type = type(arg)' plus 'issubclass' over 'isinstance' when doing many checks successively
 * Prefer 'is' operator over '==', 'isinstance' and 'issubclass' whenever it is applicable
 * Order branches by hit probability
-* Guard complex manually debug checks with 'if __debug__ and __builtins__["__debug__"]'
-  to allow disabling them at runtime instead of compile time only
+* Guard complex manually debug checks with 'if __debug__ and __builtins__["__debug__"]' to allow disabling them at
+  runtime instead of compile time only
 * Use 'getattr' on class rather than instances for static properties
 
-A direct consequence of this breaking type checking because pyright is not able to understand that
-'arg_type' is immutably bound to 'type(arg)'. Moreover, some privates fields of standard module
-'dataclass' had to be imported as a consequence of inlining 'is_dataclass' and 'fields'.
+A direct consequence of this breaking type checking because pyright is not able to understand that 'arg_type' is
+immutably bound to 'type(arg)'. Moreover, some privates fields of standard module 'dataclass' had to be imported as
+a consequence of inlining 'is_dataclass' and 'fields'.
 """
 
 import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
 
+from quadrants import _tensor_wrapper
 from quadrants._lib import core as _qd_core
+from quadrants._tensor import (
+    _TENSOR_T_FIELD_MARKER,
+    _TENSOR_T_NDARRAY_MARKER,
+)
+from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
+from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
+from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.snode import SNode
 from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import (
+    buffer_view_type,
     ndarray_type,
     primitive_types,
     sparse_matrix_builder,
     template,
 )
+
+# Default ndarray annotation for Tensor-resolved-as-ndarray. Defining at module scope avoids re-allocating per call.
+# boundary defaults to UNSAFE (the same default a bare ``qd.types.ndarray()`` would produce).
+_TENSOR_T_NDARRAY_ANNOTATION = ndarray_type.NdarrayType()
 
 AnnotationType = Union[
     template,
@@ -62,7 +72,44 @@ _primitive_types = {int, float, bool}
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
+    # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers direct
+    # args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
+    # ``getattr``, so a wrapper stored as a struct field arrives here un-stripped with its declared annotation (e.g.
+    # ``qd.types.NDArray[qd.f32, 2]``). Without this unwrap the function falls through to the "external arrays" path
+    # (line ~149) which technically reads ``.shape`` off the wrapper but produces a meaningless cache key. See
+    # ``perso_hugh/doc/quadrants-tensor.md`` §8.14. Idempotent for top-level args.
+    #
+    # PERF-CRITICAL: The _any_tensor_constructed guard makes this check zero-cost when no qd.Tensor has been created.
+    # This function runs on *every* argument of *every* kernel invocation. ``type(arg) in _TENSOR_WRAPPER_TYPES`` is
+    # used instead of ``isinstance`` because it is a pointer comparison (~10 ns) vs an MRO walk (~100–200 ns). Do not
+    # replace with isinstance or remove the guard.
+    if (
+        _tensor_wrapper._any_tensor_constructed and type(arg) in _TENSOR_WRAPPER_TYPES
+    ):  # pyright: ignore[reportOptionalMemberAccess]
+        arg = arg._unwrap()
     annotation_type = type(annotation)
+    # qd.Tensor: value-dispatch. Ndarray-shaped values flow through the ndarray feature path; everything else falls
+    # through to the template path (Field, SNode, primitives). Both branches are salted with a marker so cache keys
+    # disambiguate. The annotation is the wrapper *class* (``qd.Tensor``); ``arg`` is always a bare impl by the time
+    # we get here (``Kernel.__call__`` unwraps ``Tensor`` instances).
+    if annotation is _TensorClass:
+        if type(arg) in _TENSOR_WRAPPER_TYPES:
+            arg = arg._unwrap()
+        arg_type = type(arg)
+        if issubclass(arg_type, (Ndarray, AnyArray)):
+            return (_TENSOR_T_NDARRAY_MARKER,) + tuple(
+                _extract_arg(
+                    raise_on_templated_floats,
+                    arg,
+                    _TENSOR_T_NDARRAY_ANNOTATION,
+                    arg_name,
+                )
+            )
+        # Fall through to the template path below by retargeting the annotation. Wrap the result with a field marker
+        # so its cache entry is distinct from the ndarray branch above.
+        annotation = template
+        annotation_type = type(template)
+        return (_TENSOR_T_FIELD_MARKER,) + (_extract_arg(raise_on_templated_floats, arg, template, arg_name),)
     arg_type = type(arg)
     if annotation is template or annotation_type is template:
         if arg_type is SNode:
@@ -92,6 +139,17 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         if raise_on_templated_floats and arg_type is float:
             raise ValueError("Floats not allowed as templated types.")
         return arg
+    if annotation_type is buffer_view_type.BufferViewType:
+        if not isinstance(arg, BufferViewInstance):
+            raise QuadrantsRuntimeTypeError(f"Argument {arg_name} expects a BufferView, got {type(arg).__name__}")
+        inner = arg.get_ndarray()
+        assert isinstance(inner, Ndarray)
+        assert inner.shape is not None
+        if __debug__ and __builtins__["__debug__"] and annotation.dtype is not None:
+            annotation.ndarray_type.check_matched(inner.get_type(), arg_name)
+        type_id = id(inner.element_type)
+        element_type = type_id if type_id in primitive_types.type_ids else inner.element_type
+        return element_type, len(inner.shape), False, annotation.ndarray_type.boundary
     if annotation_type is ndarray_type.NdarrayType:
         if isinstance(arg, Ndarray):
             # Allow deferring '__debug__' evaluation at runtime
@@ -104,13 +162,18 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # Convert singleton primitive dtype to int. This will dramatically speed up hashing later on.
             type_id = id(arg.element_type)
             element_type = type_id if type_id in primitive_types.type_ids else arg.element_type
-            return element_type, len(arg.shape), needs_grad, annotation.boundary
+            # Optional tensor layout (None for legacy / identity).
+            #
+            # PERF-CRITICAL: arg._qd_layout uses direct attribute access (not getattr) because Ndarray has a class-level
+            # _qd_layout=None default. This avoids getattr(..., default) overhead on every kernel arg. Do not replace
+            # with getattr().
+            return element_type, len(arg.shape), needs_grad, annotation.boundary, arg._qd_layout
         if isinstance(arg, AnyArray):
             ty = arg.get_type()
             if __debug__ and __builtins__["__debug__"]:
                 annotation.check_matched(ty, arg_name)
             assert arg.shape is not None
-            return ty.element_type, len(arg.shape), ty.needs_grad, annotation.boundary
+            return ty.element_type, len(arg.shape), ty.needs_grad, annotation.boundary, arg._qd_layout
         # external arrays
         shape = getattr(arg, "shape", None)
         if shape is None:
@@ -156,7 +219,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             element_type = _qd_core.get_type_factory_instance().get_tensor_type(element_shape, dtype)
         else:
             element_type = arg.dtype
-        return element_type, len(shape) - len(element_shape), needs_grad, annotation.boundary
+        return element_type, len(shape) - len(element_shape), needs_grad, annotation.boundary, None
     # Inlining `dataclasses.is_dataclass` and `dataclasess.fields`, which are very slow due to extra runtime checks
     annotation_fields = getattr(annotation, _FIELDS, None)
     if annotation_fields is not None:

@@ -1,0 +1,125 @@
+name: Check test coverage for changes
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  check-test-coverage:
+    name: Check test coverage for changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait for builds to finish (dead-reckoning), to save AI cost if someone pushes many commits in a row
+        run: sleep 1800
+
+      - name: Collect diffs and file lists
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          MERGE_BASE=$(git merge-base "origin/$BASE_REF" HEAD)
+
+          # Diff of source-only files (excluding tests/, benchmarks/, docs/, scripts/, misc/)
+          git diff "$MERGE_BASE...HEAD" \
+            -- '*.py' '*.cpp' '*.h' '*.hpp' '*.c' '*.cc' '*.cu' \
+            ':!tests/' ':!benchmarks/' ':!docs/' ':!scripts/' ':!misc/' \
+            > /tmp/source_diff.patch
+
+          # List of ALL changed files in the PR (including tests)
+          git diff --name-only "$MERGE_BASE...HEAD" > /tmp/all_changed_files.txt
+
+          # List of changed test files only
+          git diff --name-only "$MERGE_BASE...HEAD" -- 'tests/' > /tmp/changed_test_files.txt
+
+          if [ ! -s /tmp/source_diff.patch ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No source files changed (only tests/docs/scripts/etc)."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Source diff: $(wc -l < /tmp/source_diff.patch) lines"
+            echo "All changed files: $(wc -l < /tmp/all_changed_files.txt)"
+            echo "Changed test files: $(wc -l < /tmp/changed_test_files.txt)"
+          fi
+
+      - name: Install Cursor CLI
+        if: steps.changed.outputs.skip != 'true'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+
+      - name: Check test coverage with Cursor agent
+        if: steps.changed.outputs.skip != 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_KEY_HUGH }}
+        run: |
+          RESULT=$(agent -p "$(cat <<'PROMPT'
+          You are checking whether code changes in a PR have adequate test coverage.
+
+          Inputs:
+          - /tmp/source_diff.patch — unified diff of NON-TEST source files changed in this PR (.py, .cpp, .h, etc., excluding tests/)
+          - /tmp/all_changed_files.txt — list of ALL files changed in this PR
+          - /tmp/changed_test_files.txt — list of test files changed/added in this PR
+
+          Your task:
+          1. Read the source diff to understand what functional code was added or modified.
+          2. Read the changed test files list to see what tests were added or modified in this PR.
+          3. For each meaningful source change (new function, new class, new method, changed behavior, new module), determine whether there is a corresponding test — either:
+             a. An existing test file in the repo (under tests/) that already covers that code, OR
+             b. A new/modified test file in this PR that covers that code.
+          4. Use the repo structure to find existing tests. The repo layout is:
+             - Python source: python/quadrants/
+             - Python tests: tests/python/
+             - C++ source: quadrants/ (subdirs: codegen, ir, runtime, transforms, etc.)
+             - C++ tests: tests/cpp/ (mirrors the source subdirs)
+             Test files are typically named test_<feature>.py or test_<feature>.cpp.
+
+          Repo testing policy — Python is the default:
+          - Prefer Python tests under tests/python/. Most C++ behavior is reachable via the Python
+            API and is best tested end-to-end from Python.
+          - Do NOT flag missing C++ tests when adequate Python coverage (existing or added in this
+            PR) already exercises the changed behavior end-to-end.
+          - Only flag a missing C++ test under tests/cpp/ when the behavior is impossible or
+            impractical to exercise from Python. Narrow exceptions:
+            (a) Hardware-capability gating or other negative paths that require mocked device
+                state (e.g. a function that returns empty when a SPIR-V capability is missing) —
+                Python tests on real devices either skip or never enter the branch.
+            (b) Parity with an existing C++ test for an analogous function (e.g. if foo_a has a
+                C++ unit test and the PR adds foo_b of the same shape, mirror the test).
+
+          What to flag:
+          - New public functions/methods/classes with no test coverage at all
+          - New modules/files with no corresponding test file
+          - Significant behavior changes (new branches, new error handling) with no test for the new behavior
+          - C++ additions matching one of the (a)–(b) exceptions above with no C++ test
+
+          What NOT to flag:
+          - Pure refactors that don't change behavior (renames, moves, reformatting)
+          - Changes to internal/private helpers that are indirectly tested through public API tests
+          - Trivial changes (imports, type hints, comments, docstrings, logging)
+          - Config files, build files, CI files
+          - Changes to test infrastructure itself (conftest.py, test utilities)
+          - Bug fixes where the fix is obviously correct and narrow
+          - Missing C++ tests for code already adequately covered by Python end-to-end tests
+
+          Be pragmatic. Not every line needs a test. Focus on substantial untested additions.
+          Do NOT modify any files.
+          Stop after finding 5 violations.
+
+          If there are NO violations, your final output must start with the word PASS.
+          If there ARE violations, your final output must start with the word FAIL, followed by a list of violations (up to 5) in the format: <filepath>:<function_or_class>: <what is untested>
+          PROMPT
+          )" --model claude-4.6-opus-high-thinking --mode ask --output-format text --trust)
+
+          echo "$RESULT"
+          if echo "$RESULT" | grep -qE "^FAIL([[:space:]]|$)"; then
+            exit 1
+          fi

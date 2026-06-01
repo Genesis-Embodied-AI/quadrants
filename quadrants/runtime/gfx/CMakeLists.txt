@@ -4,6 +4,8 @@ add_library(gfx_runtime)
 target_sources(gfx_runtime
   PRIVATE
     runtime.cpp
+    adstack_bound_reducer_launch.cpp
+    adstack_max_reducer_launch.cpp
     adstack_sizer_launch.cpp
     snode_tree_manager.cpp
     kernel_launcher.cpp

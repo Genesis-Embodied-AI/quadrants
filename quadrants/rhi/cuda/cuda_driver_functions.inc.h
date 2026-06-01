@@ -20,6 +20,7 @@ PER_CUDA_FUNCTION(context_set_limit, cuCtxSetLimit, int, std::size_t);
 
 // Stream management
 PER_CUDA_FUNCTION(stream_create, cuStreamCreate, void **, uint32);
+PER_CUDA_FUNCTION(stream_destroy, cuStreamDestroy_v2, void *);
 
 // Memory management
 PER_CUDA_FUNCTION(memcpy_host_to_device, cuMemcpyHtoD_v2, void *, void *, std::size_t);
@@ -34,10 +35,13 @@ PER_CUDA_FUNCTION(memset, cuMemsetD8_v2, void *, uint8, std::size_t);
 PER_CUDA_FUNCTION(memsetd32, cuMemsetD32_v2, void *, uint32, std::size_t);
 PER_CUDA_FUNCTION(mem_free, cuMemFree_v2, void *);
 PER_CUDA_FUNCTION(mem_free_async_impl, cuMemFreeAsync, void *, void *);
+PER_CUDA_FUNCTION(mem_alloc_host, cuMemAllocHost_v2, void **, std::size_t);
+PER_CUDA_FUNCTION(mem_free_host, cuMemFreeHost, void *);
 PER_CUDA_FUNCTION(mem_advise, cuMemAdvise, void *, std::size_t, uint32, uint32);
 PER_CUDA_FUNCTION(mem_get_info, cuMemGetInfo_v2, std::size_t *, std::size_t *);
 PER_CUDA_FUNCTION(mem_get_attribute, cuPointerGetAttribute, void *, uint32, void *);
 PER_CUDA_FUNCTION(mem_pool_set_attribute, cuMemPoolSetAttribute, void *, uint32, void *);
+PER_CUDA_FUNCTION(mem_pool_trim_to, cuMemPoolTrimTo, void *, std::size_t);
 
 // Module and kernels
 PER_CUDA_FUNCTION(module_get_function, cuModuleGetFunction, void **, void *, const char *);
@@ -50,8 +54,12 @@ PER_CUDA_FUNCTION(kernel_get_occupancy, cuOccupancyMaxActiveBlocksPerMultiproces
 PER_CUDA_FUNCTION(kernel_set_attribute, cuFuncSetAttribute, void *, CUfunction_attribute_enum, int);
 
 
+// Context management
+PER_CUDA_FUNCTION(context_synchronize, cuCtxSynchronize);
+
 // Stream management
 PER_CUDA_FUNCTION(stream_synchronize, cuStreamSynchronize, void *);
+PER_CUDA_FUNCTION(stream_wait_event, cuStreamWaitEvent, void *, void *, uint32);
 
 // Event management
 PER_CUDA_FUNCTION(event_create, cuEventCreate, void **, uint32)

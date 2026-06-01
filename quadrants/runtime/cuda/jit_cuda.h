@@ -88,6 +88,12 @@ class JITSessionCUDA : public JITSession {
   const CompileConfig &config_;
 };
 
+// Append a per-process nonce comment to `ptx` when `compile_config.offline_cache` is disabled, so the NVIDIA driver
+// compute cache (~/.nv/ComputeCache) - keyed by PTX content hash - cannot serve stale SASS across runs. The nonce is
+// constant within a single process, which preserves intra-run cache hits between kernels with identical PTX while
+// busting cross-run hits. PTX comments do not affect SASS codegen. No-op when offline_cache is true.
+void append_compute_cache_bypass_nonce_if_disabled(std::string &ptx, const CompileConfig &compile_config);
+
 #endif
 
 std::unique_ptr<JITSession> create_llvm_jit_session_cuda(QuadrantsLLVMContext *tlctx,

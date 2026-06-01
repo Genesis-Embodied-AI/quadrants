@@ -12,6 +12,7 @@ from quadrants import _logging
 from .._wrap_inspect import FunctionSourceInfo
 from ..kernel_arguments import ArgMetadata
 from . import args_hasher, config_hasher, function_hasher
+from .args_hasher import FastcacheSkip
 from .fast_caching_types import HashedFunctionSourceInfo
 from .hash_utils import hash_iterable_strings
 from .python_side_cache import PythonSideCache
@@ -31,13 +32,14 @@ def create_cache_key(
     - compilation config (which includes arch, and debug)
     """
     args_hash = args_hasher.hash_args(raise_on_templated_floats, args, arg_metas)
-    if args_hash is None:
-        # the bit in caps at start should not be modified without modifying corresponding text
-        # freetext bit can be freely modified
-        _logging.warn(
-            f"[FASTCACHE][INVALID_FUNC] The pure function {kernel_source_info.function_name} could not be "
-            "fast cached, because one or more parameter types were invalid"
-        )
+    if isinstance(args_hash, FastcacheSkip):
+        if args_hash is FastcacheSkip.WARN:
+            # the bit in caps at start should not be modified without modifying corresponding text
+            # freetext bit can be freely modified
+            _logging.warn(
+                f"[FASTCACHE][INVALID_FUNC] The pure function {kernel_source_info.function_name} could not be "
+                "fast cached, because one or more parameter types were invalid"
+            )
         return None
     kernel_hash = function_hasher.hash_kernel(kernel_source_info)
     config_hash = config_hasher.hash_compile_config()

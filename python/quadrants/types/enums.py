@@ -12,7 +12,7 @@ def to_boundary_enum(boundary):
         return BoundaryMode.CLAMP
     if boundary == "unsafe":
         return BoundaryMode.UNSAFE
-    raise ValueError(f"Invalid boundary argument: {boundary}")
+    raise ValueError(f"Invalid boundary argument: {boundary}. Valid options: 'unsafe', 'clamp'")
 
 
 class DeviceCapability:
@@ -44,4 +44,4 @@ class DeviceCapability:
     spirv_has_no_integer_wrap_decoration = "spirv_has_no_integer_wrap_decoration"
 
 
-__all__ = ["Layout", "AutodiffMode", "SNodeGradType", "Format", "DeviceCapability"]
+__all__ = ["Layout", "AutodiffMode", "SNodeGradType", "Format", "BoundaryMode", "DeviceCapability"]

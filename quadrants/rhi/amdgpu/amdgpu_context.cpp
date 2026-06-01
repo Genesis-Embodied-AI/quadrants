@@ -13,6 +13,8 @@
 namespace quadrants {
 namespace lang {
 
+thread_local void *AMDGPUContext::stream_ = nullptr;
+
 AMDGPUContext::AMDGPUContext() : driver_(AMDGPUDriver::get_instance_without_context()) {
   dev_count_ = 0;
   driver_.init(0);
@@ -190,7 +192,7 @@ void AMDGPUContext::launch(void *func,
   if (grid_dim > 0) {
     std::lock_guard<std::mutex> _(lock_);
     void *config[] = {(void *)0x01, (void *)packed_arg, (void *)0x02, (void *)&pack_size, (void *)0x03};
-    driver_.launch_kernel(func, grid_dim, 1, 1, block_dim, 1, 1, dynamic_shared_mem_bytes, nullptr, nullptr,
+    driver_.launch_kernel(func, grid_dim, 1, 1, block_dim, 1, 1, dynamic_shared_mem_bytes, stream_, nullptr,
                           reinterpret_cast<void **>(&config));
   }
   std::free(packed_arg);
@@ -199,11 +201,26 @@ void AMDGPUContext::launch(void *func,
     profiler_->stop(task_handle);
 
   if (debug_) {
-    driver_.stream_synchronize(nullptr);
+    driver_.stream_synchronize(stream_);
   }
 }
 
+void AMDGPUContext::trim_default_mem_pool() {
+  if (!supports_mem_pool_) {
+    return;
+  }
+  void *default_mem_pool = nullptr;
+  driver_.device_get_default_mem_pool(&default_mem_pool, 0 /*device ordinal*/);
+  // `min_bytes_to_keep = 0` releases every cached page back to the driver.
+  driver_.mem_pool_trim_to(default_mem_pool, 0u);
+}
+
 AMDGPUContext::~AMDGPUContext() {
+  // Currently unreachable: singleton is heap-allocated via `new` in get_instance() and never deleted.
+  for (auto *s : stream_pool_) {
+    driver_.stream_destroy(s);
+  }
+  stream_pool_.clear();
   if (context_) {
     driver_.device_primary_ctx_release(device_);
   }

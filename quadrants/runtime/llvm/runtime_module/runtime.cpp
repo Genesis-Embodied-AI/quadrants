@@ -24,93 +24,20 @@
 
 #include "quadrants/inc/constants.h"
 #include "quadrants/inc/cuda_kernel_utils.inc.h"
-#include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/math/arithmetic.h"
+#include "llvm_runtime.h"
+#include "adstack_runtime.h"
 
-struct RuntimeContext;
-using assert_failed_type = void (*)(const char *);
-using host_printf_type = void (*)(const char *, ...);
-// In llvm 15, host_printf_type will be saved as ptr instead of ptr of
-// FunctionType.
-// Add dummy function to save function type for host_printf_type.
+// In llvm 15, host_printf_type will be saved as ptr instead of ptr of FunctionType. Add dummy function to save function
+// type for host_printf_type.
 extern "C" void get_func_type_host_printf(const char *, ...) {
 }
-
-using host_vsnprintf_type = int (*)(char *, std::size_t, const char *, std::va_list);
-using host_allocator_type = void *(*)(void *, std::size_t, std::size_t);
-using RangeForTaskFunc = void(RuntimeContext *, const char *tls, int i);
-using MeshForTaskFunc = void(RuntimeContext *, const char *tls, uint32_t i);
-using parallel_for_type = void (*)(void *thread_pool,
-                                   int splits,
-                                   int num_desired_threads,
-                                   void *context,
-                                   void (*func)(void *, int thread_id, int i));
 
 #if defined(__linux__) && !ARCH_cuda && defined(QD_ARCH_x64)
 __asm__(".symver logf,logf@GLIBC_2.2.5");
 __asm__(".symver powf,powf@GLIBC_2.2.5");
 __asm__(".symver expf,expf@GLIBC_2.2.5");
 #endif
-
-// For accessing struct fields
-#define STRUCT_FIELD(S, F)                              \
-  extern "C" decltype(S::F) S##_get_##F(S *s) {         \
-    return s->F;                                        \
-  }                                                     \
-  extern "C" decltype(S::F) *S##_get_ptr_##F(S *s) {    \
-    return &(s->F);                                     \
-  }                                                     \
-  extern "C" void S##_set_##F(S *s, decltype(S::F) f) { \
-    s->F = f;                                           \
-  }
-
-#define STRUCT_FIELD_ARRAY(S, F)                                                          \
-  extern "C" std::remove_all_extents_t<decltype(S::F)> S##_get_##F(S *s, int i) {         \
-    return s->F[i];                                                                       \
-  }                                                                                       \
-  extern "C" void S##_set_##F(S *s, int i, std::remove_all_extents_t<decltype(S::F)> f) { \
-    s->F[i] = f;                                                                          \
-  };
-
-// For fetching struct fields from device to host
-#define RUNTIME_STRUCT_FIELD(S, F)                                       \
-  extern "C" void runtime_##S##_get_##F(LLVMRuntime *runtime, S *s) {    \
-    runtime->set_result(quadrants_result_buffer_runtime_query_id, s->F); \
-  }
-
-#define RUNTIME_STRUCT_FIELD_ARRAY(S, F)                                     \
-  extern "C" void runtime_##S##_get_##F(LLVMRuntime *runtime, S *s, int i) { \
-    runtime->set_result(quadrants_result_buffer_runtime_query_id, s->F[i]);  \
-  }
-
-using int8 = int8_t;
-using int16 = int16_t;
-using int32 = int32_t;
-using int64 = int64_t;
-using uint1 = bool;
-using uint8 = uint8_t;
-using uint16 = uint16_t;
-using uint32 = uint32_t;
-using uint64 = uint64_t;
-using float32 = float;
-using float64 = double;
-
-using i8 = int8;
-using i16 = int16;
-using i32 = int32;
-using i64 = int64;
-using u1 = uint1;
-using u8 = uint8;
-using u16 = uint16;
-using u32 = uint32;
-using u64 = uint64;
-using f32 = float32;
-using f64 = float64;
-
-using uint8 = uint8_t;
-using Ptr = uint8 *;
-
-using RuntimeContextArgType = long long;
 
 #if ARCH_cuda || ARCH_amdgpu
 extern "C" {
@@ -149,7 +76,7 @@ i64 cpu_clock_i64() {
   return 0;
 }
 
-void system_memfence() {
+void system_mem_fence() {
 }
 
 #if ARCH_cuda
@@ -534,101 +461,6 @@ void initialize_rand_state(RandState *state, u32 i) {
 }
 }
 
-struct NodeManager;
-
-struct PreallocatedMemoryChunk {
-  Ptr preallocated_head = nullptr;
-  Ptr preallocated_tail = nullptr;
-  std::size_t preallocated_size = 0;
-};
-
-struct LLVMRuntime {
-  PreallocatedMemoryChunk runtime_objects_chunk;
-  PreallocatedMemoryChunk runtime_memory_chunk;
-
-  host_allocator_type host_allocator;
-  assert_failed_type assert_failed;
-  host_printf_type host_printf;
-  host_vsnprintf_type host_vsnprintf;
-  Ptr memory_pool;
-
-  Ptr roots[kMaxNumSnodeTreesLlvm];
-  size_t root_mem_sizes[kMaxNumSnodeTreesLlvm];
-
-  Ptr thread_pool;
-  parallel_for_type parallel_for;
-  ListManager *element_lists[quadrants_max_num_snodes];
-  NodeManager *node_allocators[quadrants_max_num_snodes];
-  Ptr ambient_elements[quadrants_max_num_snodes];
-  Ptr temporaries;
-  RandState *rand_states;
-
-  // Cross backend (CPU, CUDA, AMDGPU) runtime memory allocation
-  Ptr allocate_aligned(PreallocatedMemoryChunk &memory_chunk,
-                       std::size_t size,
-                       std::size_t alignment,
-                       bool request = false);
-
-  // Allocate from preallocated memory (CUDA, AMDGPU)
-  Ptr allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_chunk, std::size_t size, std::size_t alignment);
-  Ptr profiler;
-  void (*profiler_start)(Ptr, Ptr);
-  void (*profiler_stop)(Ptr);
-
-  char error_message_template[quadrants_error_message_max_length];
-  uint64 error_message_arguments[quadrants_error_message_max_num_arguments];
-  i32 error_message_lock = 0;
-  i64 error_code = 0;
-  // Dedicated flag for adstack-overflow-specific errors. Separate from `error_code` so assertions (which set
-  // error_code=1 and are only surfaced when `compile_config.debug` is on) do not leak through the always-on poll
-  // that Program::synchronize runs.
-  i64 adstack_overflow_flag = 0;
-
-  // Per-runtime heap-backed autodiff stack slab. Replaces the function-scope `create_entry_block_alloca` that used
-  // to hold every adstack on the worker-thread stack (capped at ~512 KB on macOS secondary threads).
-  // The buffer is host-owned: `LlvmRuntimeExecutor::ensure_adstack_heap(bytes)` grows it via the device allocator
-  // before each kernel launch based on `OffloadedTask::ad_stack.per_thread_stride * num_threads`. The new pointer
-  // and size are published into these two fields without a per-grow kernel launch: a one-shot
-  // `runtime_get_adstack_heap_field_ptrs` kernel (see below) caches the device addresses of the two fields in the
-  // host-side executor, and subsequent grows write to those cached addresses via `memcpy_host_to_device` on
-  // CUDA / AMDGPU, or via direct pointer stores on CPU. Device kernels only read these fields; they do not grow
-  // the buffer, so there is no device-side lock, no `locked_task` emulation, and no cross-wavefront visibility
-  // concern.
-  Ptr adstack_heap_buffer = nullptr;
-  u64 adstack_heap_size = 0;
-
-  // Per-launch adstack metadata buffers. Populated by the host right before each kernel launch from the
-  // `AdStackAllocaStmt::size_expr` host evaluator, consumed inside the kernel by the LLVM codegen base-address and
-  // push-overflow math. `adstack_per_thread_stride` is the same sum-of-sizes that used to be baked as an immediate
-  // at codegen time; `adstack_offsets[stack_id]` and `adstack_max_sizes[stack_id]` are indexed by the
-  // `AdStackAllocaStmt::stack_id` assigned in the codegen pre-scan. Both arrays live in device-visible memory and
-  // are published through `runtime_get_adstack_metadata_field_ptrs` using the same host-write-through-cached-pointer
-  // pattern as `adstack_heap_buffer`.
-  u64 adstack_per_thread_stride = 0;
-  u64 *adstack_offsets = nullptr;
-  u64 *adstack_max_sizes = nullptr;
-
-  Ptr result_buffer;
-  i32 allocator_lock;
-
-  i32 num_rand_states;
-
-  i64 total_requested_memory;
-
-  template <typename T>
-  void set_result(std::size_t i, T t) {
-    static_assert(sizeof(T) <= sizeof(uint64));
-    ((u64 *)result_buffer)[i] = quadrants_union_cast_with_different_sizes<uint64>(t);
-  }
-
-  template <typename T, typename... Args>
-  T *create(Args &&...args) {
-    auto ptr = (T *)allocate_aligned(runtime_memory_chunk, sizeof(T), 4096, true /*request*/);
-    new (ptr) T(std::forward<Args>(args)...);
-    return ptr;
-  }
-};
-
 // TODO: are these necessary?
 STRUCT_FIELD_ARRAY(LLVMRuntime, element_lists);
 STRUCT_FIELD_ARRAY(LLVMRuntime, node_allocators);
@@ -641,11 +473,6 @@ STRUCT_FIELD(LLVMRuntime, host_vsnprintf);
 STRUCT_FIELD(LLVMRuntime, profiler);
 STRUCT_FIELD(LLVMRuntime, profiler_start);
 STRUCT_FIELD(LLVMRuntime, profiler_stop);
-STRUCT_FIELD(LLVMRuntime, adstack_heap_buffer);
-STRUCT_FIELD(LLVMRuntime, adstack_heap_size);
-STRUCT_FIELD(LLVMRuntime, adstack_per_thread_stride);
-STRUCT_FIELD(LLVMRuntime, adstack_offsets);
-STRUCT_FIELD(LLVMRuntime, adstack_max_sizes);
 
 // NodeManager of node S (hash, pointer) managers the memory allocation of S_ch
 // It makes use of three ListManagers.
@@ -748,261 +575,11 @@ void runtime_get_temporaries_ptr(LLVMRuntime *runtime) {
   runtime->set_result(quadrants_result_buffer_ret_value_id, runtime->temporaries);
 }
 
-// Writes the addresses of `runtime->adstack_heap_buffer` and `runtime->adstack_heap_size` into the result buffer
-// so the host-side executor can cache them. With those cached device pointers the host grows the heap by issuing
-// two simple `memcpy_host_to_device` writes - no per-grow kernel launch for the setters, which sidesteps any
-// questions about AMDGPU kernel calling convention on the auto-generated STRUCT_FIELD setters vs the
-// hand-written `runtime_*` wrappers.
-void runtime_get_adstack_heap_field_ptrs(LLVMRuntime *runtime) {
-  runtime->set_result(quadrants_result_buffer_ret_value_id, (u64)(void *)&runtime->adstack_heap_buffer);
-  runtime->set_result(quadrants_result_buffer_ret_value_id + 1, (u64)(void *)&runtime->adstack_heap_size);
-}
-
-// Mirrors `runtime_get_adstack_heap_field_ptrs` for the three per-launch metadata fields. The host caches the three
-// returned addresses once per program and then publishes new values (stride + offsets array ptr + max_sizes array
-// ptr) before every kernel launch via the same `memcpy_host_to_device` / direct-store path used for the heap
-// buffer. Writing all three addresses in one call keeps the launch-time host path to a single
-// already-cached-address memcpy per field rather than one kernel launch per field.
-void runtime_get_adstack_metadata_field_ptrs(LLVMRuntime *runtime) {
-  runtime->set_result(quadrants_result_buffer_ret_value_id, (u64)(void *)&runtime->adstack_per_thread_stride);
-  runtime->set_result(quadrants_result_buffer_ret_value_id + 1, (u64)(void *)&runtime->adstack_offsets);
-  runtime->set_result(quadrants_result_buffer_ret_value_id + 2, (u64)(void *)&runtime->adstack_max_sizes);
-}
-
-// Device-resident adstack SizeExpr interpreter. Runs on whatever backend the LLVM runtime JIT-compiles this
-// bitcode to: a plain C function call on CPU, a single-thread kernel launch on CUDA / AMDGPU. The bytecode buffer
-// layout is defined by `quadrants/ir/adstack_size_expr_device.h` and produced host-side by
-// `encode_adstack_size_expr_device_bytecode` immediately before this call.
-//
-// For every alloca slot the interpreter walks its tree (recursive descent over node indices that point strictly
-// backwards) and writes:
-//   - `runtime->adstack_max_sizes[i]` = `clamp(tree_value, 1, max_size_compile_time)` if the tree is non-empty,
-//     else `max_size_compile_time`. The compile-time cap is the structural upper bound the pre-pass proved, so
-//     the clamp only ever tightens against a buggy tree evaluation; the `max(_, 1)` preserves the "always room
-//     for one push" invariant the runtime's `stack_push` relies on.
-//   - `runtime->adstack_offsets[i]` = cumulative byte offset inside the per-thread slice.
-//   - `runtime->adstack_per_thread_stride` = final running sum (after last alloca).
-// The host reads back `adstack_per_thread_stride` via the cached field pointer to size the heap with
-// `ensure_adstack_heap`; the offsets / max_sizes arrays stay device-resident and feed the main kernel directly.
-//
-// Ndarray element access (`ExternalTensorRead`) reads `ctx->arg_buffer` at the `arg_buffer_offset` encoded into
-// the node to fetch the data pointer, then indexes by the linear offset computed from the node's indices. There
-// is no `array_ptrs` map on device; the host-side encoder has already resolved `arg_id -> arg_buffer_offset`
-// through the kernel's `args_type` struct layout.
-//
-// Recursion bounded by tree depth (typically <10 for observed reverse-mode kernels, <30 worst case). The
-// bound-variable scope is kept in a fixed-size array indexed by `var_id`; the host encoder dense-remaps each
-// tree's `var_id`s into `[0, kDeviceBoundVarCap)` before emitting bytecode and hard-errors above the cap, so
-// `values[var_id]` is always in bounds here.
-
-namespace {
-
-constexpr int kDeviceBoundVarCap = quadrants::lang::kAdStackSizeExprDeviceMaxBoundVars;
-
-struct DeviceEvalScope {
-  // Bound-var lookup by `var_id`. Unbound slots are sentinelled by the caller before the interpreter enters the
-  // subtree; walking the code paths that read `values[vid]` without a matching `MaxOverRange` bind would be a
-  // pre-pass bug. The interpreter does not validate - on GPU backends we cannot afford a host-style assert from
-  // device code, so a buggy tree is caught through wrong max_size values and an overflow at `stack_push` rather
-  // than a fatal trap here.
-  i64 values[kDeviceBoundVarCap];
-};
-
-i64 device_load_element(const char *data_ptr, i64 linear, i32 prim_dt) {
-  // Enum values mirror `PrimitiveTypeID` in `quadrants/inc/data_type.inc.h` (f16=0, f32=1, f64=2, i8=3, i16=4,
-  // i32=5, i64=6, u1=7, u8=8, u16=9, u32=10, u64=11). The pre-pass only emits integer reads (the adstack-size
-  // grammar rejects float-typed reads at build_value_expr), so we only decode the integer types here.
-  switch (prim_dt) {
-    case 3:  // i8
-      return (i64) reinterpret_cast<const i8 *>(data_ptr)[linear];
-    case 4:  // i16
-      return (i64) reinterpret_cast<const i16 *>(data_ptr)[linear];
-    case 5:  // i32
-      return (i64) reinterpret_cast<const i32 *>(data_ptr)[linear];
-    case 6:  // i64
-      return reinterpret_cast<const i64 *>(data_ptr)[linear];
-    case 8:  // u8
-      return (i64) reinterpret_cast<const u8 *>(data_ptr)[linear];
-    case 9:  // u16
-      return (i64) reinterpret_cast<const u16 *>(data_ptr)[linear];
-    case 10:  // u32
-      return (i64) reinterpret_cast<const u32 *>(data_ptr)[linear];
-    case 11:  // u64
-      return (i64) reinterpret_cast<const u64 *>(data_ptr)[linear];
-    default:
-      return 0;  // unreachable: encoder rejects other types
-  }
-}
-
-i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
-                     const i32 *indices,
-                     i32 node_idx,
-                     DeviceEvalScope *scope,
-                     const char *arg_buffer) {
-  const auto &node = nodes[node_idx];
-  using K = quadrants::lang::AdStackSizeExprDeviceKind;
-  switch (static_cast<K>(node.kind)) {
-    case K::kConst:
-      return node.const_value;
-    case K::kAdd:
-      return device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer) +
-             device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
-    case K::kSub: {
-      // Match the host evaluator: clamp negative trip counts to zero so an underflowed `end - begin` doesn't
-      // poison a surrounding `Mul` / `MaxOverRange` product.
-      i64 lhs = device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer);
-      i64 rhs = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
-      i64 diff = lhs - rhs;
-      return diff > 0 ? diff : 0;
-    }
-    case K::kMul:
-      return device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer) *
-             device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
-    case K::kMax: {
-      i64 lhs = device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer);
-      i64 rhs = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
-      return lhs > rhs ? lhs : rhs;
-    }
-    case K::kMaxOverRange: {
-      i64 begin = device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer);
-      i64 end = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
-      // Mirror of the host evaluator's iteration guard (see `adstack_size_expr_eval.cpp::evaluate_node`).
-      // A range of several million would stall the sizer launch for seconds; anything that wide is almost
-      // certainly a pre-pass bug. Hard-stop via quadrants_assert so the failure surfaces at qd.sync() with
-      // a clear adstack-sizer attribution rather than a mysterious launch hang.
-      constexpr i64 kMaxOverRangeIterations = i64{1} << 24;
-      i64 result = 0;
-      const i32 var = node.var_id;
-      for (i64 i = begin; i < end; ++i) {
-        if (i - begin > kMaxOverRangeIterations) {
-          break;  // see host evaluator's note; a sibling assertion in the host path will have fired first.
-        }
-        if (var >= 0 && var < kDeviceBoundVarCap) {
-          scope->values[var] = i;
-        }
-        i64 v = device_eval_node(nodes, indices, node.body_node_idx, scope, arg_buffer);
-        if (v > result)
-          result = v;
-      }
-      return result;
-    }
-    case K::kBoundVariable: {
-      const i32 var = node.var_id;
-      if (var >= 0 && var < kDeviceBoundVarCap)
-        return scope->values[var];
-      return 0;
-    }
-    case K::kExternalTensorRead: {
-      // `data_ptr_slot = *(void **)(arg_buffer + arg_buffer_offset)`: read the ndarray's data pointer out of the
-      // kernel arg buffer at the offset the host encoder precomputed via `args_type->get_element_offset`. This
-      // replaces the host evaluator's `ctx->array_ptrs` map lookup with a straight field read that the device
-      // can perform without reaching for a std::unordered_map.
-      auto data_ptr_raw = *reinterpret_cast<const char *const *>(arg_buffer + node.arg_buffer_offset);
-      // Indices encoded as `[idx_a_raw, elem_stride_a]` pairs per axis, matching `kFieldLoad`'s layout. The
-      // host encoder in `adstack_size_expr_eval.cpp` pre-computes the C-order element strides from the
-      // launch context's ndarray shape; a 1-D read collapses to `elem_stride = 1` and recovers the original
-      // stride-1 sum. The multi-axis case is what this fix unblocks: without the per-axis multiply a 2-D
-      // `a[i, j]` read would land on `a_flat[i + j]` instead of `a_flat[i * shape[1] + j]`, silently
-      // under-bounding the sizer and tripping `Adstack overflow` at `qd.sync()`.
-      i64 linear = 0;
-      for (i32 k = 0; k < node.indices_count; ++k) {
-        const i32 raw = indices[node.indices_offset + 2 * k];
-        const i32 elem_stride = indices[node.indices_offset + 2 * k + 1];
-        i64 v = 0;
-        if (raw >= 0) {
-          v = raw;
-        } else {
-          const i32 var = -(raw + 1);
-          if (var >= 0 && var < kDeviceBoundVarCap)
-            v = scope->values[var];
-        }
-        linear += v * static_cast<i64>(elem_stride);
-      }
-      return device_load_element(data_ptr_raw, linear, node.prim_dt);
-    }
-    case K::kFieldLoad:
-      // The LLVM encoder always host-folds `FieldLoad` leaves (via `SNodeRwAccessorsBank`) before emitting
-      // device bytecode, so the interpreter never sees `kFieldLoad`. It is reserved for the SPIR-V sizer
-      // shader's PSB read path. Return zero rather than asserting (this runtime-module compiles to LLVM
-      // bitcode with no host-assert facility) so a mis-emitted tree surfaces downstream as a wrong-`max_size`
-      // adstack overflow at `qd.sync()` rather than silently UB here.
-      return 0;
-  }
-  return 0;
-}
-
-}  // namespace
-
-void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, Ptr bytecode) {
-  // Bytecode layout:
-  // [AdStackSizeExprDeviceHeader][stack_headers[n_stacks]][nodes[total_nodes]][indices[total_indices]]. All three
-  // arrays live contiguously so the interpreter can index them by offset from the single `bytecode` pointer - the host
-  // memcpys the whole blob in one go, and this function runs before any main-kernel dispatch that would stomp
-  // `arg_buffer`.
-  using quadrants::lang::AdStackSizeExprDeviceHeader;
-  using quadrants::lang::AdStackSizeExprDeviceNode;
-  using quadrants::lang::AdStackSizeExprDeviceStackHeader;
-
-  const auto *header = reinterpret_cast<const AdStackSizeExprDeviceHeader *>(bytecode);
-  const auto *stack_headers = reinterpret_cast<const AdStackSizeExprDeviceStackHeader *>(
-      reinterpret_cast<const char *>(bytecode) + sizeof(AdStackSizeExprDeviceHeader));
-  const auto *nodes = reinterpret_cast<const AdStackSizeExprDeviceNode *>(
-      reinterpret_cast<const char *>(stack_headers) + sizeof(AdStackSizeExprDeviceStackHeader) * header->n_stacks);
-  const auto *indices = reinterpret_cast<const i32 *>(reinterpret_cast<const char *>(nodes) +
-                                                      sizeof(AdStackSizeExprDeviceNode) * header->total_nodes);
-
-  const char *arg_buffer = ctx->arg_buffer;
-  u64 *out_max_sizes = runtime->adstack_max_sizes;
-  u64 *out_offsets = runtime->adstack_offsets;
-
-  // Alignment rule copied from `publish_adstack_metadata` in `llvm_runtime_executor.cpp`: each stack's slice ends
-  // aligned to 8 bytes so `stack_top_primal`'s `stack + sizeof(u64) + idx * 2 * element_size` math stays aligned
-  // for every element type the IR may emit.
-  auto align_up_8 = [](u64 n) -> u64 { return (n + 7u) & ~(u64)7u; };
-
-  DeviceEvalScope scope;
-  for (i32 k = 0; k < kDeviceBoundVarCap; ++k)
-    scope.values[k] = 0;
-
-  u64 running_offset = 0;
-  for (u32 i = 0; i < header->n_stacks; ++i) {
-    const auto &sh = stack_headers[i];
-    u64 max_size;
-    if (sh.root_node_idx < 0) {
-      // No symbolic bound captured (offline-cache-hit with `size_exprs` dropped) - use the compile-time bound.
-      max_size = sh.max_size_compile_time > 0 ? sh.max_size_compile_time : 1;
-    } else {
-      i64 v = device_eval_node(nodes, indices, sh.root_node_idx, &scope, arg_buffer);
-      // Floor at 1 to match the host evaluator (`evaluate_adstack_size_expr`); a tree that evaluates to 0 or negative
-      // leaves one slot reserved so the heap base address is still valid and any spurious push surfaces as an overflow
-      // rather than a zero-slice alias. Do NOT clamp upward against `max_size_compile_time`: for non-const symbolic
-      // bounds the pre-pass seeds it from `default_ad_stack_size` as a conservative placeholder (see the "conservative
-      // seed" note in `determine_ad_stack_size.cpp`), not as a proven upper bound, so clamping would silently truncate
-      // correct per-launch values above the seed and trigger an overflow at the next `qd.sync()`. The CPU path in
-      // `LlvmRuntimeExecutor::publish_adstack_metadata` follows the same floor-only rule.
-      if (v < 1)
-        v = 1;
-      max_size = static_cast<u64>(v);
-    }
-    out_max_sizes[i] = max_size;
-    out_offsets[i] = running_offset;
-    running_offset += align_up_8(sizeof(i64) + (u64)sh.entry_size_bytes * max_size);
-  }
-
-  runtime->adstack_per_thread_stride = running_offset;
-}
+#include "adstack_runtime.cpp"
 
 void runtime_retrieve_and_reset_error_code(LLVMRuntime *runtime) {
   runtime->set_result(quadrants_result_buffer_error_id, runtime->error_code);
   runtime->error_code = 0;
-}
-
-void runtime_retrieve_and_reset_adstack_overflow(LLVMRuntime *runtime) {
-  // Paired with the relaxed atomic write in `stack_push`. The host calls this only after the thread pool has
-  // joined, so strictly no synchronization is required here, but use `__atomic_exchange_n` anyway to keep the
-  // read/reset symmetric with the write and to avoid annotating the single shared field as half-atomic.
-  i64 flag = __atomic_exchange_n(&runtime->adstack_overflow_flag, (i64)0, __ATOMIC_RELAXED);
-  runtime->set_result(quadrants_result_buffer_error_id, flag);
 }
 
 void runtime_retrieve_error_message(LLVMRuntime *runtime, int i) {
@@ -1019,6 +596,11 @@ void runtime_ListManager_get_num_active_chunks(LLVMRuntime *runtime, ListManager
 
 RUNTIME_STRUCT_FIELD_ARRAY(LLVMRuntime, node_allocators);
 RUNTIME_STRUCT_FIELD_ARRAY(LLVMRuntime, element_lists);
+// Host-side runtime-query getter for `runtime->roots[snode_root_id]`. The CPU bound-reducer host evaluator in
+// `LlvmRuntimeExecutor::publish_per_task_bound_count_cpu` uses this to walk SNode-backed gating fields (`field_base =
+// roots[id] + snode_byte_base_offset`); the device-side reducer reads the same array directly from device code, so no
+// runtime_query wrapper is needed there.
+RUNTIME_STRUCT_FIELD_ARRAY(LLVMRuntime, roots);
 RUNTIME_STRUCT_FIELD(LLVMRuntime, total_requested_memory);
 
 RUNTIME_STRUCT_FIELD(NodeManager, free_list);
@@ -1167,7 +749,15 @@ void runtime_memory_allocate_aligned(LLVMRuntime *runtime, std::size_t size, std
 // External API
 // [ON HOST] CPU backend
 // [ON DEVICE] CUDA/AMDGPU backend
-void runtime_get_memory_requirements(Ptr result_buffer, i32 num_rand_states, i32 use_preallocated_buffer) {
+//
+// `external_rand_states_buffer` is set to non-zero by the GPU host launcher when the rand-states buffer is provided
+// by `PersistentRandStateBuffer` (process-lifetime, host-side singleton) rather than carved out of the per-init
+// runtime-objects preallocation. The CPU path still leaves it 0 (rand-states are bumped from `runtime_objects_chunk`
+// in `runtime_initialize`).
+void runtime_get_memory_requirements(Ptr result_buffer,
+                                     i32 num_rand_states,
+                                     i32 use_preallocated_buffer,
+                                     i32 external_rand_states_buffer) {
   i64 size = 0;
 
   if (use_preallocated_buffer) {
@@ -1175,7 +765,9 @@ void runtime_get_memory_requirements(Ptr result_buffer, i32 num_rand_states, i32
   }
 
   size += quadrants::iroundup(i64(quadrants_global_tmp_buffer_size), quadrants_page_size);
-  size += quadrants::iroundup(i64(sizeof(RandState)) * num_rand_states, quadrants_page_size);
+  if (!external_rand_states_buffer) {
+    size += quadrants::iroundup(i64(sizeof(RandState)) * num_rand_states, quadrants_page_size);
+  }
 
   reinterpret_cast<i64 *>(result_buffer)[0] = size;
 }
@@ -1183,6 +775,22 @@ void runtime_get_memory_requirements(Ptr result_buffer, i32 num_rand_states, i32
 // External API
 // [ON HOST] CPU backend
 // [ON DEVICE] CUDA/AMDGPU backend
+//
+// Returns the byte size the rand-states buffer would consume if allocated in-line in `runtime_objects_chunk`. The
+// host calls this to size the process-lifetime allocation owned by `PersistentRandStateBuffer`.
+void runtime_get_rand_states_buffer_size(Ptr result_buffer, i32 num_rand_states) {
+  i64 size = quadrants::iroundup(i64(sizeof(RandState)) * num_rand_states, quadrants_page_size);
+  reinterpret_cast<i64 *>(result_buffer)[0] = size;
+}
+
+// External API
+// [ON HOST] CPU backend
+// [ON DEVICE] CUDA/AMDGPU backend
+//
+// `external_rand_states_buffer` is non-null when the host has provided a process-lifetime rand-states allocation (via
+// `PersistentRandStateBuffer`). In that case `runtime->rand_states` is bound to that pointer and no rand-states bytes
+// are bumped out of `runtime_objects_chunk`. The CPU path passes nullptr and falls through to the in-chunk
+// allocation.
 void runtime_initialize(Ptr result_buffer,
                         Ptr memory_pool,
                         std::size_t preallocated_size,  // Non-zero means use the preallocated buffer
@@ -1190,7 +798,8 @@ void runtime_initialize(Ptr result_buffer,
                         i32 num_rand_states,
                         void *_host_allocator,
                         void *_host_printf,
-                        void *_host_vsnprintf) {
+                        void *_host_vsnprintf,
+                        Ptr external_rand_states_buffer) {
   // bootstrap
   auto host_allocator = (host_allocator_type)_host_allocator;
   auto host_printf = (host_printf_type)_host_printf;
@@ -1220,24 +829,18 @@ void runtime_initialize(Ptr result_buffer,
 
   runtime->total_requested_memory = 0;
 
-  // Zero-init the adstack metadata fields (see AdStackSizingInfo usage): `LLVMRuntime` is allocated from a raw
-  // memory pool rather than constructed via `new`, so the C++ default-member-initializers on these fields never
-  // run. The host launcher writes real values into them via `publish_adstack_metadata` before dispatching any
-  // adstack-bearing kernel, but we still zero them here so an assert-driven read (or a stale cached kernel that
-  // runs before any publish) sees well-defined zeros instead of garbage.
-  runtime->adstack_heap_buffer = nullptr;
-  runtime->adstack_heap_size = 0;
-  runtime->adstack_per_thread_stride = 0;
-  runtime->adstack_offsets = nullptr;
-  runtime->adstack_max_sizes = nullptr;
-  runtime->adstack_overflow_flag = 0;
+  adstack_runtime_zero_init(runtime);
 
   runtime->temporaries = (Ptr)runtime->allocate_aligned(runtime->runtime_objects_chunk,
                                                         quadrants_global_tmp_buffer_size, quadrants_page_size);
 
   runtime->num_rand_states = num_rand_states;
-  runtime->rand_states = (RandState *)runtime->allocate_aligned(
-      runtime->runtime_objects_chunk, sizeof(RandState) * runtime->num_rand_states, quadrants_page_size);
+  if (external_rand_states_buffer != nullptr) {
+    runtime->rand_states = (RandState *)external_rand_states_buffer;
+  } else {
+    runtime->rand_states = (RandState *)runtime->allocate_aligned(
+        runtime->runtime_objects_chunk, sizeof(RandState) * runtime->num_rand_states, quadrants_page_size);
+  }
 }
 
 void runtime_initialize_memory(LLVMRuntime *runtime, std::size_t preallocated_size, Ptr preallocated_buffer) {
@@ -1377,6 +980,19 @@ i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
   return 0;
 }
 
+// Exchanges a 32-bit value between lanes ``i`` and ``i ^ 32`` in a single instruction. The native instruction
+// ``v_permlane64_b32`` is only available on gfx940+ (CDNA3) and gfx11+ (RDNA3+); ``llvm_context.cpp`` detects the
+// target at JIT time and patches this stub to either the ``llvm.amdgcn.permlane64`` intrinsic (on supported
+// hardware) or an LDS-roundtrip software emulation (on gfx9xx CDNA1/2 and gfx10.x RDNA1/2). The emulation has higher
+// latency (LDS store + ``s_waitcnt`` + LDS load -- roughly tens of cycles per call vs. a few for the native swap),
+// but produces correct cross-half results on RDNA wave64 emulation hardware. Used by
+// ``amdgpu_cross_half_shuffle_i32`` below to repair the cross-half story for ``ds_bpermute``, which is SIMD32-scoped
+// on RDNA.
+i32 amdgpu_permlane64(i32 value) {
+  __builtin_trap();
+  return 0;
+}
+
 i32 amdgpu_mbcnt_lo(i32 mask, i32 base) {
   __builtin_trap();
   return 0;
@@ -1387,12 +1003,98 @@ i32 amdgpu_mbcnt_hi(i32 mask, i32 base) {
   return 0;
 }
 
+i32 amdgpu_ballot_w32(bool bit) {
+  __builtin_trap();
+  return 0;
+}
+
+i64 amdgpu_ballot_w64(bool bit) {
+  __builtin_trap();
+  return 0;
+}
+
+i32 amdgpu_ballot_i32(i32 predicate) {
+  return amdgpu_ballot_w32((bool)predicate);
+}
+
+i64 amdgpu_ballot_u64(i32 predicate) {
+  return amdgpu_ballot_w64((bool)predicate);
+}
+
 i32 amdgpu_lane_id() {
   return amdgpu_mbcnt_hi(-1, amdgpu_mbcnt_lo(-1, 0));
 }
 
+// Wave64-aware "read ``value`` from lane ``target_lane``" gather for AMDGPU. Shared by every i32 shuffle variant
+// (``shuffle`` / ``shuffle_down`` / ``shuffle_up``); the f32 / i64 / f64 wrappers below decompose into i32 calls and
+// therefore inherit the wave64 fix for free.
+//
+// Why this isn't just ``ds_bpermute``:
+//
+// The AMDGCN ``ds_bpermute_b32`` instruction takes a 5-bit lane index (bits 2-6 of the byte argument), so it can
+// only directly address lanes 0-31 -- regardless of which lane is issuing the read and regardless of wavefront
+// size. Concretely: on wave64, ``ds_bpermute(target_lane * 4, value)`` returns ``value[target_lane & 31]`` for
+// every lane, never reaching the top half of the wavefront for ``target_lane >= 32``.
+//
+// To repair the top-half case we pair ``ds_bpermute`` with ``llvm.amdgcn.permlane64``, a single-instruction swap
+// between lanes ``i`` and ``i ^ 32``. ``permlane64(value)`` exposes the top-half payload at bottom-half lane indices,
+// so ``ds_bpermute(byte, permlane64(value))`` effectively reads from lanes 32-63. We always compute both reads and
+// select between them branchlessly based on the high bit of ``target_lane``: bit 5 picks the half.
+//
+// Note this is correct on every AMDGPU target we run on. On CDNA (gfx9xx, gfx940/942) ``ds_bpermute`` could in
+// principle directly address all 64 lanes, but because we always mask the byte argument to ``(target_lane & 31) * 4``
+// we never test that path -- on both ISAs the byte index is in [0, 128) and only addresses the bottom half. The
+// ``permlane64`` swap then supplies the top-half data: on hardware with the native instruction (gfx940+ CDNA3 /
+// gfx11+ RDNA3+) this is a single ``v_permlane64_b32``; on older wave64-capable targets (gfx9xx CDNA1/2, gfx10.x
+// RDNA1/2) the JIT patches ``amdgpu_permlane64`` to an LDS roundtrip that produces the same result at higher latency
+// (see the patching logic in ``llvm_context.cpp``).
+//
+// OOR target lanes (``target_lane < 0`` or ``target_lane >= 64``): we mask to ``target_lane & 31`` for the byte and
+// ``& 32`` for the half-bit. The behaviour for OOR targets is implementation-defined on every backend (CUDA's
+// ``__shfl_sync`` also wraps), and the upstream subgroup ops never rely on it -- ``shuffle_up`` / ``shuffle_down``
+// have a ``lane_in_group`` predicate at the call site, ``shuffle_xor`` is always in-range for the mask range we
+// support, etc. We just need OOR not to crash or corrupt in-range lanes.
+i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
+  // Two parallel reads, then a per-lane select. ``permlane64`` is convergent and must execute uniformly across the
+  // wave -- lifting it above the select keeps the AMDGPU backend happy and lets it issue exactly one
+  // ``v_permlane64_b32``. ``ds_bpermute`` on RDNA wave64 is SIMD32-scoped with a 5-bit address (top half of the wave
+  // is unreachable directly), so ``from_self_half`` handles the same-SIMD case and ``from_other_half`` handles the
+  // cross-SIMD case via the ``swapped`` payload. On CDNA the wave is one SIMD64 so both reads return the same value
+  // and the select is a no-op; we don't try to optimize that out because the dead read is cheap (LLVM CSE may fold
+  // it anyway).
+  i32 self_lane = amdgpu_lane_id();
+  i32 swapped = amdgpu_permlane64(value);
+  i32 byte = (target_lane & 31) * 4;
+  // ``llvm.amdgcn.ds.bpermute`` is the real hardware ``ds_bpermute_b32`` -- but if LLVM's uniformity analysis decides
+  // ``byte`` is uniform across the wave (e.g. ``target_lane`` is a compile-time constant), it sometimes lowers to a
+  // ``v_readlane_b32``-style instruction that addresses lanes 0..31 wave-globally rather than SIMD32-locally. On
+  // RDNA wave64 that gives the wrong answer for top-half lanes in cross-half reads (lane 32+ would always read from
+  // the bottom half of its SIMD instead of swapping in the other SIMD's payload via ``permlane64``). The empty
+  // ``+v`` inline asm marks ``byte`` as a VGPR with an opaque write, forcing LLVM to treat it as per-lane and emit a
+  // genuine ``ds_bpermute_b32`` -- which on RDNA does SIMD-local addressing, exactly what we need to pair with the
+  // ``permlane64`` swap for cross-half traffic. On CDNA the cost is zero (the instruction is the same shape) and on
+  // RDNA the cost is also zero (we'd already be issuing a real ``ds_bpermute`` for the per-lane case; this just
+  // makes the constant-target case behave the same way).
+  //
+  // The ``+v`` constraint names the AMDGPU VGPR register class. clang accepts ``v`` as a constraint name on x86
+  // (where it historically means an SSE register) and on amdgcn, but rejects it outright on AArch64 -- the asm is
+  // parsed against the host's clang target even though the resulting bitcode is later re-targeted to amdgcn at JIT
+  // time (see ``llvm_context.cpp`` setting the module triple to ``amdgcn-amd-amdhsa``). The constraint string is
+  // preserved verbatim into the IR, so any host whose front-end accepts ``v`` produces bitcode that the AMDGPU
+  // backend later reads correctly. Gate on both ``ARCH_amdgpu`` (the runtime is built once per backend, see
+  // ``runtime_module/CMakeLists.txt``) and a host-arch allowlist; on AArch64 manylinux builds we drop the fence,
+  // which loses the constant-``target_lane`` VGPR hint -- the per-lane case (the common one) still emits a real
+  // ``ds_bpermute_b32`` because uniformity analysis sees per-lane inputs.
+#if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
+  __asm__ volatile("" : "+v"(byte));
+#endif
+  i32 from_self_half = amdgpu_ds_bpermute(byte, value);
+  i32 from_other_half = amdgpu_ds_bpermute(byte, swapped);
+  return ((target_lane ^ self_lane) & 32) ? from_other_half : from_self_half;
+}
+
 i32 amdgpu_shuffle_i32(i32 index, i32 value) {
-  return amdgpu_ds_bpermute(index * 4, value);
+  return amdgpu_cross_half_shuffle_i32(index, value);
 }
 
 f32 amdgpu_shuffle_f32(i32 index, f32 value) {
@@ -1423,11 +1125,11 @@ f64 amdgpu_shuffle_f64(i32 index, f64 value) {
   return u.d;
 }
 
-// FIXME: Currently emulates shuffle_down via ds_bpermute (~50 cycle latency).
-// Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for
-// reduction-pattern offsets (1, 2, 4, 8, 16).
+// FIXME: Currently emulates shuffle_down via the cross-half ``ds_bpermute`` + ``permlane64`` helper (~50-60 cycle
+// latency). Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for reduction-pattern offsets (1, 2, 4,
+// 8, 16); the cross-half case (offset >= 32) still needs the helper.
 i32 amdgpu_shuffle_down_i32(i32 offset, i32 value) {
-  return amdgpu_ds_bpermute((amdgpu_lane_id() + offset) * 4, value);
+  return amdgpu_cross_half_shuffle_i32(amdgpu_lane_id() + offset, value);
 }
 
 f32 amdgpu_shuffle_down_f32(i32 offset, f32 value) {
@@ -1455,6 +1157,40 @@ f64 amdgpu_shuffle_down_f64(i32 offset, f64 value) {
   } u;
   u.d = value;
   u.i = amdgpu_shuffle_down_i64(offset, u.i);
+  return u.d;
+}
+
+// Mirrors `amdgpu_shuffle_down`: the cross-half helper is a generic gather, so `shuffle_up` is just `shuffle_down`
+// with the source lane index decremented instead of incremented. The same DPP fast-path FIXME applies here too.
+i32 amdgpu_shuffle_up_i32(i32 offset, i32 value) {
+  return amdgpu_cross_half_shuffle_i32(amdgpu_lane_id() - offset, value);
+}
+
+f32 amdgpu_shuffle_up_f32(i32 offset, f32 value) {
+  union {
+    f32 f;
+    i32 i;
+  } u;
+  u.f = value;
+  u.i = amdgpu_shuffle_up_i32(offset, u.i);
+  return u.f;
+}
+
+i64 amdgpu_shuffle_up_i64(i32 offset, i64 value) {
+  i32 lo = (i32)(u64)value;
+  i32 hi = (i32)((u64)value >> 32);
+  lo = amdgpu_shuffle_up_i32(offset, lo);
+  hi = amdgpu_shuffle_up_i32(offset, hi);
+  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
+}
+
+f64 amdgpu_shuffle_up_f64(i32 offset, f64 value) {
+  union {
+    f64 d;
+    i64 i;
+  } u;
+  u.d = value;
+  u.i = amdgpu_shuffle_up_i64(offset, u.i);
   return u.d;
 }
 
@@ -1523,6 +1259,40 @@ f64 cuda_shuffle_down_f64(i32 offset, f64 value) {
   } u;
   u.d = value;
   u.i = cuda_shuffle_down_i64(offset, u.i);
+  return u.d;
+}
+
+// `shfl.sync.up.b32` clamp byte is 0 (no clamp at low boundary), unlike `shfl.sync.down.b32` which uses 0x1f. See
+// `qd.simt.warp.shfl_up_*` (which uses width=0) and the NVVM IR / PTX ISA documentation for `shfl.sync.up.b32`.
+i32 cuda_shuffle_up_i32(i32 offset, i32 value) {
+  return cuda_shfl_up_sync_i32(0xFFFFFFFF, value, offset, 0);
+}
+
+f32 cuda_shuffle_up_f32(i32 offset, f32 value) {
+  union {
+    f32 f;
+    i32 i;
+  } u;
+  u.f = value;
+  u.i = cuda_shuffle_up_i32(offset, u.i);
+  return u.f;
+}
+
+i64 cuda_shuffle_up_i64(i32 offset, i64 value) {
+  i32 lo = (i32)(u64)value;
+  i32 hi = (i32)((u64)value >> 32);
+  lo = cuda_shuffle_up_i32(offset, lo);
+  hi = cuda_shuffle_up_i32(offset, hi);
+  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
+}
+
+f64 cuda_shuffle_up_f64(i32 offset, f64 value) {
+  union {
+    f64 d;
+    i64 i;
+  } u;
+  u.d = value;
+  u.i = cuda_shuffle_up_i64(offset, u.i);
   return u.d;
 }
 
@@ -1609,10 +1379,10 @@ int32 block_barrier_count_i32(int32 predicate) {
 void warp_barrier(uint32 mask) {
 }
 
-void block_memfence() {
+void block_mem_fence() {
 }
 
-void grid_memfence() {
+void grid_mem_fence() {
 }
 
 // these trivial functions are needed by the DEFINE_REDUCTION macro
@@ -2110,7 +1880,7 @@ void ListManager::touch_chunk(int chunk_id) {
     locked_task(&lock, [&] {
       // may have been allocated during lock contention
       if (!chunks[chunk_id]) {
-        grid_memfence();
+        grid_mem_fence();
         auto chunk_ptr = runtime->allocate_aligned(runtime->runtime_memory_chunk,
                                                    max_num_elements_per_chunk * element_size, 4096, true /*request*/);
         atomic_exchange_u64((u64 *)&chunks[chunk_id], (u64)chunk_ptr);
@@ -2309,55 +2079,7 @@ void quadrants_printf(LLVMRuntime *runtime, const char *format, Args &&...args) 
 
 #include "locked_task.h"
 
-extern "C" {  // local stack operations
-
-// The stack index `n` is clamped on read so that overflow (push past capacity) does not let subsequent pops and
-// top-accesses underflow it and index far out of bounds. The corresponding stack_push sets
-// `runtime->adstack_overflow_flag` and skips the increment instead of trapping, so the host-side launcher
-// surfaces the failure as a Python exception rather than killing the process via __builtin_trap. When n == 0
-// (pop-after-overflow underflow path) we return a pointer to slot 0 - an uninitialized-but-in-bounds slot. The
-// caller will read garbage from it, but the host raises on `runtime->adstack_overflow_flag` before any such
-// value reaches user code.
-Ptr stack_top_primal(Ptr stack, std::size_t element_size) {
-  auto n = *(u64 *)stack;
-  std::size_t idx = n > 0 ? n - 1 : 0;
-  return stack + sizeof(u64) + idx * 2 * element_size;
-}
-
-Ptr stack_top_adjoint(Ptr stack, std::size_t element_size) {
-  return stack_top_primal(stack, element_size) + element_size;
-}
-
-void stack_init(Ptr stack) {
-  *(u64 *)stack = 0;
-}
-
-void stack_pop(Ptr stack) {
-  auto &n = *(u64 *)stack;
-  if (n > 0) {
-    n--;
-  }
-}
-
-void stack_push(LLVMRuntime *runtime, Ptr stack, size_t max_num_elements, std::size_t element_size) {
-  u64 &n = *(u64 *)stack;
-  if (n + 1 > max_num_elements) {
-    // Overflow: the loop has more iterations than the adstack capacity. Skip the push and flip the dedicated
-    // overflow flag so the host launcher throws at sync. Multiple CPU threads can hit this branch concurrently
-    // (thread pool dispatch over a multi-element field), so write the sentinel through `__atomic_store_n` with
-    // relaxed ordering: on x86-64/ARM64 this compiles to a regular naturally-aligned store, but it satisfies the
-    // C++11 memory model (plain non-atomic writes from multiple threads to the same object are a data race, even
-    // when every writer stores the same value). The host only reads the flag from `check_adstack_overflow()`
-    // after the thread pool has joined, so no ordering beyond "happens eventually" is required.
-    // `locked_task` was avoided because the AMDGPU JIT cannot retarget its host-side machinery
-    // (`hipErrorNoBinaryForGpu`). Using a separate field (not `error_code`) keeps this check distinct from
-    // assertion machinery, which is debug-gated.
-    __atomic_store_n(&runtime->adstack_overflow_flag, (i64)1, __ATOMIC_RELAXED);
-    return;
-  }
-  n += 1;
-  std::memset(stack_top_primal(stack, element_size), 0, element_size * 2);
-}
+extern "C" {
 
 #include "internal_functions.h"
 
