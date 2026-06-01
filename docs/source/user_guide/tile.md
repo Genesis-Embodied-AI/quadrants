@@ -5,7 +5,7 @@ Quadrants provides two register-resident matrix tile types:
 - `qd.simt.Tile16x16` — a 16x16 tile distributed across 16 threads in a subgroup (one row per thread, 16 scalar registers per thread).
 - `qd.simt.Tile32x32` — a 32x32 tile distributed across 32 threads in a subgroup (one row per thread, 32 scalar registers per thread).
 
-Both have identical APIs (creation, slice-syntax load/store, `qd.outer` rank-1 updates, `cholesky_`, `solve_triangular_`, SharedArray interop) and use subgroup shuffles for cross-thread communication — no shared memory needed. The rest of this page documents the API in terms of `Tile16x16`; everything carries over to `Tile32x32` by swapping the class name and using `SIZE == 32` / `block_dim=32`. The [`Tile32x32` section](#tile32x32) below has the dispatch rules and a worked example.
+Both have identical APIs (creation, slice-syntax load/store, `qd.outer` rank-1 updates, `cholesky_`, `solve_triangular_`, SharedArray interop) and use subgroup shuffles for cross-thread communication — no shared memory needed. The rest of this page documents the API in terms of `Tile16x16`; everything carries over to `Tile32x32` by swapping the class name and using `SIZE == 32` / `block_dim=32`. The [`Tile32x32` section](#tile32x32) below has guidance on when to pick 32x32 vs 16x16 and a short example.
 
 Tiles are useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.
 
