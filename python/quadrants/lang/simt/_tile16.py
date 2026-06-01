@@ -7,7 +7,7 @@ Each tile is a 16x16 matrix distributed across 16 threads in a subgroup, one row
 in 16 scalar registers (r0-r15).  Cross-thread communication uses subgroup shuffles -- no shared memory needed.
 
 The thread's lane index (tid) is obtained internally via ``subgroup.invocation_id()``, so callers never need to
-pass it.  See docs/source/user_guide/tile16.md for usage documentation.
+pass it.  See docs/source/user_guide/tile.md for usage documentation.
 """
 
 from typing import TYPE_CHECKING as _TYPE_CHECKING
