@@ -22,9 +22,17 @@ The following compound types are available:
 Note on the "Members can be tensors" row for `@qd.dataclass`: a `@qd.dataclass`'s members must be primitives, fixed vectors, or fixed matrices — not `qd.field` / `qd.ndarray`. However, *allocating* a `@qd.dataclass` as a tensor of structs in SoA layout (`MyStruct.field(shape=(N,), layout=qd.Layout.SOA)`) extrudes each member into its own length-`N` tensor — so the resulting *collection* effectively behaves like a struct of parallel tensors, even though the `@qd.dataclass` type itself doesn't have tensor-typed members. See the [`@qd.dataclass` section](#qddataclass-qdtypesstruct) below.
 
 > ⚠️ **Deprecation: `@dataclasses.dataclass` instance passed via `qd.Template`.**
-> Passing a `@dataclasses.dataclass` instance into a `qd.Template`-annotated kernel parameter was never intended to be supported, and only works inadvertently. As of this release the combination emits a `DeprecationWarning` at compile time; in a future release it will become an error. The recommended annotation for a `@dataclasses.dataclass` is the dataclass type itself (`def k(s: MyStruct)`), which has a fast flatten-to-args path. For `@qd.data_oriented` containers continue to use `qd.Template` as before.
+> Passing a `@dataclasses.dataclass` instance into a `qd.Template`-annotated kernel parameter is not supported and emits a `DeprecationWarning` at compile time. In a future release it will become an error.
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
+
+## How to choose a compound type?
+
+It's of course very subjective, but some guidelines you could consider:
+
+- if you are trying to write a python class that runs on the GPU => use a `@qd.data_oriented`
+- if you are trying to write typed dataclasses, for passing data around between the `@data_oriented` classes, and between methods of the same `@data_oriented` class => use `@dataclasses.dataclass`es
+- `@qd.dataclass` is used to create structured element types for field tensors. We also use it to create the Cholesky [tiles](tile16.md)
 
 ## dataclasses.dataclass
 
