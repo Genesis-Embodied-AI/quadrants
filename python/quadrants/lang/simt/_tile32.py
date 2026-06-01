@@ -610,8 +610,8 @@ def _make_tile32x32_class(dtype):
         def cholesky_(self, eps):
             """In-place 32x32 Cholesky factorization via subgroup shuffles.
 
-            On return, the lower triangle holds L such that A = L @ L^T.  Diagonal clamped to
-            sqrt(max(value, eps)) for numerical stability.
+            On return, the lower triangle holds L such that A = L @ L^T.  Diagonal clamped to sqrt(max(value, eps))
+            for numerical stability.
             """
             # `k` and `j` are wrapped in qd.static so the `if k > j` predicates fold at compile time and register access
             # on the outer `k` and inner `j` collapses to a single field reference via `self._r(<py_int>)` (a thin
