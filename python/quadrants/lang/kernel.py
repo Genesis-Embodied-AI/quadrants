@@ -387,23 +387,18 @@ class Kernel(FuncBase):
         if key in self.materialized_kernels:
             return
 
-        # Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.Template``-annotated
-        # kernel parameter was never an intentional Quadrants pattern. It works inadvertently because the template
-        # walker happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.
-        # dataclass`` is the dataclass type itself (flat-by-fields path). We fire the warning here, after the
-        # ``materialized_kernels`` cache-hit early return above, so it only runs on the first compile for each
-        # unique spec-key — zero cost on the steady-state launch hot path. Doubly-decorated objects (``@qd.data_
-        # oriented`` over ``@dataclasses.dataclass``) are excluded because that combination is a legitimate
-        # pattern routed through the data-oriented path.
+        # Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.Template``-annotated kernel
+        # parameter was never an intentional Quadrants pattern. It works inadvertently because the template walker
+        # happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.dataclass`` is
+        # the dataclass type itself (flat-by-fields path). We fire the warning here, after the ``materialized_kernels``
+        # cache-hit early return above, so it only runs on the first compile for each unique spec-key — zero cost on the
+        # steady-state launch hot path. Doubly-decorated objects (``@qd.data_oriented`` over ``@dataclasses.dataclass``)
+        # are excluded because that combination is a legitimate pattern routed through the data-oriented path.
         for arg_meta, val in zip(self.arg_metas, py_args):
             ann = arg_meta.annotation
             if ann is not template and type(ann) is not template:
                 continue
-            if (
-                dataclasses.is_dataclass(val)
-                and not isinstance(val, type)
-                and not is_data_oriented(val)
-            ):
+            if dataclasses.is_dataclass(val) and not isinstance(val, type) and not is_data_oriented(val):
                 warnings.warn(
                     f"Kernel {self.func.__qualname__!r} parameter {arg_meta.name!r}: passing a "
                     "@dataclasses.dataclass instance into a qd.Template-annotated kernel parameter was "
@@ -495,18 +490,18 @@ class Kernel(FuncBase):
         # id(struct) in args_hash is already sufficient. For mutable structs, ndarray attributes can change between
         # calls while the struct id stays the same, so we fold the live ndarray id(s) into the hash.
         #
-        # The predicate must catch any "host container in which ndarray member references can be reassigned at runtime"
-        # case. Non-frozen dataclasses have ``__hash__ is None`` (Python sets it when ``eq=True, frozen=False``), so
-        # they hit the first arm. ``@qd.data_oriented`` classes inherit ``object.__hash__`` so the ``__hash__ is None``
-        # check is False for them — we need a separate arm. Without this arm, ``state.x = other_ndarray`` on the same
-        # data_oriented instance would not invalidate the launch-context cache and the kernel would re-launch against
-        # the stale binding.
+        # The predicate must catch any "host container in which ndarray member references can be reassigned at
+        # runtime" case. Non-frozen dataclasses have ``__hash__ is None`` (Python sets it when ``eq=True,
+        # frozen=False``), so they hit the first arm. ``@qd.data_oriented`` classes inherit ``object.__hash__`` so the
+        # ``__hash__ is None`` check is False for them — we need a separate arm. Without it, ``state.x = other_nd`` on
+        # the same data_oriented instance would not invalidate the launch-context cache and the kernel would re-launch
+        # against the stale binding.
         #
         # Mutability must be checked across the *entire* attr-chain, not just the top-level arg. With a frozen outer
-        # container wrapping a mutable inner container that holds the ndarray (e.g. ``frozen dataclass -> @qd.data_-
-        # oriented -> qd.ndarray``), id(outer) alone does not capture leaf rebinding because the inner container can
-        # still reassign ``.x``. So we OR-fold the mutability check across every parent along ``chain`` from the root
-        # down to (but excluding) the leaf attribute.
+        # container wrapping a mutable inner container that holds the ndarray (e.g. frozen dataclass -> data_oriented
+        # -> ndarray), id(outer) alone does not capture leaf rebinding because the inner container can still reassign
+        # ``.x``. So we OR-fold the mutability check across every parent along ``chain`` from the root down to (but
+        # excluding) the leaf attribute.
         if key != self._mutable_nd_cached_key:
             if self._struct_ndarray_launch_info_by_key:
                 struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
@@ -672,18 +667,18 @@ class Kernel(FuncBase):
 
     @staticmethod
     def _chain_has_mutable_container(args, template_arg_idx, attr_chain) -> bool:
-        """Return True if any container along ``attr_chain`` from ``args[template_arg_idx]`` down to (but excluding)
-        the leaf ndarray attribute is mutable in a way that lets it rebind its child attribute. Such a parent makes
-        ``id(args[template_arg_idx])`` alone insufficient to uniquely identify the leaf, so the leaf id must be
-        folded into the launch-context cache key.
+        """Return True if any container along ``attr_chain`` from ``args[template_arg_idx]`` down to (but excluding) the
+        leaf ndarray attribute is mutable in a way that lets it rebind its child attribute. Such a parent makes
+        ``id(args[template_arg_idx])`` alone insufficient to uniquely identify the leaf, so the leaf id must be folded
+        into the launch-context cache key.
 
         A container is "mutable" here iff:
         - its type has ``__hash__ is None`` (Python sets this for non-frozen ``@dataclass(eq=True)`` types), or
-        - it is a ``@qd.data_oriented`` instance (these inherit ``object.__hash__`` so the ``__hash__ is None``
-          check misses them; they support normal attribute assignment).
+        - it is a ``@qd.data_oriented`` instance (these inherit ``object.__hash__`` so the ``__hash__ is None`` check
+          misses them; they support normal attribute assignment).
 
-        Walks all parents from the root down to ``attr_chain[:-1]`` — the final entry is the leaf itself, whose
-        own mutability does not affect rebinding by its parent. Returns on the first mutable parent.
+        Walks all parents from the root down to ``attr_chain[:-1]`` — the final entry is the leaf itself, whose own
+        mutability does not affect rebinding by its parent. Returns on the first mutable parent.
         """
         cur = args[template_arg_idx]
         if type(cur).__hash__ is None or is_data_oriented(cur):
