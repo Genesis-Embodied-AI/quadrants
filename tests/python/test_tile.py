@@ -1520,14 +1520,15 @@ def test_vec_proxy_shared_array(TILE, make_tile, tdim, m_size):
 
     K0 = tdim
     COL = 2
-    M_dim = m_size  # capture as compile-time literal for SharedArray dim
 
     @qd.kernel(fastcache=True)
     def k1(mat_f: qd.Template, vecs_f: qd.Template, out_f: qd.Template, K0: qd.i32, COL: qd.i32, m_runtime: qd.i32):
         qd.loop_config(block_dim=TILE.SIZE)
         tile_size = TILE.SIZE
         for _ in range(tile_size):
-            sh = qd.simt.block.SharedArray((M_dim, M_dim), qd.f32)
+            # SharedArray dim must be a compile-time literal; size 80 fits the largest tile's m_size (80 for tile32),
+            # tile16 underutilises the allocation but the test logic is identical.
+            sh = qd.simt.block.SharedArray((80, 80), qd.f32)
             tid = qd.simt.subgroup.invocation_id()
             for row in range(m_runtime):
                 if row % tile_size == tid:
@@ -1745,9 +1746,9 @@ def test_proxy_in_func(TILE, make_tile, tdim, m_size, tensor_type):
     @qd.func
     def cholesky_via_proxy(s: Ann, d: Ann):
         t = TILE.zeros(dtype=qd.f32)
-        t[:] = s[0:tdim, 0:tdim]
+        t[:] = s[0 : TILE.SIZE, 0 : TILE.SIZE]
         t.cholesky_(qd.f32(1e-6))
-        d[0:tdim, 0:tdim] = t
+        d[0 : TILE.SIZE, 0 : TILE.SIZE] = t
 
     @qd.kernel(fastcache=True)
     def k1(src_arr: Ann, dst_arr: Ann):
