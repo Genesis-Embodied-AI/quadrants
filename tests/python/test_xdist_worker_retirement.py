@@ -1,8 +1,8 @@
 """Tests for the xdist worker retirement hooks in conftest.py.
 
-Verifies that when a worker is killed via os._exit(1) after a test failure:
-1. Failures are not double-counted (no synthetic "worker crashed" report)
-2. The session completes even with many failures (--max-worker-restart cap does not trigger premature shutdown)
+Verifies that when a worker is killed via os._exit(1) after a test failure: 1. Failures are not double-counted (no
+synthetic "worker crashed" report)  2. The session completes even with many failures (--max-worker-restart cap does not
+trigger premature shutdown)
 
 These tests use pytester to run pytest-xdist in a subprocess, so they do not require GPU hardware.
 """

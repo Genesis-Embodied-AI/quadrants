@@ -160,9 +160,9 @@ def pytest_unconfigure(config):
 def pytest_runtest_logreport(report):
     """Kill the xdist worker process after a test failure so it restarts with clean GPU state.
 
-    Runs trylast so xdist's own hook sends the real test report over the channel first.  Before
-    exiting, we write a marker file so the controller's pytest_handlecrashitem can distinguish this
-    intentional exit from a genuine crash (segfault, OOM, etc.).
+    Runs trylast so xdist's own hook sends the real test report over the channel first.  Before exiting, we write a
+    marker file so the controller's pytest_handlecrashitem can distinguish this intentional exit from a genuine crash
+    (segfault, OOM, etc.).
     """
     if not os.environ.get("PYTEST_XDIST_WORKER"):
         return
@@ -184,10 +184,10 @@ def pytest_runtest_logreport(report):
 def pytest_handlecrashitem(crashitem, report, sched):
     """Suppress the synthetic crash report only for intentional ``os._exit(1)`` exits.
 
-    When a worker is killed intentionally (to reset GPU state after a failure), it writes a marker
-    file before exiting.  If the marker exists, we mutate the synthetic report so the terminal
-    reporter drops it into the empty-string stats bucket (invisible in the summary).  Genuine
-    crashes (segfaults, OOM, etc.) have no marker, so their reports pass through as failures.
+    When a worker is killed intentionally (to reset GPU state after a failure), it writes a marker file before exiting.
+    If the marker exists, we mutate the synthetic report so the terminal reporter drops it into the empty-string stats
+    bucket (invisible in the summary).  Genuine crashes (segfaults, OOM, etc.) have no marker, so their reports pass
+    through as failures.
     """
     d = _exit_marker_dir()
     if not d:
