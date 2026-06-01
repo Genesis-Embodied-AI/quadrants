@@ -199,8 +199,6 @@ def my_blocked_op(A, row0, col0, eps):
 
 ## Method reference
 
-The table below shows the 16x16 API; the `Tile32x32` API is identical, swap the class name and use `SIZE == 32`.
-
 | Operation | Description |
 |-----------|-------------|
 | `qd.simt.Tile16x16.zeros(dtype=...)` | Create a zero-initialized tile |
