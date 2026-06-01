@@ -935,3 +935,37 @@ def test_data_oriented_field_only_no_speckey_change():
 
     # Run a second time on the same instance — should reuse the same compiled kernel.
     run(state)
+
+
+# ---------------------------------------------------------------------------
+# 22. @qd.data_oriented holding a qd.Tensor wrapper around an ndarray.
+#
+# Both ``_build_struct_nd_paths`` and ``_collect_struct_nd_descriptors`` in
+# ``_template_mapper_hotpath.py`` have a ``if type(v) in _TENSOR_WRAPPER_TYPES: v = v._unwrap()`` branch that the rest
+# of the file doesn't exercise (every other test attaches a bare ``qd.ndarray``). This test covers that unwrap path
+# for the ndarray-backed wrapper: the struct-walker should treat ``state.a`` as if it were a bare ndarray (paths
+# cached on the class, shape descriptors collected from the unwrapped impl).
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_ndarray_wrapper():
+    N = 6
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, a):
+            self.a = a
+
+    a = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.NDARRAY)
+    state = State(a=a)
+
+    @qd.kernel
+    def run(s: qd.Template):
+        for i in range(N):
+            s.a[i] = i + 1
+
+    run(state)
+    np.testing.assert_array_equal(a.to_numpy(), np.arange(1, N + 1))
+
+    run(state)
