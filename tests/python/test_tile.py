@@ -1522,13 +1522,21 @@ def test_vec_proxy_shared_array(TILE, make_tile, tdim, m_size):
     COL = 2
 
     @qd.kernel(fastcache=True)
-    def k1(mat_f: qd.Template, vecs_f: qd.Template, out_f: qd.Template, K0: qd.i32, COL: qd.i32, m_runtime: qd.i32):
+    def k1(
+        mat_f: qd.Template,
+        vecs_f: qd.Template,
+        out_f: qd.Template,
+        K0: qd.i32,
+        COL: qd.i32,
+        m_runtime: qd.i32,
+        M_dim: qd.Template,
+    ):
         qd.loop_config(block_dim=TILE.SIZE)
         tile_size = TILE.SIZE
         for _ in range(tile_size):
-            # SharedArray dim must be a compile-time literal; size 80 fits the largest tile's m_size (80 for tile32),
-            # tile16 underutilises the allocation but the test logic is identical.
-            sh = qd.simt.block.SharedArray((80, 80), qd.f32)
+            # SharedArray dim must be a compile-time literal; M_dim arrives as a qd.Template primitive
+            # so each (tile size, m_size) combo gets its own cached kernel.
+            sh = qd.simt.block.SharedArray((M_dim, M_dim), qd.f32)
             tid = qd.simt.subgroup.invocation_id()
             for row in range(m_runtime):
                 if row % tile_size == tid:
@@ -1546,7 +1554,7 @@ def test_vec_proxy_shared_array(TILE, make_tile, tdim, m_size):
     V = rng.randn(m_size, m_size).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
-    k1(mat, vecs, out, K0, COL, m_size)
+    k1(mat, vecs, out, K0, COL, m_size, m_size)
     col = V[K0 : K0 + tdim, COL]
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
