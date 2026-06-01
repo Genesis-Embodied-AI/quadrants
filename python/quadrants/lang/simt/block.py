@@ -38,7 +38,7 @@ def sync():
         return impl.call_internal("block_barrier", with_runtime_context=False)
     if arch_uses_spv(arch):
         return impl.call_internal("workgroupBarrier", with_runtime_context=False)
-    raise ValueError(f"qd.block.shared_array is not supported for arch {arch}")
+    raise ValueError(f"qd.block.sync is not supported for arch {arch}")
 
 
 def sync_all_nonzero(predicate):

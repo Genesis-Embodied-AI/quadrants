@@ -26,17 +26,40 @@ TEST(DiagnoseAdstackOverflow, RegistryAndLookup) {
   EXPECT_NE(id_b, 0u);
   EXPECT_NE(id_a, id_b);
 
-  // Idempotent re-registration: same pointer returns the same id (and updates metadata in place).
+  // Idempotent re-registration: same pointer AND same `(kernel_name, task_id_in_kernel)` returns the same id and
+  // updates only the metadata in place. Production callers hit this path twice per codegen
+  // (`codegen_llvm.cpp::offloaded_task_start` registers with empty `allocated_max_sizes` so the codegen can bake the
+  // id; `finalize_offloaded_task_function` re-registers with the populated metadata after the alloca scan).
   uint32_t id_a_redo =
-      prog.adstack_cache().register_adstack_sizing_info(static_cast<const void *>(&dummy_a), "kernel_a_v2",
-                                                        /*task=*/2,
+      prog.adstack_cache().register_adstack_sizing_info(static_cast<const void *>(&dummy_a), "kernel_a", /*task=*/0,
                                                         /*allocated_max_sizes=*/{8}, /*size_exprs=*/{});
   EXPECT_EQ(id_a, id_a_redo);
   auto entry = prog.adstack_cache().lookup_adstack_sizing_info(id_a);
   ASSERT_TRUE(entry.has_value());
-  EXPECT_EQ(entry->kernel_name, "kernel_a_v2");
-  EXPECT_EQ(entry->task_id_in_kernel, 2);
+  EXPECT_EQ(entry->kernel_name, "kernel_a");
+  EXPECT_EQ(entry->task_id_in_kernel, 0);
   EXPECT_EQ(entry->allocated_max_sizes, std::vector<int>({8}));
+
+  // Recycled `identity_key` (same pointer address, different logical kernel) does NOT collapse to the previous id.
+  // The allocator can free an `OffloadedTask::ad_stack` and reuse its address for an unrelated task across a
+  // re-codegen / `qd.reset()` cycle, and the `max_reducer_cache_` keyed by `(registry_id, stack_id, mor_node_idx)`
+  // would serve stale results to the new kernel if we returned the previous id here. The content-stable hash path
+  // mints (or finds) the correct id for the new kernel; the previous entry stays alive so any still-live owner
+  // resolving via its registry id continues to work (e.g. the overflow diagnose path).
+  uint32_t id_a_recycled =
+      prog.adstack_cache().register_adstack_sizing_info(static_cast<const void *>(&dummy_a), "different_kernel",
+                                                        /*task=*/5,
+                                                        /*allocated_max_sizes=*/{2}, /*size_exprs=*/{});
+  EXPECT_NE(id_a, id_a_recycled);
+  auto recycled_entry = prog.adstack_cache().lookup_adstack_sizing_info(id_a_recycled);
+  ASSERT_TRUE(recycled_entry.has_value());
+  EXPECT_EQ(recycled_entry->kernel_name, "different_kernel");
+  EXPECT_EQ(recycled_entry->task_id_in_kernel, 5);
+  // Previous entry survives intact (the still-live owner resolving via `id_a` keeps working).
+  auto preserved_entry = prog.adstack_cache().lookup_adstack_sizing_info(id_a);
+  ASSERT_TRUE(preserved_entry.has_value());
+  EXPECT_EQ(preserved_entry->kernel_name, "kernel_a");
+  EXPECT_EQ(preserved_entry->task_id_in_kernel, 0);
 
   // Lookup with id 0 (sentinel) returns nullopt.
   EXPECT_FALSE(prog.adstack_cache().lookup_adstack_sizing_info(0).has_value());

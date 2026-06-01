@@ -879,6 +879,31 @@ void IndexExpression::flatten(FlattenContext *ctx) {
   stmt->dbg_info = dbg_info;
 }
 
+void VolatileLoadExpression::type_check(const CompileConfig *) {
+  // The result type is whatever an ordinary rvalue load of `src` would produce; we only override how the load
+  // is *emitted*, not what it produces.  Errors here mirror what `flatten_rvalue` would surface for the same
+  // `src` -- if the source isn't an lvalue at all, `flatten` below will fail the lvalue assertion.
+  ret_type = src.get_rvalue_type();
+}
+
+void VolatileLoadExpression::flatten(FlattenContext *ctx) {
+  // Reuse the lvalue-flattening helper to materialise the pointer Stmt for `src` (e.g. an `IndexExpression`
+  // resolves to a `GlobalPtrStmt` / `ExternalPtrStmt`).  Then push a `GlobalLoadStmt` with `is_volatile=true`
+  // -- mirroring `flatten_global_load` but with the volatile bit set.  Local-array sources are rejected: a
+  // function-scope alloca cannot be observed by another thread, so a volatile load there would be meaningless.
+  Stmt *ptr_stmt = flatten_lvalue(src, ctx);
+  if (ptr_stmt->is<AllocaStmt>()) {
+    ErrorEmitter(QuadrantsTypeError(), this,
+                 "qd.volatile_load() requires a global lvalue (field / ndarray subscript); "
+                 "function-scope local arrays are not visible to other threads.");
+  }
+  auto load_stmt = std::make_unique<GlobalLoadStmt>(ptr_stmt, /*is_volatile=*/true, dbg_info);
+  auto pointee_type = load_stmt->src->ret_type.ptr_removed();
+  load_stmt->ret_type = pointee_type->get_compute_type();
+  ctx->push_back(std::move(load_stmt));
+  stmt = ctx->back_stmt();
+}
+
 void RangeAssumptionExpression::type_check(const CompileConfig *) {
   QD_ASSERT_TYPE_CHECKED(input);
   QD_ASSERT_TYPE_CHECKED(base);
@@ -980,7 +1005,7 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
     // Reject tensor (vector / matrix) destinations explicitly. The other atomic ops fan out to per-component
     // scalar AtomicOpStmts via scalarize / lower_matrix_ptr, but those passes use the 3-arg AtomicOpStmt
     // constructor and would silently drop `expected`, tripping QD_ASSERT(stmt->expected) in codegen. Until the
-    // scalarizers grow a 4-arg path that threads `expected_i` through, refuse tensor CAS at trace time.
+    // scalarizers grow a 4-arg path that threads `expected_i` through, refuse tensor CAS at compile time.
     if (dest_dtype->is<TensorType>()) {
       ErrorEmitter(QuadrantsTypeError(), this,
                    fmt::format("'atomic_cas' on tensor (vector / matrix) destinations is not supported; got "

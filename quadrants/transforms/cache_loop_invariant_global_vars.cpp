@@ -266,6 +266,10 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
   }
 
   void visit(GlobalLoadStmt *stmt) override {
+    // Volatile loads must read from memory on every execution (spin-wait correctness); skip caching.
+    if (stmt->is_volatile) {
+      return;
+    }
     if (auto depth = find_cache_depth_if_cacheable(stmt->src, stmt->parent)) {
       auto alloca_stmt = cache_global_to_local(stmt->src, CacheStatus::Read, depth.value());
       auto local_load = std::make_unique<LocalLoadStmt>(alloca_stmt);

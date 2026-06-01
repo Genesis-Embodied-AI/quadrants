@@ -1052,24 +1052,32 @@ class ASTTransformer(Builder):
                     "Please check if the number of arguments of qd.ndrange() is equal to "
                     "the number of the loop variables."
                 )
-            for i, target in enumerate(targets):
-                if i + 1 < len(targets):
-                    target_tmp = impl.expr_init(I // ndrange_var.acc_dimensions[i + 1])
+            # ``physical_to_canonical[p]`` is the canonical (user-visible) axis index that receives
+            # the decomposed index for physical nesting level ``p``. For the identity / ``axes=None``
+            # case this is ``[0, 1, ..., n-1]`` and the emitted IR matches the pre-``axes=`` codegen
+            # byte-for-byte.
+            physical_to_canonical = ndrange_var._physical_to_canonical
+            n_levels = len(ndrange_var.dimensions)
+            for p in range(n_levels):
+                if p + 1 < n_levels:
+                    target_tmp = impl.expr_init(I // ndrange_var.acc_dimensions[p + 1])
                 else:
                     target_tmp = impl.expr_init(I)
+                canonical_idx = physical_to_canonical[p]
+                target = targets[canonical_idx]
                 ctx.create_variable(
                     target,
                     impl.expr_init(
                         target_tmp
                         + impl.subscript(
                             ctx.ast_builder,
-                            impl.subscript(ctx.ast_builder, ndrange_var.bounds, i),
+                            impl.subscript(ctx.ast_builder, ndrange_var.bounds, p),
                             0,
                         )
                     ),
                 )
-                if i + 1 < len(targets):
-                    I._assign(I - target_tmp * ndrange_var.acc_dimensions[i + 1])
+                if p + 1 < n_levels:
+                    I._assign(I - target_tmp * ndrange_var.acc_dimensions[p + 1])
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
             ctx.loop_depth -= 1
@@ -1098,14 +1106,22 @@ class ASTTransformer(Builder):
 
             ctx.create_variable(target, target_var)
             I = impl.expr_init(ndrange_loop_var)
-            for i in range(len(ndrange_var.dimensions)):
-                if i + 1 < len(ndrange_var.dimensions):
-                    target_tmp = I // ndrange_var.acc_dimensions[i + 1]
+            # See ``build_ndrange_for`` above for the ``axes=`` semantics. The grouped target_var
+            # is a vector indexed by canonical axis, so element ``physical_to_canonical[p]`` (not ``p``)
+            # receives the decomposition of physical level ``p``.
+            physical_to_canonical = ndrange_var._physical_to_canonical
+            n_levels = len(ndrange_var.dimensions)
+            for p in range(n_levels):
+                if p + 1 < n_levels:
+                    target_tmp = I // ndrange_var.acc_dimensions[p + 1]
                 else:
                     target_tmp = I
-                impl.subscript(ctx.ast_builder, target_var, i)._assign(target_tmp + ndrange_var.bounds[i][0])
-                if i + 1 < len(ndrange_var.dimensions):
-                    I._assign(I - target_tmp * ndrange_var.acc_dimensions[i + 1])
+                canonical_idx = physical_to_canonical[p]
+                impl.subscript(ctx.ast_builder, target_var, canonical_idx)._assign(
+                    target_tmp + ndrange_var.bounds[p][0]
+                )
+                if p + 1 < n_levels:
+                    I._assign(I - target_tmp * ndrange_var.acc_dimensions[p + 1])
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
             ctx.loop_depth -= 1

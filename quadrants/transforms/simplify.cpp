@@ -73,6 +73,13 @@ class BasicBlockSimplify : public IRVisitor {
   void visit(GlobalLoadStmt *stmt) override {
     if (is_done(stmt))
       return;
+    // Volatile loads cannot be replaced by an earlier load of the same address: the cell may have been written
+    // by another thread / block since the prior load (that's the entire point of `qd.volatile_load`).  Bail out
+    // before the redundant-load search.
+    if (stmt->is_volatile) {
+      set_done(stmt);
+      return;
+    }
     for (int i = 0; i < current_stmt_id; i++) {
       auto &bstmt = block->statements[i];
       if (stmt->ret_type == bstmt->ret_type) {

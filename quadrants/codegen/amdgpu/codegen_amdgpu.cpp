@@ -323,6 +323,9 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     auto ptr = llvm_val[stmt->src];
     auto ptr_type = stmt->src->ret_type->as<PointerType>();
     if (ptr_type->is_bit_pointer()) {
+      // See the matching guard in `TaskCodeGenLLVM::create_global_load`: per-field volatile semantics on a quant
+      // bit-packed snode are not meaningful, and no public API exposes the combination today.
+      QD_ASSERT(!stmt->is_volatile);
       auto val_type = ptr_type->get_pointee_type();
       auto get_ch = stmt->src->as<GetChStmt>();
       auto physical_type = tlctx->get_data_type(get_ch->input_snode->physical_type);
@@ -341,8 +344,14 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
                                              get_ch->output_snode->id_in_bit_struct);
       }
     } else {
-      // Byte pointer case.
-      llvm_val[stmt] = builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      // Byte pointer case.  `setVolatile(true)` keeps AMDGPU's optimiser from hoisting the load out of a
+      // spin-wait loop or merging it with a prior load of the same address; LLVM lowers it to the standard
+      // `global_load_*` family with the no-merge / no-hoist invariant preserved.
+      auto *load = builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      if (stmt->is_volatile) {
+        load->setVolatile(true);
+      }
+      llvm_val[stmt] = load;
     }
   }
 
