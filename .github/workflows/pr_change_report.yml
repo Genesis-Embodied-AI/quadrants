@@ -137,7 +137,7 @@ jobs:
           Output: JSON Lines. ONE JSON object per line. Nothing else. NO code fences, NO
           preamble, NO closing remarks, NO commentary, NO blank lines between objects.
           PROMPT
-          )" --model composer-2 --mode ask --output-format text --trust \
+          )" --model composer-2.5 --mode ask --output-format text --trust \
             > /tmp/pr_change_report/function_ranges.jsonl
 
           echo "----- function_ranges.jsonl -----"
