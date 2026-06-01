@@ -146,7 +146,7 @@ A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@da
 
 ### Under the hood
 
-A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. Inside a kernel, tensor members are read-write through indexing (`s.x[i] = ...`) since their contents live on the device, but the member *binding* itself (`s.x = other_tensor`) cannot be reassigned from inside a kernel.
+A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. Inside a kernel, tensor members are read-write through indexing (`s.x[i] = ...`), but the member *binding* itself (`s.x = other_tensor`) cannot be reassigned from inside a kernel.
 
 ## qd.data_oriented
 
