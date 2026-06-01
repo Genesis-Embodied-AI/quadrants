@@ -10,6 +10,8 @@ To run without cache:
 qd.init(offline_cache=False, ...)
 ```
 
+See [qd.init options](init_options.md) for what `offline_cache=False` actually does on CUDA (it bypasses both the Quadrants PtxCache and the NVIDIA driver compute cache).
+
 To clear cache:
 - the cache is located by default on linux and mac at `~/.cache/quadrants`
 - simply remove this entire folder:

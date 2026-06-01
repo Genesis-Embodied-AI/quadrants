@@ -18,6 +18,7 @@ Functions
    quadrants.lang.matrix_ops.diag
    quadrants.lang.matrix_ops.sum
    quadrants.lang.matrix_ops.norm_sqr
+   quadrants.lang.matrix_ops.frobenius_inner
    quadrants.lang.matrix_ops.norm
    quadrants.lang.matrix_ops.norm_inv
    quadrants.lang.matrix_ops.normalized
@@ -54,6 +55,8 @@ Module Contents
 .. py:function:: sum(mat)
 
 .. py:function:: norm_sqr(mat)
+
+.. py:function:: frobenius_inner(mat_x, mat_y)
 
 .. py:function:: norm(mat, eps=0.0)
 

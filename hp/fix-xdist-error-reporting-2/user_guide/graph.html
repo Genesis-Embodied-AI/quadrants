@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>CUDA Graph &#8212; Quadrants 0.7.3 documentation</title>
+    <title>Graph &#8212; Quadrants 1.0.1 documentation</title>
   
   
   
@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
-<link href="../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+  <link href="../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -38,12 +38,12 @@
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
-<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
 
-    <script src="../_static/documentation_options.js?v=c98573da"></script>
+    <script src="../_static/documentation_options.js?v=292eb321"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -59,11 +59,11 @@
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Performance Dispatch" href="perf_dispatch.html" />
-    <link rel="prev" title="Tile16x16: register-resident 16x16 tiles" href="tile16.html" />
+    <link rel="next" title="Streams" href="streams.html" />
+    <link rel="prev" title="Fastcache" href="fastcache.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.3" />
+  <meta name="docsearch:version" content="1.0.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
   
 </a></div>
     
@@ -179,11 +179,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -256,11 +263,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -288,7 +302,11 @@
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
@@ -296,6 +314,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
 <ul class="nav bd-sidenav">
@@ -303,16 +322,28 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">CUDA Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -373,7 +404,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">CUDA Graph</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Graph</span></li>
   </ul>
 </nav>
 </div>
@@ -390,9 +421,45 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="cuda-graph">
-<h1>CUDA Graph<a class="headerlink" href="#cuda-graph" title="Link to this heading">#</a></h1>
-<p>CUDA graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch. On non-CUDA platforms, the cuda graph annotation is simply ignored, and code runs normally.</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="graph">
+<h1>Graph<a class="headerlink" href="#graph" title="Link to this heading">#</a></h1>
+<p>Graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch.</p>
+<section id="backend-support">
+<h2>Backend support<a class="headerlink" href="#backend-support" title="Link to this heading">#</a></h2>
+<p>Both features run on every backend. They are <em>hardware accelerated</em> on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires CUDA SM 9.0+ / Hopper for its hardware-accelerated path. On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall — see <a class="reference internal" href="#caveats">Caveats</a>).</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Feature</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.cuda</span></code> SM 9.0+</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.cuda</span></code> &lt; SM 9.0</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.metal</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.cpu</span></code></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">graph=True</span></code></p></td>
+<td><p>hardware accelerated</p></td>
+<td><p>hardware accelerated</p></td>
+<td><p>hardware accelerated</p></td>
+<td><p>runs (no acceleration)</p></td>
+<td><p>runs (no acceleration)</p></td>
+<td><p>runs (no acceleration)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code></p></td>
+<td><p>hardware accelerated</p></td>
+<td><p>host fallback</p></td>
+<td><p>host fallback</p></td>
+<td><p>host fallback</p></td>
+<td><p>host fallback</p></td>
+<td><p>host fallback</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>AMDGPU <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).</p>
+</section>
 <section id="basic-usage">
 <h2>Basic usage<a class="headerlink" href="#basic-usage" title="Link to this heading">#</a></h2>
 <p>Add <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> to a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> decorator:</p>
@@ -407,7 +474,7 @@
         <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mf">2.0</span>
 </pre></div>
 </div>
-<p>The top level for-loops will be compiled into a single CUDA graph. The parallelism is the same as before, but the launch latency much reduced.</p>
+<p>The top level for-loops will be compiled into a single graph. The parallelism is the same as before, but the launch latency much reduced.</p>
 <p>The kernel is used normally — no other API changes are needed:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
 <span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
@@ -416,11 +483,14 @@
 <span class="n">my_kernel</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># subsequent calls: replays the cached graph</span>
 </pre></div>
 </div>
+<p>This works the same way on CUDA and AMDGPU. The cache is keyed per (compiled-kernel-specialization, launch-id), so different template instantiations (different field bindings, etc.) get their own cached graph.</p>
 <section id="restrictions">
 <h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p><strong>No struct return values.</strong> Kernels that return values (e.g. <code class="docutils literal notranslate"><span class="pre">-&gt;</span> <span class="pre">qd.i32</span></code>) cannot use CUDA graphs. An error is raised if <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is set on such a kernel.</p></li>
+<li><p><strong>No struct return values.</strong> Kernels that return values (e.g. <code class="docutils literal notranslate"><span class="pre">-&gt;</span> <span class="pre">qd.i32</span></code>) cannot use graphs. An error is raised if <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is set on such a kernel.</p></li>
 <li><p><strong>Primal kernels only.</strong> The <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> flag is applied to the primal (forward) kernel only, not its adjoint. Autodiff kernels use the normal launch path.</p></li>
+<li><p><strong>Device-resident ndarrays.</strong> Graph mode bakes device pointers into the cached graph, so all ndarray arguments must be on the GPU. Passing a host-resident ndarray raises an error.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> is incompatible</strong> with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>. Choose one or the other.</p></li>
 </ul>
 </section>
 <section id="passing-different-arguments">
@@ -462,8 +532,8 @@
 </div>
 <p>The argument to <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while()</span></code> must be the name of a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray parameter. The loop body repeats while this value is non-zero.</p>
 <ul class="simple">
-<li><p>On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.</p></li>
-<li><p>On older CUDA GPUs and non-CUDA backends, it falls back to a host-side do-while loop.</p></li>
+<li><p>On CUDA SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.</p></li>
+<li><p>On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see <a class="reference internal" href="#caveats">Caveats</a> and the <a class="reference internal" href="#backend-support">backend support table</a>).</p></li>
 </ul>
 <section id="patterns">
 <h3>Patterns<a class="headerlink" href="#patterns" title="Link to this heading">#</a></h3>
@@ -506,18 +576,19 @@
 <ul class="simple">
 <li><p>The same physical ndarray must be used for the counter parameter on every
 call. Passing a different ndarray raises an error, because the counter’s
-device pointer is baked into the CUDA graph at creation time.</p></li>
+device pointer is baked into the graph at creation time.</p></li>
 </ul>
 </section>
 <section id="caveats">
 <h3>Caveats<a class="headerlink" href="#caveats" title="Link to this heading">#</a></h3>
-<p>On currently unsupported GPU platforms, such as AMDGPU at the time of writing, the value of the <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:</p>
+<p>On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and <strong>AMDGPU</strong> (HIP has no conditional / while node API as of ROCm 7.2) — the value of the <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:</p>
 <ul class="simple">
 <li><p>wait for GPU async queue to finish processing</p></li>
 <li><p>copy condition value to hostside</p></li>
 <li><p>evaluate condition value on hostside</p></li>
 <li><p>launch new kernels for next loop iteration, if not finished yet</p></li>
 </ul>
+<p>Note: the basic <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> path (without <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code>) does <strong>not</strong> stall the host like this on either CUDA or AMDGPU — the entire kernel sequence runs as a single GPU-side graph replay.</p>
 <p>Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:</p>
 <ul class="simple">
 <li><p>fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:</p></li>
@@ -538,20 +609,20 @@ device pointer is baked into the CUDA graph at creation time.</p></li>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="tile16.html"
+       href="fastcache.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Tile16x16: register-resident 16x16 tiles</p>
+        <p class="prev-next-title">Fastcache</p>
       </div>
     </a>
     <a class="right-next"
-       href="perf_dispatch.html"
+       href="streams.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Performance Dispatch</p>
+        <p class="prev-next-title">Streams</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -574,6 +645,7 @@ device pointer is baked into the CUDA graph at creation time.</p></li>
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#backend-support">Backend support</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic usage</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#restrictions">Restrictions</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#passing-different-arguments">Passing different arguments</a></li>
@@ -613,8 +685,8 @@ device pointer is baked into the CUDA graph at creation time.</p></li>
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
-<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -648,7 +720,7 @@ device pointer is baked into the CUDA graph at creation time.</p></li>
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
 </p></div>
       
     </div>

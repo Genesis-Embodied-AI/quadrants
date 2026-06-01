@@ -9,37 +9,41 @@ Functions
 
 .. autoapisummary::
 
+   quadrants.lang.simt.subgroup.sync
+   quadrants.lang.simt.subgroup.mem_fence
    quadrants.lang.simt.subgroup.barrier
    quadrants.lang.simt.subgroup.memory_barrier
    quadrants.lang.simt.subgroup.elect
-   quadrants.lang.simt.subgroup.all_true
-   quadrants.lang.simt.subgroup.any_true
-   quadrants.lang.simt.subgroup.all_equal
+   quadrants.lang.simt.subgroup.ballot_first_n
+   quadrants.lang.simt.subgroup.ballot
+   quadrants.lang.simt.subgroup.ballot_full_subgroup
+   quadrants.lang.simt.subgroup.all_true_tiled
+   quadrants.lang.simt.subgroup.any_true_tiled
+   quadrants.lang.simt.subgroup.all_equal_tiled
+   quadrants.lang.simt.subgroup.lanemask_lt
+   quadrants.lang.simt.subgroup.lanemask_le
+   quadrants.lang.simt.subgroup.lanemask_eq
+   quadrants.lang.simt.subgroup.lanemask_gt
+   quadrants.lang.simt.subgroup.lanemask_ge
    quadrants.lang.simt.subgroup.broadcast_first
-   quadrants.lang.simt.subgroup.reduce_add
-   quadrants.lang.simt.subgroup.reduce_all_add
-   quadrants.lang.simt.subgroup.inclusive_add
-   quadrants.lang.simt.subgroup.inclusive_mul
-   quadrants.lang.simt.subgroup.inclusive_min
-   quadrants.lang.simt.subgroup.inclusive_max
-   quadrants.lang.simt.subgroup.inclusive_and
-   quadrants.lang.simt.subgroup.inclusive_or
-   quadrants.lang.simt.subgroup.inclusive_xor
-   quadrants.lang.simt.subgroup.exclusive_add
-   quadrants.lang.simt.subgroup.exclusive_mul
-   quadrants.lang.simt.subgroup.exclusive_min
-   quadrants.lang.simt.subgroup.exclusive_max
-   quadrants.lang.simt.subgroup.exclusive_and
-   quadrants.lang.simt.subgroup.exclusive_or
-   quadrants.lang.simt.subgroup.exclusive_xor
+   quadrants.lang.simt.subgroup.group_size
+   quadrants.lang.simt.subgroup.log2_group_size
+   quadrants.lang.simt.subgroup.invocation_id
    quadrants.lang.simt.subgroup.shuffle
    quadrants.lang.simt.subgroup.shuffle_xor
    quadrants.lang.simt.subgroup.shuffle_up
    quadrants.lang.simt.subgroup.shuffle_down
+   quadrants.lang.simt.subgroup.all_true
+   quadrants.lang.simt.subgroup.any_true
+   quadrants.lang.simt.subgroup.all_equal
 
 
 Module Contents
 ---------------
+
+.. py:function:: sync()
+
+.. py:function:: mem_fence()
 
 .. py:function:: barrier()
 
@@ -47,70 +51,213 @@ Module Contents
 
 .. py:function:: elect()
 
-.. py:function:: all_true(cond)
+   Return ``1`` on lane ``0`` of every subgroup and ``0`` on every other lane.
 
-.. py:function:: any_true(cond)
+   Implemented portably as ``invocation_id() == 0``: every backend that lowers ``invocation_id()`` therefore lowers
+   ``elect()`` at zero extra cost (it inlines at compile time into a single compare + zext).
 
-.. py:function:: all_equal(value)
+   Note that this narrows SPIR-V's ``OpGroupNonUniformElect`` semantics, which may pick any *active* lane as the
+   elected one.  Under the documented uniform-CF + all-lanes-active contract for ``qd.simt.subgroup`` this distinction
+   is invisible (lane 0 is always active and is a legal choice), and pinning down the elected lane keeps the behaviour
+   consistent across backends.
+
+
+.. py:function:: ballot_first_n(predicate, n: template())
+
+   Return a ``u32`` bitmask whose bit ``i`` is set iff ``i < n`` AND lane ``i``'s ``predicate`` is non-zero.
+
+   ``n`` is a ``qd.template()`` compile-time constant in ``[1, 32]``; bits ``>= n`` of the result are always zero.
+   Pass ``n = 32`` for "ballot all 32 representable lanes" (the most common case, used by ``segmented_reduce_*`` and
+   every other consumer of the u32 ballot in this module).
+
+   Backend lowering:
+
+   * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` — the warp is always 32 lanes, so the ``u32`` result naturally
+     packs every lane.
+   * AMDGPU: ``llvm.amdgcn.ballot.i64`` followed by ``trunc to i32``; bits ``[32, 64)`` of the i64 (lanes 32..63 on
+     wave64) are always discarded, matching the ``ballot_first_n(p, n <= 32)`` contract.  This is a workaround for
+     an LLVM AMDGPU isel bug — ``ballot.i32`` is documented as well-defined on wave64 (PR
+     https://github.com/llvm/llvm-project/pull/71556) but in practice still fails ``Cannot select`` on gfx942 in
+     LLVM 20 / 22 for non-constant predicates.  See ``codegen_amdgpu.cpp`` for the full bug + workaround comment.
+   * SPIR-V: ``OpGroupNonUniformBallot`` (returns a uvec4); we extract component 0 = lanes 0..31's ballot.
+
+   For ``n < 32`` we mask the predicate by ``lane < n`` before issuing the ballot, so bits ``[n, 32)`` of the result
+   are forced to zero regardless of what those lanes' actual predicates are.  At ``n == 32`` the masking is provably
+   a no-op on every backend (lanes ``>= 32`` are either non-existent on wave32 or already not represented in the u32
+   result on wave64), so we shortcut and emit the ballot directly with no extra arithmetic.
+
+   Caller contract: uniform CF + all lanes active.  If you need a mask covering more than 32 lanes (for wave64
+   callers who want the full subgroup), use `ballot` and check the high 32 bits.
+
+
+.. py:function:: ballot(predicate)
+
+   Return a ``u64`` bitmask covering the entire subgroup; bit ``i`` is set iff lane ``i``'s ``predicate`` is
+   non-zero.  On wave32 backends (CUDA, RDNA wave32, most Vulkan / Metal) the high 32 bits of the result are always
+   zero, since lanes ``>= 32`` do not exist; on wave64 backends (AMDGPU CDNA, GFX9, RDNA explicit-wave64) all 64 bits
+   are meaningful.  Use this when you need a subgroup-wide population count, prefix-mask, or compaction that has to
+   cover more than 32 lanes; use `ballot_first_n` when you only care about the first 32 lanes.
+
+   Backend lowering:
+
+   * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` zero-extended to ``u64`` — the warp is 32 lanes so the high half
+     is always zero.
+   * AMDGPU: ``llvm.amdgcn.ballot.i64`` — returns the full 64-bit ballot on wave64; on wave32 the AMDGPU backend
+     lowers it to the wave32 ballot zero-extended to 64 bits, so the API stays uniform across wavefront modes.  The
+     i64 form selects cleanly in current LLVM (unlike the i32 form's isel bug noted in ``ballot_first_n``); see
+     https://github.com/llvm/llvm-project/pull/71556 and ``codegen_amdgpu.cpp`` for the full background.
+   * SPIR-V: extract components 0 and 1 of the ``OpGroupNonUniformBallot`` uvec4 (lanes 0..31 and 32..63
+     respectively) and pack them: ``u64(hi) << 32 | u64(lo)``.
+
+   Caller contract: uniform CF + all lanes active.
+
+
+.. py:function:: ballot_full_subgroup(predicate)
+
+   Deprecated alias for :func:`ballot`.
+
+   Emits a ``DeprecationWarning`` on first use and forwards to :func:`ballot`.  Will be removed in a future
+   release; rename call sites to ``ballot(predicate)``.  Full-subgroup ops are unsuffixed throughout this module
+   (``reduce_add`` / ``all_true`` / ``inclusive_max`` / etc.); tiled variants take a ``_tiled`` suffix and an extra
+   ``log2_size`` template parameter.
+
+
+.. py:function:: all_true_tiled(predicate, log2_size: template())
+
+   AND-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane
+   of the group iff every lane in the group has a non-zero ``predicate``, else ``0``.
+
+   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target (32 on CUDA / Metal, 64
+   on AMDGPU — wave64 is forced on every AMDGPU target).  ``log2_size`` is a compile-time template; the body is fully
+   unrolled.
+
+
+.. py:function:: any_true_tiled(predicate, log2_size: template())
+
+   OR-reduce ``predicate != 0`` across ``2**log2_size`` consecutive lanes.  Returns ``1`` (``i32``) on every lane
+   of the group iff at least one lane in the group has a non-zero ``predicate``, else ``0``.
+
+   See `all_true_tiled` for the size contract.
+
+
+.. py:function:: all_equal_tiled(value, log2_size: template())
+
+   Return ``1`` (``i32``) on every lane in each ``2**log2_size`` group iff every lane in the group has the same
+   ``value``, else ``0``.
+
+   Equality is the backend's native ``==`` on ``value``'s dtype: for floats this means ``NaN != NaN`` (a group with
+   any ``NaN`` returns ``0``) and ``+0.0 == -0.0``, matching SPIR-V ``OpGroupNonUniformAllEqual``.  Callers wanting
+   bit-equality on floats should bit-cast to the same-width integer dtype before calling.
+
+   Implementation: each lane reads the value at the start of its group via ``shuffle``, then ``all_true_tiled``
+   AND-reduces the per-lane equality bit.  Cost: one ``shuffle`` plus one ``all_true_tiled`` (one ``vote.all`` on
+   CUDA at ``log2_size == 5``, otherwise a ``log2_size``-deep ``shuffle_xor`` butterfly).
+
+
+.. py:function:: lanemask_lt(lane_id)
+
+   Bitmask of lanes strictly below ``lane_id`` — bit ``i`` is set iff ``i < lane_id``.
+
+   Pass ``invocation_id()`` for the classic CUDA ``__lanemask_lt()`` (current lane's mask).  Equivalent to
+   ``(u32(1) << u32(lane_id)) - u32(1)``; inlined at compile time into 1 shift + 1 subtract.
+
+   See the module-level note for the ``lane_id ∈ [0, 31]`` contract and the AMDGPU CDNA wave64 caveat.
+
+
+.. py:function:: lanemask_le(lane_id)
+
+   Bitmask of lanes ``<= lane_id`` — bit ``i`` is set iff ``i <= lane_id``.
+
+   Equivalent to ``lanemask_lt(lane_id) | lanemask_eq(lane_id)``.  See `lanemask_lt` for the contract.
+
+
+.. py:function:: lanemask_eq(lane_id)
+
+   Bitmask with exactly one bit set at ``lane_id`` — equivalent to ``u32(1) << u32(lane_id)``.
+
+   See `lanemask_lt` for the contract.
+
+
+.. py:function:: lanemask_gt(lane_id)
+
+   Bitmask of lanes strictly above ``lane_id`` — bit ``i`` is set iff ``i > lane_id``.
+
+   Equivalent to ``~lanemask_le(lane_id)``.  See `lanemask_lt` for the contract.
+
+
+.. py:function:: lanemask_ge(lane_id)
+
+   Bitmask of lanes ``>= lane_id`` — bit ``i`` is set iff ``i >= lane_id``.
+
+   Equivalent to ``~lanemask_lt(lane_id)``.  See `lanemask_lt` for the contract.
+
 
 .. py:function:: broadcast_first(value)
 
-.. py:function:: reduce_add(value, log2_size: template())
+   Broadcast lane 0's ``value`` to every lane in the subgroup.
 
-   Sum ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
-
-   The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.
-   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
-   (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).
-
-   ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
-   shuffle+add operations in the calling kernel's IR.
+   Equivalent to ``broadcast(value, qd.u32(0))``; ``0`` is trivially dynamically uniform, so the SPIR-V
+   ``OpGroupNonUniformBroadcast`` requirement is satisfied. Decorated with ``@qd.func`` and inlined into the calling
+   kernel.
 
 
-.. py:function:: reduce_all_add(value, log2_size: template())
+.. py:function:: group_size() -> int
 
-   Sum ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.
+   Active subgroup size for the current launch, as a Python ``int``.
 
-   The result is broadcast to all ``2**log2_size`` lanes.  Caller must ensure ``2**log2_size``
-   does not exceed the active subgroup size on the target.
+   Resolves once at compile time by querying the live ``Program`` --- 32 on CUDA, 64 on AMDGPU (every AMDGPU target is
+   pinned to ``+wavefrontsize64``), and the device-probed value on the SPIR-V backends (read from
+   ``VkPhysicalDeviceSubgroupProperties::subgroupSize`` on Vulkan, fixed at 32 on Metal). Because the return type is a
+   plain ``int``, the value can be used as a ``qd.template()`` argument inside ``@qd.kernel`` / ``@qd.func`` bodies ---
+   this is how the full-subgroup reductions (e.g. ``reduce_add(v)``) pick up the right ``log2_size`` per backend
+   without the caller having to plumb it manually.
 
-   ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
-   shuffle+add operations in the calling kernel's IR.
+   For use inside ``@qd.kernel`` / ``@qd.func`` bodies: the value is folded into the kernel IR as a constant on every
+   backend, including SPIR-V (so MoltenVK / desktop Vulkan see a literal subgroup size rather than a runtime
+   ``OpLoad`` of ``BuiltInSubgroupSize``). Calling it from plain host Python after ``qd.init()`` is also legal and
+   returns the same number, which is handy for setting up grid dimensions on the host side.
 
 
-.. py:function:: inclusive_add(value)
+.. py:function:: log2_group_size() -> int
 
-.. py:function:: inclusive_mul(value)
+   ``log2(group_size())`` as a Python ``int``, asserting the subgroup size is a power of two.
 
-.. py:function:: inclusive_min(value)
+   Equivalent to ``int(math.log2(group_size()))`` but emits a clearer error if the device ever reports a
+   non-power-of-two subgroup width (no current SPIR-V driver does, but the spec allows it). Like ``group_size()`` this
+   is a compile-time constant on every backend --- callers feed it straight into ``qd.template()`` to pick the right
+   ``log2_size`` for a full-subgroup reduction (e.g. ``reduce_add_tiled(v, qd.simt.subgroup.log2_group_size())``).
 
-.. py:function:: inclusive_max(value)
 
-.. py:function:: inclusive_and(value)
-
-.. py:function:: inclusive_or(value)
-
-.. py:function:: inclusive_xor(value)
-
-.. py:function:: exclusive_add(value)
-
-.. py:function:: exclusive_mul(value)
-
-.. py:function:: exclusive_min(value)
-
-.. py:function:: exclusive_max(value)
-
-.. py:function:: exclusive_and(value)
-
-.. py:function:: exclusive_or(value)
-
-.. py:function:: exclusive_xor(value)
+.. py:function:: invocation_id()
 
 .. py:function:: shuffle(value, index)
 
 .. py:function:: shuffle_xor(value, mask)
 
+   Lane ``i`` reads ``value`` from lane ``i ^ mask``.
+
+   Implemented portably as ``shuffle(value, lane ^ mask)``: every backend that lowers ``shuffle`` therefore lowers
+   ``shuffle_xor``. ``mask`` is a ``u32`` and must place the XOR partner inside the active subgroup; results outside
+   that range are implementation-defined (same caveat as ``shuffle``). Decorated with ``@qd.func`` and inlined into
+   the calling kernel.
+
+
 .. py:function:: shuffle_up(value, offset)
 
 .. py:function:: shuffle_down(value, offset)
+
+.. py:function:: all_true(predicate)
+
+   ``all_true_tiled`` across the entire subgroup -- see ``all_true_tiled(..., log2_size=log2_group_size())``.
+
+
+.. py:function:: any_true(predicate)
+
+   ``any_true_tiled`` across the entire subgroup -- see ``any_true_tiled(..., log2_size=log2_group_size())``.
+
+
+.. py:function:: all_equal(value)
+
+   ``all_equal_tiled`` across the entire subgroup -- see ``all_equal_tiled(..., log2_size=log2_group_size())``.
+
 

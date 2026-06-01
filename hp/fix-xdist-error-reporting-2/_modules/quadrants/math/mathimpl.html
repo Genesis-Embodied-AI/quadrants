@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.math.mathimpl &#8212; Quadrants 0.7.3 documentation</title>
+    <title>quadrants.math.mathimpl &#8212; Quadrants 1.0.1 documentation</title>
   
   
   
@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,12 +37,12 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
 
-    <script src="../../../_static/documentation_options.js?v=c98573da"></script>
+    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.3" />
+  <meta name="docsearch:version" content="1.0.1" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
   
 </a></div>
     
@@ -176,11 +176,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -251,11 +258,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -325,6 +339,7 @@
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">static</span><span class="p">,</span> <span class="n">zero</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span>
@@ -348,7 +363,7 @@
     <span class="n">tanh</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix</span><span class="p">,</span> <span class="n">template</span><span class="p">,</span> <span class="n">vector</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">f64</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u64</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">f64</span><span class="p">,</span> <span class="n">i32</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u64</span>
 
 <span class="n">cfg</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">default_cfg</span>
 
@@ -1283,6 +1298,73 @@
 
 
 
+<span class="nd">@func</span>
+<div class="viewcode-block" id="ffs">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.ffs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">ffs</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">ffs</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># Portable fallback for fns(): scans a 32-bit `mask` from `base` in the direction implied by the sign of `offset` and</span>
+<span class="c1"># returns the bit position of the |offset|-th set bit, or 0xFFFFFFFF if there are fewer than |offset| set bits in the</span>
+<span class="c1"># requested half-open range. The CUDA fast path lowers to a single PTX `fns.b32` instruction via inline asm (the slim</span>
+<span class="c1"># libdevice we ship does not include `__nv_fns`) and bypasses this @qd.func entirely; see fns() below.</span>
+<span class="nd">@func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_fns_portable</span><span class="p">(</span><span class="n">mask</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span> <span class="n">base</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="n">i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">u32</span><span class="p">:</span>
+    <span class="n">NOT_FOUND</span> <span class="o">=</span> <span class="n">u32</span><span class="p">(</span><span class="mh">0xFFFFFFFF</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">NOT_FOUND</span>
+    <span class="k">if</span> <span class="n">offset</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">base</span> <span class="o">&lt;</span> <span class="n">u32</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">mask</span> <span class="o">&gt;&gt;</span> <span class="n">base</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">!=</span> <span class="n">u32</span><span class="p">(</span><span class="mi">0</span><span class="p">):</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">base</span>
+    <span class="k">elif</span> <span class="n">offset</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="n">offset</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
+            <span class="n">pos</span> <span class="o">=</span> <span class="n">u32</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">pos</span> <span class="o">&gt;=</span> <span class="n">base</span><span class="p">:</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">mask</span> <span class="o">&gt;&gt;</span> <span class="n">pos</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">!=</span> <span class="n">u32</span><span class="p">(</span><span class="mi">0</span><span class="p">):</span>
+                    <span class="n">n</span> <span class="o">-=</span> <span class="mi">1</span>
+                    <span class="k">if</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">result</span> <span class="o">==</span> <span class="n">NOT_FOUND</span><span class="p">:</span>
+                            <span class="n">result</span> <span class="o">=</span> <span class="n">pos</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="o">-</span><span class="n">offset</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
+            <span class="n">pos</span> <span class="o">=</span> <span class="n">u32</span><span class="p">(</span><span class="mi">31</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">pos</span> <span class="o">&lt;=</span> <span class="n">base</span><span class="p">:</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">mask</span> <span class="o">&gt;&gt;</span> <span class="n">pos</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">!=</span> <span class="n">u32</span><span class="p">(</span><span class="mi">0</span><span class="p">):</span>
+                    <span class="n">n</span> <span class="o">-=</span> <span class="mi">1</span>
+                    <span class="k">if</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">result</span> <span class="o">==</span> <span class="n">NOT_FOUND</span><span class="p">:</span>
+                            <span class="n">result</span> <span class="o">=</span> <span class="n">pos</span>
+    <span class="k">return</span> <span class="n">result</span>
+
+
+<div class="viewcode-block" id="fns">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.fns">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fns</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Find the n-th set bit in a 32-bit mask, with CUDA fast-path dispatch.</span>
+
+<span class="sd">    Mirrors CUDA&#39;s ``__nv_fns(mask, base, offset)``: scans ``mask`` starting from bit ``base`` and returns the bit</span>
+<span class="sd">    position of the ``|offset|``-th set bit found. The sign of ``offset`` selects the search direction:</span>
+
+<span class="sd">    * ``offset &gt; 0``: scan upward (towards higher bit indices) starting at ``base`` (inclusive).</span>
+<span class="sd">    * ``offset &lt; 0``: scan downward (towards lower bit indices) starting at ``base`` (inclusive).</span>
+<span class="sd">    * ``offset == 0``: returns ``base`` if ``mask &amp; (1 &lt;&lt; base)`` is non-zero, else ``0xFFFFFFFF``.</span>
+
+<span class="sd">    Returns ``0xFFFFFFFF`` if the requested set bit does not exist.</span>
+
+<span class="sd">    On CUDA the call lowers to a single PTX ``fns.b32`` instruction via inline asm (``__nv_fns`` is not in the slim</span>
+<span class="sd">    libdevice we ship). On every other backend (x64 / AMDGPU / SPIR-V) a portable Python @qd.func fallback is emitted;</span>
+<span class="sd">    the body is a 32-iteration loop over bit positions and is fully unrolled by the lowering pipeline on each backend.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_fns_u32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_fns_portable</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">offset</span><span class="p">)</span></div>
+
+
+
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
     <span class="s2">&quot;acos&quot;</span><span class="p">,</span>
     <span class="s2">&quot;asin&quot;</span><span class="p">,</span>
@@ -1299,7 +1381,9 @@
     <span class="s2">&quot;e&quot;</span><span class="p">,</span>
     <span class="s2">&quot;exp&quot;</span><span class="p">,</span>
     <span class="s2">&quot;eye&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ffs&quot;</span><span class="p">,</span>
     <span class="s2">&quot;floor&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;fns&quot;</span><span class="p">,</span>
     <span class="s2">&quot;fract&quot;</span><span class="p">,</span>
     <span class="s2">&quot;inf&quot;</span><span class="p">,</span>
     <span class="s2">&quot;inverse&quot;</span><span class="p">,</span>
@@ -1377,8 +1461,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -1412,7 +1496,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
 </p></div>
       
     </div>

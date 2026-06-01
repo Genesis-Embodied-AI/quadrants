@@ -248,26 +248,30 @@ Module Contents
 
 
 
-   .. py:method:: to_numpy()
+   .. py:method:: to_numpy(*, copy=True)
 
       Converts the Struct field instance to a dictionary of NumPy arrays.
 
       The dictionary may be nested when converting nested structs.
+
+      :param copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise (per member).
 
       :returns: The result NumPy array.
       :rtype: Dict[str, Union[numpy.ndarray, Dict]]
 
 
 
-   .. py:method:: to_torch(device=None)
+   .. py:method:: to_torch(device=None, *, copy=True)
 
       Converts the Struct field instance to a dictionary of PyTorch tensors.
 
       The dictionary may be nested when converting nested structs.
 
-      :param device: The
-                     desired device of returned tensor.
+      :param device: The desired device of returned tensor.
       :type device: torch.device, optional
+      :param copy: ``True`` (default) returns independent copies, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise (per member).
 
       :returns:
 

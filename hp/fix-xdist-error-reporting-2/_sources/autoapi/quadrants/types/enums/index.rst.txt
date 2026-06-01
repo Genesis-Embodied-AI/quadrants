@@ -13,6 +13,7 @@ Attributes
    quadrants.types.enums.AutodiffMode
    quadrants.types.enums.SNodeGradType
    quadrants.types.enums.Format
+   quadrants.types.enums.BoundaryMode
 
 
 Classes
@@ -33,6 +34,8 @@ Module Contents
 .. py:data:: SNodeGradType
 
 .. py:data:: Format
+
+.. py:data:: BoundaryMode
 
 .. py:class:: DeviceCapability
 
