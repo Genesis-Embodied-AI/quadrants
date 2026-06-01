@@ -296,8 +296,6 @@ This table summarises which member types are allowed inside which container type
 | `@qd.data_oriented`             | yes | yes | yes | yes | yes      | yes |
 | `@qd.dataclass`                 | no  | yes | yes | no  | no       | yes |
 
-[\*1] A `dataclasses.dataclass` whose member type is `@qd.data_oriented` is currently deprecated. It only ever worked through the `qd.Template` outer-arg path (typed-dataclass annotations error out because `@qd.data_oriented` carries no per-member annotations to flatten), and that path is itself deprecated — see the [deprecation notice in Overview](#overview). To hold a `@qd.data_oriented` instance, make the outer container `@qd.data_oriented` too, rather than a `@dataclasses.dataclass`.
-
 ### Outer kernel-arg annotation
 
 The outermost annotation you put on the kernel parameter determines how the container is walked:
