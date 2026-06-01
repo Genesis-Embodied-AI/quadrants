@@ -15,14 +15,11 @@ both tile sizes (a tile instance is duck-typed against ``_load`` / ``_store`` / 
 """
 
 from typing import TYPE_CHECKING as _TYPE_CHECKING
-from typing import Any, NoReturn
+from typing import Any
 
 import quadrants as qd
-
 from quadrants.lang.simt._tile16 import (
     _OuterProduct,
-    _TileRefProxy,
-    _TileSliceProxy,
     _VecSliceProxy,
 )
 
@@ -42,8 +39,12 @@ if _TYPE_CHECKING:
         def cholesky_(self, eps: Any) -> None: ...  # noqa: E704
         def solve_triangular_(self, B: "_Tile32x32Proto", lower: bool = True) -> None: ...  # noqa: E704
         def _load(self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any) -> None: ...  # noqa: E704
-        def _store(self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any) -> None: ...  # noqa: E704
-        def _load3d(self, arr: Any, batch: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any) -> None: ...  # noqa: E704
+        def _store(
+            self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any
+        ) -> None: ...  # noqa: E704
+        def _load3d(
+            self, arr: Any, batch: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any
+        ) -> None: ...  # noqa: E704
         def _store3d(
             self, arr: Any, batch: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any
         ) -> None: ...  # noqa: E704
@@ -63,7 +64,7 @@ _TILE = 32
 _REGS = tuple(f"r{i}" for i in range(_TILE))
 
 
-_tile32_cache: dict[Any, type] = {}
+_tile32_cache = {}
 
 
 def _make_tile32x32(dtype=None) -> "type[_Tile32x32Proto]":
