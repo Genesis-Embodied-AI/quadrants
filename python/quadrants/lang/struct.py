@@ -618,11 +618,9 @@ class StructType(CompoundType):
         self.dtype = _qd_core.get_type_factory_instance().get_struct_type(elements)
 
     def __mro_entries__(self, bases):
-        # A ``@qd.dataclass`` is a ``StructType`` *instance*, not a class, so it
-        # cannot normally appear in a base-class list. PEP 560 lets us return a
-        # real placeholder class to stand in for it; that placeholder carries a
-        # back-reference to this ``StructType`` so ``dataclass`` can merge our
-        # members and methods into the subclass.
+        # A ``@qd.dataclass`` is a ``StructType`` *instance*, not a class, so it cannot normally appear in a base-class
+        # list. PEP 560 lets us return a real placeholder class to stand in for it; that placeholder carries a
+        # back-reference to this ``StructType`` so ``dataclass`` can merge our members and methods into the subclass.
         placeholder = type("_QuadrantsDataclassBase", (object,), {"_quadrants_struct_type": self})
         return (placeholder,)
 
@@ -826,9 +824,8 @@ def dataclass(cls):
         A quadrants struct with the annotations as fields
             and methods from the class attached.
     """
-    # Merge in members and methods from any @qd.dataclass base classes. A
-    # @qd.dataclass parent is a StructType instance, so it appears in __bases__
-    # as the placeholder class injected by StructType.__mro_entries__, which
+    # Merge in members and methods from any @qd.dataclass base classes. A @qd.dataclass parent is a StructType
+    # instance, so it appears in __bases__ as the placeholder class injected by StructType.__mro_entries__, which
     # back-references the parent via _quadrants_struct_type.
     inherited_fields = {}
     inherited_methods = {}
