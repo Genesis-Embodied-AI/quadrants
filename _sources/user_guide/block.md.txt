@@ -104,7 +104,7 @@ Allocates a shared-memory array, scoped to the calling block.
 
 Element access uses the standard `arr[i]` / `arr[i, j]` subscript syntax inside a kernel.
 
-A worked example with `Tile16x16` interaction is in [tile16](tile16.md).
+A worked example with `Tile16x16` interaction is in [tile](tile.md).
 
 ### `block.global_thread_idx()`
 
@@ -226,5 +226,5 @@ The function inserts the necessary `block.sync()` retires before returning, so c
 - [grid](grid.md) - the device-scope counterpart of `block.mem_fence()`. For coordination within a single block, prefer `block.mem_fence()` - it is cheaper.
 - [parallelization](parallelization.md) - kernel-launch and grid-stride patterns.
 - [subgroup](subgroup.md) - primitives that operate within a single subgroup (warp / wavefront), one tier below block scope.
-- [tile16](tile16.md) - `Tile16x16` register-resident tiles, built on `subgroup.shuffle`.
+- [tile](tile.md) - `Tile16x16` and `Tile32x32` register-resident tiles, built on `subgroup.shuffle`.
 - `qd.atomic_add` / `qd.atomic_min` / ... - global-memory atomics, the other common cross-block coordination mechanism.

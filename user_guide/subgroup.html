@@ -59,7 +59,7 @@
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Tile16x16: register-resident 16x16 tiles" href="tile16.html" />
+    <link rel="next" title="Register-resident tiles: Tile16x16 and Tile32x32" href="tile.html" />
     <link rel="prev" title="Math" href="math.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -327,7 +327,7 @@
 <li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Subgroup primitives</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile.html">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
 <ul class="nav bd-sidenav">
@@ -423,7 +423,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="subgroup-primitives">
 <h1>Subgroup primitives<a class="headerlink" href="#subgroup-primitives" title="Link to this heading">#</a></h1>
-<p>Subgroup operations let threads within the same subgroup (warp on NVIDIA, wave on AMD, subgroup on Vulkan / Metal) cooperate directly - exchanging register values, voting on predicates, scanning, and electing a leader - without going through shared memory or block barriers. They are the building block for fast in-warp data exchange and are used internally by <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> (see <a class="reference internal" href="tile16.html"><span class="std std-doc">tile16</span></a>).</p>
+<p>Subgroup operations let threads within the same subgroup (warp on NVIDIA, wave on AMD, subgroup on Vulkan / Metal) cooperate directly - exchanging register values, voting on predicates, scanning, and electing a leader - without going through shared memory or block barriers. They are the building block for fast in-warp data exchange and are used internally by <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code> (see <a class="reference internal" href="tile.html"><span class="std std-doc">tile</span></a>).</p>
 <p>Subgroup ops live under <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code> and are written so the same Python source compiles to the right vendor primitive on each backend. Calling a backend that has not implemented an op fails at trace or codegen time.</p>
 <section id="what-s-available">
 <h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
@@ -1209,7 +1209,7 @@ result  = ((target_lane ^ self_lane) &amp; 32) ? hi : lo
 <section id="related">
 <h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><a class="reference internal" href="tile16.html"><span class="std std-doc">tile16</span></a> - <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> builds on <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code> to implement register-resident 16×16 matrix tiles.</p></li>
+<li><p><a class="reference internal" href="tile.html"><span class="std std-doc">tile</span></a> - <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code> build on <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code> to implement register-resident matrix tiles.</p></li>
 </ul>
 </section>
 </section>
@@ -1234,11 +1234,11 @@ result  = ((target_lane ^ self_lane) &amp; 32) ? hi : lo
       </div>
     </a>
     <a class="right-next"
-       href="tile16.html"
+       href="tile.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Tile16x16: register-resident 16x16 tiles</p>
+        <p class="prev-next-title">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

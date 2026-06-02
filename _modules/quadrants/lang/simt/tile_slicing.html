@@ -331,11 +331,11 @@
                 <article class="bd-article">
                   
   <h1>Source code for quadrants.lang.simt.tile_slicing</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Tile16x16 slice-syntax dispatch for impl.subscript().</span>
+<span></span><span class="sd">&quot;&quot;&quot;Tile slice-syntax dispatch for impl.subscript().</span>
 
 <span class="sd">Intercepts array subscripts during compilation and returns deferred proxy objects</span>
 <span class="sd">(_TileSliceProxy, _VecSliceProxy, _TileRefProxy) that execute tile load/store</span>
-<span class="sd">when consumed by an assignment.</span>
+<span class="sd">when consumed by an assignment. Works for any registered tile size (currently 16 and 32).</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsSyntaxError</span>
@@ -345,7 +345,20 @@
     <span class="n">_TileSliceProxy</span><span class="p">,</span>
     <span class="n">_VecSliceProxy</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt._tile32</span><span class="w"> </span><span class="kn">import</span> <span class="n">_tile32_cache</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.struct</span><span class="w"> </span><span class="kn">import</span> <span class="n">Struct</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_tile</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return True if ``value`` is an instance of any registered tile dataclass.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">_tile16_cache</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="ow">or</span> <span class="nb">any</span><span class="p">(</span>
+        <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">_tile32_cache</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_any_tile_built</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return True if any tile dataclass has been built (i.e. at least one tile is in use).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">_tile16_cache</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">bool</span><span class="p">(</span><span class="n">_tile32_cache</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="try_tile_ref">
@@ -353,7 +366,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">try_tile_ref</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_indices</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Handle tile[:] → _TileRefProxy.</span>
 
-<span class="sd">    Returns (True, proxy) if value is a Tile16x16 struct subscripted with [:], otherwise (False, None).</span>
+<span class="sd">    Returns (True, proxy) if value is a tile struct subscripted with [:], otherwise (False, None).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">_indices</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_indices</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">slice</span><span class="p">)</span> <span class="ow">or</span> <span class="n">_indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span>
@@ -361,7 +374,7 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Struct</span><span class="p">):</span>
         <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span>
 
-    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">_tile16_cache</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+    <span class="k">if</span> <span class="n">_is_tile</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">_TileRefProxy</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
     <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span></div>
 
@@ -369,7 +382,7 @@
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_check_slice</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
     <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">s</span><span class="o">.</span><span class="n">stop</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Tile16x16 </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> slice: both start and stop indices are required&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Tile </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> slice: both start and stop indices are required&quot;</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="try_tile_slice">
@@ -380,7 +393,7 @@
 <span class="sd">    Returns (True, proxy) if the subscript matches a tile slice pattern, otherwise (False, None).</span>
 <span class="sd">    Raises QuadrantsSyntaxError if tile types exist but the pattern is invalid.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">_tile16_cache</span><span class="p">:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_any_tile_built</span><span class="p">():</span>
         <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span>
 
     <span class="n">is_slice</span> <span class="o">=</span> <span class="p">[</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="nb">slice</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">]</span>

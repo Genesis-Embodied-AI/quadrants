@@ -5,11 +5,11 @@ quadrants.lang.simt.tile_slicing
 
 .. autoapi-nested-parse::
 
-   Tile16x16 slice-syntax dispatch for impl.subscript().
+   Tile slice-syntax dispatch for impl.subscript().
 
    Intercepts array subscripts during compilation and returns deferred proxy objects
    (_TileSliceProxy, _VecSliceProxy, _TileRefProxy) that execute tile load/store
-   when consumed by an assignment.
+   when consumed by an assignment. Works for any registered tile size (currently 16 and 32).
 
 
 
@@ -29,7 +29,7 @@ Module Contents
 
    Handle tile[:] → _TileRefProxy.
 
-   Returns (True, proxy) if value is a Tile16x16 struct subscripted with [:], otherwise (False, None).
+   Returns (True, proxy) if value is a tile struct subscripted with [:], otherwise (False, None).
 
 
 .. py:function:: try_tile_slice(value, indices)
